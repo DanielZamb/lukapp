@@ -1,1 +1,6 @@
-.agents/*
+.agents/
+.claude/
+.vscode/
+docs/
+exports/
+.DS_Store
