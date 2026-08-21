@@ -28,6 +28,17 @@ design contract and the operational definition of the 5–8 element guardrail.
 See [NAVIGATION-REVIEW.md](./NAVIGATION-REVIEW.md) for the accepted flows,
 container rule, and remaining navigation work.
 
+## Notification Intake verdict (SEN-7)
+
+**Variant D — Priority, simplified** is the selected review model. It keeps
+Variant B's priority grouping and bulk Ready confirmation, then uses the same
+grey grouped-list treatment as the rest of the prototype.
+
+Open it at `/notification-intake/D`. Routes A–C remain as primary-source
+evidence. The reconciliation warning sits centered above the lists. Candidates
+stay local until confirm; discarded notices stay content-free; Month Close can
+continue with the warning acknowledged.
+
 ## Run it
 
 ```bash
