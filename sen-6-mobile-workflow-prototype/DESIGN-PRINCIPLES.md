@@ -17,6 +17,11 @@ A **UX element** is a user-perceived group or decision target: a page header, a
 hero value, a disclosure, an action tile, a list group, or a primary action.
 Supporting labels inside one group do not count as separate elements.
 
+Each principal component may carry one to three information elements. A title,
+value, state, timestamp, or supporting fact each count as one. If the component
+needs more than three, keep only what supports the immediate decision and make
+the component open a detail screen for the rest.
+
 Aim for five to eight visible groups on a normal decision surface. This is a
 working density guardrail—not a literal reading of the “magical number seven.”
 When a workflow needs more, chunk it into steps instead of shrinking or hiding
@@ -41,6 +46,11 @@ separate decisions receive at least `spacing.xl`; major screen zones receive
 `spacing.section`. This applies the
 [Law of Proximity](https://lawsofux.com/law-of-proximity/) so grouping does not
 depend on borders or color alone.
+
+A card must represent one of the screen's five to eight principal groups. Use
+one when its contents need to be perceived and acted on together, such as a
+candidate list. Do not wrap a lone summary, title, or value for decoration when
+type and spacing already establish the relationship.
 
 ## 5. Important actions are easy to acquire
 
@@ -74,3 +84,12 @@ Variant E, **Essential-first**, is the selected home model:
 - **Overview** contains balances, activity, and Financial Account Profiles.
 - The user icon opens the user/workspace page, where appearance settings and
   first-time setup preview live.
+
+## Notification Intake decision
+
+Variant D, **Priority, simplified**, is the selected review model:
+
+- Priority Candidates sit above the ones that can wait.
+- Ready Candidates can be confirmed in one action.
+- Candidate lists use the same grey grouped cards as the rest of the prototype.
+- The reconciliation warning is a centered control, not a banner.

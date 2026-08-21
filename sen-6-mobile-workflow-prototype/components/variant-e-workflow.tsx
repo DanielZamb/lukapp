@@ -749,7 +749,7 @@ export function VariantEWorkflow() {
     return shell(
       <>
         <Header title="Daniel" eyebrow="USER & WORKSPACE" onBack={back} styles={styles} theme={theme} />
-        <View style={styles.card}>
+        <View style={styles.openSection}>
           <Text style={styles.sectionTitle}>Appearance</Text>
           <View style={styles.segmented}>
             <Pressable
@@ -1058,7 +1058,7 @@ export function VariantEWorkflow() {
     return shell(
       <>
         <Header title="Overview" eyebrow="BALANCES & ACTIVITY" onBack={back} styles={styles} theme={theme} />
-        <View style={styles.amountCard}><Text style={styles.muted}>Across your accounts</Text><Text style={styles.detailAmount}>{money(totalBalance)}</Text></View>
+        <View style={styles.openAmount}><Text style={styles.muted}>Across your accounts</Text><Text style={styles.detailAmount}>{money(totalBalance)}</Text></View>
         <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Financial accounts</Text><Pressable accessibilityRole="button" onPressIn={lightTap} onPress={startAddAccount} style={styles.textActionButton}><Text style={styles.textAction}>+ Add</Text></Pressable></View>
         <View style={styles.listGroup}>
           {accounts.map((account) => (
@@ -1080,7 +1080,7 @@ export function VariantEWorkflow() {
     return shell(
       <>
         <Header title={selectedAccount.name} eyebrow="FINANCIAL ACCOUNT" onBack={back} styles={styles} theme={theme} />
-        <View style={styles.amountCard}><Text style={styles.muted}>Current balance</Text><Text style={styles.detailAmount}>{money(selectedAccount.balance, selectedAccount.currency)}</Text></View>
+        <View style={styles.openAmount}><Text style={styles.muted}>Current balance</Text><Text style={styles.detailAmount}>{money(selectedAccount.balance, selectedAccount.currency)}</Text></View>
         <View style={styles.listGroup}>
           <ListRow title="Type" value={selectedAccount.kind} styles={styles} theme={theme} />
           <ListRow title="Currency" value={selectedAccount.currency} styles={styles} theme={theme} />
@@ -1165,7 +1165,7 @@ const createStyles = (theme: Theme) =>
     tileDetailPrimary: { color: theme.primaryForeground, opacity: 0.82, fontSize: fontSize.label, fontFamily: font.medium },
     badge: { position: "absolute", top: spacing.lg, right: spacing.lg, minWidth: 26, height: 26, paddingHorizontal: spacing.sm, borderRadius: radius.full, backgroundColor: theme.primaryForeground, alignItems: "center", justifyContent: "center" },
     badgeText: { color: theme.primary, fontSize: fontSize.label, fontFamily: font.bold },
-    card: { gap: spacing.lg, padding: spacing.xl, borderRadius: radius.lg, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border },
+    openSection: { gap: spacing.lg },
     segmented: { flexDirection: "row", gap: spacing.sm, padding: spacing.xs, borderRadius: radius.md, backgroundColor: theme.background },
     segment: { flex: 1, minHeight: touchTarget, flexDirection: "row", gap: spacing.sm, alignItems: "center", justifyContent: "center", borderRadius: radius.sm },
     segmentSelected: { backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.ring },
@@ -1199,6 +1199,7 @@ const createStyles = (theme: Theme) =>
     completionIcon: { width: 68, height: 68, borderRadius: radius.full, alignItems: "center", justifyContent: "center", backgroundColor: theme.primary },
     completionTitle: { color: theme.foreground, fontSize: 30, lineHeight: 36, fontFamily: font.extrabold, textAlign: "center" },
     completionCopy: { maxWidth: 340, color: theme.mutedForeground, fontSize: fontSize.body, lineHeight: 24, fontFamily: font.regular, textAlign: "center" },
+    openAmount: { gap: spacing.sm, paddingVertical: spacing.md },
     amountCard: { gap: spacing.md, padding: spacing.xl, borderRadius: radius.lg, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border },
     detailAmount: { color: theme.foreground, fontSize: 30, lineHeight: 36, fontFamily: font.extrabold, letterSpacing: -0.6 },
     sectionHeader: { minHeight: touchTarget, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

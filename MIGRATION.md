@@ -469,13 +469,15 @@ Initial mobile scope:
 - account balances;
 - transaction activity;
 - record basic income, expense, and transfer; and
-- review pending offline entry drafts.
+- create and review device-local Local Entry Drafts.
 
-Offline support is limited to drafts. The server still validates and posts through the
-same commands as web. Do not build an offline ledger or mobile-specific accounting model.
+Offline support is limited to encrypted Local Entry Draft form input. A Local Entry Draft
+never synchronizes as a Draft or becomes Workspace state. When the user submits it online,
+the server authenticates, authorizes, validates, and runs the same command as web. Do not
+build an offline ledger, financial read cache, or mobile-specific accounting model.
 
-Learning goal: Expo navigation, native inputs, authentication, and a small idempotent
-offline queue without relearning backend architecture.
+Learning goal: Expo navigation, native inputs, authentication, and idempotent online
+submission without relearning backend architecture.
 
 ## Legacy-To-v2 Mapping
 

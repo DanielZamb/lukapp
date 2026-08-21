@@ -25,6 +25,8 @@ activity, and Financial Account Profiles. Appearance lives on the user page.
 
 See [DESIGN-PRINCIPLES.md](./DESIGN-PRINCIPLES.md) for the Laws-of-UX-informed
 design contract and the operational definition of the 5–8 element guardrail.
+See [NAVIGATION-REVIEW.md](./NAVIGATION-REVIEW.md) for the accepted flows,
+container rule, and remaining navigation work.
 
 ## Run it
 

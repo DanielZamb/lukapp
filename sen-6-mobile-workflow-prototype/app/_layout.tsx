@@ -21,5 +21,17 @@ export default function RootLayout() {
     return null;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen
+        name="workflow"
+        options={{
+          headerShown: true,
+          title: "Workflow prototype",
+          headerBackTitle: "Prototypes",
+        }}
+      />
+    </Stack>
+  );
 }

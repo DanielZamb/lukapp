@@ -427,6 +427,26 @@ _Avoid_: Ordinary Payment Reversal, silent backdated edit
 A simplified entry experience for an immediate receipt or payment that generates an accounting-correct entry in the accrual-capable General Ledger.
 _Avoid_: Cash-basis accounting
 
+**Local Entry Draft**:
+Device-owned, short-lived form input for a manually initiated financial entry. It never synchronizes or becomes Workspace state; submitting it invokes an ordinary online server command under current Workspace authority.
+_Avoid_: Workspace Draft, offline transaction, sync queue
+
+**Notification Intake**:
+An optional, user-consented workflow that interprets selected device notifications as local suggestions for financial activity. It is neither an accounting source of truth nor a completeness mechanism.
+_Avoid_: Notification ledger, automatic posting
+
+**Notification Intake Candidate**:
+A device-owned, short-lived suggestion derived from allowed notification content and held for user review. It is not a Workspace Draft, source record, or accounting record and has no Posting Authority.
+_Avoid_: Draft Journal Entry, Bank Source Transaction, automatic transaction
+
+**Discard Notice**:
+A content-free local acknowledgement that Notification Intake discarded a notification instead of creating a Candidate. It reports intake behavior without preserving the discarded evidence or implying financial activity.
+_Avoid_: Notification Intake Candidate, accounting exception
+
+**Notification Intake Receipt**:
+An immutable Workspace record created when a user confirms a Notification Intake Candidate into accounting. It preserves the normalized suggestion and confirmation history without retaining raw notification content or source-application identity.
+_Avoid_: Notification Intake Candidate, source notification, Posting Authority
+
 **Progressive Disclosure**:
 One financial engine presented at different depths: basic users see simple inputs and insights, while advanced users can inspect and control the underlying bookkeeping and reporting.
 _Avoid_: Separate basic and advanced ledgers
@@ -444,15 +464,19 @@ An activated plan whose source-expense eligibility changed and whose future reco
 _Avoid_: Cancelled plan, payment default
 
 **Savings Premium**:
-The total amount by which a Savings Recovery Plan's chosen installments exceed its original expense principal. It is a derived behavioral saving goal—not accounting interest or investment return—and any amount already contributed remains historical saving if the plan ends.
+The total amount by which a Savings Recovery Plan's scheduled installments exceed its original expense principal. It is a derived behavioral saving goal, not accounting interest or investment return, and any amount already contributed remains historical saving if the plan ends.
 _Avoid_: Self-interest, investment yield
 
-**Implied Self-Charge Rate**:
-The monthly rate mathematically implied by a Savings Recovery Plan's principal, chosen installment count, and chosen installment amount. It is a transparent description of the plan, not an external yield or user-entered rate.
-_Avoid_: Investment return, credit-card rate
+**Annual Self-Charge Rate**:
+The non-negative nominal annual rate used by a Savings Recovery Plan. The user may set it directly or let the amortization core calculate it from principal, installment count, and Regular Recovery Amount; it is never accounting interest, an investment return, or an external borrowing rate.
+_Avoid_: Implied Self-Charge Rate, investment return, credit-card rate
+
+**Regular Recovery Amount**:
+The compact, currency-friendly amount used for every Recovery Installment except the final settlement adjustment. The user may set it directly or let the amortization core calculate it from principal, Annual Self-Charge Rate, and installment count.
+_Avoid_: Exact amortized payment, arbitrary payment precision
 
 **Recovery Installment**:
-One scheduled monthly amount in a Savings Recovery Plan, split into principal recovery and Savings Premium using the Implied Self-Charge Rate. Every installment uses the chosen amount except for a minor final currency-rounding adjustment.
+One monthly contribution in a Savings Recovery Plan, split into principal recovery and Savings Premium by the amortization core. Regular installments use the Regular Recovery Amount, while the final installment settles the remaining plan amount.
 _Avoid_: Loan payment, investment contribution
 
 **Recovery Prepayment**:
