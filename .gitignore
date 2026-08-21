@@ -1,1 +1,3 @@
 .agents/*
+exports/
+.DS_Store
