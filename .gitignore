@@ -4,3 +4,6 @@
 docs/
 exports/
 .DS_Store
+node_modules/
+.env.local
+.convex/
