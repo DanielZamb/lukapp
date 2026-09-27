@@ -1,9 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import {
-  AccountingError,
-  createAccountingCore,
-} from "../src/accounting/accounting";
+import { AccountingError, createAccountingCore } from "../src/accounting";
 import { convexReadStore, convexStore } from "./store";
 import {
   accountBalance,
@@ -39,10 +36,13 @@ export const createPersonalWorkspace = mutation({
   args: {
     ...actor,
     functionalCurrency: v.string(),
+    now: v.number(),
   },
   returns: workspace,
   handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexStore(ctx.db));
+    const core = createAccountingCore(await convexStore(ctx.db), {
+      now: () => new Date(args.now),
+    });
     return run(() =>
       core.createPersonalWorkspace({
         actor: { userId: args.userId },

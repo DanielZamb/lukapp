@@ -1,5 +1,5 @@
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
-import { AccountingError } from "../src/accounting/accounting";
+import { AccountingError } from "../src/accounting/errors";
 import type { DataModel, Id } from "./_generated/dataModel";
 import type {
   AccountingPeriod,
@@ -10,7 +10,7 @@ import type {
   StoredPeriodStatus,
   StoredProfile,
   StoredWorkspace,
-} from "../src/accounting/accounting";
+} from "../src/accounting/types";
 
 type ReadDb = Pick<GenericQueryCtx<DataModel>["db"], "get" | "query">;
 type WriteDb = GenericMutationCtx<DataModel>["db"];

@@ -1,17 +1,20 @@
 export {
   AccountingError,
-  createAccountingCore,
-  type AccountBalance,
-  type AccountingCore,
+  accountingErrorMessages,
   type AccountingErrorCode,
-  type AccountingPeriod,
-  type Actor,
-  type FinancialAccountProfile,
-  type JournalLine,
-  type Money,
-  type PeriodStatus,
-  type PostedCashExpense,
-  type TrialBalanceRow,
-  type Workspace,
-  type WorkspaceKind,
-} from "./accounting";
+} from "./errors";
+export { createAccountingCore } from "./core";
+export type {
+  AccountBalance,
+  AccountingCore,
+  AccountingPeriod,
+  Actor,
+  FinancialAccountProfile,
+  JournalLine,
+  Money,
+  PeriodStatus,
+  PostedCashExpense,
+  TrialBalanceRow,
+  Workspace,
+  WorkspaceKind,
+} from "./types";

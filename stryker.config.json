@@ -7,7 +7,7 @@
     "configFile": "vitest.config.ts",
     "related": false
   },
-  "mutate": ["src/accounting/accounting.ts"],
+  "mutate": ["src/accounting/**/*.ts"],
   "ignoreStatic": true,
   "reporters": ["clear-text", "progress", "html"]
 }
