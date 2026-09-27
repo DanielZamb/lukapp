@@ -1,6 +1,20 @@
 import { AccountingError } from "./errors";
 
+export function dateFromTimestamp(now: number): Date {
+  if (!Number.isFinite(now)) {
+    throw new AccountingError("clock_required");
+  }
+  const date = new Date(now);
+  if (Number.isNaN(date.getTime())) {
+    throw new AccountingError("clock_required");
+  }
+  return date;
+}
+
 export function clockMonth(now: Date): { year: number; month: number } {
+  if (Number.isNaN(now.getTime())) {
+    throw new AccountingError("clock_required");
+  }
   return {
     year: now.getUTCFullYear(),
     month: now.getUTCMonth() + 1,

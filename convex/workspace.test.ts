@@ -54,6 +54,28 @@ test("a Personal Workspace opens with the current Accounting Period", async () =
   });
 });
 
+test("an invalid clock cannot create a Personal Workspace", async () => {
+  const t = testdb();
+
+  const infinite = await t
+    .mutation(api.accounting.createPersonalWorkspace, {
+      userId: owner.userId,
+      functionalCurrency: "COP",
+      now: Number.POSITIVE_INFINITY,
+    })
+    .catch((caught: unknown) => caught);
+  const nan = await t
+    .mutation(api.accounting.createPersonalWorkspace, {
+      userId: owner.userId,
+      functionalCurrency: "COP",
+      now: Number.NaN,
+    })
+    .catch((caught: unknown) => caught);
+
+  expect(infinite).toMatchObject({ data: { code: "clock_required" } });
+  expect(nan).toMatchObject({ data: { code: "clock_required" } });
+});
+
 test("a stranger cannot open another person's Workspace", async () => {
   const t = testdb();
   const workspace = await createOwnedWorkspace(t);

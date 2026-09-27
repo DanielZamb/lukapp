@@ -3,6 +3,7 @@ export const accountingErrorMessages = {
   amount_must_be_positive: "amount must be positive",
   functional_currency_required: "Functional Currency required",
   accounting_date_required: "Accounting Date required",
+  clock_required: "Clock required",
   idempotency_key_required: "Idempotency key required",
   locked_period: "Locked Period",
   financial_account_profile_not_found: "Financial Account Profile not found",

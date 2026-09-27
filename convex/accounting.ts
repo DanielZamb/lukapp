@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { AccountingError, createAccountingCore } from "../src/accounting";
+import { dateFromTimestamp } from "../src/accounting/period";
 import { convexReadStore, convexStore } from "./store";
 import {
   accountBalance,
@@ -41,7 +42,7 @@ export const createPersonalWorkspace = mutation({
   returns: workspace,
   handler: async (ctx, args) => {
     const core = createAccountingCore(await convexStore(ctx.db), {
-      now: () => new Date(args.now),
+      now: () => dateFromTimestamp(args.now),
     });
     return run(() =>
       core.createPersonalWorkspace({
@@ -61,7 +62,7 @@ export const openWorkspace = query({
   returns: workspace,
   handler: async (ctx, args) => {
     const core = createAccountingCore(await convexReadStore(ctx.db), {
-      now: () => new Date(args.now),
+      now: () => dateFromTimestamp(args.now),
     });
     return run(() =>
       core.openWorkspace({
