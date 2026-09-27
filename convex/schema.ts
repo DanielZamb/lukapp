@@ -19,16 +19,19 @@ export default defineSchema({
   financialAccountProfiles: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
-    productKind: v.literal("checking"),
     postingAccountId: v.id("ledgerAccounts"),
   }).index("by_workspace", ["workspaceId"]),
   postedJournalEntries: defineTable({
     workspaceId: v.id("workspaces"),
+    financialAccountProfileId: v.id("financialAccountProfiles"),
     accountingDate: v.string(),
     description: v.string(),
-    currency: v.string(),
-    minorUnits: v.number(),
-  }).index("by_workspace", ["workspaceId"]),
+    periodYear: v.number(),
+    periodMonth: v.number(),
+    idempotencyKey: v.string(),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"]),
   journalLines: defineTable({
     workspaceId: v.id("workspaces"),
     journalEntryId: v.id("postedJournalEntries"),
@@ -40,5 +43,6 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     year: v.number(),
     month: v.number(),
+    status: v.union(v.literal("open"), v.literal("locked")),
   }).index("by_workspace_year_month", ["workspaceId", "year", "month"]),
 });
