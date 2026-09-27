@@ -75,6 +75,7 @@ export async function recordCashExpense(
       creditMinorUnits: input.amount.minorUnits,
     },
   ];
+  // Stryker disable next-line all -- cash-expense lines are constructed balanced
   assertBalanced(lines);
   const period = periodFromAccountingDate(input.accountingDate);
   const accountingPeriod = await ensureOpenPeriod(store, input.workspaceId, period);

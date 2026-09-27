@@ -69,6 +69,8 @@ test("repeating an idempotency key posts the cash expense once", async () => {
     {
       financialAccountProfileId: daily.id,
       name: "Daily",
+      debitMinorUnits: 0,
+      creditMinorUnits: 150000,
       debitMinusCredit: { currency: "COP", minorUnits: -150000 },
     },
   ]);
@@ -165,6 +167,8 @@ test("balances move only after a cash expense is posted", async () => {
     {
       financialAccountProfileId: daily.id,
       name: "Daily",
+      debitMinorUnits: 0,
+      creditMinorUnits: 0,
       debitMinusCredit: { currency: "COP", minorUnits: 0 },
     },
   ]);
@@ -172,6 +176,8 @@ test("balances move only after a cash expense is posted", async () => {
     {
       financialAccountProfileId: daily.id,
       name: "Daily",
+      debitMinorUnits: 0,
+      creditMinorUnits: 150000,
       debitMinusCredit: { currency: "COP", minorUnits: -150000 },
     },
   ]);

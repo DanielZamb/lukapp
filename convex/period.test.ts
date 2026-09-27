@@ -136,6 +136,8 @@ test("a cash expense cannot become Posted in a Locked Period", async () => {
     {
       financialAccountProfileId: daily.id,
       name: "Daily",
+      debitMinorUnits: 0,
+      creditMinorUnits: 0,
       debitMinusCredit: { currency: "COP", minorUnits: 0 },
     },
   ]);

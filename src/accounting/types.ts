@@ -55,6 +55,11 @@ export type PostedCashExpense = {
 export type AccountBalance = {
   financialAccountProfileId: string;
   name: string;
+  /** Debits on the profile's Posting Account, Functional Currency. */
+  debitMinorUnits: number;
+  /** Credits on the profile's Posting Account, Functional Currency. A cash expense lands here. */
+  creditMinorUnits: number;
+  /** debitMinorUnits − creditMinorUnits. A cash expense credits the profile, so this goes down. */
   debitMinusCredit: Money;
 };
 

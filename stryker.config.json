@@ -7,7 +7,14 @@
     "configFile": "vitest.config.ts",
     "related": false
   },
-  "mutate": ["src/accounting/**/*.ts"],
+  "mutate": [
+    "src/accounting/**/*.ts",
+    "!src/accounting/**/*.test.ts",
+    "!src/accounting/convexHarness.ts",
+    "!src/accounting/types.ts",
+    "!src/accounting/index.ts"
+  ],
+  "incremental": true,
   "ignoreStatic": true,
   "reporters": ["clear-text", "progress", "html"]
 }

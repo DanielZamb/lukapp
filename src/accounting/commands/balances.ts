@@ -11,14 +11,27 @@ export async function balances(
     store.listPostedCashExpenses(input.workspaceId),
   ]);
   const lines = entries.flatMap((entry) => entry.lines);
-  return profiles.map((profile) => ({
-    financialAccountProfileId: profile.id,
-    name: profile.name,
-    debitMinusCredit: {
-      currency: workspace.functionalCurrency,
-      minorUnits: lines
-        .filter((line) => line.ledgerAccountId === profile.postingAccountId)
-        .reduce((sum, line) => sum + line.debitMinorUnits - line.creditMinorUnits, 0),
-    },
-  }));
+  return profiles.map((profile) => {
+    const postingLines = lines.filter(
+      (line) => line.ledgerAccountId === profile.postingAccountId,
+    );
+    const debitMinorUnits = postingLines.reduce(
+      (sum, line) => sum + line.debitMinorUnits,
+      0,
+    );
+    const creditMinorUnits = postingLines.reduce(
+      (sum, line) => sum + line.creditMinorUnits,
+      0,
+    );
+    return {
+      financialAccountProfileId: profile.id,
+      name: profile.name,
+      debitMinorUnits,
+      creditMinorUnits,
+      debitMinusCredit: {
+        currency: workspace.functionalCurrency,
+        minorUnits: debitMinorUnits - creditMinorUnits,
+      },
+    };
+  });
 }

@@ -56,6 +56,8 @@ export const postedCashExpense = v.object({
 export const accountBalance = v.object({
   financialAccountProfileId: v.string(),
   name: v.string(),
+  debitMinorUnits: v.number(),
+  creditMinorUnits: v.number(),
   debitMinusCredit: money,
 });
 
