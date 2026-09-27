@@ -38,7 +38,9 @@ export default defineSchema({
     ledgerAccountId: v.id("ledgerAccounts"),
     debitMinorUnits: v.number(),
     creditMinorUnits: v.number(),
-  }).index("by_workspace", ["workspaceId"]),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_entry", ["journalEntryId"]),
   accountingPeriods: defineTable({
     workspaceId: v.id("workspaces"),
     year: v.number(),

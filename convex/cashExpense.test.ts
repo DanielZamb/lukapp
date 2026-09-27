@@ -74,6 +74,25 @@ test("repeating an idempotency key posts the cash expense once", async () => {
   ]);
 });
 
+test("an idempotency key cannot replay a different currency", async () => {
+  const t = testdb();
+  const workspace = await createOwnedWorkspace(t);
+  const daily = await createDaily(t, workspace.id);
+  await t.mutation(
+    api.accounting.recordCashExpense,
+    groceries(workspace.id, daily.id),
+  );
+
+  const error = await t
+    .mutation(api.accounting.recordCashExpense, {
+      ...groceries(workspace.id, daily.id),
+      amount: { currency: "USD", minorUnits: 150000 },
+    })
+    .catch((caught: unknown) => caught);
+
+  expect(error).toMatchObject({ data: { code: "idempotency_key_conflict" } });
+});
+
 test("an idempotency key cannot post a different cash expense", async () => {
   const t = testdb();
   const workspace = await createOwnedWorkspace(t);
@@ -156,6 +175,33 @@ test("balances move only after a cash expense is posted", async () => {
       debitMinusCredit: { currency: "COP", minorUnits: -150000 },
     },
   ]);
+});
+
+test("a non-finite or fractional amount cannot become Posted", async () => {
+  const t = testdb();
+  const workspace = await createOwnedWorkspace(t);
+  const daily = await createDaily(t, workspace.id);
+
+  const infinite = await t
+    .mutation(api.accounting.recordCashExpense, {
+      ...groceries(workspace.id, daily.id, { idempotencyKey: "infinite" }),
+      amount: { currency: "COP", minorUnits: Number.POSITIVE_INFINITY },
+    })
+    .catch((caught: unknown) => caught);
+  const fractional = await t
+    .mutation(api.accounting.recordCashExpense, {
+      ...groceries(workspace.id, daily.id, { idempotencyKey: "fractional" }),
+      amount: { currency: "COP", minorUnits: 1.5 },
+    })
+    .catch((caught: unknown) => caught);
+  const activity = await t.query(api.accounting.listPostedCashExpenses, {
+    userId: owner.userId,
+    workspaceId: workspace.id,
+  });
+
+  expect(infinite).toMatchObject({ data: { code: "amount_must_be_positive" } });
+  expect(fractional).toMatchObject({ data: { code: "amount_must_be_positive" } });
+  expect(activity).toEqual([]);
 });
 
 test("a zero-amount cash expense cannot become Posted", async () => {

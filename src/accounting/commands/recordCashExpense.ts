@@ -40,7 +40,8 @@ export async function recordCashExpense(
       existing.financialAccountProfileId === input.financialAccountProfileId &&
       existing.accountingDate === input.accountingDate &&
       existing.description === input.description &&
-      postedAmount(workspace, existing) === input.amount.minorUnits;
+      postedAmount(workspace, existing) === input.amount.minorUnits &&
+      input.amount.currency === workspace.functionalCurrency;
     if (!sameCommand) {
       throw new AccountingError("idempotency_key_conflict");
     }
@@ -49,7 +50,10 @@ export async function recordCashExpense(
   if (!workspace.expenseAccountId) {
     throw new AccountingError("expense_account_not_found");
   }
-  if (input.amount.minorUnits <= 0) {
+  if (
+    !Number.isSafeInteger(input.amount.minorUnits) ||
+    input.amount.minorUnits <= 0
+  ) {
     throw new AccountingError("amount_must_be_positive");
   }
   if (input.amount.currency !== workspace.functionalCurrency) {

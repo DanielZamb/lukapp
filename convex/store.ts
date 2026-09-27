@@ -76,13 +76,14 @@ async function readStore(db: ReadDb): Promise<
     | "getAccountingPeriod"
   >
 > {
-  async function linesFor(workspaceId: string): Promise<JournalLine[]> {
-    const docs = await db
-      .query("journalLines")
-      .withIndex("by_workspace", (q) =>
-        q.eq("workspaceId", asWorkspaceId(workspaceId)),
-      )
-      .collect();
+  function toLines(
+    docs: Array<{
+      journalEntryId: Id<"postedJournalEntries">;
+      ledgerAccountId: Id<"ledgerAccounts">;
+      debitMinorUnits: number;
+      creditMinorUnits: number;
+    }>,
+  ): JournalLine[] {
     return docs.map((doc) => ({
       journalEntryId: doc.journalEntryId,
       ledgerAccountId: doc.ledgerAccountId,
@@ -90,6 +91,26 @@ async function readStore(db: ReadDb): Promise<
       debitMinorUnits: doc.debitMinorUnits,
       creditMinorUnits: doc.creditMinorUnits,
     }));
+  }
+
+  async function linesForWorkspace(workspaceId: string): Promise<JournalLine[]> {
+    const docs = await db
+      .query("journalLines")
+      .withIndex("by_workspace", (q) =>
+        q.eq("workspaceId", asWorkspaceId(workspaceId)),
+      )
+      .collect();
+    return toLines(docs);
+  }
+
+  async function linesForEntry(
+    journalEntryId: Id<"postedJournalEntries">,
+  ): Promise<JournalLine[]> {
+    const docs = await db
+      .query("journalLines")
+      .withIndex("by_entry", (q) => q.eq("journalEntryId", journalEntryId))
+      .collect();
+    return toLines(docs);
   }
 
   async function toEntry(
@@ -196,7 +217,7 @@ async function readStore(db: ReadDb): Promise<
       if (!doc) {
         return undefined;
       }
-      return toEntry(doc, await linesFor(workspaceId));
+      return toEntry(doc, await linesForEntry(doc._id));
     },
 
     async listPostedCashExpenses(workspaceId) {
@@ -207,7 +228,7 @@ async function readStore(db: ReadDb): Promise<
             q.eq("workspaceId", asWorkspaceId(workspaceId)),
           )
           .collect(),
-        linesFor(workspaceId),
+        linesForWorkspace(workspaceId),
       ]);
       return Promise.all(docs.map((doc) => toEntry(doc, lines)));
     },
