@@ -1,0 +1,24 @@
+---
+description: Keep backend/core files under 600 lines and one concern per file
+globs: src/accounting/**/*.ts,convex/**/*.ts
+alwaysApply: true
+---
+
+# Backend file size and one concern
+
+Core and Convex server files stay **under 600 lines**. Go over that only when a split would lie about the design. Leave a one-line comment at the top of the file explaining why.
+
+One file is one concern, like a TanStack Router API route: one URL, one loader. Here that is one command, one adapter, or one shared helper.
+
+When two concerns share a file, split them. Create-workspace and record-cash-expense do not live together. Period calendar math does not live inside the cash-expense command. The Convex store adapter does not live inside a mutation wrapper.
+
+```text
+# ❌ one 600+ line factory of every command
+src/accounting/accounting.ts
+
+# ✅ one command per file, factory only wires them
+src/accounting/commands/recordCashExpense.ts
+src/accounting/core.ts
+```
+
+`convex/_generated/**` is excluded from this rule.

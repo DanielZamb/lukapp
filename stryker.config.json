@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "vitest": {
+    "configFile": "vitest.config.ts",
+    "related": false
+  },
+  "mutate": [
+    "src/accounting/**/*.ts",
+    "!src/accounting/**/*.test.ts",
+    "!src/accounting/convexHarness.ts",
+    "!src/accounting/types.ts",
+    "!src/accounting/index.ts"
+  ],
+  "incremental": true,
+  "ignoreStatic": true,
+  "reporters": ["clear-text", "progress", "html"]
+}

@@ -4,3 +4,12 @@
 docs/
 exports/
 .DS_Store
+node_modules/
+.pnpm/
+.pnpm-store/
+.env.local
+.convex/
+scratch/
+.stryker-tmp/
+reports/mutation/
+coverage/
