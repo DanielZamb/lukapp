@@ -22,30 +22,7 @@ function testdb() {
   return convexAccounting(modules);
 }
 
-test("a Personal Workspace starts from the versioned sparse Chart of Accounts", async () => {
-  const t = testdb();
-  const workspace = await createOwnedWorkspace(t);
-  const daily = await createDaily(t, workspace.id);
-
-  const accounts = await reader(t, workspace.id).ledgerAccounts();
-
-  expect(workspace.chartOfAccountsTemplate).toBe("personal@1");
-  expect(accounts.map(({ name, nature, systemKey }) => ({ name, nature, systemKey }))).toEqual([
-    { name: "Expenses", nature: "Expense", systemKey: "expenses" },
-    { name: "Income", nature: "Revenue", systemKey: "income" },
-    { name: "Opening Balance Equity", nature: "Equity", systemKey: "openingBalanceEquity" },
-    { name: "Daily", nature: "Asset", systemKey: undefined },
-  ]);
-  expect(accounts[3]).toEqual({
-    id: daily.ledgerAccountId,
-    name: "Daily",
-    nature: "Asset",
-    role: "Posting",
-    financialAccountProfileId: daily.id,
-  });
-});
-
-test("cash income debits the profile and credits Income", async () => {
+test("cash income debits the profile and credits Otros ingresos", async () => {
   const t = testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
@@ -68,7 +45,7 @@ test("cash income debits the profile and credits Income", async () => {
     creditMinorUnits,
   }))).toEqual([
     { name: "Daily", nature: "Asset", debitMinorUnits: 4000000, creditMinorUnits: 0 },
-    { name: "Income", nature: "Revenue", debitMinorUnits: 0, creditMinorUnits: 4000000 },
+    { name: "Otros ingresos", nature: "Revenue", debitMinorUnits: 0, creditMinorUnits: 4000000 },
   ]);
   expect(balance?.balance).toEqual({ currency: "COP", minorUnits: 4000000 });
 });
@@ -106,14 +83,14 @@ test("a card purchase grows a Liability, shown as money owed", async () => {
 test("the trial balance names each account by id and nature, even with duplicate names", async () => {
   const t = testdb();
   const workspace = await createOwnedWorkspace(t);
-  const confusing = await createProfile(t, workspace.id, "Expenses", "cash");
+  const confusing = await createProfile(t, workspace.id, "Otros gastos personales", "cash");
 
   await t.mutation(api.accounting.recordCashExpense, groceries(workspace.id, confusing.id));
   const trial = await reader(t, workspace.id).trialBalance();
 
-  expect(trial.map(({ name, nature }) => ({ name, nature }))).toEqual([
-    { name: "Expenses", nature: "Expense" },
-    { name: "Expenses", nature: "Asset" },
+  expect(trial.map(({ code, name, nature }) => ({ code, name, nature }))).toEqual([
+    { code: "11050501", name: "Otros gastos personales", nature: "Asset" },
+    { code: "51959595", name: "Otros gastos personales", nature: "Expense" },
   ]);
   expect(new Set(trial.map((row) => row.ledgerAccountId)).size).toBe(2);
 });

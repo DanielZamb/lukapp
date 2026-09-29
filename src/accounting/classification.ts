@@ -1,28 +1,32 @@
+import { natureOfCode } from "./chartOfAccounts";
 import { AccountingError } from "./errors";
-import type { AccountNature, FinancialAccountProductKind } from "./types";
+import type {
+  AccountNature,
+  ChartOfAccountsTemplate,
+  FinancialAccountProductKind,
+} from "./types";
 
-/** Product Classification Policy (ADR-0010): product facts decide the Posting Account nature. */
-export const profileClassificationPolicy = "financial-account-profile@1";
+/** Product Classification Policy (ADR-0010): product facts decide where the profile's Posting Account sits. */
+export const profileClassificationPolicy = "financial-account-profile@2";
 
-const natureByProductKind: Record<FinancialAccountProductKind, AccountNature> = {
-  cash: "Asset",
-  bankAccount: "Asset",
-  creditCard: "Liability",
-  loan: "Liability",
-};
-
-export function classifyFinancialAccountProfile(productKind: string): {
+export function classifyFinancialAccountProfile(
+  template: ChartOfAccountsTemplate,
+  productKind: string,
+): {
   productKind: FinancialAccountProductKind;
+  parentCode: string;
   nature: AccountNature;
   policy: string;
 } {
-  if (!Object.hasOwn(natureByProductKind, productKind)) {
+  if (!Object.hasOwn(template.financialAccountParents, productKind)) {
     throw new AccountingError("financial_account_product_kind_unknown");
   }
   const kind = productKind as FinancialAccountProductKind;
+  const parentCode = template.financialAccountParents[kind];
   return {
     productKind: kind,
-    nature: natureByProductKind[kind],
+    parentCode,
+    nature: natureOfCode(template, parentCode),
     policy: profileClassificationPolicy,
   };
 }

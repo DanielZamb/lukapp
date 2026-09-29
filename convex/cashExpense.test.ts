@@ -35,7 +35,7 @@ test("a posted cash expense can be read back with its profile and lines", async 
   expect(activity).toEqual([posted]);
   expect(posted.financialAccountProfileName).toBe("Daily");
   expect(posted.replay).toBe(false);
-  expect(posted.lines.map((line) => line.name)).toEqual(["Expenses", "Daily"]);
+  expect(posted.lines.map((line) => line.name)).toEqual(["Otros gastos personales", "Daily"]);
   expect(posted.lines.map((line) => line.nature)).toEqual(["Expense", "Asset"]);
   expect(posted.policy).toBe("cash-expense@1");
   expect(posted.postedBy).toBe(owner.userId);
@@ -136,13 +136,15 @@ test("a posted cash expense is balanced in Functional Currency", async () => {
   ).toBe(0);
   expect(trial).toContainEqual({
     ledgerAccountId: posted.lines[0]?.ledgerAccountId,
+    code: "51959595",
     nature: "Expense",
-    name: "Expenses",
+    name: "Otros gastos personales",
     debitMinorUnits: 150000,
     creditMinorUnits: 0,
   });
   expect(trial).toContainEqual({
     ledgerAccountId: daily.ledgerAccountId,
+    code: "11100501",
     nature: "Asset",
     name: "Daily",
     debitMinorUnits: 0,

@@ -1,8 +1,9 @@
 import { totalsByAccount } from "../ledgerTotals";
 import { requireWorkspace } from "../membership";
 import type { AccountingStore, Actor, TrialBalanceRow } from "../types";
+import { byCode } from "../views";
 
-/** Every Ledger Account with Posted activity; debits and credits sum to equal totals. */
+/** Every Ledger Account with Posted activity, in code order; debits and credits sum to equal totals. */
 export async function trialBalance(
   store: AccountingStore,
   input: { actor: Actor; workspaceId: string },
@@ -13,12 +14,13 @@ export async function trialBalance(
     store.listJournalEntries(input.workspaceId),
   ]);
   const totals = totalsByAccount(entries);
-  return accounts.flatMap((account) => {
+  return accounts.sort(byCode).flatMap((account) => {
     const row = totals.get(account.id);
     return row
       ? [
           {
             ledgerAccountId: account.id,
+            code: account.code,
             name: account.name,
             nature: account.nature,
             debitMinorUnits: row.debitMinorUnits,

@@ -19,7 +19,7 @@ export async function createPersonalWorkspace(
     },
     input.actor.userId,
   );
-  await provisionChartOfAccounts(store, workspace.id);
+  await provisionChartOfAccounts(store, workspace.id, personalChartTemplate);
   const period = await store.insertAccountingPeriod(workspace.id, {
     ...month,
     status: "open",

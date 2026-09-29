@@ -89,6 +89,18 @@ _Avoid_: Posting Account
 A Ledger Account eligible to receive Journal Lines. It never has child Ledger Accounts.
 _Avoid_: Summary Account
 
+**Account Code**:
+The hierarchical code of a Ledger Account in its COA Template, such as 530505 in the PUC. Its first digit locks the account's nature; its leading digits name the summary levels above it (clase, grupo, cuenta, subcuenta).
+_Avoid_: Category code, account number (for a bank account)
+
+**Auxiliary Account**:
+An eight-digit Posting Account added under an official PUC subaccount, used for a Financial Account Profile or for a personal concept the commercial PUC lacks.
+_Avoid_: Custom account, User Category
+
+**Normal Side**:
+The side, debit or credit, that increases a Ledger Account (its naturaleza). It follows the nature except for contra accounts such as accumulated depreciation.
+_Avoid_: Sign, direction
+
 **Financial Account Profile**:
 The user-facing description of a real-world bank account, wallet, card, loan, deposit, or similar financial product, linked to its automatically classified Posting Account.
 _Avoid_: Ledger Account, Chart of Accounts entry

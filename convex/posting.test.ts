@@ -25,9 +25,9 @@ async function kernel() {
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const accounts = await reader(t, workspace.id).ledgerAccounts();
-  const expenses = accounts.find((account) => account.systemKey === "expenses");
+  const expenses = accounts.find((account) => account.code === "51959595");
   if (!expenses) {
-    throw new Error("template is missing Expenses");
+    throw new Error("template is missing Otros gastos personales");
   }
   function post(
     lines: DraftJournalLine[],

@@ -2,10 +2,10 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
   accountNature,
+  normalSide,
   periodStatus,
   postingPolicy,
   productKind,
-  systemAccountKey,
 } from "./validators";
 
 export default defineSchema({
@@ -21,13 +21,14 @@ export default defineSchema({
   }).index("by_workspace_user", ["workspaceId", "userId"]),
   ledgerAccounts: defineTable({
     workspaceId: v.id("workspaces"),
+    code: v.string(),
     name: v.string(),
     nature: accountNature,
+    normalSide,
     role: v.literal("Posting"),
-    systemKey: v.optional(systemAccountKey),
   })
     .index("by_workspace", ["workspaceId"])
-    .index("by_workspace_system_key", ["workspaceId", "systemKey"]),
+    .index("by_workspace_code", ["workspaceId", "code"]),
   financialAccountProfiles: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),

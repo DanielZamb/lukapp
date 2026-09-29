@@ -7,6 +7,7 @@ import { convexReadStore, convexStore } from "./store";
 import {
   accountBalance,
   accountingPeriod,
+  catalogAccount,
   financialAccountProfile,
   ledgerAccount,
   money,
@@ -33,6 +34,7 @@ const cashActivity = {
   accountingDate: v.string(),
   description: v.string(),
   idempotencyKey: v.string(),
+  ledgerAccountCode: v.optional(v.string()),
 };
 
 async function run<T>(work: () => Promise<T>): Promise<T> {
@@ -100,6 +102,15 @@ export const listLedgerAccounts = query({
   handler: async (ctx, args) =>
     run(() =>
       createAccountingCore(convexReadStore(ctx.db)).listLedgerAccounts(withActor(args)),
+    ),
+});
+
+export const listCatalogAccounts = query({
+  args: inWorkspace,
+  returns: v.array(catalogAccount),
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).listCatalogAccounts(withActor(args)),
     ),
 });
 
