@@ -52,7 +52,12 @@ export type ChartOfAccountsTemplate = {
 };
 
 /** Product facts a basic user recognizes; classification turns them into a nature. */
-export type FinancialAccountProductKind = "cash" | "bankAccount" | "creditCard" | "loan";
+export type FinancialAccountProductKind =
+  | "cash"
+  | "bankAccount"
+  | "savingsAccount"
+  | "creditCard"
+  | "loan";
 
 /** Versioned rule that built a Journal Entry, kept as provenance. */
 export type PostingPolicy = "cash-expense@1" | "cash-income@1" | "reversal@1";

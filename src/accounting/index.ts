@@ -6,9 +6,10 @@
  *    sparse `co-puc-personal@1` Chart of Accounts: 313001 Patrimonio de apertura,
  *    42959595 Otros ingresos, 51959595 Otros gastos personales. Pass `now` (UTC ms)
  *    on the Convex mutation.
- * 2. `createFinancialAccountProfile({ name: "Nu", productKind: "bankAccount" })`.
+ * 2. `createFinancialAccountProfile({ name: "Daily", productKind: "bankAccount" })`.
  *    The product kind decides the PUC parent and so the nature: the profile gets its
- *    own auxiliary Posting Account, such as 11100501 under 111005 Bancos.
+ *    own auxiliary Posting Account, such as 11100501 under 111005 Bancos, or
+ *    11200501 under 112005 Cuentas de ahorro for a `savingsAccount`.
  * 3. `recordCashExpense` or `recordCashIncome` with `amount` in Functional Currency,
  *    `accountingDate` as `YYYY-MM-DD`, `description`, an `idempotencyKey`, and an
  *    optional `ledgerAccountCode` such as "530505" (Gastos bancarios). The code must

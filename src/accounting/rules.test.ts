@@ -94,6 +94,7 @@ test("product kinds classify under their PUC parent, which decides the nature", 
   const template = personalChartTemplate;
   expect(classifyFinancialAccountProfile(template, "cash")).toMatchObject({ parentCode: "110505", nature: "Asset" });
   expect(classifyFinancialAccountProfile(template, "bankAccount")).toMatchObject({ parentCode: "111005", nature: "Asset" });
+  expect(classifyFinancialAccountProfile(template, "savingsAccount")).toMatchObject({ parentCode: "112005", nature: "Asset" });
   expect(classifyFinancialAccountProfile(template, "creditCard")).toMatchObject({ parentCode: "210510", nature: "Liability" });
   expect(classifyFinancialAccountProfile(template, "loan")).toEqual({
     productKind: "loan",

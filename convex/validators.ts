@@ -20,6 +20,7 @@ export const catalogUse = v.union(
 export const productKind = v.union(
   v.literal("cash"),
   v.literal("bankAccount"),
+  v.literal("savingsAccount"),
   v.literal("creditCard"),
   v.literal("loan"),
 );

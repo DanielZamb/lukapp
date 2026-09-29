@@ -145,8 +145,9 @@ test("each profile gets the next auxiliary account under its PUC parent", async 
   const workspace = await createOwnedWorkspace(t);
 
   const profiles = [
-    await createProfile(t, workspace.id, "Nu", "bankAccount"),
+    await createProfile(t, workspace.id, "Nu", "savingsAccount"),
     await createProfile(t, workspace.id, "Davivienda", "bankAccount"),
+    await createProfile(t, workspace.id, "Bancolombia ahorros", "savingsAccount"),
     await createProfile(t, workspace.id, "Efectivo", "cash"),
     await createProfile(t, workspace.id, "TDC Banco de Bogotá", "creditCard"),
     await createProfile(t, workspace.id, "Crédito hipotecario", "loan"),
@@ -157,8 +158,9 @@ test("each profile gets the next auxiliary account under its PUC parent", async 
     const account = accounts.find((candidate) => candidate.id === profile.ledgerAccountId);
     return [account?.code, account?.name, account?.nature, account?.normalSide];
   })).toEqual([
-    ["11100501", "Nu", "Asset", "Debit"],
-    ["11100502", "Davivienda", "Asset", "Debit"],
+    ["11200501", "Nu", "Asset", "Debit"],
+    ["11100501", "Davivienda", "Asset", "Debit"],
+    ["11200502", "Bancolombia ahorros", "Asset", "Debit"],
     ["11050501", "Efectivo", "Asset", "Debit"],
     ["21051001", "TDC Banco de Bogotá", "Liability", "Credit"],
     ["21051002", "Crédito hipotecario", "Liability", "Credit"],

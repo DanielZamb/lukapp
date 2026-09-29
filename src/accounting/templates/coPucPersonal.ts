@@ -20,6 +20,7 @@ export const coPucPersonalTemplate = {
   financialAccountParents: {
     cash: "110505",
     bankAccount: "111005",
+    savingsAccount: "112005",
     creditCard: "210510",
     loan: "210510",
   },
@@ -131,6 +132,8 @@ export const coPucPersonalTemplate = {
     "110505": "Caja general",
     "1110": "Bancos",
     "111005": "Moneda nacional",
+    "1120": "Cuentas de ahorro",
+    "112005": "Bancos",
     "12": "Inversiones",
     "1225": "Certificados",
     "1245": "Derechos fiduciarios",
