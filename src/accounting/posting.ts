@@ -39,6 +39,7 @@ export async function postJournalEntry(
   }
   assertBalancedLines(draft.lines);
   await assertPostingAccounts(store, input.workspaceId, draft.lines);
+  await assertLinkedRecords(store, input.workspaceId, draft);
   const period = periodFromAccountingDate(draft.accountingDate);
   await requirePostablePeriod(store, input.workspaceId, draft.accountingDate);
   const entry = await store.insertJournalEntry({
@@ -87,6 +88,26 @@ async function assertPostingAccounts(
     const account = await store.getLedgerAccount(line.ledgerAccountId);
     if (!account || account.workspaceId !== workspaceId) {
       throw new AccountingError("ledger_account_not_found");
+    }
+  }
+}
+
+/** A draft may only link to a profile or an entry in its own Workspace. */
+async function assertLinkedRecords(
+  store: AccountingStore,
+  workspaceId: string,
+  draft: JournalEntryDraft,
+): Promise<void> {
+  if (draft.financialAccountProfileId !== undefined) {
+    const profile = await store.getProfile(draft.financialAccountProfileId);
+    if (!profile || profile.workspaceId !== workspaceId) {
+      throw new AccountingError("financial_account_profile_not_found");
+    }
+  }
+  if (draft.reversesEntryId !== undefined) {
+    const reversed = await store.getJournalEntry(draft.reversesEntryId);
+    if (!reversed || reversed.workspaceId !== workspaceId) {
+      throw new AccountingError("journal_entry_not_found");
     }
   }
 }

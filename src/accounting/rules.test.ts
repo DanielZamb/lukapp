@@ -125,9 +125,26 @@ test("the personal template provisions one account per nature it needs", () => {
   ]);
 });
 
-test("Functional Currency is a three-letter ISO code", () => {
-  expect(requireFunctionalCurrencyCode("COP")).toBe("COP");
-  for (const bad of ["", "cop", "CO", "COPX", " COP"]) {
+test("Functional Currency is an active ISO 4217 currency", () => {
+  for (const code of ["COP", "USD", "EUR", "JPY", "VED", "XCG"]) {
+    expect(requireFunctionalCurrencyCode(code)).toBe(code);
+  }
+  for (const bad of [
+    "",
+    "cop",
+    "CO",
+    "COPX",
+    " COP",
+    "ZZZ",
+    "XXX",
+    "XTS",
+    "XAU",
+    "XDR",
+    "BOV",
+    "ANG",
+    "BGN",
+    "HRK",
+  ]) {
     expectAccountingError(
       () => requireFunctionalCurrencyCode(bad),
       "functional_currency_invalid",

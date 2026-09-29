@@ -1,8 +1,9 @@
+import { functionalCurrencyCodes } from "./currencies";
 import { AccountingError } from "./errors";
 import type { Money, StoredWorkspace } from "./types";
 
 export function requireFunctionalCurrencyCode(currency: string): string {
-  if (!/^[A-Z]{3}$/.test(currency)) {
+  if (!functionalCurrencyCodes.has(currency)) {
     throw new AccountingError("functional_currency_invalid");
   }
   return currency;

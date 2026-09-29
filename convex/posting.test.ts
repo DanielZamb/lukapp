@@ -174,3 +174,45 @@ test("Posting treats any changed fact under a used key as a conflict", async () 
     ]);
   }
 });
+
+test("Posting refuses links to a profile or entry outside the Workspace", async () => {
+  const { t, workspace, post, balanced } = await kernel();
+  const other = await createOwnedWorkspace(t);
+  const otherDaily = await createDaily(t, other.id);
+  const otherEntry = await t.mutation(api.accounting.recordCashExpense, {
+    userId: owner.userId,
+    workspaceId: other.id,
+    financialAccountProfileId: otherDaily.id,
+    amount: { currency: "COP", minorUnits: 10 },
+    accountingDate: "2026-09-24",
+    description: "Elsewhere",
+    idempotencyKey: "elsewhere",
+  });
+
+  const foreignProfile = await post(balanced, "profile", {
+    financialAccountProfileId: otherDaily.id,
+  });
+  const missingProfile = await post(balanced, "missing-profile", {
+    financialAccountProfileId: "not-an-id",
+  });
+  const foreignEntry = await post(balanced, "entry", { reversesEntryId: otherEntry.id });
+  const missingEntry = await post(balanced, "missing-entry", { reversesEntryId: "not-an-id" });
+
+  expect(foreignProfile).toMatchObject({ code: "financial_account_profile_not_found" });
+  expect(missingProfile).toMatchObject({ code: "financial_account_profile_not_found" });
+  expect(foreignEntry).toMatchObject({ code: "journal_entry_not_found" });
+  expect(missingEntry).toMatchObject({ code: "journal_entry_not_found" });
+  expect(await reader(t, workspace.id).entries()).toEqual([]);
+});
+
+test("Posting accepts links to records in its own Workspace", async () => {
+  const { t, workspace, daily, post, balanced } = await kernel();
+
+  const first = await post(balanced, "first", { financialAccountProfileId: daily.id });
+  const linked = await post(balanced, "linked", {
+    reversesEntryId: (first as { entry: { id: string } }).entry.id,
+  });
+
+  expect(linked).toMatchObject({ replay: false });
+  expect(await reader(t, workspace.id).entries()).toHaveLength(2);
+});

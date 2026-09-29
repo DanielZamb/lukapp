@@ -1,6 +1,6 @@
 export const accountingErrorMessages = {
   workspace_membership_required: "Workspace Membership required",
-  functional_currency_invalid: "Functional Currency must be a three-letter ISO 4217 code",
+  functional_currency_invalid: "Functional Currency must be an active ISO 4217 currency code",
   currency_mismatch: "Amount must be in the Workspace Functional Currency",
   amount_must_be_positive: "amount must be positive",
   accounting_date_required: "Accounting Date required",

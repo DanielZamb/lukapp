@@ -129,10 +129,10 @@ test("a profile needs a name, and names are trimmed", async () => {
   expect(wallet.name).toBe("Wallet");
 });
 
-test("a Workspace needs a real Functional Currency code", async () => {
+test("a Workspace needs an active ISO 4217 Functional Currency", async () => {
   const t = testdb();
 
-  for (const functionalCurrency of ["", "cop", "PESOS"]) {
+  for (const functionalCurrency of ["", "cop", "PESOS", "ZZZ"]) {
     const error = await caught(
       t.mutation(api.accounting.createPersonalWorkspace, {
         userId: owner.userId,
