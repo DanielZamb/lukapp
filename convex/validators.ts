@@ -85,6 +85,7 @@ export const catalogAccount = v.object({
   nature: accountNature,
   normalSide,
   use: catalogUse,
+  reportingConcept: v.optional(v.string()),
   ancestors: v.array(v.object({ code: v.string(), name: v.string() })),
   ledgerAccountId: v.optional(v.string()),
 });

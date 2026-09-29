@@ -1,6 +1,7 @@
 /* The Workspace Chart of Accounts: template lookup, locked classification, and sparse activation (ADR-0007, ADR-0082). */
 import { AccountingError, type AccountingErrorCode } from "./errors";
 import { coPucPersonalTemplate } from "./templates/coPucPersonal";
+import { usGaapPersonalTemplate } from "./templates/usGaapPersonal";
 import type {
   AccountNature,
   AccountingStore,
@@ -13,12 +14,12 @@ import type {
   StoredWorkspace,
 } from "./types";
 
-/** The template every new Personal Workspace starts from. */
+/** The template a new Personal Workspace starts from unless it asks for another. */
 export const personalChartTemplate: ChartOfAccountsTemplate = coPucPersonalTemplate;
 
-const templates = new Map<string, ChartOfAccountsTemplate>([
-  [coPucPersonalTemplate.version, coPucPersonalTemplate],
-]);
+const templates = new Map<string, ChartOfAccountsTemplate>(
+  [coPucPersonalTemplate, usGaapPersonalTemplate].map((template) => [template.version, template]),
+);
 
 /** Uses a recording flow may ask for, and the error when a code belongs to another use. */
 type RecordingUse = Extract<CatalogUse, "expense" | "income">;
@@ -154,6 +155,7 @@ export function catalogView(
       name: account.name,
       ...classify(template, account),
       use: account.use,
+      ...(account.reportingConcept ? { reportingConcept: account.reportingConcept } : {}),
       ancestors: ancestorCodes(account.code).map((code) => ({
         code,
         name: template.summaryNames[code] ?? "",

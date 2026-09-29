@@ -236,3 +236,75 @@ test("the trial balance lists accounts in PUC code order with their codes", asyn
     ["51159501", 1000, 0],
   ]);
 });
+
+test("a Workspace can start from the English US GAAP template instead", async () => {
+  const t = testdb();
+  const workspace = await t.mutation(api.accounting.createPersonalWorkspace, {
+    userId: "owner-1",
+    functionalCurrency: "USD",
+    now: Date.UTC(2026, 8, 24),
+    chartOfAccountsTemplate: "us-gaap-personal@1",
+  });
+  const checking = await createProfile(t, workspace.id, "Checking", "bankAccount");
+  const card = await createProfile(t, workspace.id, "Visa", "creditCard");
+  await createProfile(t, workspace.id, "High-yield savings", "savingsAccount");
+
+  const fee = await t.mutation(api.accounting.recordCashExpense, {
+    ...groceries(workspace.id, checking.id),
+    amount: { currency: "USD", minorUnits: 1200 },
+    ledgerAccountCode: "6010",
+  });
+  const pucCode = await caught(
+    t.mutation(api.accounting.recordCashExpense, {
+      ...groceries(workspace.id, checking.id, { idempotencyKey: "puc" }),
+      amount: { currency: "USD", minorUnits: 1200 },
+      ledgerAccountCode: "530505",
+    }),
+  );
+  const accounts = await reader(t, workspace.id).ledgerAccounts();
+  const catalog = await t.query(api.accounting.listCatalogAccounts, {
+    userId: "owner-1",
+    workspaceId: workspace.id,
+  });
+
+  expect(workspace.chartOfAccountsTemplate).toBe("us-gaap-personal@1");
+  expect(accounts.map(({ code, name, nature, normalSide }) => [code, name, nature, normalSide])).toEqual([
+    ["102001", "Checking", "Asset", "Debit"],
+    ["103001", "High-yield savings", "Asset", "Debit"],
+    ["201001", "Visa", "Liability", "Credit"],
+    ["3010", "Opening balance equity", "Equity", "Credit"],
+    ["4990", "Other income", "Revenue", "Credit"],
+    ["5599", "Other personal expenses", "Expense", "Debit"],
+    ["6010", "Bank fees", "Expense", "Debit"],
+  ]);
+  expect(accounts.find((account) => account.id === card.ledgerAccountId)?.code).toBe("201001");
+  expect(fee.lines[0]).toMatchObject({ code: "6010", name: "Bank fees" });
+  expect(pucCode).toMatchObject({ data: { code: "ledger_account_code_unknown" } });
+  expect(catalog.find((account) => account.code === "6030")).toEqual({
+    code: "6030",
+    name: "Interest expense",
+    nature: "Expense",
+    normalSide: "Debit",
+    use: "expense",
+    reportingConcept: "us-gaap:InterestExpense",
+    ancestors: [
+      { code: "6", name: "Financial and other expenses" },
+      { code: "60", name: "Financial costs" },
+    ],
+  });
+});
+
+test("a Workspace cannot start from an unknown COA Template", async () => {
+  const t = testdb();
+
+  const error = await caught(
+    t.mutation(api.accounting.createPersonalWorkspace, {
+      userId: "owner-1",
+      functionalCurrency: "COP",
+      now: Date.UTC(2026, 8, 24),
+      chartOfAccountsTemplate: "personal@1",
+    }),
+  );
+
+  expect(error).toMatchObject({ data: { code: "chart_of_accounts_template_unknown" } });
+});

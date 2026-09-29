@@ -4,8 +4,10 @@
  * Record, then correct, a cash expense:
  * 1. `createPersonalWorkspace({ actor, functionalCurrency: "COP" })` provisions the
  *    sparse `co-puc-personal@1` Chart of Accounts: 313001 Patrimonio de apertura,
- *    42959595 Otros ingresos, 51959595 Otros gastos personales. Pass `now` (UTC ms)
- *    on the Convex mutation.
+ *    42959595 Otros ingresos, 51959595 Otros gastos personales. Pass
+ *    `chartOfAccountsTemplate: "us-gaap-personal@1"` for the English template, whose
+ *    accounts cite FASB US GAAP Taxonomy concepts. Pass `now` (UTC ms) on the Convex
+ *    mutation.
  * 2. `createFinancialAccountProfile({ name: "Daily", productKind: "bankAccount" })`.
  *    The product kind decides the PUC parent and so the nature: the profile gets its
  *    own auxiliary Posting Account, such as 11100501 under 111005 Bancos, or

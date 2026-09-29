@@ -140,6 +140,7 @@ test("natures decide the side that increases an account", () => {
 
 test("only known COA Template versions resolve", () => {
   expect(chartTemplate("co-puc-personal@1")).toBe(personalChartTemplate);
+  expect(chartTemplate("us-gaap-personal@1").version).toBe("us-gaap-personal@1");
   expectAccountingError(() => chartTemplate("personal@1"), "chart_of_accounts_template_unknown");
 });
 
@@ -149,14 +150,17 @@ test("PUC levels above a code are clase, grupo, cuenta, and subcuenta", () => {
   expect(ancestorCodes("1105")).toEqual(["1", "11"]);
 });
 
-test("the PUC template keeps Posting Accounts as named, unique leaves", () => {
-  const template = personalChartTemplate;
+test.each([
+  ["co-puc-personal@1", /^[1-5](\d{3}|\d{5}|\d{7})$/],
+  ["us-gaap-personal@1", /^[1-6]\d{3}$/],
+])("%s keeps Posting Accounts as named, unique leaves", (version, codeShape) => {
+  const template = chartTemplate(version);
   const codes = template.accounts.map((account) => account.code);
   const parents = Object.values(template.financialAccountParents);
 
   expect(new Set(codes).size).toBe(codes.length);
   for (const code of codes) {
-    expect(code).toMatch(/^[1-5](\d{3}|\d{5}|\d{7})$/);
+    expect(code).toMatch(codeShape);
     expect([...codes, ...parents].filter((other) => other !== code && other.startsWith(code))).toEqual([]);
   }
   for (const code of [...codes, ...parents]) {
@@ -167,8 +171,19 @@ test("the PUC template keeps Posting Accounts as named, unique leaves", () => {
   for (const parent of parents) {
     expect(template.summaryNames[parent], parent).toBeTruthy();
   }
-  const defaults = template.defaults;
-  expect(template.accounts.filter((account) => Object.values(defaults).includes(account.code))).toEqual([
+  for (const [use, code] of [
+    ["expense", template.defaults.expense],
+    ["income", template.defaults.income],
+    ["openingBalance", template.defaults.openingBalance],
+  ]) {
+    expect(template.accounts.find((account) => account.code === code)?.use, code).toBe(use);
+  }
+});
+
+test("the PUC template defaults and contra accounts", () => {
+  const template = personalChartTemplate;
+  const defaults = Object.values(template.defaults);
+  expect(template.accounts.filter((account) => defaults.includes(account.code))).toEqual([
     { code: "313001", name: "Patrimonio de apertura", use: "openingBalance" },
     { code: "42959595", name: "Otros ingresos", use: "income" },
     { code: "51959595", name: "Otros gastos personales", use: "expense" },
@@ -179,6 +194,21 @@ test("the PUC template keeps Posting Accounts as named, unique leaves", () => {
     "159220",
     "159235",
   ]);
+});
+
+test("the US GAAP template mirrors the PUC contra accounts and cites FASB concepts", () => {
+  const template = chartTemplate("us-gaap-personal@1");
+  expect(template.accounts.filter((account) => account.normalSide).map((account) => account.code)).toEqual([
+    "1591",
+    "1592",
+    "1593",
+    "1594",
+  ]);
+  for (const account of template.accounts) {
+    if (account.reportingConcept) {
+      expect(account.reportingConcept).toMatch(/^us-gaap:[A-Z][A-Za-z0-9]+$/);
+    }
+  }
 });
 
 test("Functional Currency is an active ISO 4217 currency", () => {

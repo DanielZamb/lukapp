@@ -35,6 +35,8 @@ export type CatalogAccount = {
   use: CatalogUse;
   /** Only for contra accounts; otherwise the nature decides. */
   normalSide?: NormalSide;
+  /** Qualified name of the closest reporting taxonomy element, such as us-gaap:InterestExpense. */
+  reportingConcept?: string;
 };
 
 /** A versioned COA Template. The first digit of a code locks the account's nature. */
@@ -96,6 +98,7 @@ export type CatalogAccountView = {
   nature: AccountNature;
   normalSide: NormalSide;
   use: CatalogUse;
+  reportingConcept?: string;
   ancestors: Array<{ code: string; name: string }>;
   /** Present once the Workspace has activated the account. */
   ledgerAccountId?: string;
@@ -268,6 +271,8 @@ export type AccountingCore = {
   createPersonalWorkspace(input: {
     actor: Actor;
     functionalCurrency: string;
+    /** COA Template version; co-puc-personal@1 when omitted. */
+    chartOfAccountsTemplate?: string;
   }): Promise<Workspace>;
   openWorkspace(input: {
     actor: Actor;

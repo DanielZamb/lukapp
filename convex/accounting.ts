@@ -53,7 +53,12 @@ function withActor<T extends { userId: string }>({ userId, ...rest }: T) {
 }
 
 export const createPersonalWorkspace = mutation({
-  args: { ...actor, functionalCurrency: v.string(), now: v.number() },
+  args: {
+    ...actor,
+    functionalCurrency: v.string(),
+    chartOfAccountsTemplate: v.optional(v.string()),
+    now: v.number(),
+  },
   returns: workspace,
   handler: async (ctx, args) =>
     run(() => {
@@ -63,6 +68,9 @@ export const createPersonalWorkspace = mutation({
       return core.createPersonalWorkspace({
         actor: { userId: args.userId },
         functionalCurrency: args.functionalCurrency,
+        ...(args.chartOfAccountsTemplate
+          ? { chartOfAccountsTemplate: args.chartOfAccountsTemplate }
+          : {}),
       });
     }),
 });
