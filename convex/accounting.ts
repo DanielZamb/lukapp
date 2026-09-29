@@ -8,9 +8,11 @@ import {
   accountBalance,
   accountingPeriod,
   financialAccountProfile,
+  ledgerAccount,
   money,
   periodKey,
-  postedCashExpense,
+  postedJournalEntry,
+  productKind,
   trialBalanceRow,
   workspace,
 } from "./validators";
@@ -19,191 +21,151 @@ const actor = {
   userId: v.string(),
 };
 
-function throwAccounting(error: unknown): never {
-  if (error instanceof AccountingError) {
-    throw new ConvexError({ code: error.code, message: error.message });
-  }
-  throw error;
-}
+const inWorkspace = {
+  ...actor,
+  workspaceId: v.string(),
+};
+
+const cashActivity = {
+  ...inWorkspace,
+  financialAccountProfileId: v.string(),
+  amount: money,
+  accountingDate: v.string(),
+  description: v.string(),
+  idempotencyKey: v.string(),
+};
 
 async function run<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
-    throwAccounting(error);
+    if (error instanceof AccountingError) {
+      throw new ConvexError({ code: error.code, message: error.message });
+    }
+    throw error;
   }
 }
 
+function withActor<T extends { userId: string }>({ userId, ...rest }: T) {
+  return { actor: { userId }, ...rest };
+}
+
 export const createPersonalWorkspace = mutation({
-  args: {
-    ...actor,
-    functionalCurrency: v.string(),
-    now: v.number(),
-  },
+  args: { ...actor, functionalCurrency: v.string(), now: v.number() },
   returns: workspace,
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexStore(ctx.db), {
-      now: () => dateFromTimestamp(args.now),
-    });
-    return run(() =>
-      core.createPersonalWorkspace({
+  handler: async (ctx, args) =>
+    run(() => {
+      const core = createAccountingCore(convexStore(ctx.db), {
+        now: () => dateFromTimestamp(args.now),
+      });
+      return core.createPersonalWorkspace({
         actor: { userId: args.userId },
         functionalCurrency: args.functionalCurrency,
-      }),
-    );
-  },
+      });
+    }),
 });
 
 export const openWorkspace = query({
-  args: {
-    ...actor,
-    workspaceId: v.string(),
-    now: v.number(),
-  },
+  args: { ...inWorkspace, now: v.number() },
   returns: workspace,
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexReadStore(ctx.db), {
-      now: () => dateFromTimestamp(args.now),
-    });
-    return run(() =>
-      core.openWorkspace({
-        actor: { userId: args.userId },
-        workspaceId: args.workspaceId,
-        now: args.now,
-      }),
-    );
-  },
+  handler: async (ctx, args) =>
+    run(() => createAccountingCore(convexReadStore(ctx.db)).openWorkspace(withActor(args))),
 });
 
 export const createFinancialAccountProfile = mutation({
-  args: {
-    ...actor,
-    workspaceId: v.string(),
-    name: v.string(),
-  },
+  args: { ...inWorkspace, name: v.string(), productKind },
   returns: financialAccountProfile,
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexStore(ctx.db));
-    return run(() =>
-      core.createFinancialAccountProfile({
-        actor: { userId: args.userId },
-        workspaceId: args.workspaceId,
-        name: args.name,
-      }),
-    );
-  },
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db)).createFinancialAccountProfile(
+        withActor(args),
+      ),
+    ),
 });
 
 export const listFinancialAccountProfiles = query({
-  args: {
-    ...actor,
-    workspaceId: v.string(),
-  },
+  args: inWorkspace,
   returns: v.array(financialAccountProfile),
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexReadStore(ctx.db));
-    return run(() =>
-      core.listFinancialAccountProfiles({
-        actor: { userId: args.userId },
-        workspaceId: args.workspaceId,
-      }),
-    );
-  },
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).listFinancialAccountProfiles(
+        withActor(args),
+      ),
+    ),
+});
+
+export const listLedgerAccounts = query({
+  args: inWorkspace,
+  returns: v.array(ledgerAccount),
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).listLedgerAccounts(withActor(args)),
+    ),
 });
 
 export const lockAccountingPeriod = mutation({
-  args: {
-    ...actor,
-    workspaceId: v.string(),
-    period: periodKey,
-  },
+  args: { ...inWorkspace, period: periodKey, reason: v.optional(v.string()) },
   returns: accountingPeriod,
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexStore(ctx.db));
-    return run(() =>
-      core.lockAccountingPeriod({
-        actor: { userId: args.userId },
-        workspaceId: args.workspaceId,
-        period: args.period,
-      }),
-    );
-  },
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db)).lockAccountingPeriod(withActor(args)),
+    ),
 });
 
 export const recordCashExpense = mutation({
-  args: {
-    ...actor,
-    workspaceId: v.string(),
-    financialAccountProfileId: v.string(),
-    amount: money,
-    accountingDate: v.string(),
-    description: v.string(),
-    idempotencyKey: v.string(),
-  },
-  returns: postedCashExpense,
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexStore(ctx.db));
-    return run(() =>
-      core.recordCashExpense({
-        actor: { userId: args.userId },
-        workspaceId: args.workspaceId,
-        financialAccountProfileId: args.financialAccountProfileId,
-        amount: args.amount,
-        accountingDate: args.accountingDate,
-        description: args.description,
-        idempotencyKey: args.idempotencyKey,
-      }),
-    );
-  },
+  args: cashActivity,
+  returns: postedJournalEntry,
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db)).recordCashExpense(withActor(args)),
+    ),
 });
 
-export const listPostedCashExpenses = query({
+export const recordCashIncome = mutation({
+  args: cashActivity,
+  returns: postedJournalEntry,
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db)).recordCashIncome(withActor(args)),
+    ),
+});
+
+export const reversePostedEntry = mutation({
   args: {
-    ...actor,
-    workspaceId: v.string(),
+    ...inWorkspace,
+    journalEntryId: v.string(),
+    accountingDate: v.optional(v.string()),
+    description: v.optional(v.string()),
+    idempotencyKey: v.string(),
   },
-  returns: v.array(postedCashExpense),
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexReadStore(ctx.db));
-    return run(() =>
-      core.listPostedCashExpenses({
-        actor: { userId: args.userId },
-        workspaceId: args.workspaceId,
-      }),
-    );
-  },
+  returns: postedJournalEntry,
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db)).reversePostedEntry(withActor(args)),
+    ),
+});
+
+export const listJournalEntries = query({
+  args: inWorkspace,
+  returns: v.array(postedJournalEntry),
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).listJournalEntries(withActor(args)),
+    ),
 });
 
 export const balances = query({
-  args: {
-    ...actor,
-    workspaceId: v.string(),
-  },
+  args: inWorkspace,
   returns: v.array(accountBalance),
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexReadStore(ctx.db));
-    return run(() =>
-      core.balances({
-        actor: { userId: args.userId },
-        workspaceId: args.workspaceId,
-      }),
-    );
-  },
+  handler: async (ctx, args) =>
+    run(() => createAccountingCore(convexReadStore(ctx.db)).balances(withActor(args))),
 });
 
 export const trialBalance = query({
-  args: {
-    ...actor,
-    workspaceId: v.string(),
-  },
+  args: inWorkspace,
   returns: v.array(trialBalanceRow),
-  handler: async (ctx, args) => {
-    const core = createAccountingCore(await convexReadStore(ctx.db));
-    return run(() =>
-      core.trialBalance({
-        actor: { userId: args.userId },
-        workspaceId: args.workspaceId,
-      }),
-    );
-  },
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).trialBalance(withActor(args)),
+    ),
 });

@@ -27,7 +27,7 @@ test("a posted cash expense can be read back with its profile and lines", async 
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
-  const activity = await t.query(api.accounting.listPostedCashExpenses, {
+  const activity = await t.query(api.accounting.listJournalEntries, {
     userId: owner.userId,
     workspaceId: workspace.id,
   });
@@ -36,10 +36,9 @@ test("a posted cash expense can be read back with its profile and lines", async 
   expect(posted.financialAccountProfileName).toBe("Daily");
   expect(posted.replay).toBe(false);
   expect(posted.lines.map((line) => line.name)).toEqual(["Expenses", "Daily"]);
-  expect(posted.lines.map((line) => line.journalEntryId)).toEqual([
-    posted.id,
-    posted.id,
-  ]);
+  expect(posted.lines.map((line) => line.nature)).toEqual(["Expense", "Asset"]);
+  expect(posted.policy).toBe("cash-expense@1");
+  expect(posted.postedBy).toBe(owner.userId);
   expect(
     posted.lines.reduce((sum, line) => sum + line.debitMinorUnits, 0),
   ).toBe(posted.lines.reduce((sum, line) => sum + line.creditMinorUnits, 0));
@@ -53,7 +52,7 @@ test("repeating an idempotency key posts the cash expense once", async () => {
 
   const first = await t.mutation(api.accounting.recordCashExpense, input);
   const second = await t.mutation(api.accounting.recordCashExpense, input);
-  const activity = await t.query(api.accounting.listPostedCashExpenses, {
+  const activity = await t.query(api.accounting.listJournalEntries, {
     userId: owner.userId,
     workspaceId: workspace.id,
   });
@@ -69,14 +68,15 @@ test("repeating an idempotency key posts the cash expense once", async () => {
     {
       financialAccountProfileId: daily.id,
       name: "Daily",
+      nature: "Asset",
       debitMinorUnits: 0,
       creditMinorUnits: 150000,
-      debitMinusCredit: { currency: "COP", minorUnits: -150000 },
+      balance: { currency: "COP", minorUnits: -150000 },
     },
   ]);
 });
 
-test("an idempotency key cannot replay a different currency", async () => {
+test("a replayed idempotency key still rejects a different currency", async () => {
   const t = testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
@@ -92,7 +92,7 @@ test("an idempotency key cannot replay a different currency", async () => {
     })
     .catch((caught: unknown) => caught);
 
-  expect(error).toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  expect(error).toMatchObject({ data: { code: "currency_mismatch" } });
 });
 
 test("an idempotency key cannot post a different cash expense", async () => {
@@ -122,7 +122,7 @@ test("a posted cash expense is balanced in Functional Currency", async () => {
   const t = testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  await t.mutation(
+  const posted = await t.mutation(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
@@ -135,11 +135,15 @@ test("a posted cash expense is balanced in Functional Currency", async () => {
     trial.reduce((sum, row) => sum + row.debitMinorUnits - row.creditMinorUnits, 0),
   ).toBe(0);
   expect(trial).toContainEqual({
+    ledgerAccountId: posted.lines[0]?.ledgerAccountId,
+    nature: "Expense",
     name: "Expenses",
     debitMinorUnits: 150000,
     creditMinorUnits: 0,
   });
   expect(trial).toContainEqual({
+    ledgerAccountId: daily.ledgerAccountId,
+    nature: "Asset",
     name: "Daily",
     debitMinorUnits: 0,
     creditMinorUnits: 150000,
@@ -167,18 +171,20 @@ test("balances move only after a cash expense is posted", async () => {
     {
       financialAccountProfileId: daily.id,
       name: "Daily",
+      nature: "Asset",
       debitMinorUnits: 0,
       creditMinorUnits: 0,
-      debitMinusCredit: { currency: "COP", minorUnits: 0 },
+      balance: { currency: "COP", minorUnits: 0 },
     },
   ]);
   expect(after).toEqual([
     {
       financialAccountProfileId: daily.id,
       name: "Daily",
+      nature: "Asset",
       debitMinorUnits: 0,
       creditMinorUnits: 150000,
-      debitMinusCredit: { currency: "COP", minorUnits: -150000 },
+      balance: { currency: "COP", minorUnits: -150000 },
     },
   ]);
 });
@@ -200,7 +206,7 @@ test("a non-finite or fractional amount cannot become Posted", async () => {
       amount: { currency: "COP", minorUnits: 1.5 },
     })
     .catch((caught: unknown) => caught);
-  const activity = await t.query(api.accounting.listPostedCashExpenses, {
+  const activity = await t.query(api.accounting.listJournalEntries, {
     userId: owner.userId,
     workspaceId: workspace.id,
   });
@@ -223,7 +229,7 @@ test("a zero-amount cash expense cannot become Posted", async () => {
       }),
     )
     .catch((caught: unknown) => caught);
-  const activity = await t.query(api.accounting.listPostedCashExpenses, {
+  const activity = await t.query(api.accounting.listJournalEntries, {
     userId: owner.userId,
     workspaceId: workspace.id,
   });
@@ -260,5 +266,5 @@ test("a cash expense must use the Workspace Functional Currency", async () => {
     })
     .catch((caught: unknown) => caught);
 
-  expect(error).toMatchObject({ data: { code: "functional_currency_required" } });
+  expect(error).toMatchObject({ data: { code: "currency_mismatch" } });
 });

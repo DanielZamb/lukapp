@@ -6,15 +6,15 @@ import type {
   PostedJournalEntry,
 } from "../types";
 
-/** Dr Expenses, Cr the profile's Posting Account. */
-export function recordCashExpense(
+/** Dr the profile's Posting Account, Cr Income. */
+export function recordCashIncome(
   store: AccountingStore,
   clock: AccountingClock,
   input: CashActivityInput,
 ): Promise<PostedJournalEntry> {
   return recordCashActivity(store, clock, input, {
-    policy: "cash-expense@1",
-    direction: "out",
-    counterpart: "expenses",
+    policy: "cash-income@1",
+    direction: "in",
+    counterpart: "income",
   });
 }

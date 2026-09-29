@@ -1,28 +1,28 @@
-import { toWorkspace } from "../helpers";
+import { personalChartTemplate, provisionChartOfAccounts } from "../chartOfAccounts";
+import { requireFunctionalCurrencyCode } from "../money";
 import { clockMonth } from "../period";
 import type { AccountingClock, AccountingStore, Actor, Workspace } from "../types";
+import { toWorkspace } from "../views";
 
 export async function createPersonalWorkspace(
   store: AccountingStore,
   clock: AccountingClock,
   input: { actor: Actor; functionalCurrency: string },
 ): Promise<Workspace> {
+  const functionalCurrency = requireFunctionalCurrencyCode(input.functionalCurrency);
+  const month = clockMonth(clock.now());
   const workspace = await store.insertWorkspace(
-    { kind: "Personal", functionalCurrency: input.functionalCurrency },
+    {
+      kind: "Personal",
+      functionalCurrency,
+      chartOfAccountsTemplate: personalChartTemplate.version,
+    },
     input.actor.userId,
   );
-  const expense = await store.insertLedgerAccount({
-    workspaceId: workspace.id,
-    name: "Expenses",
-  });
-  await store.insertLedgerAccount({
-    workspaceId: workspace.id,
-    name: "Opening Balance Equity",
-  });
-  await store.setExpenseAccount(workspace.id, expense.id);
+  await provisionChartOfAccounts(store, workspace.id);
   const period = await store.insertAccountingPeriod(workspace.id, {
-    ...clockMonth(clock.now()),
+    ...month,
     status: "open",
   });
-  return toWorkspace({ ...workspace, expenseAccountId: expense.id }, period);
+  return toWorkspace(workspace, period);
 }

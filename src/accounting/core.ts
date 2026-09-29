@@ -1,12 +1,15 @@
-import { balances } from "./commands/balances";
 import { createFinancialAccountProfile } from "./commands/createFinancialAccountProfile";
 import { createPersonalWorkspace } from "./commands/createPersonalWorkspace";
-import { listFinancialAccountProfiles } from "./commands/listFinancialAccountProfiles";
-import { listPostedCashExpenses } from "./commands/listPostedCashExpenses";
 import { lockAccountingPeriod } from "./commands/lockAccountingPeriod";
-import { openWorkspace } from "./commands/openWorkspace";
 import { recordCashExpense } from "./commands/recordCashExpense";
-import { trialBalance } from "./commands/trialBalance";
+import { recordCashIncome } from "./commands/recordCashIncome";
+import { reversePostedEntry } from "./commands/reversePostedEntry";
+import { balances } from "./queries/balances";
+import { listFinancialAccountProfiles } from "./queries/listFinancialAccountProfiles";
+import { listJournalEntries } from "./queries/listJournalEntries";
+import { listLedgerAccounts } from "./queries/listLedgerAccounts";
+import { openWorkspace } from "./queries/openWorkspace";
+import { trialBalance } from "./queries/trialBalance";
 import type { AccountingClock, AccountingCore, AccountingStore } from "./types";
 
 export function createAccountingCore(
@@ -21,10 +24,13 @@ export function createAccountingCore(
       createFinancialAccountProfile(store, input),
     listFinancialAccountProfiles: (input) =>
       listFinancialAccountProfiles(store, input),
-    recordCashExpense: (input) => recordCashExpense(store, input),
-    listPostedCashExpenses: (input) => listPostedCashExpenses(store, input),
+    listLedgerAccounts: (input) => listLedgerAccounts(store, input),
+    recordCashExpense: (input) => recordCashExpense(store, clock, input),
+    recordCashIncome: (input) => recordCashIncome(store, clock, input),
+    reversePostedEntry: (input) => reversePostedEntry(store, clock, input),
+    listJournalEntries: (input) => listJournalEntries(store, input),
     balances: (input) => balances(store, input),
     trialBalance: (input) => trialBalance(store, input),
-    lockAccountingPeriod: (input) => lockAccountingPeriod(store, input),
+    lockAccountingPeriod: (input) => lockAccountingPeriod(store, clock, input),
   };
 }

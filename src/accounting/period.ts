@@ -45,3 +45,33 @@ export function periodFromAccountingDate(accountingDate: string): {
   }
   return { year, month };
 }
+
+export function requirePeriodKey(period: { year: number; month: number }): {
+  year: number;
+  month: number;
+} {
+  if (
+    !Number.isInteger(period.year) ||
+    period.year < 1 ||
+    period.year > 9999 ||
+    !Number.isInteger(period.month) ||
+    period.month < 1 ||
+    period.month > 12
+  ) {
+    throw new AccountingError("accounting_period_invalid");
+  }
+  return { year: period.year, month: period.month };
+}
+
+export function nextPeriod(period: { year: number; month: number }): {
+  year: number;
+  month: number;
+} {
+  return period.month === 12
+    ? { year: period.year + 1, month: 1 }
+    : { year: period.year, month: period.month + 1 };
+}
+
+export function firstDayOf(period: { year: number; month: number }): string {
+  return `${String(period.year).padStart(4, "0")}-${String(period.month).padStart(2, "0")}-01`;
+}
