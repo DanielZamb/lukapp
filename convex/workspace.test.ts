@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import {
+  caught,
   convexAccounting,
   createDaily,
   createOwnedWorkspace,
@@ -105,4 +107,19 @@ test("owner can create and list a Financial Account Profile", async () => {
   expect(profile.name).toBe("Daily");
   expect(profile.workspaceId).toBe(workspace.id);
   expect(profiles).toEqual([profile]);
+});
+
+test("a membership left behind by a missing Workspace grants nothing", async () => {
+  const t = testdb();
+  const workspace = await createOwnedWorkspace(t);
+  await t.run((ctx) => ctx.db.delete(workspace.id as Id<"workspaces">));
+
+  const error = await caught(
+    t.query(api.accounting.listFinancialAccountProfiles, {
+      userId: owner.userId,
+      workspaceId: workspace.id,
+    }),
+  );
+
+  expect(error).toMatchObject({ data: { code: "workspace_membership_required" } });
 });

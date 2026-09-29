@@ -1,6 +1,7 @@
-import { requireWorkspace, toWorkspace } from "../helpers";
+import { requireWorkspace } from "../membership";
 import { clockMonth, dateFromTimestamp } from "../period";
 import type { AccountingClock, AccountingStore, Actor, Workspace } from "../types";
+import { toWorkspace } from "../views";
 
 export async function openWorkspace(
   store: AccountingStore,
