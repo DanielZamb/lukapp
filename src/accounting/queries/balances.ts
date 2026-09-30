@@ -14,11 +14,11 @@ export async function balances(
     store.listLedgerAccounts(input.workspaceId),
     store.listJournalEntries(input.workspaceId),
   ]);
-  const natures = new Map(accounts.map((account) => [account.id, account.nature]));
+  const accountsById = new Map(accounts.map((account) => [account.id, account]));
   const totals = totalsByAccount(entries);
   return profiles.map((profile) => {
-    const nature = natures.get(profile.postingAccountId);
-    if (!nature) {
+    const ledgerAccount = accountsById.get(profile.postingAccountId);
+    if (!ledgerAccount) {
       throw new AccountingError("ledger_account_not_found");
     }
     const account = totals.get(profile.postingAccountId) ?? {
@@ -28,12 +28,12 @@ export async function balances(
     return {
       financialAccountProfileId: profile.id,
       name: profile.name,
-      nature,
+      nature: ledgerAccount.nature,
       debitMinorUnits: account.debitMinorUnits,
       creditMinorUnits: account.creditMinorUnits,
       balance: {
         currency: workspace.functionalCurrency,
-        minorUnits: normalBalance(nature, account),
+        minorUnits: normalBalance(ledgerAccount.normalSide, account),
       },
     };
   });

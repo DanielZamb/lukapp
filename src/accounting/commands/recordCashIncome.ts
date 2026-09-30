@@ -6,7 +6,7 @@ import type {
   PostedJournalEntry,
 } from "../types";
 
-/** Dr the profile's Posting Account, Cr Income. */
+/** Dr the profile's Posting Account, Cr an income account (the template default unless chosen). */
 export function recordCashIncome(
   store: AccountingStore,
   clock: AccountingClock,

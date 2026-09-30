@@ -62,17 +62,15 @@ function toAccountingPeriod(doc: {
 }
 
 function toLedgerAccount(doc: Doc<"ledgerAccounts">): LedgerAccount {
-  const account: LedgerAccount = {
+  return {
     id: doc._id,
     workspaceId: doc.workspaceId,
+    code: doc.code,
     name: doc.name,
     nature: doc.nature,
+    normalSide: doc.normalSide,
     role: doc.role,
   };
-  if (doc.systemKey) {
-    account.systemKey = doc.systemKey;
-  }
-  return account;
 }
 
 function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
@@ -166,13 +164,13 @@ function readStore(db: ReadDb): ReadMethods {
       return doc ? toLedgerAccount(doc) : undefined;
     },
 
-    async findSystemAccount(workspaceId, systemKey) {
+    async findLedgerAccountByCode(workspaceId, code) {
       const doc = await db
         .query("ledgerAccounts")
-        .withIndex("by_workspace_system_key", (q) =>
+        .withIndex("by_workspace_code", (q) =>
           q
             .eq("workspaceId", storedId<"workspaces">(workspaceId))
-            .eq("systemKey", systemKey),
+            .eq("code", code),
         )
         .unique();
       return doc ? toLedgerAccount(doc) : undefined;

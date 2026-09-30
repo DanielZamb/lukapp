@@ -5,6 +5,7 @@ import { recordCashExpense } from "./commands/recordCashExpense";
 import { recordCashIncome } from "./commands/recordCashIncome";
 import { reversePostedEntry } from "./commands/reversePostedEntry";
 import { balances } from "./queries/balances";
+import { listCatalogAccounts } from "./queries/listCatalogAccounts";
 import { listFinancialAccountProfiles } from "./queries/listFinancialAccountProfiles";
 import { listJournalEntries } from "./queries/listJournalEntries";
 import { listLedgerAccounts } from "./queries/listLedgerAccounts";
@@ -25,6 +26,7 @@ export function createAccountingCore(
     listFinancialAccountProfiles: (input) =>
       listFinancialAccountProfiles(store, input),
     listLedgerAccounts: (input) => listLedgerAccounts(store, input),
+    listCatalogAccounts: (input) => listCatalogAccounts(store, input),
     recordCashExpense: (input) => recordCashExpense(store, clock, input),
     recordCashIncome: (input) => recordCashIncome(store, clock, input),
     reversePostedEntry: (input) => reversePostedEntry(store, clock, input),

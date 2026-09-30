@@ -8,15 +8,19 @@ export const accountNature = v.union(
   v.literal("Expense"),
 );
 
-export const systemAccountKey = v.union(
-  v.literal("expenses"),
+export const normalSide = v.union(v.literal("Debit"), v.literal("Credit"));
+
+export const catalogUse = v.union(
+  v.literal("expense"),
   v.literal("income"),
-  v.literal("openingBalanceEquity"),
+  v.literal("openingBalance"),
+  v.literal("general"),
 );
 
 export const productKind = v.union(
   v.literal("cash"),
   v.literal("bankAccount"),
+  v.literal("savingsAccount"),
   v.literal("creditCard"),
   v.literal("loan"),
 );
@@ -67,15 +71,28 @@ export const financialAccountProfile = v.object({
 
 export const ledgerAccount = v.object({
   id: v.string(),
+  code: v.string(),
   name: v.string(),
   nature: accountNature,
+  normalSide,
   role: v.literal("Posting"),
-  systemKey: v.optional(systemAccountKey),
   financialAccountProfileId: v.optional(v.string()),
+});
+
+export const catalogAccount = v.object({
+  code: v.string(),
+  name: v.string(),
+  nature: accountNature,
+  normalSide,
+  use: catalogUse,
+  reportingConcept: v.optional(v.string()),
+  ancestors: v.array(v.object({ code: v.string(), name: v.string() })),
+  ledgerAccountId: v.optional(v.string()),
 });
 
 export const journalLine = v.object({
   ledgerAccountId: v.string(),
+  code: v.string(),
   name: v.string(),
   nature: accountNature,
   debitMinorUnits: v.number(),
@@ -110,6 +127,7 @@ export const accountBalance = v.object({
 
 export const trialBalanceRow = v.object({
   ledgerAccountId: v.string(),
+  code: v.string(),
   name: v.string(),
   nature: accountNature,
   debitMinorUnits: v.number(),

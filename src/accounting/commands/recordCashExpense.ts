@@ -6,7 +6,7 @@ import type {
   PostedJournalEntry,
 } from "../types";
 
-/** Dr Expenses, Cr the profile's Posting Account. */
+/** Dr an expense account (the template default unless chosen), Cr the profile's Posting Account. */
 export function recordCashExpense(
   store: AccountingStore,
   clock: AccountingClock,
@@ -15,6 +15,6 @@ export function recordCashExpense(
   return recordCashActivity(store, clock, input, {
     policy: "cash-expense@1",
     direction: "out",
-    counterpart: "expenses",
+    counterpart: "expense",
   });
 }

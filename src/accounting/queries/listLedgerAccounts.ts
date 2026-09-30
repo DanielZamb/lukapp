@@ -1,7 +1,8 @@
 import { requireWorkspace } from "../membership";
 import type { AccountingStore, Actor, LedgerAccountView } from "../types";
+import { byCode } from "../views";
 
-/** The Chart of Accounts behind the profiles, for advanced views. */
+/** The Workspace's activated Chart of Accounts in code order, for advanced views. */
 export async function listLedgerAccounts(
   store: AccountingStore,
   input: { actor: Actor; workspaceId: string },
@@ -14,16 +15,15 @@ export async function listLedgerAccounts(
   const profileByAccount = new Map(
     profiles.map((profile) => [profile.postingAccountId, profile.id]),
   );
-  return accounts.map((account) => {
+  return accounts.sort(byCode).map((account) => {
     const view: LedgerAccountView = {
       id: account.id,
+      code: account.code,
       name: account.name,
       nature: account.nature,
+      normalSide: account.normalSide,
       role: account.role,
     };
-    if (account.systemKey) {
-      view.systemKey = account.systemKey;
-    }
     const profileId = profileByAccount.get(account.id);
     if (profileId) {
       view.financialAccountProfileId = profileId;

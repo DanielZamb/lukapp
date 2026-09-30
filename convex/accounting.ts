@@ -7,6 +7,7 @@ import { convexReadStore, convexStore } from "./store";
 import {
   accountBalance,
   accountingPeriod,
+  catalogAccount,
   financialAccountProfile,
   ledgerAccount,
   money,
@@ -33,6 +34,7 @@ const cashActivity = {
   accountingDate: v.string(),
   description: v.string(),
   idempotencyKey: v.string(),
+  ledgerAccountCode: v.optional(v.string()),
 };
 
 async function run<T>(work: () => Promise<T>): Promise<T> {
@@ -51,7 +53,12 @@ function withActor<T extends { userId: string }>({ userId, ...rest }: T) {
 }
 
 export const createPersonalWorkspace = mutation({
-  args: { ...actor, functionalCurrency: v.string(), now: v.number() },
+  args: {
+    ...actor,
+    functionalCurrency: v.string(),
+    chartOfAccountsTemplate: v.optional(v.string()),
+    now: v.number(),
+  },
   returns: workspace,
   handler: async (ctx, args) =>
     run(() => {
@@ -61,6 +68,9 @@ export const createPersonalWorkspace = mutation({
       return core.createPersonalWorkspace({
         actor: { userId: args.userId },
         functionalCurrency: args.functionalCurrency,
+        ...(args.chartOfAccountsTemplate
+          ? { chartOfAccountsTemplate: args.chartOfAccountsTemplate }
+          : {}),
       });
     }),
 });
@@ -100,6 +110,15 @@ export const listLedgerAccounts = query({
   handler: async (ctx, args) =>
     run(() =>
       createAccountingCore(convexReadStore(ctx.db)).listLedgerAccounts(withActor(args)),
+    ),
+});
+
+export const listCatalogAccounts = query({
+  args: inWorkspace,
+  returns: v.array(catalogAccount),
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).listCatalogAccounts(withActor(args)),
     ),
 });
 

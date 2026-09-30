@@ -1,3 +1,4 @@
+import { chartTemplate, nextAuxiliaryCode, normalSideOf } from "../chartOfAccounts";
 import { classifyFinancialAccountProfile } from "../classification";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
@@ -9,6 +10,7 @@ import type {
 } from "../types";
 import { toProfile } from "../views";
 
+/** Each profile gets its own auxiliary Posting Account, as a bookkeeper opens one per bank account. */
 export async function createFinancialAccountProfile(
   store: AccountingStore,
   input: {
@@ -18,16 +20,21 @@ export async function createFinancialAccountProfile(
     productKind: FinancialAccountProductKind;
   },
 ): Promise<FinancialAccountProfile> {
-  await requireWorkspace(store, input.workspaceId, input.actor);
+  const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
   const name = input.name.trim();
   if (!name) {
     throw new AccountingError("name_required");
   }
-  const classified = classifyFinancialAccountProfile(input.productKind);
+  const classified = classifyFinancialAccountProfile(
+    chartTemplate(workspace.chartOfAccountsTemplate),
+    input.productKind,
+  );
   const postingAccount = await store.insertLedgerAccount({
     workspaceId: input.workspaceId,
+    code: await nextAuxiliaryCode(store, input.workspaceId, classified.parentCode),
     name,
     nature: classified.nature,
+    normalSide: normalSideOf(classified.nature),
     role: "Posting",
   });
   const profile = await store.insertProfile({

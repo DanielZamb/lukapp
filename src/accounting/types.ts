@@ -23,11 +23,43 @@ export type AccountNature = "Asset" | "Liability" | "Equity" | "Revenue" | "Expe
 /** Posting Accounts receive Journal Lines. Summary Accounts arrive with reporting. */
 export type LedgerAccountRole = "Posting";
 
-/** Accounts a Chart of Accounts template provisions for backend policies to find. */
-export type SystemAccountKey = "expenses" | "income" | "openingBalanceEquity";
+/** The side that increases an account (naturaleza débito o crédito). Contra accounts oppose their nature. */
+export type NormalSide = "Debit" | "Credit";
+
+/** The recording flow allowed to use a template account; general accounts wait for their capability. */
+export type CatalogUse = "expense" | "income" | "openingBalance" | "general";
+
+export type CatalogAccount = {
+  code: string;
+  name: string;
+  use: CatalogUse;
+  /** Only for contra accounts; otherwise the nature decides. */
+  normalSide?: NormalSide;
+  /** Qualified name of the closest reporting taxonomy element, such as us-gaap:InterestExpense. */
+  reportingConcept?: string;
+};
+
+/** A versioned COA Template. The first digit of a code locks the account's nature. */
+export type ChartOfAccountsTemplate = {
+  version: string;
+  natureByClass: Record<string, AccountNature>;
+  /** Accounts provisioned in every new Workspace, found again by code. */
+  defaults: { expense: string; income: string; openingBalance: string };
+  /** Each profile gets its own auxiliary Posting Account under this code. */
+  financialAccountParents: Record<FinancialAccountProductKind, string>;
+  /** Posting Accounts a Workspace may activate. */
+  accounts: CatalogAccount[];
+  /** Names of the non-postable levels above the Posting Accounts. */
+  summaryNames: Record<string, string>;
+};
 
 /** Product facts a basic user recognizes; classification turns them into a nature. */
-export type FinancialAccountProductKind = "cash" | "bankAccount" | "creditCard" | "loan";
+export type FinancialAccountProductKind =
+  | "cash"
+  | "bankAccount"
+  | "savingsAccount"
+  | "creditCard"
+  | "loan";
 
 /** Versioned rule that built a Journal Entry, kept as provenance. */
 export type PostingPolicy = "cash-expense@1" | "cash-income@1" | "reversal@1";
@@ -51,11 +83,25 @@ export type FinancialAccountProfile = {
 
 export type LedgerAccountView = {
   id: string;
+  code: string;
   name: string;
   nature: AccountNature;
+  normalSide: NormalSide;
   role: LedgerAccountRole;
-  systemKey?: SystemAccountKey;
   financialAccountProfileId?: string;
+};
+
+/** A template account a Workspace can use, with where it sits in the Chart of Accounts. */
+export type CatalogAccountView = {
+  code: string;
+  name: string;
+  nature: AccountNature;
+  normalSide: NormalSide;
+  use: CatalogUse;
+  reportingConcept?: string;
+  ancestors: Array<{ code: string; name: string }>;
+  /** Present once the Workspace has activated the account. */
+  ledgerAccountId?: string;
 };
 
 export type Money = {
@@ -65,6 +111,7 @@ export type Money = {
 
 export type JournalLineView = {
   ledgerAccountId: string;
+  code: string;
   name: string;
   nature: AccountNature;
   debitMinorUnits: number;
@@ -103,6 +150,7 @@ export type AccountBalance = {
 
 export type TrialBalanceRow = {
   ledgerAccountId: string;
+  code: string;
   name: string;
   nature: AccountNature;
   debitMinorUnits: number;
@@ -125,13 +173,15 @@ export type StoredProfile = {
   postingAccountId: string;
 };
 
+/** Code, nature, and normal side are locked when the account is activated. */
 export type LedgerAccount = {
   id: string;
   workspaceId: string;
+  code: string;
   name: string;
   nature: AccountNature;
+  normalSide: NormalSide;
   role: LedgerAccountRole;
-  systemKey?: SystemAccountKey;
 };
 
 export type DraftJournalLine = {
@@ -180,9 +230,9 @@ export type AccountingStore = {
   isMember(workspaceId: string, userId: string): Promise<boolean>;
   insertLedgerAccount(account: Omit<LedgerAccount, "id">): Promise<LedgerAccount>;
   getLedgerAccount(accountId: string): Promise<LedgerAccount | undefined>;
-  findSystemAccount(
+  findLedgerAccountByCode(
     workspaceId: string,
-    systemKey: SystemAccountKey,
+    code: string,
   ): Promise<LedgerAccount | undefined>;
   listLedgerAccounts(workspaceId: string): Promise<LedgerAccount[]>;
   insertProfile(profile: Omit<StoredProfile, "id">): Promise<StoredProfile>;
@@ -221,6 +271,8 @@ export type AccountingCore = {
   createPersonalWorkspace(input: {
     actor: Actor;
     functionalCurrency: string;
+    /** COA Template version; co-puc-personal@1 when omitted. */
+    chartOfAccountsTemplate?: string;
   }): Promise<Workspace>;
   openWorkspace(input: {
     actor: Actor;
@@ -241,6 +293,10 @@ export type AccountingCore = {
     actor: Actor;
     workspaceId: string;
   }): Promise<LedgerAccountView[]>;
+  listCatalogAccounts(input: {
+    actor: Actor;
+    workspaceId: string;
+  }): Promise<CatalogAccountView[]>;
   recordCashExpense(input: CashActivityInput): Promise<PostedJournalEntry>;
   recordCashIncome(input: CashActivityInput): Promise<PostedJournalEntry>;
   reversePostedEntry(input: {
@@ -280,4 +336,6 @@ export type CashActivityInput = {
   accountingDate: string;
   description: string;
   idempotencyKey: string;
+  /** Template account the money went to or came from; the template default when omitted. */
+  ledgerAccountCode?: string;
 };

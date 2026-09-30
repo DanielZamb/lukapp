@@ -1,5 +1,12 @@
 import { expect, test } from "vitest";
-import { increasesWithDebit, normalBalance, personalChartTemplate } from "./chartOfAccounts";
+import {
+  ancestorCodes,
+  chartTemplate,
+  increasesWithDebit,
+  natureOfCode,
+  normalBalance,
+  personalChartTemplate,
+} from "./chartOfAccounts";
 import { classifyFinancialAccountProfile } from "./classification";
 import { totalsByAccount } from "./ledgerTotals";
 import { requireFunctionalAmount, requireFunctionalCurrencyCode } from "./money";
@@ -27,7 +34,7 @@ const cop: StoredWorkspace = {
   id: "w",
   kind: "Personal",
   functionalCurrency: "COP",
-  chartOfAccountsTemplate: "personal@1",
+  chartOfAccountsTemplate: "co-puc-personal@1",
 };
 
 function line(ledgerAccountId: string, debitMinorUnits: number, creditMinorUnits: number) {
@@ -83,23 +90,40 @@ test("debits must equal credits, and totals must stay safe integers", () => {
   );
 });
 
-test("product kinds classify into Posting Account natures", () => {
-  expect(classifyFinancialAccountProfile("cash").nature).toBe("Asset");
-  expect(classifyFinancialAccountProfile("bankAccount").nature).toBe("Asset");
-  expect(classifyFinancialAccountProfile("creditCard").nature).toBe("Liability");
-  expect(classifyFinancialAccountProfile("loan")).toEqual({
+test("product kinds classify under their PUC parent, which decides the nature", () => {
+  const template = personalChartTemplate;
+  expect(classifyFinancialAccountProfile(template, "cash")).toMatchObject({ parentCode: "110505", nature: "Asset" });
+  expect(classifyFinancialAccountProfile(template, "bankAccount")).toMatchObject({ parentCode: "111005", nature: "Asset" });
+  expect(classifyFinancialAccountProfile(template, "savingsAccount")).toMatchObject({ parentCode: "112005", nature: "Asset" });
+  expect(classifyFinancialAccountProfile(template, "creditCard")).toMatchObject({ parentCode: "210510", nature: "Liability" });
+  expect(classifyFinancialAccountProfile(template, "loan")).toEqual({
     productKind: "loan",
+    parentCode: "210510",
     nature: "Liability",
-    policy: "financial-account-profile@1",
+    policy: "financial-account-profile@2",
   });
   expectAccountingError(
-    () => classifyFinancialAccountProfile("toString"),
+    () => classifyFinancialAccountProfile(template, "toString"),
     "financial_account_product_kind_unknown",
   );
   expectAccountingError(
-    () => classifyFinancialAccountProfile("savings"),
+    () => classifyFinancialAccountProfile(template, "savings"),
     "financial_account_product_kind_unknown",
   );
+});
+
+test("the PUC class digit locks the nature of a code", () => {
+  const template = personalChartTemplate;
+  expect(["110505", "210510", "313001", "421005", "530505"].map((code) => natureOfCode(template, code))).toEqual([
+    "Asset",
+    "Liability",
+    "Equity",
+    "Revenue",
+    "Expense",
+  ]);
+  for (const code of ["", "6135", "905", "x1"]) {
+    expectAccountingError(() => natureOfCode(template, code), "ledger_account_code_unknown");
+  }
 });
 
 test("natures decide the side that increases an account", () => {
@@ -109,20 +133,82 @@ test("natures decide the side that increases an account", () => {
   expect(increasesWithDebit("Equity")).toBe(false);
   expect(increasesWithDebit("Revenue")).toBe(false);
   const totals = { debitMinorUnits: 30, creditMinorUnits: 100 };
-  expect(normalBalance("Asset", totals)).toBe(-70);
-  expect(normalBalance("Liability", totals)).toBe(70);
-  expect(Object.is(normalBalance("Liability", { debitMinorUnits: 0, creditMinorUnits: 0 }), 0)).toBe(true);
+  expect(normalBalance("Debit", totals)).toBe(-70);
+  expect(normalBalance("Credit", totals)).toBe(70);
+  expect(Object.is(normalBalance("Credit", { debitMinorUnits: 0, creditMinorUnits: 0 }), 0)).toBe(true);
 });
 
-test("the personal template provisions one account per nature it needs", () => {
-  expect(personalChartTemplate.version).toBe("personal@1");
-  expect(
-    personalChartTemplate.accounts.map((account) => [account.systemKey, account.nature]),
-  ).toEqual([
-    ["expenses", "Expense"],
-    ["income", "Revenue"],
-    ["openingBalanceEquity", "Equity"],
+test("only known COA Template versions resolve", () => {
+  expect(chartTemplate("co-puc-personal@1")).toBe(personalChartTemplate);
+  expect(chartTemplate("us-gaap-personal@1").version).toBe("us-gaap-personal@1");
+  expectAccountingError(() => chartTemplate("personal@1"), "chart_of_accounts_template_unknown");
+});
+
+test("PUC levels above a code are clase, grupo, cuenta, and subcuenta", () => {
+  expect(ancestorCodes("51959595")).toEqual(["5", "51", "5195", "519595"]);
+  expect(ancestorCodes("530505")).toEqual(["5", "53", "5305"]);
+  expect(ancestorCodes("1105")).toEqual(["1", "11"]);
+});
+
+test.each([
+  ["co-puc-personal@1", /^[1-5](\d{3}|\d{5}|\d{7})$/],
+  ["us-gaap-personal@1", /^[1-6]\d{3}$/],
+])("%s keeps Posting Accounts as named, unique leaves", (version, codeShape) => {
+  const template = chartTemplate(version);
+  const codes = template.accounts.map((account) => account.code);
+  const parents = Object.values(template.financialAccountParents);
+
+  expect(new Set(codes).size).toBe(codes.length);
+  for (const code of codes) {
+    expect(code).toMatch(codeShape);
+    expect([...codes, ...parents].filter((other) => other !== code && other.startsWith(code))).toEqual([]);
+  }
+  for (const code of [...codes, ...parents]) {
+    for (const ancestor of ancestorCodes(code)) {
+      expect(template.summaryNames[ancestor], `${ancestor} above ${code}`).toBeTruthy();
+    }
+  }
+  for (const parent of parents) {
+    expect(template.summaryNames[parent], parent).toBeTruthy();
+  }
+  for (const [use, code] of [
+    ["expense", template.defaults.expense],
+    ["income", template.defaults.income],
+    ["openingBalance", template.defaults.openingBalance],
+  ]) {
+    expect(template.accounts.find((account) => account.code === code)?.use, code).toBe(use);
+  }
+});
+
+test("the PUC template defaults and contra accounts", () => {
+  const template = personalChartTemplate;
+  const defaults = Object.values(template.defaults);
+  expect(template.accounts.filter((account) => defaults.includes(account.code))).toEqual([
+    { code: "313001", name: "Patrimonio de apertura", use: "openingBalance" },
+    { code: "42959595", name: "Otros ingresos", use: "income" },
+    { code: "51959595", name: "Otros gastos personales", use: "expense" },
   ]);
+  expect(template.accounts.filter((account) => account.normalSide).map((account) => account.code)).toEqual([
+    "159205",
+    "159215",
+    "159220",
+    "159235",
+  ]);
+});
+
+test("the US GAAP template mirrors the PUC contra accounts and cites FASB concepts", () => {
+  const template = chartTemplate("us-gaap-personal@1");
+  expect(template.accounts.filter((account) => account.normalSide).map((account) => account.code)).toEqual([
+    "1591",
+    "1592",
+    "1593",
+    "1594",
+  ]);
+  for (const account of template.accounts) {
+    if (account.reportingConcept) {
+      expect(account.reportingConcept).toMatch(/^us-gaap:[A-Z][A-Za-z0-9]+$/);
+    }
+  }
 });
 
 test("Functional Currency is an active ISO 4217 currency", () => {

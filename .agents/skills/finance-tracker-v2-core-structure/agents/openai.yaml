@@ -1,0 +1,6 @@
+interface:
+  display_name: "Finance Tracker v2 core structure"
+  short_description: "Keep accounting rules in coherent core modules"
+  default_prompt: "Use $finance-tracker-v2-core-structure to review the server and accounting core file boundaries."
+policy:
+  allow_implicit_invocation: true

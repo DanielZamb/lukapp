@@ -82,6 +82,7 @@ export async function toPostedJournalEntry(
       const account = requireAccount(context.accounts, line.ledgerAccountId);
       return {
         ledgerAccountId: line.ledgerAccountId,
+        code: account.code,
         name: account.name,
         nature: account.nature,
         debitMinorUnits: line.debitMinorUnits,
@@ -100,6 +101,11 @@ export async function toPostedJournalEntry(
     view.reversedByEntryId = links.reversedByEntryId;
   }
   return view;
+}
+
+/** Chart of Accounts order: hierarchical codes sort as strings, so 1105 comes before 111005 and 2105. */
+export function byCode(a: { code: string }, b: { code: string }): number {
+  return a.code < b.code ? -1 : a.code > b.code ? 1 : 0;
 }
 
 function requireAccount(

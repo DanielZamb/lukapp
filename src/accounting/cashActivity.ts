@@ -1,4 +1,4 @@
-import { requireSystemAccount } from "./chartOfAccounts";
+import { requireTemplateAccount } from "./chartOfAccounts";
 import { AccountingError } from "./errors";
 import { requireWorkspace } from "./membership";
 import { requireFunctionalAmount } from "./money";
@@ -9,7 +9,6 @@ import type {
   CashActivityInput,
   PostedJournalEntry,
   PostingPolicy,
-  SystemAccountKey,
 } from "./types";
 import { journalContext, toPostedJournalEntry } from "./views";
 
@@ -17,6 +16,9 @@ import { journalContext, toPostedJournalEntry } from "./views";
  * Cash-style activity between a Financial Account Profile and one Chart of Accounts
  * counterpart. Money out credits the profile; money in debits it. The profile's
  * nature decides what that does to its balance, so a card purchase grows a Liability.
+ * The counterpart is the template account for `ledgerAccountCode`, or the template
+ * default, and its template use must match the flow: an expense for money out,
+ * income for money in.
  */
 export async function recordCashActivity(
   store: AccountingStore,
@@ -25,7 +27,7 @@ export async function recordCashActivity(
   treatment: {
     policy: PostingPolicy;
     direction: "out" | "in";
-    counterpart: SystemAccountKey;
+    counterpart: "expense" | "income";
   },
 ): Promise<PostedJournalEntry> {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
@@ -34,10 +36,11 @@ export async function recordCashActivity(
   if (!profile || profile.workspaceId !== input.workspaceId) {
     throw new AccountingError("financial_account_profile_not_found");
   }
-  const counterpart = await requireSystemAccount(
+  const counterpart = await requireTemplateAccount(
     store,
-    input.workspaceId,
+    workspace,
     treatment.counterpart,
+    input.ledgerAccountCode,
   );
   const debitAccountId =
     treatment.direction === "out" ? counterpart.id : profile.postingAccountId;

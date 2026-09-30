@@ -1,4 +1,7 @@
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/finance-tracker-v2-core-structure/
 .claude/
 .vscode/
 docs/
