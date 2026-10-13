@@ -19,6 +19,7 @@ import { postJournalEntry } from "../src/accounting/posting";
 import { convexStore } from "./store";
 import {
   workspaceRolePolicy,
+  workspaceRolePolicyVersion,
   hasWorkspacePermission,
 } from "../src/accounting/membership";
 
@@ -277,6 +278,7 @@ test("ledger and period decisions preserve the authenticated actor", async () =>
 });
 
 test("role presets give preparation and posting separate authority", () => {
+  expect(workspaceRolePolicyVersion).toBe("workspace-roles@3");
   expect(workspaceRolePolicy).toEqual({
     Owner: [
       "view",
@@ -285,6 +287,7 @@ test("role presets give preparation and posting separate authority", () => {
       "correct",
       "managePeriods",
       "administerMembership",
+      "manageBudgets",
       "manageRecoveryPlans",
     ],
     Accountant: ["view", "prepare", "post", "correct", "managePeriods"],

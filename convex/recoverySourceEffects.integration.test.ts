@@ -12,7 +12,7 @@ beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(sept
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 async function fixture(kind: "Personal" | "Household") {
-  const t = convexAccounting(modules);
+  const t = convexAccounting(modules, true);
   const workspace = kind === "Personal" ? await createOwnedWorkspace(t) : await t.mutation(api.accounting.createHouseholdWorkspace, {
     functionalCurrency: "COP", now: septNow, idempotencyKey: "household",
   });

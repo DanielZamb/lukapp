@@ -8,14 +8,14 @@ The `personalWorkspaceOwners` table stores only tokenIdentifier, Clerk issuer, C
 
 `ownerQuery` and `ownerMutation` use convex-helpers customQuery/customMutation with customCtx. They authenticate through ctx.auth and require both the configured issuer and pre-provisioned Owner subject. Missing configuration fails closed. Their context adds actor and the verified identity facts. Accounting errors map to stable ConvexError codes.
 
-The versioned `workspace-roles@2` policy defines these permissions:
+The versioned `workspace-roles@3` policy defines these permissions:
 
-| Role | View | Prepare | Post | Correct | Manage periods | Administer membership | Manage Recovery plans |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Owner | yes | yes | yes | yes | yes | yes | yes |
-| Accountant | yes | yes | yes | yes | yes | no | no |
-| Preparer | yes | yes | no | no | no | no | no |
-| Viewer | yes | no | no | no | no | no | no |
+| Role | View | Prepare | Post | Correct | Manage periods | Administer membership | Manage Budgets | Manage Recovery plans |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Owner | yes | yes | yes | yes | yes | yes | yes | yes |
+| Accountant | yes | yes | yes | yes | yes | no | no | no |
+| Preparer | yes | yes | no | no | no | no | no | no |
+| Viewer | yes | no | no | no | no | no | no | no |
 
 Only Personal bootstrap and deliberate Household creation grant a membership, always Owner. See [the Workspace API contract](./WORKSPACES.md) for Household retry and discovery behavior. Other role presets are modeled for enforcement and deterministic tests; there is no public role-grant API. Core membership checks enforce permissions. Shared Posting enforces Post even when called internally. Reversal requires Correct and reaches Posting. Profile creation requires Prepare; period locking requires Manage periods.
 
@@ -34,3 +34,5 @@ Local convex-test identity integration proves the boundary; it does not establis
 The next planning adapters must use View for Savings Recovery and Budget reads and Prepare for their draft input. Recovery Plan activation, cancellation, and correction require a separate Recovery Plan Authority, which the first cutover grants only to Owner. Budget configuration also requires Owner in this cutover. Notification Intake confirmation requires Post and invokes the same Posting controls. Later shared-Workspace grants must extend the explicit policy rather than infer authority from preparation or Posting.
 
 C04 adds the explicit `manageRecoveryPlans` permission to Owner only. Recovery commands require it, including backend Draft editing; reads require View. Accountant retains Posting Authority and cannot change Recovery planning. Every Recovery export uses the same registered-device proof wrappers and shared operation registry as accounting.
+
+The combined `workspace-roles@3` policy preserves both Owner-only planning capabilities from the independently reviewed @2 parents and every previous role grant. Budget commands, including revision edits and retirement, require `manageBudgets`; Recovery commands, including backend Draft edits, require `manageRecoveryPlans`. Both read paths require View. Accountant retains authorized Posting with neither planning management capability. Budget policies remain typed unresolved choices described in [the C03 handoff](../docs/handoffs/C03-budget.md). Both scopes use the unchanged exact-operation proof wrappers and the canonical union registry.
