@@ -1,6 +1,6 @@
 # Owner access and Workspace provisioning
 
-A02 extends this A01 design record with mandatory registered-device possession on every accounting call, including bootstrap. The current API, errors and native responsibilities are in [the device handoff](../src/access/NATIVE-HANDOFF.md). The A01 identity and permission rules below still apply; its original argument descriptions now also require `access`.
+A02 and A03 extend this A01 design record with mandatory registered-device possession on every accounting call, including bootstrap. The current API, errors and native responsibilities are in [the device handoff](../src/access/NATIVE-HANDOFF.md). The A01 identity and permission rules below still apply; its original argument descriptions now also require `access`.
 
 The actor's stable key is Convex `UserIdentity.tokenIdentifier`. Membership `userId`, ledger `postedBy`, and period decision `decidedBy` store this server-derived key. Device arguments never supply an actor. Existing synthetic membership IDs grant no access and require an explicit future migration.
 
@@ -29,7 +29,7 @@ Current API references checked against primary sources on 2026-10-13:
 - https://docs.convex.dev/auth/functions-auth
 - https://github.com/get-convex/convex-helpers/blob/main/packages/convex-helpers/server/customFunctions.ts
 
-Local convex-test identity integration proves the boundary; it does not establish deployed Clerk or accounting access. Native UI and provider session-setting verification remain outside this authenticated accounting pilot. A02 adds the local device boundary described in the linked handoff.
+Local convex-test identity integration proves the boundary; it does not establish deployed Clerk or accounting access. Native UI and provider session-setting verification remain outside this authenticated accounting pilot. A02 adds the local device boundary described in the linked handoff. A03 adds durable provider revocation/recovery and signed terminal-session reconciliation. Its `checkSession` action supplies a current provider observation before foreground device/Workspace admission; financial mutations retain the shared A02 and accounting checks. Controlled official-SDK transports establish local behavior, while deployment secrets, webhook wiring, live claims, Native API and Clerk lifetime settings remain unobserved.
 
 The next planning adapters must use View for Savings Recovery and Budget reads and Prepare for their draft input. Recovery Plan activation, cancellation, and correction require a separate Recovery Plan Authority, which the first cutover grants only to Owner. Budget configuration also requires Owner in this cutover. Notification Intake confirmation requires Post and invokes the same Posting controls. Later shared-Workspace grants must extend the explicit policy rather than infer authority from preparation or Posting.
 
