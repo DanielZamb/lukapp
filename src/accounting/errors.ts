@@ -1,6 +1,5 @@
 export const accountingErrorMessages = {
   activity_before_opening: "Activity cannot precede the profile Start Tracking date",
-  opening_date_conflict: "Corrections must preserve the established Start Tracking date",
   opening_already_recorded: "Reverse the active opening before recording a replacement; a zero opening requires its replacement key",
   opening_replacement_conflict: "The replacement must identify the current opening",
   opening_amount_invalid: "Opening amount must be nonnegative whole minor units",

@@ -200,7 +200,7 @@ test("opening replay survives a lock, conflicts on changed input, and reserves z
   expect(await read.entries()).toEqual([]);
 });
 
-test("one active opening requires reversal before replacement and retains its Start Tracking date", async () => {
+test("one active opening requires reversal before replacement and preserves original receipts", async () => {
   const { t, input, read } = await fixture();
   const first = await t.mutation(api.accounting.recordOpeningPosition, input);
   if (!first.journalEntry) throw new Error("Expected posted opening");
@@ -237,14 +237,6 @@ test("one active opening requires reversal before replacement and retains its St
       ),
     ),
   ).toMatchObject({ data: { code: "activity_before_opening" } });
-  expect(
-    await caught(
-      t.mutation(api.accounting.recordOpeningPosition, {
-        ...replacement,
-        accountingDate: "2026-09-21",
-      }),
-    ),
-  ).toMatchObject({ data: { code: "opening_date_conflict" } });
   const corrected = await t.mutation(
     api.accounting.recordOpeningPosition,
     replacement,
@@ -290,16 +282,42 @@ test("zero opening correction explicitly identifies the current receipt and neve
   const posted = await t.mutation(api.accounting.recordOpeningPosition, {
     ...replacement,
     replacesOpeningKey: zero.idempotencyKey,
+    accountingDate: "2026-09-18",
   });
-  expect(posted.profile.opening.status).toBe("posted");
+  expect(posted.profile.opening).toMatchObject({
+    status: "posted",
+    accountingDate: "2026-09-18",
+  });
   if (!posted.journalEntry) throw new Error("Expected posted opening");
   await reverse(t, input.workspaceId, posted.journalEntry.id);
   const backToZero = await t.mutation(api.accounting.recordOpeningPosition, {
     ...zero,
     idempotencyKey: "opening-3",
     replacesOpeningKey: "opening-2",
+    accountingDate: "2026-09-22",
   });
-  expect(backToZero.profile.opening.status).toBe("zero");
+  expect(backToZero.profile.opening).toMatchObject({
+    status: "zero",
+    accountingDate: "2026-09-22",
+  });
+  const originalReplay = await t.mutation(api.accounting.recordOpeningPosition, zero);
+  expect(originalReplay.profile).toEqual(backToZero.profile);
+  expect(originalReplay.journalEntry).toBeNull();
+  expect(originalReplay.replay).toBe(true);
+  for (const changed of [
+    { idempotencyKey: "opening-3", replacesOpeningKey: "opening-3" },
+    { idempotencyKey: "opening-4", replacesOpeningKey: "opening-1" },
+  ]) {
+    expect(
+      await caught(t.mutation(api.accounting.recordOpeningPosition, {
+        ...input,
+        accountingDate: "2026-09-24",
+        ...changed,
+      })),
+    ).toMatchObject({ data: { code: changed.idempotencyKey === "opening-3"
+      ? "idempotency_key_conflict"
+      : "opening_replacement_conflict" } });
+  }
   expect((await read.balances())[0]?.balance.minorUnits).toBe(0);
   expect(
     await t.run((ctx) => ctx.db.query("openingPositions").collect()),

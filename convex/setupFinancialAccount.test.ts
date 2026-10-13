@@ -307,6 +307,7 @@ test("setup replay after correction returns the current profile and its original
     ...openingArgs(input),
     financialAccountProfileId: first.profile.id,
     idempotencyKey: "correct-opening",
+    accountingDate: "2026-09-18",
     amount: { currency: "COP", minorUnits: 800 },
   });
   const replay = await t.mutation(api.accounting.setupFinancialAccount, input);

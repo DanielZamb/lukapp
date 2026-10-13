@@ -329,6 +329,7 @@ export type AccountingStore = {
     workspaceId: string,
     key: string,
   ): Promise<StoredOpeningPosition | undefined>;
+  clearProfileOpening(profileId: string): Promise<void>;
   saveOpeningPosition(position: StoredOpeningPosition): Promise<void>;
   listProfiles(workspaceId: string): Promise<StoredProfile[]>;
   insertJournalEntry(

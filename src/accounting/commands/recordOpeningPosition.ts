@@ -3,6 +3,7 @@ import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
 import { requireProfile } from "../financialAccountProfiles";
 import { periodFromAccountingDate } from "../period";
+import { assertOpeningCutover } from "../openingDate";
 import { requirePostablePeriod } from "../periodControl";
 import { postJournalEntry } from "../posting";
 import type {
@@ -67,8 +68,6 @@ export async function recordOpeningPosition(
     throw new AccountingError("idempotency_key_conflict");
   if (profile.opening) {
     await requireWorkspace(store, input.workspaceId, input.actor, "correct");
-    if (profile.opening.accountingDate !== input.accountingDate)
-      throw new AccountingError("opening_date_conflict");
     if (
       input.replacesOpeningKey !== undefined &&
       input.replacesOpeningKey !== profile.opening.idempotencyKey
@@ -84,19 +83,9 @@ export async function recordOpeningPosition(
   } else {
     if (input.replacesOpeningKey !== undefined)
       throw new AccountingError("opening_replacement_conflict");
-    const entries = await store.listJournalEntries(input.workspaceId);
-    if (
-      entries.some(
-        (entry) =>
-          entry.accountingDate < input.accountingDate &&
-          entry.lines.some(
-            (line) => line.ledgerAccountId === profile.postingAccountId,
-          ),
-      )
-    ) {
-      throw new AccountingError("activity_before_opening");
-    }
   }
+  await assertOpeningCutover(store, profile, input.accountingDate);
+  if (profile.opening) await store.clearProfileOpening(profile.id);
   let opening: StoredOpening;
   const common = {
     accountingDate: input.accountingDate,

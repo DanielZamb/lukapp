@@ -18,6 +18,7 @@ type WriteMethod =
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
+  | "clearProfileOpening"
   | "saveOpeningPosition"
   | "insertJournalEntry"
   | "insertAccountingPeriod"
@@ -334,6 +335,12 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
       return { id, ...profile };
     },
 
+    async clearProfileOpening(profileId) {
+      await db.patch(requiredId(db, "financialAccountProfiles", profileId), {
+        opening: undefined,
+      });
+    },
+
     async saveOpeningPosition(position) {
       await db.insert("openingPositions", {
         ...position,
@@ -449,6 +456,7 @@ function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),
+    clearProfileOpening: async () => unavailable("clearProfileOpening"),
     saveOpeningPosition: async () => unavailable("saveOpeningPosition"),
     insertJournalEntry: async () => unavailable("insertJournalEntry"),
     insertAccountingPeriod: async () => unavailable("insertAccountingPeriod"),
