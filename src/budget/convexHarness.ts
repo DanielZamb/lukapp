@@ -28,7 +28,7 @@ export async function planningOnly<T>(t: AccountingTest, run: () => Promise<T>):
 export async function budgetFixture(modules: Record<string, () => Promise<unknown>>, household = false, template = "co-puc-personal@1") {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(Date.UTC(2026, 9, 13, 12));
-  const t = convexAccounting(modules);
+  const t = convexAccounting(modules, true);
   const common = { functionalCurrency: "COP", chartOfAccountsTemplate: template, now: septNow };
   const workspace = household
     ? await t.mutation(api.accounting.createHouseholdWorkspace, { ...common, idempotencyKey: "house" })

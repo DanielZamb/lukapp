@@ -27,7 +27,7 @@ export const createBudget = ownerMutation({
   handler: (ctx, args) => result(async () => {
     validateCreate(args);
     const decidedAt = new Date();
-    return create({ store: budgetStore(ctx.db), accounting: accountingPlanningReads(ctx.db), clock: { now: () => decidedAt } }, { ...args, actor: ctx.actor });
+    return create({ store: budgetStore(ctx), accounting: accountingPlanningReads(ctx), clock: { now: () => decidedAt } }, { ...args, actor: ctx.actor });
   }),
 });
 export const updateBudget = ownerMutation({
@@ -37,7 +37,7 @@ export const updateBudget = ownerMutation({
   handler: (ctx, args) => result(async () => {
     validateUpdate(args);
     const decidedAt = new Date();
-    return update({ store: budgetStore(ctx.db), accounting: accountingPlanningReads(ctx.db), clock: { now: () => decidedAt } }, { ...args, actor: ctx.actor });
+    return update({ store: budgetStore(ctx), accounting: accountingPlanningReads(ctx), clock: { now: () => decidedAt } }, { ...args, actor: ctx.actor });
   }),
 });
 export const retireBudget = ownerMutation({
@@ -47,12 +47,12 @@ export const retireBudget = ownerMutation({
   handler: (ctx, args) => result(async () => {
     validateRetire(args);
     const decidedAt = new Date();
-    return retire({ store: budgetStore(ctx.db), accounting: accountingPlanningReads(ctx.db), clock: { now: () => decidedAt } }, { ...args, actor: ctx.actor });
+    return retire({ store: budgetStore(ctx), accounting: accountingPlanningReads(ctx), clock: { now: () => decidedAt } }, { ...args, actor: ctx.actor });
   }),
 });
 export const listBudgets = ownerQuery({
   operation: "budget.listBudgets", args: { workspaceId: b.budget.fields.workspaceId }, returns: v.array(b.budget),
-  handler: (ctx, args) => result(() => list(budgetReads(ctx.db), accountingPlanningReads(ctx.db), { ...args, actor: ctx.actor })),
+  handler: (ctx, args) => result(() => list(budgetReads(ctx), accountingPlanningReads(ctx), { ...args, actor: ctx.actor })),
 });
 export const evaluateBudgets = ownerQuery({
   operation: "budget.evaluateBudgets",
@@ -61,13 +61,13 @@ export const evaluateBudgets = ownerQuery({
     requirePeriodKey(args.month);
     const selection = args.selection ?? { kind: "current" };
     validateSelection(selection);
-    return evaluate(budgetReads(ctx.db), accountingPlanningReads(ctx.db), { ...args, selection, actor: ctx.actor });
+    return evaluate(budgetReads(ctx), accountingPlanningReads(ctx), { ...args, selection, actor: ctx.actor });
   }),
 });
 export const budgetImpactWarning = ownerQuery({
   operation: "budget.budgetImpactWarning", args: { workspaceId: b.budget.fields.workspaceId, proposal: b.expenseProposal }, returns: b.budgetImpact,
   handler: (ctx, args) => result(async () => {
     validateProposal(args.proposal);
-    return impact(budgetReads(ctx.db), accountingPlanningReads(ctx.db), { ...args, actor: ctx.actor });
+    return impact(budgetReads(ctx), accountingPlanningReads(ctx), { ...args, actor: ctx.actor });
   }),
 });

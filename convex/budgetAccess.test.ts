@@ -58,7 +58,7 @@ for (const operation of budgetOperations) test(`${operation}: unchanged exact op
   expect(await anonymous.call().catch(e => e)).toMatchObject({ data: { code: "authentication_required" } });
   const entry = publicCase(onClient, created.budget.id, operation);
   const call = (access?: Proof) => planningOnly(f.t, () => entry.call(access));
-  expect(await call().catch(e => e)).toMatchObject({ data: { code: "device_proof_required" } });
+  expect(await call().catch(e => e)).toMatchObject({ data: { code: "device_proof_required", directive: "unlock-online" } });
   const wrong = await fixtureProof(c.t, c.key, "accounting.balances", entry.args, c.device.id);
   expect(await call(wrong).catch(e => e)).toMatchObject({ data: { code: "device_proof_invalid" } });
   const changed = await fixtureProof(c.t, c.key, operation, { ...entry.args, changedFact: 1 }, c.device.id);
@@ -69,7 +69,7 @@ for (const operation of budgetOperations) test(`${operation}: unchanged exact op
   const pending = await fixtureProof(c.t, c.key, operation, entry.args, c.device.id);
   const revokeArgs = { deviceId: c.device.id };
   await c.t.mutation(api.devices.revoke, { ...revokeArgs, access: await fixtureProof(c.t, c.key, "devices.revoke", revokeArgs, c.device.id) });
-  expect(await call(pending).catch(e => e)).toMatchObject({ data: { code: "device_revoked" } });
+  expect(await call(pending).catch(e => e)).toMatchObject({ data: { code: "device_revoked", directive: "wipe-local-input-and-sign-out" } });
 });
 
 for (const household of [false, true]) test(`${household ? "Household" : "Personal"}: current permissions and membership protect fresh calls and idempotent retries`, async () => {
@@ -161,3 +161,12 @@ test("local simultaneous singleton creates and same-revision edits converge with
   expect(updates.filter(r => r.data?.code === "budget_revision_stale")).toHaveLength(1);
   expect((await f.t.query(api.budget.listBudgets, { workspaceId: f.workspace.id }))[0]?.revision).toBe(2);
 });
+
+for (const [sts, code] of [[undefined, "session_state_unverified"], ["pending", "session_not_active"]])
+  test(`Budget warning preserves session denial and wipe directive: ${code}`, async () => {
+    const f = await budgetFixture(modules);
+    const proposal = { financialAccountProfileId: f.profile.id, accountingDate: "2026-09-30", amount: { currency: "COP", minorUnits: 1 } };
+    expect(await planningOnly(f.t, () => f.t.withIdentity({ ...ownerIdentity, sid: "sess_budgetdenied", sts })
+      .query(api.budget.budgetImpactWarning, { workspaceId: f.workspace.id, proposal })).catch(e => e))
+      .toMatchObject({ data: { code, directive: "wipe-local-input-and-sign-out" } });
+  });
