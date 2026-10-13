@@ -157,8 +157,8 @@ test("missing membership denies reads, writes, discovery and bootstrap instead o
       productKind: "bankAccount",
     }),
     t.mutation(api.accounting.createPersonalWorkspace, bootstrap),
-  ])
-    expect(await caught(operation)).toMatchObject({
+  ].map(caught))
+    expect(await operation).toMatchObject({
       data: { code: "workspace_membership_required" },
     });
   expect(
@@ -222,10 +222,11 @@ test("Preparer can prepare a profile but cannot post, lock, correct or regain Ow
     }),
     t.mutation(api.accounting.createPersonalWorkspace, bootstrap),
     t.query(api.accounting.personalWorkspace, { now: septNow }),
-  ])
-    expect(await caught(operation)).toMatchObject({
+  ].map(caught)) {
+    expect(await operation).toMatchObject({
       data: { code: "workspace_permission_required" },
     });
+  }
   const direct = await caught(
     t.run((ctx) =>
       postJournalEntry(
