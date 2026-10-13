@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 import { expect, test, vi } from "vitest";
 import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
