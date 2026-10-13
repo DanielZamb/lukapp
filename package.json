@@ -9,7 +9,10 @@
     "test:coverage": "vitest run --coverage",
     "crap": "vitest run --coverage && node scripts/crap.mjs",
     "typecheck": "tsc --noEmit",
-    "mutate": "stryker run"
+    "mutate": "stryker run",
+    "mobile:start": "pnpm --filter @lukapp/mobile start",
+    "mobile:typecheck": "pnpm --filter @lukapp/mobile typecheck",
+    "mobile:test": "pnpm --filter @lukapp/mobile test"
   },
   "devDependencies": {
     "@edge-runtime/vm": "5.0.0",
