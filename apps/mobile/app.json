@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Lukapp",
+    "slug": "lukapp",
+    "version": "0.1.0",
+    "scheme": "lukapp",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.sennkai.lukapp.dev",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.sennkai.lukapp.dev",
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-dev-client"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

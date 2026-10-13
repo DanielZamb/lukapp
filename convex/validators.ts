@@ -57,7 +57,7 @@ export const accountingPeriod = v.object({
 
 export const workspace = v.object({
   id: v.string(),
-  kind: v.literal("Personal"),
+  kind: v.union(v.literal("Personal"), v.literal("Household")),
   functionalCurrency: v.string(),
   chartOfAccountsTemplate: v.string(),
   currentAccountingPeriod: accountingPeriod,

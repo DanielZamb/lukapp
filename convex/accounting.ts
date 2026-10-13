@@ -66,6 +66,36 @@ export const createPersonalWorkspace = ownerMutation({
     }),
 });
 
+export const createHouseholdWorkspace = ownerMutation({
+  operation: "accounting.createHouseholdWorkspace",
+  args: {
+    functionalCurrency: v.string(),
+    chartOfAccountsTemplate: v.optional(v.string()),
+    idempotencyKey: v.string(),
+    now: v.number(),
+  },
+  returns: workspace,
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db), {
+        now: () => dateFromTimestamp(args.now),
+      }).createHouseholdWorkspace({ ...args, actor: ctx.actor }),
+    ),
+});
+
+export const listOwnedWorkspaces = ownerQuery({
+  operation: "accounting.listOwnedWorkspaces",
+  args: { now: v.number() },
+  returns: v.array(workspace),
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).listOwnedWorkspaces({
+        ...args,
+        actor: ctx.actor,
+      }),
+    ),
+});
+
 export const personalWorkspace = ownerQuery({
   operation: "accounting.personalWorkspace",
   args: { now: v.number() },

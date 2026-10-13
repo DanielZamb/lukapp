@@ -1,3 +1,5 @@
+import { createHouseholdWorkspace } from "./commands/createHouseholdWorkspace";
+import { listOwnedWorkspaces } from "./queries/listOwnedWorkspaces";
 import { recordAccountTransfer } from "./commands/recordAccountTransfer";
 import { recordOpeningPosition } from "./commands/recordOpeningPosition";
 import { setupFinancialAccount } from "./commands/setupFinancialAccount";
@@ -23,6 +25,9 @@ export function createAccountingCore(
   return {
     createPersonalWorkspace: (input) =>
       createPersonalWorkspace(store, clock, input),
+    createHouseholdWorkspace: (input) =>
+      createHouseholdWorkspace(store, clock, input),
+    listOwnedWorkspaces: (input) => listOwnedWorkspaces(store, clock, input),
     openWorkspace: (input) => openWorkspace(store, clock, input),
     createFinancialAccountProfile: (input) =>
       createFinancialAccountProfile(store, input),

@@ -48,8 +48,13 @@ export default defineSchema({
     subject: v.string(),
     workspaceId: v.id("workspaces"),
   }).index("by_identity", ["tokenIdentifier"]),
+  householdWorkspaceCreations: defineTable({
+    ownerUserId: v.string(),
+    idempotencyKey: v.string(),
+    workspaceId: v.id("workspaces"),
+  }).index("by_owner_key", ["ownerUserId", "idempotencyKey"]),
   workspaces: defineTable({
-    kind: v.literal("Personal"),
+    kind: v.union(v.literal("Personal"), v.literal("Household")),
     functionalCurrency: v.string(),
     chartOfAccountsTemplate: v.string(),
   }),
@@ -62,7 +67,9 @@ export default defineSchema({
       v.literal("Preparer"),
       v.literal("Viewer"),
     ),
-  }).index("by_workspace_user", ["workspaceId", "userId"]),
+  })
+    .index("by_workspace_user", ["workspaceId", "userId"])
+    .index("by_user_role", ["userId", "role"]),
   ledgerAccounts: defineTable({
     workspaceId: v.id("workspaces"),
     code: v.string(),
