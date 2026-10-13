@@ -1,4 +1,3 @@
-/* The Workspace Chart of Accounts: template lookup, locked classification, and sparse activation (ADR-0007, ADR-0082). */
 import { AccountingError, type AccountingErrorCode } from "./errors";
 import { coPucPersonalTemplate } from "./templates/coPucPersonal";
 import { usGaapPersonalTemplate } from "./templates/usGaapPersonal";
@@ -21,7 +20,6 @@ const templates = new Map<string, ChartOfAccountsTemplate>(
   [coPucPersonalTemplate, usGaapPersonalTemplate].map((template) => [template.version, template]),
 );
 
-/** Uses a recording flow may ask for, and the error when a code belongs to another use. */
 type RecordingUse = Extract<CatalogUse, "expense" | "income" | "openingBalance">;
 
 const wrongUse: Record<RecordingUse, AccountingErrorCode> = {
