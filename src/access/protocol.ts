@@ -9,6 +9,8 @@ export const accessPolicy = {
 } as const;
 
 export const operations = [
+  "budget.createBudget", "budget.updateBudget", "budget.retireBudget",
+  "budget.listBudgets", "budget.evaluateBudgets", "budget.budgetImpactWarning",
   "accounting.createUserCategory", "accounting.suggestCategoryNature", "accounting.listUserCategories", "accounting.categoryTotals",
   "accounting.changeUserCategory", "accounting.previewCategoryReclassification", "accounting.confirmCategoryReclassification",
   "devices.register", "devices.revoke", "devices.heartbeat", "devices.approveRegistration",

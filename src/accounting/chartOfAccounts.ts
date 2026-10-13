@@ -119,12 +119,8 @@ export async function requireTemplateAccount(
   use: RecordingUse,
   code?: string,
 ): Promise<LedgerAccount> {
-  const template = chartTemplate(workspace.chartOfAccountsTemplate);
-  const account = catalogAccount(template, code ?? template.defaults[use]);
-  if (account.use !== use) {
-    throw new AccountingError(wrongUse[use]);
-  }
-  return activate(store, workspace.id, template, account);
+  const account = resolveTemplateAccount(workspace, use, code);
+  return activate(store, workspace.id, chartTemplate(workspace.chartOfAccountsTemplate), account);
 }
 
 /** Next auxiliary code under a profile parent: 111005 → 11100501, 11100502, … up to 99. Template accounts never sit under a profile parent. */
@@ -173,4 +169,11 @@ export function catalogView(
 /** Clase, grupo, cuenta, and subcuenta above a code: 51959595 → 5, 51, 5195, 519595. */
 export function ancestorCodes(code: string): string[] {
   return [1, 2, 4, 6].filter((length) => length < code.length).map((length) => code.slice(0, length));
+}
+
+export function resolveTemplateAccount(workspace: StoredWorkspace, use: RecordingUse, code?: string) {
+  const template = chartTemplate(workspace.chartOfAccountsTemplate);
+  const account = catalogAccount(template, code ?? template.defaults[use]);
+  if (account.use !== use) throw new AccountingError(wrongUse[use]);
+  return { ...account, ...classify(template, account) };
 }

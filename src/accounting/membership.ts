@@ -12,9 +12,10 @@ export type WorkspacePermission =
   | "post"
   | "correct"
   | "managePeriods"
-  | "administerMembership";
+  | "administerMembership"
+  | "manageBudgets";
 
-export const workspaceRolePolicyVersion = "workspace-roles@1";
+export const workspaceRolePolicyVersion = "workspace-roles@2";
 
 export const workspaceRolePolicy = {
   Owner: [
@@ -24,6 +25,7 @@ export const workspaceRolePolicy = {
     "correct",
     "managePeriods",
     "administerMembership",
+    "manageBudgets",
   ],
   Accountant: ["view", "prepare", "post", "correct", "managePeriods"],
   Preparer: ["view", "prepare"],
@@ -39,7 +41,7 @@ export function hasWorkspacePermission(
 }
 
 export async function requireWorkspace(
-  store: AccountingStore,
+  store: Pick<AccountingStore, "membershipRole" | "getWorkspace">,
   workspaceId: string,
   actor: Actor,
   permission: WorkspacePermission = "view",

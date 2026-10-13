@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as budget from "../budget.js";
 import type * as accounting from "../accounting.js";
 import type * as authConnection from "../authConnection.js";
 import type * as deviceValidators from "../deviceValidators.js";
@@ -33,6 +34,7 @@ import type * as validators from "../validators.js";
  */
 declare const fullApi: ApiFromModules<{
   accounting: typeof accounting;
+  budget: typeof budget;
   authConnection: typeof authConnection;
   deviceValidators: typeof deviceValidators;
   devices: typeof devices;

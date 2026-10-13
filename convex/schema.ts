@@ -13,7 +13,10 @@ import {
   cashCategoryInput,
 } from "./validators";
 
+import { budgetTables } from "./budgetValidators";
+
 export default defineSchema({
+  ...budgetTables,
   mobileDevices: defineTable({
     tokenIdentifier: v.string(), sid: v.string(), publicKey: v.string(),
     name: v.string(), platform: devicePlatform,
@@ -115,6 +118,7 @@ export default defineSchema({
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"])
+    .index("by_workspace_period", ["workspaceId", "periodYear", "periodMonth"])
     .index("by_reverses", ["reversesEntryId"]),
   journalLines: defineTable({
     category: v.optional(categorySnapshot),

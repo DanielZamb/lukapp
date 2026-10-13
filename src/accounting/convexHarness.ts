@@ -41,7 +41,7 @@ export function convexAccounting(
     const raw = base.withIdentity({ sid: "sess_fixture", sts: "active", ...identity });
     async function argsWithProof(reference: FunctionReference<"query" | "mutation">, args: Record<string, unknown>) {
       const operation = operations.find((operation) => operation === getFunctionName(reference).replace(":", "."));
-      if (!operation || !operation.startsWith("accounting.") || "access" in args) return args;
+      if (!operation || operation.startsWith("devices.") || "access" in args) return args;
       if (identity.subject !== ownerIdentity.subject || identity.issuer !== ownerIdentity.issuer ||
         !process.env.LUKAPP_OWNER_CLERK_SUBJECT || !process.env.CLERK_JWT_ISSUER_DOMAIN) return args;
       const { key, device } = await register();

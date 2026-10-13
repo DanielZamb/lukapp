@@ -1,4 +1,5 @@
 export const accountingErrorMessages = {
+  planning_read_limit: "Too much Posted activity for one complete planning evaluation",
   category_not_found: "User Category not found",
   category_preset_unknown: "Category Preset not found",
   category_unresolved: "Confirm the Category Nature before posting",
