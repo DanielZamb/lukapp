@@ -32,9 +32,14 @@ function idFor<Table extends TableNames>(
   return db.normalizeId(table, id);
 }
 
-/** Only for ids the kernel got back from this store, never raw caller input. */
-function storedId<Table extends TableNames>(id: string): Id<Table> {
-  return id as Id<Table>;
+function requiredId<Table extends TableNames>(
+  db: ReadDb,
+  table: Table,
+  id: string,
+): Id<Table> {
+  const normalized = idFor(db, table, id);
+  if (!normalized) throw new Error(`Store received an invalid ${table} id`);
+  return normalized;
 }
 
 function findAccountingPeriod(
@@ -144,10 +149,10 @@ function readStore(db: ReadDb): ReadMethods {
       return stored;
     },
 
-    async isMember(workspaceId, userId) {
+    async membershipRole(workspaceId, userId) {
       const id = idFor(db, "workspaces", workspaceId);
       if (!id) {
-        return false;
+        return undefined;
       }
       const membership = await db
         .query("workspaceMemberships")
@@ -155,7 +160,7 @@ function readStore(db: ReadDb): ReadMethods {
           q.eq("workspaceId", id).eq("userId", userId),
         )
         .unique();
-      return membership !== null;
+      return membership?.role;
     },
 
     async getLedgerAccount(accountId) {
@@ -169,7 +174,7 @@ function readStore(db: ReadDb): ReadMethods {
         .query("ledgerAccounts")
         .withIndex("by_workspace_code", (q) =>
           q
-            .eq("workspaceId", storedId<"workspaces">(workspaceId))
+            .eq("workspaceId", requiredId(db, "workspaces", workspaceId))
             .eq("code", code),
         )
         .unique();
@@ -180,7 +185,7 @@ function readStore(db: ReadDb): ReadMethods {
       const docs = await db
         .query("ledgerAccounts")
         .withIndex("by_workspace", (q) =>
-          q.eq("workspaceId", storedId<"workspaces">(workspaceId)),
+          q.eq("workspaceId", requiredId(db, "workspaces", workspaceId)),
         )
         .collect();
       return docs.map(toLedgerAccount);
@@ -196,7 +201,7 @@ function readStore(db: ReadDb): ReadMethods {
       const docs = await db
         .query("financialAccountProfiles")
         .withIndex("by_workspace", (q) =>
-          q.eq("workspaceId", storedId<"workspaces">(workspaceId)),
+          q.eq("workspaceId", requiredId(db, "workspaces", workspaceId)),
         )
         .collect();
       return docs.map(toProfile);
@@ -213,7 +218,7 @@ function readStore(db: ReadDb): ReadMethods {
           .query("journalEntries")
           .withIndex("by_workspace_idempotency", (q) =>
             q
-              .eq("workspaceId", storedId<"workspaces">(workspaceId))
+              .eq("workspaceId", requiredId(db, "workspaces", workspaceId))
               .eq("idempotencyKey", idempotencyKey),
           )
           .unique(),
@@ -225,14 +230,14 @@ function readStore(db: ReadDb): ReadMethods {
         await db
           .query("journalEntries")
           .withIndex("by_reverses", (q) =>
-            q.eq("reversesEntryId", storedId<"journalEntries">(entryId)),
+            q.eq("reversesEntryId", requiredId(db, "journalEntries", entryId)),
           )
           .first(),
       );
     },
 
     async listJournalEntries(workspaceId) {
-      const workspace = storedId<"workspaces">(workspaceId);
+      const workspace = requiredId(db, "workspaces", workspaceId);
       const [docs, lines] = await Promise.all([
         db
           .query("journalEntries")
@@ -249,7 +254,7 @@ function readStore(db: ReadDb): ReadMethods {
     async getAccountingPeriod(workspaceId, period) {
       const doc = await findAccountingPeriod(
         db,
-        storedId<"workspaces">(workspaceId),
+        requiredId(db, "workspaces", workspaceId),
         period,
       );
       return doc ? toAccountingPeriod(doc) : undefined;
@@ -272,7 +277,7 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
     async insertLedgerAccount(account) {
       const id = await db.insert("ledgerAccounts", {
         ...account,
-        workspaceId: storedId<"workspaces">(account.workspaceId),
+        workspaceId: requiredId(db, "workspaces", account.workspaceId),
       });
       return { id, ...account };
     },
@@ -280,14 +285,18 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
     async insertProfile(profile) {
       const id = await db.insert("financialAccountProfiles", {
         ...profile,
-        workspaceId: storedId<"workspaces">(profile.workspaceId),
-        postingAccountId: storedId<"ledgerAccounts">(profile.postingAccountId),
+        workspaceId: requiredId(db, "workspaces", profile.workspaceId),
+        postingAccountId: requiredId(
+          db,
+          "ledgerAccounts",
+          profile.postingAccountId,
+        ),
       });
       return { id, ...profile };
     },
 
     async insertJournalEntry(entry) {
-      const workspaceId = storedId<"workspaces">(entry.workspaceId);
+      const workspaceId = requiredId(db, "workspaces", entry.workspaceId);
       const journalEntryId = await db.insert("journalEntries", {
         workspaceId,
         accountingDate: entry.accountingDate,
@@ -300,13 +309,21 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
         postedAt: entry.postedAt,
         ...(entry.financialAccountProfileId
           ? {
-              financialAccountProfileId: storedId<"financialAccountProfiles">(
+              financialAccountProfileId: requiredId(
+                db,
+                "financialAccountProfiles",
                 entry.financialAccountProfileId,
               ),
             }
           : {}),
         ...(entry.reversesEntryId
-          ? { reversesEntryId: storedId<"journalEntries">(entry.reversesEntryId) }
+          ? {
+              reversesEntryId: requiredId(
+                db,
+                "journalEntries",
+                entry.reversesEntryId,
+              ),
+            }
           : {}),
       });
       for (const [lineNumber, line] of entry.lines.entries()) {
@@ -314,7 +331,11 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
           workspaceId,
           journalEntryId,
           lineNumber,
-          ledgerAccountId: storedId<"ledgerAccounts">(line.ledgerAccountId),
+          ledgerAccountId: requiredId(
+            db,
+            "ledgerAccounts",
+            line.ledgerAccountId,
+          ),
           debitMinorUnits: line.debitMinorUnits,
           creditMinorUnits: line.creditMinorUnits,
         });
@@ -323,7 +344,7 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
     },
 
     async insertAccountingPeriod(workspaceId, period) {
-      const id = storedId<"workspaces">(workspaceId);
+      const id = requiredId(db, "workspaces", workspaceId);
       const existing = await findAccountingPeriod(db, id, period);
       if (existing) {
         return toAccountingPeriod(existing);
@@ -335,7 +356,7 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
     async setAccountingPeriodStatus(workspaceId, period, status) {
       const doc = await findAccountingPeriod(
         db,
-        storedId<"workspaces">(workspaceId),
+        requiredId(db, "workspaces", workspaceId),
         period,
       );
       if (!doc) {
@@ -347,7 +368,7 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
 
     async insertPeriodControlDecision(workspaceId, decision) {
       await db.insert("periodControlDecisions", {
-        workspaceId: storedId<"workspaces">(workspaceId),
+        workspaceId: requiredId(db, "workspaces", workspaceId),
         year: decision.period.year,
         month: decision.period.month,
         action: decision.action,
@@ -370,7 +391,8 @@ function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
     insertProfile: async () => unavailable("insertProfile"),
     insertJournalEntry: async () => unavailable("insertJournalEntry"),
     insertAccountingPeriod: async () => unavailable("insertAccountingPeriod"),
-    setAccountingPeriodStatus: async () => unavailable("setAccountingPeriodStatus"),
+    setAccountingPeriodStatus: async () =>
+      unavailable("setAccountingPeriodStatus"),
     insertPeriodControlDecision: async () =>
       unavailable("insertPeriodControlDecision"),
   };

@@ -20,7 +20,7 @@ export async function createFinancialAccountProfile(
     productKind: FinancialAccountProductKind;
   },
 ): Promise<FinancialAccountProfile> {
-  const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
+  const workspace = await requireWorkspace(store, input.workspaceId, input.actor, "prepare");
   const name = input.name.trim();
   if (!name) {
     throw new AccountingError("name_required");

@@ -7,7 +7,7 @@ import {
   convexAccounting,
   createDaily,
   createOwnedWorkspace,
-  owner,
+  ownerIdentity,
   septNow,
 } from "../src/accounting/convexHarness";
 
@@ -25,7 +25,6 @@ test("owner can create a Personal Workspace and open it", async () => {
   const t = testdb();
   const workspace = await createOwnedWorkspace(t);
   const opened = await t.query(api.accounting.openWorkspace, {
-    userId: owner.userId,
     workspaceId: workspace.id,
     now: septNow,
   });
@@ -39,7 +38,6 @@ test("a Personal Workspace opens with the current Accounting Period", async () =
   const t = testdb();
   const workspace = await createOwnedWorkspace(t);
   const opened = await t.query(api.accounting.openWorkspace, {
-    userId: owner.userId,
     workspaceId: workspace.id,
     now: septNow,
   });
@@ -61,14 +59,12 @@ test("an invalid clock cannot create a Personal Workspace", async () => {
 
   const infinite = await t
     .mutation(api.accounting.createPersonalWorkspace, {
-      userId: owner.userId,
       functionalCurrency: "COP",
       now: Number.POSITIVE_INFINITY,
     })
     .catch((caught: unknown) => caught);
   const nan = await t
     .mutation(api.accounting.createPersonalWorkspace, {
-      userId: owner.userId,
       functionalCurrency: "COP",
       now: Number.NaN,
     })
@@ -83,15 +79,15 @@ test("a stranger cannot open another person's Workspace", async () => {
   const workspace = await createOwnedWorkspace(t);
 
   const error = await t
+    .withIdentity({ ...ownerIdentity, subject: "stranger-2", tokenIdentifier: "stranger-2" })
     .query(api.accounting.openWorkspace, {
-      userId: "stranger-2",
       workspaceId: workspace.id,
       now: septNow,
     })
     .catch((caught: unknown) => caught);
 
   expect(error).toMatchObject({
-    data: { code: "workspace_membership_required" },
+    data: { code: "owner_not_allowed" },
   });
 });
 
@@ -100,7 +96,6 @@ test("owner can create and list a Financial Account Profile", async () => {
   const workspace = await createOwnedWorkspace(t);
   const profile = await createDaily(t, workspace.id);
   const profiles = await t.query(api.accounting.listFinancialAccountProfiles, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -116,7 +111,6 @@ test("a membership left behind by a missing Workspace grants nothing", async () 
 
   const error = await caught(
     t.query(api.accounting.listFinancialAccountProfiles, {
-      userId: owner.userId,
       workspaceId: workspace.id,
     }),
   );

@@ -2,6 +2,8 @@ export type Actor = {
   userId: string;
 };
 
+export type WorkspaceRole = "Owner" | "Accountant" | "Preparer" | "Viewer";
+
 export type WorkspaceKind = "Personal";
 
 export type PeriodStatus = "open" | "locked" | "not_opened";
@@ -53,7 +55,6 @@ export type ChartOfAccountsTemplate = {
   summaryNames: Record<string, string>;
 };
 
-/** Product facts a basic user recognizes; classification turns them into a nature. */
 export type FinancialAccountProductKind =
   | "cash"
   | "bankAccount"
@@ -227,7 +228,7 @@ export type AccountingStore = {
     ownerUserId: string,
   ): Promise<StoredWorkspace>;
   getWorkspace(workspaceId: string): Promise<StoredWorkspace | undefined>;
-  isMember(workspaceId: string, userId: string): Promise<boolean>;
+  membershipRole(workspaceId: string, userId: string): Promise<WorkspaceRole | undefined>;
   insertLedgerAccount(account: Omit<LedgerAccount, "id">): Promise<LedgerAccount>;
   getLedgerAccount(accountId: string): Promise<LedgerAccount | undefined>;
   findLedgerAccountByCode(
@@ -327,7 +328,6 @@ export type AccountingCore = {
   }): Promise<AccountingPeriod>;
 };
 
-/** Familiar facts a basic user enters for money that moved in or out of an account. */
 export type CashActivityInput = {
   actor: Actor;
   workspaceId: string;

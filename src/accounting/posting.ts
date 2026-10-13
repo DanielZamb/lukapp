@@ -1,4 +1,3 @@
-/* The one entry point that writes to the General Ledger. Commands build drafts; this recognizes them. */
 import { AccountingError } from "./errors";
 import { requireWorkspace } from "./membership";
 import { periodFromAccountingDate } from "./period";
@@ -23,7 +22,7 @@ export async function postJournalEntry(
   input: { actor: Actor; workspaceId: string; draft: JournalEntryDraft },
 ): Promise<PostingResult> {
   const { draft } = input;
-  await requireWorkspace(store, input.workspaceId, input.actor);
+  await requireWorkspace(store, input.workspaceId, input.actor, "post");
   if (!draft.idempotencyKey) {
     throw new AccountingError("idempotency_key_required");
   }
@@ -78,7 +77,6 @@ export function assertBalancedLines(lines: DraftJournalLine[]): void {
   }
 }
 
-/** Every line hits an existing account in this Workspace. All accounts are Posting Accounts until Summary Accounts exist. */
 async function assertPostingAccounts(
   store: AccountingStore,
   workspaceId: string,
@@ -92,7 +90,6 @@ async function assertPostingAccounts(
   }
 }
 
-/** A draft may only link to a profile or an entry in its own Workspace. */
 async function assertLinkedRecords(
   store: AccountingStore,
   workspaceId: string,

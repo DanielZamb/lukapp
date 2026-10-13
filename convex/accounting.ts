@@ -1,6 +1,10 @@
-/* Convex commands for the accounting kernel. Walkthrough: src/accounting/index.ts. */
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { ownerMutation, ownerQuery } from "./lib/owner";
+import {
+  bootstrapPersonalWorkspace,
+  personalWorkspaceLink,
+  requirePersonalWorkspaceOwner,
+} from "./lib/personalWorkspace";
 import { AccountingError, createAccountingCore } from "../src/accounting";
 import { dateFromTimestamp } from "../src/accounting/period";
 import { convexReadStore, convexStore } from "./store";
@@ -18,12 +22,7 @@ import {
   workspace,
 } from "./validators";
 
-const actor = {
-  userId: v.string(),
-};
-
 const inWorkspace = {
-  ...actor,
   workspaceId: v.string(),
 };
 
@@ -48,13 +47,8 @@ async function run<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-function withActor<T extends { userId: string }>({ userId, ...rest }: T) {
-  return { actor: { userId }, ...rest };
-}
-
-export const createPersonalWorkspace = mutation({
+export const createPersonalWorkspace = ownerMutation({
   args: {
-    ...actor,
     functionalCurrency: v.string(),
     chartOfAccountsTemplate: v.optional(v.string()),
     now: v.number(),
@@ -65,91 +59,132 @@ export const createPersonalWorkspace = mutation({
       const core = createAccountingCore(convexStore(ctx.db), {
         now: () => dateFromTimestamp(args.now),
       });
-      return core.createPersonalWorkspace({
-        actor: { userId: args.userId },
-        functionalCurrency: args.functionalCurrency,
-        ...(args.chartOfAccountsTemplate
-          ? { chartOfAccountsTemplate: args.chartOfAccountsTemplate }
-          : {}),
-      });
+      return bootstrapPersonalWorkspace(ctx, args, core);
     }),
 });
 
-export const openWorkspace = query({
+export const personalWorkspace = ownerQuery({
+  args: { now: v.number() },
+  returns: v.union(
+    v.object({ status: v.literal("provisioning-required") }),
+    v.object({ status: v.literal("ready"), workspace }),
+  ),
+  handler: async (ctx, args) =>
+    run(async () => {
+      const linked = await personalWorkspaceLink(ctx, ctx.actor.userId);
+      if (!linked) return { status: "provisioning-required" } as const;
+      await requirePersonalWorkspaceOwner(
+        ctx,
+        linked.workspaceId,
+        ctx.actor.userId,
+      );
+      const workspace = await createAccountingCore(
+        convexReadStore(ctx.db),
+      ).openWorkspace({
+        actor: ctx.actor,
+        workspaceId: linked.workspaceId,
+        now: args.now,
+      });
+      return { status: "ready", workspace } as const;
+    }),
+});
+
+export const openWorkspace = ownerQuery({
   args: { ...inWorkspace, now: v.number() },
   returns: workspace,
   handler: async (ctx, args) =>
-    run(() => createAccountingCore(convexReadStore(ctx.db)).openWorkspace(withActor(args))),
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).openWorkspace({
+        ...args,
+        actor: ctx.actor,
+      }),
+    ),
 });
 
-export const createFinancialAccountProfile = mutation({
+export const createFinancialAccountProfile = ownerMutation({
   args: { ...inWorkspace, name: v.string(), productKind },
   returns: financialAccountProfile,
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexStore(ctx.db)).createFinancialAccountProfile(
-        withActor(args),
-      ),
+      createAccountingCore(convexStore(ctx.db)).createFinancialAccountProfile({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });
 
-export const listFinancialAccountProfiles = query({
+export const listFinancialAccountProfiles = ownerQuery({
   args: inWorkspace,
   returns: v.array(financialAccountProfile),
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexReadStore(ctx.db)).listFinancialAccountProfiles(
-        withActor(args),
-      ),
+      createAccountingCore(
+        convexReadStore(ctx.db),
+      ).listFinancialAccountProfiles({ ...args, actor: ctx.actor }),
     ),
 });
 
-export const listLedgerAccounts = query({
+export const listLedgerAccounts = ownerQuery({
   args: inWorkspace,
   returns: v.array(ledgerAccount),
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexReadStore(ctx.db)).listLedgerAccounts(withActor(args)),
+      createAccountingCore(convexReadStore(ctx.db)).listLedgerAccounts({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });
 
-export const listCatalogAccounts = query({
+export const listCatalogAccounts = ownerQuery({
   args: inWorkspace,
   returns: v.array(catalogAccount),
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexReadStore(ctx.db)).listCatalogAccounts(withActor(args)),
+      createAccountingCore(convexReadStore(ctx.db)).listCatalogAccounts({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });
 
-export const lockAccountingPeriod = mutation({
+export const lockAccountingPeriod = ownerMutation({
   args: { ...inWorkspace, period: periodKey, reason: v.optional(v.string()) },
   returns: accountingPeriod,
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexStore(ctx.db)).lockAccountingPeriod(withActor(args)),
+      createAccountingCore(convexStore(ctx.db)).lockAccountingPeriod({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });
 
-export const recordCashExpense = mutation({
+export const recordCashExpense = ownerMutation({
   args: cashActivity,
   returns: postedJournalEntry,
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexStore(ctx.db)).recordCashExpense(withActor(args)),
+      createAccountingCore(convexStore(ctx.db)).recordCashExpense({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });
 
-export const recordCashIncome = mutation({
+export const recordCashIncome = ownerMutation({
   args: cashActivity,
   returns: postedJournalEntry,
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexStore(ctx.db)).recordCashIncome(withActor(args)),
+      createAccountingCore(convexStore(ctx.db)).recordCashIncome({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });
 
-export const reversePostedEntry = mutation({
+export const reversePostedEntry = ownerMutation({
   args: {
     ...inWorkspace,
     journalEntryId: v.string(),
@@ -160,31 +195,45 @@ export const reversePostedEntry = mutation({
   returns: postedJournalEntry,
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexStore(ctx.db)).reversePostedEntry(withActor(args)),
+      createAccountingCore(convexStore(ctx.db)).reversePostedEntry({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });
 
-export const listJournalEntries = query({
+export const listJournalEntries = ownerQuery({
   args: inWorkspace,
   returns: v.array(postedJournalEntry),
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexReadStore(ctx.db)).listJournalEntries(withActor(args)),
+      createAccountingCore(convexReadStore(ctx.db)).listJournalEntries({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });
 
-export const balances = query({
+export const balances = ownerQuery({
   args: inWorkspace,
   returns: v.array(accountBalance),
   handler: async (ctx, args) =>
-    run(() => createAccountingCore(convexReadStore(ctx.db)).balances(withActor(args))),
+    run(() =>
+      createAccountingCore(convexReadStore(ctx.db)).balances({
+        ...args,
+        actor: ctx.actor,
+      }),
+    ),
 });
 
-export const trialBalance = query({
+export const trialBalance = ownerQuery({
   args: inWorkspace,
   returns: v.array(trialBalanceRow),
   handler: async (ctx, args) =>
     run(() =>
-      createAccountingCore(convexReadStore(ctx.db)).trialBalance(withActor(args)),
+      createAccountingCore(convexReadStore(ctx.db)).trialBalance({
+        ...args,
+        actor: ctx.actor,
+      }),
     ),
 });

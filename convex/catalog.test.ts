@@ -188,7 +188,6 @@ test("the catalog lists template accounts with their PUC levels, nature, and act
   const accounts = await reader(t, workspace.id).ledgerAccounts();
 
   const catalog = await t.query(api.accounting.listCatalogAccounts, {
-    userId: "owner-1",
     workspaceId: workspace.id,
   });
 
@@ -240,7 +239,6 @@ test("the trial balance lists accounts in PUC code order with their codes", asyn
 test("a Workspace can start from the English US GAAP template instead", async () => {
   const t = testdb();
   const workspace = await t.mutation(api.accounting.createPersonalWorkspace, {
-    userId: "owner-1",
     functionalCurrency: "USD",
     now: Date.UTC(2026, 8, 24),
     chartOfAccountsTemplate: "us-gaap-personal@1",
@@ -263,7 +261,6 @@ test("a Workspace can start from the English US GAAP template instead", async ()
   );
   const accounts = await reader(t, workspace.id).ledgerAccounts();
   const catalog = await t.query(api.accounting.listCatalogAccounts, {
-    userId: "owner-1",
     workspaceId: workspace.id,
   });
 
@@ -299,7 +296,6 @@ test("a Workspace cannot start from an unknown COA Template", async () => {
 
   const error = await caught(
     t.mutation(api.accounting.createPersonalWorkspace, {
-      userId: "owner-1",
       functionalCurrency: "COP",
       now: Date.UTC(2026, 8, 24),
       chartOfAccountsTemplate: "personal@1",

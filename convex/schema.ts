@@ -9,6 +9,12 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  personalWorkspaceOwners: defineTable({
+    tokenIdentifier: v.string(),
+    issuer: v.string(),
+    subject: v.string(),
+    workspaceId: v.id("workspaces"),
+  }).index("by_identity", ["tokenIdentifier"]),
   workspaces: defineTable({
     kind: v.literal("Personal"),
     functionalCurrency: v.string(),
@@ -17,7 +23,12 @@ export default defineSchema({
   workspaceMemberships: defineTable({
     workspaceId: v.id("workspaces"),
     userId: v.string(),
-    role: v.literal("Owner"),
+    role: v.union(
+      v.literal("Owner"),
+      v.literal("Accountant"),
+      v.literal("Preparer"),
+      v.literal("Viewer"),
+    ),
   }).index("by_workspace_user", ["workspaceId", "userId"]),
   ledgerAccounts: defineTable({
     workspaceId: v.id("workspaces"),

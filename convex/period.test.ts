@@ -27,7 +27,6 @@ test("a later month stays not opened until a cash expense posts into it", async 
   const t = testdb();
   const workspace = await createOwnedWorkspace(t, septNow);
   const opened = await t.query(api.accounting.openWorkspace, {
-    userId: owner.userId,
     workspaceId: workspace.id,
     now: octNow,
   });
@@ -40,7 +39,6 @@ test("a later month stays not opened until a cash expense posts into it", async 
     }),
   );
   const reopened = await t.query(api.accounting.openWorkspace, {
-    userId: owner.userId,
     workspaceId: workspace.id,
     now: octNow,
   });
@@ -92,12 +90,10 @@ test("a posted cash expense reports the live Accounting Period status", async ()
     groceries(workspace.id, daily.id),
   );
   await t.mutation(api.accounting.lockAccountingPeriod, {
-    userId: owner.userId,
     workspaceId: workspace.id,
     period: { year: 2026, month: 9 },
   });
   const [posted] = await t.query(api.accounting.listJournalEntries, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -113,7 +109,6 @@ test("a cash expense cannot become Posted in a Locked Period", async () => {
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   await t.mutation(api.accounting.lockAccountingPeriod, {
-    userId: owner.userId,
     workspaceId: workspace.id,
     period: { year: 2026, month: 9 },
   });
@@ -124,11 +119,9 @@ test("a cash expense cannot become Posted in a Locked Period", async () => {
     )
     .catch((caught: unknown) => caught);
   const activity = await t.query(api.accounting.listJournalEntries, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
   const balances = await t.query(api.accounting.balances, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -169,7 +162,6 @@ test("two cash expenses in one month share one Accounting Period", async () => {
     }),
   );
   await t.mutation(api.accounting.lockAccountingPeriod, {
-    userId: owner.userId,
     workspaceId: workspace.id,
     period: { year: 2026, month: 9 },
   });

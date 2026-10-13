@@ -1,4 +1,6 @@
 export const accountingErrorMessages = {
+  workspace_permission_required: "Workspace permission required",
+  personal_workspace_configuration_conflict: "Personal Workspace configuration already selected",
   workspace_membership_required: "Workspace Membership required",
   functional_currency_invalid: "Functional Currency must be an active ISO 4217 currency code",
   currency_mismatch: "Amount must be in the Workspace Functional Currency",

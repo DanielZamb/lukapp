@@ -31,7 +31,7 @@ export async function reversePostedEntry(
     idempotencyKey: string;
   },
 ): Promise<PostedJournalEntry> {
-  const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
+  const workspace = await requireWorkspace(store, input.workspaceId, input.actor, "correct");
   const original = await store.getJournalEntry(input.journalEntryId);
   if (!original || original.workspaceId !== input.workspaceId) {
     throw new AccountingError("journal_entry_not_found");

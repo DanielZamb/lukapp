@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { ownerAdmission } from "./lib/owner";
 import { query } from "./_generated/server";
 
 export const connection = query({
@@ -11,7 +12,7 @@ export const connection = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return { status: "signed-out" } as const;
-    if (identity.subject !== process.env.LUKAPP_OWNER_CLERK_SUBJECT) {
+    if (ownerAdmission(identity)) {
       return { status: "not-owner" } as const;
     }
     return { status: "owner", clerkSubject: identity.subject } as const;

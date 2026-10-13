@@ -30,7 +30,7 @@ export async function recordCashActivity(
     counterpart: "expense" | "income";
   },
 ): Promise<PostedJournalEntry> {
-  const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
+  const workspace = await requireWorkspace(store, input.workspaceId, input.actor, "post");
   const amount = requireFunctionalAmount(workspace, input.amount);
   const profile = await store.getProfile(input.financialAccountProfileId);
   if (!profile || profile.workspaceId !== input.workspaceId) {
