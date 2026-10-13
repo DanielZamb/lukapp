@@ -21,7 +21,6 @@
  * 5. Read `listFinancialAccountProfiles` for opening state, `listJournalEntries`
  *    with an optional profile filter, `balances`, or `trialBalance`.
  *
- * Every General Ledger write goes through `postJournalEntry` in `posting.ts`.
  * Opening receipts and profile snapshots share the command transaction. Opening
  * retries return the original receipt and current profile state. Changed command
  * facts return `idempotency_key_conflict`. Failures are `AccountingError`, mapped
