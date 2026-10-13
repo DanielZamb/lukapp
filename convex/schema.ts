@@ -1,3 +1,4 @@
+import { providerActor, providerState, providerTarget } from "./providerValidators";
 import { categoryFields, userCategory, categorySnapshot, categoryCorrection } from "./categoryAnnotationValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
@@ -14,9 +15,24 @@ import {
 } from "./validators";
 
 import { budgetTables } from "./budgetValidators";
+import { planFields, eventFields } from "./recoveryValidators";
 
 export default defineSchema({
   ...budgetTables,
+  recoveryPlans: defineTable(planFields).index("by_workspace", ["workspaceId"]),
+  recoveryEvents: defineTable(eventFields).index("by_workspace", ["workspaceId"]),
+  recoveryReceipts: defineTable({ workspaceId: v.string(), key: v.string(), fingerprint: v.string(), resultId: v.string() })
+    .index("by_workspace_key", ["workspaceId", "key"]),
+  clerkProviderWork: defineTable({
+    ...providerActor, target: providerTarget, state: providerState, attempts: v.number(),
+  }).index("by_identity", ["tokenIdentifier"]),
+  clerkRecoveryIntents: defineTable({
+    ...providerActor, initiatingSid: v.string(), createdAt: v.number(), expiresAt: v.number(),
+    workId: v.optional(v.id("clerkProviderWork")),
+  }).index("by_identity", ["tokenIdentifier"]),
+  clerkWebhookDeliveries: defineTable({
+    ...providerActor, sid: v.string(), eventId: v.string(), eventType: v.string(), timestamp: v.number(),
+  }).index("by_event", ["eventId"]),
   mobileDevices: defineTable({
     tokenIdentifier: v.string(), sid: v.string(), publicKey: v.string(),
     name: v.string(), platform: devicePlatform,
@@ -119,6 +135,7 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"])
     .index("by_workspace_period", ["workspaceId", "periodYear", "periodMonth"])
+    .index("by_workspace_policy_date", ["workspaceId", "policy", "accountingDate"])
     .index("by_reverses", ["reversesEntryId"]),
   journalLines: defineTable({
     category: v.optional(categorySnapshot),

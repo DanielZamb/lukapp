@@ -11,11 +11,12 @@ export type WorkspacePermission =
   | "prepare"
   | "post"
   | "correct"
+  | "manageRecoveryPlans"
   | "managePeriods"
   | "administerMembership"
   | "manageBudgets";
 
-export const workspaceRolePolicyVersion = "workspace-roles@2";
+export const workspaceRolePolicyVersion = "workspace-roles@3";
 
 export const workspaceRolePolicy = {
   Owner: [
@@ -26,6 +27,7 @@ export const workspaceRolePolicy = {
     "managePeriods",
     "administerMembership",
     "manageBudgets",
+    "manageRecoveryPlans",
   ],
   Accountant: ["view", "prepare", "post", "correct", "managePeriods"],
   Preparer: ["view", "prepare"],
