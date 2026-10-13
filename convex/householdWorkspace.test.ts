@@ -1,4 +1,4 @@
-import { expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import { api } from "./_generated/api";
@@ -8,6 +8,12 @@ import {
   caught, convexAccounting, createOwnedWorkspace, ownerIdentity, septNow, octNow,
 } from "../src/accounting/convexHarness";
 import type { TableNames } from "./_generated/dataModel";
+import { fixtureKey, registerFixture } from "../src/access/convexHarness";
+import { proveDeviceRequest } from "../src/access/client";
+import { accessPolicy, bytesToHex } from "../src/access/protocol";
+import type { AccessOperation } from "../src/access/protocol";
+
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
 const household = { functionalCurrency: "USD", idempotencyKey: "household-1", now: septNow };
@@ -238,7 +244,7 @@ test("missing membership is excluded from discovery and never repaired by creati
     t.mutation(api.accounting.createPersonalWorkspace, personal),
     t.query(api.accounting.personalWorkspace, { now: septNow }),
     ...[first, second].map((w) => t.query(api.accounting.balances, { workspaceId: w.id })),
-  ]) expect(await caught(operation)).toMatchObject({ data: { code: "workspace_membership_required" } });
+  ].map(caught)) expect(await operation).toMatchObject({ data: { code: "workspace_membership_required" } });
   expect(await snapshot(t)).toEqual(before);
 });
 
@@ -304,4 +310,157 @@ test("Household creation and owned discovery enforce Clerk admission and revoked
 test("empty discovery still validates its current clock", async () => {
   const t = convexAccounting(modules);
   expect(await caught(t.query(api.accounting.listOwnedWorkspaces, { now: Number.NaN }))).toMatchObject({ data: { code: "clock_required" } });
+});
+
+
+test("Household create and discovery require device proof even for admitted Owner sessions", async () => {
+  vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", ownerIdentity.subject);
+  vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", ownerIdentity.issuer);
+  const t = convexTest(schema, modules).withIdentity({ ...ownerIdentity, sid: "sess_householdProof", sts: "active" });
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, household))).toMatchObject({ data: { code: "device_proof_required" } });
+  expect(await caught(t.query(api.accounting.listOwnedWorkspaces, { now: septNow }))).toMatchObject({ data: { code: "device_proof_required" } });
+});
+
+
+async function householdDevice() {
+  vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", ownerIdentity.subject);
+  vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", ownerIdentity.issuer);
+  const t = convexTest(schema, modules).withIdentity({ ...ownerIdentity, sid: "sess_householdDevice", sts: "active" });
+  const key = await fixtureKey();
+  const device = await registerFixture(t, key);
+  const sign = <Request extends object>(operation: AccessOperation, request: Request) => proveDeviceRequest({
+    transport: { prepare: (args) => t.mutation(api.devices.prepare, args) },
+    hash: { sha256Utf8: async (message) => bytesToHex(new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(message)),
+    )) },
+    key: { publicKey: async () => key.publicKey, sign: key.sign },
+    deviceId: device.id, operation, request,
+  });
+  return { t, key, device, sign };
+}
+
+test("Household exact-operation proofs bind payloads and fresh retries preserve creation facts", async () => {
+  const { t, sign } = await householdDevice();
+  const discovery = { now: septNow };
+  const create = await sign("accounting.createHouseholdWorkspace", household);
+  const list = await sign("accounting.listOwnedWorkspaces", discovery);
+  const before = await snapshot(t);
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, { ...create, access: list.access }))).toMatchObject({ data: { code: "device_proof_invalid" } });
+  expect(await caught(t.query(api.accounting.listOwnedWorkspaces, { ...list, access: create.access }))).toMatchObject({ data: { code: "device_proof_invalid" } });
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, { ...create, functionalCurrency: "COP" }))).toMatchObject({ data: { code: "device_request_mismatch" } });
+  expect(await caught(t.query(api.accounting.listOwnedWorkspaces, { ...list, now: octNow }))).toMatchObject({ data: { code: "device_request_mismatch" } });
+  expect(await snapshot(t)).toEqual(before);
+  const workspace = await t.mutation(api.accounting.createHouseholdWorkspace, create);
+  expect(workspace).toMatchObject({ kind: "Household", functionalCurrency: "USD" });
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, create))).toMatchObject({ data: { code: "device_challenge_replayed" } });
+  expect(await t.mutation(api.accounting.createHouseholdWorkspace, await sign("accounting.createHouseholdWorkspace", household))).toEqual(workspace);
+  expect(await t.query(api.accounting.listOwnedWorkspaces, list)).toEqual([workspace]);
+  expect(await t.query(api.accounting.listOwnedWorkspaces, await sign("accounting.listOwnedWorkspaces", discovery))).toEqual([workspace]);
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, await sign("accounting.createHouseholdWorkspace", { ...household, functionalCurrency: "COP" })))).toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  expect(await t.run((ctx) => ctx.db.query("householdWorkspaceCreations").collect())).toHaveLength(1);
+});
+
+test("accounting fixture preserves explicit missing and wrong proofs instead of replacing them", async () => {
+  const t = convexAccounting(modules);
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, { ...household, access: undefined }))).toMatchObject({ data: { code: "device_proof_required" } });
+  expect(await caught(t.query(api.accounting.listOwnedWorkspaces, { now: septNow, access: undefined }))).toMatchObject({ data: { code: "device_proof_required" } });
+  const { sign } = await householdDevice();
+  const wrong = await sign("accounting.listOwnedWorkspaces", { now: septNow });
+  const wrapped = convexAccounting(modules);
+  expect(await caught(wrapped.mutation(api.accounting.createHouseholdWorkspace, { ...household, access: wrong.access }))).toMatchObject({ data: { code: "device_proof_invalid" } });
+});
+
+test.each(["revoked", "inactive", "maximum"] as const)("Household fresh, pending and replay requests deny %s devices", async (state) => {
+  const started = Date.UTC(2026, 9, 13, 12);
+  const time = vi.spyOn(Date, "now").mockReturnValue(started);
+  const { t, key, device, sign } = await householdDevice();
+  const create = await sign("accounting.createHouseholdWorkspace", household);
+  await t.mutation(api.accounting.createHouseholdWorkspace, create);
+  const priorList = await sign("accounting.listOwnedWorkspaces", { now: septNow });
+  expect(await t.query(api.accounting.listOwnedWorkspaces, priorList)).toHaveLength(1);
+  if (state === "maximum") {
+    for (const day of [20, 40, 60, 80]) {
+      time.mockReturnValue(started + day * 24 * 60 * 60 * 1000);
+      await t.mutation(api.devices.heartbeat, await sign("devices.heartbeat", {}));
+    }
+  }
+  const lifetime = state === "maximum" ? accessPolicy.maximumLifetimeMs : accessPolicy.inactivityLifetimeMs;
+  if (state !== "revoked") time.mockReturnValue(started + lifetime - 1);
+  const pendingRetry = await sign("accounting.createHouseholdWorkspace", household);
+  const pendingCreate = await sign("accounting.createHouseholdWorkspace", { ...household, idempotencyKey: "later-household" });
+  const pendingList = await sign("accounting.listOwnedWorkspaces", { now: septNow });
+  if (state === "revoked") await t.mutation(api.devices.revoke, await sign("devices.revoke", { deviceId: device.id }));
+  else time.mockReturnValue(started + lifetime);
+  const code = state === "revoked" ? "device_revoked" : state === "inactive" ? "session_inactive" : "session_maximum_lifetime";
+  const before = await snapshot(t);
+  for (const request of [create, pendingRetry, pendingCreate]) {
+    expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, request))).toMatchObject({ data: { code, directive: "wipe-local-input-and-sign-out" } });
+  }
+  for (const request of [priorList, pendingList]) {
+    expect(await caught(t.query(api.accounting.listOwnedWorkspaces, request))).toMatchObject({ data: { code, directive: "wipe-local-input-and-sign-out" } });
+  }
+  expect(await caught(sign("accounting.createHouseholdWorkspace", household))).toMatchObject({ data: { code } });
+  expect(await caught(sign("accounting.listOwnedWorkspaces", { now: septNow }))).toMatchObject({ data: { code } });
+  expect(await caught(registerFixture(t, key))).toMatchObject({ data: { code } });
+  expect(await snapshot(t)).toEqual(before);
+  expect(await t.run((ctx) => ctx.db.query("mobileDevices").collect())).toHaveLength(1);
+});
+
+test("Household pending and fresh proofs observe membership removal without repairing discovery or retries", async () => {
+  const { t, sign } = await householdDevice();
+  const personalWorkspace = await t.mutation(api.accounting.createPersonalWorkspace, await sign("accounting.createPersonalWorkspace", personal));
+  const created = await sign("accounting.createHouseholdWorkspace", household);
+  const workspace = await t.mutation(api.accounting.createHouseholdWorkspace, created);
+  const pendingRetry = await sign("accounting.createHouseholdWorkspace", household);
+  const priorList = await sign("accounting.listOwnedWorkspaces", { now: septNow });
+  expect(await t.query(api.accounting.listOwnedWorkspaces, priorList)).toEqual([personalWorkspace, workspace]);
+  await t.run(async (ctx) => {
+    const membership = await ctx.db.query("workspaceMemberships").filter((q) => q.eq(q.field("workspaceId"), workspace.id)).unique();
+    if (!membership) throw new Error("Missing fixture membership");
+    await ctx.db.delete(membership._id);
+  });
+  const before = await snapshot(t);
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, pendingRetry))).toMatchObject({ data: { code: "workspace_membership_required" } });
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, await sign("accounting.createHouseholdWorkspace", household)))).toMatchObject({ data: { code: "workspace_membership_required" } });
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, created))).toMatchObject({ data: { code: "device_challenge_replayed" } });
+  expect(await t.query(api.accounting.listOwnedWorkspaces, priorList)).toEqual([personalWorkspace]);
+  expect(await t.query(api.accounting.listOwnedWorkspaces, await sign("accounting.listOwnedWorkspaces", { now: septNow }))).toEqual([personalWorkspace]);
+  expect(await snapshot(t)).toEqual(before);
+});
+
+test("Household proofs cannot cross sessions and changed session authority denies prepared requests", async () => {
+  const { t, sign } = await householdDevice();
+  const create = await sign("accounting.createHouseholdWorkspace", household);
+  const list = await sign("accounting.listOwnedWorkspaces", { now: septNow });
+  const other = t.withIdentity({ ...ownerIdentity, sid: "sess_anotherHousehold", sts: "active" });
+  expect(await caught(other.mutation(api.accounting.createHouseholdWorkspace, create))).toMatchObject({ data: { code: "device_proof_invalid" } });
+  expect(await caught(other.query(api.accounting.listOwnedWorkspaces, list))).toMatchObject({ data: { code: "device_proof_invalid" } });
+  const pending = t.withIdentity({ ...ownerIdentity, sid: "sess_householdDevice", sts: "pending" });
+  expect(await caught(pending.mutation(api.accounting.createHouseholdWorkspace, create))).toMatchObject({ data: { code: "session_not_active" } });
+  expect(await caught(pending.query(api.accounting.listOwnedWorkspaces, list))).toMatchObject({ data: { code: "session_not_active" } });
+  expect(await t.run((ctx) => ctx.db.query("householdWorkspaceCreations").collect())).toEqual([]);
+});
+
+
+test("Household provisioning failure rolls back the signed challenge with its receipt and permits the same proof retry", async () => {
+  const { t, sign } = await householdDevice();
+  const request = await sign("accounting.createHouseholdWorkspace", household);
+  const before = await snapshot(t);
+  const realStore = stores.convexStore;
+  const fail = vi.spyOn(stores, "convexStore").mockImplementation((db) => {
+    const store = realStore(db);
+    return { ...store, async saveHouseholdWorkspaceCreation(input) {
+      await store.saveHouseholdWorkspaceCreation(input);
+      throw new Error("Signed receipt transaction failure");
+    } };
+  });
+  try {
+    await expect(t.mutation(api.accounting.createHouseholdWorkspace, request)).rejects.toThrow("Signed receipt transaction failure");
+  } finally {
+    fail.mockRestore();
+  }
+  expect(await snapshot(t)).toEqual(before);
+  expect(await t.mutation(api.accounting.createHouseholdWorkspace, request)).toMatchObject({ kind: "Household", functionalCurrency: "USD" });
+  expect(await caught(t.mutation(api.accounting.createHouseholdWorkspace, request))).toMatchObject({ data: { code: "device_challenge_replayed" } });
+  expect(await t.run((ctx) => ctx.db.query("householdWorkspaceCreations").collect())).toHaveLength(1);
 });

@@ -25,21 +25,26 @@ invitations, and additional users remain deferred.
 
 ## UI handoff
 
-The Owner wrappers derive the actor from Clerk. None of these calls accepts
-`actor`, `userId`, or a Workspace kind supplied by the client.
+The Owner wrappers derive the actor from Clerk. Every call requires the same
+registered-device proof boundary as the other accounting endpoints. The four API
+signatures below include `access: { challengeId, signature }`. Prepare and sign the
+exact operation and complete request through `proveDeviceRequest`; the operation
+names for Household creation and discovery are `accounting.createHouseholdWorkspace`
+and `accounting.listOwnedWorkspaces`. None accepts `actor`, `userId`, or a Workspace
+kind supplied by the client.
 
 - `api.accounting.createPersonalWorkspace({ functionalCurrency,
-  chartOfAccountsTemplate?, now }) -> Workspace` keeps the canonical first-run
+  chartOfAccountsTemplate?, now, access }) -> Workspace` keeps the canonical first-run
   bootstrap. Currency is explicit. A changed configuration fails with
   `personal_workspace_configuration_conflict`.
-- `api.accounting.personalWorkspace({ now }) -> { status: "provisioning-required" }
+- `api.accounting.personalWorkspace({ now, access }) -> { status: "provisioning-required" }
   | { status: "ready", workspace: Workspace }` keeps existing first-run discovery.
 - `api.accounting.createHouseholdWorkspace({ functionalCurrency,
-  chartOfAccountsTemplate?, idempotencyKey, now }) -> Workspace` is deliberate later
+  chartOfAccountsTemplate?, idempotencyKey, now, access }) -> Workspace` is deliberate later
   setup. Persist one nonblank key for that creation attempt and reuse it after an
   uncertain result. A fresh key deliberately creates another Household. There is
   no Household singleton. The default template is `co-puc-personal@1`.
-- `api.accounting.listOwnedWorkspaces({ now }) -> Workspace[]` discovers only
+- `api.accounting.listOwnedWorkspaces({ now, access }) -> Workspace[]` discovers only
   existing Workspaces with a current Owner membership, in membership creation
   order. Use `Workspace.id` for subsequent selection and commands.
 
@@ -61,3 +66,14 @@ its existing scoped membership and permissions. Profiles, accounts, entries,
 and transfer sides must all belong to the selected Workspace. No cross-Workspace
 transfer or shared ledger is introduced. Native selection and setup screens are
 outside this backend unit; first-run still silently creates Personal and My money.
+
+A financial retry uses a fresh device proof and preserves its Household creation
+idempotency key. Reusing a consumed mutation proof is denied even when the
+creation facts match. Discovery queries verify current device/session authority,
+the exact operation and payload, and current Owner memberships on every call.
+Revoked or expired devices cannot create, retry, discover or prepare fresh proofs.
+Removing a Household membership denies creation retries and excludes that
+Workspace from discovery, including with a proof prepared before removal.
+The shared 30-day inactivity and 90-day maximum binding lifetimes still apply.
+Live provider/session lifecycle integration and native key custody remain outside
+this backend handoff; see [the device contract](../src/access/NATIVE-HANDOFF.md).

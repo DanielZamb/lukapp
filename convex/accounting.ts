@@ -67,6 +67,7 @@ export const createPersonalWorkspace = ownerMutation({
 });
 
 export const createHouseholdWorkspace = ownerMutation({
+  operation: "accounting.createHouseholdWorkspace",
   args: {
     functionalCurrency: v.string(),
     chartOfAccountsTemplate: v.optional(v.string()),
@@ -83,6 +84,7 @@ export const createHouseholdWorkspace = ownerMutation({
 });
 
 export const listOwnedWorkspaces = ownerQuery({
+  operation: "accounting.listOwnedWorkspaces",
   args: { now: v.number() },
   returns: v.array(workspace),
   handler: async (ctx, args) =>
