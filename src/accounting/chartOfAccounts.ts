@@ -22,11 +22,12 @@ const templates = new Map<string, ChartOfAccountsTemplate>(
 );
 
 /** Uses a recording flow may ask for, and the error when a code belongs to another use. */
-type RecordingUse = Extract<CatalogUse, "expense" | "income">;
+type RecordingUse = Extract<CatalogUse, "expense" | "income" | "openingBalance">;
 
 const wrongUse: Record<RecordingUse, AccountingErrorCode> = {
   expense: "cash_expense_account_invalid",
   income: "cash_income_account_invalid",
+  openingBalance: "opening_balance_account_invalid",
 };
 
 export function chartTemplate(version: string): ChartOfAccountsTemplate {

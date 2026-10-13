@@ -8,5 +8,5 @@ export async function listFinancialAccountProfiles(
 ): Promise<FinancialAccountProfile[]> {
   await requireWorkspace(store, input.workspaceId, input.actor);
   const profiles = await store.listProfiles(input.workspaceId);
-  return profiles.map(toProfile);
+  return Promise.all(profiles.map((profile) => toProfile(store, profile)));
 }

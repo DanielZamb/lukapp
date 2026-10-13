@@ -20,7 +20,8 @@ export type AccountingPeriod = PeriodKey & {
 };
 
 /** Accounting class of a Ledger Account; decides which side increases it. */
-export type AccountNature = "Asset" | "Liability" | "Equity" | "Revenue" | "Expense";
+export type AccountNature =
+  "Asset" | "Liability" | "Equity" | "Revenue" | "Expense";
 
 /** Posting Accounts receive Journal Lines. Summary Accounts arrive with reporting. */
 export type LedgerAccountRole = "Posting";
@@ -56,14 +57,15 @@ export type ChartOfAccountsTemplate = {
 };
 
 export type FinancialAccountProductKind =
-  | "cash"
-  | "bankAccount"
-  | "savingsAccount"
-  | "creditCard"
-  | "loan";
+  "cash" | "bankAccount" | "savingsAccount" | "creditCard" | "loan";
 
 /** Versioned rule that built a Journal Entry, kept as provenance. */
-export type PostingPolicy = "cash-expense@1" | "cash-income@1" | "reversal@1";
+export type PostingPolicy =
+  | "cash-expense@1"
+  | "cash-income@1"
+  | "reversal@1"
+  | "account-transfer@1"
+  | "opening-position@1";
 
 export type Workspace = {
   id: string;
@@ -80,6 +82,7 @@ export type FinancialAccountProfile = {
   productKind: FinancialAccountProductKind;
   /** The Posting Account behind the profile, for advanced views. */
   ledgerAccountId: string;
+  opening: OpeningStatus;
 };
 
 export type LedgerAccountView = {
@@ -115,6 +118,7 @@ export type JournalLineView = {
   code: string;
   name: string;
   nature: AccountNature;
+  financialAccountProfileId?: string;
   debitMinorUnits: number;
   creditMinorUnits: number;
 };
@@ -129,6 +133,12 @@ export type PostedJournalEntry = {
   amount: Money;
   financialAccountProfileId?: string;
   financialAccountProfileName?: string;
+  accountTransfer?: {
+    sourceFinancialAccountProfileId: string;
+    destinationFinancialAccountProfileId: string;
+    sourceNature: AccountNature;
+    destinationNature: AccountNature;
+  };
   reversesEntryId?: string;
   reversedByEntryId?: string;
   postedBy: string;
@@ -172,6 +182,8 @@ export type StoredProfile = {
   productKind: FinancialAccountProductKind;
   classificationPolicy: string;
   postingAccountId: string;
+  setupIdempotencyKey?: string;
+  opening?: StoredOpening;
 };
 
 /** Code, nature, and normal side are locked when the account is activated. */
@@ -218,6 +230,72 @@ export type PeriodControlDecision = {
   reason?: string;
 };
 
+export type StoredOpening = {
+  accountingDate: string;
+  idempotencyKey: string;
+  amount: Money;
+} & ({ kind: "zero" } | { kind: "posted"; journalEntryId: string });
+
+export type OpeningStatus =
+  | { status: "not_started" }
+  | {
+      status: "zero";
+      accountingDate: string;
+      amount: Money;
+      idempotencyKey: string;
+    }
+  | {
+      status: "posted" | "reversed";
+      accountingDate: string;
+      amount: Money;
+      idempotencyKey: string;
+      journalEntryId: string;
+    };
+
+export type StoredOpeningPosition = {
+  workspaceId: string;
+  financialAccountProfileId: string;
+  description: string;
+  replacesOpeningKey?: string;
+  opening: StoredOpening;
+};
+
+export type OpeningPositionInput = {
+  actor: Actor;
+  workspaceId: string;
+  financialAccountProfileId: string;
+  amount: Money;
+  accountingDate: string;
+  description: string;
+  idempotencyKey: string;
+  replacesOpeningKey?: string;
+};
+
+export type OpeningPositionResult = {
+  profile: FinancialAccountProfile;
+  journalEntry: PostedJournalEntry | null;
+  replay: boolean;
+};
+
+export type AccountTransferInput = {
+  actor: Actor;
+  workspaceId: string;
+  sourceFinancialAccountProfileId: string;
+  destinationFinancialAccountProfileId: string;
+  amount: Money;
+  accountingDate: string;
+  description: string;
+  idempotencyKey: string;
+};
+
+export type SetupFinancialAccountInput = Omit<
+  OpeningPositionInput,
+  "financialAccountProfileId" | "replacesOpeningKey"
+> & {
+  name: string;
+  productKind: FinancialAccountProductKind;
+};
+
 export type AccountingClock = {
   now: () => Date;
 };
@@ -228,8 +306,13 @@ export type AccountingStore = {
     ownerUserId: string,
   ): Promise<StoredWorkspace>;
   getWorkspace(workspaceId: string): Promise<StoredWorkspace | undefined>;
-  membershipRole(workspaceId: string, userId: string): Promise<WorkspaceRole | undefined>;
-  insertLedgerAccount(account: Omit<LedgerAccount, "id">): Promise<LedgerAccount>;
+  membershipRole(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceRole | undefined>;
+  insertLedgerAccount(
+    account: Omit<LedgerAccount, "id">,
+  ): Promise<LedgerAccount>;
   getLedgerAccount(accountId: string): Promise<LedgerAccount | undefined>;
   findLedgerAccountByCode(
     workspaceId: string,
@@ -238,6 +321,16 @@ export type AccountingStore = {
   listLedgerAccounts(workspaceId: string): Promise<LedgerAccount[]>;
   insertProfile(profile: Omit<StoredProfile, "id">): Promise<StoredProfile>;
   getProfile(profileId: string): Promise<StoredProfile | undefined>;
+  findProfileBySetupKey(
+    workspaceId: string,
+    key: string,
+  ): Promise<StoredProfile | undefined>;
+  findOpeningPositionByKey(
+    workspaceId: string,
+    key: string,
+  ): Promise<StoredOpeningPosition | undefined>;
+  clearProfileOpening(profileId: string): Promise<void>;
+  saveOpeningPosition(position: StoredOpeningPosition): Promise<void>;
   listProfiles(workspaceId: string): Promise<StoredProfile[]>;
   insertJournalEntry(
     entry: Omit<StoredJournalEntry, "id">,
@@ -285,6 +378,7 @@ export type AccountingCore = {
     workspaceId: string;
     name: string;
     productKind: FinancialAccountProductKind;
+    idempotencyKey?: string;
   }): Promise<FinancialAccountProfile>;
   listFinancialAccountProfiles(input: {
     actor: Actor;
@@ -298,6 +392,15 @@ export type AccountingCore = {
     actor: Actor;
     workspaceId: string;
   }): Promise<CatalogAccountView[]>;
+  recordOpeningPosition(
+    input: OpeningPositionInput,
+  ): Promise<OpeningPositionResult>;
+  setupFinancialAccount(
+    input: SetupFinancialAccountInput,
+  ): Promise<OpeningPositionResult>;
+  recordAccountTransfer(
+    input: AccountTransferInput,
+  ): Promise<PostedJournalEntry>;
   recordCashExpense(input: CashActivityInput): Promise<PostedJournalEntry>;
   recordCashIncome(input: CashActivityInput): Promise<PostedJournalEntry>;
   reversePostedEntry(input: {
@@ -311,6 +414,7 @@ export type AccountingCore = {
   listJournalEntries(input: {
     actor: Actor;
     workspaceId: string;
+    financialAccountProfileId?: string;
   }): Promise<PostedJournalEntry[]>;
   balances(input: {
     actor: Actor;

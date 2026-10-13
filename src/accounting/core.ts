@@ -1,3 +1,6 @@
+import { recordAccountTransfer } from "./commands/recordAccountTransfer";
+import { recordOpeningPosition } from "./commands/recordOpeningPosition";
+import { setupFinancialAccount } from "./commands/setupFinancialAccount";
 import { createFinancialAccountProfile } from "./commands/createFinancialAccountProfile";
 import { createPersonalWorkspace } from "./commands/createPersonalWorkspace";
 import { lockAccountingPeriod } from "./commands/lockAccountingPeriod";
@@ -27,6 +30,12 @@ export function createAccountingCore(
       listFinancialAccountProfiles(store, input),
     listLedgerAccounts: (input) => listLedgerAccounts(store, input),
     listCatalogAccounts: (input) => listCatalogAccounts(store, input),
+    recordAccountTransfer: (input) =>
+      recordAccountTransfer(store, clock, input),
+    recordOpeningPosition: (input) =>
+      recordOpeningPosition(store, clock, input),
+    setupFinancialAccount: (input) =>
+      setupFinancialAccount(store, clock, input),
     recordCashExpense: (input) => recordCashExpense(store, clock, input),
     recordCashIncome: (input) => recordCashIncome(store, clock, input),
     reversePostedEntry: (input) => reversePostedEntry(store, clock, input),

@@ -1,30 +1,30 @@
 /**
- * Accounting kernel. Convex wraps these commands in `api.accounting.*`.
+ * Accounting kernel. Public `api.accounting.*` wrappers derive Actor from the
+ * authenticated Owner identity and run each command in one Convex transaction.
  *
- * Record, then correct, a cash expense:
- * 1. `createPersonalWorkspace({ actor, functionalCurrency: "COP" })` provisions the
- *    sparse `co-puc-personal@1` Chart of Accounts: 313001 Patrimonio de apertura,
- *    42959595 Otros ingresos, 51959595 Otros gastos personales. Pass
- *    `chartOfAccountsTemplate: "us-gaap-personal@1"` for the English template, whose
- *    accounts cite FASB US GAAP Taxonomy concepts. Pass `now` (UTC ms) on the Convex
- *    mutation.
- * 2. `createFinancialAccountProfile({ name: "Daily", productKind: "bankAccount" })`.
- *    The product kind decides the PUC parent and so the nature: the profile gets its
- *    own auxiliary Posting Account, such as 11100501 under 111005 Bancos, or
- *    11200501 under 112005 Cuentas de ahorro for a `savingsAccount`.
- * 3. `recordCashExpense` or `recordCashIncome` with `amount` in Functional Currency,
- *    `accountingDate` as `YYYY-MM-DD`, `description`, an `idempotencyKey`, and an
- *    optional `ledgerAccountCode` such as "530505" (Gastos bancarios). The code must
- *    be a template expense account for an expense and an income account for income;
- *    `listCatalogAccounts` lists them. The account is activated on first use.
- * 4. `reversePostedEntry({ journalEntryId, idempotencyKey })` posts the mirror entry,
- *    so the pair nets to zero. Then record the corrected activity as a new entry.
- * 5. Read `listJournalEntries`, `balances` (normal-side `balance`), or `trialBalance`.
+ * Start Tracking, record activity, then correct:
+ * 1. `createPersonalWorkspace` provisions the selected Chart of Accounts in
+ *    Functional Currency. The default is `co-puc-personal@1`; callers may choose
+ *    `us-gaap-personal@1`. The public mutation takes `now` in UTC milliseconds.
+ * 2. `setupFinancialAccount({ workspaceId, name, productKind, amount, accountingDate,
+ *    description, idempotencyKey })` creates the profile and opening atomically.
+ *    Use `recordOpeningPosition` with `financialAccountProfileId` for an existing
+ *    profile. A zero amount establishes the date without a Journal Entry.
+ * 3. `recordCashExpense`, `recordCashIncome`, or `recordAccountTransfer` posts
+ *    activity in Functional Currency. Transfers debit the destination and credit
+ *    the source, including liability profiles. Every linked profile enforces its
+ *    opening date. `listCatalogAccounts` supplies expense and income choices.
+ * 4. `reversePostedEntry({ journalEntryId, idempotencyKey })` posts the mirror
+ *    entry. Replace an opening with a fresh key and a date that leaves ordinary
+ *    profile activity on or after the cutover. A zero correction also requires
+ *    `replacesOpeningKey` identifying the current receipt.
+ * 5. Read `listFinancialAccountProfiles` for opening state, `listJournalEntries`
+ *    with an optional profile filter, `balances`, or `trialBalance`.
  *
- * Every write goes through `postJournalEntry` in `posting.ts`. Reuse an idempotency key
- * only for the same command; anything else returns `idempotency_key_conflict`.
- * Failures are `AccountingError` (`code` + `message`), wrapped as ConvexError on the API.
- * Actor `userId` is still caller-supplied until the auth ticket.
+ * Opening receipts and profile snapshots share the command transaction. Opening
+ * retries return the original receipt and current profile state. Changed command
+ * facts return `idempotency_key_conflict`. Failures are `AccountingError`, mapped
+ * to ConvexError with `code` and `message` by the public wrappers.
  */
 export { createAccountingCore } from "./core";
 export {
@@ -34,6 +34,11 @@ export {
 } from "./errors";
 export type {
   AccountBalance,
+  AccountTransferInput,
+  OpeningPositionInput,
+  OpeningPositionResult,
+  OpeningStatus,
+  SetupFinancialAccountInput,
   AccountingCore,
   AccountingPeriod,
   AccountNature,
