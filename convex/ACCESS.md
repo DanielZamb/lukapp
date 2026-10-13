@@ -1,5 +1,7 @@
 # Owner access and Personal Workspace bootstrap
 
+A02 extends this A01 design record with mandatory registered-device possession on every accounting call, including bootstrap. The current API, errors and native responsibilities are in [the device handoff](../src/access/NATIVE-HANDOFF.md). The A01 identity and permission rules below still apply; its original argument descriptions now also require `access`.
+
 The actor's stable key is Convex `UserIdentity.tokenIdentifier`. Membership `userId`, ledger `postedBy`, and period decision `decidedBy` store this server-derived key. Device arguments never supply an actor. Existing synthetic membership IDs grant no access and require an explicit future migration.
 
 The `personalWorkspaceOwners` table stores only tokenIdentifier, Clerk issuer, Clerk subject, and Personal Workspace ID. A `by_identity` index makes the bootstrap read and insert participate in Convex's serializable mutation transaction. No email, session token, device ID, or profile claims are needed.
@@ -27,6 +29,6 @@ Current API references checked against primary sources on 2026-10-13:
 - https://docs.convex.dev/auth/functions-auth
 - https://github.com/get-convex/convex-helpers/blob/main/packages/convex-helpers/server/customFunctions.ts
 
-Local convex-test identity integration proves the boundary; it does not establish deployed Clerk or accounting access. Native UI, device registration, and session settings remain outside this pilot.
+Local convex-test identity integration proves the boundary; it does not establish deployed Clerk or accounting access. Native UI and provider session-setting verification remain outside this authenticated accounting pilot. A02 adds the local device boundary described in the linked handoff.
 
 The next planning adapters must use View for Savings Recovery and Budget reads and Prepare for their draft input. Recovery Plan activation, cancellation, and correction require a separate Recovery Plan Authority, which the first cutover grants only to Owner. Budget configuration also requires Owner in this cutover. Notification Intake confirmation requires Post and invokes the same Posting controls. Later shared-Workspace grants must extend the explicit policy rather than infer authority from preparation or Posting.

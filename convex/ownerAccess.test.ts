@@ -388,6 +388,7 @@ test("every public accounting validator excludes client actor claims", () => {
     }
     expect(endpoint.exportArgs()).not.toContain('"userId"');
     expect(endpoint.exportArgs()).not.toContain('"actor"');
+    expect(endpoint.exportArgs()).toContain('"access"');
   }
 });
 

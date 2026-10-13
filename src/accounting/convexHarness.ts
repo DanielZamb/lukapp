@@ -1,4 +1,10 @@
 import { vi } from "vitest";
+import { getFunctionName } from "convex/server";
+import type { FunctionReference, UserIdentity } from "convex/server";
+import { fixtureKey, fixtureProof, registerFixture } from "../access/convexHarness";
+import type { DeviceTest } from "../access/convexHarness";
+import type { MutationCtx, QueryCtx } from "../../convex/_generated/server";
+import { operations } from "../access/protocol";
 import { createAccountingCore } from "./core";
 import { convexStore } from "../../convex/store";
 import { convexTest } from "convex-test";
@@ -23,7 +29,44 @@ export function convexAccounting(
 ) {
   vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", ownerIdentity.subject);
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", ownerIdentity.issuer);
-  return convexTest(schema, modules).withIdentity(ownerIdentity);
+  const base = convexTest(schema, modules);
+  let registration: Promise<{ key: Awaited<ReturnType<typeof fixtureKey>>; device: Awaited<ReturnType<typeof registerFixture>> }> | undefined;
+  const register = () => registration ??= (async () => {
+    const raw = base.withIdentity({ ...ownerIdentity, sid: "sess_fixture", sts: "active" });
+    const key = await fixtureKey();
+    const device = await registerFixture(raw, key);
+    return { key, device };
+  })();
+  function wrapped(identity: Partial<UserIdentity>): DeviceTest {
+    const raw = base.withIdentity({ sid: "sess_fixture", sts: "active", ...identity });
+    async function argsWithProof(reference: FunctionReference<"query" | "mutation">, args: Record<string, unknown>) {
+      const operation = operations.find((operation) => operation === getFunctionName(reference).replace(":", "."));
+      if (!operation || !operation.startsWith("accounting.")) return args;
+      if (identity.subject !== ownerIdentity.subject || identity.issuer !== ownerIdentity.issuer ||
+        !process.env.LUKAPP_OWNER_CLERK_SUBJECT || !process.env.CLERK_JWT_ISSUER_DOMAIN) return args;
+      const { key, device } = await register();
+      return { ...args, access: await fixtureProof(raw, key, operation, args, device.id) };
+    }
+    return new Proxy(raw, {
+      get(target, property, receiver) {
+        if (property === "withIdentity") return (next: Partial<UserIdentity>) => wrapped(next);
+        if (property === "query") return async (
+          reference: FunctionReference<"query"> | ((ctx: QueryCtx) => Promise<unknown>),
+          args: Record<string, unknown> = {},
+        ) => typeof reference === "function"
+          ? target.query(reference)
+          : target.query(reference, await argsWithProof(reference, args));
+        if (property === "mutation") return async (
+          reference: FunctionReference<"mutation"> | ((ctx: MutationCtx) => Promise<unknown>),
+          args: Record<string, unknown> = {},
+        ) => typeof reference === "function"
+          ? target.mutation(reference)
+          : target.mutation(reference, await argsWithProof(reference, args));
+        return Reflect.get(target, property, receiver);
+      },
+    });
+  }
+  return wrapped(ownerIdentity);
 }
 
 export async function createOwnedWorkspace(t: AccountingTest, now = septNow) {

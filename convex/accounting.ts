@@ -48,6 +48,7 @@ async function run<T>(work: () => Promise<T>): Promise<T> {
 }
 
 export const createPersonalWorkspace = ownerMutation({
+  operation: "accounting.createPersonalWorkspace",
   args: {
     functionalCurrency: v.string(),
     chartOfAccountsTemplate: v.optional(v.string()),
@@ -64,6 +65,7 @@ export const createPersonalWorkspace = ownerMutation({
 });
 
 export const personalWorkspace = ownerQuery({
+  operation: "accounting.personalWorkspace",
   args: { now: v.number() },
   returns: v.union(
     v.object({ status: v.literal("provisioning-required") }),
@@ -90,6 +92,7 @@ export const personalWorkspace = ownerQuery({
 });
 
 export const openWorkspace = ownerQuery({
+  operation: "accounting.openWorkspace",
   args: { ...inWorkspace, now: v.number() },
   returns: workspace,
   handler: async (ctx, args) =>
@@ -102,6 +105,7 @@ export const openWorkspace = ownerQuery({
 });
 
 export const createFinancialAccountProfile = ownerMutation({
+  operation: "accounting.createFinancialAccountProfile",
   args: { ...inWorkspace, name: v.string(), productKind },
   returns: financialAccountProfile,
   handler: async (ctx, args) =>
@@ -114,6 +118,7 @@ export const createFinancialAccountProfile = ownerMutation({
 });
 
 export const listFinancialAccountProfiles = ownerQuery({
+  operation: "accounting.listFinancialAccountProfiles",
   args: inWorkspace,
   returns: v.array(financialAccountProfile),
   handler: async (ctx, args) =>
@@ -125,6 +130,7 @@ export const listFinancialAccountProfiles = ownerQuery({
 });
 
 export const listLedgerAccounts = ownerQuery({
+  operation: "accounting.listLedgerAccounts",
   args: inWorkspace,
   returns: v.array(ledgerAccount),
   handler: async (ctx, args) =>
@@ -137,6 +143,7 @@ export const listLedgerAccounts = ownerQuery({
 });
 
 export const listCatalogAccounts = ownerQuery({
+  operation: "accounting.listCatalogAccounts",
   args: inWorkspace,
   returns: v.array(catalogAccount),
   handler: async (ctx, args) =>
@@ -149,6 +156,7 @@ export const listCatalogAccounts = ownerQuery({
 });
 
 export const lockAccountingPeriod = ownerMutation({
+  operation: "accounting.lockAccountingPeriod",
   args: { ...inWorkspace, period: periodKey, reason: v.optional(v.string()) },
   returns: accountingPeriod,
   handler: async (ctx, args) =>
@@ -161,6 +169,7 @@ export const lockAccountingPeriod = ownerMutation({
 });
 
 export const recordCashExpense = ownerMutation({
+  operation: "accounting.recordCashExpense",
   args: cashActivity,
   returns: postedJournalEntry,
   handler: async (ctx, args) =>
@@ -173,6 +182,7 @@ export const recordCashExpense = ownerMutation({
 });
 
 export const recordCashIncome = ownerMutation({
+  operation: "accounting.recordCashIncome",
   args: cashActivity,
   returns: postedJournalEntry,
   handler: async (ctx, args) =>
@@ -185,6 +195,7 @@ export const recordCashIncome = ownerMutation({
 });
 
 export const reversePostedEntry = ownerMutation({
+  operation: "accounting.reversePostedEntry",
   args: {
     ...inWorkspace,
     journalEntryId: v.string(),
@@ -203,6 +214,7 @@ export const reversePostedEntry = ownerMutation({
 });
 
 export const listJournalEntries = ownerQuery({
+  operation: "accounting.listJournalEntries",
   args: inWorkspace,
   returns: v.array(postedJournalEntry),
   handler: async (ctx, args) =>
@@ -215,6 +227,7 @@ export const listJournalEntries = ownerQuery({
 });
 
 export const balances = ownerQuery({
+  operation: "accounting.balances",
   args: inWorkspace,
   returns: v.array(accountBalance),
   handler: async (ctx, args) =>
@@ -227,6 +240,7 @@ export const balances = ownerQuery({
 });
 
 export const trialBalance = ownerQuery({
+  operation: "accounting.trialBalance",
   args: inWorkspace,
   returns: v.array(trialBalanceRow),
   handler: async (ctx, args) =>
