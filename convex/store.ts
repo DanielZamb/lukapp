@@ -15,6 +15,7 @@ type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
 type ReadMethods = Omit<AccountingStore, WriteMethod>;
 type WriteMethod =
+  | "insertCategory" | "saveCategory" | "saveCategoryReceipt"
   | "saveHouseholdWorkspaceCreation"
   | "insertWorkspace"
   | "insertLedgerAccount"
@@ -88,6 +89,7 @@ function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
     name: doc.name,
     productKind: doc.productKind,
     classificationPolicy: doc.classificationPolicy,
+    ...(doc.classificationAnswers ? { classificationAnswers: doc.classificationAnswers } : {}),
     postingAccountId: doc.postingAccountId,
     ...(doc.setupIdempotencyKey !== undefined
       ? { setupIdempotencyKey: doc.setupIdempotencyKey }
@@ -108,12 +110,16 @@ function toEntry(
     description: doc.description,
     idempotencyKey: doc.idempotencyKey,
     policy: doc.policy,
+    ...(doc.cashCategoryInput ? { cashCategoryInput: doc.cashCategoryInput } : {}),
+    ...(doc.sourceExpenseEffects ? { sourceExpenseEffects: doc.sourceExpenseEffects } : {}),
     postedBy: doc.postedBy,
     postedAt: doc.postedAt,
     lines: lines
       .filter((line) => line.journalEntryId === doc._id)
       .sort((a, b) => a.lineNumber - b.lineNumber)
       .map((line) => ({
+        ...(line.category ? { category: line.category } : {}),
+        ...(line.categoryCorrection ? { categoryCorrection: line.categoryCorrection } : {}),
         ledgerAccountId: line.ledgerAccountId,
         debitMinorUnits: line.debitMinorUnits,
         creditMinorUnits: line.creditMinorUnits,
@@ -150,6 +156,23 @@ function readStore(db: ReadDb): ReadMethods {
   }
 
   return {
+    async getCategory(categoryId) {
+      const id = idFor(db, "userCategories", categoryId);
+      const doc = id && await db.get(id);
+      if (!doc) return undefined;
+      const { _id, _creationTime, ...category } = doc;
+      return { id: _id, ...category };
+    },
+    async listCategories(workspaceId) {
+      const docs = await db.query("userCategories").withIndex("by_workspace", q => q.eq("workspaceId", workspaceId)).collect();
+      return docs.map(({ _id, _creationTime, ...category }) => ({ id: _id, ...category }));
+    },
+    async getCategoryReceipt(workspaceId, key) {
+      const doc = await db.query("categoryReceipts").withIndex("by_workspace_key", q => q.eq("workspaceId", workspaceId).eq("idempotencyKey", key)).unique();
+      if (!doc) return undefined;
+      const { _id, _creationTime, ...receipt } = doc;
+      return receipt;
+    },
     async getWorkspace(workspaceId) {
       const id = idFor(db, "workspaces", workspaceId);
       const doc = id && (await db.get(id));
@@ -349,6 +372,15 @@ function readStore(db: ReadDb): ReadMethods {
 
 function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
   return {
+    async insertCategory(category) {
+      const id = await db.insert("userCategories", category);
+      return { id, ...category };
+    },
+    async saveCategory(category) {
+      const { id, ...fields } = category;
+      await db.replace(requiredId(db, "userCategories", id), fields);
+    },
+    async saveCategoryReceipt(receipt) { await db.insert("categoryReceipts", receipt); },
     async saveHouseholdWorkspaceCreation(input) {
       await db.insert("householdWorkspaceCreations", {
         ...input,
@@ -424,6 +456,8 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
         description: entry.description,
         idempotencyKey: entry.idempotencyKey,
         policy: entry.policy,
+        ...(entry.cashCategoryInput ? { cashCategoryInput: entry.cashCategoryInput } : {}),
+        ...(entry.sourceExpenseEffects ? { sourceExpenseEffects: entry.sourceExpenseEffects } : {}),
         postedBy: entry.postedBy,
         postedAt: entry.postedAt,
         ...(entry.financialAccountProfileId
@@ -445,6 +479,14 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
             }
           : {}),
       });
+      for (const effect of entry.sourceExpenseEffects ?? []) {
+        const sourceEntryId = requiredId(db, "journalEntries", effect.sourceEntryId);
+        const earlierEffects = await db.query("journalSourceEffects").withIndex("by_workspace_source", q => q.eq("workspaceId", workspaceId).eq("sourceEntryId", sourceEntryId)).collect();
+        const sourceSequence = Math.max(0, ...earlierEffects.map(row => row.sourceSequence)) + 1;
+        if (!Number.isSafeInteger(sourceSequence)) throw new AccountingError("journal_line_invalid");
+        await db.insert("journalSourceEffects", { workspaceId, journalEntryId, sourceEntryId,
+          expenseDeltaMinorUnits: effect.expenseDeltaMinorUnits, sourceSequence });
+      }
       for (const [lineNumber, line] of entry.lines.entries()) {
         await db.insert("journalLines", {
           workspaceId,
@@ -455,6 +497,8 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
             "ledgerAccounts",
             line.ledgerAccountId,
           ),
+          ...(line.category ? { category: line.category } : {}),
+          ...(line.categoryCorrection ? { categoryCorrection: line.categoryCorrection } : {}),
           debitMinorUnits: line.debitMinorUnits,
           creditMinorUnits: line.creditMinorUnits,
         });
@@ -505,6 +549,9 @@ function unavailable(method: string): never {
 
 function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
   return {
+    insertCategory: async () => unavailable("insertCategory"),
+    saveCategory: async () => unavailable("saveCategory"),
+    saveCategoryReceipt: async () => unavailable("saveCategoryReceipt"),
     saveHouseholdWorkspaceCreation: async () =>
       unavailable("saveHouseholdWorkspaceCreation"),
     insertWorkspace: async () => unavailable("insertWorkspace"),

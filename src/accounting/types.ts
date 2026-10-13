@@ -1,3 +1,4 @@
+import type { CategoryCore, CategoryStore, CategorySnapshot, CategoryCorrection } from "./categoryTypes";
 export type Actor = {
   userId: string;
 };
@@ -50,7 +51,7 @@ export type ChartOfAccountsTemplate = {
   /** Accounts provisioned in every new Workspace, found again by code. */
   defaults: { expense: string; income: string; openingBalance: string };
   /** Each profile gets its own auxiliary Posting Account under this code. */
-  financialAccountParents: Record<FinancialAccountProductKind, string>;
+  financialAccountParents: Record<FinancialAccountParentKind, string>;
   /** Posting Accounts a Workspace may activate. */
   accounts: CatalogAccount[];
   /** Names of the non-postable levels above the Posting Accounts. */
@@ -58,7 +59,16 @@ export type ChartOfAccountsTemplate = {
 };
 
 export type FinancialAccountProductKind =
-  "cash" | "bankAccount" | "savingsAccount" | "creditCard" | "loan";
+  "cash" | "bankAccount" | "savingsAccount" | "creditCard" | "loan"
+  | "receivable" | "investment" | "personalDebt";
+
+export type FinancialAccountParentKind = Exclude<FinancialAccountProductKind, "receivable" | "investment">
+  | "securedReceivable" | "unsecuredReceivable" | "termDeposit" | "investmentFund";
+
+export type ProfileClassificationAnswers =
+  | { kind: "receivable"; security: "secured" | "unsecured"; counterpartyName: string }
+  | { kind: "investment"; form: "termDeposit" | "fund"; counterpartyName?: string }
+  | { kind: "personalDebt"; counterpartyName: string };
 
 /** Versioned rule that built a Journal Entry, kept as provenance. */
 export type PostingPolicy =
@@ -66,7 +76,8 @@ export type PostingPolicy =
   | "cash-income@1"
   | "reversal@1"
   | "account-transfer@1"
-  | "opening-position@1";
+  | "opening-position@1"
+  | "category-reclassification@1";
 
 export type Workspace = {
   id: string;
@@ -81,6 +92,7 @@ export type FinancialAccountProfile = {
   workspaceId: string;
   name: string;
   productKind: FinancialAccountProductKind;
+  classificationAnswers?: ProfileClassificationAnswers;
   /** The Posting Account behind the profile, for advanced views. */
   ledgerAccountId: string;
   opening: OpeningStatus;
@@ -115,6 +127,8 @@ export type Money = {
 };
 
 export type JournalLineView = {
+  category?: CategorySnapshot;
+  categoryCorrection?: CategoryCorrection;
   ledgerAccountId: string;
   code: string;
   name: string;
@@ -125,6 +139,9 @@ export type JournalLineView = {
 };
 
 export type PostedJournalEntry = {
+  cashCategoryInput?: { userCategoryId: string; categoryRevision?: number; ledgerAccountCode?: string };
+
+  sourceExpenseEffects?: Array<{ sourceEntryId: string; expenseDeltaMinorUnits: number }>;
   id: string;
   policy: PostingPolicy;
   description: string;
@@ -181,6 +198,7 @@ export type StoredProfile = {
   workspaceId: string;
   name: string;
   productKind: FinancialAccountProductKind;
+  classificationAnswers?: ProfileClassificationAnswers;
   classificationPolicy: string;
   postingAccountId: string;
   setupIdempotencyKey?: string;
@@ -199,6 +217,8 @@ export type LedgerAccount = {
 };
 
 export type DraftJournalLine = {
+  category?: CategorySnapshot;
+  categoryCorrection?: CategoryCorrection;
   ledgerAccountId: string;
   debitMinorUnits: number;
   creditMinorUnits: number;
@@ -206,6 +226,9 @@ export type DraftJournalLine = {
 
 /** What a command asks Posting to recognize. Posting adds period and provenance. */
 export type JournalEntryDraft = {
+  cashCategoryInput?: { userCategoryId: string; categoryRevision?: number; ledgerAccountCode?: string };
+
+  sourceExpenseEffects?: Array<{ sourceEntryId: string; expenseDeltaMinorUnits: number }>;
   accountingDate: string;
   description: string;
   idempotencyKey: string;
@@ -295,13 +318,14 @@ export type SetupFinancialAccountInput = Omit<
 > & {
   name: string;
   productKind: FinancialAccountProductKind;
+  classificationAnswers?: ProfileClassificationAnswers;
 };
 
 export type AccountingClock = {
   now: () => Date;
 };
 
-export type AccountingStore = {
+export type AccountingStore = CategoryStore & {
   insertWorkspace(
     workspace: Omit<StoredWorkspace, "id">,
     ownerUserId: string,
@@ -375,7 +399,7 @@ export type AccountingStore = {
   ): Promise<void>;
 };
 
-export type AccountingCore = {
+export type AccountingCore = CategoryCore & {
   createPersonalWorkspace(input: {
     actor: Actor;
     functionalCurrency: string;
@@ -402,6 +426,7 @@ export type AccountingCore = {
     workspaceId: string;
     name: string;
     productKind: FinancialAccountProductKind;
+  classificationAnswers?: ProfileClassificationAnswers;
     idempotencyKey?: string;
   }): Promise<FinancialAccountProfile>;
   listFinancialAccountProfiles(input: {
@@ -467,6 +492,8 @@ export type CashActivityInput = {
   idempotencyKey: string;
   /** Template account the money went to or came from; the template default when omitted. */
   ledgerAccountCode?: string;
+  userCategoryId?: string;
+  categoryRevision?: number;
 };
 
 export type PostedExpense = {

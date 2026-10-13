@@ -1,3 +1,5 @@
+import { categorySelection, categoryChange, reclassificationTarget, reclassificationPreview, reclassificationResult, userCategory } from "./categoryValidators";
+import { natureAnswer } from "./categoryAnnotationValidators";
 import { ConvexError, v } from "convex/values";
 import { ownerMutation, ownerQuery } from "./lib/owner";
 import {
@@ -21,6 +23,7 @@ import {
   postedJournalEntry,
   postedExpense,
   productKind,
+  profileClassificationAnswers,
   trialBalanceRow,
   workspace,
 } from "./validators";
@@ -37,6 +40,8 @@ const cashActivity = {
   description: v.string(),
   idempotencyKey: v.string(),
   ledgerAccountCode: v.optional(v.string()),
+  userCategoryId: v.optional(v.string()),
+  categoryRevision: v.optional(v.number()),
 };
 
 async function run<T>(work: () => Promise<T>): Promise<T> {
@@ -156,7 +161,7 @@ export const openWorkspace = ownerQuery({
 
 export const createFinancialAccountProfile = ownerMutation({
   operation: "accounting.createFinancialAccountProfile",
-  args: { ...inWorkspace, name: v.string(), productKind },
+  args: { ...inWorkspace, name: v.string(), productKind, classificationAnswers: v.optional(profileClassificationAnswers), idempotencyKey: v.optional(v.string()) },
   returns: financialAccountProfile,
   handler: async (ctx, args) =>
     run(() =>
@@ -329,7 +334,7 @@ export const recordOpeningPosition = ownerMutation({
 
 export const setupFinancialAccount = ownerMutation({
   operation: "accounting.setupFinancialAccount",
-  args: { ...openingPositionArgs, name: v.string(), productKind },
+  args: { ...openingPositionArgs, name: v.string(), productKind, classificationAnswers: v.optional(profileClassificationAnswers) },
   returns: openingPositionResult,
   handler: async (ctx, args) =>
     run(() =>
@@ -363,4 +368,43 @@ export const listPostedExpenses = ownerQuery({
   returns: v.array(postedExpense),
   handler: async (ctx, args) => run(() => createAccountingCore(convexReadStore(ctx.db))
     .listPostedExpenses({ ...args, actor: ctx.actor })),
+});
+
+export const createUserCategory = ownerMutation({
+  operation: "accounting.createUserCategory",
+  args: { ...inWorkspace, name: v.string(), selection: categorySelection, idempotencyKey: v.string() },
+  returns: v.union(v.object({ kind: v.literal("category"), category: userCategory, replay: v.boolean() }),
+    v.object({ kind: v.literal("profileRequired"), answer: v.union(v.literal("stillMine"), v.literal("payingDebt")) })),
+  handler: (ctx, args) => run(() => createAccountingCore(convexStore(ctx.db)).createUserCategory({ ...args, actor: ctx.actor })),
+});
+export const suggestCategoryNature = ownerQuery({
+  operation: "accounting.suggestCategoryNature",
+  args: { ...inWorkspace, name: v.string() },
+  returns: v.object({ policy: v.string(), suggestions: v.array(natureAnswer), requiresConfirmation: v.literal(true) }),
+  handler: (ctx, args) => run(() => createAccountingCore(convexReadStore(ctx.db)).suggestCategoryNature({ ...args, actor: ctx.actor })),
+});
+export const listUserCategories = ownerQuery({
+  operation: "accounting.listUserCategories", args: inWorkspace, returns: v.array(userCategory),
+  handler: (ctx, args) => run(() => createAccountingCore(convexReadStore(ctx.db)).listUserCategories({ ...args, actor: ctx.actor })),
+});
+export const categoryTotals = ownerQuery({
+  operation: "accounting.categoryTotals", args: inWorkspace,
+  returns: v.array(v.object({ categoryId: v.string(), year: v.number(), month: v.number(), expense: money, income: money })),
+  handler: (ctx, args) => run(() => createAccountingCore(convexReadStore(ctx.db)).categoryTotals({ ...args, actor: ctx.actor })),
+});
+export const changeUserCategory = ownerMutation({
+  operation: "accounting.changeUserCategory",
+  args: { ...inWorkspace, categoryId: v.string(), revision: v.number(), change: categoryChange, confirmed: v.literal(true), idempotencyKey: v.string() },
+  returns: v.object({ category: userCategory, replay: v.boolean() }),
+  handler: (ctx, args) => run(() => createAccountingCore(convexStore(ctx.db)).changeUserCategory({ ...args, actor: ctx.actor })),
+});
+const reclassificationArgs = { ...inWorkspace, categoryId: v.string(), target: reclassificationTarget, currentDate: v.string() };
+export const previewCategoryReclassification = ownerQuery({
+  operation: "accounting.previewCategoryReclassification", args: reclassificationArgs, returns: reclassificationPreview,
+  handler: (ctx, args) => run(() => createAccountingCore(convexReadStore(ctx.db)).previewCategoryReclassification({ ...args, actor: ctx.actor })),
+});
+export const confirmCategoryReclassification = ownerMutation({
+  operation: "accounting.confirmCategoryReclassification",
+  args: { ...reclassificationArgs, revisionToken: v.string(), confirmed: v.literal(true), idempotencyKey: v.string() }, returns: reclassificationResult,
+  handler: (ctx, args) => run(() => createAccountingCore(convexStore(ctx.db)).confirmCategoryReclassification({ ...args, actor: ctx.actor })),
 });

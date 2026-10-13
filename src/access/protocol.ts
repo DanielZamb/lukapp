@@ -9,6 +9,8 @@ export const accessPolicy = {
 } as const;
 
 export const operations = [
+  "accounting.createUserCategory", "accounting.suggestCategoryNature", "accounting.listUserCategories", "accounting.categoryTotals",
+  "accounting.changeUserCategory", "accounting.previewCategoryReclassification", "accounting.confirmCategoryReclassification",
   "devices.register", "devices.revoke", "devices.heartbeat", "devices.approveRegistration",
   "accounting.createPersonalWorkspace", "accounting.personalWorkspace", "accounting.openWorkspace",
   "accounting.createHouseholdWorkspace", "accounting.listOwnedWorkspaces",

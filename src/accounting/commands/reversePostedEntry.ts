@@ -56,8 +56,12 @@ export async function reversePostedEntry(
     description: input.description ?? `Reversal: ${original.description}`,
     idempotencyKey: input.idempotencyKey,
     policy: "reversal@1" as const,
+    ...(original.cashCategoryInput ? { cashCategoryInput: original.cashCategoryInput } : {}),
     reversesEntryId: original.id,
+    ...(original.sourceExpenseEffects ? { sourceExpenseEffects: original.sourceExpenseEffects.map(e => ({ sourceEntryId: e.sourceEntryId, expenseDeltaMinorUnits: -e.expenseDeltaMinorUnits })) } : {}),
     lines: original.lines.map((line) => ({
+      ...(line.category ? { category: line.category } : {}),
+      ...(line.categoryCorrection ? { categoryCorrection: line.categoryCorrection } : {}),
       ledgerAccountId: line.ledgerAccountId,
       debitMinorUnits: line.creditMinorUnits,
       creditMinorUnits: line.debitMinorUnits,

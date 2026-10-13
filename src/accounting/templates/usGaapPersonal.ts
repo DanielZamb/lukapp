@@ -27,6 +27,11 @@ export const usGaapPersonalTemplate = {
     savingsAccount: "1030",
     creditCard: "2010",
     loan: "2110",
+    securedReceivable: "1250",
+    unsecuredReceivable: "1260",
+    termDeposit: "1110",
+    investmentFund: "1120",
+    personalDebt: "2120",
   },
   accounts: [
     // 1 Assets
@@ -130,6 +135,11 @@ export const usGaapPersonalTemplate = {
     { code: "6160", name: "Loss on disposal of property and equipment", use: "general", reportingConcept: "us-gaap:GainLossOnDispositionOfAssets" },
   ],
   summaryNames: {
+    "2120": "Loans from individuals",
+    "1120": "Investment fund units",
+    "1110": "Certificates of deposit",
+    "1260": "Loans to individuals, unsecured",
+    "1250": "Loans to individuals, secured",
     "1": "Assets",
     "10": "Cash and cash equivalents",
     "1010": "Cash on hand",
