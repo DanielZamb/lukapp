@@ -9,7 +9,6 @@ export async function enqueueProviderWork(ctx: MutationCtx, actor: { tokenIdenti
   if (prior) return prior;
   const state = { kind: "pending", nextAttemptAt: Date.now() } as const;
   const workId = await ctx.db.insert("clerkProviderWork", { ...actor, target, state, attempts: 0 });
-  await ctx.scheduler.runAfter(0, internal.clerkProvider.process, { workId });
-  await ctx.scheduler.runAfter(60_000, internal.clerkProvider.process, { workId });
+  await ctx.scheduler.runAfter(0, internal.providerWork.dispatch, { workId });
   return { _id: workId, state };
 }

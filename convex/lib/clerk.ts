@@ -12,7 +12,7 @@ export function sanitizedProviderError(error: unknown): ProviderError {
   if (error instanceof ConvexError && typeof error.data === "object" && error.data !== null && "code" in error.data) {
     const code = error.data.code;
     switch (code) {
-      case "provider_configuration_required": case "provider_provenance_mismatch":
+      case "provider_configuration_required": case "provider_instance_mismatch": case "provider_provenance_mismatch":
       case "provider_session_invalid": case "provider_session_terminal":
       case "recovery_fresh_sign_in_required": case "recovery_intent_expired": case "recovery_conflict":
         return code;
@@ -35,9 +35,9 @@ export type ClerkTransport = Pick<ReturnType<typeof createClerkClient>, "session
 export type ClerkSession = Awaited<ReturnType<ClerkTransport["sessions"]["getSession"]>>;
 export async function verifyProviderInstance(clerk: ClerkTransport, issuer: string) {
   const domains = await clerk.domains.list();
-  if (!domains.data.some((domain) => domain.frontendApiUrl === issuer)) providerFailure("provider_provenance_mismatch");
+  if (!domains.data.some((domain) => domain.frontendApiUrl === issuer)) providerFailure("provider_instance_mismatch");
   const instance = await clerk.instance.get();
-  if (process.env.CLERK_INSTANCE_ID && instance.id !== process.env.CLERK_INSTANCE_ID) providerFailure("provider_provenance_mismatch");
+  if (process.env.CLERK_INSTANCE_ID && instance.id !== process.env.CLERK_INSTANCE_ID) providerFailure("provider_instance_mismatch");
   return instance;
 }
 export function ownedSession(session: ClerkSession, subject: string, sid: string) {

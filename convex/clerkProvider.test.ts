@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import type { SessionJSON } from "@clerk/backend";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
+import { claimAttempt } from "./providerWork";
 import { caught, ownerIdentity, septNow } from "../src/accounting/convexHarness";
 import { fixtureKey, fixtureProof, registerFixture } from "../src/access/convexHarness";
 import { providerFunctions } from "../src/access/provider";
@@ -33,6 +34,10 @@ function setup(sessions: SessionJSON[] = []) {
   const calls: { method: string; path: string; offset: number; status: string | null }[] = [];
   const failures = new Set<string>();
   const lostResponses = new Set<string>();
+  const failAfter = new Map<string, number>();
+  const counts = new Map<string, number>();
+  let removeWhenPaging: string | undefined;
+  let heldList: { entered: () => void; wait: Promise<void> } | undefined;
   let issuer = ownerIdentity.issuer;
   let listOwner = ownerIdentity.subject;
   let pageSize = 100;
@@ -42,14 +47,19 @@ function setup(sessions: SessionJSON[] = []) {
     const path = url.pathname;
     const method = init?.method ?? "GET";
     calls.push({ method, path, offset: Number(url.searchParams.get("offset") ?? 0), status: url.searchParams.get("status") });
-    if (failures.has(path)) return Response.json({ errors: [{ code: "fixture_unavailable", message: "fixture unavailable" }] }, { status: 503 });
+    counts.set(path, (counts.get(path) ?? 0) + 1);
+    if (failures.has(path) || (counts.get(path) ?? 0) >= (failAfter.get(path) ?? Infinity)) return Response.json({ errors: [{ code: "fixture_unavailable", message: "fixture unavailable" }] }, { status: 503 });
     if (path === "/v1/domains") return Response.json({ data: [{ object: "domain", id: "dmn_fixture", name: "fixture", frontend_api_url: issuer, is_satellite: false, cname_targets: [], development_origin: "http://localhost" }], total_count: 1 });
     if (path === "/v1/instance") return Response.json({ object: "instance", id: instanceId, environment_type: "development", allowed_origins: [] });
     if (path === "/v1/sessions") {
       if (url.searchParams.get("user_id") !== ownerIdentity.subject || url.searchParams.has("status")) throw new Error("Unsafe session enumeration");
-      const all = [...state.values()].sort((a, b) => b.created_at - a.created_at);
       const offset = Number(url.searchParams.get("offset"));
-      return Response.json({ data: all.slice(offset, offset + Math.min(pageSize, Number(url.searchParams.get("limit")))).map((session) => ({ ...session, user_id: listOwner })), total_count: all.length });
+      if (offset > 0 && removeWhenPaging) { state.delete(removeWhenPaging); removeWhenPaging = undefined; }
+      const all = [...state.values()].sort((a, b) => b.created_at - a.created_at);
+      const overlap = Number(url.searchParams.get("limit")) === 101 ? 1 : 0;
+      const response = { data: all.slice(offset, offset + Math.min(pageSize + overlap, Number(url.searchParams.get("limit")))).map((session) => ({ ...session, user_id: listOwner })), total_count: all.length };
+      if (heldList) { const held = heldList; heldList = undefined; held.entered(); await held.wait; }
+      return Response.json(response);
     }
     const sid = path.split("/")[3];
     if (!sid || !path.startsWith("/v1/sessions/")) throw new Error("Unexpected provider method");
@@ -62,13 +72,21 @@ function setup(sessions: SessionJSON[] = []) {
     return Response.json(session);
   }));
   const client = (sid: string, extra: Partial<typeof ownerIdentity> = {}) => root.withIdentity({ ...ownerIdentity, sid, sts: "active", aud: "convex", ...extra });
-  return { root, state, calls, failures, lostResponses, client,
+  return { root, state, calls, failures, lostResponses, failAfter, client,
+    removeDuringPagination: (sid: string) => { removeWhenPaging = sid; },
+    holdFirstList: () => {
+      let enter = () => {}; let release = () => {};
+      const entered = new Promise<void>((resolve) => { enter = resolve; });
+      const wait = new Promise<void>((resolve) => { release = resolve; });
+      heldList = { entered: enter, wait };
+      return { entered, release };
+    },
     wrongIssuer: () => { issuer = "https://wrong.clerk.accounts.dev"; },
     wrongListOwner: () => { listOwner = "user_wrong"; },
     paginate: (size: number) => { pageSize = size; } };
 }
-async function enrolled(t: ReturnType<ReturnType<typeof setup>["client"]>) {
-  const key = await fixtureKey(); const device = await registerFixture(t, key);
+async function enrolled(t: ReturnType<ReturnType<typeof setup>["client"]>, platform: "ios" | "android" = "ios") {
+  const key = await fixtureKey(); const device = await registerFixture(t, key, platform);
   return { t, key, device };
 }
 async function revoke(client: Awaited<ReturnType<typeof enrolled>>, target = client.device.id) {
@@ -100,12 +118,11 @@ test("actual SDK live check rejects a revoked session despite unchanged admitted
   expect(await s.root.run((ctx) => ctx.db.query("workspaces").collect())).toEqual([]);
 });
 
-test.each(["user", "session", "issuer", "impersonation"])("live provider provenance rejects wrong %s", async (kind) => {
+test.each(["user", "session", "impersonation"])("live provider provenance rejects wrong %s", async (kind) => {
   const s = setup([providerSession("sess_old")]);
   const row = s.state.get("sess_old"); if (!row) throw new Error("fixture missing");
   if (kind === "user") row.user_id = "user_wrong";
   if (kind === "session") row.id = "sess_wrong";
-  if (kind === "issuer") s.wrongIssuer();
   if (kind === "impersonation") row.actor = { sub: "user_other" };
   expect(await s.client("sess_old").action(api.clerkProvider.checkSession, {})).toMatchObject({ kind: "denied", code: "provider_provenance_mismatch" });
   expect(s.calls.some((call) => call.method === "POST")).toBe(false);
@@ -160,7 +177,7 @@ test("missing provider configuration is sanitized and durable, not fabricated su
   const s = setup([providerSession("sess_old")]); const c = await enrolled(s.client("sess_old")); vi.stubEnv("CLERK_SECRET_KEY", "");
   const result = await revoke(c); await s.root.action(internal.clerkProvider.process, { workId: result.workId });
   expect(await c.t.query(api.providerWork.status, { workId: result.workId })).toMatchObject({ state: { kind: "pending", error: "provider_configuration_required" } });
-  expect(await c.t.action(api.clerkProvider.checkSession, {})).toEqual({ kind: "unavailable", code: "provider_configuration_required" });
+  expect(await c.t.action(api.clerkProvider.checkSession, {})).toEqual({ kind: "denied", code: "device_revoked", directive: "wipe-local-input-and-sign-out" });
   expect(s.calls).toEqual([]);
 });
 
@@ -174,7 +191,8 @@ test("provider 404 proves session absence after instance verification and retain
 test("recovery requires an actual Session created after intent, not a fresh JWT iat or reused Session", async () => {
   const s = setup([providerSession("sess_old"), providerSession("sess_reused")]);
   const intent = await s.client("sess_old").action(api.clerkProvider.beginRecovery, {});
-  for (const sid of ["sess_old", "sess_reused"]) {
+  expect(await caught(s.client("sess_old").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId }))).toMatchObject({ data: { code: "provider_session_terminal" } });
+  for (const sid of ["sess_reused"]) {
     const t = s.root.withIdentity({ ...ownerIdentity, sid, sts: "active", iat: Math.floor(now / 1000) + 1 });
     expect(await caught(t.action(api.clerkProvider.completeRecovery, { intentId: intent.intentId }))).toMatchObject({ data: { code: "recovery_fresh_sign_in_required" } });
   }
@@ -200,7 +218,7 @@ test("recovery paginates never-enrolled sessions, partial failure retains barrie
   s.failures.add("/v1/sessions/sess_hidden2/revoke");
   const result = await s.client("sess_new").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId });
   expect(result.state).toMatchObject({ kind: "pending", error: "provider_unavailable" });
-  expect(s.calls.filter((call) => call.path === "/v1/sessions").map((call) => call.offset)).toEqual([0, 2, 4]);
+  expect(s.calls.filter((call) => call.path === "/v1/sessions").map((call) => call.offset)).toEqual([0, 1, 3]);
   expect(await old.t.query(api.devices.status, {})).toMatchObject({ kind: "denied" });
   expect(await s.client("sess_hidden4").query(api.devices.status, {})).toMatchObject({ code: "recovery_registration_blocked" });
   const recovered = await enrolled(s.client("sess_new"));
@@ -215,13 +233,13 @@ test("recovery paginates never-enrolled sessions, partial failure retains barrie
   expect(s.calls.some((call) => call.method === "POST" && call.path.includes("sess_new"))).toBe(false);
 });
 
-test("recovery excludes newer sessions, rejects replay with another Session, and serializes concurrent intents", async () => {
+test("recovery excludes newer sessions, rejects replay with another Session, and shares an unused intent", async () => {
   const s = setup([providerSession("sess_old")]);
   const first = await s.client("sess_old").action(api.clerkProvider.beginRecovery, {});
   expect(await s.client("sess_old").action(api.clerkProvider.beginRecovery, {})).toEqual(first);
   s.state.set("sess_new", providerSession("sess_new", { created_at: now + 1000 }));
   s.state.set("sess_later", providerSession("sess_later", { created_at: now + 1500 })); vi.setSystemTime(now + 2000);
-  expect(await caught(s.client("sess_later").action(api.clerkProvider.beginRecovery, {}))).toMatchObject({ data: { code: "recovery_conflict" } });
+  expect(await s.client("sess_later").action(api.clerkProvider.beginRecovery, {})).toEqual(first);
   const result = await s.client("sess_new").action(api.clerkProvider.completeRecovery, { intentId: first.intentId });
   expect(result.state.kind).toBe("succeeded"); expect(s.state.get("sess_later")?.status).toBe("active");
   expect(await s.client("sess_later").query(api.devices.status, {})).toMatchObject({ code: "recovery_registration_blocked" });
@@ -234,7 +252,7 @@ test("wrong Owner in session pagination prevents revocation and keeps recovery p
   const result = await s.client("sess_new").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId });
   expect(result.state).toMatchObject({ kind: "pending", error: "provider_provenance_mismatch" });
   expect(s.calls.some((call) => call.method === "POST")).toBe(false);
-  expect(await s.client("sess_old").query(api.devices.status, {})).toMatchObject({ code: "recovery_registration_blocked" });
+  expect(await s.client("sess_old").query(api.devices.status, {})).toMatchObject({ code: "session_revoked" });
 });
 
 test.each(["session.ended", "session.removed", "session.revoked"])("signature-verified %s denies an owned session and authentic delivery dedupes", async (type) => {
@@ -325,5 +343,108 @@ test("recovery checkpoints page progress and resumes beyond the action chunk wit
   expect(await s.client("sess_new").query(api.providerWork.status, { workId: result.workId })).toMatchObject({ state: { kind: "succeeded" } });
   expect([...s.state.values()].filter((session) => session.status === "active").map((session) => session.id)).toEqual(["sess_new"]);
   expect(s.calls.filter((call) => call.method === "POST")).toHaveLength(24);
-  expect(s.calls.some((call) => call.path === "/v1/sessions" && call.offset === 24)).toBe(true);
+  expect(s.calls.some((call) => call.path === "/v1/sessions" && call.offset === 23)).toBe(true);
+});
+
+
+test("recovery acceptance denies old financial authority before a second provider request can fail", async () => {
+  const s = setup([providerSession("sess_old"), providerSession("sess_remote")]); const old = await enrolled(s.client("sess_old"));
+  const remote = await enrolled(s.client("sess_remote"), "android");
+  const request = { functionalCurrency: "COP", now: septNow };
+  const access = await fixtureProof(remote.t, remote.key, "accounting.createPersonalWorkspace", request, remote.device.id);
+  const intent = await old.t.action(api.clerkProvider.beginRecovery, {});
+  expect(await remote.t.query(api.devices.status, {})).toMatchObject({ kind: "registered" });
+  s.state.set("sess_new", providerSession("sess_new", { created_at: now + 1000 })); vi.setSystemTime(now + 2000);
+  s.failAfter.set("/v1/domains", 3);
+  const result = await s.client("sess_new").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId });
+  expect(result.state.kind).toBe("pending");
+  expect(await s.root.run((ctx) => ctx.db.query("deviceRecoveryBarriers").collect())).toHaveLength(1);
+  expect(await caught(remote.t.mutation(api.accounting.createPersonalWorkspace, { ...request, access }))).toMatchObject({ data: { directive: "wipe-local-input-and-sign-out" } });
+  const chosen = await enrolled(s.client("sess_new"));
+  s.failAfter.clear(); vi.setSystemTime(now + 12_000); await s.root.action(internal.clerkProvider.process, { workId: result.workId });
+  expect(await chosen.t.query(api.devices.status, {})).toMatchObject({ kind: "registered" });
+  expect(await chosen.t.query(api.providerWork.status, { workId: result.workId })).toMatchObject({ state: { kind: "succeeded" } });
+});
+
+test("another live Owner can retrieve a held intent and the initiating sid cannot renew after expiry", async () => {
+  const s = setup([providerSession("sess_stolen"), providerSession("sess_owner")]);
+  const intent = await s.client("sess_stolen").action(api.clerkProvider.beginRecovery, {});
+  expect(await s.client("sess_owner").action(api.clerkProvider.beginRecovery, {})).toEqual(intent);
+  vi.setSystemTime(now + 11 * 60_000);
+  expect(await caught(s.client("sess_stolen").action(api.clerkProvider.beginRecovery, {}))).toMatchObject({ data: { code: "provider_session_terminal" } });
+});
+
+test("starting recovery immediately retires the initiating binding through real public denial", async () => {
+  const s = setup([providerSession("sess_old")]); const old = await enrolled(s.client("sess_old"));
+  await old.t.action(api.clerkProvider.beginRecovery, {});
+  expect(await old.t.query(api.devices.status, {})).toMatchObject({ code: "session_revoked", directive: "wipe-local-input-and-sign-out" });
+  expect(await caught(registerFixture(old.t, await fixtureKey()))).toMatchObject({ data: { code: "session_revoked" } });
+});
+
+test("shrinking provider inventory restarts pagination instead of claiming older cleanup success", async () => {
+  const s = setup([providerSession("sess_old"), providerSession("sess_terminal", { created_at: now - 1, status: "ended" })]); s.paginate(2);
+  const intent = await s.client("sess_old").action(api.clerkProvider.beginRecovery, {});
+  s.state.set("sess_new", providerSession("sess_new", { created_at: now + 1000 })); vi.setSystemTime(now + 2000);
+  s.removeDuringPagination("sess_terminal");
+  const result = await s.client("sess_new").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId });
+  expect(result.state.kind).toBe("succeeded");
+  expect(s.state.get("sess_old")?.status).toBe("revoked");
+  expect(await s.client("sess_old").query(api.devices.status, {})).toMatchObject({ code: "session_revoked" });
+});
+
+test("dispatch supervision survives both initial action invocations ending before a claim", async () => {
+  const s = setup([providerSession("sess_old")]); const old = await enrolled(s.client("sess_old")); const result = await revoke(old);
+  const descriptor = Object.getOwnPropertyDescriptor(claimAttempt, "_handler");
+  const handler: unknown = descriptor?.value;
+  if (!descriptor || typeof handler !== "function") throw new Error("Convex invocation seam missing");
+  let missed = 0;
+  Object.defineProperty(claimAttempt, "_handler", { ...descriptor, value: (...args: unknown[]) =>
+    ++missed <= 2 ? Promise.resolve(null) : Reflect.apply(handler, claimAttempt, args) });
+  try { await s.root.finishAllScheduledFunctions(() => vi.runAllTimers()); }
+  finally { Object.defineProperty(claimAttempt, "_handler", descriptor); }
+  expect(await old.t.query(api.providerWork.status, { workId: result.workId })).toMatchObject({ state: { kind: "succeeded" } });
+  expect(s.state.get("sess_old")?.status).toBe("revoked");
+});
+
+test.each([
+  [undefined, "active", "session_id_required"], [17, "active", "session_id_invalid"],
+  ["sess_old", undefined, "session_state_unverified"], ["sess_old", "pending", "session_not_active"],
+])("checkSession retains A02 denial sid=%s sts=%s", async (sid, sts, code) => {
+  const s = setup(); vi.stubEnv("CLERK_SECRET_KEY", "");
+  const t = s.root.withIdentity({ ...ownerIdentity, sid, sts });
+  expect(await t.action(api.clerkProvider.checkSession, {})).toEqual({ kind: "denied", code, directive: "wipe-local-input-and-sign-out" });
+  expect(s.calls).toEqual([]);
+});
+
+test("instance configuration mismatch blocks admission without directing native deletion", async () => {
+  const s = setup([providerSession("sess_old")]); const old = await enrolled(s.client("sess_old")); s.wrongIssuer();
+  expect(await old.t.action(api.clerkProvider.checkSession, {})).toMatchObject({ kind: "unavailable", code: "provider_instance_mismatch" });
+  expect(await old.t.query(api.devices.status, {})).toMatchObject({ kind: "registered" });
+  expect(await s.root.run((ctx) => ctx.db.query("deviceSessionDenials").collect())).toEqual([]);
+});
+
+test("an expired overlapping worker cannot rewind newer recovery progress", async () => {
+  const s = setup([providerSession("sess_old"), ...Array.from({ length: 45 }, (_, i) => providerSession(`sess_overlap${i}`))]); s.paginate(1);
+  const intent = await s.client("sess_old").action(api.clerkProvider.beginRecovery, {});
+  s.state.set("sess_new", providerSession("sess_new", { created_at: now + 1000 })); vi.setSystemTime(now + 2000);
+  const gate = s.holdFirstList();
+  const completion = s.client("sess_new").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId });
+  await gate.entered;
+  const work = await s.root.run(async (ctx) => (await ctx.db.query("clerkProviderWork").collect()).find((row) => row.target.kind === "recovery"));
+  if (!work) throw new Error("recovery work missing");
+  vi.setSystemTime(now + 62_001);
+  await s.root.action(internal.clerkProvider.process, { workId: work._id });
+  await s.root.action(internal.clerkProvider.process, { workId: work._id });
+  expect(await s.root.query(internal.providerWork.get, { workId: work._id })).toMatchObject({ target: { scan: { offset: 40, hadLive: true } } });
+  gate.release(); await completion;
+  expect(await s.root.query(internal.providerWork.get, { workId: work._id })).toMatchObject({ target: { scan: { offset: 40, hadLive: true } } });
+  await s.root.finishAllScheduledFunctions(() => vi.runAllTimers());
+  expect(await s.client("sess_new").query(api.providerWork.status, { workId: work._id })).toMatchObject({ state: { kind: "succeeded" } });
+});
+
+
+test("known local Session denial still directs wipe when backend configuration is unavailable", async () => {
+  const s = setup([providerSession("sess_old")]); const old = await enrolled(s.client("sess_old"));
+  await old.t.action(api.clerkProvider.beginRecovery, {}); vi.stubEnv("CLERK_SECRET_KEY", "");
+  expect(await old.t.action(api.clerkProvider.checkSession, {})).toEqual({ kind: "denied", code: "session_revoked", directive: "wipe-local-input-and-sign-out" });
 });
