@@ -14,7 +14,7 @@ import type {
   StoredWorkspace,
 } from "./types";
 
-/** The template a new Personal Workspace starts from unless it asks for another. */
+/** The template a new Personal or Household Workspace starts from unless it asks for another. */
 export const personalChartTemplate: ChartOfAccountsTemplate = coPucPersonalTemplate;
 
 const templates = new Map<string, ChartOfAccountsTemplate>(

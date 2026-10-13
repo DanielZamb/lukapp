@@ -11,6 +11,7 @@ import type { ChartOfAccountsTemplate } from "../types";
 
 export const usGaapPersonalTemplate = {
   version: "us-gaap-personal@1",
+  applicableWorkspaceKinds: ["Personal", "Household"],
   natureByClass: {
     "1": "Asset",
     "2": "Liability",

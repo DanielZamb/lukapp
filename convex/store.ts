@@ -15,6 +15,7 @@ type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
 type ReadMethods = Omit<AccountingStore, WriteMethod>;
 type WriteMethod =
+  | "saveHouseholdWorkspaceCreation"
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
@@ -153,6 +154,30 @@ function readStore(db: ReadDb): ReadMethods {
         chartOfAccountsTemplate: doc.chartOfAccountsTemplate,
       };
       return stored;
+    },
+
+    async listOwnedWorkspaceIds(userId) {
+      const memberships = await db
+        .query("workspaceMemberships")
+        .withIndex("by_user_role", (q) =>
+          q.eq("userId", userId).eq("role", "Owner"),
+        )
+        .collect();
+      const ids: string[] = [];
+      for (const membership of memberships) {
+        if (await db.get(membership.workspaceId)) ids.push(membership.workspaceId);
+      }
+      return ids;
+    },
+
+    async findHouseholdWorkspaceByKey(userId, key) {
+      const receipt = await db
+        .query("householdWorkspaceCreations")
+        .withIndex("by_owner_key", (q) =>
+          q.eq("ownerUserId", userId).eq("idempotencyKey", key),
+        )
+        .unique();
+      return receipt?.workspaceId;
     },
 
     async membershipRole(workspaceId, userId) {
@@ -304,6 +329,13 @@ function readStore(db: ReadDb): ReadMethods {
 
 function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
   return {
+    async saveHouseholdWorkspaceCreation(input) {
+      await db.insert("householdWorkspaceCreations", {
+        ...input,
+        workspaceId: requiredId(db, "workspaces", input.workspaceId),
+      });
+    },
+
     async insertWorkspace(workspace, ownerUserId) {
       const workspaceId = await db.insert("workspaces", workspace);
       await db.insert("workspaceMemberships", {
@@ -453,6 +485,8 @@ function unavailable(method: string): never {
 
 function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
   return {
+    saveHouseholdWorkspaceCreation: async () =>
+      unavailable("saveHouseholdWorkspaceCreation"),
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),

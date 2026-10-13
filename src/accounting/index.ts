@@ -6,6 +6,9 @@
  * 1. `createPersonalWorkspace` provisions the selected Chart of Accounts in
  *    Functional Currency. The default is `co-puc-personal@1`; callers may choose
  *    `us-gaap-personal@1`. The public mutation takes `now` in UTC milliseconds.
+ *    `createHouseholdWorkspace` deliberately provisions another Workspace using
+ *    a required creation idempotency key. `listOwnedWorkspaces` discovers current
+ *    Owner memberships. Both kinds use the same accounting commands below.
  * 2. `setupFinancialAccount({ workspaceId, name, productKind, amount, accountingDate,
  *    description, idempotencyKey })` creates the profile and opening atomically.
  *    Use `recordOpeningPosition` with `financialAccountProfileId` for an existing
