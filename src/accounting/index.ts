@@ -24,7 +24,7 @@
  * Every write goes through `postJournalEntry` in `posting.ts`. Reuse an idempotency key
  * only for the same command; anything else returns `idempotency_key_conflict`.
  * Failures are `AccountingError` (`code` + `message`), wrapped as ConvexError on the API.
- * Actor `userId` is still caller-supplied until the auth ticket.
+ * Public Convex wrappers derive the Actor from the authenticated Owner identity.
  */
 export { createAccountingCore } from "./core";
 export {
@@ -34,6 +34,11 @@ export {
 } from "./errors";
 export type {
   AccountBalance,
+  AccountTransferInput,
+  OpeningPositionInput,
+  OpeningPositionResult,
+  OpeningStatus,
+  SetupFinancialAccountInput,
   AccountingCore,
   AccountingPeriod,
   AccountNature,

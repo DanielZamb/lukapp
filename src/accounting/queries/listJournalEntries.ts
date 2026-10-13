@@ -1,3 +1,4 @@
+import { requireProfile } from "../financialAccountProfiles";
 import { requireWorkspace } from "../membership";
 import type { AccountingStore, Actor, PostedJournalEntry } from "../types";
 import { journalContext, toPostedJournalEntry } from "../views";
@@ -5,9 +6,25 @@ import { journalContext, toPostedJournalEntry } from "../views";
 /** Every Posted Journal Entry, reversals included, with links between each pair. */
 export async function listJournalEntries(
   store: AccountingStore,
-  input: { actor: Actor; workspaceId: string },
+  input: {
+    actor: Actor;
+    workspaceId: string;
+    financialAccountProfileId?: string;
+  },
 ): Promise<PostedJournalEntry[]> {
-  const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
+  const workspace = await requireWorkspace(
+    store,
+    input.workspaceId,
+    input.actor,
+  );
+  const profile =
+    input.financialAccountProfileId !== undefined
+      ? await requireProfile(
+          store,
+          input.workspaceId,
+          input.financialAccountProfileId,
+        )
+      : undefined;
   const [entries, context] = await Promise.all([
     store.listJournalEntries(input.workspaceId),
     journalContext(store, workspace),
@@ -18,12 +35,20 @@ export async function listJournalEntries(
     ),
   );
   return Promise.all(
-    entries.map((entry) => {
-      const reversedByEntryId = reversedBy.get(entry.id);
-      return toPostedJournalEntry(store, context, entry, {
-        replay: false,
-        ...(reversedByEntryId ? { reversedByEntryId } : {}),
-      });
-    }),
+    entries
+      .filter(
+        (entry) =>
+          !profile ||
+          entry.lines.some(
+            (line) => line.ledgerAccountId === profile.postingAccountId,
+          ),
+      )
+      .map((entry) => {
+        const reversedByEntryId = reversedBy.get(entry.id);
+        return toPostedJournalEntry(store, context, entry, {
+          replay: false,
+          ...(reversedByEntryId ? { reversedByEntryId } : {}),
+        });
+      }),
   );
 }

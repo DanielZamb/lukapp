@@ -1,3 +1,4 @@
+import { assertOpeningDates } from "./openingDate";
 import { AccountingError } from "./errors";
 import { requireWorkspace } from "./membership";
 import { periodFromAccountingDate } from "./period";
@@ -36,10 +37,19 @@ export async function postJournalEntry(
     }
     return { entry: existing, replay: true };
   }
+  if (
+    await store.findOpeningPositionByKey(
+      input.workspaceId,
+      draft.idempotencyKey,
+    )
+  ) {
+    throw new AccountingError("idempotency_key_conflict");
+  }
   assertBalancedLines(draft.lines);
   await assertPostingAccounts(store, input.workspaceId, draft.lines);
   await assertLinkedRecords(store, input.workspaceId, draft);
   const period = periodFromAccountingDate(draft.accountingDate);
+  await assertOpeningDates(store, input.workspaceId, draft);
   await requirePostablePeriod(store, input.workspaceId, draft.accountingDate);
   const entry = await store.insertJournalEntry({
     ...draft,
@@ -65,7 +75,7 @@ export function assertBalancedLines(lines: DraftJournalLine[]): void {
       !Number.isSafeInteger(c) ||
       d < 0 ||
       c < 0 ||
-      (d > 0) === (c > 0)
+      d > 0 === c > 0
     ) {
       throw new AccountingError("journal_line_invalid");
     }
@@ -109,7 +119,10 @@ async function assertLinkedRecords(
   }
 }
 
-function sameDraft(entry: StoredJournalEntry, draft: JournalEntryDraft): boolean {
+function sameDraft(
+  entry: StoredJournalEntry,
+  draft: JournalEntryDraft,
+): boolean {
   return (
     entry.accountingDate === draft.accountingDate &&
     entry.description === draft.description &&

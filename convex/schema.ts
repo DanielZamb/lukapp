@@ -6,6 +6,7 @@ import {
   periodStatus,
   postingPolicy,
   productKind,
+  storedOpening,
 } from "./validators";
 
 export default defineSchema({
@@ -46,7 +47,19 @@ export default defineSchema({
     productKind,
     classificationPolicy: v.string(),
     postingAccountId: v.id("ledgerAccounts"),
-  }).index("by_workspace", ["workspaceId"]),
+    setupIdempotencyKey: v.optional(v.string()),
+    opening: v.optional(storedOpening),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_setup", ["workspaceId", "setupIdempotencyKey"]),
+  openingPositions: defineTable({
+    workspaceId: v.id("workspaces"),
+    financialAccountProfileId: v.id("financialAccountProfiles"),
+    description: v.string(),
+    replacesOpeningKey: v.optional(v.string()),
+    idempotencyKey: v.string(),
+    opening: storedOpening,
+  }).index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"]),
   journalEntries: defineTable({
     workspaceId: v.id("workspaces"),
     accountingDate: v.string(),

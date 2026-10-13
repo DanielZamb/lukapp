@@ -18,6 +18,7 @@ type WriteMethod =
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
+  | "saveOpeningPosition"
   | "insertJournalEntry"
   | "insertAccountingPeriod"
   | "setAccountingPeriodStatus"
@@ -86,6 +87,10 @@ function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
     productKind: doc.productKind,
     classificationPolicy: doc.classificationPolicy,
     postingAccountId: doc.postingAccountId,
+    ...(doc.setupIdempotencyKey !== undefined
+      ? { setupIdempotencyKey: doc.setupIdempotencyKey }
+      : {}),
+    ...(doc.opening ? { opening: doc.opening } : {}),
   };
 }
 
@@ -197,6 +202,40 @@ function readStore(db: ReadDb): ReadMethods {
       return doc ? toProfile(doc) : undefined;
     },
 
+    async findProfileBySetupKey(workspaceId, key) {
+      const doc = await db
+        .query("financialAccountProfiles")
+        .withIndex("by_workspace_setup", (q) =>
+          q
+            .eq("workspaceId", requiredId(db, "workspaces", workspaceId))
+            .eq("setupIdempotencyKey", key),
+        )
+        .unique();
+      return doc ? toProfile(doc) : undefined;
+    },
+
+    async findOpeningPositionByKey(workspaceId, key) {
+      const doc = await db
+        .query("openingPositions")
+        .withIndex("by_workspace_idempotency", (q) =>
+          q
+            .eq("workspaceId", requiredId(db, "workspaces", workspaceId))
+            .eq("idempotencyKey", key),
+        )
+        .unique();
+      return doc
+        ? {
+            workspaceId: doc.workspaceId,
+            financialAccountProfileId: doc.financialAccountProfileId,
+            description: doc.description,
+            opening: doc.opening,
+            ...(doc.replacesOpeningKey !== undefined
+              ? { replacesOpeningKey: doc.replacesOpeningKey }
+              : {}),
+          }
+        : undefined;
+    },
+
     async listProfiles(workspaceId) {
       const docs = await db
         .query("financialAccountProfiles")
@@ -295,6 +334,27 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
       return { id, ...profile };
     },
 
+    async saveOpeningPosition(position) {
+      await db.insert("openingPositions", {
+        ...position,
+        workspaceId: requiredId(db, "workspaces", position.workspaceId),
+        financialAccountProfileId: requiredId(
+          db,
+          "financialAccountProfiles",
+          position.financialAccountProfileId,
+        ),
+        idempotencyKey: position.opening.idempotencyKey,
+      });
+      await db.patch(
+        requiredId(
+          db,
+          "financialAccountProfiles",
+          position.financialAccountProfileId,
+        ),
+        { opening: position.opening },
+      );
+    },
+
     async insertJournalEntry(entry) {
       const workspaceId = requiredId(db, "workspaces", entry.workspaceId);
       const journalEntryId = await db.insert("journalEntries", {
@@ -389,6 +449,7 @@ function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),
+    saveOpeningPosition: async () => unavailable("saveOpeningPosition"),
     insertJournalEntry: async () => unavailable("insertJournalEntry"),
     insertAccountingPeriod: async () => unavailable("insertAccountingPeriod"),
     setAccountingPeriodStatus: async () =>

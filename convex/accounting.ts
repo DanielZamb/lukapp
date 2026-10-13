@@ -10,6 +10,7 @@ import { dateFromTimestamp } from "../src/accounting/period";
 import { convexReadStore, convexStore } from "./store";
 import {
   accountBalance,
+  openingPositionResult,
   accountingPeriod,
   catalogAccount,
   financialAccountProfile,
@@ -203,7 +204,7 @@ export const reversePostedEntry = ownerMutation({
 });
 
 export const listJournalEntries = ownerQuery({
-  args: inWorkspace,
+  args: { ...inWorkspace, financialAccountProfileId: v.optional(v.string()) },
   returns: v.array(postedJournalEntry),
   handler: async (ctx, args) =>
     run(() =>
@@ -232,6 +233,58 @@ export const trialBalance = ownerQuery({
   handler: async (ctx, args) =>
     run(() =>
       createAccountingCore(convexReadStore(ctx.db)).trialBalance({
+        ...args,
+        actor: ctx.actor,
+      }),
+    ),
+});
+
+const openingPositionArgs = {
+  ...inWorkspace,
+  amount: money,
+  accountingDate: v.string(),
+  description: v.string(),
+  idempotencyKey: v.string(),
+};
+
+export const recordOpeningPosition = ownerMutation({
+  args: {
+    ...openingPositionArgs,
+    financialAccountProfileId: v.string(),
+    replacesOpeningKey: v.optional(v.string()),
+  },
+  returns: openingPositionResult,
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db)).recordOpeningPosition({
+        ...args,
+        actor: ctx.actor,
+      }),
+    ),
+});
+
+export const setupFinancialAccount = ownerMutation({
+  args: { ...openingPositionArgs, name: v.string(), productKind },
+  returns: openingPositionResult,
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db)).setupFinancialAccount({
+        ...args,
+        actor: ctx.actor,
+      }),
+    ),
+});
+
+export const recordAccountTransfer = ownerMutation({
+  args: {
+    ...openingPositionArgs,
+    sourceFinancialAccountProfileId: v.string(),
+    destinationFinancialAccountProfileId: v.string(),
+  },
+  returns: postedJournalEntry,
+  handler: async (ctx, args) =>
+    run(() =>
+      createAccountingCore(convexStore(ctx.db)).recordAccountTransfer({
         ...args,
         actor: ctx.actor,
       }),

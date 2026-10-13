@@ -1,4 +1,8 @@
-import { chartTemplate, nextAuxiliaryCode, normalSideOf } from "../chartOfAccounts";
+import {
+  chartTemplate,
+  nextAuxiliaryCode,
+  normalSideOf,
+} from "../chartOfAccounts";
 import { classifyFinancialAccountProfile } from "../classification";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
@@ -18,12 +22,31 @@ export async function createFinancialAccountProfile(
     workspaceId: string;
     name: string;
     productKind: FinancialAccountProductKind;
+    idempotencyKey?: string;
   },
 ): Promise<FinancialAccountProfile> {
-  const workspace = await requireWorkspace(store, input.workspaceId, input.actor, "prepare");
+  const workspace = await requireWorkspace(
+    store,
+    input.workspaceId,
+    input.actor,
+    "prepare",
+  );
   const name = input.name.trim();
   if (!name) {
     throw new AccountingError("name_required");
+  }
+  if (input.idempotencyKey !== undefined) {
+    if (!input.idempotencyKey)
+      throw new AccountingError("idempotency_key_required");
+    const existing = await store.findProfileBySetupKey(
+      input.workspaceId,
+      input.idempotencyKey,
+    );
+    if (existing) {
+      if (existing.name !== name || existing.productKind !== input.productKind)
+        throw new AccountingError("idempotency_key_conflict");
+      return toProfile(store, existing);
+    }
   }
   const classified = classifyFinancialAccountProfile(
     chartTemplate(workspace.chartOfAccountsTemplate),
@@ -31,7 +54,11 @@ export async function createFinancialAccountProfile(
   );
   const postingAccount = await store.insertLedgerAccount({
     workspaceId: input.workspaceId,
-    code: await nextAuxiliaryCode(store, input.workspaceId, classified.parentCode),
+    code: await nextAuxiliaryCode(
+      store,
+      input.workspaceId,
+      classified.parentCode,
+    ),
     name,
     nature: classified.nature,
     normalSide: normalSideOf(classified.nature),
@@ -43,6 +70,9 @@ export async function createFinancialAccountProfile(
     productKind: classified.productKind,
     classificationPolicy: classified.policy,
     postingAccountId: postingAccount.id,
+    ...(input.idempotencyKey !== undefined
+      ? { setupIdempotencyKey: input.idempotencyKey }
+      : {}),
   });
-  return toProfile(profile);
+  return toProfile(store, profile);
 }
