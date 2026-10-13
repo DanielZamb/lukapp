@@ -4,7 +4,7 @@ This is the implementation contract for SEN-61, not a settled product decision. 
 
 ## Usage and signatures
 
-All six public operations use the existing Owner/device exact-operation wrappers. Actor is server-admitted. Create/update/retire require current Workspace `manageBudgets`, granted only to Owner in `workspace-roles@2`; reads require View. Clients send fresh proof even for an exact command retry.
+All six public operations use the existing Owner/device exact-operation wrappers. Actor is server-admitted. Create/update/retire require current Workspace `manageBudgets`, granted only to Owner in `workspace-roles@3`; reads require View. Clients send fresh proof even for an exact command retry.
 
 ```ts
 createBudget({ workspaceId, name, startMonth, target, cardinality, rollover, limit, idempotencyKey })
@@ -54,6 +54,6 @@ Two independent read-only architect sketches compared append-only standing effec
 
 The bounded annual carry choice accepts January reset in exchange for at most twelve actual-month reads. The 256-limit-history bound keeps rollover policy selection finite; it is an operational bound, not a claim about a settled preference. User experience and category hierarchy remain unresolved for F05/V01. Local tests establish authenticated handler behavior, not deployed OCC or native/physical proof.
 
-## Cross-unit integration constraint
+## Combined planning authority
 
-The coordinator reported that separately approved C04 introduces Owner-only `manageRecoveryPlans` at its standalone `workspace-roles@2`. C03's verified base does not contain C04. This ticket adds only `manageBudgets` and explicitly preserves all prior grants. Parent owns the future C03-C04-permission-union gate: both capabilities and both exact-operation sets must survive under one coherent reviewed version. No C04 source is inspected or integrated here. Any later reconciliation needs exact verified source heads and its own public-proof/review gate.
+The reviewed Budget and Recovery parents independently used `workspace-roles@2` for their own Owner-only capability. Their normal merge uses `workspace-roles@3` with both `manageBudgets` and `manageRecoveryPlans`, preserving every other role grant. Both scopes retain the unchanged exact-operation proof wrappers and the canonical registry union. Their tables, images/events, ledger-read policies and typed unresolved variants remain separate. [The combined handoff](./C03-C04-reconciliation.md) records the local public proof and preservation limits.

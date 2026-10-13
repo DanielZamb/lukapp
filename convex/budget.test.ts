@@ -48,7 +48,7 @@ for (const household of [false, true]) for (const template of ["co-puc-personal@
   expect(posted.amount.minorUnits).toBe(20);
   expect(limited(first(await evaluate(f, 9)))).toEqual([150, 100, 0, 100, -50, 50, 0]);
   expect(created.budget.created.decidedBy).toBe(owner.userId);
-  expect(workspaceRolePolicyVersion).toBe("workspace-roles@2");
+  expect(workspaceRolePolicyVersion).toBe("workspace-roles@3");
   expect(["Owner", "Accountant", "Preparer", "Viewer"].map(role => role === "Owner" ? hasWorkspacePermission("Owner", "manageBudgets") :
     role === "Accountant" ? hasWorkspacePermission("Accountant", "manageBudgets") : role === "Preparer" ? hasWorkspacePermission("Preparer", "manageBudgets") : hasWorkspacePermission("Viewer", "manageBudgets"))).toEqual([true, false, false, false]);
 });
