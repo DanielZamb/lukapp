@@ -1,4 +1,5 @@
 import { providerActor, providerState, providerTarget } from "./providerValidators";
+import { firstRunResult } from "./onboardingValidators";
 import { categoryFields, userCategory, categorySnapshot, categoryCorrection } from "./categoryAnnotationValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
@@ -15,6 +16,8 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  firstRunCompletions: defineTable({ tokenIdentifier: v.string(), request: v.string(), result: firstRunResult })
+    .index("by_identity", ["tokenIdentifier"]),
   clerkProviderWork: defineTable({
     ...providerActor, target: providerTarget, state: providerState, attempts: v.number(),
   }).index("by_identity", ["tokenIdentifier"]),

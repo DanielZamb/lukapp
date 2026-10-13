@@ -1,3 +1,4 @@
+import { useInteraction } from "./Interaction";
 import { inspectTarget } from "../dev/target-inspection";
 import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
@@ -20,6 +21,7 @@ export function ListRow({
   disabled = false,
 }: ListRowProps) {
   const theme = useTheme();
+  const interact = useInteraction();
   const content = (
     <>
       <View style={{ flex: 1, gap: spacing.xs }}>
@@ -73,7 +75,7 @@ export function ListRow({
       accessibilityLabel={[title, supporting, value].filter(Boolean).join(", ")}
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => { interact(); onPress?.(); }}
       style={({ pressed }) => [
         style,
         { opacity: disabled ? 0.5 : pressed ? 0.7 : 1 },

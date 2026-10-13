@@ -8,6 +8,7 @@ docs/
 exports/
 .DS_Store
 node_modules/
+.native-tools/
 .pnpm/
 .pnpm-store/
 .env.local

@@ -1,4 +1,6 @@
 import { categorySelection, categoryChange, reclassificationTarget, reclassificationPreview, reclassificationResult, userCategory } from "./categoryValidators";
+import { firstRunArgs, firstRunResult, firstRunStatusResult } from "./onboardingValidators";
+import { finishFirstRun, firstRunState } from "./lib/onboarding";
 import { natureAnswer } from "./categoryAnnotationValidators";
 import { ConvexError, v } from "convex/values";
 import { ownerMutation, ownerQuery } from "./lib/owner";
@@ -30,6 +32,39 @@ import {
 const inWorkspace = {
   workspaceId: v.string(),
 };
+
+export const completeFirstRun = ownerMutation({
+  operation: "accounting.completeFirstRun",
+  args: firstRunArgs,
+  returns: firstRunResult,
+  handler: (ctx, args) => run(() => finishFirstRun(ctx, args)),
+});
+export const firstRunStatus = ownerQuery({
+  operation: "accounting.firstRunStatus",
+  args: { now: v.number() },
+  returns: firstRunStatusResult,
+  handler: (ctx, args) => run(() => firstRunState(ctx, args.now)),
+});
+
+export const phoneSummary = ownerQuery({
+  operation: "accounting.phoneSummary",
+  args: inWorkspace,
+  returns: v.object({
+    workspace,
+    profiles: v.array(financialAccountProfile),
+    balances: v.array(accountBalance),
+    entries: v.array(postedJournalEntry),
+  }),
+  handler: (ctx, args) => run(async () => {
+    const core = createAccountingCore(convexReadStore(ctx.db));
+    const input = { ...args, actor: ctx.actor };
+    const [profiles, balances, entries, workspace] = await Promise.all([
+      core.listFinancialAccountProfiles(input), core.balances(input),
+      core.listJournalEntries(input), core.openWorkspace({ ...input, now: Date.now() }),
+    ]);
+    return { workspace, profiles, balances, entries };
+  }),
+});
 
 const cashActivity = {
   ...inWorkspace,

@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Text, View, Platform } from "react-native";
 import {
   Geist_400Regular,
   Geist_500Medium,
@@ -11,6 +11,8 @@ import {
 } from "@expo-google-fonts/geist";
 import { ThemeProvider, useTheme } from "../theme/ThemeProvider";
 import { font, spacing } from "../theme/tokens";
+import { AccessRoot } from "../access/RuntimeProvider";
+export const unstable_settings = { initialRouteName: "index" };
 
 function AppStack() {
   const theme = useTheme();
@@ -45,7 +47,7 @@ function AppStack() {
       </View>
     );
   return (
-    <>
+    <AccessRoot>
       <StatusBar style="auto" />
       <Stack
         screenOptions={{
@@ -53,8 +55,11 @@ function AppStack() {
           contentStyle: { backgroundColor: theme.background },
           headerTitleStyle: { fontFamily: font.semibold },
         }}
-      />
-    </>
+      >
+        <Stack.Screen name="setup" options={{ presentation: Platform.OS === "ios" ? "modal" : "formSheet", sheetAllowedDetents: [1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="account-setup" options={{ presentation: Platform.OS === "ios" ? "modal" : "formSheet", sheetAllowedDetents: [1], sheetGrabberVisible: true }} />
+      </Stack>
+    </AccessRoot>
   );
 }
 

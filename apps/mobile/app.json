@@ -12,12 +12,16 @@
     },
     "android": {
       "package": "com.sennkai.lukapp.dev",
+      "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-dev-client"
+      "expo-dev-client",
+      ["expo-local-authentication", { "faceIDPermission": "Use Face ID to unlock your money and local drafts." }],
+      "expo-secure-store",
+      "@clerk/expo"
     ],
     "experiments": {
       "typedRoutes": true
