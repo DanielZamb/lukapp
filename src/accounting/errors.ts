@@ -22,6 +22,7 @@ export const accountingErrorMessages = {
   financial_account_profile_not_found: "Financial Account Profile not found",
   financial_account_product_kind_unknown: "Financial Account product kind not recognized",
   ledger_account_not_found: "Ledger Account not found",
+  chart_of_accounts_template_not_applicable: "Chart of Accounts template does not apply to this Workspace Kind",
   chart_of_accounts_template_unknown: "Chart of Accounts template not recognized",
   ledger_account_code_unknown: "Account code is not in the Chart of Accounts template",
   cash_expense_account_invalid: "Account cannot record a cash expense",

@@ -1,4 +1,4 @@
-# Owner access and Personal Workspace bootstrap
+# Owner access and Workspace provisioning
 
 A02 extends this A01 design record with mandatory registered-device possession on every accounting call, including bootstrap. The current API, errors and native responsibilities are in [the device handoff](../src/access/NATIVE-HANDOFF.md). The A01 identity and permission rules below still apply; its original argument descriptions now also require `access`.
 
@@ -17,7 +17,7 @@ The versioned `workspace-roles@1` policy defines these permissions:
 | Preparer | yes | yes | no | no | no | no |
 | Viewer | yes | no | no | no | no | no |
 
-Only bootstrap grants a membership, always Owner. Other role presets are modeled for enforcement and deterministic tests; there is no public role-grant API. Core membership checks enforce permissions. Shared Posting enforces Post even when called internally. Reversal requires Correct and reaches Posting. Profile creation requires Prepare; period locking requires Manage periods.
+Only Personal bootstrap and deliberate Household creation grant a membership, always Owner. See [the Workspace API contract](./WORKSPACES.md) for Household retry and discovery behavior. Other role presets are modeled for enforcement and deterministic tests; there is no public role-grant API. Core membership checks enforce permissions. Shared Posting enforces Post even when called internally. Reversal requires Correct and reaches Posting. Profile creation requires Prepare; period locking requires Manage periods.
 
 `accounting.createPersonalWorkspace` takes explicit functionalCurrency, optional chartOfAccountsTemplate, and the existing now clock argument. The first call provisions one Workspace, Owner membership, sparse chart, and initial period, then records the identity link. Retries return the same Workspace. A changed currency/template yields personal_workspace_configuration_conflict. Removed membership is denied and never repaired by login.
 

@@ -4,7 +4,7 @@ export type Actor = {
 
 export type WorkspaceRole = "Owner" | "Accountant" | "Preparer" | "Viewer";
 
-export type WorkspaceKind = "Personal";
+export type WorkspaceKind = "Personal" | "Household";
 
 export type PeriodStatus = "open" | "locked" | "not_opened";
 
@@ -45,6 +45,7 @@ export type CatalogAccount = {
 /** A versioned COA Template. The first digit of a code locks the account's nature. */
 export type ChartOfAccountsTemplate = {
   version: string;
+  applicableWorkspaceKinds: readonly WorkspaceKind[];
   natureByClass: Record<string, AccountNature>;
   /** Accounts provisioned in every new Workspace, found again by code. */
   defaults: { expense: string; income: string; openingBalance: string };
@@ -306,6 +307,16 @@ export type AccountingStore = {
     ownerUserId: string,
   ): Promise<StoredWorkspace>;
   getWorkspace(workspaceId: string): Promise<StoredWorkspace | undefined>;
+  listOwnedWorkspaceIds(userId: string): Promise<string[]>;
+  findHouseholdWorkspaceByKey(
+    userId: string,
+    key: string,
+  ): Promise<string | undefined>;
+  saveHouseholdWorkspaceCreation(input: {
+    ownerUserId: string;
+    idempotencyKey: string;
+    workspaceId: string;
+  }): Promise<void>;
   membershipRole(
     workspaceId: string,
     userId: string,
@@ -368,6 +379,16 @@ export type AccountingCore = {
     /** COA Template version; co-puc-personal@1 when omitted. */
     chartOfAccountsTemplate?: string;
   }): Promise<Workspace>;
+  createHouseholdWorkspace(input: {
+    actor: Actor;
+    functionalCurrency: string;
+    chartOfAccountsTemplate?: string;
+    idempotencyKey: string;
+  }): Promise<Workspace>;
+  listOwnedWorkspaces(input: {
+    actor: Actor;
+    now?: number;
+  }): Promise<Workspace[]>;
   openWorkspace(input: {
     actor: Actor;
     workspaceId: string;

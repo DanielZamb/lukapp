@@ -9,6 +9,7 @@ import type { ChartOfAccountsTemplate } from "../types";
 
 export const coPucPersonalTemplate = {
   version: "co-puc-personal@1",
+  applicableWorkspaceKinds: ["Personal", "Household"],
   natureByClass: {
     "1": "Asset",
     "2": "Liability",
