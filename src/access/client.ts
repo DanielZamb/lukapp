@@ -28,7 +28,7 @@ export async function proveDeviceRequest<Request extends object>(input: {
   operation: AccessOperation;
   request: Request;
 }) {
-  const payloadHash = await input.hash.sha256Utf8(canonicalJson(input.request));
+  const payloadHash = (await input.hash.sha256Utf8(canonicalJson(input.request))).toLowerCase();
   const challenge = await input.transport.prepare({
     operation: input.operation, payloadHash,
     ...(input.deviceId ? { deviceId: input.deviceId } : { publicKey: await input.key.publicKey() }),

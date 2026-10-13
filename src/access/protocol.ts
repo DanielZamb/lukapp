@@ -11,6 +11,8 @@ export const accessPolicy = {
 export const operations = [
   "devices.register", "devices.revoke", "devices.heartbeat", "devices.approveRegistration",
   "accounting.createPersonalWorkspace", "accounting.personalWorkspace", "accounting.openWorkspace",
+  "accounting.localInputAuthority", "accounting.setupFinancialAccount",
+  "accounting.recordOpeningPosition", "accounting.recordAccountTransfer",
   "accounting.createFinancialAccountProfile", "accounting.listFinancialAccountProfiles",
   "accounting.listLedgerAccounts", "accounting.listCatalogAccounts", "accounting.lockAccountingPeriod",
   "accounting.recordCashExpense", "accounting.recordCashIncome", "accounting.reversePostedEntry",

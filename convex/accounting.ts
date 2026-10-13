@@ -6,6 +6,7 @@ import {
   requirePersonalWorkspaceOwner,
 } from "./lib/personalWorkspace";
 import { AccountingError, createAccountingCore } from "../src/accounting";
+import { requireWorkspace } from "../src/accounting/membership";
 import { dateFromTimestamp } from "../src/accounting/period";
 import { convexReadStore, convexStore } from "./store";
 import {
@@ -89,6 +90,23 @@ export const personalWorkspace = ownerQuery({
         now: args.now,
       });
       return { status: "ready", workspace } as const;
+    }),
+});
+
+export const localInputAuthority = ownerQuery({
+  operation: "accounting.localInputAuthority",
+  args: { workspaceId: v.optional(v.string()) },
+  returns: v.union(
+    v.object({ kind: v.literal("provisioning-required") }),
+    v.object({ kind: v.literal("ready"), workspaceId: v.string() }),
+  ),
+  handler: async (ctx, args) =>
+    run(async () => {
+      const workspaceId = args.workspaceId ??
+        (await personalWorkspaceLink(ctx, ctx.actor.userId))?.workspaceId;
+      if (workspaceId === undefined) return { kind: "provisioning-required" } as const;
+      await requireWorkspace(convexReadStore(ctx.db), workspaceId, ctx.actor, "prepare");
+      return { kind: "ready", workspaceId } as const;
     }),
 });
 
@@ -262,6 +280,7 @@ const openingPositionArgs = {
 };
 
 export const recordOpeningPosition = ownerMutation({
+  operation: "accounting.recordOpeningPosition",
   args: {
     ...openingPositionArgs,
     financialAccountProfileId: v.string(),
@@ -278,6 +297,7 @@ export const recordOpeningPosition = ownerMutation({
 });
 
 export const setupFinancialAccount = ownerMutation({
+  operation: "accounting.setupFinancialAccount",
   args: { ...openingPositionArgs, name: v.string(), productKind },
   returns: openingPositionResult,
   handler: async (ctx, args) =>
@@ -290,6 +310,7 @@ export const setupFinancialAccount = ownerMutation({
 });
 
 export const recordAccountTransfer = ownerMutation({
+  operation: "accounting.recordAccountTransfer",
   args: {
     ...openingPositionArgs,
     sourceFinancialAccountProfileId: v.string(),
