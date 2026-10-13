@@ -16,11 +16,13 @@ import type { ForegroundAdmissionTransport } from "../src/access/admission";
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
 const now = Date.UTC(2026, 9, 13, 7);
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubEnv("CLERK_SECRET_KEY", "");
   vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", ownerIdentity.subject);
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", ownerIdentity.issuer);
   vi.spyOn(Date, "now").mockReturnValue(now);
 });
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 function setup() {
   const root = convexTest(schema, modules);
   const session = (sid: string, extra: Partial<UserIdentity> = {}) => root.withIdentity({ ...ownerIdentity, sid, sts: "active", ...extra });
@@ -169,7 +171,7 @@ test("revocation closes the JWT window and causes next-contact wipe, then replac
   expect(await caught(registerFixture(newcomer, newKey))).toMatchObject({ data: { code: "device_slot_occupied" } });
   const revokeArgs = { deviceId: lost.device.id };
   const access = await fixtureProof(newcomer, newKey, "devices.revoke", revokeArgs);
-  expect(await newcomer.mutation(api.devices.revoke, { ...revokeArgs, access })).toEqual({ kind: "revoked", providerRevocation: "pending-integration" });
+  expect(await newcomer.mutation(api.devices.revoke, { ...revokeArgs, access })).toMatchObject({ kind: "revoked", providerRevocation: { kind: "pending" } });
   expect(await caught(lost.t.mutation(api.accounting.recordCashExpense, signed))).toMatchObject({ data: { code: "device_revoked", directive: "wipe-local-input-and-sign-out" } });
   expect(await lost.t.query(api.devices.status, {})).toEqual({ kind: "denied", code: "device_revoked", directive: "wipe-local-input-and-sign-out" });
   expect(await caught(registerFixture(lost.t, await fixtureKey()))).toMatchObject({ data: { code: "device_revoked" } });
@@ -212,8 +214,8 @@ test.each(["inactivity", "maximum"])("binding %s expiry denies financial access 
   const revokeArgs = { deviceId: client.device.id };
   for (let retry = 0; retry < 2; retry++) {
     const access = await fixtureProof(replacementSession, replacementKey, "devices.revoke", revokeArgs);
-    expect(await replacementSession.mutation(api.devices.revoke, { ...revokeArgs, access })).toEqual({
-      kind: "revoked", providerRevocation: "pending-integration",
+    expect(await replacementSession.mutation(api.devices.revoke, { ...revokeArgs, access })).toMatchObject({
+      kind: "revoked", providerRevocation: { kind: "pending" },
     });
   }
   expect(await caught(registerFixture(replacementSession, client.key))).toMatchObject({ data: { code: "device_registration_conflict" } });

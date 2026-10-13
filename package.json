@@ -23,6 +23,7 @@
     "vitest": "3.2.7"
   },
   "dependencies": {
+    "@clerk/backend": "3.23.2",
     "convex": "1.46.0",
     "convex-helpers": "0.1.128"
   }

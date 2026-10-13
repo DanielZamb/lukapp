@@ -1,3 +1,4 @@
+import { providerActor, providerState, providerTarget } from "./providerValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { accessOperation, devicePlatform, deviceState } from "./deviceValidators";
@@ -11,6 +12,16 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  clerkProviderWork: defineTable({
+    ...providerActor, target: providerTarget, state: providerState, attempts: v.number(),
+  }).index("by_identity", ["tokenIdentifier"]),
+  clerkRecoveryIntents: defineTable({
+    ...providerActor, initiatingSid: v.string(), createdAt: v.number(), expiresAt: v.number(),
+    workId: v.optional(v.id("clerkProviderWork")),
+  }).index("by_identity", ["tokenIdentifier"]),
+  clerkWebhookDeliveries: defineTable({
+    ...providerActor, sid: v.string(), eventId: v.string(), eventType: v.string(), timestamp: v.number(),
+  }).index("by_event", ["eventId"]),
   mobileDevices: defineTable({
     tokenIdentifier: v.string(), sid: v.string(), publicKey: v.string(),
     name: v.string(), platform: devicePlatform,

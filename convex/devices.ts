@@ -1,3 +1,5 @@
+import { enqueueProviderWork } from "./lib/providerWork";
+import { providerState } from "./providerValidators";
 import { ConvexError, v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { ownerAdmission, requireOwner } from "./lib/owner";
@@ -123,7 +125,7 @@ export const heartbeat = mutation({
 
 export const revoke = mutation({
   args: { deviceId: v.id("mobileDevices"), access: v.optional(deviceProof) },
-  returns: v.object({ kind: v.literal("revoked"), providerRevocation: v.literal("pending-integration") }),
+  returns: v.object({ kind: v.literal("revoked"), providerRevocation: providerState, workId: v.id("clerkProviderWork") }),
   handler: async (ctx, { access, ...args }) => {
     const owner = await requireOwner(ctx);
     const verified = await verifyChallenge(ctx, owner.clerkIdentity, access, "devices.revoke", false);
@@ -132,7 +134,8 @@ export const revoke = mutation({
     if (!device || device.tokenIdentifier !== owner.identity.tokenIdentifier) denyAccess("device_unknown");
     if (device.state.kind === "active") await ctx.db.patch(device._id, { state: { kind: "revoked", at: Date.now(), reason: "owner" } });
     await consumeChallenge(ctx, verified.challenge, null);
-    return { kind: "revoked", providerRevocation: "pending-integration" } as const;
+    const work = await enqueueProviderWork(ctx, owner.identity, { kind: "revoke", sid: device.sid });
+    return { kind: "revoked", providerRevocation: work.state, workId: work._id } as const;
   },
 });
 
