@@ -14,7 +14,13 @@ import {
   cashCategoryInput,
 } from "./validators";
 
+import { planFields, eventFields } from "./recoveryValidators";
+
 export default defineSchema({
+  recoveryPlans: defineTable(planFields).index("by_workspace", ["workspaceId"]),
+  recoveryEvents: defineTable(eventFields).index("by_workspace", ["workspaceId"]),
+  recoveryReceipts: defineTable({ workspaceId: v.string(), key: v.string(), fingerprint: v.string(), resultId: v.string() })
+    .index("by_workspace_key", ["workspaceId", "key"]),
   clerkProviderWork: defineTable({
     ...providerActor, target: providerTarget, state: providerState, attempts: v.number(),
   }).index("by_identity", ["tokenIdentifier"]),
@@ -126,6 +132,7 @@ export default defineSchema({
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"])
+    .index("by_workspace_policy_date", ["workspaceId", "policy", "accountingDate"])
     .index("by_reverses", ["reversesEntryId"]),
   journalLines: defineTable({
     category: v.optional(categorySnapshot),

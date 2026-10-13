@@ -377,6 +377,9 @@ export type AccountingStore = CategoryStore & {
   ): Promise<StoredJournalEntry | undefined>;
   findReversalOf(entryId: string): Promise<StoredJournalEntry | undefined>;
   listJournalEntries(workspaceId: string): Promise<StoredJournalEntry[]>;
+  listExpenseEntriesInRange(workspaceId: string, from: string, through: string): Promise<StoredJournalEntry[]>;
+  listAccountTransferEntriesInRange(workspaceId: string, from: string, through: string): Promise<StoredJournalEntry[]>;
+  listJournalSourceEffects(workspaceId: string, sourceEntryId: string): Promise<JournalSourceEffect[]>;
   getAccountingPeriod(
     workspaceId: string,
     period: PeriodKey,
@@ -462,6 +465,7 @@ export type AccountingCore = CategoryCore & {
     workspaceId: string;
     financialAccountProfileId?: string;
   }): Promise<PostedJournalEntry[]>;
+  listPostedExpenses(input: { actor: Actor; workspaceId: string; from: string; through: string }): Promise<PostedExpense[]>;
   balances(input: {
     actor: Actor;
     workspaceId: string;
@@ -490,4 +494,21 @@ export type CashActivityInput = {
   ledgerAccountCode?: string;
   userCategoryId?: string;
   categoryRevision?: number;
+};
+
+export type PostedExpense = {
+  entryId: string;
+  accountingDate: string;
+  description: string;
+  amount: Money;
+  expenseLines: Array<{ ledgerAccountId: string; amount: Money }>;
+  currentEligibleAmount: Money;
+  sourceEffects: Array<JournalSourceEffect & { accountingDate: string; recordedAt: number; reversedByEntryId: string | null }>;
+  reversal: { entryId: string; accountingDate: string; recordedAt: number } | null;
+};
+
+export type JournalSourceEffect = {
+  workspaceId: string; sourceEntryId: string; journalEntryId: string;
+  expenseDeltaMinorUnits: Money["minorUnits"];
+  sourceSequence: number;
 };

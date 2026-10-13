@@ -19,6 +19,12 @@ export const operations = [
   "accounting.createFinancialAccountProfile", "accounting.listFinancialAccountProfiles",
   "accounting.listLedgerAccounts", "accounting.listCatalogAccounts", "accounting.lockAccountingPeriod",
   "accounting.recordCashExpense", "accounting.recordCashIncome", "accounting.reversePostedEntry",
+  "accounting.listPostedExpenses",
+  "savingsRecovery.saveDraft", "savingsRecovery.activatePlan", "savingsRecovery.cancelPlan",
+  "savingsRecovery.replacePlan", "savingsRecovery.reconcilePlans", "savingsRecovery.decideCandidate",
+  "savingsRecovery.recordContribution", "savingsRecovery.reverseContribution",
+  "savingsRecovery.proposeAllocation", "savingsRecovery.decideProposal", "savingsRecovery.declareOpeningProgress",
+  "savingsRecovery.listCandidates", "savingsRecovery.progress", "savingsRecovery.monthlyWaterfall",
   "accounting.listJournalEntries", "accounting.balances", "accounting.trialBalance",
 ] as const;
 export type AccessOperation = typeof operations[number];

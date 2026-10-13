@@ -285,6 +285,7 @@ test("role presets give preparation and posting separate authority", () => {
       "correct",
       "managePeriods",
       "administerMembership",
+      "manageRecoveryPlans",
     ],
     Accountant: ["view", "prepare", "post", "correct", "managePeriods"],
     Preparer: ["view", "prepare"],

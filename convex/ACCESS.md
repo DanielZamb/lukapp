@@ -8,14 +8,14 @@ The `personalWorkspaceOwners` table stores only tokenIdentifier, Clerk issuer, C
 
 `ownerQuery` and `ownerMutation` use convex-helpers customQuery/customMutation with customCtx. They authenticate through ctx.auth and require both the configured issuer and pre-provisioned Owner subject. Missing configuration fails closed. Their context adds actor and the verified identity facts. Accounting errors map to stable ConvexError codes.
 
-The versioned `workspace-roles@1` policy defines these permissions:
+The versioned `workspace-roles@2` policy defines these permissions:
 
-| Role | View | Prepare | Post | Correct | Manage periods | Administer membership |
-| --- | --- | --- | --- | --- | --- | --- |
-| Owner | yes | yes | yes | yes | yes | yes |
-| Accountant | yes | yes | yes | yes | yes | no |
-| Preparer | yes | yes | no | no | no | no |
-| Viewer | yes | no | no | no | no | no |
+| Role | View | Prepare | Post | Correct | Manage periods | Administer membership | Manage Recovery plans |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Owner | yes | yes | yes | yes | yes | yes | yes |
+| Accountant | yes | yes | yes | yes | yes | no | no |
+| Preparer | yes | yes | no | no | no | no | no |
+| Viewer | yes | no | no | no | no | no | no |
 
 Only Personal bootstrap and deliberate Household creation grant a membership, always Owner. See [the Workspace API contract](./WORKSPACES.md) for Household retry and discovery behavior. Other role presets are modeled for enforcement and deterministic tests; there is no public role-grant API. Core membership checks enforce permissions. Shared Posting enforces Post even when called internally. Reversal requires Correct and reaches Posting. Profile creation requires Prepare; period locking requires Manage periods.
 
@@ -32,3 +32,5 @@ Current API references checked against primary sources on 2026-10-13:
 Local convex-test identity integration proves the boundary; it does not establish deployed Clerk or accounting access. Native UI and provider session-setting verification remain outside this authenticated accounting pilot. A02 adds the local device boundary described in the linked handoff. A03 adds durable provider revocation/recovery and signed terminal-session reconciliation. Its `checkSession` action supplies a current provider observation before foreground device/Workspace admission; financial mutations retain the shared A02 and accounting checks. Controlled official-SDK transports establish local behavior, while deployment secrets, webhook wiring, live claims, Native API and Clerk lifetime settings remain unobserved.
 
 The next planning adapters must use View for Savings Recovery and Budget reads and Prepare for their draft input. Recovery Plan activation, cancellation, and correction require a separate Recovery Plan Authority, which the first cutover grants only to Owner. Budget configuration also requires Owner in this cutover. Notification Intake confirmation requires Post and invokes the same Posting controls. Later shared-Workspace grants must extend the explicit policy rather than infer authority from preparation or Posting.
+
+C04 adds the explicit `manageRecoveryPlans` permission to Owner only. Recovery commands require it, including backend Draft editing; reads require View. Accountant retains Posting Authority and cannot change Recovery planning. Every Recovery export uses the same registered-device proof wrappers and shared operation registry as accounting.
