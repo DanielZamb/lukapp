@@ -448,3 +448,27 @@ test("known local Session denial still directs wipe when backend configuration i
   await old.t.action(api.clerkProvider.beginRecovery, {}); vi.stubEnv("CLERK_SECRET_KEY", "");
   expect(await old.t.action(api.clerkProvider.checkSession, {})).toEqual({ kind: "denied", code: "session_revoked", directive: "wipe-local-input-and-sign-out" });
 });
+
+test.each(["active", "ended"])("recovery cleanup includes an older owned %s impersonation Session", async (status) => {
+  const s = setup([providerSession("sess_old"), providerSession("sess_hidden"),
+    providerSession("sess_impersonated", { status, actor: { sub: "user_administrator" } })]);
+  const intent = await s.client("sess_old").action(api.clerkProvider.beginRecovery, {});
+  s.state.set("sess_new", providerSession("sess_new", { created_at: now + 1000 })); vi.setSystemTime(now + 2000);
+  const result = await s.client("sess_new").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId });
+  expect(result.state.kind).toBe("succeeded");
+  expect(s.state.get("sess_hidden")?.status).toBe("revoked");
+  expect(s.state.get("sess_impersonated")?.status).toBe(status === "active" ? "revoked" : "ended");
+  expect(await s.client("sess_impersonated").query(api.devices.status, {})).toMatchObject({ code: "session_revoked" });
+  expect(s.state.get("sess_new")?.status).toBe("active");
+  const next = await s.client("sess_new").action(api.clerkProvider.beginRecovery, {});
+  expect(next.intentId).not.toBe(intent.intentId);
+});
+
+test("an impersonated recovering Session cannot consume an intent or install a barrier", async () => {
+  const s = setup([providerSession("sess_old")]); const intent = await s.client("sess_old").action(api.clerkProvider.beginRecovery, {});
+  s.state.set("sess_impersonated", providerSession("sess_impersonated", { created_at: now + 1000, actor: { sub: "user_administrator" } }));
+  vi.setSystemTime(now + 2000);
+  expect(await caught(s.client("sess_impersonated").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId }))).toMatchObject({ data: { code: "provider_provenance_mismatch" } });
+  expect(await s.root.run((ctx) => ctx.db.query("deviceRecoveryBarriers").collect())).toEqual([]);
+  expect(s.calls.some((call) => call.method === "POST")).toBe(false);
+});

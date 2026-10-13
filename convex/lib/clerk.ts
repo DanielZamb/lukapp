@@ -41,7 +41,7 @@ export async function verifyProviderInstance(clerk: ClerkTransport, issuer: stri
   return instance;
 }
 export function ownedSession(session: ClerkSession, subject: string, sid: string) {
-  if (session.id !== sid || session.userId !== subject || session.actor !== null) providerFailure("provider_provenance_mismatch");
+  if (session.id !== sid || session.userId !== subject) providerFailure("provider_provenance_mismatch");
   if (!/^sess_[a-zA-Z0-9]{1,120}$/.test(session.id) || !Number.isSafeInteger(session.createdAt) || session.createdAt <= 0
     || !Number.isSafeInteger(session.expireAt) || !Number.isSafeInteger(session.abandonAt)) providerFailure("provider_session_invalid");
   return session;
@@ -51,6 +51,7 @@ export function sessionIsTerminal(session: ClerkSession) {
     || session.expireAt <= Date.now() || session.abandonAt <= Date.now();
 }
 export function activeSession(session: ClerkSession) {
+  if (session.actor !== null) providerFailure("provider_provenance_mismatch");
   if (sessionIsTerminal(session)) providerFailure("provider_session_terminal");
   if (session.status !== "active" || session.createdAt > Date.now()) providerFailure("provider_session_invalid");
   return session;
