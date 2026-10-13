@@ -232,3 +232,32 @@ test("catch-up cannot precede any locked source even when an older period is ope
   expect((await t.query(api.accounting.listJournalEntries, { workspaceId: w.id }))).toHaveLength(2);
   expect(await effects(t)).toEqual([]);
 });
+
+test("preview counts only sources requiring the requested account and confirmation consumes that exact plan", async () => {
+  const { t, w, category, spend, daily } = await fixture(); await spend(100, "2026-09-24", "needs-correction");
+  await t.mutation(api.accounting.recordCashExpense, { ...groceries(w.id, daily.id, { amount: 200, accountingDate: "2026-09-25", idempotencyKey: "already-rent" }), userCategoryId: category.id, ledgerAccountCode: "512010" });
+  const { preview, confirmed } = await classify(t, w.id, category.id, { kind: "category", nature: "Expense", accountCode: "512010" }, "rent", "2026-09-30");
+  expect(preview).toMatchObject({ entryCount: 1, lineCount: 1, amount: { currency: "COP", minorUnits: 100 }, lockedEntryCount: 0, lockedAmount: { currency: "COP", minorUnits: 0 }, correctionDates: ["2026-09-24"] });
+  const entries = await t.query(api.accounting.listJournalEntries, { workspaceId: w.id });
+  expect(entries.filter(e => confirmed.correctionEntryIds.includes(e.id)).map(e => [e.accountingDate, e.amount.minorUnits])).toEqual([["2026-09-24", 100]]);
+  expect((await t.query(api.accounting.categoryTotals, { workspaceId: w.id }))[0]?.expense.minorUnits).toBe(300);
+});
+
+test("aligned locked history needs no catch-up period and an entirely aligned category posts no correction", async () => {
+  const { t, w, category, spend, daily } = await fixture();
+  const aligned = await t.mutation(api.accounting.recordCashExpense, { ...groceries(w.id, daily.id, { amount: 200, accountingDate: "2026-09-24", idempotencyKey: "already-rent" }), userCategoryId: category.id, ledgerAccountCode: "512010" });
+  await lock(t, w.id, { year: 2026, month: 9 });
+  await spend(100, "2026-10-01", "needs-correction");
+  const request = { workspaceId: w.id, categoryId: category.id, target: { kind: "category" as const, nature: "Expense" as const, accountCode: "512010" }, currentDate: "2026-11-01" };
+  const preview = await t.query(api.accounting.previewCategoryReclassification, request);
+  expect(preview).toMatchObject({ entryCount: 1, amount: { minorUnits: 100 }, lockedEntryCount: 0, lockedAmount: { minorUnits: 0 }, correctionDates: ["2026-10-01"] });
+  const confirmed = await t.mutation(api.accounting.confirmCategoryReclassification, { ...request, revisionToken: preview.revisionToken, confirmed: true, idempotencyKey: "rent" });
+  expect(confirmed.correctionEntryIds).toHaveLength(1);
+  expect((await t.query(api.accounting.listJournalEntries, { workspaceId: w.id })).find(e => e.id === aligned.id)?.lines).toEqual(aligned.lines);
+  const secondPreview = await t.query(api.accounting.previewCategoryReclassification, request);
+  expect(secondPreview).toMatchObject({ entryCount: 0, amount: { minorUnits: 0 }, correctionDates: [], buckets: [] });
+  const noop = await t.mutation(api.accounting.confirmCategoryReclassification, { ...request, revisionToken: secondPreview.revisionToken, confirmed: true, idempotencyKey: "noop" });
+  expect(noop.correctionEntryIds).toEqual([]);
+  expect((await t.query(api.accounting.listJournalEntries, { workspaceId: w.id }))).toHaveLength(3);
+  expect(await effects(t)).toEqual([]);
+});

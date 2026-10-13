@@ -19,14 +19,16 @@ export async function previewCategoryReclassification(store: AccountingStore, in
   const currentPeriod = periodFromAccountingDate(input.currentDate);
   if (input.target.kind === "category") assertCategoryAccount(workspace.chartOfAccountsTemplate, input.target.nature, input.target.accountCode);
   else classifyFinancialAccountProfile(chartTemplate(workspace.chartOfAccountsTemplate), input.target.setup.productKind, input.target.setup.classificationAnswers);
+  const targetAccountId = input.target.kind === "category"
+    ? (await store.findLedgerAccountByCode(input.workspaceId, input.target.accountCode))?.id : undefined;
+  const targetNature = input.target.kind === "category" ? input.target.nature : undefined;
   const entries = (await store.listJournalEntries(input.workspaceId)).sort((a, b) => a.id.localeCompare(b.id));
   const buckets = new Map<string, ReclassificationBucket>();
   const periods = new Map<string, string>();
-  const entryIds = new Set<string>();
   const lockedIds = new Set<string>();
-  let lineCount = 0;
   for (const entry of entries) for (const [lineNumber, line] of entry.lines.entries()) {
     if (line.category?.categoryId !== category.id) continue;
+    if (line.ledgerAccountId === targetAccountId && line.category.nature === targetNature) continue;
     const periodKey = `${entry.period.year}-${String(entry.period.month).padStart(2, "0")}`;
     let status = periods.get(periodKey);
     if (!status) {
@@ -35,7 +37,6 @@ export async function previewCategoryReclassification(store: AccountingStore, in
       periods.set(periodKey, status);
     }
     const locked = status === "locked";
-    if (locked && input.currentDate < entry.accountingDate) throw new AccountingError("reclassification_date_before_source");
     const date = locked ? input.currentDate : entry.accountingDate;
     const destinationPeriod = locked ? "catch-up" : periodKey;
     const key = `${destinationPeriod}:${line.ledgerAccountId}:${commandIdentity(line.category)}`;
@@ -59,11 +60,15 @@ export async function previewCategoryReclassification(store: AccountingStore, in
     }
     if (locked && !bucket.priorLockedPeriods.includes(periodKey)) bucket.priorLockedPeriods.push(periodKey);
     buckets.set(key, bucket);
-    entryIds.add(entry.id); lineCount++;
     if (locked) lockedIds.add(entry.id);
   }
   const currentStatus = await store.getAccountingPeriod(input.workspaceId, currentPeriod);
   const outstanding = [...buckets.values()].filter(b => b.rootSources.some(root => root.signedMinorUnits !== 0)).sort((a, b) => commandIdentity(a).localeCompare(commandIdentity(b)));
+  const selectedSources = outstanding.flatMap(bucket => bucket.sources);
+  const entryIds = new Set(selectedSources.map(source => source.entryId));
+  const lockedEntryIds = new Set(selectedSources.filter(source => lockedIds.has(source.entryId)).map(source => source.entryId));
+  if (entries.some(entry => lockedEntryIds.has(entry.id) && input.currentDate < entry.accountingDate))
+    throw new AccountingError("reclassification_date_before_source");
   if (outstanding.some(b => b.priorLockedPeriods.length) && currentStatus?.status !== "open")
     throw new AccountingError("reclassification_current_period_required");
   if (input.target.kind === "profile") {
@@ -74,9 +79,9 @@ export async function previewCategoryReclassification(store: AccountingStore, in
   const lockedTotal = outstanding.filter(b => b.priorLockedPeriods.length).reduce((n, b) => n + b.rootSources.reduce((sum, root) => sum + Math.abs(root.signedMinorUnits), 0), 0);
   if (!Number.isSafeInteger(total)) throw new AccountingError("journal_line_invalid");
   const revisionToken = commandIdentity({ policy: "category-reclassification@1", category, target: input.target, currentDate: input.currentDate,
-    template: workspace.chartOfAccountsTemplate, periods: [...periods.entries()].sort(), currentStatus, history: entries.filter(e => entryIds.has(e.id)) });
-  return { categoryId: category.id, categoryRevision: category.revision, revisionToken, entryCount: entryIds.size, lineCount,
-    amount: { currency: workspace.functionalCurrency, minorUnits: total }, lockedEntryCount: lockedIds.size,
+    template: workspace.chartOfAccountsTemplate, periods: [...periods.entries()].sort(), currentStatus, history: entries.filter(e => e.lines.some(line => line.category?.categoryId === category.id)) });
+  return { categoryId: category.id, categoryRevision: category.revision, revisionToken, entryCount: entryIds.size, lineCount: selectedSources.length,
+    amount: { currency: workspace.functionalCurrency, minorUnits: total }, lockedEntryCount: lockedEntryIds.size,
     lockedAmount: { currency: workspace.functionalCurrency, minorUnits: lockedTotal },
     correctionDates: [...new Set(outstanding.map(b => b.accountingDate.slice(0, 7)))].sort().map(month => outstanding.filter(b => b.accountingDate.startsWith(month)).reduce((date, b) => b.accountingDate > date ? b.accountingDate : date, "")), buckets: outstanding };
 }
@@ -116,7 +121,6 @@ export async function confirmCategoryReclassification(store: AccountingStore, cl
     const lines: DraftJournalLine[] = [];
     const expenseEffects = new Map<string, number>();
     for (const bucket of preview.buckets.filter(b => b.accountingDate.slice(0, 7) === date.slice(0, 7))) {
-      if (bucket.ledgerAccountId === destinationId && input.target.kind === "category" && bucket.snapshot.nature === input.target.nature) continue;
       const expenseFactor = (input.target.kind === "category" && input.target.nature === "Expense" ? 1 : 0) - (bucket.snapshot.nature === "Expense" ? 1 : 0);
       for (const root of bucket.rootSources.filter(root => root.signedMinorUnits !== 0)) {
         const amount = Math.abs(root.signedMinorUnits);
