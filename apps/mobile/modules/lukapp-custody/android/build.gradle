@@ -1,0 +1,18 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+group = 'expo.modules.lukappcustody'
+version = '0.1.0'
+android {
+  namespace "expo.modules.lukappcustody"
+  defaultConfig { versionCode 1; versionName "0.1.0" }
+  buildFeatures { buildConfig true }
+  buildTypes {
+    debug { buildConfigField "boolean", "DEVELOPMENT_CUSTODY", "true" }
+    release { buildConfigField "boolean", "DEVELOPMENT_CUSTODY", "false" }
+  }
+}
+dependencies {
+  implementation "androidx.biometric:biometric:1.2.0-alpha04"
+}
