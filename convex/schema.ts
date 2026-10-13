@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { accessOperation, devicePlatform, deviceState } from "./deviceValidators";
 import {
   accountNature,
   normalSide,
@@ -10,6 +11,26 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  mobileDevices: defineTable({
+    tokenIdentifier: v.string(), sid: v.string(), publicKey: v.string(),
+    name: v.string(), platform: devicePlatform,
+    createdAt: v.number(), lastSeenAt: v.number(), state: deviceState,
+  }).index("by_identity_sid", ["tokenIdentifier", "sid"])
+    .index("by_identity_platform", ["tokenIdentifier", "platform"])
+    .index("by_identity_key", ["tokenIdentifier", "publicKey"])
+    .index("by_identity", ["tokenIdentifier"]),
+  deviceChallenges: defineTable({
+    tokenIdentifier: v.string(), sid: v.string(), operation: accessOperation,
+    deviceId: v.optional(v.id("mobileDevices")), publicKey: v.string(), payloadHash: v.string(),
+    nonce: v.string(), expiresAt: v.number(), consumedAt: v.optional(v.number()),
+  }).index("by_identity_sid", ["tokenIdentifier", "sid"]),
+  deviceSessionDenials: defineTable({ tokenIdentifier: v.string(), sid: v.string(), at: v.number() })
+    .index("by_identity_sid", ["tokenIdentifier", "sid"]),
+  deviceRecoveryBarriers: defineTable({ tokenIdentifier: v.string() }).index("by_identity", ["tokenIdentifier"]),
+  deviceRegistrationApprovals: defineTable({ tokenIdentifier: v.string(), sid: v.string() })
+    .index("by_identity_sid", ["tokenIdentifier", "sid"]),
+  deviceRecoveryEvents: defineTable({ tokenIdentifier: v.string(), eventId: v.string(), recoveredSid: v.string() })
+    .index("by_identity_event", ["tokenIdentifier", "eventId"]),
   personalWorkspaceOwners: defineTable({
     tokenIdentifier: v.string(),
     issuer: v.string(),
