@@ -33,6 +33,7 @@ export async function toProfile(
     workspaceId: profile.workspaceId,
     name: profile.name,
     productKind: profile.productKind,
+    ...(profile.classificationAnswers ? { classificationAnswers: profile.classificationAnswers } : {}),
     ledgerAccountId: profile.postingAccountId,
     opening: !profile.opening
       ? { status: "not_started" }
@@ -95,6 +96,8 @@ export async function toPostedJournalEntry(
   const view: PostedJournalEntry = {
     id: entry.id,
     policy: entry.policy,
+    ...(entry.cashCategoryInput ? { cashCategoryInput: entry.cashCategoryInput } : {}),
+    ...(entry.sourceExpenseEffects ? { sourceExpenseEffects: entry.sourceExpenseEffects } : {}),
     description: entry.description,
     accountingDate: entry.accountingDate,
     accountingPeriod: period,
@@ -114,6 +117,8 @@ export async function toPostedJournalEntry(
         line.ledgerAccountId,
       );
       return {
+        ...(line.category ? { category: line.category } : {}),
+        ...(line.categoryCorrection ? { categoryCorrection: line.categoryCorrection } : {}),
         ledgerAccountId: line.ledgerAccountId,
         ...(financialAccountProfileId !== undefined
           ? { financialAccountProfileId }

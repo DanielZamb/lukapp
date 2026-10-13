@@ -1,3 +1,5 @@
+import { createUserCategory, changeUserCategory, listUserCategories, categoryTotals, categoryNatureSuggestion } from "./categories";
+import { previewCategoryReclassification, confirmCategoryReclassification } from "./reclassification";
 import { createHouseholdWorkspace } from "./commands/createHouseholdWorkspace";
 import { listOwnedWorkspaces } from "./queries/listOwnedWorkspaces";
 import { recordAccountTransfer } from "./commands/recordAccountTransfer";
@@ -23,6 +25,13 @@ export function createAccountingCore(
   clock: AccountingClock = { now: () => new Date() },
 ): AccountingCore {
   return {
+    createUserCategory: input => createUserCategory(store, input),
+    suggestCategoryNature: input => categoryNatureSuggestion(store, input),
+    listUserCategories: input => listUserCategories(store, input),
+    categoryTotals: input => categoryTotals(store, input),
+    changeUserCategory: input => changeUserCategory(store, input),
+    previewCategoryReclassification: input => previewCategoryReclassification(store, input),
+    confirmCategoryReclassification: input => confirmCategoryReclassification(store, clock, input),
     createPersonalWorkspace: (input) =>
       createPersonalWorkspace(store, clock, input),
     createHouseholdWorkspace: (input) =>
