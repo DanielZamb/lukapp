@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { convexTest } from "convex-test";
 import type { UserIdentity } from "convex/server";
