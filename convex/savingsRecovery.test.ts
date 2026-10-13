@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import { convexAccounting, createOwnedWorkspace, createProfile, caught, reverse, ownerIdentity, septNow, lock } from "../src/accounting/convexHarness";
