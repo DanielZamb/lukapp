@@ -8,6 +8,7 @@ export const accountingErrorMessages = {
   category_confirmation_required: "Explicit confirmation required",
   category_suggestion_invalid: "This nature is not a current lexicon suggestion",
   category_merge_invalid: "Merge requires different active categories of the same nature",
+  reclassification_date_before_source: "Catch-up cannot precede a locked source Accounting Date",
   reclassification_stale: "Reclassification preview changed; preview again",
   reclassification_current_period_required: "Locked corrections require a current open Accounting Period",
   reclassification_target_invalid: "Reclassification target is inconsistent",

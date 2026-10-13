@@ -139,6 +139,8 @@ export type JournalLineView = {
 };
 
 export type PostedJournalEntry = {
+  cashCategoryInput?: { userCategoryId: string; categoryRevision?: number; ledgerAccountCode?: string };
+
   sourceExpenseEffects?: Array<{ sourceEntryId: string; expenseDeltaMinorUnits: number }>;
   id: string;
   policy: PostingPolicy;
@@ -224,6 +226,8 @@ export type DraftJournalLine = {
 
 /** What a command asks Posting to recognize. Posting adds period and provenance. */
 export type JournalEntryDraft = {
+  cashCategoryInput?: { userCategoryId: string; categoryRevision?: number; ledgerAccountCode?: string };
+
   sourceExpenseEffects?: Array<{ sourceEntryId: string; expenseDeltaMinorUnits: number }>;
   accountingDate: string;
   description: string;

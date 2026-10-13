@@ -35,9 +35,10 @@ export async function previewCategoryReclassification(store: AccountingStore, in
       periods.set(periodKey, status);
     }
     const locked = status === "locked";
+    if (locked && input.currentDate < entry.accountingDate) throw new AccountingError("reclassification_date_before_source");
     const date = locked ? input.currentDate : entry.accountingDate;
     const destinationPeriod = locked ? "catch-up" : periodKey;
-    const key = `${destinationPeriod}:${line.ledgerAccountId}:${line.category.nature}`;
+    const key = `${destinationPeriod}:${line.ledgerAccountId}:${commandIdentity(line.category)}`;
     const bucket = buckets.get(key) ?? { accountingDate: date, ledgerAccountId: line.ledgerAccountId, signedMinorUnits: 0, sources: [], rootSources: [], priorLockedPeriods: [], snapshot: line.category };
     bucket.accountingDate = date > bucket.accountingDate ? date : bucket.accountingDate;
     const signedMinorUnits = line.debitMinorUnits - line.creditMinorUnits;
@@ -50,7 +51,10 @@ export async function previewCategoryReclassification(store: AccountingStore, in
       : [{ entryId: entry.reversesEntryId ?? entry.id, lineNumber, signedMinorUnits }];
     for (const root of lineage) {
       const saved = bucket.rootSources.find(r => r.entryId === root.entryId && r.lineNumber === root.lineNumber);
-      if (saved) saved.signedMinorUnits += root.signedMinorUnits;
+      if (saved) {
+        saved.signedMinorUnits += root.signedMinorUnits;
+        if (!Number.isSafeInteger(saved.signedMinorUnits)) throw new AccountingError("journal_line_invalid");
+      }
       else bucket.rootSources.push({ ...root });
     }
     if (locked && !bucket.priorLockedPeriods.includes(periodKey)) bucket.priorLockedPeriods.push(periodKey);
@@ -59,15 +63,15 @@ export async function previewCategoryReclassification(store: AccountingStore, in
     if (locked) lockedIds.add(entry.id);
   }
   const currentStatus = await store.getAccountingPeriod(input.workspaceId, currentPeriod);
-  const outstanding = [...buckets.values()].filter(b => b.signedMinorUnits !== 0).sort((a, b) => commandIdentity(a).localeCompare(commandIdentity(b)));
+  const outstanding = [...buckets.values()].filter(b => b.rootSources.some(root => root.signedMinorUnits !== 0)).sort((a, b) => commandIdentity(a).localeCompare(commandIdentity(b)));
   if (outstanding.some(b => b.priorLockedPeriods.length) && currentStatus?.status !== "open")
     throw new AccountingError("reclassification_current_period_required");
   if (input.target.kind === "profile") {
     const openingDate = input.target.setup.accountingDate;
     if (outstanding.some(b => b.accountingDate < openingDate)) throw new AccountingError("activity_before_opening");
   }
-  const total = outstanding.reduce((n, b) => n + Math.abs(b.signedMinorUnits), 0);
-  const lockedTotal = outstanding.filter(b => b.priorLockedPeriods.length).reduce((n, b) => n + Math.abs(b.signedMinorUnits), 0);
+  const total = outstanding.reduce((n, b) => n + b.rootSources.reduce((sum, root) => sum + Math.abs(root.signedMinorUnits), 0), 0);
+  const lockedTotal = outstanding.filter(b => b.priorLockedPeriods.length).reduce((n, b) => n + b.rootSources.reduce((sum, root) => sum + Math.abs(root.signedMinorUnits), 0), 0);
   if (!Number.isSafeInteger(total)) throw new AccountingError("journal_line_invalid");
   const revisionToken = commandIdentity({ policy: "category-reclassification@1", category, target: input.target, currentDate: input.currentDate,
     template: workspace.chartOfAccountsTemplate, periods: [...periods.entries()].sort(), currentStatus, history: entries.filter(e => entryIds.has(e.id)) });
@@ -113,17 +117,18 @@ export async function confirmCategoryReclassification(store: AccountingStore, cl
     const expenseEffects = new Map<string, number>();
     for (const bucket of preview.buckets.filter(b => b.accountingDate.slice(0, 7) === date.slice(0, 7))) {
       if (bucket.ledgerAccountId === destinationId && input.target.kind === "category" && bucket.snapshot.nature === input.target.nature) continue;
-      const amount = Math.abs(bucket.signedMinorUnits);
-      const positive = bucket.signedMinorUnits > 0;
-      const correction = { reclassificationKey: input.idempotencyKey, sources: bucket.sources,
-        rootSources: bucket.rootSources.filter(root => root.signedMinorUnits !== 0), priorLockedPeriods: bucket.priorLockedPeriods.sort() };
       const expenseFactor = (input.target.kind === "category" && input.target.nature === "Expense" ? 1 : 0) - (bucket.snapshot.nature === "Expense" ? 1 : 0);
-      for (const root of correction.rootSources) expenseEffects.set(root.entryId,
-        (expenseEffects.get(root.entryId) ?? 0) + expenseFactor * root.signedMinorUnits);
-      lines.push({ ledgerAccountId: bucket.ledgerAccountId, debitMinorUnits: positive ? 0 : amount, creditMinorUnits: positive ? amount : 0,
-        category: bucket.snapshot, categoryCorrection: { ...correction, side: "reversing" } });
-      lines.push({ ledgerAccountId: destinationId, debitMinorUnits: positive ? amount : 0, creditMinorUnits: positive ? 0 : amount,
-        ...(input.target.kind === "category" ? { category: categorySnapshot(updated) } : {}), categoryCorrection: { ...correction, side: "replacement" } });
+      for (const root of bucket.rootSources.filter(root => root.signedMinorUnits !== 0)) {
+        const amount = Math.abs(root.signedMinorUnits);
+        const positive = root.signedMinorUnits > 0;
+        const correction = { reclassificationKey: input.idempotencyKey, sources: bucket.sources,
+          rootSources: [root], priorLockedPeriods: bucket.priorLockedPeriods.sort() };
+        expenseEffects.set(root.entryId, (expenseEffects.get(root.entryId) ?? 0) + expenseFactor * root.signedMinorUnits);
+        lines.push({ ledgerAccountId: bucket.ledgerAccountId, debitMinorUnits: positive ? 0 : amount, creditMinorUnits: positive ? amount : 0,
+          category: bucket.snapshot, categoryCorrection: { ...correction, side: "reversing" } });
+        lines.push({ ledgerAccountId: destinationId, debitMinorUnits: positive ? amount : 0, creditMinorUnits: positive ? 0 : amount,
+          ...(input.target.kind === "category" ? { category: categorySnapshot(updated) } : {}), categoryCorrection: { ...correction, side: "replacement" } });
+      }
     }
     if (!lines.length) continue;
     const catchUp = lines.some(line => line.categoryCorrection?.priorLockedPeriods.length);

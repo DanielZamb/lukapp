@@ -9,7 +9,7 @@
  *    `createHouseholdWorkspace` deliberately provisions another Workspace using
  *    a required creation idempotency key. `listOwnedWorkspaces` discovers current
  *    Owner memberships. Both kinds use the same accounting commands below.
- * 2. `setupFinancialAccount({ workspaceId, name, productKind, amount, accountingDate,
+ * 2. `setupFinancialAccount({ workspaceId, name, productKind, classificationAnswers, amount, accountingDate,
  *    description, idempotencyKey })` creates the profile and opening atomically.
  *    Use `recordOpeningPosition` with `financialAccountProfileId` for an existing
  *    profile. A zero amount establishes the date without a Journal Entry.
@@ -50,6 +50,7 @@ export type {
   CatalogAccountView,
   CatalogUse,
   FinancialAccountProductKind,
+  ProfileClassificationAnswers,
   FinancialAccountProfile,
   JournalLineView,
   LedgerAccountView,
@@ -62,3 +63,5 @@ export type {
   Workspace,
   WorkspaceKind,
 } from "./types";
+
+export type { UserCategory, CategorySnapshot, CategoryNature, CategorySelection, ReclassificationTarget, ReclassificationPreview, ReclassificationResult } from "./categoryTypes";

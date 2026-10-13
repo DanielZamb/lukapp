@@ -52,7 +52,7 @@ for (const template of ["co-puc-personal@1", "us-gaap-personal@1"]) for (const k
 test("suggestions require confirmation; ambiguous and unknown names resolve to Otros and post", async () => {
   const t = testdb(); const workspace = await createOwnedWorkspace(t); const daily = await createDaily(t, workspace.id);
   expect(await t.query(api.accounting.suggestCategoryNature, { workspaceId: workspace.id, name: "Arriéndo" })).toEqual({ policy: "category-es-en@1", suggestions: ["Expense", "Income"], requiresConfirmation: true });
-  for (const [name, answer] of [["ahorro", "stillMine"], ["inversión", "stillMine"], ["pago tarjeta", "payingDebt"]] satisfies Array<[string, "stillMine" | "payingDebt"]>) {
+  for (const [name, answer] of [["ahorro", "stillMine"], ["inversión", "stillMine"], ["pago tarjeta", "payingDebt"], ["Préstamo a Juan", "stillMine"], ["debt to Mom", "payingDebt"]] satisfies Array<[string, "stillMine" | "payingDebt"]>) {
     expect(await t.query(api.accounting.suggestCategoryNature, { workspaceId: workspace.id, name })).toMatchObject({ suggestions: [answer] });
     expect(await t.mutation(api.accounting.createUserCategory, { workspaceId: workspace.id, name, selection: { kind: "custom", answer, confirmation: "lexiconConfirmed" }, idempotencyKey: name })).toEqual({ kind: "profileRequired", answer });
   }
@@ -63,6 +63,9 @@ test("suggestions require confirmation; ambiguous and unknown names resolve to O
       account: { kind: "fallback", accountCode: "51959595", policy: "category-es-en@1", candidates: name === "seguro" ? ["lifeInsurance", "vehicleInsurance"] : [] } });
     expect((await t.mutation(api.accounting.recordCashExpense, { ...groceries(workspace.id, daily.id, { amount: 50, idempotencyKey: name }), userCategoryId: category.id })).lines[0]?.debitMinorUnits).toBe(50);
   }
+  const unknownIncome = await custom(t, workspace.id, "unlisted cash income", "Income");
+  expect(unknownIncome.classification).toMatchObject({ kind: "resolved", nature: "Income", account: { kind: "fallback", accountCode: "42959595", candidates: [] } });
+  expect((await t.mutation(api.accounting.recordCashIncome, { ...groceries(workspace.id, daily.id, { amount: 75, idempotencyKey: "income-fallback" }), userCategoryId: unknownIncome.id })).lines[1]).toMatchObject({ code: "42959595", creditMinorUnits: 75 });
   expect(await t.mutation(api.accounting.createUserCategory, { workspaceId: workspace.id, name: "unknown", selection: { kind: "custom", answer: "Income", confirmation: "lexiconConfirmed" }, idempotencyKey: "bad-confirm" }).catch(e => e)).toMatchObject({ data: { code: "category_suggestion_invalid" } });
 });
 
@@ -113,4 +116,27 @@ test("category reads and writes recheck current Workspace authority and device r
   expect((await t.query(api.accounting.listUserCategories, { workspaceId: workspace.id }))).toHaveLength(1);
   await t.run(async ctx => { const device = await ctx.db.query("mobileDevices").withIndex("by_identity", q => q.eq("tokenIdentifier", ownerIdentity.tokenIdentifier)).unique(); if (!device) throw new Error("Device missing"); await ctx.db.patch(device._id, { state: { kind: "revoked", at: Date.now(), reason: "owner" } }); });
   expect(await t.query(api.accounting.listUserCategories, { workspaceId: workspace.id }).catch(e => e)).toMatchObject({ data: { code: "device_revoked" } });
+});
+
+test("category retries preserve whether an advanced account and revision were submitted", async () => {
+  const t = testdb(); const w = await createOwnedWorkspace(t); const daily = await createDaily(t, w.id); const cat = await custom(t, w.id, "mercado");
+  const input = { ...groceries(w.id, daily.id, { amount: 100, idempotencyKey: "override" }), userCategoryId: cat.id, ledgerAccountCode: "512010" };
+  const original = await t.mutation(api.accounting.recordCashExpense, input);
+  expect(await t.mutation(api.accounting.recordCashExpense, { ...input, ledgerAccountCode: undefined }).catch(e => e)).toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  expect(await t.mutation(api.accounting.recordCashExpense, input)).toEqual({ ...original, replay: true });
+  const defaultInput = { ...input, ledgerAccountCode: undefined, idempotencyKey: "default" };
+  await t.mutation(api.accounting.recordCashExpense, defaultInput);
+  expect(await t.mutation(api.accounting.recordCashExpense, { ...defaultInput, ledgerAccountCode: "51959501" }).catch(e => e)).toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  expect(await t.mutation(api.accounting.recordCashExpense, { ...defaultInput, categoryRevision: 1 }).catch(e => e)).toMatchObject({ data: { code: "idempotency_key_conflict" } });
+});
+
+test("a committed category key cannot be reused to return a profile route", async () => {
+  const t = testdb(); const w = await createOwnedWorkspace(t);
+  const args = { workspaceId: w.id, name: "mine", selection: { kind: "custom" as const, answer: "Expense" as const, confirmation: "answered" as const }, idempotencyKey: "same" };
+  const created = await t.mutation(api.accounting.createUserCategory, args);
+  for (const answer of ["stillMine", "payingDebt"] as const) for (const confirmation of ["answered", "lexiconConfirmed"] as const) {
+    expect(await t.mutation(api.accounting.createUserCategory, { ...args, selection: { ...args.selection, answer, confirmation } }).catch(e => e)).toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  }
+  expect(await t.mutation(api.accounting.createUserCategory, args)).toEqual({ ...created, replay: true });
+  expect((await t.query(api.accounting.listUserCategories, { workspaceId: w.id }))).toHaveLength(1);
 });

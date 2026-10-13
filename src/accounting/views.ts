@@ -96,6 +96,7 @@ export async function toPostedJournalEntry(
   const view: PostedJournalEntry = {
     id: entry.id,
     policy: entry.policy,
+    ...(entry.cashCategoryInput ? { cashCategoryInput: entry.cashCategoryInput } : {}),
     ...(entry.sourceExpenseEffects ? { sourceExpenseEffects: entry.sourceExpenseEffects } : {}),
     description: entry.description,
     accountingDate: entry.accountingDate,

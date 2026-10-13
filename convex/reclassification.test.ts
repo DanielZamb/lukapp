@@ -205,3 +205,30 @@ test("equal-timestamp corrections and mirrors preserve per-source causal sequenc
     expect(rows).toEqual([{ sequence: 1, delta: -100, postedAt: Date.UTC(2026, 9, 13, 10) }, { sequence: 2, delta: 100, postedAt: Date.UTC(2026, 9, 13, 10) }]);
   } finally { vi.useRealTimers(); }
 });
+
+test("cancelling monthly balances retain each original source reduction and balanced provenance", async () => {
+  const { t, w, category, spend } = await fixture();
+  const a = await spend(100, "2026-09-24", "a");
+  await reverse(t, w.id, a.id, { accountingDate: "2026-10-01", idempotencyKey: "reverse-a" });
+  const b = await spend(100, "2026-10-01", "b");
+  const { preview, confirmed } = await classify(t, w.id, category.id, { kind: "category", nature: "Income", accountCode: "42201001" }, "net-zero", "2026-10-02");
+  const sourceEffects = await effects(t);
+  expect(sourceEffects.filter(e => e.sourceEntryId === b.id).reduce((n, e) => n + e.expenseDeltaMinorUnits, 0)).toBe(-100);
+  expect(sourceEffects.filter(e => e.sourceEntryId === a.id).reduce((n, e) => n + e.expenseDeltaMinorUnits, 0)).toBe(0);
+  expect(preview.correctionDates).toEqual(["2026-09-24", "2026-10-01"]);
+  expect(confirmed.correctionEntryIds).toHaveLength(2);
+  const entries = await t.query(api.accounting.listJournalEntries, { workspaceId: w.id });
+  expect(entries.filter(e => e.policy === "category-reclassification@1").sort((a, b) => a.accountingDate.localeCompare(b.accountingDate)).map(e => [e.accountingDate, e.amount.minorUnits])).toEqual([["2026-09-24", 100], ["2026-10-01", 200]]);
+  for (const e of entries.filter(e => e.policy === "category-reclassification@1"))
+    expect(e.lines.reduce((n, l) => n + l.debitMinorUnits - l.creditMinorUnits, 0)).toBe(0);
+  expect((await t.query(api.accounting.categoryTotals, { workspaceId: w.id })).map(r => [r.month, r.expense.minorUnits, r.income.minorUnits])).toEqual([[9, 0, -100], [10, 0, 0]]);
+});
+
+test("catch-up cannot precede any locked source even when an older period is open", async () => {
+  const { t, w, category, spend } = await fixture(); await spend(1, "2026-09-01", "older-open"); await spend(100, "2026-10-01", "locked-source");
+  await lock(t, w.id, { year: 2026, month: 10 });
+  const request = { workspaceId: w.id, categoryId: category.id, target: { kind: "category" as const, nature: "Income" as const, accountCode: "42201001" }, currentDate: "2026-09-30" };
+  expect(await t.query(api.accounting.previewCategoryReclassification, request).catch(e => e)).toMatchObject({ data: { code: "reclassification_date_before_source" } });
+  expect((await t.query(api.accounting.listJournalEntries, { workspaceId: w.id }))).toHaveLength(2);
+  expect(await effects(t)).toEqual([]);
+});

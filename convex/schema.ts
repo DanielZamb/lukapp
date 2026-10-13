@@ -10,6 +10,7 @@ import {
   productKind,
   profileClassificationAnswers,
   storedOpening,
+  cashCategoryInput,
 } from "./validators";
 
 export default defineSchema({
@@ -98,6 +99,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"), sourceEntryId: v.id("journalEntries"), journalEntryId: v.id("journalEntries"), expenseDeltaMinorUnits: v.number(), sourceSequence: v.number(),
   }).index("by_workspace_source", ["workspaceId", "sourceEntryId"]),
   journalEntries: defineTable({
+    cashCategoryInput: v.optional(cashCategoryInput),
     workspaceId: v.id("workspaces"),
     accountingDate: v.string(),
     periodYear: v.number(),

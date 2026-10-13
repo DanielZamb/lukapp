@@ -144,6 +144,7 @@ function sameDraft(
     entry.accountingDate === draft.accountingDate &&
     entry.description === draft.description &&
     entry.policy === draft.policy &&
+    commandIdentity(entry.cashCategoryInput) === commandIdentity(draft.cashCategoryInput) &&
     commandIdentity(entry.sourceExpenseEffects) === commandIdentity(draft.sourceExpenseEffects) &&
     entry.financialAccountProfileId === draft.financialAccountProfileId &&
     entry.reversesEntryId === draft.reversesEntryId &&

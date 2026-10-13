@@ -150,7 +150,10 @@ export const journalLine = v.object({
   creditMinorUnits: v.number(),
 });
 
+export const cashCategoryInput = v.object({ userCategoryId: v.string(), categoryRevision: v.optional(v.number()), ledgerAccountCode: v.optional(v.string()) });
+
 export const postedJournalEntry = v.object({
+  cashCategoryInput: v.optional(cashCategoryInput),
   id: v.string(),
   policy: postingPolicy,
   sourceExpenseEffects: v.optional(v.array(v.object({ sourceEntryId: v.string(), expenseDeltaMinorUnits: v.number() }))),

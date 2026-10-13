@@ -1,3 +1,4 @@
+import { commandIdentity } from "./commandIdentity";
 import { categorySnapshot, requireCategory } from "./categories";
 import type { CategorySnapshot } from "./categoryTypes";
 import { requireTemplateAccount } from "./chartOfAccounts";
@@ -38,8 +39,15 @@ export async function recordCashActivity(
   if (!profile || profile.workspaceId !== input.workspaceId) {
     throw new AccountingError("financial_account_profile_not_found");
   }
+  const cashCategoryInput = input.userCategoryId === undefined ? undefined : {
+    userCategoryId: input.userCategoryId,
+    ...(input.categoryRevision !== undefined ? { categoryRevision: input.categoryRevision } : {}),
+    ...(input.ledgerAccountCode !== undefined ? { ledgerAccountCode: input.ledgerAccountCode } : {}),
+  };
   let category: CategorySnapshot | undefined;
   const existing = await store.findJournalEntryByIdempotencyKey(input.workspaceId, input.idempotencyKey);
+  if (existing && commandIdentity(existing.cashCategoryInput) !== commandIdentity(cashCategoryInput))
+    throw new AccountingError("idempotency_key_conflict");
   if (input.userCategoryId !== undefined) {
     const saved = existing?.lines.find(line => line.category)?.category;
     if (existing) {
@@ -75,6 +83,7 @@ export async function recordCashActivity(
       description: input.description,
       idempotencyKey: input.idempotencyKey,
       policy: treatment.policy,
+      ...(cashCategoryInput ? { cashCategoryInput } : {}),
       financialAccountProfileId: profile.id,
       lines: [
         { ledgerAccountId: debitAccountId, debitMinorUnits: amount, creditMinorUnits: 0,

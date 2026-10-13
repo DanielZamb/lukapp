@@ -23,17 +23,17 @@ export async function createUserCategory(store: AccountingStore, input: CreateCa
   if (!name) throw new AccountingError("name_required");
   if (!input.idempotencyKey) throw new AccountingError("idempotency_key_required");
   const selection = input.selection;
-  if (selection.kind === "custom" && selection.confirmation === "lexiconConfirmed" &&
-      !suggestCategoryNature(name).suggestions.includes(selection.answer))
-    throw new AccountingError("category_suggestion_invalid");
-  if (selection.kind === "custom" && (selection.answer === "stillMine" || selection.answer === "payingDebt"))
-    return { kind: "profileRequired" as const, answer: selection.answer };
   const request = commandIdentity({ command: "create", name, selection });
   const receipt = await store.getCategoryReceipt(input.workspaceId, input.idempotencyKey);
   if (receipt) {
     if (receipt.request !== request) throw new AccountingError("idempotency_key_conflict");
     return { kind: "category" as const, category: receipt.category, replay: true };
   }
+  if (selection.kind === "custom" && selection.confirmation === "lexiconConfirmed" &&
+      !suggestCategoryNature(name).suggestions.includes(selection.answer))
+    throw new AccountingError("category_suggestion_invalid");
+  if (selection.kind === "custom" && (selection.answer === "stillMine" || selection.answer === "payingDebt"))
+    return { kind: "profileRequired" as const, answer: selection.answer };
   let classification: CategoryClassification;
   if (selection.kind === "preset") classification = resolvePreset(workspace.chartOfAccountsTemplate, selection.concept);
   else {
