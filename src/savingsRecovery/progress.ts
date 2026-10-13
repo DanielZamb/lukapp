@@ -32,17 +32,17 @@ export function sourcePaid(entryId: string, allocations: ContributionAllocation[
   return total(allocations.flatMap(allocation => allocation.sources.filter(source => source.entryId === entryId).map(source => source.principalMinor)));
 }
 
-export async function sourceExpense(ledger: RecoveryLedger, workspaceId: string, entryId: string, asKnownAt: number) {
+export async function sourceExpenseFacts(ledger: RecoveryLedger, workspaceId: string, entryId: string, asKnownAt: number) {
   const entry = await ledger.getJournalEntry(entryId);
-  if (!entry || entry.workspaceId !== workspaceId || entry.policy !== "cash-expense@1" || entry.postedAt > asKnownAt) return 0;
+  if (!entry || entry.workspaceId !== workspaceId || entry.policy !== "cash-expense@1" || entry.postedAt > asKnownAt) return { minorUnits: 0, prefixes: [] };
   const reversal = await ledger.findReversalOf(entryId);
-  if (reversal && reversal.postedAt <= asKnownAt) return 0;
+  if (reversal && reversal.postedAt <= asKnownAt) return { minorUnits: 0, prefixes: [] };
   const amounts = [];
   for (const line of entry.lines) {
     const account = await ledger.getLedgerAccount(line.ledgerAccountId);
     if (account?.nature === "Expense") amounts.push(line.debitMinorUnits);
   }
-  return (await expenseEligibility(ledger, { workspaceId, sourceEntryId: entryId, originalMinorUnits: total(amounts), asKnownAt })).minorUnits;
+  return (await expenseEligibility(ledger, { workspaceId, sourceEntryId: entryId, originalMinorUnits: total(amounts), asKnownAt }));
 }
 
 export async function planStatus(ledger: RecoveryLedger, snapshot: Snapshot, plan: Plan, allocations: ContributionAllocation[], asKnownAt: number) {
@@ -53,19 +53,16 @@ export async function planStatus(ledger: RecoveryLedger, snapshot: Snapshot, pla
   if (paid.amountMinor === total(plan.state.commitment.schedule.map(item => item.amountMinor))) return { kind: "Completed" as const, unsupportedEntryIds: [] };
   const unsupportedEntryIds = [];
   for (const source of plan.terms.sources) {
-    const eligible = await sourceExpense(ledger, plan.workspaceId, source.entryId, asKnownAt);
+    const sourceFacts = await sourceExpenseFacts(ledger, plan.workspaceId, source.entryId, asKnownAt);
     const recoveredElsewhere = sourcePaid(source.entryId, allocations.filter(allocation => allocation.planId !== plan.id));
-    let unsupported = source.principalMinor + recoveredElsewhere > eligible;
-    const effects = await ledger.listJournalSourceEffects(plan.workspaceId, source.entryId);
-    const changes = await Promise.all(effects.map(effect => ledger.getJournalEntry(effect.journalEntryId)));
-    for (const change of changes) {
-      if (unsupported || !change || change.postedAt < plan.state.commitment.activatedAt || change.postedAt > asKnownAt) continue;
-      const historical = await countedAllocations(ledger, snapshot, change.postedAt);
+    let unsupported = source.principalMinor + recoveredElsewhere > sourceFacts.minorUnits;
+    for (const change of sourceFacts.prefixes) {
+      if (unsupported || change.sourceSequence <= plan.state.commitment.sourceEffectCuts[source.entryId]) continue;
+      const historical = await countedAllocations(ledger, snapshot, change.recordedAt);
       const paidAtChange = [...historical.verified, ...historical.declared];
       if (paidFor(plan.id, paidAtChange).amountMinor === total(plan.state.commitment.schedule.map(item => item.amountMinor))) continue;
-      const eligibleAtChange = await sourceExpense(ledger, plan.workspaceId, source.entryId, change.postedAt);
       const recoveredOutsideAtChange = sourcePaid(source.entryId, paidAtChange.filter(allocation => allocation.planId !== plan.id));
-      unsupported = source.principalMinor + recoveredOutsideAtChange > eligibleAtChange;
+      unsupported = source.principalMinor + recoveredOutsideAtChange > change.eligibleMinorUnits;
     }
     if (unsupported) unsupportedEntryIds.push(source.entryId);
   }
@@ -101,4 +98,21 @@ export function validDate(date: string): string {
 export function remainingSources(plan: Plan, allocations: ContributionAllocation[]): SourceAllocation[] {
   return plan.terms.sources.map(source => ({ ...source, principalMinor: minor(source.principalMinor - sourcePaid(source.entryId,
     allocations.filter(allocation => allocation.planId === plan.id))) }));
+}
+
+export async function sourceExpense(ledger: RecoveryLedger, workspaceId: string, entryId: string, asKnownAt: number) {
+  return (await sourceExpenseFacts(ledger, workspaceId, entryId, asKnownAt)).minorUnits;
+}
+
+export function ownsSourceReservation(snapshot: Snapshot, plan: Plan, asKnownAt: number): boolean {
+  return plan.state.kind === "Activated" && plan.state.commitment.activatedAt <= asKnownAt &&
+    !snapshot.events.some(event => event.recordedAt <= asKnownAt && event.data.kind === "cancelled" && event.data.planId === plan.id);
+}
+
+export function requireExclusiveSources(snapshot: Snapshot, plan: Plan, asKnownAt: number) {
+  if (!ownsSourceReservation(snapshot, plan, asKnownAt)) throw new RecoveryError("recovery_plan_inactive");
+  for (const source of plan.terms.sources) {
+    if (snapshot.plans.some(other => other.id !== plan.id && ownsSourceReservation(snapshot, other, asKnownAt) &&
+      other.terms.sources.some(item => item.entryId === source.entryId))) throw new RecoveryError("recovery_source_reserved");
+  }
 }

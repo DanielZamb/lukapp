@@ -5,7 +5,7 @@ export const sourceAllocation = v.object({ entryId: v.string(), principalMinor: 
 export const planTerms = v.object({ name: v.string(), destinationProfileId: v.string(), sources: v.array(sourceAllocation),
   installmentCount: v.number(), installmentAmountMinor: v.number() });
 export const installment = v.object({ month: v.string(), amountMinor: v.number(), principalMinor: v.number(), premiumMinor: v.number() });
-export const commitment = v.object({ activatedOn: v.string(), activatedAt: v.number(), principalMinor: v.number(),
+export const commitment = v.object({ activatedOn: v.string(), activatedAt: v.number(), sourceEffectCuts: v.record(v.string(), v.number()), principalMinor: v.number(),
   impliedMonthlyRate: v.number(), schedule: v.array(installment) });
 export const planState = v.union(v.object({ kind: v.literal("Draft") }), v.object({ kind: v.literal("Activated"), commitment }));
 export const planFields = { workspaceId: v.string(), revision: v.number(), terms: planTerms, replacesPlanId: v.union(v.string(), v.null()), state: planState };

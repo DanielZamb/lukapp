@@ -10,12 +10,12 @@ The `personalWorkspaceOwners` table stores only tokenIdentifier, Clerk issuer, C
 
 The versioned `workspace-roles@2` policy defines these permissions:
 
-| Role | View | Prepare | Post | Correct | Manage periods | Administer membership |
-| --- | --- | --- | --- | --- | --- | --- |
-| Owner | yes | yes | yes | yes | yes | yes |
-| Accountant | yes | yes | yes | yes | yes | no |
-| Preparer | yes | yes | no | no | no | no |
-| Viewer | yes | no | no | no | no | no |
+| Role | View | Prepare | Post | Correct | Manage periods | Administer membership | Manage Recovery plans |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Owner | yes | yes | yes | yes | yes | yes | yes |
+| Accountant | yes | yes | yes | yes | yes | no | no |
+| Preparer | yes | yes | no | no | no | no | no |
+| Viewer | yes | no | no | no | no | no | no |
 
 Only Personal bootstrap and deliberate Household creation grant a membership, always Owner. See [the Workspace API contract](./WORKSPACES.md) for Household retry and discovery behavior. Other role presets are modeled for enforcement and deterministic tests; there is no public role-grant API. Core membership checks enforce permissions. Shared Posting enforces Post even when called internally. Reversal requires Correct and reaches Posting. Profile creation requires Prepare; period locking requires Manage periods.
 

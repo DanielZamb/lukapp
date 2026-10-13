@@ -2,7 +2,7 @@ import { requireWorkspace } from "../accounting/membership";
 import { periodFromAccountingDate } from "../accounting/period";
 import type { Actor } from "../accounting/types";
 import { minor, RecoveryError, text, total } from "./amounts";
-import { countedAllocations, paidFor, planStatus, sourcePaid } from "./progress";
+import { countedAllocations, ownsSourceReservation, paidFor, planStatus, sourcePaid } from "./progress";
 import type { AvailableCashInput, RecoveryLedger, RecoveryReadStore } from "./types";
 
 type QueryInput = { actor: Actor; workspaceId: string };
@@ -42,7 +42,7 @@ export function createRecoveryQueries(store: RecoveryReadStore, ledger: Recovery
       return expenses.map(expense => {
         const decision = result.snapshot.events.filter(event => event.data.kind === "candidateDecision" && event.data.entryId === expense.entryId).at(-1);
         const recoveredPrincipalMinor = sourcePaid(expense.entryId, result.all);
-        const reservedBy = result.plans.find(item => (item.status.kind === "Active" || item.status.kind === "Suspended") &&
+        const reservedBy = result.plans.find(item => ownsSourceReservation(result.snapshot, item.plan, result.asKnownAt) &&
           item.plan.terms.sources.some(source => source.entryId === expense.entryId))?.plan.id ?? null;
         return { expense, decision: decision?.data.kind === "candidateDecision" ? decision.data.decision : "eligible" as const,
           recoveredPrincipalMinor, remainingEligibleMinor: expense.reversal ? 0 : Math.max(0, expense.currentEligibleAmount.minorUnits - recoveredPrincipalMinor), reservedBy };
@@ -111,7 +111,7 @@ export function createRecoveryQueries(store: RecoveryReadStore, ledger: Recovery
       const candidates = expenses.filter(expense => !expense.reversal).filter(expense => {
         const decision = result.snapshot.events.filter(event => event.data.kind === "candidateDecision" && event.data.entryId === expense.entryId).at(-1);
         return (!decision || (decision.data.kind === "candidateDecision" && decision.data.decision === "eligible")) &&
-          !result.plans.some(item => (item.status.kind === "Active" || item.status.kind === "Suspended") &&
+          !result.plans.some(item => ownsSourceReservation(result.snapshot, item.plan, result.asKnownAt) &&
             item.plan.terms.sources.some(source => source.entryId === expense.entryId));
       }).sort((a, b) => a.accountingDate.localeCompare(b.accountingDate) || a.entryId.localeCompare(b.entryId))
         .map(expense => ({ entryId: expense.entryId, outstandingMinor: Math.max(0, expense.currentEligibleAmount.minorUnits - sourcePaid(expense.entryId, result.all)) }));

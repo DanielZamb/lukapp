@@ -189,7 +189,7 @@ export const postedExpense = v.object({
   entryId: v.string(), accountingDate: v.string(), description: v.string(), amount: money,
   currentEligibleAmount: money,
   sourceEffects: v.array(v.object({ workspaceId: v.string(), sourceEntryId: v.string(), journalEntryId: v.string(),
-    expenseDeltaMinorUnits: v.number(), accountingDate: v.string(), recordedAt: v.number(), reversedByEntryId: v.union(v.string(), v.null()) })),
+    expenseDeltaMinorUnits: v.number(), sourceSequence: v.number(), accountingDate: v.string(), recordedAt: v.number(), reversedByEntryId: v.union(v.string(), v.null()) })),
   expenseLines: v.array(v.object({ ledgerAccountId: v.string(), amount: money })),
   reversal: v.union(v.null(), v.object({ entryId: v.string(), accountingDate: v.string(), recordedAt: v.number() })),
 });

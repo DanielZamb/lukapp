@@ -112,7 +112,7 @@ export default defineSchema({
     .index("by_workspace_policy_date", ["workspaceId", "policy", "accountingDate"])
     .index("by_reverses", ["reversesEntryId"]),
   journalSourceEffects: defineTable({ workspaceId: v.id("workspaces"), sourceEntryId: v.id("journalEntries"),
-    journalEntryId: v.id("journalEntries"), expenseDeltaMinorUnits: v.number() })
+    journalEntryId: v.id("journalEntries"), expenseDeltaMinorUnits: v.number(), sourceSequence: v.number() })
     .index("by_workspace_source", ["workspaceId", "sourceEntryId"]),
   journalLines: defineTable({
     workspaceId: v.id("workspaces"),

@@ -3,7 +3,7 @@ import { periodFromAccountingDate } from "../accounting/period";
 import { canonicalJson } from "../access/protocol";
 import { allocate } from "./allocation";
 import { minor, RecoveryError, text, total } from "./amounts";
-import { countedAllocations, findPlan, planStatus, sourceExpense, sourcePaid, transferEvidence, validDate } from "./progress";
+import { countedAllocations, findPlan, ownsSourceReservation, planStatus, requireExclusiveSources, sourceExpense, sourcePaid, transferEvidence, validDate } from "./progress";
 import { freezeSchedule } from "./schedule";
 import type { AllocationIntent, CommandContext, ContributionAllocation, PlanTerms, RecoveryEventData, RecoveryLedger, RecoveryStore, Snapshot } from "./types";
 
@@ -50,6 +50,7 @@ export function createRecoveryCommands(store: RecoveryStore, ledger: RecoveryLed
       const status = await planStatus(ledger, snapshot, plan, paid, at);
       if (status.kind !== "Active" || plan.state.kind !== "Activated") throw new RecoveryError("recovery_plan_inactive");
       if (evidence.entry.accountingDate < plan.state.commitment.activatedOn) throw new RecoveryError("recovery_transfer_before_activation");
+      requireExclusiveSources(snapshot, plan, at);
       const destination = await ledger.getProfile(plan.terms.destinationProfileId);
       if (destination?.postingAccountId !== evidence.destinationAccountId) throw new RecoveryError("recovery_destination_mismatch");
       allocations.push(allocate(plan, item.amountMinor, paid, evidence.entry.accountingDate));
@@ -87,7 +88,10 @@ export function createRecoveryCommands(store: RecoveryStore, ledger: RecoveryLed
         if (!destination || destination.workspaceId !== input.workspaceId || account?.nature !== "Asset") throw new RecoveryError("recovery_destination_ineligible");
         const counted = await countedAllocations(ledger, snapshot, at);
         const paid = [...counted.verified, ...counted.declared];
+        const sourceEffectCuts: Record<string, number> = {};
         for (const source of plan.terms.sources) {
+          const effects = await ledger.listJournalSourceEffects(input.workspaceId, source.entryId);
+          sourceEffectCuts[source.entryId] = effects.reduce((sequence, effect) => Math.max(sequence, effect.sourceSequence), 0);
           const entry = await ledger.getJournalEntry(source.entryId);
           const eligible = await sourceExpense(ledger, input.workspaceId, source.entryId, at);
           const decision = snapshot.events.filter(event => event.data.kind === "candidateDecision" && event.data.entryId === source.entryId).at(-1);
@@ -95,11 +99,10 @@ export function createRecoveryCommands(store: RecoveryStore, ledger: RecoveryLed
             source.principalMinor > eligible - sourcePaid(source.entryId, paid)) throw new RecoveryError("recovery_source_ineligible");
           for (const other of snapshot.plans) {
             if (other.id === plan.id || !other.terms.sources.some(item => item.entryId === source.entryId)) continue;
-            const status = await planStatus(ledger, snapshot, other, paid, at);
-            if (status.kind === "Active" || status.kind === "Suspended") throw new RecoveryError("recovery_source_reserved");
+            if (ownsSourceReservation(snapshot, other, at)) throw new RecoveryError("recovery_source_reserved");
           }
         }
-        const commitment = freezeSchedule(plan.terms, today, at);
+        const commitment = { ...freezeSchedule(plan.terms, today, at), sourceEffectCuts };
         await store.updatePlan({ ...plan, revision: plan.revision + 1, state: { kind: "Activated", commitment } });
         return plan.id;
       });
@@ -137,11 +140,8 @@ export function createRecoveryCommands(store: RecoveryStore, ledger: RecoveryLed
     decideCandidate(input: CommandContext & { entryId: string; decision: "eligible" | "deferred" | "excluded" }) {
       return command("decideCandidate", input, async (snapshot, at) => {
         if (!(await sourceExpense(ledger, input.workspaceId, input.entryId, at))) throw new RecoveryError("recovery_source_ineligible");
-        const counted = await countedAllocations(ledger, snapshot, at);
-        for (const plan of snapshot.plans.filter(plan => plan.terms.sources.some(source => source.entryId === input.entryId))) {
-          const status = await planStatus(ledger, snapshot, plan, [...counted.verified, ...counted.declared], at);
-          if (status.kind === "Active" || status.kind === "Suspended") throw new RecoveryError("recovery_source_reserved");
-        }
+        if (snapshot.plans.some(plan => ownsSourceReservation(snapshot, plan, at) &&
+          plan.terms.sources.some(source => source.entryId === input.entryId))) throw new RecoveryError("recovery_source_reserved");
         return append(input, at, { kind: "candidateDecision", entryId: input.entryId, decision: input.decision });
       });
     },
@@ -183,11 +183,22 @@ export function createRecoveryCommands(store: RecoveryStore, ledger: RecoveryLed
         const plan = findPlan(snapshot, input.planId);
         if (plan.state.kind !== "Activated") throw new RecoveryError("recovery_plan_inactive");
         validDate(input.throughDate);
-        if (input.throughDate > today) throw new RecoveryError("recovery_opening_date_invalid");
+        if (input.throughDate >= plan.state.commitment.activatedOn) throw new RecoveryError("recovery_opening_date_invalid");
         if (snapshot.events.some(event => (event.data.kind === "openingProgress" && event.data.planId === plan.id) ||
           (event.data.kind === "contribution" && event.data.allocations.some(item => item.planId === plan.id)))) throw new RecoveryError("recovery_opening_already_established");
         const counted = await countedAllocations(ledger, snapshot, at);
         if ((await planStatus(ledger, snapshot, plan, [...counted.verified, ...counted.declared], at)).kind !== "Active") throw new RecoveryError("recovery_plan_inactive");
+        const destination = await ledger.getProfile(plan.terms.destinationProfileId);
+        const transfers = await ledger.listAccountTransferEntriesInRange(input.workspaceId, plan.state.commitment.activatedOn, today);
+        for (const transfer of transfers) {
+          if (await ledger.findReversalOf(transfer.id)) continue;
+          const outgoing = transfer.lines.find(line => line.creditMinorUnits > 0);
+          const incoming = transfer.lines.find(line => line.debitMinorUnits > 0);
+          if (!outgoing || !incoming || incoming.ledgerAccountId !== destination?.postingAccountId) continue;
+          const sourceAccount = await ledger.getLedgerAccount(outgoing.ledgerAccountId);
+          const destinationAccount = await ledger.getLedgerAccount(incoming.ledgerAccountId);
+          if (sourceAccount?.nature === "Asset" && destinationAccount?.nature === "Asset") throw new RecoveryError("recovery_opening_evidence_available");
+        }
         const allocation = allocate(plan, input.amountMinor, [], input.throughDate);
         return append(input, at, { kind: "openingProgress", planId: plan.id, throughDate: input.throughDate,
           provenance: text(input.provenance), evidenceUnavailable: input.evidenceUnavailable, allocation });

@@ -306,13 +306,13 @@ test("indexed linked source effects reduce original eligibility, mirror reversal
     const sourceEntryId = ctx.db.normalizeId("journalEntries", f.one.id);
     const journalEntryId = ctx.db.normalizeId("journalEntries", reduction.id);
     if (!workspaceId || !sourceEntryId || !journalEntryId) throw new Error("Invalid fixture ids");
-    await ctx.db.insert("journalSourceEffects", { workspaceId, sourceEntryId, journalEntryId, expenseDeltaMinorUnits: -40 });
+    await ctx.db.insert("journalSourceEffects", { workspaceId, sourceEntryId, journalEntryId, expenseDeltaMinorUnits: -40, sourceSequence: 1 });
   });
   const ledger = await ledgerBytes(f.t);
   const read = await f.t.query(api.accounting.listPostedExpenses, { ...f.ctx, from: "2026-09-01", through: "2026-09-30" });
   expect(read.map(row => [row.amount.minorUnits, row.currentEligibleAmount.minorUnits])).toEqual([[101, 61], [202, 202]]);
   expect(read[0].sourceEffects).toEqual([{ workspaceId: f.workspace.id, sourceEntryId: f.one.id, journalEntryId: reduction.id,
-    expenseDeltaMinorUnits: -40, accountingDate: "2026-09-24", recordedAt: septNow, reversedByEntryId: null }]);
+    expenseDeltaMinorUnits: -40, sourceSequence: 1, accountingDate: "2026-09-24", recordedAt: septNow, reversedByEntryId: null }]);
   expect((await f.progress()).plans[0]).toMatchObject({ plan: frozen, status: { kind: "Suspended", unsupportedEntryIds: [f.one.id] } });
   expect((await f.t.query(api.savingsRecovery.listCandidates, { ...f.ctx, from: "2026-09-01", through: "2026-09-30" })).map(row => row.remainingEligibleMinor)).toEqual([61, 202]);
   expect(await ledgerBytes(f.t)).toBe(ledger);
@@ -323,7 +323,7 @@ test("indexed linked source effects reduce original eligibility, mirror reversal
     const sourceEntryId = ctx.db.normalizeId("journalEntries", f.one.id);
     const journalEntryId = ctx.db.normalizeId("journalEntries", mirror.id);
     if (!workspaceId || !sourceEntryId || !journalEntryId) throw new Error("Invalid fixture ids");
-    await ctx.db.insert("journalSourceEffects", { workspaceId, sourceEntryId, journalEntryId, expenseDeltaMinorUnits: 40 });
+    await ctx.db.insert("journalSourceEffects", { workspaceId, sourceEntryId, journalEntryId, expenseDeltaMinorUnits: 40, sourceSequence: 2 });
   });
   const restored = await f.t.query(api.accounting.listPostedExpenses, { ...f.ctx, from: "2026-09-01", through: "2026-09-30" });
   expect(restored[0].currentEligibleAmount.minorUnits).toBe(101);
@@ -344,7 +344,8 @@ test("detected suspension stays historical after restoration and replacement use
       const sourceEntryId = ctx.db.normalizeId("journalEntries", f.one.id);
       const entry = ctx.db.normalizeId("journalEntries", journalEntryId);
       if (!workspaceId || !sourceEntryId || !entry) throw new Error("Invalid fixture ids");
-      await ctx.db.insert("journalSourceEffects", { workspaceId, sourceEntryId, journalEntryId: entry, expenseDeltaMinorUnits });
+      const prior = await ctx.db.query("journalSourceEffects").withIndex("by_workspace_source", q => q.eq("workspaceId", workspaceId).eq("sourceEntryId", sourceEntryId)).collect();
+      await ctx.db.insert("journalSourceEffects", { workspaceId, sourceEntryId, journalEntryId: entry, expenseDeltaMinorUnits, sourceSequence: prior.length + 1 });
     });
   }
   await effect(reduction.id, -40);
@@ -405,4 +406,69 @@ test("cancelled Draft cannot be edited or activated, and all new protected expor
     () => f.t.mutation(api.savingsRecovery.declareOpeningProgress, { ...cmd, planId: id, amountMinor: 1, throughDate: "2026-09-23", provenance: "Declared", evidenceUnavailable: true }),
   ];
   for (const call of calls) expect(await caught(call())).toMatchObject({ data: { code: "device_proof_required" } });
+});
+
+test.each(["contribution", "transfer"] as const)("completed reservation requires cancellation before reuse and cannot revive after %s reversal", async reversalKind => {
+  const f = await fixture();
+  const old = await f.draft({ ...f.terms, sources: [{ entryId: f.one.id, principalMinor: 50 }], installmentCount: 1, installmentAmountMinor: 50 }, "old-partial");
+  await f.activate(old);
+  const support = await f.transfer(50);
+  const contributionId = await f.record(support.id, old, 50);
+  expect((await f.progress()).plans[0].status.kind).toBe("Completed");
+  const next = await f.draft({ ...f.terms, sources: [{ entryId: f.one.id, principalMinor: 51 }], installmentCount: 1, installmentAmountMinor: 51 }, "leftover");
+  expect(await caught(f.activate(next))).toMatchObject({ data: { code: "recovery_source_reserved" } });
+  expect(await caught(f.t.mutation(api.savingsRecovery.decideCandidate, { ...f.ctx, entryId: f.one.id, decision: "excluded", idempotencyKey: "exclude-complete" }))).toMatchObject({ data: { code: "recovery_source_reserved" } });
+  await f.t.mutation(api.savingsRecovery.cancelPlan, { ...f.ctx, planId: old, reason: "Release completed reservation", idempotencyKey: "release" });
+  await f.activate(next, "activate-after-release");
+  if (reversalKind === "contribution") await f.t.mutation(api.savingsRecovery.reverseContribution, { ...f.ctx, contributionId, reason: "Correct old completed attribution", idempotencyKey: "undo-old" });
+  else await reverse(f.t, f.workspace.id, support.id, { accountingDate: "2026-09-24" });
+  expect((await f.progress()).plans.map(row => [row.status.kind, row.verified.amountMinor])).toEqual([["Cancelled", 0], ["Active", 0]]);
+  const fresh = await f.transfer(10, "fresh");
+  const ledger = await ledgerBytes(f.t);
+  expect(await caught(f.record(fresh.id, old, 5, "revive-old"))).toMatchObject({ data: { code: "recovery_plan_inactive" } });
+  await f.record(fresh.id, next, 10, "pay-new");
+  expect((await f.progress()).plans[1].verified.principalMinor).toBe(10);
+  expect(await ledgerBytes(f.t)).toBe(ledger);
+});
+
+test("opening progress rejects activation-day dates and claimable ledger evidence while historical imported window remains declared", async () => {
+  const f = await fixture(); const id = await f.draft(); await f.activate(id);
+  const args = { ...f.ctx, planId: id, amountMinor: 100, throughDate: "2026-09-24", evidenceUnavailable: true as const, provenance: "Declared cutover", idempotencyKey: "today-baseline" };
+  expect(await caught(f.t.mutation(api.savingsRecovery.declareOpeningProgress, args))).toMatchObject({ data: { code: "recovery_opening_date_invalid" } });
+  await f.transfer(100);
+  const before = await ledgerBytes(f.t);
+  expect(await caught(f.t.mutation(api.savingsRecovery.declareOpeningProgress, { ...args, throughDate: "2026-09-23", idempotencyKey: "available-evidence" }))).toMatchObject({ data: { code: "recovery_opening_evidence_available" } });
+  expect((await f.progress()).plans[0].declaredBaseline.amountMinor).toBe(0);
+  expect(await ledgerBytes(f.t)).toBe(before);
+  const historical = await fixture(); const historicalPlan = await historical.draft(); await historical.activate(historicalPlan);
+  await historical.transfer(100, "pre-activation-import", "2026-09-23");
+  await historical.t.mutation(api.savingsRecovery.declareOpeningProgress, { ...args, ...historical.ctx, planId: historicalPlan, throughDate: "2026-09-23", idempotencyKey: "historical-baseline" });
+  expect((await historical.progress()).plans[0]).toMatchObject({ verified: { amountMinor: 0 }, declaredBaseline: { amountMinor: 100 } });
+});
+
+test("equal Posted timestamps cannot erase unsupported source history without reconciliation", async () => {
+  const f = await fixture(); const id = await f.draft(); await f.activate(id);
+  const reduction = await f.t.mutation(api.accounting.recordCashIncome, { ...f.ctx, financialAccountProfileId: f.source.id,
+    amount: { currency: "COP", minorUnits: 40 }, accountingDate: "2026-09-24", description: "Equal timestamp effect", idempotencyKey: "equal-effect" });
+  async function effect(journalEntryId: string, expenseDeltaMinorUnits: number) {
+    await f.t.run(async ctx => {
+      const workspaceId = ctx.db.normalizeId("workspaces", f.workspace.id);
+      const sourceEntryId = ctx.db.normalizeId("journalEntries", f.one.id);
+      const entry = ctx.db.normalizeId("journalEntries", journalEntryId);
+      if (!workspaceId || !sourceEntryId || !entry) throw new Error("Invalid fixture ids");
+      const prior = await ctx.db.query("journalSourceEffects").withIndex("by_workspace_source", q => q.eq("workspaceId", workspaceId).eq("sourceEntryId", sourceEntryId)).collect();
+      await ctx.db.insert("journalSourceEffects", { workspaceId, sourceEntryId, journalEntryId: entry, expenseDeltaMinorUnits, sourceSequence: prior.length + 1 });
+    });
+  }
+  await effect(reduction.id, -40);
+  expect((await f.progress()).plans[0].status.kind).toBe("Suspended");
+  const mirror = await reverse(f.t, f.workspace.id, reduction.id, { accountingDate: "2026-09-24" });
+  expect(mirror.postedAt).toBe(reduction.postedAt);
+  await effect(mirror.id, 40);
+  expect((await f.progress()).plans[0].status.kind).toBe("Suspended");
+  const restored = await f.t.query(api.accounting.listPostedExpenses, { ...f.ctx, from: "2026-09-01", through: "2026-09-30" });
+  expect(restored[0].currentEligibleAmount.minorUnits).toBe(101);
+  const replacement = await f.t.mutation(api.savingsRecovery.replacePlan, { ...f.ctx, planId: id, terms: f.terms, reason: "Explicit restoration replacement", idempotencyKey: "same-time-replace" });
+  await f.activate(replacement);
+  expect((await f.progress()).plans.map(row => row.status.kind)).toEqual(["Cancelled", "Active"]);
 });

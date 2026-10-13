@@ -354,6 +354,7 @@ export type AccountingStore = {
   findReversalOf(entryId: string): Promise<StoredJournalEntry | undefined>;
   listJournalEntries(workspaceId: string): Promise<StoredJournalEntry[]>;
   listExpenseEntriesInRange(workspaceId: string, from: string, through: string): Promise<StoredJournalEntry[]>;
+  listAccountTransferEntriesInRange(workspaceId: string, from: string, through: string): Promise<StoredJournalEntry[]>;
   listJournalSourceEffects(workspaceId: string, sourceEntryId: string): Promise<JournalSourceEffect[]>;
   getAccountingPeriod(
     workspaceId: string,
@@ -482,4 +483,5 @@ export type PostedExpense = {
 export type JournalSourceEffect = {
   workspaceId: string; sourceEntryId: string; journalEntryId: string;
   expenseDeltaMinorUnits: Money["minorUnits"];
+  sourceSequence: number;
 };

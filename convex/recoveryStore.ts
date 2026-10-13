@@ -13,6 +13,7 @@ export function recoveryLedger(db: QueryCtx["db"]): RecoveryLedger {
     getWorkspace: store.getWorkspace, membershipRole: store.membershipRole,
     getJournalEntry: store.getJournalEntry, findReversalOf: store.findReversalOf,
     listJournalSourceEffects: store.listJournalSourceEffects,
+    listAccountTransferEntriesInRange: store.listAccountTransferEntriesInRange,
     getProfile: store.getProfile, getLedgerAccount: store.getLedgerAccount, getAccountingPeriod: store.getAccountingPeriod,
     expenses: input => listPostedExpenses(store, input), balances: input => balances(store, input),
   };

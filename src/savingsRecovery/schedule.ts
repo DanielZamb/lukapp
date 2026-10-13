@@ -2,7 +2,7 @@ import { nextPeriod, periodFromAccountingDate, firstDayOf } from "../accounting/
 import { minor, RecoveryError, total } from "./amounts";
 import type { FrozenCommitment, PlanTerms } from "./types";
 
-export function freezeSchedule(terms: PlanTerms, activatedOn: string, activatedAt: number): FrozenCommitment {
+export function freezeSchedule(terms: PlanTerms, activatedOn: string, activatedAt: number): Omit<FrozenCommitment, "sourceEffectCuts"> {
   const principalMinor = total(terms.sources.map(source => source.principalMinor));
   minor(principalMinor, true);
   const amount = minor(terms.installmentAmountMinor, true);

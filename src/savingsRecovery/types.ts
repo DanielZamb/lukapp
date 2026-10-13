@@ -18,6 +18,7 @@ export type Installment = {
 export type FrozenCommitment = {
   activatedOn: string;
   activatedAt: number;
+  sourceEffectCuts: Record<string, number>;
   principalMinor: MinorUnits;
   impliedMonthlyRate: number;
   schedule: Installment[];
@@ -53,7 +54,7 @@ export type Receipt = { fingerprint: string; resultId: string };
 export type Snapshot = { plans: Plan[]; events: RecoveryEvent[] };
 export type RecoveryLedger = Pick<AccountingStore,
   "getWorkspace" | "membershipRole" | "getJournalEntry" | "findReversalOf" |
-  "getProfile" | "getLedgerAccount" | "getAccountingPeriod" | "listJournalSourceEffects"> & {
+  "getProfile" | "getLedgerAccount" | "getAccountingPeriod" | "listJournalSourceEffects" | "listAccountTransferEntriesInRange"> & {
   expenses(input: { actor: Actor; workspaceId: string; from: string; through: string }): Promise<PostedExpense[]>;
   balances(input: { actor: Actor; workspaceId: string }): Promise<AccountBalance[]>;
 };
