@@ -100,7 +100,7 @@ test("product kinds classify under their PUC parent, which decides the nature", 
     productKind: "loan",
     parentCode: "210510",
     nature: "Liability",
-    policy: "financial-account-profile@2",
+    policy: "financial-account-profile@3",
   });
   expectAccountingError(
     () => classifyFinancialAccountProfile(template, "toString"),

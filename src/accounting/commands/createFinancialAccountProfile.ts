@@ -1,3 +1,4 @@
+import { commandIdentity } from "../commandIdentity";
 import {
   chartTemplate,
   nextAuxiliaryCode,
@@ -11,6 +12,7 @@ import type {
   Actor,
   FinancialAccountProfile,
   FinancialAccountProductKind,
+  ProfileClassificationAnswers,
 } from "../types";
 import { toProfile } from "../views";
 
@@ -22,6 +24,7 @@ export async function createFinancialAccountProfile(
     workspaceId: string;
     name: string;
     productKind: FinancialAccountProductKind;
+    classificationAnswers?: ProfileClassificationAnswers;
     idempotencyKey?: string;
   },
 ): Promise<FinancialAccountProfile> {
@@ -35,6 +38,11 @@ export async function createFinancialAccountProfile(
   if (!name) {
     throw new AccountingError("name_required");
   }
+  const classified = classifyFinancialAccountProfile(
+    chartTemplate(workspace.chartOfAccountsTemplate),
+    input.productKind,
+    input.classificationAnswers,
+  );
   if (input.idempotencyKey !== undefined) {
     if (!input.idempotencyKey)
       throw new AccountingError("idempotency_key_required");
@@ -43,15 +51,12 @@ export async function createFinancialAccountProfile(
       input.idempotencyKey,
     );
     if (existing) {
-      if (existing.name !== name || existing.productKind !== input.productKind)
+      if (existing.name !== name || existing.productKind !== input.productKind ||
+          commandIdentity(existing.classificationAnswers) !== commandIdentity(classified.answers))
         throw new AccountingError("idempotency_key_conflict");
       return toProfile(store, existing);
     }
   }
-  const classified = classifyFinancialAccountProfile(
-    chartTemplate(workspace.chartOfAccountsTemplate),
-    input.productKind,
-  );
   const postingAccount = await store.insertLedgerAccount({
     workspaceId: input.workspaceId,
     code: await nextAuxiliaryCode(
@@ -69,6 +74,7 @@ export async function createFinancialAccountProfile(
     name,
     productKind: classified.productKind,
     classificationPolicy: classified.policy,
+    ...(classified.answers ? { classificationAnswers: classified.answers } : {}),
     postingAccountId: postingAccount.id,
     ...(input.idempotencyKey !== undefined
       ? { setupIdempotencyKey: input.idempotencyKey }

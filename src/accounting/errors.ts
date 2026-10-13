@@ -1,4 +1,18 @@
 export const accountingErrorMessages = {
+  category_not_found: "User Category not found",
+  category_preset_unknown: "Category Preset not found",
+  category_unresolved: "Confirm the Category Nature before posting",
+  category_inactive: "Category is archived or converted",
+  category_nature_mismatch: "Category Nature does not match this flow",
+  category_revision_stale: "Category revision changed",
+  category_confirmation_required: "Explicit confirmation required",
+  category_suggestion_invalid: "This nature is not a current lexicon suggestion",
+  category_merge_invalid: "Merge requires different active categories of the same nature",
+  reclassification_stale: "Reclassification preview changed; preview again",
+  reclassification_current_period_required: "Locked corrections require a current open Accounting Period",
+  reclassification_target_invalid: "Reclassification target is inconsistent",
+
+  profile_classification_answers_required: "Required profile classification answers are missing or inconsistent",
   activity_before_opening: "Activity cannot precede the profile Start Tracking date",
   opening_already_recorded: "Reverse the active opening before recording a replacement; a zero opening requires its replacement key",
   opening_replacement_conflict: "The replacement must identify the current opening",

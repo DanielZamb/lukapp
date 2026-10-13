@@ -1,3 +1,4 @@
+import { categorySnapshot, categoryCorrection } from "./categoryAnnotationValidators";
 import { v } from "convex/values";
 
 export const accountNature = v.union(
@@ -23,6 +24,15 @@ export const productKind = v.union(
   v.literal("savingsAccount"),
   v.literal("creditCard"),
   v.literal("loan"),
+  v.literal("receivable"),
+  v.literal("investment"),
+  v.literal("personalDebt"),
+);
+
+export const profileClassificationAnswers = v.union(
+  v.object({ kind: v.literal("receivable"), security: v.union(v.literal("secured"), v.literal("unsecured")), counterpartyName: v.string() }),
+  v.object({ kind: v.literal("investment"), form: v.union(v.literal("termDeposit"), v.literal("fund")), counterpartyName: v.optional(v.string()) }),
+  v.object({ kind: v.literal("personalDebt"), counterpartyName: v.string() }),
 );
 
 export const postingPolicy = v.union(
@@ -31,6 +41,7 @@ export const postingPolicy = v.union(
   v.literal("reversal@1"),
   v.literal("account-transfer@1"),
   v.literal("opening-position@1"),
+  v.literal("category-reclassification@1"),
 );
 
 export const periodStatus = v.union(v.literal("open"), v.literal("locked"));
@@ -101,6 +112,7 @@ export const financialAccountProfile = v.object({
   workspaceId: v.string(),
   name: v.string(),
   productKind,
+  classificationAnswers: v.optional(profileClassificationAnswers),
   ledgerAccountId: v.string(),
   opening: openingStatus,
 });
@@ -127,6 +139,8 @@ export const catalogAccount = v.object({
 });
 
 export const journalLine = v.object({
+  category: v.optional(categorySnapshot),
+  categoryCorrection: v.optional(categoryCorrection),
   ledgerAccountId: v.string(),
   financialAccountProfileId: v.optional(v.string()),
   code: v.string(),
@@ -139,6 +153,7 @@ export const journalLine = v.object({
 export const postedJournalEntry = v.object({
   id: v.string(),
   policy: postingPolicy,
+  sourceExpenseEffects: v.optional(v.array(v.object({ sourceEntryId: v.string(), expenseDeltaMinorUnits: v.number() }))),
   description: v.string(),
   accountingDate: v.string(),
   accountingPeriod,
