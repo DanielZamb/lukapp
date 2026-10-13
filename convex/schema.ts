@@ -10,7 +10,13 @@ import {
   storedOpening,
 } from "./validators";
 
+import { planFields, eventFields } from "./recoveryValidators";
+
 export default defineSchema({
+  recoveryPlans: defineTable(planFields).index("by_workspace", ["workspaceId"]),
+  recoveryEvents: defineTable(eventFields).index("by_workspace", ["workspaceId"]),
+  recoveryReceipts: defineTable({ workspaceId: v.string(), key: v.string(), fingerprint: v.string(), resultId: v.string() })
+    .index("by_workspace_key", ["workspaceId", "key"]),
   mobileDevices: defineTable({
     tokenIdentifier: v.string(), sid: v.string(), publicKey: v.string(),
     name: v.string(), platform: devicePlatform,
@@ -103,7 +109,11 @@ export default defineSchema({
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"])
+    .index("by_workspace_policy_date", ["workspaceId", "policy", "accountingDate"])
     .index("by_reverses", ["reversesEntryId"]),
+  journalSourceEffects: defineTable({ workspaceId: v.id("workspaces"), sourceEntryId: v.id("journalEntries"),
+    journalEntryId: v.id("journalEntries"), expenseDeltaMinorUnits: v.number() })
+    .index("by_workspace_source", ["workspaceId", "sourceEntryId"]),
   journalLines: defineTable({
     workspaceId: v.id("workspaces"),
     journalEntryId: v.id("journalEntries"),

@@ -316,6 +316,24 @@ function readStore(db: ReadDb): ReadMethods {
       return docs.map((doc) => toEntry(doc, lines));
     },
 
+    async listJournalSourceEffects(workspaceId, sourceEntryId) {
+      const docs = await db.query("journalSourceEffects").withIndex("by_workspace_source", q => q
+        .eq("workspaceId", requiredId(db, "workspaces", workspaceId))
+        .eq("sourceEntryId", requiredId(db, "journalEntries", sourceEntryId))).collect();
+      return docs.map(({ workspaceId, sourceEntryId, journalEntryId, expenseDeltaMinorUnits }) =>
+        ({ workspaceId, sourceEntryId, journalEntryId, expenseDeltaMinorUnits }));
+    },
+
+    async listExpenseEntriesInRange(workspaceId, from, through) {
+      const docs = await db.query("journalEntries")
+        .withIndex("by_workspace_policy_date", q => q
+          .eq("workspaceId", requiredId(db, "workspaces", workspaceId))
+          .eq("policy", "cash-expense@1")
+          .gte("accountingDate", from).lte("accountingDate", through)).collect();
+      const entries = await Promise.all(docs.map(withLines));
+      return entries.filter((entry): entry is StoredJournalEntry => entry !== undefined);
+    },
+
     async getAccountingPeriod(workspaceId, period) {
       const doc = await findAccountingPeriod(
         db,

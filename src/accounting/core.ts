@@ -9,6 +9,7 @@ import { lockAccountingPeriod } from "./commands/lockAccountingPeriod";
 import { recordCashExpense } from "./commands/recordCashExpense";
 import { recordCashIncome } from "./commands/recordCashIncome";
 import { reversePostedEntry } from "./commands/reversePostedEntry";
+import { listPostedExpenses } from "./queries/listPostedExpenses";
 import { balances } from "./queries/balances";
 import { listCatalogAccounts } from "./queries/listCatalogAccounts";
 import { listFinancialAccountProfiles } from "./queries/listFinancialAccountProfiles";
@@ -45,6 +46,7 @@ export function createAccountingCore(
     recordCashIncome: (input) => recordCashIncome(store, clock, input),
     reversePostedEntry: (input) => reversePostedEntry(store, clock, input),
     listJournalEntries: (input) => listJournalEntries(store, input),
+    listPostedExpenses: (input) => listPostedExpenses(store, input),
     balances: (input) => balances(store, input),
     trialBalance: (input) => trialBalance(store, input),
     lockAccountingPeriod: (input) => lockAccountingPeriod(store, clock, input),

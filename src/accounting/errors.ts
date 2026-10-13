@@ -1,4 +1,5 @@
 export const accountingErrorMessages = {
+  journal_source_effect_invalid: "Journal source effect must reference valid current ledger facts",
   activity_before_opening: "Activity cannot precede the profile Start Tracking date",
   opening_already_recorded: "Reverse the active opening before recording a replacement; a zero opening requires its replacement key",
   opening_replacement_conflict: "The replacement must identify the current opening",
