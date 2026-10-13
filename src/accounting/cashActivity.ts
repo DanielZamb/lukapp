@@ -1,3 +1,6 @@
+import { commandIdentity } from "./commandIdentity";
+import { categorySnapshot, requireCategory } from "./categories";
+import type { CategorySnapshot } from "./categoryTypes";
 import { requireTemplateAccount } from "./chartOfAccounts";
 import { AccountingError } from "./errors";
 import { requireWorkspace } from "./membership";
@@ -36,11 +39,37 @@ export async function recordCashActivity(
   if (!profile || profile.workspaceId !== input.workspaceId) {
     throw new AccountingError("financial_account_profile_not_found");
   }
+  const cashCategoryInput = input.userCategoryId === undefined ? undefined : {
+    userCategoryId: input.userCategoryId,
+    ...(input.categoryRevision !== undefined ? { categoryRevision: input.categoryRevision } : {}),
+    ...(input.ledgerAccountCode !== undefined ? { ledgerAccountCode: input.ledgerAccountCode } : {}),
+  };
+  let category: CategorySnapshot | undefined;
+  const existing = await store.findJournalEntryByIdempotencyKey(input.workspaceId, input.idempotencyKey);
+  if (existing && commandIdentity(existing.cashCategoryInput) !== commandIdentity(cashCategoryInput))
+    throw new AccountingError("idempotency_key_conflict");
+  if (input.userCategoryId !== undefined) {
+    const saved = existing?.lines.find(line => line.category)?.category;
+    if (existing) {
+      if (!saved || saved.categoryId !== input.userCategoryId) throw new AccountingError("idempotency_key_conflict");
+      category = saved;
+    } else {
+      const record = await requireCategory(store, input.workspaceId, input.userCategoryId);
+      if (record.status !== "active") throw new AccountingError("category_inactive");
+      category = categorySnapshot(record);
+    }
+    if (category.nature !== (treatment.counterpart === "expense" ? "Expense" : "Income"))
+      throw new AccountingError("category_nature_mismatch");
+    if (input.categoryRevision !== undefined && category.revision !== input.categoryRevision)
+      throw new AccountingError("category_revision_stale");
+    category = { ...category, account: input.ledgerAccountCode !== undefined
+      ? { kind: "advanced", accountCode: input.ledgerAccountCode } : category.account };
+  } else if (input.categoryRevision !== undefined) throw new AccountingError("category_not_found");
   const counterpart = await requireTemplateAccount(
     store,
     workspace,
     treatment.counterpart,
-    input.ledgerAccountCode,
+    input.ledgerAccountCode ?? category?.account.accountCode,
   );
   const debitAccountId =
     treatment.direction === "out" ? counterpart.id : profile.postingAccountId;
@@ -54,10 +83,13 @@ export async function recordCashActivity(
       description: input.description,
       idempotencyKey: input.idempotencyKey,
       policy: treatment.policy,
+      ...(cashCategoryInput ? { cashCategoryInput } : {}),
       financialAccountProfileId: profile.id,
       lines: [
-        { ledgerAccountId: debitAccountId, debitMinorUnits: amount, creditMinorUnits: 0 },
-        { ledgerAccountId: creditAccountId, debitMinorUnits: 0, creditMinorUnits: amount },
+        { ledgerAccountId: debitAccountId, debitMinorUnits: amount, creditMinorUnits: 0,
+          ...(category && treatment.direction === "out" ? { category } : {}) },
+        { ledgerAccountId: creditAccountId, debitMinorUnits: 0, creditMinorUnits: amount,
+          ...(category && treatment.direction === "in" ? { category } : {}) },
       ],
     },
   });

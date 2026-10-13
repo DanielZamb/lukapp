@@ -1,4 +1,5 @@
 import { providerActor, providerState, providerTarget } from "./providerValidators";
+import { categoryFields, userCategory, categorySnapshot, categoryCorrection } from "./categoryAnnotationValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { accessOperation, devicePlatform, deviceState } from "./deviceValidators";
@@ -8,7 +9,9 @@ import {
   periodStatus,
   postingPolicy,
   productKind,
+  profileClassificationAnswers,
   storedOpening,
+  cashCategoryInput,
 } from "./validators";
 
 export default defineSchema({
@@ -80,11 +83,15 @@ export default defineSchema({
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_code", ["workspaceId", "code"]),
+  userCategories: defineTable(categoryFields).index("by_workspace", ["workspaceId"]),
+  categoryReceipts: defineTable({ workspaceId: v.string(), idempotencyKey: v.string(), request: v.string(), category: userCategory,
+    correctionEntryIds: v.array(v.string()), financialAccountProfileId: v.optional(v.string()) }).index("by_workspace_key", ["workspaceId", "idempotencyKey"]),
   financialAccountProfiles: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     productKind,
     classificationPolicy: v.string(),
+    classificationAnswers: v.optional(profileClassificationAnswers),
     postingAccountId: v.id("ledgerAccounts"),
     setupIdempotencyKey: v.optional(v.string()),
     opening: v.optional(storedOpening),
@@ -99,7 +106,11 @@ export default defineSchema({
     idempotencyKey: v.string(),
     opening: storedOpening,
   }).index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"]),
+  journalSourceEffects: defineTable({
+    workspaceId: v.id("workspaces"), sourceEntryId: v.id("journalEntries"), journalEntryId: v.id("journalEntries"), expenseDeltaMinorUnits: v.number(), sourceSequence: v.number(),
+  }).index("by_workspace_source", ["workspaceId", "sourceEntryId"]),
   journalEntries: defineTable({
+    cashCategoryInput: v.optional(cashCategoryInput),
     workspaceId: v.id("workspaces"),
     accountingDate: v.string(),
     periodYear: v.number(),
@@ -107,6 +118,7 @@ export default defineSchema({
     description: v.string(),
     idempotencyKey: v.string(),
     policy: postingPolicy,
+    sourceExpenseEffects: v.optional(v.array(v.object({ sourceEntryId: v.string(), expenseDeltaMinorUnits: v.number() }))),
     financialAccountProfileId: v.optional(v.id("financialAccountProfiles")),
     reversesEntryId: v.optional(v.id("journalEntries")),
     postedBy: v.string(),
@@ -116,6 +128,8 @@ export default defineSchema({
     .index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"])
     .index("by_reverses", ["reversesEntryId"]),
   journalLines: defineTable({
+    category: v.optional(categorySnapshot),
+    categoryCorrection: v.optional(categoryCorrection),
     workspaceId: v.id("workspaces"),
     journalEntryId: v.id("journalEntries"),
     lineNumber: v.number(),
