@@ -5,7 +5,7 @@ import { assertCategoryAccount, categoryPolicy, resolveCategoryAccount, resolveP
 import type { AccountingStore } from "./types";
 import type { CategoryScope, CategorySnapshot, CreateCategoryInput, ChangeCategoryInput, UserCategory, CategoryClassification } from "./categoryTypes";
 
-export async function requireCategory(store: AccountingStore, workspaceId: string, id: string): Promise<UserCategory> {
+export async function requireCategory(store: Pick<AccountingStore, "getCategory">, workspaceId: string, id: string): Promise<UserCategory> {
   const category = await store.getCategory(id);
   if (!category || category.workspaceId !== workspaceId) throw new AccountingError("category_not_found");
   return category;

@@ -26,10 +26,11 @@ export type AccountingTest = ReturnType<typeof convexAccounting>;
 
 export function convexAccounting(
   modules: Record<string, () => Promise<unknown>>,
+  transactionLimits = false,
 ) {
   vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", ownerIdentity.subject);
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", ownerIdentity.issuer);
-  const base = convexTest(schema, modules);
+  const base = convexTest({ schema, modules, transactionLimits });
   let registration: Promise<{ key: Awaited<ReturnType<typeof fixtureKey>>; device: Awaited<ReturnType<typeof registerFixture>> }> | undefined;
   const register = () => registration ??= (async () => {
     const raw = base.withIdentity({ ...ownerIdentity, sid: "sess_fixture", sts: "active" });

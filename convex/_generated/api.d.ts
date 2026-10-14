@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Generated `api` utility.
  *
@@ -13,6 +12,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as budget from "../budget.js";
 import type * as savingsRecovery from "../savingsRecovery.js";
 import type * as accounting from "../accounting.js";
 import type * as authConnection from "../authConnection.js";
@@ -40,6 +40,7 @@ import type * as validators from "../validators.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  budget: typeof budget;
   savingsRecovery: typeof savingsRecovery;
   accounting: typeof accounting;
   authConnection: typeof authConnection;
