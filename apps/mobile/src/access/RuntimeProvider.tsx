@@ -44,7 +44,7 @@ WebBrowser.maybeCompleteAuthSession();
 function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixture }: PropsWithChildren<{
   rpc: Rpc; session: string | null; online: boolean; signOut: () => Promise<void>; signIn: () => Promise<void>; fixture: boolean;
 }>) {
-  const [failure, setFailure] = useState(false);
+  const [failure, setFailure] = useState<"storage" | "sign-in" | null>(null);
   const runtime = useMemo(() => {
     let clear = () => {};
     const controller = new AccessController({
@@ -61,7 +61,7 @@ function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixtu
   useEffect(() => {
     let stopped = false;
     void runtime.controller.start().then(() => { if (!stopped) runtime.controller.context(session, online); })
-      .catch(() => { if (!stopped) setFailure(true); });
+      .catch(() => { if (!stopped) setFailure("storage"); });
     const native = custody.addListener("change", () => runtime.controller.nativeChanged());
     const app = AppState.addEventListener("change", value => {
       if (value === "background" || (value === "inactive" && runtime.controller.getSnapshot().kind !== "checking")) runtime.controller.suspend();
@@ -89,15 +89,16 @@ function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixtu
             <Screen>
               <Header title="Lukapp" />
               <Copy title={state.kind === "signed-out" ? "Your money, clearly" : "Your money stays private"}
-                detail={failure ? "This device could not open secure storage. Use a supported device with strong biometrics." :
+                detail={failure === "storage" ? "This device could not open secure storage. Use a supported device with strong biometrics." :
+                  failure === "sign-in" ? "Google sign-in did not finish. Try again online." :
                   state.kind === "wiping" ? "Removing local input and signing out." :
                   state.kind === "signed-out" ? "Sign in to connect your money securely." :
                   !online ? "Reconnect before unlocking. Your saved Drafts stay on this device." :
                   state.kind === "blocked" ? "Access needs a fresh online check. Unlock again or sign in." :
                   state.kind === "checking" ? "Checking your access." : "Unlock with your biometrics to continue."} />
-              {state.kind === "signed-out" ? <PrimaryButton label={fixture ? "Sign in synthetic Owner" : "Continue with Google"} onPress={() => { void signIn().catch(() => setFailure(true)); }} /> :
+              {state.kind === "signed-out" ? <PrimaryButton label={fixture ? "Sign in synthetic Owner" : "Continue with Google"} onPress={() => { setFailure(null); void signIn().catch(() => setFailure("sign-in")); }} /> :
                 <PrimaryButton label={state.kind === "blocked" && state.code === "full_sign_in_required" ? "Full sign-in" : "Unlock"} loading={state.kind === "checking" || state.kind === "wiping" || state.kind === "starting"}
-                  disabled={!online || failure} onPress={() => {
+                  disabled={!online || failure === "storage"} onPress={() => {
                     if (state.kind === "blocked" && state.code === "full_sign_in_required") void runtime.controller.wipe();
                     else void runtime.controller.admit();
                   }} />}

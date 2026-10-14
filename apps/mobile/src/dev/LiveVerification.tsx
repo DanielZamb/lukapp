@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Platform } from "react-native";
 import { useRuntime } from "../access/RuntimeProvider";
 import { custody } from "../access/native";
@@ -9,10 +9,12 @@ export function LiveVerification() {
   const { controller, fixture } = useRuntime();
   const [message, setMessage] = useState("Coordinator manifest required. Deployment assertions require independent receipts.");
   const [busy, setBusy] = useState(false);
+  const running = useRef(false);
   if (!__DEV__ || fixture) return null;
   const platform = Platform.OS === "ios" ? "ios" : "android";
   const run = async () => {
-    if (busy) return;
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     const expected = controller.getSnapshot();
     try {
@@ -26,7 +28,7 @@ export function LiveVerification() {
       if (controller.getSnapshot() === expected) setMessage(saved.ok ? "Scenario " + receipt.scenarioId + " · " + receipt.status + " · assertions recorded" : "Scenario finished; receipt transport unavailable");
     } catch {
       if (controller.getSnapshot() === expected) setMessage("Verification stopped. Check the approved manifest and current online admission.");
-    } finally { setBusy(false); }
+    } finally { running.current = false; setBusy(false); }
   };
   return <>
     <Copy title="Real-provider public requests" detail="Development only. Explicitly runs the coordinator's approved financial scenario using this app's Clerk client, native key and normal public API." />
