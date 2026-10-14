@@ -1,0 +1,16 @@
+{
+  "validationOnly": true,
+  "kind": "dryRunOnly",
+  "exitStatus": 0,
+  "generated": 8457,
+  "executed": 0,
+  "reused": 0,
+  "statuses": null,
+  "survivors": null,
+  "score": null,
+  "mutationGatePassed": false,
+  "reason": "Only initial unmutated test execution; no mutant outcomes observed",
+  "manifestDigest": "60f90f07bda03232c4d68bb49352ff6c78c7b50ff6cc7a7e84a35cb9f2c72a0d",
+  "changedDuringRun": false,
+  "rawLogSha256": "c332ac6389a1a9f83946f56ee09f955f00e7435fbdfd19c5b62d199cfffab64c"
+}
