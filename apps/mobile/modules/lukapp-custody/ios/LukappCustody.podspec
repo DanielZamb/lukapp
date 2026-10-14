@@ -10,6 +10,8 @@ Pod::Spec.new do |s|
   s.source = { :path => '.' }
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
+  s.dependency 'ExpoSQLite', '57.0.4'
+  s.pod_target_xcconfig = { 'OTHER_SWIFT_FLAGS' => '$(inherited) -Xcc -DSQLITE_HAS_CODEC=1' }
   s.source_files = '**/*.swift'
   s.swift_version = '5.9'
 end

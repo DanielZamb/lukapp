@@ -5,13 +5,15 @@ import { custody } from "../access/native";
 import { draftStore } from "../modules/local-entry-drafts/store";
 import { candidateStore } from "../modules/notification-intake/store";
 import { today } from "../modules/local-entry-drafts/money";
+import { LiveVerification } from "../dev/LiveVerification";
 import { Copy, Header, Screen, SecondaryButton } from "../ui";
 
 export default function NativeProof() {
   const { fixture } = useRuntime();
   const access = useAccess();
   const [result, setResult] = useState("");
-  if (!__DEV__ || !fixture || access.kind !== "ready") return null;
+  if (!__DEV__ || access.kind !== "ready") return null;
+  if (!fixture) return <Screen><Header title="Development public verification" back={{ label: "Back", onPress: () => router.back() }} /><LiveVerification /></Screen>;
   const generation = access.contact.generation;
   const workspaceId = access.workspaceId;
   const drafts = draftStore(custody, generation, workspaceId);

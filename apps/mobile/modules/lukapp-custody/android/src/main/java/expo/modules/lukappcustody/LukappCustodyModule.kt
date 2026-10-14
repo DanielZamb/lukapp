@@ -315,34 +315,68 @@ class LukappCustodyModule : Module() {
     val now = (contactTime ?: error("input_not_admitted")) + SystemClock.elapsedRealtime() - (contactUptime ?: error("input_not_admitted"))
     val clock = file("clock")
     if (clock.exists() && now < clock.readText().toLong()) {
-      for (item in requireNotNull(root.listFiles()).filter { it.extension == "db" }) check(item.delete()) { "input_deletion_failed" }
-      keys.deleteEntry(inputAlias); error("input_clock_uncertain")
+      error("input_clock_uncertain")
     }
     write(clock, now.toString().toByteArray()); return now
   }
+  private fun databaseKey(): ByteArray {
+    val target = file("sqlcipher-key")
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    if (target.exists()) {
+      check(keys.containsAlias(inputAlias)) { "input_key_lost" }
+      val bytes = target.readBytes()
+      check(bytes.size >= 28) { "input_key_lost" }
+      cipher.init(Cipher.DECRYPT_MODE, inputKey(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
+      cipher.updateAAD(("sqlcipher-key:" + mode).toByteArray(Charsets.UTF_8))
+      return cipher.doFinal(bytes.copyOfRange(12, bytes.size)).also { check(it.size == 32) { "input_key_lost" } }
+    }
+    check(requireNotNull(root.listFiles()).none { it.extension == "sqlcipher" }) { "input_key_lost" }
+    check(keys.containsAlias(inputAlias) || requireNotNull(root.listFiles()).none { it.extension == "db" }) { "input_key_lost" }
+    val bytes = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+    try {
+      cipher.init(Cipher.ENCRYPT_MODE, inputKey())
+      cipher.updateAAD(("sqlcipher-key:" + mode).toByteArray(Charsets.UTF_8))
+      write(target, cipher.iv + cipher.doFinal(bytes))
+      return bytes
+    } catch (error: Exception) { bytes.fill(0); throw error }
+  }
+  private fun database(owner: String, scope: String): SqlCipherInput {
+    val legacy = store(owner, scope)
+    val key = databaseKey()
+    val database = try { SqlCipherInput(File(legacy.parentFile, legacy.nameWithoutExtension + ".sqlcipher"), owner + ":" + scope, key) }
+      finally { key.fill(0) }
+    try {
+      if (legacy.exists()) {
+        val bytes = legacy.readBytes()
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, inputKey(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
+        cipher.updateAAD((owner + ":" + scope).toByteArray(Charsets.UTF_8))
+        val decrypted = cipher.doFinal(bytes.copyOfRange(12, bytes.size))
+        try {
+          val array = JSONArray(String(decrypted, Charsets.UTF_8))
+          database.save((0 until array.length()).map { array.getJSONObject(it) }, importing = true)
+        } finally { decrypted.fill(0) }
+        check(legacy.delete()) { "input_deletion_failed" }
+      }
+      return database
+    } catch (error: Exception) { database.close(); throw error }
+  }
   private fun read(owner: String, scope: String): MutableList<JSONObject> {
     val now = retentionTime()
-    val target = store(owner, scope)
-    if (!target.exists()) return mutableListOf()
-    val bytes = target.readBytes()
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.DECRYPT_MODE, inputKey(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
-    cipher.updateAAD((owner + ":" + scope).toByteArray())
-    val array = JSONArray(String(cipher.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8))
-    val all = (0 until array.length()).map { array.getJSONObject(it) }
-    var changed = false
-    val kept = all.map {
-      if ((now < it.getLong("createdAt") || now >= it.getLong("expiresAt")) && !it.isNull("content")) {
-        changed = true; it.put("content", JSONObject.NULL)
-      } else it
-    }.toMutableList()
-    if (changed) save(kept, owner, scope)
-    return kept
+    return database(owner, scope).use { database ->
+      val all = database.read()
+      var changed = false
+      val kept = all.map {
+        if ((now < it.getLong("createdAt") || now >= it.getLong("expiresAt")) && !it.isNull("content")) {
+          changed = true; it.put("content", JSONObject.NULL)
+        } else it
+      }.toMutableList()
+      if (changed) database.save(kept)
+      kept
+    }
   }
   private fun save(records: List<JSONObject>, owner: String, scope: String) {
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.ENCRYPT_MODE, inputKey()); cipher.updateAAD((owner + ":" + scope).toByteArray())
-    write(store(owner, scope), cipher.iv + cipher.doFinal(JSONArray(records).toString().toByteArray(Charsets.UTF_8)))
+    database(owner, scope).use { it.save(records) }
   }
   private fun write(target: File, bytes: ByteArray) {
     val atomic = AtomicFile(target)

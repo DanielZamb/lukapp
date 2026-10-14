@@ -15,7 +15,7 @@ after token retrieval before HTTP dispatch. The WebSocket client supplies only
 connection/authentication state, with no financial subscriptions.
 
 `modules/lukapp-custody` owns the installation P-256 private key, biometric
-enrollment sentinel, AES-GCM input encryption key, monotonic lock window and
+enrollment sentinel, SQLCipher database key, monotonic lock window and
 durable wipe markers. JavaScript receives only public keys and signatures. It
 cannot export the private signing key. Native signing and input methods check the
 generation, foreground admission, current enrollment and pending wipe.
@@ -60,10 +60,16 @@ a local completion gate or call simulated responses physical evidence.
 
 ## Local input and retry custody
 
-Drafts and Candidates have separate native encrypted files and ownership gates.
-The files are AES-GCM encrypted device-only storage, not an offline ledger or a
-financial read cache. There is no capture/parser, sync, transfer, backup or
-automatic posting queue. Encryption keys remain in native device-only storage.
+Drafts and Candidates have separate native SQLCipher databases and ownership
+gates, including an encrypted owner/Workspace identity. These device-only input
+databases hold neither an offline ledger nor a financial read cache. There is no capture/parser, sync, transfer, backup or
+automatic posting queue. Database keys remain native: device-only Keychain on iOS, a random database key
+wrapped by non-exportable AndroidKeyStore AES on Android. Signing key custody is
+separate. Connections close after each operation, with cipher_memory_security,
+in-memory temporary storage and secure_delete enabled. Earlier AES-GCM files
+migrate in a transaction, preserving IDs, expiry and deletion tombstones; only
+a successful import removes the old encrypted file. Wipe covers databases and
+all journals, wrapped keys and legacy files.
 Retention uses an admitted server heartbeat time plus native monotonic elapsed
 time. A persisted high-water mark rejects clock rollback; cold launch requires a
 new online admission. Editing, retry and cached provider state cannot renew the

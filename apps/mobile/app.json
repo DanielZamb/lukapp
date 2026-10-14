@@ -19,9 +19,20 @@
       "expo-router",
       "expo-font",
       "expo-dev-client",
-      ["expo-local-authentication", { "faceIDPermission": "Use Face ID to unlock your money and local drafts." }],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to unlock your money and local drafts."
+        }
+      ],
       "expo-secure-store",
-      "@clerk/expo"
+      "@clerk/expo",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

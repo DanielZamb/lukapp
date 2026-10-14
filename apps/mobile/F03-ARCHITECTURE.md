@@ -23,7 +23,7 @@ Posted owner. A Workspace-ready response alone does not mean setup is complete.
 ## Sketch
 
 - Native custody owns the installation P-256 key, separate enrollment sentinel,
-  AES-GCM input keys, native monotonic lock window, generation and wipe marker.
+  SQLCipher database keys, native monotonic lock window, generation and wipe marker.
 - The access controller owns provider-first network sequencing, enrollment,
   recovery, an asynchronous epoch, and current Workspace publication.
 - Manual Draft and Candidate owners have separate encrypted namespaces and
@@ -70,3 +70,25 @@ Draft or duplicated accounting logic.
 Simulator keys and controlled provider transports must be explicitly labelled.
 Production Secure Enclave absence fails closed. Physical/hardware proof and live
 provider/deployment observations remain separate from local fixture evidence.
+
+## SQLCipher continuation
+
+Two local designs were compared against SEN-45 and the native handoff: Expo
+JavaScript SQLite with a passed database key, and native SQLCipher connections
+behind the existing custody boundary. Native connections preserve ownership of
+keys and admission in one place; no decrypted page cache survives an operation.
+iOS uses the pinned ExpoSQLite SQLCipher C interface, Android the pinned official
+Zetetic native database interface. The installation signing key stays separate.
+
+Draft and Candidate databases include an encrypted owner/Workspace identity,
+transactional records and original expiry tombstones. The iOS database key stays
+in device-only Keychain. Android wraps a random database key with the existing
+non-exportable AndroidKeyStore AES key. Database passwords never enter JS.
+Legacy AES-GCM files migrate transactionally with unchanged IDs and times, and
+are deleted only after commit. Retry after an interrupted migration imports only
+missing IDs. Every connection closes and enables SQLCipher memory wiping.
+
+Clock regression blocks access and preserves encrypted input. A new admission
+must obtain current server contact; cached provider state cannot establish the
+retention clock. The persisted high-water mark and native elapsed time prevent
+clock rollback or a process restart from extending an existing expiry.

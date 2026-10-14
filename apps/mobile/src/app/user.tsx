@@ -11,6 +11,6 @@ export default function User() {
     <SecondaryButton label="Security and devices" onPress={() => router.push("/security")} />
     <SecondaryButton label="Lock now" onPress={() => controller.lock()} />
     <SecondaryButton label="Sign out" onPress={() => { void controller.wipe(); }} />
-    {__DEV__ && fixture && <SecondaryButton label="Controlled native verification" onPress={() => router.push("/native-proof")} />}
+    {__DEV__ && <SecondaryButton label={fixture ? "Controlled native verification" : "Development public verification"} onPress={() => router.push("/native-proof")} />}
   </Screen>;
 }

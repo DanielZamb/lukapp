@@ -8,12 +8,6 @@ private struct CustodyFailure: Error, LocalizedError {
   let code: String
   var errorDescription: String? { code }
 }
-private struct InputRecord: Codable {
-  let id: String
-  let content: String?
-  let createdAt: Double
-  let expiresAt: Double
-}
 
 public final class LukappCustodyModule: Module {
   private let mutex = NSRecursiveLock()
@@ -357,11 +351,19 @@ public final class LukappCustodyModule: Module {
       } catch { promise.reject("unlock_required", error.localizedDescription) }
     }
   }
-  private func inputKey() throws -> SymmetricKey {
-    if let bytes = try secret("input-key") { return SymmetricKey(data: bytes) }
+  private func inputKey() throws -> Data {
+    if let bytes = try secret("input-key") {
+      guard bytes.count == 32 else { throw CustodyFailure(code: "input_key_lost") }
+      return bytes
+    }
+    let existing = try FileManager.default.contentsOfDirectory(at: directory(), includingPropertiesForKeys: nil)
+    guard !existing.contains(where: { $0.pathExtension == "db" || $0.pathExtension == "sqlcipher" }) else { throw CustodyFailure(code: "input_key_lost") }
     let key = SymmetricKey(size: .bits256)
-    try key.withUnsafeBytes { try putSecret("input-key", data: Data($0), biometric: false) }
-    return key
+    return try key.withUnsafeBytes {
+      let bytes = Data($0)
+      try putSecret("input-key", data: bytes, biometric: false)
+      return bytes
+    }
   }
   private func storeURL(_ owner: String, _ scope: String) throws -> URL {
     let digest = hex(Data(SHA256.hash(data: Data(scope.utf8))))
@@ -372,32 +374,40 @@ public final class LukappCustodyModule: Module {
     let now = contactTime + ProcessInfo.processInfo.systemUptime - contactUptime
     let path = try url("clock")
     if let bytes = try? Data(contentsOf: path), let value = String(data: bytes, encoding: .utf8), let previous = Double(value), now < previous {
-      for item in try FileManager.default.contentsOfDirectory(at: directory(), includingPropertiesForKeys: nil) where item.pathExtension == "db" { try FileManager.default.removeItem(at: item) }
-      try removeSecret("input-key")
       throw CustodyFailure(code: "input_clock_uncertain")
     }
     try Data(String(now).utf8).write(to: path, options: .atomic)
     return now
   }
+  private func database(_ owner: String, _ scope: String) throws -> SqlCipherInput {
+    let legacy = try storeURL(owner, scope)
+    var key = try inputKey()
+    defer { key.resetBytes(in: 0..<key.count) }
+    let database = try SqlCipherInput(path: legacy.deletingPathExtension().appendingPathExtension("sqlcipher"), binding: owner + ":" + scope, key: &key)
+    if FileManager.default.fileExists(atPath: legacy.path) {
+      var legacyKey = try inputKey()
+      defer { legacyKey.resetBytes(in: 0..<legacyKey.count) }
+      let box = try AES.GCM.SealedBox(combined: Data(contentsOf: legacy))
+      var data = try AES.GCM.open(box, using: SymmetricKey(data: legacyKey), authenticating: Data((owner + ":" + scope).utf8))
+      defer { data.resetBytes(in: 0..<data.count) }
+      try database.save(try JSONDecoder().decode([InputRecord].self, from: data), importing: true)
+      try FileManager.default.removeItem(at: legacy)
+    }
+    return database
+  }
   private func read(_ owner: String, _ scope: String) throws -> [InputRecord] {
     let now = try retentionTime()
-    let path = try storeURL(owner, scope)
-    guard FileManager.default.fileExists(atPath: path.path) else { return [] }
-    let box = try AES.GCM.SealedBox(combined: Data(contentsOf: path))
-    let data = try AES.GCM.open(box, using: inputKey(), authenticating: Data((owner + ":" + scope).utf8))
-    let all = try JSONDecoder().decode([InputRecord].self, from: data)
+    let database = try database(owner, scope)
+    let all = try database.read()
     let kept = all.map { record in
       now < record.createdAt || now >= record.expiresAt
         ? InputRecord(id: record.id, content: nil, createdAt: record.createdAt, expiresAt: record.expiresAt) : record
     }
-    if zip(all, kept).contains(where: { $0.0.content != $0.1.content }) { try save(kept, owner, scope) }
+    if zip(all, kept).contains(where: { $0.0.content != $0.1.content }) { try database.save(kept) }
     return kept
   }
   private func save(_ records: [InputRecord], _ owner: String, _ scope: String) throws {
-    let bytes = try JSONEncoder().encode(records)
-    let sealed = try AES.GCM.seal(bytes, using: inputKey(), authenticating: Data((owner + ":" + scope).utf8))
-    guard let combined = sealed.combined else { throw CustodyFailure(code: "encryption_failed") }
-    try combined.write(to: storeURL(owner, scope), options: .atomic)
+    try database(owner, scope).save(records)
   }
   private func hex(_ bytes: Data) -> String { bytes.map { String(format: "%02x", $0) }.joined() }
 }
