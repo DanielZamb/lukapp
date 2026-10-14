@@ -57,7 +57,9 @@ export async function planStatus(ledger: RecoveryLedger, snapshot: Snapshot, pla
     const recoveredElsewhere = sourcePaid(source.entryId, allocations.filter(allocation => allocation.planId !== plan.id));
     let unsupported = source.principalMinor + recoveredElsewhere > sourceFacts.minorUnits;
     for (const change of sourceFacts.prefixes) {
-      if (unsupported || change.sourceSequence <= plan.state.commitment.sourceEffectCuts[source.entryId]) continue;
+      if (unsupported) continue;
+      const cut = plan.state.commitment.sourceEffectCuts[source.entryId];
+      if (cut !== undefined && change.sourceSequence <= cut) continue;
       const historical = await countedAllocations(ledger, snapshot, change.recordedAt);
       const paidAtChange = [...historical.verified, ...historical.declared];
       if (paidFor(plan.id, paidAtChange).amountMinor === total(plan.state.commitment.schedule.map(item => item.amountMinor))) continue;

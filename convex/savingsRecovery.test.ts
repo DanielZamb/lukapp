@@ -111,6 +111,44 @@ test("proportional source and installment allocations preserve exact principal, 
   expect(await ledgerBytes(f.t)).toBe(ledger);
 });
 
+test("residual ties and premium-only payments retain literal source provenance", async () => {
+  const f = await fixture();
+  const first = await f.expense(1, "rounding-first");
+  const second = await f.expense(1, "rounding-second");
+  const third = await f.expense(1, "rounding-third");
+  const id = await f.draft({ ...f.terms,
+    sources: [first, second, third].map(entry => ({ entryId: entry.id, principalMinor: 1 })),
+    installmentCount: 1, installmentAmountMinor: 6,
+  });
+  await f.activate(id);
+  const posted = await f.transfer(6);
+  const before = await ledgerBytes(f.t);
+  await f.record(posted.id, id, 1, "tie");
+  await f.record(posted.id, id, 1, "premium-only");
+  await f.record(posted.id, id, 4, "finish-rounding");
+  const progress = await f.progress();
+  expect(progress.contributions.flatMap(row => {
+    if (row.data.kind !== "contribution") throw new Error("Expected contribution");
+    return row.data.allocations;
+  })).toEqual([
+    { planId: id, amountMinor: 1, principalMinor: 1, premiumMinor: 0,
+      installments: [{ installmentIndex: 0, principalMinor: 1, premiumMinor: 0, prepayment: false }],
+      sources: [{ entryId: first.id, principalMinor: 1 }, { entryId: second.id, principalMinor: 0 }, { entryId: third.id, principalMinor: 0 }],
+    },
+    { planId: id, amountMinor: 1, principalMinor: 0, premiumMinor: 1,
+      installments: [{ installmentIndex: 0, principalMinor: 0, premiumMinor: 1, prepayment: false }],
+      sources: [{ entryId: first.id, principalMinor: 0 }, { entryId: second.id, principalMinor: 0 }, { entryId: third.id, principalMinor: 0 }],
+    },
+    { planId: id, amountMinor: 4, principalMinor: 2, premiumMinor: 2,
+      installments: [{ installmentIndex: 0, principalMinor: 2, premiumMinor: 2, prepayment: false }],
+      sources: [{ entryId: first.id, principalMinor: 0 }, { entryId: second.id, principalMinor: 1 }, { entryId: third.id, principalMinor: 1 }],
+    },
+  ]);
+  expect(progress.plans[0]).toMatchObject({ status: { kind: "Completed" },
+    verified: { amountMinor: 6, principalMinor: 3, premiumMinor: 3 } });
+  expect(await ledgerBytes(f.t)).toBe(before);
+});
+
 test("immutable attribution reversal restores transfer capacity while cancelled plan retains saving", async () => {
   const f = await fixture(); const id = await f.draft(); await f.activate(id);
   const posted = await f.transfer(100);
