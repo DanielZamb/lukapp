@@ -26,10 +26,11 @@ export type AccountingTest = ReturnType<typeof convexAccounting>;
 
 export function convexAccounting(
   modules: Record<string, () => Promise<unknown>>,
+  transactionLimits = false,
 ) {
   vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", ownerIdentity.subject);
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", ownerIdentity.issuer);
-  const base = convexTest(schema, modules);
+  const base = convexTest({ schema, modules, transactionLimits });
   let registration: Promise<{ key: Awaited<ReturnType<typeof fixtureKey>>; device: Awaited<ReturnType<typeof registerFixture>> }> | undefined;
   const register = () => registration ??= (async () => {
     const raw = base.withIdentity({ ...ownerIdentity, sid: "sess_fixture", sts: "active" });
@@ -41,7 +42,7 @@ export function convexAccounting(
     const raw = base.withIdentity({ sid: "sess_fixture", sts: "active", ...identity });
     async function argsWithProof(reference: FunctionReference<"query" | "mutation">, args: Record<string, unknown>) {
       const operation = operations.find((operation) => operation === getFunctionName(reference).replace(":", "."));
-      if (!operation || !operation.startsWith("accounting.") || "access" in args) return args;
+      if (!operation || operation.startsWith("devices.") || "access" in args) return args;
       if (identity.subject !== ownerIdentity.subject || identity.issuer !== ownerIdentity.issuer ||
         !process.env.LUKAPP_OWNER_CLERK_SUBJECT || !process.env.CLERK_JWT_ISSUER_DOMAIN) return args;
       const { key, device } = await register();

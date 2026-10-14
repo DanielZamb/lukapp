@@ -23,6 +23,7 @@ import {
   money,
   periodKey,
   postedJournalEntry,
+  postedExpense,
   productKind,
   profileClassificationAnswers,
   trialBalanceRow,
@@ -394,6 +395,14 @@ export const recordAccountTransfer = ownerMutation({
         actor: ctx.actor,
       }),
     ),
+});
+
+export const listPostedExpenses = ownerQuery({
+  operation: "accounting.listPostedExpenses",
+  args: { ...inWorkspace, from: v.string(), through: v.string() },
+  returns: v.array(postedExpense),
+  handler: async (ctx, args) => run(() => createAccountingCore(convexReadStore(ctx.db))
+    .listPostedExpenses({ ...args, actor: ctx.actor })),
 });
 
 export const createUserCategory = ownerMutation({
