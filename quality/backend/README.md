@@ -1,0 +1,47 @@
+# Backend quality gates
+
+The user approved these criteria on 2026-10-14, before current-source mutation results.
+
+- Each area must independently reach at least 80% mutation detection.
+- Each executable function must have CRAP at most 30. Complexity uses the TypeScript AST, counting decisions, loops, catches, nondefault cases, conditionals, and logical operators. Nested functions have their own complexity and coverage.
+- Missing coverage, absent report files, unknown or incomplete mutant statuses, runtime errors, changed inputs during execution, and failing tool exits fail the gate.
+- Mutation runs are fresh, nonincremental, with static mutants enabled. This tooling adds no mutator or individual mutant suppression.
+- The receipt score is `100 * (Killed + Timeout) / all generated mutants`. Survived, NoCoverage, CompileError, Ignored, and any incomplete work receive no detected credit. Compile errors and existing ignored mutants remain in this conservative denominator. Timeouts count as detection, as in Stryker, and remain separately visible for review.
+- CRAP uses `complexity² * (1 - coverage/100)³ + complexity`. Coverage is the minimum statement and branch coverage inside each function. V8 statement ranges can span a whole source line, so statements that overlap a function count. A known zero function-entry count forces zero coverage even when a surrounding line ran. Missing function observations cannot pass. Comparisons use unrounded values.
+- Runs execute sequentially with at most two Stryker workers or two Vitest workers. Dependencies retain the existing lockfile and 4320-minute minimum release age.
+
+## Scope and exclusions
+
+`policy.json` owns the shared coverage and mutation scope. Areas partition all selected source files. Accounting includes rules, commands, queries, projections, templates, and runtime errors. Auth includes the shared device protocol, Owner admission, challenge verification, provider work, Clerk adapter, signature-verified webhook handling, and auth readiness. Budget and Recovery include their implemented rules, commands, and queries. Convex includes remaining public handlers, persistence adapters, schema, and runtime validators. Budget's `types.ts` contains runtime policy constants and is included.
+
+Generated Convex files, declaration-only files, the accounting export barrel, and test harnesses are excluded. The native client admission and transport modules under `src/access` belong to F03 and are excluded from backend mutation scope. Their exact bytes still appear in the input manifest. `convex/auth.config.ts` is deployment-only issuer wiring and is excluded from local scoring. Its separate acceptance check requires the actual development deployment to admit the actual Clerk Owner through the normal public API. HTTP webhook routing remains included, alongside the signature and terminal-session behavior.
+
+These gates establish local regression quality. They do not establish deployment identity, actual authenticated Clerk admission, real provider administration, or mobile acceptance. Root AGENTS.md requires separate real Convex and Clerk receipts for runtime completion. This owner has no deployment or device authority.
+
+## Reproduce and inspect
+
+Run `pnpm install --frozen-lockfile`, then `pnpm quality:backend` for coverage, CRAP, and all five mutation areas. Run `pnpm crap` for coverage and CRAP, or `pnpm mutate` for all mutation areas. For one area, run `pnpm quality:backend mutation auth` or substitute `accounting`, `budget`, `recovery`, or `convex`. Run `node --test scripts/backend-quality.test.mjs` to check the reporter's arithmetic and AST behavior.
+
+Run `node scripts/backend-complexity.mjs` to report inherent complexity failures without coverage. Pass an exact Git commit as its argument for a read-only source-hashed advisory scan. Such a scan measures only complexity and cannot establish a CRAP or mutation pass.
+
+Every run gets its own directory in `quality/backend/runs`. `receipt.json` records commands, times, tool exits, Node and pnpm versions, the starting commit, SHA-256 hashes of source, tests, quality scripts, configurations, and lockfiles, and whether any input changed during execution. Complete Stryker reports and coverage JSON are retained as gzip files. Generated, actually executed, uncovered, invalid, timed-out, and surviving mutants are separate counts. Every outcome other than Killed also appears in the area survivor file with location and mutation details. An interrupted or missing receipt is incomplete evidence.
+
+Run `pnpm quality:backend verify <run-directory>` to check an existing receipt against current input hashes and its retained artifact hashes. Reuse a passing area only when those hashes match. Any test change invalidates reuse conservatively, because it can alter mutant detection. Evidence may describe a parent commit with identical input bytes; compare hashes, not just commit labels.
+
+## Prior evidence audit
+
+At base `9fbf2ea`, Stryker and Vitest coverage selected only `src/accounting`. Stryker enabled incremental reuse and ignored static mutants. `scripts/crap.mjs` counted decisions with a source-text regular expression across whole files and had no failure threshold. It therefore was a report, not a gate.
+
+The retained run receipts, reports, and source records were inspected read-only. No complete current-source mutation report or CRAP receipt with exact test hashes was found. The retained Linear issue history reports an older kernel result of 37 tests, Stryker 100%, and CRAP average 4.08. Preserve that claim as history. It cannot establish the broader current backend gates.
+
+The base also contains three Stryker suppression comments in `src/accounting/period.ts`, at lines 4, 39, and 41. They claim redundant nonfinite-date and overflow checks. This owner cannot edit production comments. Stryker's generated Ignored mutants remain in the raw report and in the receipt denominator, receive no detected credit, and retain their original ignore reasons. Their equivalence claims are not accepted as executed evidence.
+
+The unchanged baseline in this checkout passed 341 tests across 27 files with two workers. `audit-baseline.log` retains that observation. The Budget capacity test retains its original dataset sizes and boundary assertions. Its fixture now clones complete rows from an actual signed public expense posting, avoiding thousands of repeated setup commands. Public posting after a capacity failure remains part of the acceptance assertion.
+
+The large dataset test is now `convex/budgetCapacity.load.test.ts`. It is mandatory in full regression and coverage. The overall gate fails if its exact named assertion is missing, failed, or skipped. Stryker excludes that file from its mutation test selection. The smaller public transaction-headroom test remains selected, and `planningReadCapacity.test.ts` checks each exact used and remaining threshold, ordered complete reads, overflow cleanup, and budget consumption during an iterator read. All production source mutants remain included. Selected and excluded test paths, counts, and hashes are retained. This setup optimization supplies local fixture data only and supplies no real-provider evidence.
+
+Coverage instrumentation exceeded the original four-minute load-test timeout in the retained preliminary run. The load test retains that timeout for ordinary regression. The quality runner sets `LUKAPP_INSTRUMENTED_LOAD=1` for its coverage invocation, allowing a bounded 600 seconds, as the user instructed. The fixture logs completed setup and assertion phase times. Convex transaction limits, the dataset, and functional boundary assertions remain required. Coverage is retained even on failure; a failed or skipped test still fails the overall gate.
+
+Cloned rows receive new database ids and unique command keys. Their profile, category snapshots, line order, accounting dates, posting facts, and schema indexes come from a canonical public posting. Cloning remains in batches of at most 25 rows. Evaluation and warning transaction boundaries, original row counts, expected amounts, and all original assertions remain intact. The first row in each batch of fixture additions comes from a signed public command rather than an internal core call.
+
+Validation artifacts outside `runs` are advisory development checks. They include a successful 353-test selected suite and Stryker dry-run validation, which generated 8457 mutants on the original backend but executed zero. They exclude the mandatory load assertion and cannot pass the overall gate. The original complexity failure and read-only C02 candidate scan remain separate. Official combined-source execution waits for reviewed C02, C04, and F03 changes.

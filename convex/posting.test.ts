@@ -68,6 +68,30 @@ test("Posting records actor and time provenance on the entry", async () => {
   });
 });
 
+test("Posting rejects broken source-effect, category, and correction links without writing an entry", async () => {
+  const f = await kernel();
+  const created = await f.t.mutation(api.accounting.createUserCategory, { workspaceId: f.workspace.id, name: "Groceries",
+    selection: { kind: "preset", concept: "groceries" }, idempotencyKey: "linked-category" });
+  if (created.kind !== "category") throw new Error("Expected category");
+  const expense = await f.t.mutation(api.accounting.recordCashExpense, { workspaceId: f.workspace.id,
+    financialAccountProfileId: f.daily.id, amount: { currency: "COP", minorUnits: 10 }, accountingDate: "2026-09-24",
+    description: "Source", userCategoryId: created.category.id, idempotencyKey: "linked-source" });
+  const category = expense.lines.find(line => line.category)?.category;
+  if (!category) throw new Error("Expected posted category snapshot");
+  const before = await f.t.run(ctx => ctx.db.query("journalEntries").collect());
+  expect(await f.post(f.balanced, "missing-effect", { sourceExpenseEffects: [{ sourceEntryId: "missing", expenseDeltaMinorUnits: 1 }] }))
+    .toEqual({ code: "journal_entry_not_found" });
+  expect(await f.post(f.balanced, "fractional-effect", { sourceExpenseEffects: [{ sourceEntryId: expense.id, expenseDeltaMinorUnits: 0.5 }] }))
+    .toEqual({ code: "journal_line_invalid" });
+  expect(await f.post(f.balanced.map((line, index) => index === 0 ? { ...line, category: { ...category, categoryId: "missing" } } : line), "missing-category"))
+    .toEqual({ code: "category_not_found" });
+  expect(await f.post(f.balanced.map((line, index) => index === 0 ? { ...line, categoryCorrection: {
+    reclassificationKey: "broken-reference", side: "replacement", sources: [{ entryId: expense.id, lineNumber: 99, signedMinorUnits: 10 }],
+    rootSources: [{ entryId: expense.id, lineNumber: 99, signedMinorUnits: 10 }], priorLockedPeriods: [],
+  } } : line), "missing-correction-line")).toEqual({ code: "journal_entry_not_found" });
+  expect(await f.t.run(ctx => ctx.db.query("journalEntries").collect())).toEqual(before);
+});
+
 test("Posting rejects lines on missing or foreign Ledger Accounts", async () => {
   const { t, post, balanced } = await kernel();
   const other = await createAdditionalWorkspaceFixture(t);

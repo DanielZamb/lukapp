@@ -1,0 +1,130 @@
+{
+  "passed": false,
+  "functions": 748,
+  "missingFiles": [],
+  "failures": 1,
+  "highest": [
+    {
+      "file": "src/accounting/reclassification.ts",
+      "function": "previewCategoryReclassification",
+      "line": 14,
+      "complexity": 32,
+      "statements": 100,
+      "branches": 88.88888888888889,
+      "coverage": 88.88888888888889,
+      "crap": 33.40466392318244,
+      "missingCoverage": false,
+      "statementObservations": 74,
+      "branchObservations": 63,
+      "functionEntries": [
+        76
+      ]
+    },
+    {
+      "file": "convex/devices.ts",
+      "function": "anonymous@144:12",
+      "line": 144,
+      "complexity": 5,
+      "statements": 100,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 30,
+      "missingCoverage": false,
+      "statementObservations": 13,
+      "branchObservations": 3,
+      "functionEntries": []
+    },
+    {
+      "file": "convex/providerWork.ts",
+      "function": "anonymous@98:12",
+      "line": 98,
+      "complexity": 5,
+      "statements": 85.71428571428571,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 30,
+      "missingCoverage": false,
+      "statementObservations": 7,
+      "branchObservations": 1,
+      "functionEntries": []
+    },
+    {
+      "file": "convex/clerkProvider.ts",
+      "function": "processProviderWork",
+      "line": 75,
+      "complexity": 29,
+      "statements": 100,
+      "branches": 91.11111111111111,
+      "coverage": 91.11111111111111,
+      "crap": 29.590661179698216,
+      "missingCoverage": false,
+      "statementObservations": 57,
+      "branchObservations": 45,
+      "functionEntries": [
+        50
+      ]
+    },
+    {
+      "file": "convex/devices.ts",
+      "function": "anonymous@162:12",
+      "line": 162,
+      "complexity": 13,
+      "statements": 100,
+      "branches": 57.142857142857146,
+      "coverage": 57.142857142857146,
+      "crap": 26.303206997084544,
+      "missingCoverage": false,
+      "statementObservations": 22,
+      "branchObservations": 14,
+      "functionEntries": []
+    },
+    {
+      "file": "src/accounting/commands/recordOpeningPosition.ts",
+      "function": "recordOpeningPosition",
+      "line": 19,
+      "complexity": 26,
+      "statements": 100,
+      "branches": 94.11764705882354,
+      "coverage": 94.11764705882354,
+      "crap": 26.13759413800122,
+      "missingCoverage": false,
+      "statementObservations": 123,
+      "branchObservations": 51,
+      "functionEntries": [
+        207
+      ]
+    },
+    {
+      "file": "src/accounting/reclassification.ts",
+      "function": "confirmCategoryReclassification",
+      "line": 89,
+      "complexity": 25,
+      "statements": 100,
+      "branches": 92.15686274509804,
+      "coverage": 92.15686274509804,
+      "crap": 25.301543147055053,
+      "missingCoverage": false,
+      "statementObservations": 61,
+      "branchObservations": 51,
+      "functionEntries": [
+        52
+      ]
+    },
+    {
+      "file": "src/access/protocol.ts",
+      "function": "integer",
+      "line": 129,
+      "complexity": 14,
+      "statements": 100,
+      "branches": 63.63636363636363,
+      "coverage": 63.63636363636363,
+      "crap": 23.424492862509393,
+      "missingCoverage": false,
+      "statementObservations": 14,
+      "branchObservations": 11,
+      "functionEntries": [
+        4
+      ]
+    }
+  ]
+}

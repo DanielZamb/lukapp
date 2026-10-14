@@ -1,0 +1,59 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ],
+  "vitest": {
+    "configFile": "vitest.mutation.config.ts",
+    "related": false
+  },
+  "mutate": [
+    "src/accounting/**/*.ts",
+    "src/budget/**/*.ts",
+    "src/savingsRecovery/**/*.ts",
+    "src/access/protocol.ts",
+    "convex/**/*.ts",
+    "!**/*.test.ts",
+    "!**/*.d.ts",
+    "!**/convexHarness.ts",
+    "!src/accounting/types.ts",
+    "!src/accounting/categoryTypes.ts",
+    "!src/accounting/index.ts",
+    "!src/savingsRecovery/types.ts",
+    "!convex/_generated/**",
+    "!convex/auth.config.ts"
+  ],
+  "concurrency": 2,
+  "coverageAnalysis": "perTest",
+  "incremental": false,
+  "ignoreStatic": false,
+  "thresholds": {
+    "high": 80,
+    "low": 80,
+    "break": 80
+  },
+  "files": [
+    "src/**/*.ts",
+    "convex/**/*.ts",
+    "convex/_generated/*.js",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.json",
+    "vitest.config.ts",
+    "vitest.mutation.config.ts",
+    "scripts/backend-scope.mjs",
+    "quality/backend/policy.json"
+  ],
+  "reporters": [
+    "clear-text",
+    "progress",
+    "json"
+  ],
+  "dryRunOnly": true,
+  "jsonReporter": {
+    "fileName": "/Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/quality/backend/stryker-validation.json"
+  }
+}

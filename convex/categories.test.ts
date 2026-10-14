@@ -14,6 +14,25 @@ async function custom(t: AccountingTest, workspaceId: string, name: string, answ
   return result.category;
 }
 
+test("category changes reject empty names and keys, stale revisions, and inactive categories without changing history", async () => {
+  const t = testdb(); const workspace = await createOwnedWorkspace(t);
+  const category = await custom(t, workspace.id, "Original");
+  const request = { workspaceId: workspace.id, categoryId: category.id, revision: 1, confirmed: true as const,
+    change: { kind: "rename" as const, name: "New name" }, idempotencyKey: "rename" };
+  const before = await t.query(api.accounting.listUserCategories, { workspaceId: workspace.id });
+  for (const [args, code] of [
+    [{ ...request, idempotencyKey: "" }, "idempotency_key_required"],
+    [{ ...request, change: { kind: "rename" as const, name: " \t" } }, "name_required"],
+    [{ ...request, revision: 2 }, "category_revision_stale"],
+  ] as const) expect(await t.mutation(api.accounting.changeUserCategory, args).catch(error => error)).toMatchObject({ data: { code } });
+  expect(await t.query(api.accounting.listUserCategories, { workspaceId: workspace.id })).toEqual(before);
+  await t.mutation(api.accounting.changeUserCategory, { ...request, change: { kind: "archive" }, idempotencyKey: "archive" });
+  expect(await t.mutation(api.accounting.changeUserCategory, { ...request, revision: 2 }).catch(error => error))
+    .toMatchObject({ data: { code: "category_inactive" } });
+  expect(await t.query(api.accounting.listUserCategories, { workspaceId: workspace.id }))
+    .toEqual([{ ...category, revision: 2, status: "archived" }]);
+});
+
 for (const template of ["co-puc-personal@1", "us-gaap-personal@1"]) for (const kind of ["Personal", "Household"]) {
   test(`${kind}/${template}: confirmed names resolve actual posting accounts, provenance and literal totals`, async () => {
     const t = testdb();

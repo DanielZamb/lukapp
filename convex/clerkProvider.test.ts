@@ -255,6 +255,17 @@ test("wrong Owner in session pagination prevents revocation and keeps recovery p
   expect(await s.client("sess_old").query(api.devices.status, {})).toMatchObject({ code: "session_revoked" });
 });
 
+test("an empty provider page with a nonempty inventory keeps recovery pending and never claims completion", async () => {
+  const s = setup([providerSession("sess_old")]);
+  const intent = await s.client("sess_old").action(api.clerkProvider.beginRecovery, {});
+  s.state.set("sess_new", providerSession("sess_new", { created_at: now + 1000 }));
+  vi.setSystemTime(now + 2000); s.paginate(0);
+  const result = await s.client("sess_new").action(api.clerkProvider.completeRecovery, { intentId: intent.intentId });
+  expect(result.state).toMatchObject({ kind: "pending", error: "provider_unavailable" });
+  expect(s.state.get("sess_old")?.status).toBe("active");
+  expect(s.calls.some(call => call.method === "POST")).toBe(false);
+});
+
 test.each(["session.ended", "session.removed", "session.revoked"])("signature-verified %s denies an owned session and authentic delivery dedupes", async (type) => {
   const s = setup([providerSession("sess_old")]); const c = await enrolled(s.client("sess_old"));
   const data = { ...providerSession("sess_old", { status: type.slice(8) }), user: null };
@@ -276,6 +287,28 @@ test("invalid signatures, wrong Owner/instance, malformed terminal data and cont
   expect((await deliver(s.root, await signedEvent("msg_good"))).status).toBe(200);
   expect((await deliver(s.root, await signedEvent("msg_good", "session.revoked", { ...providerSession("sess_other", { status: "revoked" }), user: null }))).status).toBe(400);
   expect(await s.root.run((ctx) => ctx.db.query("deviceSessionDenials").collect())).toHaveLength(1);
+});
+
+test("authentic webhook payload validation never writes denial or delivery rows for malformed events", async () => {
+  const s = setup();
+  const valid = { ...providerSession("sess_old", { status: "revoked" }), user: null };
+  const malformed = [null, [], { ...valid, object: "user" }, { ...valid, id: 1 }, { ...valid, id: "sess_" },
+    { ...valid, status: 1 }, { ...valid, status: "active" }];
+  for (const [index, data] of malformed.entries()) {
+    const response = await deliver(s.root, await signedEvent(`msg_malformed${index}`, "session.revoked", data));
+    expect(response.status, `malformed data ${index}: ${JSON.stringify(data)}`).toBe(400);
+    expect(await response.text()).toBe("provider_session_invalid");
+  }
+  for (const [index, extra] of [{ type: 1 }, { timestamp: "today" }, { timestamp: 0.5 }].entries()) {
+    const response = await deliver(s.root, await signedEvent(`msg_badEnvelope${index}`, "session.revoked", valid, extra));
+    expect(response.status, `malformed envelope ${index}: ${JSON.stringify(extra)}`).toBe(400);
+    expect(await response.text()).toBe("provider_session_invalid");
+  }
+  const oversized = await deliver(s.root, await signedEvent("m".repeat(257), "session.revoked", valid));
+  expect(oversized.status).toBe(400);
+  expect(await s.root.run(ctx => ctx.db.query("deviceSessionDenials").collect())).toEqual([]);
+  expect(await s.root.run(ctx => ctx.db.query("clerkWebhookDeliveries").collect())).toEqual([]);
+  expect(s.calls).toEqual([]);
 });
 
 test("late creation event cannot undo a terminal denial or initiate recovery", async () => {

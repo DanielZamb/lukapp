@@ -46,6 +46,23 @@ async function ledgerBytes(t: AccountingTest) {
 const protections = { essentialSpendingMinor: 100, taxesMinor: 200, requiredReservesMinor: 300, externalObligationsMinor: 400, provenance: "Owner reviewed supplied obligations" };
 const entered = { kind: "entered" as const, availableMinor: 500, protections, attestation: "Net cash after supplied protections" };
 
+test("computed cash rejects missing and duplicate profiles and disabled prepayment leaves literal ordinary saving", async () => {
+  const f = await fixture();
+  const args = { ...f.ctx, month: "2026-09", includePrepayment: false,
+    cash: { kind: "computed" as const, liquidProfileIds: [f.source.id], protections } };
+  for (const ids of [[], [f.source.id, f.source.id]]) expect(await caught(f.t.query(api.savingsRecovery.monthlyWaterfall,
+    { ...args, cash: { ...args.cash, liquidProfileIds: ids } }))).toMatchObject({ data: { code: "recovery_cash_profiles_invalid" } });
+  expect(await caught(f.t.query(api.savingsRecovery.monthlyWaterfall, { ...args, cash: { ...args.cash, liquidProfileIds: ["missing"] } })))
+    .toMatchObject({ data: { code: "recovery_cash_profile_ineligible" } });
+  const before = await ledgerBytes(f.t);
+  const result = await f.t.query(api.savingsRecovery.monthlyWaterfall, args);
+  expect(result.availableCash).toMatchObject({ availableMinor: 8697, ledgerCashMinor: 9697, protectedMinor: 1000 });
+  expect(result.prepayment).toEqual([]);
+  expect(result.ordinarySavingMinor).toBe(8394);
+  expect(result.expenseRecovery.map(row => row.allocatedMinor)).toEqual([101, 202]);
+  expect(await ledgerBytes(f.t)).toBe(before);
+});
+
 test.each(["Personal", "Household"] as const)("%s public handlers freeze schedule and leave ledger byte-identical", async kind => {
   const f = await fixture(kind);
   const before = await ledgerBytes(f.t);

@@ -7,9 +7,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "crap": "vitest run --coverage && node scripts/crap.mjs",
+    "crap": "node scripts/backend-quality.mjs coverage",
+    "quality:backend": "node scripts/backend-quality.mjs",
     "typecheck": "tsc --noEmit",
-    "mutate": "stryker run",
+    "mutate": "node scripts/backend-quality.mjs mutation",
     "mobile:start": "pnpm --filter @lukapp/mobile start",
     "mobile:typecheck": "pnpm --filter @lukapp/mobile typecheck",
     "mobile:test": "pnpm --filter @lukapp/mobile test"

@@ -1,0 +1,42 @@
+
+> lukapp@ test /Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates
+> vitest run --maxWorkers=2
+
+ DEPRECATED  "environmentMatchGlobs" is deprecated. Use `test.projects` to define different configurations instead.
+
+ RUN  v3.2.7 /Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates
+
+ ✓ convex/clerkProvider.test.ts (40 tests) 247ms
+ ✓ convex/householdWorkspace.test.ts (29 tests) 353ms
+ ✓ convex/savingsRecovery.test.ts (23 tests) 799ms
+ ✓ convex/deviceAccess.test.ts (25 tests) 267ms
+ ✓ convex/budget.test.ts (16 tests) 684ms
+ ✓ convex/reclassification.test.ts (18 tests) 439ms
+ ✓ convex/recoverySourceEffects.integration.test.ts (5 tests) 432ms
+ ✓ convex/planningUnion.integration.test.ts (6 tests) 678ms
+ ✓ convex/ownerAccess.test.ts (16 tests) 101ms
+ ✓ convex/categories.test.ts (10 tests) 298ms
+ ✓ convex/budgetAccess.test.ts (13 tests) 348ms
+ ✓ convex/openingDateCorrection.test.ts (11 tests) 298ms
+ ✓ convex/openingPosition.test.ts (14 tests) 266ms
+ ✓ convex/setupFinancialAccount.test.ts (13 tests) 193ms
+ ✓ convex/accountTransfer.test.ts (10 tests) 182ms
+ ✓ convex/catalog.test.ts (11 tests) 346ms
+ ✓ convex/posting.test.ts (8 tests) 97ms
+ ✓ convex/cashExpense.test.ts (10 tests) 124ms
+ ✓ convex/period.test.ts (9 tests) 115ms
+ ✓ convex/reversal.test.ts (10 tests) 176ms
+ ✓ convex/natures.test.ts (7 tests) 88ms
+ ✓ convex/profileKinds.test.ts (3 tests) 144ms
+ ✓ convex/workspace.test.ts (6 tests) 47ms
+ ✓ convex/authConnection.test.ts (5 tests) 9ms
+ ✓ src/accounting/rules.test.ts (18 tests) 10ms
+ ✓ src/access/protocol.test.ts (3 tests) 6ms
+ ✓ convex/budgetCapacity.test.ts (2 tests) 140291ms
+   ✓ annual carry returns a complete evaluation or a planning limit error under real transaction limits, and posting remains independent  140249ms
+
+ Test Files  27 passed (27)
+      Tests  341 passed (341)
+   Start at  00:01:47
+   Duration  145.49s (transform 482ms, setup 0ms, collect 1.43s, tests 147.04s, environment 370ms, prepare 806ms)
+
