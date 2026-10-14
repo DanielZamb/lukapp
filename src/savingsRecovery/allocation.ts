@@ -13,7 +13,12 @@ export function allocate(plan: Plan, amount: number, paid: ContributionAllocatio
     const premiumRemaining = installment.premiumMinor - total(prior.map(allocation => allocation.premiumMinor));
     const applied = Math.min(remaining, total([principalRemaining, premiumRemaining]));
     if (applied === 0) continue;
-    const [principal, premium] = proportional(applied, [principalRemaining, premiumRemaining]);
+    const split = proportional(applied, [
+      { component: "principal", remaining: principalRemaining },
+      { component: "premium", remaining: premiumRemaining },
+    ], part => part.remaining);
+    const principal = total(split.filter(share => share.part.component === "principal").map(share => share.amountMinor));
+    const premium = total(split.filter(share => share.part.component === "premium").map(share => share.amountMinor));
     installments.push({ installmentIndex: index, principalMinor: principal, premiumMinor: premium,
       prepayment: installment.month > contributionDate.slice(0, 7) });
     remaining -= applied;
@@ -23,7 +28,7 @@ export function allocate(plan: Plan, amount: number, paid: ContributionAllocatio
   const principalMinor = total(installments.map(item => item.principalMinor));
   const premiumMinor = total(installments.map(item => item.premiumMinor));
   const sources = remainingSources(plan, paid);
-  const shares = proportional(principalMinor, sources.map(source => source.principalMinor));
+  const shares = proportional(principalMinor, sources, source => source.principalMinor);
   return { planId: plan.id, amountMinor: amount, principalMinor, premiumMinor, installments,
-    sources: sources.map((source, index) => ({ entryId: source.entryId, principalMinor: shares[index] })) };
+    sources: shares.map(({ part, amountMinor }) => ({ entryId: part.entryId, principalMinor: amountMinor })) };
 }
