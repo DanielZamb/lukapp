@@ -1,0 +1,1103 @@
+{
+  "label": "legacy",
+  "version": "3.2.7",
+  "explicitOption": false,
+  "sourceHash": "453d0bbf84278dc9c2df6e0708563665d590f268403d3a4cb8b7d7040acbe921",
+  "rows": [
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "parent",
+      "line": 1,
+      "complexity": 10,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 110,
+      "missingCoverage": true,
+      "statementObservations": 2,
+      "branchObservations": 1,
+      "functionEntries": [
+        1
+      ],
+      "mapping": "ambiguous",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "ambiguous-nested-branch-ownership"
+      ],
+      "rejectedBranchObservations": [
+        {
+          "id": "1:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 3,
+              "column": 15
+            },
+            "end": {
+              "line": 3,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        },
+        {
+          "id": "2:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 4,
+              "column": 15
+            },
+            "end": {
+              "line": 4,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        },
+        {
+          "id": "3:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 5,
+              "column": 15
+            },
+            "end": {
+              "line": 5,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        },
+        {
+          "id": "4:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 6,
+              "column": 15
+            },
+            "end": {
+              "line": 6,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        },
+        {
+          "id": "5:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 7,
+              "column": 15
+            },
+            "end": {
+              "line": 7,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        },
+        {
+          "id": "6:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 8,
+              "column": 15
+            },
+            "end": {
+              "line": 8,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        },
+        {
+          "id": "7:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 9,
+              "column": 15
+            },
+            "end": {
+              "line": 9,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        },
+        {
+          "id": "8:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 10,
+              "column": 15
+            },
+            "end": {
+              "line": 10,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        },
+        {
+          "id": "9:0",
+          "count": 0,
+          "location": {
+            "start": {
+              "line": 11,
+              "column": 15
+            },
+            "end": {
+              "line": 11,
+              "column": 30
+            }
+          },
+          "reason": "nested-function-overlap"
+        }
+      ],
+      "entryProofs": [
+        {
+          "kind": "fnMap",
+          "id": "0",
+          "count": 1,
+          "start": {
+            "line": 1,
+            "column": 7
+          },
+          "end": {
+            "line": 13,
+            "column": 1
+          }
+        },
+        {
+          "kind": "branch-root",
+          "id": "0:0",
+          "count": 1,
+          "start": {
+            "line": 1,
+            "column": 7
+          },
+          "end": {
+            "line": 13,
+            "column": 1
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@3:23",
+      "line": 3,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@4:23",
+      "line": 4,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@5:23",
+      "line": 5,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@6:23",
+      "line": 6,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@7:23",
+      "line": 7,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@8:23",
+      "line": 8,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@9:23",
+      "line": 9,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@10:23",
+      "line": 10,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@11:23",
+      "line": 11,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "chosen",
+      "line": 14,
+      "complexity": 2,
+      "statements": 100,
+      "branches": 100,
+      "coverage": 100,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 0,
+      "branchObservations": 1,
+      "functionEntries": [
+        1
+      ],
+      "mapping": "fnMap",
+      "statementBasis": "function-entry",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "fnMap",
+          "id": "1",
+          "count": 1,
+          "start": {
+            "line": 14,
+            "column": 7
+          },
+          "end": {
+            "line": 16,
+            "column": 1
+          }
+        },
+        {
+          "kind": "branch-root",
+          "id": "10:0",
+          "count": 1,
+          "start": {
+            "line": 14,
+            "column": 7
+          },
+          "end": {
+            "line": 16,
+            "column": 1
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@15:17",
+      "line": 15,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@15:27",
+      "line": 15,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": true,
+      "statementObservations": 0,
+      "branchObservations": 0,
+      "functionEntries": [],
+      "mapping": "missing",
+      "statementBasis": "none",
+      "mappingProblems": [
+        "no-owned-function-observations"
+      ],
+      "rejectedBranchObservations": [],
+      "entryProofs": []
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "mapped",
+      "line": 17,
+      "complexity": 1,
+      "statements": 100,
+      "branches": 100,
+      "coverage": 100,
+      "crap": 1,
+      "missingCoverage": false,
+      "statementObservations": 0,
+      "branchObservations": 1,
+      "functionEntries": [
+        1
+      ],
+      "mapping": "fnMap",
+      "statementBasis": "function-entry",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "fnMap",
+          "id": "2",
+          "count": 1,
+          "start": {
+            "line": 17,
+            "column": 7
+          },
+          "end": {
+            "line": 19,
+            "column": 1
+          }
+        },
+        {
+          "kind": "branch-root",
+          "id": "12:0",
+          "count": 1,
+          "start": {
+            "line": 17,
+            "column": 7
+          },
+          "end": {
+            "line": 19,
+            "column": 1
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@18:21",
+      "line": 18,
+      "complexity": 2,
+      "statements": 100,
+      "branches": 100,
+      "coverage": 100,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 0,
+      "branchObservations": 3,
+      "functionEntries": [
+        2
+      ],
+      "mapping": "branch-root",
+      "statementBasis": "function-entry",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "branch-root",
+          "id": "13:0",
+          "count": 2,
+          "start": {
+            "line": 18,
+            "column": 20
+          },
+          "end": {
+            "line": 18,
+            "column": 50
+          }
+        }
+      ]
+    }
+  ],
+  "fnMap": {
+    "0": {
+      "name": "parent",
+      "decl": {
+        "start": {
+          "line": 1,
+          "column": 7
+        },
+        "end": {
+          "line": 13,
+          "column": 1
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 1,
+          "column": 7
+        },
+        "end": {
+          "line": 13,
+          "column": 1
+        }
+      },
+      "line": 1
+    },
+    "1": {
+      "name": "chosen",
+      "decl": {
+        "start": {
+          "line": 14,
+          "column": 7
+        },
+        "end": {
+          "line": 16,
+          "column": 1
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 14,
+          "column": 7
+        },
+        "end": {
+          "line": 16,
+          "column": 1
+        }
+      },
+      "line": 14
+    },
+    "2": {
+      "name": "mapped",
+      "decl": {
+        "start": {
+          "line": 17,
+          "column": 7
+        },
+        "end": {
+          "line": 19,
+          "column": 1
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 17,
+          "column": 7
+        },
+        "end": {
+          "line": 19,
+          "column": 1
+        }
+      },
+      "line": 17
+    }
+  },
+  "f": {
+    "0": 1,
+    "1": 1,
+    "2": 1
+  },
+  "branchMap": {
+    "0": {
+      "type": "branch",
+      "line": 1,
+      "loc": {
+        "start": {
+          "line": 1,
+          "column": 7
+        },
+        "end": {
+          "line": 13,
+          "column": 1
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 1,
+            "column": 7
+          },
+          "end": {
+            "line": 13,
+            "column": 1
+          }
+        }
+      ]
+    },
+    "1": {
+      "type": "branch",
+      "line": 3,
+      "loc": {
+        "start": {
+          "line": 3,
+          "column": 15
+        },
+        "end": {
+          "line": 3,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 3,
+            "column": 15
+          },
+          "end": {
+            "line": 3,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "2": {
+      "type": "branch",
+      "line": 4,
+      "loc": {
+        "start": {
+          "line": 4,
+          "column": 15
+        },
+        "end": {
+          "line": 4,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 4,
+            "column": 15
+          },
+          "end": {
+            "line": 4,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "3": {
+      "type": "branch",
+      "line": 5,
+      "loc": {
+        "start": {
+          "line": 5,
+          "column": 15
+        },
+        "end": {
+          "line": 5,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 5,
+            "column": 15
+          },
+          "end": {
+            "line": 5,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "4": {
+      "type": "branch",
+      "line": 6,
+      "loc": {
+        "start": {
+          "line": 6,
+          "column": 15
+        },
+        "end": {
+          "line": 6,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 6,
+            "column": 15
+          },
+          "end": {
+            "line": 6,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "5": {
+      "type": "branch",
+      "line": 7,
+      "loc": {
+        "start": {
+          "line": 7,
+          "column": 15
+        },
+        "end": {
+          "line": 7,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 7,
+            "column": 15
+          },
+          "end": {
+            "line": 7,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "6": {
+      "type": "branch",
+      "line": 8,
+      "loc": {
+        "start": {
+          "line": 8,
+          "column": 15
+        },
+        "end": {
+          "line": 8,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 8,
+            "column": 15
+          },
+          "end": {
+            "line": 8,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "7": {
+      "type": "branch",
+      "line": 9,
+      "loc": {
+        "start": {
+          "line": 9,
+          "column": 15
+        },
+        "end": {
+          "line": 9,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 9,
+            "column": 15
+          },
+          "end": {
+            "line": 9,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "8": {
+      "type": "branch",
+      "line": 10,
+      "loc": {
+        "start": {
+          "line": 10,
+          "column": 15
+        },
+        "end": {
+          "line": 10,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 10,
+            "column": 15
+          },
+          "end": {
+            "line": 10,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "9": {
+      "type": "branch",
+      "line": 11,
+      "loc": {
+        "start": {
+          "line": 11,
+          "column": 15
+        },
+        "end": {
+          "line": 11,
+          "column": 30
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 11,
+            "column": 15
+          },
+          "end": {
+            "line": 11,
+            "column": 30
+          }
+        }
+      ]
+    },
+    "10": {
+      "type": "branch",
+      "line": 14,
+      "loc": {
+        "start": {
+          "line": 14,
+          "column": 7
+        },
+        "end": {
+          "line": 16,
+          "column": 1
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 14,
+            "column": 7
+          },
+          "end": {
+            "line": 16,
+            "column": 1
+          }
+        }
+      ]
+    },
+    "11": {
+      "type": "branch",
+      "line": 15,
+      "loc": {
+        "start": {
+          "line": 15,
+          "column": 22
+        },
+        "end": {
+          "line": 15,
+          "column": 34
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 15,
+            "column": 22
+          },
+          "end": {
+            "line": 15,
+            "column": 34
+          }
+        }
+      ]
+    },
+    "12": {
+      "type": "branch",
+      "line": 17,
+      "loc": {
+        "start": {
+          "line": 17,
+          "column": 7
+        },
+        "end": {
+          "line": 19,
+          "column": 1
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 17,
+            "column": 7
+          },
+          "end": {
+            "line": 19,
+            "column": 1
+          }
+        }
+      ]
+    },
+    "13": {
+      "type": "branch",
+      "line": 18,
+      "loc": {
+        "start": {
+          "line": 18,
+          "column": 20
+        },
+        "end": {
+          "line": 18,
+          "column": 50
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 18,
+            "column": 20
+          },
+          "end": {
+            "line": 18,
+            "column": 50
+          }
+        }
+      ]
+    },
+    "14": {
+      "type": "branch",
+      "line": 18,
+      "loc": {
+        "start": {
+          "line": 18,
+          "column": 37
+        },
+        "end": {
+          "line": 18,
+          "column": 49
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 18,
+            "column": 37
+          },
+          "end": {
+            "line": 18,
+            "column": 49
+          }
+        }
+      ]
+    },
+    "15": {
+      "type": "branch",
+      "line": 18,
+      "loc": {
+        "start": {
+          "line": 18,
+          "column": 41
+        },
+        "end": {
+          "line": 18,
+          "column": 50
+        }
+      },
+      "locations": [
+        {
+          "start": {
+            "line": 18,
+            "column": 41
+          },
+          "end": {
+            "line": 18,
+            "column": 50
+          }
+        }
+      ]
+    }
+  },
+  "b": {
+    "0": [
+      1
+    ],
+    "1": [
+      0
+    ],
+    "2": [
+      0
+    ],
+    "3": [
+      0
+    ],
+    "4": [
+      0
+    ],
+    "5": [
+      0
+    ],
+    "6": [
+      0
+    ],
+    "7": [
+      0
+    ],
+    "8": [
+      0
+    ],
+    "9": [
+      0
+    ],
+    "10": [
+      1
+    ],
+    "11": [
+      0
+    ],
+    "12": [
+      1
+    ],
+    "13": [
+      2
+    ],
+    "14": [
+      1
+    ],
+    "15": [
+      1
+    ]
+  }
+}

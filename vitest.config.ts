@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { policy } from "./scripts/backend-scope.mjs";
+import { policy, coverageFormat } from "./scripts/backend-scope.mjs";
 
 export default defineConfig({
   test: {
@@ -8,6 +8,7 @@ export default defineConfig({
     maxWorkers: 2,
     coverage: {
       provider: "v8",
+      experimentalAstAwareRemapping: coverageFormat.experimentalAstAwareRemapping,
       reportOnFailure: true,
       include: policy.include,
       exclude: policy.exclude,

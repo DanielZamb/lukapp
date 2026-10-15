@@ -18,8 +18,13 @@ function authReceipt(t) {
     .map(file => [file, { source: readFileSync(file, "utf8"), mutants: [{ id: file, status: "Killed" }] }])) };
   const bytes = gzipSync(JSON.stringify(report));
   writeFileSync(join(directory, "auth-mutation.json.gz"), bytes);
+  const suites = inputs.mutationTests.selected.map(file => ({ file, status: "pass", errors: [], tests: [{ name: "fixture test", status: "pass" }] }));
+  const preflight = { inputDigest: inputs.digest, status: "complete", sandbox: { passed: true, failures: [] }, suites,
+    runnerTests: suites.map(suite => ({ id: `${suite.file}#fixture test`, status: "success" })) };
+  const preflightBytes = JSON.stringify(preflight);
+  writeFileSync(join(directory, "auth-preflight.json"), preflightBytes);
   const receipt = { mode: "mutation", area: "auth", manifest: inputs, stages: [{ name: "auth", exitStatus: 0, passed: true }],
-    passed: true, changedDuringRun: false, artifacts: { "auth-mutation.json.gz": sha256(bytes) } };
+    passed: true, changedDuringRun: false, artifacts: { "auth-mutation.json.gz": sha256(bytes), "auth-preflight.json": sha256(preflightBytes) } };
   const save = () => writeFileSync(join(directory, "receipt.json"), JSON.stringify(receipt));
   save();
   return { directory, receipt, save };
@@ -197,5 +202,41 @@ test("review A3 rejecting erased branches preserves independent named and V8 roo
     assert.equal(row.missingCoverage, false);
     assert.deepEqual(row.functionEntries, [count]);
     assert.equal(row.branchObservations, kind === "named" ? 0 : 1);
+  }
+});
+
+test("graph correction the final verifier rejects missing preflight and changed imported-mobile reuse", t => {
+  const fixture = authReceipt(t);
+  delete fixture.receipt.artifacts["auth-preflight.json"];
+  fixture.save();
+  assert.equal(verifyReceipt(fixture.directory).passed, false);
+  fixture.receipt.manifest.files["apps/mobile/src/modules/local-entry-drafts/store.ts"] = "changed";
+  fixture.save();
+  assert.ok(verifyReceipt(fixture.directory).changed.includes("apps/mobile/src/modules/local-entry-drafts/store.ts"));
+});
+test("graph correction the final verifier rechecks a failed empty suite despite recorded passing flags", t => {
+  const fixture = authReceipt(t);
+  const path = join(fixture.directory, "auth-preflight.json");
+  const evidence = JSON.parse(readFileSync(path));
+  evidence.suites[0] = { ...evidence.suites[0], status: "fail", tests: [] };
+  evidence.check = { passed: true };
+  const bytes = JSON.stringify(evidence);
+  writeFileSync(path, bytes);
+  fixture.receipt.artifacts["auth-preflight.json"] = sha256(bytes);
+  fixture.save();
+  assert.equal(verifyReceipt(fixture.directory).passed, false);
+});
+
+test("AST coverage receipts cannot omit or change their mapping format", t => {
+  const fixture = authReceipt(t);
+  fixture.receipt.mode = "coverage";
+  delete fixture.receipt.area;
+  fixture.receipt.stages = [{ name: "coverage-crap", exitStatus: 0 }];
+  for (const format of [undefined, { format: "legacy" }, { format: "unknown" }]) {
+    fixture.receipt.coverageFormat = format;
+    fixture.save();
+    const result = verifyReceipt(fixture.directory);
+    assert.equal(result.formatMatches, false);
+    assert.equal(result.passed, false);
   }
 });

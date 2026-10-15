@@ -1,8 +1,8 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "packageManager": "pnpm",
-  "testRunner": "vitest",
-  "plugins": ["@stryker-mutator/vitest-runner"],
+  "testRunner": "backend-vitest",
+  "plugins": ["./scripts/backend-vitest-runner.mjs"],
   "vitest": {
     "configFile": "vitest.mutation.config.ts",
     "related": false
@@ -18,6 +18,6 @@
   "incremental": false,
   "ignoreStatic": false,
   "thresholds": { "high": 80, "low": 80, "break": 80 },
-  "ignorePatterns": ["**", "!src/**/*.ts", "!convex/**/*.ts", "!convex/_generated/*.js", "!package.json", "!pnpm-lock.yaml", "!pnpm-workspace.yaml", "!tsconfig.json", "!convex/tsconfig.json", "!vitest.config.ts", "!vitest.mutation.config.ts", "!scripts/backend-scope.mjs", "!quality/backend/policy.json"],
+  "ignorePatterns": ["**", "!src/**/*.ts", "!convex/**/*.ts", "!convex/_generated/*.js", "!package.json", "!pnpm-lock.yaml", "!pnpm-workspace.yaml", "!tsconfig.json", "!convex/tsconfig.json", "!vitest.config.ts", "!vitest.mutation.config.ts", "!scripts/backend-scope.mjs", "!scripts/backend-vitest-runner.mjs", "!scripts/backend-suites.mjs", "!quality/backend/policy.json"],
   "reporters": ["clear-text", "progress-append-only", "json"]
 }

@@ -1,0 +1,1766 @@
+{
+  "rows": [
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "parent",
+      "line": 1,
+      "complexity": 10,
+      "statements": 55,
+      "branches": 50,
+      "coverage": 50,
+      "crap": 22.5,
+      "missingCoverage": false,
+      "statementObservations": 20,
+      "branchObservations": 18,
+      "functionEntries": [
+        1
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "0",
+          "count": 1,
+          "start": {
+            "line": 1,
+            "column": 34
+          },
+          "end": {
+            "line": 13,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 1,
+              "column": 16
+            },
+            "end": {
+              "line": 1,
+              "column": 23
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@3:23",
+      "line": 3,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "1",
+          "count": 0,
+          "start": {
+            "line": 3,
+            "column": 28
+          },
+          "end": {
+            "line": 3,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 3,
+              "column": 22
+            },
+            "end": {
+              "line": 3,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@4:23",
+      "line": 4,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "2",
+          "count": 0,
+          "start": {
+            "line": 4,
+            "column": 28
+          },
+          "end": {
+            "line": 4,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 4,
+              "column": 22
+            },
+            "end": {
+              "line": 4,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@5:23",
+      "line": 5,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "3",
+          "count": 0,
+          "start": {
+            "line": 5,
+            "column": 28
+          },
+          "end": {
+            "line": 5,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 5,
+              "column": 22
+            },
+            "end": {
+              "line": 5,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@6:23",
+      "line": 6,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "4",
+          "count": 0,
+          "start": {
+            "line": 6,
+            "column": 28
+          },
+          "end": {
+            "line": 6,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 6,
+              "column": 22
+            },
+            "end": {
+              "line": 6,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@7:23",
+      "line": 7,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "5",
+          "count": 0,
+          "start": {
+            "line": 7,
+            "column": 28
+          },
+          "end": {
+            "line": 7,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 7,
+              "column": 22
+            },
+            "end": {
+              "line": 7,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@8:23",
+      "line": 8,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "6",
+          "count": 0,
+          "start": {
+            "line": 8,
+            "column": 28
+          },
+          "end": {
+            "line": 8,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 8,
+              "column": 22
+            },
+            "end": {
+              "line": 8,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@9:23",
+      "line": 9,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "7",
+          "count": 0,
+          "start": {
+            "line": 9,
+            "column": 28
+          },
+          "end": {
+            "line": 9,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 9,
+              "column": 22
+            },
+            "end": {
+              "line": 9,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@10:23",
+      "line": 10,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "8",
+          "count": 0,
+          "start": {
+            "line": 10,
+            "column": 28
+          },
+          "end": {
+            "line": 10,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 10,
+              "column": 22
+            },
+            "end": {
+              "line": 10,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@11:23",
+      "line": 11,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "9",
+          "count": 0,
+          "start": {
+            "line": 11,
+            "column": 28
+          },
+          "end": {
+            "line": 11,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 11,
+              "column": 22
+            },
+            "end": {
+              "line": 11,
+              "column": 28
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "chosen",
+      "line": 14,
+      "complexity": 2,
+      "statements": 100,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 6,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 2,
+      "functionEntries": [
+        1
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "10",
+          "count": 1,
+          "start": {
+            "line": 14,
+            "column": 38
+          },
+          "end": {
+            "line": 16,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 14,
+              "column": 16
+            },
+            "end": {
+              "line": 14,
+              "column": 23
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@15:17",
+      "line": 15,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "11",
+          "count": 0,
+          "start": {
+            "line": 15,
+            "column": 22
+          },
+          "end": {
+            "line": 15,
+            "column": 26
+          },
+          "declaration": {
+            "start": {
+              "line": 15,
+              "column": 16
+            },
+            "end": {
+              "line": 15,
+              "column": 22
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@15:27",
+      "line": 15,
+      "complexity": 1,
+      "statements": 0,
+      "branches": 0,
+      "coverage": 0,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        0
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "12",
+          "count": 0,
+          "start": {
+            "line": 15,
+            "column": 32
+          },
+          "end": {
+            "line": 15,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 15,
+              "column": 26
+            },
+            "end": {
+              "line": 15,
+              "column": 32
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "mapped",
+      "line": 17,
+      "complexity": 1,
+      "statements": 100,
+      "branches": 100,
+      "coverage": 100,
+      "crap": 1,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 0,
+      "functionEntries": [
+        1
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "13",
+          "count": 1,
+          "start": {
+            "line": 17,
+            "column": 41
+          },
+          "end": {
+            "line": 19,
+            "column": null
+          },
+          "declaration": {
+            "start": {
+              "line": 17,
+              "column": 16
+            },
+            "end": {
+              "line": 17,
+              "column": 23
+            }
+          }
+        }
+      ]
+    },
+    {
+      "file": "quality/backend/ast-remapping/fixture/nested.ts",
+      "function": "anonymous@18:21",
+      "line": 18,
+      "complexity": 2,
+      "statements": 100,
+      "branches": 100,
+      "coverage": 100,
+      "crap": 2,
+      "missingCoverage": false,
+      "statementObservations": 1,
+      "branchObservations": 2,
+      "functionEntries": [
+        2
+      ],
+      "mapping": "ast-fnMap",
+      "statementBasis": "ast-statements",
+      "mappingProblems": [],
+      "rejectedBranchObservations": [],
+      "entryProofs": [
+        {
+          "kind": "ast-fnMap",
+          "id": "14",
+          "count": 2,
+          "start": {
+            "line": 18,
+            "column": 29
+          },
+          "end": {
+            "line": 18,
+            "column": 50
+          },
+          "declaration": {
+            "start": {
+              "line": 18,
+              "column": 20
+            },
+            "end": {
+              "line": 18,
+              "column": 29
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "problems": [],
+  "assignments": [
+    {
+      "kind": "statements",
+      "id": "0",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 2,
+          "column": 19
+        },
+        "end": {
+          "line": 2,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 3,
+          "column": 2
+        },
+        "end": {
+          "line": 3,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "2",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 3,
+          "column": 15
+        },
+        "end": {
+          "line": 3,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "3",
+      "count": 0,
+      "owner": 80,
+      "location": {
+        "start": {
+          "line": 3,
+          "column": 28
+        },
+        "end": {
+          "line": 3,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "4",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "line": 4,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "5",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 4,
+          "column": 15
+        },
+        "end": {
+          "line": 4,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "6",
+      "count": 0,
+      "owner": 111,
+      "location": {
+        "start": {
+          "line": 4,
+          "column": 28
+        },
+        "end": {
+          "line": 4,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "7",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 5,
+          "column": 2
+        },
+        "end": {
+          "line": 5,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "8",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 5,
+          "column": 15
+        },
+        "end": {
+          "line": 5,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "9",
+      "count": 0,
+      "owner": 142,
+      "location": {
+        "start": {
+          "line": 5,
+          "column": 28
+        },
+        "end": {
+          "line": 5,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "10",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 6,
+          "column": 2
+        },
+        "end": {
+          "line": 6,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "11",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 6,
+          "column": 15
+        },
+        "end": {
+          "line": 6,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "12",
+      "count": 0,
+      "owner": 173,
+      "location": {
+        "start": {
+          "line": 6,
+          "column": 28
+        },
+        "end": {
+          "line": 6,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "13",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 7,
+          "column": 2
+        },
+        "end": {
+          "line": 7,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "14",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 7,
+          "column": 15
+        },
+        "end": {
+          "line": 7,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "15",
+      "count": 0,
+      "owner": 204,
+      "location": {
+        "start": {
+          "line": 7,
+          "column": 28
+        },
+        "end": {
+          "line": 7,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "16",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 8,
+          "column": 2
+        },
+        "end": {
+          "line": 8,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "17",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 8,
+          "column": 15
+        },
+        "end": {
+          "line": 8,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "18",
+      "count": 0,
+      "owner": 235,
+      "location": {
+        "start": {
+          "line": 8,
+          "column": 28
+        },
+        "end": {
+          "line": 8,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "19",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 9,
+          "column": 2
+        },
+        "end": {
+          "line": 9,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "20",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 9,
+          "column": 15
+        },
+        "end": {
+          "line": 9,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "21",
+      "count": 0,
+      "owner": 266,
+      "location": {
+        "start": {
+          "line": 9,
+          "column": 28
+        },
+        "end": {
+          "line": 9,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "22",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 10,
+          "column": 2
+        },
+        "end": {
+          "line": 10,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "23",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 10,
+          "column": 15
+        },
+        "end": {
+          "line": 10,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "24",
+      "count": 0,
+      "owner": 297,
+      "location": {
+        "start": {
+          "line": 10,
+          "column": 28
+        },
+        "end": {
+          "line": 10,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "25",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 11,
+          "column": 2
+        },
+        "end": {
+          "line": 11,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "26",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 11,
+          "column": 15
+        },
+        "end": {
+          "line": 11,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "27",
+      "count": 0,
+      "owner": 328,
+      "location": {
+        "start": {
+          "line": 11,
+          "column": 28
+        },
+        "end": {
+          "line": 11,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "28",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 12,
+          "column": 2
+        },
+        "end": {
+          "line": 12,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "29",
+      "count": 1,
+      "owner": 358,
+      "location": {
+        "start": {
+          "line": 15,
+          "column": 2
+        },
+        "end": {
+          "line": 15,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "30",
+      "count": 0,
+      "owner": 414,
+      "location": {
+        "start": {
+          "line": 15,
+          "column": 22
+        },
+        "end": {
+          "line": 15,
+          "column": 26
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "31",
+      "count": 0,
+      "owner": 424,
+      "location": {
+        "start": {
+          "line": 15,
+          "column": 32
+        },
+        "end": {
+          "line": 15,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "32",
+      "count": 1,
+      "owner": 435,
+      "location": {
+        "start": {
+          "line": 18,
+          "column": 2
+        },
+        "end": {
+          "line": 18,
+          "column": null
+        }
+      }
+    },
+    {
+      "kind": "statements",
+      "id": "33",
+      "count": 2,
+      "owner": 498,
+      "location": {
+        "start": {
+          "line": 18,
+          "column": 29
+        },
+        "end": {
+          "line": 18,
+          "column": 50
+        }
+      }
+    },
+    {
+      "kind": "branches",
+      "id": "0:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 3,
+          "column": 2
+        },
+        "end": {
+          "line": 3,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 3,
+          "column": 2
+        },
+        "end": {
+          "line": 3,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "0:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 3,
+          "column": 2
+        },
+        "end": {
+          "line": 3,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "1:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "line": 4,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "line": 4,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "1:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "line": 4,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "2:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 5,
+          "column": 2
+        },
+        "end": {
+          "line": 5,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 5,
+          "column": 2
+        },
+        "end": {
+          "line": 5,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "2:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 5,
+          "column": 2
+        },
+        "end": {
+          "line": 5,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "3:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 6,
+          "column": 2
+        },
+        "end": {
+          "line": 6,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 6,
+          "column": 2
+        },
+        "end": {
+          "line": 6,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "3:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 6,
+          "column": 2
+        },
+        "end": {
+          "line": 6,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "4:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 7,
+          "column": 2
+        },
+        "end": {
+          "line": 7,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 7,
+          "column": 2
+        },
+        "end": {
+          "line": 7,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "4:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 7,
+          "column": 2
+        },
+        "end": {
+          "line": 7,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "5:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 8,
+          "column": 2
+        },
+        "end": {
+          "line": 8,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 8,
+          "column": 2
+        },
+        "end": {
+          "line": 8,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "5:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 8,
+          "column": 2
+        },
+        "end": {
+          "line": 8,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "6:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 9,
+          "column": 2
+        },
+        "end": {
+          "line": 9,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 9,
+          "column": 2
+        },
+        "end": {
+          "line": 9,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "6:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 9,
+          "column": 2
+        },
+        "end": {
+          "line": 9,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "7:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 10,
+          "column": 2
+        },
+        "end": {
+          "line": 10,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 10,
+          "column": 2
+        },
+        "end": {
+          "line": 10,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "7:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 10,
+          "column": 2
+        },
+        "end": {
+          "line": 10,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "8:0",
+      "count": 0,
+      "owner": 0,
+      "location": {
+        "start": {
+          "line": 11,
+          "column": 2
+        },
+        "end": {
+          "line": 11,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 11,
+          "column": 2
+        },
+        "end": {
+          "line": 11,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "8:1",
+      "count": 1,
+      "owner": 0,
+      "location": {
+        "start": {},
+        "end": {}
+      },
+      "decision": {
+        "start": {
+          "line": 11,
+          "column": 2
+        },
+        "end": {
+          "line": 11,
+          "column": null
+        }
+      },
+      "type": "if"
+    },
+    {
+      "kind": "branches",
+      "id": "9:0",
+      "count": 0,
+      "owner": 358,
+      "location": {
+        "start": {
+          "line": 15,
+          "column": 16
+        },
+        "end": {
+          "line": 15,
+          "column": 26
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 15,
+          "column": 9
+        },
+        "end": {
+          "line": 15,
+          "column": null
+        }
+      },
+      "type": "cond-expr"
+    },
+    {
+      "kind": "branches",
+      "id": "9:1",
+      "count": 0,
+      "owner": 358,
+      "location": {
+        "start": {
+          "line": 15,
+          "column": 26
+        },
+        "end": {
+          "line": 15,
+          "column": null
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 15,
+          "column": 9
+        },
+        "end": {
+          "line": 15,
+          "column": null
+        }
+      },
+      "type": "cond-expr"
+    },
+    {
+      "kind": "branches",
+      "id": "10:0",
+      "count": 1,
+      "owner": 498,
+      "location": {
+        "start": {
+          "line": 18,
+          "column": 41
+        },
+        "end": {
+          "line": 18,
+          "column": 49
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 18,
+          "column": 29
+        },
+        "end": {
+          "line": 18,
+          "column": 50
+        }
+      },
+      "type": "cond-expr"
+    },
+    {
+      "kind": "branches",
+      "id": "10:1",
+      "count": 1,
+      "owner": 498,
+      "location": {
+        "start": {
+          "line": 18,
+          "column": 49
+        },
+        "end": {
+          "line": 18,
+          "column": 50
+        }
+      },
+      "decision": {
+        "start": {
+          "line": 18,
+          "column": 29
+        },
+        "end": {
+          "line": 18,
+          "column": 50
+        }
+      },
+      "type": "cond-expr"
+    }
+  ]
+}

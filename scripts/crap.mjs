@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import ts from "typescript";
+import { analyzeAstCoverage, AST_COVERAGE_FORMAT } from "./backend-ast-coverage.mjs";
 import { backendFiles, policy } from "./backend-scope.mjs";
 
 const isFunction = node => ts.isFunctionLike(node) && node.body !== undefined;
@@ -44,7 +45,9 @@ export function functionComplexity(node) {
 export function crapScore(complexity, coverage) {
   return complexity ** 2 * (1 - coverage / 100) ** 3 + complexity;
 }
-export function analyzeFile(file, text, coverage) {
+export function analyzeFile(file, text, coverage, format = "legacy") {
+  if (format === AST_COVERAGE_FORMAT) return analyzeAstCoverage(file, text, coverage, functionComplexity);
+  if (format !== "legacy") throw new Error(`Unknown coverage format: ${format}`);
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const functions = [];
   function visit(node) {
@@ -162,14 +165,19 @@ export function analyzeFile(file, text, coverage) {
         start: observed.start, end: observed.end })) };
   });
 }
-export function reportCrap(coverage) {
+export function reportCrap(coverage, format = "legacy") {
   const files = backendFiles();
   const missingFiles = files.filter(file => !(coverage[resolve(file)] ?? coverage[file]));
-  const functions = files.flatMap(file => analyzeFile(file, readFileSync(file, "utf8"), coverage[resolve(file)] ?? coverage[file]));
+  const mappingFailures = [];
+  const functions = files.flatMap(file => {
+    const rows = analyzeFile(file, readFileSync(file, "utf8"), coverage[resolve(file)] ?? coverage[file], format);
+    mappingFailures.push(...(rows.mappingFailures ?? []).map(problem => ({ file, ...problem })));
+    return rows;
+  });
   const failures = functions.filter(row => row.missingCoverage || row.crap > policy.maximumFunctionCrap);
-  return { criterion: policy.maximumFunctionCrap, metric: "per-function AST cyclomatic complexity; minimum statement/branch coverage; nested functions measured separately",
+  return { format, mappingFailures, criterion: policy.maximumFunctionCrap, metric: "per-function AST cyclomatic complexity; minimum statement/branch coverage; nested functions measured separately",
     files: files.length, missingFiles, functions: functions.sort((a, b) => b.crap - a.crap),
-    failures, passed: files.length > 0 && functions.length > 0 && missingFiles.length === 0 && failures.length === 0 };
+    failures, passed: files.length > 0 && functions.length > 0 && missingFiles.length === 0 && failures.length === 0 && mappingFailures.length === 0 };
 }
 if (process.argv[1] && resolve(process.argv[1]) === resolve("scripts/crap.mjs")) {
   const result = reportCrap(JSON.parse(readFileSync(process.argv[2] ?? "coverage/coverage-final.json", "utf8")));

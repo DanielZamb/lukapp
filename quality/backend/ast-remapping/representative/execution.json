@@ -1,0 +1,6 @@
+{
+  "command": "node scripts/backend-ast-probe.mjs",
+  "exitStatus": 0,
+  "elapsedSeconds": 2.233983039855957,
+  "timeoutSeconds": 180
+}

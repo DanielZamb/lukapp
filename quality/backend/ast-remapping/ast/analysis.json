@@ -1,0 +1,776 @@
+{
+  "label": "ast",
+  "version": "3.2.7",
+  "explicitOption": true,
+  "sourceHash": "453d0bbf84278dc9c2df6e0708563665d590f268403d3a4cb8b7d7040acbe921",
+  "reporterError": "Error: Debug Failure. False expression.\n    at computePositionOfLineAndCharacter (/Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/node_modules/.pnpm/typescript@5.9.2/node_modules/typescript/lib/typescript.js:11699:11)\n    at SourceFileObject.getPositionOfLineAndCharacter (/Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/node_modules/.pnpm/typescript@5.9.2/node_modules/typescript/lib/typescript.js:152307:12)\n    at offset (file:///Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/scripts/crap.mjs:72:37)\n    at range (file:///Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/scripts/crap.mjs:73:39)\n    at rootCandidates (file:///Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/scripts/crap.mjs:76:22)\n    at file:///Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/scripts/crap.mjs:90:23\n    at Array.map (<anonymous>)\n    at file:///Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/scripts/crap.mjs:89:22\n    at Array.flatMap (<anonymous>)\n    at analyzeFile (file:///Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/scripts/crap.mjs:87:66)",
+  "fnMap": {
+    "0": {
+      "name": "parent",
+      "decl": {
+        "start": {
+          "line": 1,
+          "column": 16
+        },
+        "end": {
+          "line": 1,
+          "column": 23
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 1,
+          "column": 34
+        },
+        "end": {
+          "line": 13,
+          "column": null
+        }
+      },
+      "line": 1
+    },
+    "1": {
+      "name": "(anonymous_1)",
+      "decl": {
+        "start": {
+          "line": 3,
+          "column": 22
+        },
+        "end": {
+          "line": 3,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 3,
+          "column": 28
+        },
+        "end": {
+          "line": 3,
+          "column": null
+        }
+      },
+      "line": 3
+    },
+    "2": {
+      "name": "(anonymous_2)",
+      "decl": {
+        "start": {
+          "line": 4,
+          "column": 22
+        },
+        "end": {
+          "line": 4,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 4,
+          "column": 28
+        },
+        "end": {
+          "line": 4,
+          "column": null
+        }
+      },
+      "line": 4
+    },
+    "3": {
+      "name": "(anonymous_3)",
+      "decl": {
+        "start": {
+          "line": 5,
+          "column": 22
+        },
+        "end": {
+          "line": 5,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 5,
+          "column": 28
+        },
+        "end": {
+          "line": 5,
+          "column": null
+        }
+      },
+      "line": 5
+    },
+    "4": {
+      "name": "(anonymous_4)",
+      "decl": {
+        "start": {
+          "line": 6,
+          "column": 22
+        },
+        "end": {
+          "line": 6,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 6,
+          "column": 28
+        },
+        "end": {
+          "line": 6,
+          "column": null
+        }
+      },
+      "line": 6
+    },
+    "5": {
+      "name": "(anonymous_5)",
+      "decl": {
+        "start": {
+          "line": 7,
+          "column": 22
+        },
+        "end": {
+          "line": 7,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 7,
+          "column": 28
+        },
+        "end": {
+          "line": 7,
+          "column": null
+        }
+      },
+      "line": 7
+    },
+    "6": {
+      "name": "(anonymous_6)",
+      "decl": {
+        "start": {
+          "line": 8,
+          "column": 22
+        },
+        "end": {
+          "line": 8,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 8,
+          "column": 28
+        },
+        "end": {
+          "line": 8,
+          "column": null
+        }
+      },
+      "line": 8
+    },
+    "7": {
+      "name": "(anonymous_7)",
+      "decl": {
+        "start": {
+          "line": 9,
+          "column": 22
+        },
+        "end": {
+          "line": 9,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 9,
+          "column": 28
+        },
+        "end": {
+          "line": 9,
+          "column": null
+        }
+      },
+      "line": 9
+    },
+    "8": {
+      "name": "(anonymous_8)",
+      "decl": {
+        "start": {
+          "line": 10,
+          "column": 22
+        },
+        "end": {
+          "line": 10,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 10,
+          "column": 28
+        },
+        "end": {
+          "line": 10,
+          "column": null
+        }
+      },
+      "line": 10
+    },
+    "9": {
+      "name": "(anonymous_9)",
+      "decl": {
+        "start": {
+          "line": 11,
+          "column": 22
+        },
+        "end": {
+          "line": 11,
+          "column": 28
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 11,
+          "column": 28
+        },
+        "end": {
+          "line": 11,
+          "column": null
+        }
+      },
+      "line": 11
+    },
+    "10": {
+      "name": "chosen",
+      "decl": {
+        "start": {
+          "line": 14,
+          "column": 16
+        },
+        "end": {
+          "line": 14,
+          "column": 23
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 14,
+          "column": 38
+        },
+        "end": {
+          "line": 16,
+          "column": null
+        }
+      },
+      "line": 14
+    },
+    "11": {
+      "name": "(anonymous_11)",
+      "decl": {
+        "start": {
+          "line": 15,
+          "column": 16
+        },
+        "end": {
+          "line": 15,
+          "column": 22
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 15,
+          "column": 22
+        },
+        "end": {
+          "line": 15,
+          "column": 26
+        }
+      },
+      "line": 15
+    },
+    "12": {
+      "name": "(anonymous_12)",
+      "decl": {
+        "start": {
+          "line": 15,
+          "column": 26
+        },
+        "end": {
+          "line": 15,
+          "column": 32
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 15,
+          "column": 32
+        },
+        "end": {
+          "line": 15,
+          "column": null
+        }
+      },
+      "line": 15
+    },
+    "13": {
+      "name": "mapped",
+      "decl": {
+        "start": {
+          "line": 17,
+          "column": 16
+        },
+        "end": {
+          "line": 17,
+          "column": 23
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 17,
+          "column": 41
+        },
+        "end": {
+          "line": 19,
+          "column": null
+        }
+      },
+      "line": 17
+    },
+    "14": {
+      "name": "(anonymous_14)",
+      "decl": {
+        "start": {
+          "line": 18,
+          "column": 20
+        },
+        "end": {
+          "line": 18,
+          "column": 29
+        }
+      },
+      "loc": {
+        "start": {
+          "line": 18,
+          "column": 29
+        },
+        "end": {
+          "line": 18,
+          "column": 50
+        }
+      },
+      "line": 18
+    }
+  },
+  "f": {
+    "0": 1,
+    "1": 0,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 0,
+    "7": 0,
+    "8": 0,
+    "9": 0,
+    "10": 1,
+    "11": 0,
+    "12": 0,
+    "13": 1,
+    "14": 2
+  },
+  "branchMap": {
+    "0": {
+      "loc": {
+        "start": {
+          "line": 3,
+          "column": 2
+        },
+        "end": {
+          "line": 3,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 3,
+            "column": 2
+          },
+          "end": {
+            "line": 3,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 3
+    },
+    "1": {
+      "loc": {
+        "start": {
+          "line": 4,
+          "column": 2
+        },
+        "end": {
+          "line": 4,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 4,
+            "column": 2
+          },
+          "end": {
+            "line": 4,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 4
+    },
+    "2": {
+      "loc": {
+        "start": {
+          "line": 5,
+          "column": 2
+        },
+        "end": {
+          "line": 5,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 5,
+            "column": 2
+          },
+          "end": {
+            "line": 5,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 5
+    },
+    "3": {
+      "loc": {
+        "start": {
+          "line": 6,
+          "column": 2
+        },
+        "end": {
+          "line": 6,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 6,
+            "column": 2
+          },
+          "end": {
+            "line": 6,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 6
+    },
+    "4": {
+      "loc": {
+        "start": {
+          "line": 7,
+          "column": 2
+        },
+        "end": {
+          "line": 7,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 7,
+            "column": 2
+          },
+          "end": {
+            "line": 7,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 7
+    },
+    "5": {
+      "loc": {
+        "start": {
+          "line": 8,
+          "column": 2
+        },
+        "end": {
+          "line": 8,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 8,
+            "column": 2
+          },
+          "end": {
+            "line": 8,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 8
+    },
+    "6": {
+      "loc": {
+        "start": {
+          "line": 9,
+          "column": 2
+        },
+        "end": {
+          "line": 9,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 9,
+            "column": 2
+          },
+          "end": {
+            "line": 9,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 9
+    },
+    "7": {
+      "loc": {
+        "start": {
+          "line": 10,
+          "column": 2
+        },
+        "end": {
+          "line": 10,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 10,
+            "column": 2
+          },
+          "end": {
+            "line": 10,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 10
+    },
+    "8": {
+      "loc": {
+        "start": {
+          "line": 11,
+          "column": 2
+        },
+        "end": {
+          "line": 11,
+          "column": null
+        }
+      },
+      "type": "if",
+      "locations": [
+        {
+          "start": {
+            "line": 11,
+            "column": 2
+          },
+          "end": {
+            "line": 11,
+            "column": null
+          }
+        },
+        {
+          "start": {},
+          "end": {}
+        }
+      ],
+      "line": 11
+    },
+    "9": {
+      "loc": {
+        "start": {
+          "line": 15,
+          "column": 9
+        },
+        "end": {
+          "line": 15,
+          "column": null
+        }
+      },
+      "type": "cond-expr",
+      "locations": [
+        {
+          "start": {
+            "line": 15,
+            "column": 16
+          },
+          "end": {
+            "line": 15,
+            "column": 26
+          }
+        },
+        {
+          "start": {
+            "line": 15,
+            "column": 26
+          },
+          "end": {
+            "line": 15,
+            "column": null
+          }
+        }
+      ],
+      "line": 15
+    },
+    "10": {
+      "loc": {
+        "start": {
+          "line": 18,
+          "column": 29
+        },
+        "end": {
+          "line": 18,
+          "column": 50
+        }
+      },
+      "type": "cond-expr",
+      "locations": [
+        {
+          "start": {
+            "line": 18,
+            "column": 41
+          },
+          "end": {
+            "line": 18,
+            "column": 49
+          }
+        },
+        {
+          "start": {
+            "line": 18,
+            "column": 49
+          },
+          "end": {
+            "line": 18,
+            "column": 50
+          }
+        }
+      ],
+      "line": 18
+    }
+  },
+  "b": {
+    "0": [
+      0,
+      1
+    ],
+    "1": [
+      0,
+      1
+    ],
+    "2": [
+      0,
+      1
+    ],
+    "3": [
+      0,
+      1
+    ],
+    "4": [
+      0,
+      1
+    ],
+    "5": [
+      0,
+      1
+    ],
+    "6": [
+      0,
+      1
+    ],
+    "7": [
+      0,
+      1
+    ],
+    "8": [
+      0,
+      1
+    ],
+    "9": [
+      0,
+      0
+    ],
+    "10": [
+      1,
+      1
+    ]
+  }
+}

@@ -4,6 +4,7 @@ import { spawnSync, execFileSync } from "node:child_process";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { backendFiles, areaFor, manifest, policy, sha256 } from "./backend-scope.mjs";
 import { reportCrap } from "./crap.mjs";
+import { checkSuites, regressionSuites, checkPreflight, sandboxHashes } from "./backend-suites.mjs";
 import { analyzeMutation } from "./backend-mutation.mjs";
 
 export function parseArguments(args) {
@@ -28,14 +29,15 @@ export function checkStages(mode, area, stages) {
     expected: expected ?? [], missing, unexpected, duplicates, invalidRequest: expected === undefined };
 }
 export function mutationConfig(base, files, compilerConfigurations, reportPath) {
-  return { ...base, mutate: files, ignorePatterns: [...base.ignorePatterns, ...compilerConfigurations.map(file => `!${file}`)],
+  return { ...base, mutate: files, ignorePatterns: [...base.ignorePatterns, ...compilerConfigurations.filter(file => !file.split("/").includes("node_modules")).map(file => `!${file}`)],
     jsonReporter: { fileName: reportPath } };
 }
-function checkRegression(regression) {
+export function checkRegression(regression, inputs = manifest()) {
+  const suites = checkSuites([...inputs.mutationTests.selected, ...inputs.mutationTests.excluded], regressionSuites(regression));
   const loadAssertions = (regression.testResults ?? []).filter(result => result.name.endsWith("/convex/budgetCapacity.load.test.ts"))
     .flatMap(result => result.assertionResults).filter(result => result.title === policy.mandatoryLoadTest);
-  return { total: regression.numTotalTests, passed: regression.numPassedTests, pending: regression.numPendingTests, loadAssertions,
-    regressionPassed: regression.success === true && regression.numTotalTests > 0 && regression.numPassedTests === regression.numTotalTests &&
+  return { total: regression.numTotalTests, passed: regression.numPassedTests, pending: regression.numPendingTests, loadAssertions, suites,
+    regressionPassed: suites.passed && regression.success === true && regression.numTotalTests > 0 && regression.numPassedTests === regression.numTotalTests &&
       loadAssertions.length === 1 && loadAssertions[0].status === "passed" };
 }
 export function verifyReceipt(area) {
@@ -44,24 +46,33 @@ export function verifyReceipt(area) {
   const changed = Object.keys({ ...receipt.manifest.files, ...current.files }).filter(file => receipt.manifest.files[file] !== current.files[file]);
   const invalidArtifacts = Object.entries(receipt.artifacts).filter(([file, hash]) => sha256(readFileSync(join(area, file))) !== hash).map(([file]) => file);
   const stageCompleteness = checkStages(receipt.mode, receipt.area, receipt.stages);
+  const formatMatches = receipt.mode === "mutation" || JSON.stringify(receipt.coverageFormat) === JSON.stringify(current.coverageFormat);
   const stageChecks = [];
-  if (stageCompleteness.valid && !changed.length && !invalidArtifacts.length) for (const stage of receipt.stages) {
+  if (formatMatches && stageCompleteness.valid && !changed.length && !invalidArtifacts.length) for (const stage of receipt.stages) {
     if (stage.name === "coverage-crap") {
       const coverage = JSON.parse(gunzipSync(readFileSync(join(area, "coverage-final.json.gz"))));
       const regression = JSON.parse(readFileSync(join(area, "regression.json"), "utf8"));
-      stageChecks.push({ name: stage.name, passed: stage.exitStatus === 0 && reportCrap(coverage).passed && checkRegression(regression).regressionPassed });
+      stageChecks.push({ name: stage.name, passed: stage.exitStatus === 0 && reportCrap(coverage, receipt.coverageFormat?.format ?? "legacy").passed && checkRegression(regression).regressionPassed });
     } else {
       const report = JSON.parse(gunzipSync(readFileSync(join(area, `${stage.name}-mutation.json.gz`))));
       const files = current.mutationFiles.filter(file => areaFor(file) === stage.name);
       const result = analyzeMutation(report, files, current.files, policy.mutationScoreMinimum);
-      stageChecks.push({ name: stage.name, passed: stage.exitStatus === 0 && result.passed });
+      const preflightName = `${stage.name}-preflight.json`;
+      const evidence = receipt.artifacts[preflightName] ? JSON.parse(readFileSync(join(area, preflightName), "utf8")) : undefined;
+      const preflight = checkPreflight(evidence, current);
+      if (receipt.mode === "all" && evidence) {
+        const regression = JSON.parse(readFileSync(join(area, "regression.json"), "utf8"));
+        const expected = checkSuites(current.mutationTests.selected, regressionSuites(regression).filter(suite => current.mutationTests.selected.includes(suite.file)));
+        if (!expected.passed || JSON.stringify(preflight.suites?.identities) !== JSON.stringify(expected.identities)) preflight.passed = false;
+      }
+      stageChecks.push({ name: stage.name, preflight, passed: stage.exitStatus === 0 && result.passed && preflight.passed });
     }
   }
-  const passed = receipt.passed === true && !receipt.changedDuringRun && changed.length === 0 && invalidArtifacts.length === 0 &&
+  const passed = formatMatches && receipt.passed === true && !receipt.changedDuringRun && changed.length === 0 && invalidArtifacts.length === 0 &&
     stageCompleteness.valid && stageChecks.length === stageCompleteness.expected.length && stageChecks.every(stage => stage.passed);
-  return { passed, fullGatePassed: passed && receipt.mode === "all", changed, invalidArtifacts, stageCompleteness, stageChecks, recordedPass: receipt.passed };
+  return { passed, formatMatches, fullGatePassed: passed && receipt.mode === "all", changed, invalidArtifacts, stageCompleteness, stageChecks, recordedPass: receipt.passed };
 }
-function main(args) {
+async function main(args) {
   const { mode, area } = parseArguments(args);
   if (mode === "verify") {
     const result = verifyReceipt(area);
@@ -75,7 +86,7 @@ function main(args) {
   const receipt = { startedAt: new Date().toISOString(), mode, area, command: process.argv.slice(1),
     head: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
     node: process.version, pnpm: execFileSync("pnpm", ["--version"], { encoding: "utf8" }).trim(),
-    manifest: before, stages: [], artifacts: {}, passed: false };
+    coverageFormat: before.coverageFormat, manifest: before, stages: [], artifacts: {}, passed: false };
   writeFileSync(join(dir, "manifest-before.json"), JSON.stringify(before, null, 2) + "\n");
   function retain(file, bytes) { writeFileSync(join(dir, file), bytes); receipt.artifacts[file] = sha256(bytes); }
   function execute(name, args, environment = {}) {
@@ -89,16 +100,20 @@ function main(args) {
     unlinkSync(logPath);
     return { exitStatus: result.status, signal: result.signal, error: result.error?.message };
   }
+  let regressionAllowsMutation = mode === "mutation";
+  let expectedIdentities;
   if (mode === "all" || mode === "coverage") {
     if (existsSync("coverage/coverage-final.json")) unlinkSync("coverage/coverage-final.json");
     const testReportPath = resolve(dir, "regression.json");
     const execution = execute("coverage", ["exec", "vitest", "run", "--coverage", "--maxWorkers=2", "--reporter=default", "--reporter=json", `--outputFile=${testReportPath}`], { LUKAPP_INSTRUMENTED_LOAD: "1" });
     const regression = existsSync(testReportPath) ? JSON.parse(readFileSync(testReportPath, "utf8")) : {};
     if (existsSync(testReportPath)) receipt.artifacts["regression.json"] = sha256(readFileSync(testReportPath));
-    const regressionSummary = checkRegression(regression);
+    const regressionSummary = checkRegression(regression, before);
+    regressionAllowsMutation = execution.exitStatus === 0 && regressionSummary.regressionPassed;
+    expectedIdentities = checkSuites(before.mutationTests.selected, regressionSuites(regression).filter(suite => before.mutationTests.selected.includes(suite.file))).identities;
     const coverage = existsSync("coverage/coverage-final.json") ? JSON.parse(readFileSync("coverage/coverage-final.json", "utf8")) : {};
     retain("coverage-final.json.gz", gzipSync(JSON.stringify(coverage)));
-    const crap = reportCrap(coverage);
+    const crap = reportCrap(coverage, before.coverageFormat.format);
     retain("crap.json", JSON.stringify(crap, null, 2) + "\n");
     receipt.stages.push({ name: "coverage-crap", ...execution, passed: execution.exitStatus === 0 && crap.passed && regressionSummary.regressionPassed,
       regression: regressionSummary,
@@ -106,19 +121,26 @@ function main(args) {
       functions: crap.functions.length, failures: crap.failures, missingFiles: crap.missingFiles });
     console.log(`CRAP ${crap.passed ? "PASS" : "FAIL"}; ${crap.functions.length} functions; ${crap.failures.length} failures`);
   }
-  if (mode === "all" || mode === "mutation") {
+  if ((mode === "all" || mode === "mutation") && regressionAllowsMutation) {
     for (const selectedArea of area ? [area] : policy.areas) {
       const files = backendFiles().filter(file => areaFor(file) === selectedArea);
       const base = JSON.parse(readFileSync("stryker.config.json", "utf8"));
       const reportPath = resolve(dir, `${selectedArea}-mutation.json`);
-      const config = mutationConfig(base, files, before.compilerConfigurations, reportPath);
+      const config = mutationConfig(base, files, Object.keys(before.files), reportPath);
       const configPath = join(dir, `${selectedArea}-stryker.json`);
       writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
       receipt.artifacts[`${selectedArea}-stryker.json`] = sha256(readFileSync(configPath));
-      const execution = execute(selectedArea, ["exec", "stryker", "run", configPath]);
+      const preflightName = `${selectedArea}-preflight.json`;
+      const preflightOutput = resolve(dir, preflightName);
+      const preflightInputs = `${selectedArea}-preflight-inputs.json`;
+      retain(preflightInputs, JSON.stringify({ inputs: { ...before, sandboxHashes: await sandboxHashes(before) }, output: preflightOutput, expectedIdentities }, null, 2) + "\n");
+      const execution = execute(selectedArea, ["exec", "stryker", "run", configPath], { LUKAPP_MUTATION_PREFLIGHT: resolve(dir, preflightInputs) });
+      const evidence = existsSync(preflightOutput) ? JSON.parse(readFileSync(preflightOutput, "utf8")) : undefined;
+      if (evidence) receipt.artifacts[preflightName] = sha256(readFileSync(preflightOutput));
+      const preflight = checkPreflight(evidence, before);
       const report = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, "utf8")) : { files: {} };
       const { mutants, ...analysis } = analyzeMutation(report, files, before.files, policy.mutationScoreMinimum);
-      const stage = { name: selectedArea, ...execution, ...analysis, passed: execution.exitStatus === 0 && analysis.passed };
+      const stage = { name: selectedArea, ...execution, ...analysis, preflight, passed: execution.exitStatus === 0 && analysis.passed && preflight.passed };
       retain(`${selectedArea}-mutation.json.gz`, gzipSync(JSON.stringify(report)));
       if (existsSync(reportPath)) unlinkSync(reportPath);
       retain(`${selectedArea}-survivors.json`, JSON.stringify(mutants.filter(mutant => mutant.status !== "Killed"), null, 2) + "\n");

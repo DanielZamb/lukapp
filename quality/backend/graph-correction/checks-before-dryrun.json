@@ -1,0 +1,31 @@
+{
+  "base": "fea8ede08db8c0c3513e3714d1b7c27d90353589",
+  "checks": {
+    "toolTests": "node --test --test-concurrency=1 scripts/backend-ast-coverage.test.mjs scripts/backend-graph.test.mjs scripts/backend-quality.test.mjs scripts/backend-quality-review.test.mjs scripts/backend-quality-r2.test.mjs",
+    "result": "[\"1..57\",\"# tests 57\",\"# suites 0\",\"# pass 57\",\"# fail 0\",\"# cancelled 0\",\"# skipped 0\",\"# todo 0\",\"# duration_ms 7009.251916\",\"\"]"
+  },
+  "dependencies": {
+    "package.json": {
+      "current": "10761ac4e527c9febb5ac36ecd0bae40283418a005e228452c71ecd3f4877fd2",
+      "reviewed": "10761ac4e527c9febb5ac36ecd0bae40283418a005e228452c71ecd3f4877fd2"
+    },
+    "apps/mobile/package.json": {
+      "current": "6b45062ec5e817edf618d4b21b85b004f6305dd94941f02189972b22e56b45ff",
+      "reviewed": "6b45062ec5e817edf618d4b21b85b004f6305dd94941f02189972b22e56b45ff"
+    },
+    "pnpm-lock.yaml": {
+      "current": "78eb2b83d18d1a67f0fedff779395920b5ebfaf450959614a8585b0ff92c2df6",
+      "reviewed": "78eb2b83d18d1a67f0fedff779395920b5ebfaf450959614a8585b0ff92c2df6"
+    },
+    "pnpm-workspace.yaml": {
+      "current": "f14140f017baf7fd633531fe0ef70c0bad386ed672423a82696be3a41986eb4f",
+      "reviewed": "f14140f017baf7fd633531fe0ef70c0bad386ed672423a82696be3a41986eb4f"
+    }
+  },
+  "installed": {
+    "@vitest/coverage-v8": "3.2.7",
+    "vitest": "3.2.7",
+    "@stryker-mutator/vitest-runner": "10.0.0"
+  },
+  "inputDigest": "f9305e74765305789dd14aae8f115ab937382500545f9229e58c12653cdb51c2"
+}
