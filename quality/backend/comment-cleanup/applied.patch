@@ -1,0 +1,47 @@
+diff --git a/scripts/backend-retained-validation.mjs b/scripts/backend-retained-validation.mjs
+index f2f30138bd1898bcd38f93dabce0c6198bcfee84..fb5aa3f0a0b07ae20d4c0a301e794b5a15544a77 100644
+--- a/scripts/backend-retained-validation.mjs
++++ b/scripts/backend-retained-validation.mjs
+@@ -23,8 +23,6 @@ for (const [label, dataset] of [["before", "representative"], ["after", "represe
+   const sourceFile = `quality/backend/ast-remapping/${dataset}/source.ts.txt`;
+   const correctedFile = `quality/backend/mapper-diagnosis/representative-${label}-corrected.json`;
+   const text = readFileSync(sourceFile, "utf8"), corrected = Object.values(JSON.parse(readFileSync(correctedFile)))[0];
+-  // Focused tests reproduce these exact maps with the byte-verified installed
+-  // patched mapper. Historical unpatched reports remain unchanged.
+   const rows = analyzeFile("src/savingsRecovery/commands.ts", text, corrected, coverageFormat.format);
+   const report = { kind: "advisory retained-data recalculation", ...identity, newBackendExecution: false,
+     originalFormat: "vitest-v8-3.2.7-ast-v1", sourceHash: sha256(text), sourceSnapshotHash: sha256(readFileSync(sourceFile)),
+diff --git a/scripts/backend-scope.mjs b/scripts/backend-scope.mjs
+index 7fa550d3e41d4b502c618ebbed62663ef70a4393..629ac7a6081010e19296aab06c918002ec4ee2f9 100644
+--- a/scripts/backend-scope.mjs
++++ b/scripts/backend-scope.mjs
+@@ -56,8 +56,6 @@ export function compilerConfigurationFiles(seeds, root = process.cwd()) {
+   }
+   return [...files].sort();
+ }
+-// Follow local imports conservatively, including erased imports. External packages are
+-// bound by package manifests, the lockfile, and resolved compiler configurations.
+ export function importedInputs(seeds, root = process.cwd()) {
+   const files = new Set(), configurations = new Set();
+   const queue = [...seeds];
+diff --git a/scripts/backend-suites.mjs b/scripts/backend-suites.mjs
+index 55e1363cbd0caf11f2522f33a66a50055295ef6d..12f1b9a587a0619daab0efeb14b538366f45732f 100644
+--- a/scripts/backend-suites.mjs
++++ b/scripts/backend-suites.mjs
+@@ -25,8 +25,6 @@ export async function sandboxHashes(inputs, configured = {}) {
+       toInstrumenterFile: async () => ({ name: file, content }) });
+   }
+   const log = { debug() {}, warn(message) { throw new Error(`Cannot predict sandbox preprocessing: ${message}`); } };
+-  // Predict bytes using the same installed sequence, without writing or running
+-  // a sandbox. The observed root config change was JSON formatting only.
+   await new DisableTypeChecksPreprocessor(log, options, disableTypeChecks).preprocess({ files });
+   await new TSConfigPreprocessor(log, options).preprocess({ files });
+   for (const [file, expected] of files) hashes[relative(process.cwd(), file)] = sha256(await expected.readContent());
+@@ -87,7 +85,6 @@ export function regressionSuites(report, root = process.cwd()) {
+ export function checkPreflight(evidence, inputs) {
+   const failures = [];
+   if (!evidence || evidence.inputDigest !== inputs.digest) return { passed: false, failures: [{ reason: "missing-or-unbound-preflight" }] };
+-  // Recalculate from retained observations; never trust the recorded pass flag.
+   const sandbox = evidence.sandbox;
+   if (!sandbox?.passed || sandbox.failures?.length) failures.push({ reason: "sandbox-input-failure" });
+   const suites = checkSuites(inputs.mutationTests.selected, evidence.suites ?? [], evidence.runnerTests ?? []);

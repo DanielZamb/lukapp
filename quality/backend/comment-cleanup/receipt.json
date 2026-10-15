@@ -1,0 +1,63 @@
+{
+  "kind": "comment-only source/input and explicitly authorized evidence reuse",
+  "baseHead": "b86f659c756dd44dcd62eb6eb2f16d9cff876b63",
+  "baseTree": "b34205eae29d97f66a8a5b2921251e96dc7d62e1",
+  "sourceHead": "735f982904104f233eca829871670dd33e6024ab",
+  "sourceTree": "595afd04cf2738ea5dd3d9bbd247ece8750ced26",
+  "previousInputDigest": "fcff44ffca34fb7e828d1f136dcdc06f7b5d3ba78dadfee3b10b645359e6f002",
+  "inputDigest": "0feb95db95cbf1c9b7cc53a714443058c695565e153ebc65bee77691c4ef2ef3",
+  "inputFileCount": 182,
+  "changedInputs": [
+    {
+      "file": "scripts/backend-retained-validation.mjs",
+      "beforeSha256": "610a4b83c65fe7841cbe175fae4412017fb05f6e5581ef53b2699637c3480683",
+      "afterSha256": "6c5a453934879de762901aa4415ff7e8da244e48e97ecabb32394f3be56e3780"
+    },
+    {
+      "file": "scripts/backend-scope.mjs",
+      "beforeSha256": "e813498e3761994900414cb183580233b7efec9af9c62903fede3266996d67a3",
+      "afterSha256": "ec7fd672e36f235cf84c34d69fbd06636a90222934d3a6532f9f7206455bbd9f"
+    },
+    {
+      "file": "scripts/backend-suites.mjs",
+      "beforeSha256": "04786ea870a283ad430c53feca6408ba311187dd9d283d84050464e4bdbc6b44",
+      "afterSha256": "b034c1381884237f671b355f7a2b223c8450d0dc69b3c8df0acecb79e16bb3cd"
+    }
+  ],
+  "exactAcceptedPatchSha256": "945506f368ea949055b20aa8ea2c4ad44c40669f41ac4f5aeca25b64512b3a26",
+  "appliedPatchSha256": "e8b4d8f3da87d65deaea221f5209435c846a859249b5157c5b71bc1610497c64",
+  "removedLines": 7,
+  "executableTokensEquivalent": true,
+  "tokenProofSha256": "b6c91225ab790503bdee2253876c5d5103b41cfa737f700a2876ac6ef558e849",
+  "unchanged": {
+    "productionSource": true,
+    "backendTests": true,
+    "toolingTests": true,
+    "configurations": true,
+    "dependencies": true,
+    "keptExternalDependencyExplanations": true,
+    "literalIgnoreHintFixtures": true,
+    "upstreamPatchContext": true,
+    "historicalEvidence": true
+  },
+  "reusedEvidence": {
+    "frozenEvidenceHead": "b86f659c756dd44dcd62eb6eb2f16d9cff876b63",
+    "inputDigest": "fcff44ffca34fb7e828d1f136dcdc06f7b5d3ba78dadfee3b10b645359e6f002",
+    "testLog": "quality/backend/final-correction/tool-tests.log",
+    "testLogSha256": "2d612348d997f4d7bf39607f0ef7b5e7b9eac20d22c8a3b3ba86ae209e3f5923",
+    "passed": 67,
+    "failed": 0,
+    "skipped": 0,
+    "freshExecution": false,
+    "basis": "User-authorized reuse after exactly seven full-line comment deletions; all executable tokens and comment-free parsed programs identical, all test/config/dependency bytes unchanged."
+  },
+  "historicalArtifacts": {
+    "checked": 42,
+    "invalid": []
+  },
+  "noTestsOrGatesRun": true,
+  "noRetainedRecalculation": true,
+  "officialGateHeld": true,
+  "strictGateReceiptReuse": "Raw input digest changed; historical gate receipts are preserved and not relabelled as current-input passes.",
+  "finalHeadBinding": "The evidence-only commit containing this receipt has the same gate input digest and source bytes as sourceHead; final commit/tree are reported in the coordinator handoff."
+}

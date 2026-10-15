@@ -1,0 +1,44 @@
+diff --git a/scripts/backend-retained-validation.mjs b/scripts/backend-retained-validation.mjs
+--- a/scripts/backend-retained-validation.mjs
++++ b/scripts/backend-retained-validation.mjs
+@@ -23,8 +23,6 @@
+   const sourceFile = `quality/backend/ast-remapping/${dataset}/source.ts.txt`;
+   const correctedFile = `quality/backend/mapper-diagnosis/representative-${label}-corrected.json`;
+   const text = readFileSync(sourceFile, "utf8"), corrected = Object.values(JSON.parse(readFileSync(correctedFile)))[0];
+-  // Focused tests reproduce these exact maps with the byte-verified installed
+-  // patched mapper. Historical unpatched reports remain unchanged.
+   const rows = analyzeFile("src/savingsRecovery/commands.ts", text, corrected, coverageFormat.format);
+   const report = { kind: "advisory retained-data recalculation", ...identity, newBackendExecution: false,
+     originalFormat: "vitest-v8-3.2.7-ast-v1", sourceHash: sha256(text), sourceSnapshotHash: sha256(readFileSync(sourceFile)),
+diff --git a/scripts/backend-scope.mjs b/scripts/backend-scope.mjs
+--- a/scripts/backend-scope.mjs
++++ b/scripts/backend-scope.mjs
+@@ -56,8 +56,6 @@
+   }
+   return [...files].sort();
+ }
+-// Follow local imports conservatively, including erased imports. External packages are
+-// bound by package manifests, the lockfile, and resolved compiler configurations.
+ export function importedInputs(seeds, root = process.cwd()) {
+   const files = new Set(), configurations = new Set();
+   const queue = [...seeds];
+diff --git a/scripts/backend-suites.mjs b/scripts/backend-suites.mjs
+--- a/scripts/backend-suites.mjs
++++ b/scripts/backend-suites.mjs
+@@ -25,8 +25,6 @@
+       toInstrumenterFile: async () => ({ name: file, content }) });
+   }
+   const log = { debug() {}, warn(message) { throw new Error(`Cannot predict sandbox preprocessing: ${message}`); } };
+-  // Predict bytes using the same installed sequence, without writing or running
+-  // a sandbox. The observed root config change was JSON formatting only.
+   await new DisableTypeChecksPreprocessor(log, options, disableTypeChecks).preprocess({ files });
+   await new TSConfigPreprocessor(log, options).preprocess({ files });
+   for (const [file, expected] of files) hashes[relative(process.cwd(), file)] = sha256(await expected.readContent());
+@@ -87,7 +85,6 @@
+ export function checkPreflight(evidence, inputs) {
+   const failures = [];
+   if (!evidence || evidence.inputDigest !== inputs.digest) return { passed: false, failures: [{ reason: "missing-or-unbound-preflight" }] };
+-  // Recalculate from retained observations; never trust the recorded pass flag.
+   const sandbox = evidence.sandbox;
+   if (!sandbox?.passed || sandbox.failures?.length) failures.push({ reason: "sandbox-input-failure" });
+   const suites = checkSuites(inputs.mutationTests.selected, evidence.suites ?? [], evidence.runnerTests ?? []);

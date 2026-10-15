@@ -1,0 +1,10 @@
+{
+  "REPORT.md": "bc04a6ef3f3ca1c997cbaa4631102147e870c14f1542e100982da3a24efea3a5",
+  "accepted.patch": "945506f368ea949055b20aa8ea2c4ad44c40669f41ac4f5aeca25b64512b3a26",
+  "applied.patch": "e8b4d8f3da87d65deaea221f5209435c846a859249b5157c5b71bc1610497c64",
+  "input-manifest.json": "45b4a41f4b37bab839b67d2f9012fb3b4e4ebd0ab70aa712a744b5a8620db59c",
+  "receipt.json": "ec3bcd730224cbc5f39ab64187b459bdeb2a9d4d5bc26b5fc551b52034c21fe1",
+  "removed-lines.json": "64535bd75940987063c21cedd56cbc13f6bdbdaff454ad90aa688c9e95c44a08",
+  "review-source.json": "436654345404f0334a67a4a8e4549f6633a4c72ecd731ff81b5047a93dc37b7a",
+  "token-equivalence.json": "b6c91225ab790503bdee2253876c5d5103b41cfa737f700a2876ac6ef558e849"
+}

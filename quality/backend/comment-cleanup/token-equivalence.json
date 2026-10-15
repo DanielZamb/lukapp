@@ -1,0 +1,49 @@
+{
+  "base": "b86f659c756dd44dcd62eb6eb2f16d9cff876b63",
+  "typescriptVersion": "5.9.2",
+  "method": "Parse JavaScript with TypeScript; recursively enumerate getChildren leaf tokens as [SyntaxKind,getText], excluding EOF and trivia; compare token arrays and removeComments printer output. No program execution.",
+  "files": [
+    {
+      "file": "scripts/backend-retained-validation.mjs",
+      "beforeSha256": "610a4b83c65fe7841cbe175fae4412017fb05f6e5581ef53b2699637c3480683",
+      "afterSha256": "6c5a453934879de762901aa4415ff7e8da244e48e97ecabb32394f3be56e3780",
+      "tokensBefore": 683,
+      "tokensAfter": 683,
+      "tokenSha256": "681f6289ebfd30bc87612c63e31f14f2b0ca3500260dcd71a4d9cae863c29882",
+      "printedWithoutCommentsSha256": "6485fb7cc948cc1f65b2f04da03d13a119f2fbcb5dc0a4ea3c5c4aa515d01bdf",
+      "tokensEqual": true,
+      "printedWithoutCommentsEqual": true,
+      "parseDiagnosticsBefore": 0,
+      "parseDiagnosticsAfter": 0
+    },
+    {
+      "file": "scripts/backend-scope.mjs",
+      "beforeSha256": "e813498e3761994900414cb183580233b7efec9af9c62903fede3266996d67a3",
+      "afterSha256": "ec7fd672e36f235cf84c34d69fbd06636a90222934d3a6532f9f7206455bbd9f",
+      "tokensBefore": 1424,
+      "tokensAfter": 1424,
+      "tokenSha256": "f2dbe83e269b75ab1b5553131159fdb5cf9f3e18028460876a3b8ad70054fccd",
+      "printedWithoutCommentsSha256": "fbc5c23706d67e47a8e1d9e0c1c6a9690186e9f6a57582559a5f6a9a5190c5ef",
+      "tokensEqual": true,
+      "printedWithoutCommentsEqual": true,
+      "parseDiagnosticsBefore": 0,
+      "parseDiagnosticsAfter": 0
+    },
+    {
+      "file": "scripts/backend-suites.mjs",
+      "beforeSha256": "04786ea870a283ad430c53feca6408ba311187dd9d283d84050464e4bdbc6b44",
+      "afterSha256": "b034c1381884237f671b355f7a2b223c8450d0dc69b3c8df0acecb79e16bb3cd",
+      "tokensBefore": 1443,
+      "tokensAfter": 1443,
+      "tokenSha256": "ef342990bb831f6af886101ecb1210b8f723b2ad45d84d3508900da21364a779",
+      "printedWithoutCommentsSha256": "a229811810c29e6931d4c751cf63e8459b4469352106429ab4dd2872d7cfdbb6",
+      "tokensEqual": true,
+      "printedWithoutCommentsEqual": true,
+      "parseDiagnosticsBefore": 0,
+      "parseDiagnosticsAfter": 0
+    }
+  ],
+  "exactAcceptedDeletions": true,
+  "removedLineCount": 7,
+  "passed": true
+}
