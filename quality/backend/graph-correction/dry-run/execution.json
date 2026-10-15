@@ -1,0 +1,159 @@
+{
+  "startedAt": "2026-10-15T13:55:09.914Z",
+  "finishedAt": "2026-10-15T13:55:12.641Z",
+  "source": "e740202c7da5243b22723f69c46ee6765d53e0e1",
+  "tree": "18c7959bafb31a8bc958db80a86bcbe323d728af",
+  "exitStatus": 1,
+  "signal": null,
+  "timeoutMs": 300000,
+  "timedOut": false,
+  "dryRunOnly": true,
+  "workers": 1,
+  "beforeDigest": "f9305e74765305789dd14aae8f115ab937382500545f9229e58c12653cdb51c2",
+  "afterDigest": "f9305e74765305789dd14aae8f115ab937382500545f9229e58c12653cdb51c2",
+  "inputChanges": [],
+  "preflight": {
+    "passed": false,
+    "suites": {
+      "passed": false,
+      "files": 31,
+      "tests": 0,
+      "identities": [],
+      "failures": [
+        {
+          "file": "convex/accountTransfer.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/authConnection.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/budget.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/budgetAccess.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/budgetCapacity.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/cashExpense.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/catalog.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/categories.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/clerkProvider.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/deviceAccess.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/householdWorkspace.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/mobileSetupRetry.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/natures.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/onboarding.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/openingDateCorrection.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/openingPosition.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/ownerAccess.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/period.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/planningReadCapacity.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/planningUnion.integration.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/posting.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/profileKinds.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/reclassification.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/recoverySourceEffects.integration.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/reversal.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/savingsRecovery.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/setupFinancialAccount.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "convex/workspace.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "src/access/protocol.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "src/accounting/rules.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        },
+        {
+          "file": "src/savingsRecovery/amounts.test.ts",
+          "reason": "missing-or-duplicate-suite"
+        }
+      ]
+    },
+    "failures": [
+      {
+        "reason": "sandbox-input-failure"
+      },
+      {
+        "reason": "suite-preflight-failure"
+      }
+    ]
+  },
+  "mutationAcceptance": false
+}

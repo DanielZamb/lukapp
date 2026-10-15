@@ -133,7 +133,7 @@ async function main(args) {
       const preflightName = `${selectedArea}-preflight.json`;
       const preflightOutput = resolve(dir, preflightName);
       const preflightInputs = `${selectedArea}-preflight-inputs.json`;
-      retain(preflightInputs, JSON.stringify({ inputs: { ...before, sandboxHashes: await sandboxHashes(before) }, output: preflightOutput, expectedIdentities }, null, 2) + "\n");
+      retain(preflightInputs, JSON.stringify({ inputs: { ...before, sandboxHashes: await sandboxHashes(before, base) }, output: preflightOutput, expectedIdentities }, null, 2) + "\n");
       const execution = execute(selectedArea, ["exec", "stryker", "run", configPath], { LUKAPP_MUTATION_PREFLIGHT: resolve(dir, preflightInputs) });
       const evidence = existsSync(preflightOutput) ? JSON.parse(readFileSync(preflightOutput, "utf8")) : undefined;
       if (evidence) receipt.artifacts[preflightName] = sha256(readFileSync(preflightOutput));

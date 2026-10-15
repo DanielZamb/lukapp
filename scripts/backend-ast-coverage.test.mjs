@@ -121,3 +121,17 @@ test("an erased type alias observation cannot supply statement coverage for an i
   failed(rows);
   assert.ok(rows.mappingFailures.some(row => row.kind === "statements" && row.id === "0"));
 });
+
+test("the new public Recovery regression executes the raw V8 predicate but its absent AST observation still fails", () => {
+  const dir = "quality/backend/ast-remapping/representative-after-regression";
+  const proof = JSON.parse(readFileSync(`${dir}/callback-raw-probe.json`));
+  assert.deepEqual(proof.functions[0].ranges, [{ startOffset: 15948, endOffset: 15981, count: 1 }]);
+  const data = Object.values(JSON.parse(readFileSync(`${dir}/coverage-final.json`)))[0];
+  const rows = analyzeFile("src/savingsRecovery/commands.ts", readFileSync(`${dir}/source.ts.txt`, "utf8"), data, format);
+  assert.equal(rows.mappingFailures.length, 0);
+  assert.equal(rows.filter(row => row.missingCoverage).length, 1);
+  const missing = rows.find(row => row.function === "anonymous@188:78");
+  assert.equal(missing.missingCoverage, true);
+  assert.equal(missing.coverage, 0);
+  assert.deepEqual(missing.functionEntries, []);
+});

@@ -4,18 +4,29 @@ import { pathToFileURL } from "node:url";
 import { relative, resolve } from "node:path";
 import { sha256 } from "./backend-scope.mjs";
 
-export async function sandboxHashes(inputs) {
-  const require = createRequire(import.meta.resolve("@stryker-mutator/core"));
+export async function sandboxHashes(inputs, configured = {}) {
+  await import("@stryker-mutator/core");
+  const core = import.meta.resolve("@stryker-mutator/core");
+  const require = createRequire(core);
   const { disableTypeChecks } = await import(pathToFileURL(require.resolve("@stryker-mutator/instrumenter")));
-  const hashes = {};
+  const { defaultOptions } = await import(new URL("./config/index.js", core));
+  const { DisableTypeChecksPreprocessor } = await import(new URL("./sandbox/disable-type-checks-preprocessor.js", core));
+  const { TSConfigPreprocessor } = await import(new URL("./sandbox/ts-config-preprocessor.js", core));
+  const options = { ...defaultOptions, ...configured };
+  const files = new Map(), hashes = {};
   for (const file of Object.keys(inputs.files).filter(file => !inputs.mutationFiles.includes(file))) {
-    const content = readFileSync(file, "utf8");
-    // Stryker's unchanged default preprocessor runs before sandbox creation.
-    // Dependency config files are symlinked, rather than preprocessed/copied.
-    const expected = file.split("/").includes("node_modules") ? content :
-      (await disableTypeChecks({ name: file, content }, { plugins: undefined })).content;
-    hashes[file] = sha256(expected);
+    let content = readFileSync(file, "utf8");
+    // Dependency files are symlinked; only copied files enter preprocessing.
+    if (file.split("/").includes("node_modules")) { hashes[file] = sha256(content); continue; }
+    files.set(resolve(file), { readContent: async () => content, setContent: value => { content = value; },
+      toInstrumenterFile: async () => ({ name: file, content }) });
   }
+  const log = { debug() {}, warn(message) { throw new Error(`Cannot predict sandbox preprocessing: ${message}`); } };
+  // Predict bytes using the same installed sequence, without writing or running
+  // a sandbox. The observed root config change was JSON formatting only.
+  await new DisableTypeChecksPreprocessor(log, options, disableTypeChecks).preprocess({ files });
+  await new TSConfigPreprocessor(log, options).preprocess({ files });
+  for (const [file, expected] of files) hashes[relative(process.cwd(), file)] = sha256(await expected.readContent());
   return hashes;
 }
 export function checkSandbox(inputs, root = process.cwd()) {

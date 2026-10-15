@@ -1,0 +1,8 @@
+{
+  "checkoutSha256": "d532be7f0f21677211959701c3b355c1e637c46a93043a5348877979420a83ad",
+  "sandboxSha256": "7d1c5b5efa314fc2be4192d6481821443f7f9b7944dc841a8994db3a838e3930",
+  "parsedIdentical": true,
+  "checkoutText": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2022\",\n    \"lib\": [\"ES2022\"],\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true,\n    \"skipLibCheck\": true,\n    \"verbatimModuleSyntax\": true,\n    \"types\": [\"node\", \"vite/client\"]\n  },\n  \"include\": [\"src\", \"convex\"]\n}\n",
+  "sandboxText": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2022\",\n    \"lib\": [\n      \"ES2022\"\n    ],\n    \"module\": \"ESNext\",\n    \"moduleResolution\": \"bundler\",\n    \"strict\": true,\n    \"noEmit\": true,\n    \"skipLibCheck\": true,\n    \"verbatimModuleSyntax\": true,\n    \"types\": [\n      \"node\",\n      \"vite/client\"\n    ]\n  },\n  \"include\": [\n    \"src\",\n    \"convex\"\n  ]\n}",
+  "finding": "JSON formatting only; no compiler option or configuration semantic change"
+}

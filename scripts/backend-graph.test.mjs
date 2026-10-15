@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { importedInputs, manifest, sha256 } from "./backend-scope.mjs";
 import { mutationConfig, checkRegression } from "./backend-quality.mjs";
-import { checkSandbox, checkSuites, checkPreflight, snapshotSuites } from "./backend-suites.mjs";
+import { checkSandbox, checkSuites, checkPreflight, snapshotSuites, sandboxHashes } from "./backend-suites.mjs";
 import { guardRunner } from "./backend-vitest-runner.mjs";
 
 test("the real selected mobile import graph, package and compiler inputs survive Stryker selection without entering mutation scope", async () => {
@@ -120,4 +120,22 @@ else{fs.appendFileSync("commands.jsonl",JSON.stringify(args)+"\n"); if(args.incl
   assert.equal(receipt.passed, false);
   assert.deepEqual(receipt.stages.map(stage => stage.name), ["coverage-crap"]);
   assert.equal(receipt.stages[0].regression.regressionPassed, false);
+});
+
+test("sandbox binding predicts the installed TypeScript config rewrite exactly and still rejects changed options", async t => {
+  const inputs = { files: { "tsconfig.json": sha256(readFileSync("tsconfig.json")) }, mutationFiles: [] };
+  const hashes = await sandboxHashes(inputs);
+  const expected = JSON.stringify(JSON.parse(readFileSync("tsconfig.json")), null, 2);
+  assert.equal(hashes["tsconfig.json"], sha256(expected));
+  const retained = JSON.parse(readFileSync("quality/backend/graph-correction/tsconfig-format-only.json"));
+  assert.equal(retained.parsedIdentical, true);
+  assert.equal(hashes["tsconfig.json"], retained.sandboxSha256);
+  assert.notEqual(hashes["tsconfig.json"], inputs.files["tsconfig.json"]);
+  const root = mkdtempSync(join(tmpdir(), "lukapp-config-binding-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, "tsconfig.json"), expected);
+  assert.equal(checkSandbox({ ...inputs, sandboxHashes: hashes }, root).passed, true);
+  const changed = JSON.parse(expected); changed.compilerOptions.strict = false;
+  writeFileSync(join(root, "tsconfig.json"), JSON.stringify(changed, null, 2));
+  assert.equal(checkSandbox({ ...inputs, sandboxHashes: hashes }, root).passed, false);
 });

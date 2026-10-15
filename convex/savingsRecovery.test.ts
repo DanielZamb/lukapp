@@ -280,6 +280,39 @@ test("declared opening baseline is separate, unique, auditable, and creates no t
     throughDate: "2026-09-23", evidenceUnavailable: true, provenance: "another", idempotencyKey: "second-baseline" }))).toMatchObject({ data: { code: "recovery_opening_already_established" } });
 });
 
+test("recorded contribution prevents a later opening declaration and preserves all Recovery and ledger facts", async () => {
+  const f = await fixture();
+  const planId = await f.draft();
+  await f.activate(planId);
+  const posted = await f.transfer(110);
+  const contributionId = await f.record(posted.id, planId, 110);
+  const before = await f.progress();
+  expect(before.plans[0]).toMatchObject({ status: { kind: "Active" },
+    verified: { amountMinor: 110, principalMinor: 97, premiumMinor: 13 },
+    declaredBaseline: { amountMinor: 0, principalMinor: 0, premiumMinor: 0 } });
+  expect(before.contributions).toHaveLength(1);
+  expect(before.contributions[0]).toMatchObject({ id: contributionId, voided: false, corrected: false,
+    data: { kind: "contribution", transferEntryId: posted.id, contributionDate: "2026-09-24",
+      allocations: [{ planId, amountMinor: 110, principalMinor: 97, premiumMinor: 13 }] } });
+  const ledger = await ledgerBytes(f.t);
+  const recoveryFacts = () => f.t.run(async ctx => JSON.stringify({
+    plans: await ctx.db.query("recoveryPlans").collect(), events: await ctx.db.query("recoveryEvents").collect(),
+    receipts: await ctx.db.query("recoveryReceipts").collect(),
+  }));
+  const recovery = await recoveryFacts();
+  expect(await caught(f.t.mutation(api.savingsRecovery.declareOpeningProgress, {
+    ...f.ctx, planId, amountMinor: 110, throughDate: "2026-09-23", evidenceUnavailable: true,
+    provenance: "Earlier historical declaration after a recorded contribution", idempotencyKey: "baseline-after-contribution",
+  }))).toMatchObject({ data: { code: "recovery_opening_already_established" } });
+  const after = await f.progress();
+  expect(after.plans[0]).toMatchObject({ status: { kind: "Active" },
+    verified: { amountMinor: 110, principalMinor: 97, premiumMinor: 13 },
+    declaredBaseline: { amountMinor: 0, principalMinor: 0, premiumMinor: 0 } });
+  expect(after.contributions).toEqual(before.contributions);
+  expect(await ledgerBytes(f.t)).toBe(ledger);
+  expect(await recoveryFacts()).toBe(recovery);
+});
+
 test("waterfall carries oldest shortfalls without penalty before current, candidates, prepayment, saving and supports both cash modes", async () => {
   const f = await fixture(); const id = await f.draft(); await f.activate(id);
   const extra = await f.expense(70, "unplanned");

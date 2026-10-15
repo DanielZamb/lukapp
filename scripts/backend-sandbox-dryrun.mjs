@@ -5,16 +5,16 @@ import { manifest, sha256 } from "./backend-scope.mjs";
 import { mutationConfig } from "./backend-quality.mjs";
 import { sandboxHashes, checkPreflight } from "./backend-suites.mjs";
 
-const dir = "quality/backend/graph-correction/dry-run";
+const dir = process.argv[2] ?? "quality/backend/graph-correction/dry-run";
 if (existsSync(`${dir}/engine.log`)) throw new Error("Refusing to overwrite an existing sandbox validation");
 mkdirSync(dir, { recursive: true });
 const inputs = manifest();
 const startedAt = new Date().toISOString();
 writeFileSync(`${dir}/manifest-before.json`, JSON.stringify(inputs, null, 2) + "\n");
 const config = { ...mutationConfig(JSON.parse(readFileSync("stryker.config.json")), inputs.mutationFiles, Object.keys(inputs.files), resolve(dir, "mutation.json")),
-  dryRunOnly: true, concurrency: 1, tempDirName: ".stryker-v01-graph-validation" };
+  dryRunOnly: true, concurrency: 1, tempDirName: `.stryker-v01-${dir.split("/").at(-1)}` };
 writeFileSync(`${dir}/stryker.json`, JSON.stringify(config, null, 2) + "\n");
-writeFileSync(`${dir}/preflight-inputs.json`, JSON.stringify({ inputs: { ...inputs, sandboxHashes: await sandboxHashes(inputs) }, output: resolve(dir, "preflight.json") }, null, 2) + "\n");
+writeFileSync(`${dir}/preflight-inputs.json`, JSON.stringify({ inputs: { ...inputs, sandboxHashes: await sandboxHashes(inputs, config) }, output: resolve(dir, "preflight.json") }, null, 2) + "\n");
 const log = openSync(`${dir}/engine.log`, "w");
 const child = spawn("pnpm", ["exec", "stryker", "run", `${dir}/stryker.json`], { stdio: ["ignore", log, log], detached: true,
   env: { ...process.env, LUKAPP_MUTATION_PREFLIGHT: resolve(dir, "preflight-inputs.json") } });
