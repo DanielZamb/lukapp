@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { Keyboard } from "react-native";
 import { api } from "../../../../convex/_generated/api";
 import { useRuntime } from "../access/RuntimeProvider";
+import { commandResult, commandErrorCopy } from "../access/command-result";
 import { Choice, ConfirmationScreen, Copy, Header, PrimaryButton, Screen, SecondaryButton } from "../ui";
 import { Input } from "../ui/Input";
 import { SpendCategoryPicker, starterSpend } from "../modules/onboarding/categories";
@@ -20,7 +21,7 @@ export default function Setup() {
   const [request, setRequest] = useState<FinancialArgs<"completeFirstRun"> | null>(null);
   const [complete, setComplete] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
   useEffect(() => {
     let stopped = false;
@@ -35,15 +36,18 @@ export default function Setup() {
   const minorUnits = parseAmount(amount, currency);
   const finish = async () => {
     if (minorUnits === null) return;
-    Keyboard.dismiss(); setBusy(true); setError(false);
+    Keyboard.dismiss(); setBusy(true); setError("");
     const facts = request ?? { functionalCurrency: currency, purchaseNotifications: notifications, categories,
       startingAmountMinorUnits: minorUnits, accountingDate: today(), now: Date.now() };
     setRequest(facts);
     try {
-      const result = await controller.execute(async (proof, rpc) => rpc.mutation(api.accounting.completeFirstRun,
-        await proof("accounting.completeFirstRun", facts)));
-      setComplete(result.workspace.id);
-    } catch { setError(true); } finally { setBusy(false); }
+      const result = await controller.execute(async (proof, rpc) => {
+        const request = await proof("accounting.completeFirstRun", facts);
+        return commandResult(() => rpc.mutation(api.accounting.completeFirstRun, request));
+      });
+      if (result.kind === "rejected") { setError(commandErrorCopy(result.code)); return; }
+      setComplete(result.value.workspace.id);
+    } catch { setError("Unlock online and retry the same answers to check whether setup completed."); } finally { setBusy(false); }
   };
   if (complete) return <ConfirmationScreen title="You're ready to track" detail="Your starting amount and spend categories are ready."
     action={{ label: "See my money", onPress: () => { router.dismissTo("/"); controller.workspace(complete); } }} />;
@@ -74,7 +78,7 @@ export default function Setup() {
       <Copy title="What you have right now" detail="Enter one starting amount, including your bank money and cash. Zero is fine." />
       <Input accessibilityLabel="Starting amount" keyboardType="decimal-pad" placeholder="0" value={amount} onChangeText={setAmount} editable={request === null} />
       <Copy title={currency} detail="Nothing is saved until you finish." />
-      {error && <Copy title="Setup did not finish" detail="Unlock online and retry the same answers to check whether it completed." />}
+      {error && <Copy title="Setup did not finish" detail={error} />}
     </>}
   </Screen>;
 }

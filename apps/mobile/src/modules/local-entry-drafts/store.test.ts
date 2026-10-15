@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { draftStore } from "./store";
+import { draftStore, accountSetupStore } from "./store";
 import type { ExpenseDraft, LocalInputCustody } from "./store";
+import type { AccountSetupDraft } from "./account-setup";
 import { candidateStore } from "../notification-intake/store";
 
 function ownershipDouble() {
@@ -43,5 +44,25 @@ describe("Draft and Candidate ownership above native encryption", () => {
     await expect(draftStore(native, 1, "workspace1").list()).rejects.toThrow("native_locked");
     await expect(candidateStore(native, 1, "workspace1").list()).rejects.toThrow("native_locked");
     await expect(draftStore(native, 1, "workspace1").put(confirmed)).rejects.toThrow("native_locked");
+  });
+  it("restores immutable Household and account setup facts after owner replacement without mixing Expense or Candidate records", async () => {
+    const { native } = ownershipDouble();
+    const setup: AccountSetupDraft = { kind: "account-setup", stage: "confirmed", id: "setup1", workspaceId: "workspace1",
+      target: { kind: "household", request: { functionalCurrency: "COP", idempotencyKey: "setup1-household", now: 1791892800000 } },
+      request: { name: "Household cash", productKind: "cash", amount: { currency: "COP", minorUnits: 1000000 },
+        accountingDate: "2026-10-13", description: "Start tracking", idempotencyKey: "setup1-account" } };
+    await accountSetupStore(native, 1, "workspace1").put(setup);
+    await draftStore(native, 1, "workspace1").put(confirmed);
+    const restarted = accountSetupStore(native, 2, "workspace1");
+    expect(await restarted.list()).toEqual([setup]);
+    expect(await draftStore(native, 2, "workspace1").list()).toEqual([confirmed]);
+    expect(await candidateStore(native, 2, "workspace1").list()).toEqual([]);
+    await expect(restarted.put({ ...setup, target: { kind: "household", request: { functionalCurrency: "COP", idempotencyKey: "setup1-household", now: 1791892800001 } } })).rejects.toThrow("Confirmed request cannot change");
+    await expect(restarted.put({ ...setup, request: { ...setup.request, idempotencyKey: "new-command" } })).rejects.toThrow("Setup retry identity mismatch");
+    expect(await restarted.list()).toEqual([setup]);
+    await expect(accountSetupStore(native, 2, "other-workspace").list()).rejects.toThrow("Draft ownership mismatch");
+    await restarted.remove(setup.id);
+    expect(await restarted.list()).toEqual([]);
+    expect(await draftStore(native, 2, "workspace1").list()).toEqual([confirmed]);
   });
 });

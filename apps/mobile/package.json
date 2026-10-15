@@ -46,6 +46,8 @@
     "@babel/core": "7.29.0",
     "@react-native/metro-config": "0.86.3",
     "@types/react": "19.2.14",
+    "@types/react-test-renderer": "19.3.0",
+    "react-test-renderer": "19.2.3",
     "typescript": "6.0.3",
     "vitest": "3.2.7"
   },

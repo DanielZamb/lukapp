@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Crypto from "expo-crypto";
-import { api } from "../../../../convex/_generated/api";
+import { custody } from "../access/native";
+import { commandErrorCopy } from "../access/command-result";
+import { accountSetupStore } from "../modules/local-entry-drafts/store";
+import { submitAccountSetup } from "../modules/local-entry-drafts/submit-account-setup";
+import type { AccountSetupDraft } from "../modules/local-entry-drafts/account-setup";
+import { functionalCurrencyDigits } from "../../../../src/accounting/currencies";
 import { useAccess, useRuntime } from "../access/RuntimeProvider";
 import { usePostedActivity } from "../modules/posted-activity/PostedActivityProvider";
 import { parseAmount, today, validAccountingDate } from "../modules/local-entry-drafts/money";
@@ -10,7 +15,7 @@ import { Input } from "../ui/Input";
 import type { FinancialArgs } from "../../../../src/access/client";
 
 export default function AccountSetup() {
-  const params = useLocalSearchParams<{ household?: string }>();
+  const params = useLocalSearchParams<{ household?: string; id?: string }>();
   const household = params.household === "1";
   const { controller, posted } = useRuntime();
   const access = useAccess();
@@ -22,35 +27,62 @@ export default function AccountSetup() {
   const [counterparty, setCounterparty] = useState("");
   const [security, setSecurity] = useState<"secured" | "unsecured">("unsecured");
   const [investment, setInvestment] = useState<"termDeposit" | "fund">("termDeposit");
-  const [key] = useState(Crypto.randomUUID);
-  const [confirmed, setConfirmed] = useState<FinancialArgs<"setupFinancialAccount"> | null>(null);
-  const [householdId, setHouseholdId] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState<AccountSetupDraft | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
-  if (access.kind !== "ready" || snapshot.kind !== "ready" || !snapshot.phone) return <Screen><Copy title="Loading account setup" /></Screen>;
-  const currency = snapshot.phone.workspace.functionalCurrency;
-  const value = parseAmount(amount, currency);
-  const setup = async () => {
-    if (value === null) return;
-    setBusy(true); setError(false);
-    try {
-      let workspaceId = access.workspaceId;
-      if (household) {
-        const result = await controller.execute(async (proof, rpc) => rpc.mutation(api.accounting.createHouseholdWorkspace,
-          await proof("accounting.createHouseholdWorkspace", { functionalCurrency: currency, idempotencyKey: key, now: Date.now() })));
-        workspaceId = result.id; setHouseholdId(result.id);
+  const busyRef = useRef(false);
+  const [error, setError] = useState("");
+  const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    if (access.kind !== "ready") return;
+    let stopped = false;
+    const store = accountSetupStore(custody, access.contact.generation, access.workspaceId);
+    void store.list().then(items => {
+      if (stopped) return;
+      const saved = params.id ? items.find(item => item.id === params.id) :
+        items.find(item => (item.target.kind === "household") === household);
+      if (params.id && !saved) { setError("This saved setup has expired or was removed. Enter a new setup explicitly."); }
+      if (saved) {
+        setConfirmed(saved); setName(saved.request.name); setKind(saved.request.productKind);
+        setAmount(String(saved.request.amount.minorUnits / 10 ** functionalCurrencyDigits(saved.request.amount.currency)));
+        setDate(saved.request.accountingDate);
+        const answers = saved.request.classificationAnswers;
+        if (answers) {
+          setCounterparty(answers.counterpartyName ?? "");
+          if (answers.kind === "receivable") setSecurity(answers.security);
+          if (answers.kind === "investment") setInvestment(answers.form);
+        }
       }
-      const facts = confirmed ?? { workspaceId, name: name.trim(), productKind: kind,
-        amount: { currency, minorUnits: value }, accountingDate: date, description: "Start tracking", idempotencyKey: key + "-account",
-        ...(kind === "receivable" ? { classificationAnswers: { kind, security, counterpartyName: counterparty.trim() } } :
-          kind === "personalDebt" ? { classificationAnswers: { kind, counterpartyName: counterparty.trim() } } :
-          kind === "investment" ? { classificationAnswers: { kind, form: investment, ...(counterparty.trim() ? { counterpartyName: counterparty.trim() } : {}) } } : {}) };
-      setConfirmed(facts);
-      await controller.execute(async (proof, rpc) => rpc.mutation(api.accounting.setupFinancialAccount, await proof("accounting.setupFinancialAccount", facts)));
+      setChecking(false);
+    }).catch(() => { if (!stopped) controller.lock(); });
+    return () => { stopped = true; };
+  }, [access, controller, params.id, household]);
+  if (access.kind !== "ready" || snapshot.kind !== "ready" || !snapshot.phone || checking) return <Screen><Copy title="Loading account setup" /></Screen>;
+  const currency = confirmed?.request.amount.currency ?? snapshot.phone.workspace.functionalCurrency;
+  const value = confirmed?.request.amount.minorUnits ?? parseAmount(amount, currency);
+  const setup = async () => {
+    if (value === null || busyRef.current) return;
+    busyRef.current = true; setBusy(true); setError("");
+    try {
+      const id = confirmed?.id ?? Crypto.randomUUID();
+      const draft: AccountSetupDraft = confirmed ?? {
+        kind: "account-setup", stage: "confirmed", id, workspaceId: access.workspaceId,
+        target: household ? { kind: "household", request: { functionalCurrency: currency, idempotencyKey: id + "-household", now: Date.now() } } : { kind: "existing" },
+        request: { name: name.trim(), productKind: kind,
+          amount: { currency, minorUnits: value }, accountingDate: date, description: "Start tracking", idempotencyKey: id + "-account",
+          ...(kind === "receivable" ? { classificationAnswers: { kind, security, counterpartyName: counterparty.trim() } } :
+            kind === "personalDebt" ? { classificationAnswers: { kind, counterpartyName: counterparty.trim() } } :
+            kind === "investment" ? { classificationAnswers: { kind, form: investment, ...(counterparty.trim() ? { counterpartyName: counterparty.trim() } : {}) } } : {}) },
+      };
+      const store = accountSetupStore(custody, access.contact.generation, access.workspaceId);
+      await store.put(draft);
+      setConfirmed(draft); router.setParams({ id: draft.id });
+      const result = await submitAccountSetup(controller, store, draft.id);
+      if (result.kind === "rejected") { setError(commandErrorCopy(result.code)); return; }
       router.dismissTo("/");
-      if (household || householdId) controller.workspace(workspaceId);
-      else { posted.setScope({ kind: "unavailable", reason: "no-workspace" }); posted.setScope({ kind: "connected", workspaceId }); }
-    } catch { setError(true); } finally { setBusy(false); }
+      if (draft.target.kind === "household") controller.workspace(result.workspaceId);
+      else { posted.setScope({ kind: "unavailable", reason: "no-workspace" }); posted.setScope({ kind: "connected", workspaceId: result.workspaceId }); }
+    } catch { setError("Your confirmed setup stays on this device. Unlock online and explicitly retry the same facts."); }
+    finally { busyRef.current = false; setBusy(false); }
   };
   return <Screen><Header title={household ? "Set up a Household" : "Add a place"} back={{ label: "Cancel account setup", onPress: () => router.back() }} />
     <Copy title="A place for your money" detail={household ? "A separate Household with you as its Owner. It uses " + currency + "." : "Enter what is held, or what remains owed, when you start tracking."} />
@@ -68,7 +100,8 @@ export default function AccountSetup() {
     </>}
     <Input accessibilityLabel={kind === "creditCard" || kind === "loan" || kind === "personalDebt" ? "Amount owed" : "Amount held"} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="0" editable={!confirmed} />
     <Input accessibilityLabel="Start tracking date" value={date} onChangeText={setDate} editable={!confirmed} />
-    {error && <Copy title="Setup needs another check" detail="Unlock online and retry the same confirmed facts." />}
-    <PrimaryButton label="Start tracking" disabled={!name.trim() || value === null || !validAccountingDate(date) || ((kind === "receivable" || kind === "personalDebt") && !counterparty.trim())} loading={busy} onPress={() => { void setup(); }} />
+    {confirmed && <Copy title="Saved setup" detail="These confirmed details stay on this device until a known result or their original expiry. Retry submits the same details." />}
+    {error && <Copy title="Setup needs another check" detail={error} />}
+    <PrimaryButton label={confirmed ? "Retry saved setup" : "Start tracking"} disabled={!name.trim() || value === null || !validAccountingDate(date) || ((kind === "receivable" || kind === "personalDebt") && !counterparty.trim())} loading={busy} onPress={() => { void setup(); }} />
   </Screen>;
 }

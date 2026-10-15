@@ -22,7 +22,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { InteractionContext } from "../ui/Interaction";
 import { publicConfig } from "./public-config";
 import { z } from "zod";
+import { usePathname } from "expo-router";
 import { requestScopedRpc } from "./request-scoped-rpc";
+import { useSessionRpc } from "./use-session-rpc";
 
 type Runtime = {
   controller: AccessController;
@@ -58,6 +60,9 @@ function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixtu
     return { controller, posted, fixture };
   }, [rpc, signOut, fixture]);
   const state = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getSnapshot);
+  const cleanup = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getProviderCleanup);
+  const pathname = usePathname();
+  useEffect(() => { if (pathname !== "/security") runtime.controller.leaveSecurity(); }, [pathname, runtime]);
   useEffect(() => {
     let stopped = false;
     void runtime.controller.start().then(() => { if (!stopped) runtime.controller.context(session, online); })
@@ -85,6 +90,7 @@ function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixtu
       <PostedActivityProvider source={runtime.posted}>
         <View style={{ flex: 1 }} onTouchStart={() => runtime.controller.activity()}>
           {fixture && <Text style={{ color: theme.mutedForeground, fontFamily: font.medium, padding: spacing.sm, paddingTop: insets.top }} accessibilityRole="header">Controlled development fixture · Synthetic Owner</Text>}
+          {allowed && cleanup?.state.kind === "pending" && <Text style={{ color: theme.mutedForeground, fontFamily: font.medium, padding: spacing.sm }} accessibilityRole="alert">Old sessions still need provider sign-out. Their device access is already revoked.</Text>}
           {allowed ? children : (
             <Screen>
               <Header title="Lukapp" />
@@ -136,15 +142,14 @@ function LiveSession({ children, client }: PropsWithChildren<{ client: ConvexRea
   const { startSSOFlow } = useSSO();
   const [online, setOnline] = useState(client.connectionState().isWebSocketConnected);
   useEffect(() => client.subscribeToConnectionState(state => setOnline(state.isWebSocketConnected)), [client]);
-  const signOut = useMemo(() => () => clerk.signOut(), [clerk]);
   const audience = sessionClaims?.aud;
-  const rpc = useMemo(() => requestScopedRpc(async () => {
+  const { rpc, signOut } = useSessionRpc(async () => {
     const token = await getToken({ skipCache: true, ...(audience === "convex" ? {} : { template: "convex" }) });
     if (!token) throw new Error("Online provider Session required");
     const request = new ConvexHttpClient(publicConfig.convexUrl, { logger: false });
     request.setAuth(token);
     return request;
-  }), [getToken, audience, sessionId]);
+  }, () => clerk.signOut());
   const signIn = async () => {
     const flow = await startSSOFlow({ strategy: "oauth_google", redirectUrl: AuthSession.makeRedirectUri({ scheme: "lukapp", path: "sso-callback" }) });
     if (flow.authSessionResult?.type === "cancel" || flow.authSessionResult?.type === "dismiss") return;

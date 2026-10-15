@@ -49,7 +49,7 @@ export const firstRunStatus = ownerQuery({
 
 export const phoneSummary = ownerQuery({
   operation: "accounting.phoneSummary",
-  args: inWorkspace,
+  args: { ...inWorkspace, now: v.number() },
   returns: v.object({
     workspace,
     profiles: v.array(financialAccountProfile),
@@ -61,7 +61,7 @@ export const phoneSummary = ownerQuery({
     const input = { ...args, actor: ctx.actor };
     const [profiles, balances, entries, workspace] = await Promise.all([
       core.listFinancialAccountProfiles(input), core.balances(input),
-      core.listJournalEntries(input), core.openWorkspace({ ...input, now: Date.now() }),
+      core.listJournalEntries(input), core.openWorkspace(input),
     ]);
     return { workspace, profiles, balances, entries };
   }),

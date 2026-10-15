@@ -5,6 +5,7 @@ import * as Crypto from "expo-crypto";
 import { api } from "../../../../convex/_generated/api";
 import { useAccess, useRuntime } from "../access/RuntimeProvider";
 import { custody } from "../access/native";
+import { commandResult, commandErrorCopy } from "../access/command-result";
 import { usePostedActivity } from "../modules/posted-activity/PostedActivityProvider";
 import { draftStore } from "../modules/local-entry-drafts/store";
 import type { ExpenseDraft } from "../modules/local-entry-drafts/store";
@@ -57,12 +58,15 @@ export default function Expense() {
     setBusy(true); setMessage(""); Keyboard.dismiss();
     try {
       await store.put(confirmed); setDraft(confirmed); router.setParams({ id: confirmed.id });
-      const result = await controller.execute(async (proof, rpc) => rpc.mutation(api.accounting.recordCashExpense,
-        await proof("accounting.recordCashExpense", confirmed.request)));
+      const result = await controller.execute(async (proof, rpc) => {
+        const request = await proof("accounting.recordCashExpense", confirmed.request);
+        return commandResult(() => rpc.mutation(api.accounting.recordCashExpense, request));
+      });
+      if (result.kind === "rejected") { setMessage(commandErrorCopy(result.code)); return; }
       await store.remove(confirmed.id);
       posted.setScope({ kind: "unavailable", reason: "no-workspace" });
       posted.setScope({ kind: "connected", workspaceId: access.workspaceId });
-      setPostedResult({ id: result.id, profileId });
+      setPostedResult({ id: result.value.id, profileId });
     } catch { setMessage("Your confirmed Draft stays on this device. Unlock online and retry these same facts."); }
     finally { setBusy(false); }
   };

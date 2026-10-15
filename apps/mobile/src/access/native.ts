@@ -1,6 +1,8 @@
 import { requireNativeModule, NativeModule } from "expo-modules-core";
 import { derSignatureToP1363 } from "../../../../src/access/protocol";
 import type { NativeDeviceKey } from "../../../../src/access/protocol";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import type { LocalInputCustody } from "./input-contract";
 
 export type NativeState = {
   mode: "live" | "fixture";
@@ -13,7 +15,7 @@ export type NativeState = {
   protection: string;
   savedWorkspaceId: string | null;
 };
-export declare class Custody extends NativeModule<{ change: () => void }> {
+export declare class Custody extends NativeModule<{ change: () => void }> implements LocalInputCustody {
   state(): NativeState;
   initialize(mode: "live" | "fixture", generation: number): Promise<NativeState>;
   unlock(reason: string): Promise<NativeState>;
@@ -35,9 +37,11 @@ export declare class Custody extends NativeModule<{ change: () => void }> {
   erase(mode: "live" | "fixture"): Promise<void>;
   finishWipe(mode: "live" | "fixture"): Promise<void>;
   recoveryPending(): boolean;
-  recoveryIntent(mode: "live" | "fixture"): string | null;
-  setRecoveryIntent(intentId: string, mode: "live" | "fixture"): Promise<void>;
+  recoveryIntent(mode: "live" | "fixture"): Id<"clerkRecoveryIntents"> | "retrieve" | null;
+  setRecoveryIntent(intentId: Id<"clerkRecoveryIntents">, mode: "live" | "fixture"): Promise<void>;
   setRecoveryPending(pending: boolean, mode: "live" | "fixture"): Promise<void>;
+  recoveryWork(mode: "live" | "fixture"): Id<"clerkProviderWork"> | null;
+  setRecoveryWork(workId: Id<"clerkProviderWork"> | null, mode: "live" | "fixture", generation: number): Promise<void>;
 }
 export const custody = requireNativeModule<Custody>("LukappCustody");
 export const nativeDeviceKey = (generation: number): NativeDeviceKey => ({

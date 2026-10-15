@@ -161,6 +161,12 @@
             "type": "string"
           },
           "optional": false
+        },
+        "now": {
+          "fieldType": {
+            "type": "number"
+          },
+          "optional": false
         }
       }
     }

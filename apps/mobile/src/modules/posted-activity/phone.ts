@@ -30,7 +30,7 @@ export function phoneTransport(controller: AccessController): PostedTransport {
   return { subscribe: (workspaceId, receive) => {
     let cancelled = false;
     void controller.execute(async (proof, rpc) => {
-      const request = await proof("accounting.phoneSummary", { workspaceId });
+      const request = await proof("accounting.phoneSummary", { workspaceId, now: Date.now() });
       return rpc.query(api.accounting.phoneSummary, request);
     }).then(phone => {
       if (cancelled) return;

@@ -43,6 +43,8 @@ class LukappCustodyModule : Module() {
   private var window = 120000L
   private var workspace: String? = null
   private var prompt: BiometricPrompt? = null
+  private val promptKeys = PromptKeyOwnership()
+  private var promptKey: PromptKeyOwnership.Token? = null
   private val main = Handler(Looper.getMainLooper())
   private var mode = "live"
   private var contactTime: Long? = null
@@ -67,7 +69,7 @@ class LukappCustodyModule : Module() {
       main.post { appContext.currentActivity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
       foreground = false; backgroundAt = SystemClock.elapsedRealtime()
       admitting = false
-      workspace = null; generation++; prompt?.cancelAuthentication(); prompt = null; emit()
+      workspace = null; generation++; cancelPrompt(); emit()
     } }
     OnActivityEntersForeground { synchronized(guard) {
       main.post { appContext.currentActivity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
@@ -88,6 +90,18 @@ class LukappCustodyModule : Module() {
       check(expectedMode == mode) { "custody_mode_changed" }
       if (pending) write(file("recovery"), "retrieve".toByteArray())
       else if (file("recovery").exists()) check(file("recovery").delete()) { "recovery_marker_deletion_failed" }
+    } }
+    Function("recoveryWork") { expectedMode: String -> synchronized(guard) {
+      check(expectedMode == mode) { "custody_mode_changed" }
+      file("recovery-work").takeIf { it.exists() }?.readText()
+    } }
+    AsyncFunction("setRecoveryWork") { id: String?, expectedMode: String, expected: Int -> synchronized(guard) {
+      check(expectedMode == mode) { "custody_mode_changed" }
+      requireContact(expected)
+      if (id != null) {
+        require(id.isNotEmpty() && id.toByteArray().size <= 200) { "recovery_work_invalid" }
+        write(file("recovery-work"), id.toByteArray())
+      } else if (file("recovery-work").exists()) check(file("recovery-work").delete()) { "recovery_marker_deletion_failed" }
     } }
     Function("closeInput") { synchronized(guard) { admitting = false; workspace = null; generation++; emit() } }
     Function("touch") { synchronized(guard) { expireWindow(); if (unlocked && admitting && foreground) idleAt = SystemClock.elapsedRealtime() } }
@@ -180,7 +194,7 @@ class LukappCustodyModule : Module() {
       block(); check(file("wipe").exists()) { "wipe_marker_required" }
       for (alias in listOf(signingAlias, sentinelAlias, inputAlias)) keys.deleteEntry(alias)
       for (item in requireNotNull(root.listFiles())) {
-        if (item.name != "wipe" && item.name != "recovery") check(item.deleteRecursively()) { "input_deletion_failed" }
+        if (item.name !in listOf("wipe", "recovery", "recovery-work")) check(item.deleteRecursively()) { "input_deletion_failed" }
       }
       write(file("erased"), byteArrayOf(1))
     } }
@@ -196,7 +210,17 @@ class LukappCustodyModule : Module() {
   private fun block() {
     unlocked = false; admitting = false; workspace = null; generation++
     contactTime = null; contactUptime = null
-    prompt?.cancelAuthentication(); prompt = null; emit()
+    cancelPrompt(); emit()
+  }
+  private fun deletePromptKey(token: PromptKeyOwnership.Token?) {
+    if (token != null && promptKeys.release(token)) keys.deleteEntry(token.alias)
+  }
+  private fun cancelPrompt() {
+    val cancelled = prompt
+    prompt = null
+    deletePromptKey(promptKey)
+    promptKey = null
+    cancelled?.cancelAuthentication()
   }
   private fun expireWindow() {
     if (unlocked && foreground && SystemClock.elapsedRealtime() - idleAt >= window) block()
@@ -253,53 +277,73 @@ class LukappCustodyModule : Module() {
     return workspace ?: error("input_not_admitted")
   }
   private fun authenticate(reason: String, promise: Promise) {
-    val attempt = synchronized(guard) { block(); generation }
+    val (attempt, originMode, sentinel) = synchronized(guard) { block(); Triple(generation, mode, file("sentinel")) }
+    val originAlias = "lukapp.enrollment." + originMode
+    val originSigningAlias = "lukapp.installation.p256." + originMode
+    var createdKey: PromptKeyOwnership.Token? = null
     main.post {
       try {
         val activity = appContext.throwingActivity as? FragmentActivity ?: error("activity_required")
         check(BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS) { "strong_biometry_required" }
-        val sentinel = file("sentinel")
-        val existed = keys.containsAlias(sentinelAlias)
-        check(existed == sentinel.exists()) { "enrollment_sentinel_lost" }
-        if (!existed) {
-          check(!keys.containsAlias(signingAlias)) { "enrollment_sentinel_lost" }
-          KeyGenerator.getInstance("AES", "AndroidKeyStore").apply {
-            init(KeyGenParameterSpec.Builder(sentinelAlias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-              .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-              .setKeySize(256).setUserAuthenticationRequired(true)
-              .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
-              .setInvalidatedByBiometricEnrollment(true).build())
-          }.generateKey()
+        var bytes: ByteArray? = null
+        val cipher = synchronized(guard) {
+          check(generation == attempt && mode == originMode && foreground) { "unlock_stale" }
+          val existed = keys.containsAlias(originAlias)
+          check(existed == sentinel.exists()) { "enrollment_sentinel_lost" }
+          if (!existed) {
+            check(!keys.containsAlias(originSigningAlias)) { "enrollment_sentinel_lost" }
+            KeyGenerator.getInstance("AES", "AndroidKeyStore").apply {
+              init(KeyGenParameterSpec.Builder(originAlias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256).setUserAuthenticationRequired(true)
+                .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
+                .setInvalidatedByBiometricEnrollment(true).build())
+            }.generateKey()
+            createdKey = promptKeys.claim(originAlias)
+            promptKey = createdKey
+          }
+          val key = keys.getKey(originAlias, null) as SecretKey
+          bytes = if (existed) sentinel.readBytes() else null
+          Cipher.getInstance("AES/GCM/NoPadding").apply {
+            val prior = bytes
+            if (prior != null) init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, prior.copyOfRange(0, 12)))
+            else init(Cipher.ENCRYPT_MODE, key)
+          }
         }
-        val key = keys.getKey(sentinelAlias, null) as SecretKey
-        val bytes = if (existed) sentinel.readBytes() else null
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        if (bytes != null) cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
-        else cipher.init(Cipher.ENCRYPT_MODE, key)
         val auth = BiometricPrompt(activity, Executor { main.post(it) }, object : BiometricPrompt.AuthenticationCallback() {
           override fun onAuthenticationError(code: Int, message: CharSequence) {
-            synchronized(guard) { if (generation == attempt) block() }
-            if (!existed) synchronized(guard) { keys.deleteEntry(sentinelAlias) }
+            synchronized(guard) {
+              if (generation == attempt && mode == originMode) block()
+              deletePromptKey(createdKey)
+            }
             promise.reject("unlock_declined", "Full online sign-in is required", null)
           }
           override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
             try {
               val state = synchronized(guard) {
-                check(generation == attempt && foreground && !file("wipe").exists()) { "unlock_stale" }
+                check(generation == attempt && mode == originMode && foreground && !file("wipe").exists()) { "unlock_stale" }
                 val authenticated = result.cryptoObject?.cipher ?: error("strong_biometry_required")
-                if (bytes != null) check(authenticated.doFinal(bytes.copyOfRange(12, bytes.size)).contentEquals("lukapp-sentinel".toByteArray())) { "enrollment_changed" }
+                val prior = bytes
+                if (prior != null) check(authenticated.doFinal(prior.copyOfRange(12, prior.size)).contentEquals("lukapp-sentinel".toByteArray())) { "enrollment_changed" }
                 else write(sentinel, authenticated.iv + authenticated.doFinal("lukapp-sentinel".toByteArray()))
-                prompt = null; unlocked = true; admitting = true; idleAt = SystemClock.elapsedRealtime(); emit(); snapshot()
+                createdKey?.let { promptKeys.release(it) }
+                promptKey = null; prompt = null; unlocked = true; admitting = true; idleAt = SystemClock.elapsedRealtime(); emit(); snapshot()
               }
               promise.resolve(state)
-            } catch (_: Exception) { promise.reject("unlock_required", "Enrollment or access changed", null) }
+            } catch (_: Exception) {
+              synchronized(guard) { deletePromptKey(createdKey) }
+              promise.reject("unlock_required", "Enrollment or access changed", null)
+            }
           }
         })
-        synchronized(guard) { check(generation == attempt) { "unlock_stale" }; prompt = auth }
+        synchronized(guard) { check(generation == attempt && mode == originMode) { "unlock_stale" }; prompt = auth }
         auth.authenticate(BiometricPrompt.PromptInfo.Builder().setTitle(reason)
           .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
           .setNegativeButtonText("Sign in instead").build(), BiometricPrompt.CryptoObject(cipher))
-      } catch (_: Exception) { promise.reject("biometry_unavailable", "Full online sign-in is required", null) }
+      } catch (_: Exception) {
+        synchronized(guard) { deletePromptKey(createdKey) }
+        promise.reject("biometry_unavailable", "Full online sign-in is required", null)
+      }
     }
   }
   private fun inputKey(): SecretKey {

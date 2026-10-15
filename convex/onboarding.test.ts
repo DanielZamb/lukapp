@@ -37,6 +37,13 @@ test("four-answer setup atomically seeds real categories and opening, retries an
     { financialAccountProfileId: first.opening.profile.id, balance: { currency: "COP", minorUnits: 875000 } },
   ]);
   expect(await t.query(api.accounting.listJournalEntries, { workspaceId: first.workspace.id })).toHaveLength(2);
+  const phone = await t.query(api.accounting.phoneSummary, { workspaceId: first.workspace.id, now: septNow });
+  expect(phone.balances[0]?.balance).toEqual({ currency: "COP", minorUnits: 875000 });
+  expect(phone.entries).toHaveLength(2);
+  expect(phone.workspace.currentAccountingPeriod).toMatchObject({ year: 2026, month: 9, status: "open" });
+  const nextMonth = await t.query(api.accounting.phoneSummary, { workspaceId: first.workspace.id, now: Date.UTC(2026, 9, 2, 12) });
+  expect(nextMonth.workspace.currentAccountingPeriod).toEqual({ year: 2026, month: 10, status: "not_opened" });
+  expect(nextMonth.balances).toEqual(phone.balances);
   expect(await t.query(api.accounting.listUserCategories, { workspaceId: first.workspace.id })).toHaveLength(10);
   expect(await caught(t.mutation(api.accounting.completeFirstRun, { ...request, purchaseNotifications: true }))).toMatchObject({ data: { code: "idempotency_key_conflict" } });
 });

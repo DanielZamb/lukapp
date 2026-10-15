@@ -84,6 +84,18 @@ public final class LukappCustodyModule: Module {
       if pending { try Data("retrieve".utf8).write(to: self.url("recovery"), options: .atomic) }
       else if self.exists("recovery") { try FileManager.default.removeItem(at: self.url("recovery")) }
     } }
+    Function("recoveryWork") { (mode: String) -> String? in try self.withLock {
+      try self.requireMode(mode)
+      return try? String(contentsOf: self.url("recovery-work"), encoding: .utf8)
+    } }
+    AsyncFunction("setRecoveryWork") { (id: String?, mode: String, expected: Int) in try self.withLock {
+      try self.requireMode(mode)
+      try self.requireContact(expected)
+      if let id {
+        guard !id.isEmpty, id.utf8.count <= 200 else { throw CustodyFailure(code: "recovery_work_invalid") }
+        try Data(id.utf8).write(to: self.url("recovery-work"), options: .atomic)
+      } else if self.exists("recovery-work") { try FileManager.default.removeItem(at: self.url("recovery-work")) }
+    } }
     Function("closeInput") { self.withLock { self.admitting = false; self.workspace = nil; self.generation += 1; self.emit() } }
     Function("touch") { self.withLock { self.expireWindow(); if self.unlocked && self.admitting && self.foreground { self.idleAt = ProcessInfo.processInfo.systemUptime } } }
     Function("resumeAdmission") { () -> [String: Any?]? in try self.withLock {
@@ -189,7 +201,7 @@ public final class LukappCustodyModule: Module {
       for account in ["input-key", "sentinel"] { try self.removeSecret(account) }
       try self.removeSigningKey()
       for item in try FileManager.default.contentsOfDirectory(at: self.directory(), includingPropertiesForKeys: nil) {
-        if item.lastPathComponent != "wipe" && item.lastPathComponent != "recovery" { try FileManager.default.removeItem(at: item) }
+        if !["wipe", "recovery", "recovery-work"].contains(item.lastPathComponent) { try FileManager.default.removeItem(at: item) }
       }
       try self.writeMarker("erased")
     } }
