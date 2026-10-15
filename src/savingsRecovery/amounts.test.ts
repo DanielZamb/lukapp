@@ -17,14 +17,36 @@ test("Recovery amounts reject invalid and unsafe units and sums", () => {
   expect(() => text(" \t")).toThrow("recovery_text_required");
 });
 test("proportional allocation conserves cents and breaks residual ties by source order", () => {
-  expect(proportional(0, [0, 10])).toEqual([0, 0]);
-  expect(proportional(1, [1, 1, 1])).toEqual([1, 0, 0]);
-  expect(proportional(2, [1, 1, 1])).toEqual([1, 1, 0]);
-  expect(proportional(7, [5, 3, 2])).toEqual([4, 2, 1]);
-  expect(proportional(10, [5, 3, 2])).toEqual([5, 3, 2]);
-  expect(proportional(3, [0, 4])).toEqual([0, 3]);
-  expect(() => proportional(1, [0, 0])).toThrow("recovery_capacity_exceeded");
-  expect(() => proportional(11, [5, 3, 2])).toThrow("recovery_capacity_exceeded");
+  const zero = { sourceId: "zero", weight: 0 };
+  const ten = { sourceId: "ten", weight: 10 };
+  const first = { sourceId: "first", weight: 1 };
+  const second = { sourceId: "second", weight: 1 };
+  const third = { sourceId: "third", weight: 1 };
+  const five = { sourceId: "five", weight: 5 };
+  const three = { sourceId: "three", weight: 3 };
+  const two = { sourceId: "two", weight: 2 };
+  const four = { sourceId: "four", weight: 4 };
+  const anotherZero = { sourceId: "another-zero", weight: 0 };
+  expect(proportional(0, [zero, ten], part => part.weight)).toEqual([
+    { part: zero, amountMinor: 0 }, { part: ten, amountMinor: 0 },
+  ]);
+  expect(proportional(1, [first, second, third], part => part.weight)).toEqual([
+    { part: first, amountMinor: 1 }, { part: second, amountMinor: 0 }, { part: third, amountMinor: 0 },
+  ]);
+  expect(proportional(2, [first, second, third], part => part.weight)).toEqual([
+    { part: first, amountMinor: 1 }, { part: second, amountMinor: 1 }, { part: third, amountMinor: 0 },
+  ]);
+  expect(proportional(7, [five, three, two], part => part.weight)).toEqual([
+    { part: five, amountMinor: 4 }, { part: three, amountMinor: 2 }, { part: two, amountMinor: 1 },
+  ]);
+  expect(proportional(10, [five, three, two], part => part.weight)).toEqual([
+    { part: five, amountMinor: 5 }, { part: three, amountMinor: 3 }, { part: two, amountMinor: 2 },
+  ]);
+  expect(proportional(3, [zero, four], part => part.weight)).toEqual([
+    { part: zero, amountMinor: 0 }, { part: four, amountMinor: 3 },
+  ]);
+  expect(() => proportional(1, [zero, anotherZero], part => part.weight)).toThrow("recovery_capacity_exceeded");
+  expect(() => proportional(11, [five, three, two], part => part.weight)).toThrow("recovery_capacity_exceeded");
 });
 test("zero-premium schedule crosses the calendar year with exact principal installments", () => {
   const terms = { name: "Recovery", sources: [{ entryId: "expense", principalMinor: 100 }], destinationProfileId: "savings",
