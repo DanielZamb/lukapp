@@ -138,6 +138,8 @@ export function analyzeFile(file, text, coverage) {
       if (reason) rejectedBranchObservations.push({ id: entry.id, count: entry.count, location: entry.location, reason });
       return reason === undefined;
     }).map(entry => entry.count);
+    if (rejectedBranchObservations.some(entry => entry.reason === "nested-function-overlap"))
+      problems.push("ambiguous-nested-branch-ownership");
     if ([...statementCounts, ...branchCounts].some(count => !valid(count))) problems.push("missing-or-invalid-owned-count");
     const observations = statementCounts.length ? statementCounts : entries.length ? entries : branchCounts;
     if (!observations.length) problems.push(fn.selectedValue && branchRanges.some(entry => entry.candidates.includes(fn)) ?

@@ -9,7 +9,7 @@ if (!directory || existsSync(directory)) throw new Error("Provide a new output d
 mkdirSync(directory, { recursive: true });
 const before = manifest();
 const receipt = { startedAt: new Date().toISOString(), command: [process.execPath, ...process.argv.slice(1)],
-  reviewedHead: "308456396694d0204541b35d75538fb6d0802462",
+  reviewedHead: "8c37322d59eaab20e761ee093e9f8729702b3822",
   head: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(), node: process.version,
   scope: "tooling tests and retained-data recalculation only", manifest: before, commands: [],
   backendExecutions: 0, officialQualityExecution: false, artifacts: {} };
@@ -23,7 +23,7 @@ function execute(name, args) {
   save();
 }
 save();
-execute("tooling-tests", ["--test", "--test-concurrency=2", "scripts/backend-quality.test.mjs", "scripts/backend-quality-review.test.mjs"]);
+execute("tooling-tests", ["--test", "--test-concurrency=1", "scripts/backend-quality.test.mjs", "scripts/backend-quality-review.test.mjs", "scripts/backend-quality-r2.test.mjs"]);
 if (receipt.commands[0].exitStatus === 0) execute("retained-data", ["scripts/crap-mapping-audit.mjs", join(directory, "retained-data")]);
 const after = manifest();
 receipt.finishedAt = new Date().toISOString();
@@ -34,7 +34,8 @@ const summaryPath = join(directory, "retained-data/summary.json");
 if (existsSync(summaryPath)) {
   const summary = JSON.parse(readFileSync(summaryPath, "utf8"));
   receipt.advisoryCrap = { sourceRef: summary.sourceRef, passed: summary.after.passed, failures: summary.after.failures,
-    missingObservations: summary.after.missing, fromReviewed3084563: summary.fromReviewed3084563 };
+    missingObservations: summary.after.missing, fromReviewed3084563: summary.fromReviewed3084563,
+    fromReviewed8c37322: summary.fromReviewed8c37322, disputedMappingEffect: summary.disputedMappingEffect };
 }
 function retainHashes(path = directory) {
   for (const entry of readdirSync(path, { withFileTypes: true })) {
