@@ -56,8 +56,6 @@ export function compilerConfigurationFiles(seeds, root = process.cwd()) {
   }
   return [...files].sort();
 }
-// Follow local imports conservatively, including erased imports. External packages are
-// bound by package manifests, the lockfile, and resolved compiler configurations.
 export function importedInputs(seeds, root = process.cwd()) {
   const files = new Set(), configurations = new Set();
   const queue = [...seeds];

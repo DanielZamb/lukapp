@@ -25,8 +25,6 @@ export async function sandboxHashes(inputs, configured = {}) {
       toInstrumenterFile: async () => ({ name: file, content }) });
   }
   const log = { debug() {}, warn(message) { throw new Error(`Cannot predict sandbox preprocessing: ${message}`); } };
-  // Predict bytes using the same installed sequence, without writing or running
-  // a sandbox. The observed root config change was JSON formatting only.
   await new DisableTypeChecksPreprocessor(log, options, disableTypeChecks).preprocess({ files });
   await new TSConfigPreprocessor(log, options).preprocess({ files });
   for (const [file, expected] of files) hashes[relative(process.cwd(), file)] = sha256(await expected.readContent());
@@ -87,7 +85,6 @@ export function regressionSuites(report, root = process.cwd()) {
 export function checkPreflight(evidence, inputs) {
   const failures = [];
   if (!evidence || evidence.inputDigest !== inputs.digest) return { passed: false, failures: [{ reason: "missing-or-unbound-preflight" }] };
-  // Recalculate from retained observations; never trust the recorded pass flag.
   const sandbox = evidence.sandbox;
   if (!sandbox?.passed || sandbox.failures?.length) failures.push({ reason: "sandbox-input-failure" });
   const suites = checkSuites(inputs.mutationTests.selected, evidence.suites ?? [], evidence.runnerTests ?? []);

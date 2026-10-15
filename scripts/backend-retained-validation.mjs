@@ -23,8 +23,6 @@ for (const [label, dataset] of [["before", "representative"], ["after", "represe
   const sourceFile = `quality/backend/ast-remapping/${dataset}/source.ts.txt`;
   const correctedFile = `quality/backend/mapper-diagnosis/representative-${label}-corrected.json`;
   const text = readFileSync(sourceFile, "utf8"), corrected = Object.values(JSON.parse(readFileSync(correctedFile)))[0];
-  // Focused tests reproduce these exact maps with the byte-verified installed
-  // patched mapper. Historical unpatched reports remain unchanged.
   const rows = analyzeFile("src/savingsRecovery/commands.ts", text, corrected, coverageFormat.format);
   const report = { kind: "advisory retained-data recalculation", ...identity, newBackendExecution: false,
     originalFormat: "vitest-v8-3.2.7-ast-v1", sourceHash: sha256(text), sourceSnapshotHash: sha256(readFileSync(sourceFile)),
