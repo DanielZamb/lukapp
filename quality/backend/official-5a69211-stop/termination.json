@@ -1,0 +1,206 @@
+{
+  "requestedByUser": true,
+  "cause": "Stop official run after missing zod suite failure and incomplete selected test/source graph; no subsequent areas authorized.",
+  "finishedAt": "2026-10-15T13:25:56.489391+00:00",
+  "gatePid": 62826,
+  "wrapperPid": 62804,
+  "ownedProcesses": [
+    {
+      "pid": 62826,
+      "ppid": 62804,
+      "pgid": 62804,
+      "command": "node /Users/zambamon/.nvm/versions/node/v22.17.0/bin/pnpm quality:backend"
+    },
+    {
+      "pid": 62838,
+      "ppid": 62826,
+      "pgid": 62804,
+      "command": "node scripts/backend-quality.mjs"
+    },
+    {
+      "pid": 63963,
+      "ppid": 62838,
+      "pgid": 62804,
+      "command": "node /Users/zambamon/.nvm/versions/node/v22.17.0/bin/pnpm exec stryker run quality/backend/runs/2026-10-15T13-18-44-366Z-all/accounting-stryker.json"
+    },
+    {
+      "pid": 63964,
+      "ppid": 63963,
+      "pgid": 62804,
+      "command": "stryker"
+    },
+    {
+      "pid": 63973,
+      "ppid": 63964,
+      "pgid": 62804,
+      "command": "/Users/zambamon/.nvm/versions/node/v22.17.0/bin/node /Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/node_modules/.pnpm/@stryker-mutator+core@10.0.0_@types+node@26.6.2/node_modules/@stryker-mutator/core/dist/src/child-proxy/child-process-proxy-worker.js"
+    },
+    {
+      "pid": 63978,
+      "ppid": 63973,
+      "pgid": 62804,
+      "command": "/Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/node_modules/.pnpm/@esbuild+darwin-arm64@0.28.2/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.28.2 --ping"
+    },
+    {
+      "pid": 65909,
+      "ppid": 63964,
+      "pgid": 62804,
+      "command": "/Users/zambamon/.nvm/versions/node/v22.17.0/bin/node /Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/node_modules/.pnpm/@stryker-mutator+core@10.0.0_@types+node@26.6.2/node_modules/@stryker-mutator/core/dist/src/child-proxy/child-process-proxy-worker.js"
+    },
+    {
+      "pid": 65912,
+      "ppid": 65909,
+      "pgid": 62804,
+      "command": "/Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/node_modules/.pnpm/@esbuild+darwin-arm64@0.28.2/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.28.2 --ping"
+    }
+  ],
+  "actions": [
+    {
+      "pid": 62826,
+      "signal": "SIGSTOP",
+      "at": "2026-10-15T13:25:56.286888+00:00",
+      "sent": true
+    },
+    {
+      "pid": 62838,
+      "signal": "SIGSTOP",
+      "at": "2026-10-15T13:25:56.287094+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63963,
+      "signal": "SIGSTOP",
+      "at": "2026-10-15T13:25:56.287101+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63964,
+      "signal": "SIGSTOP",
+      "at": "2026-10-15T13:25:56.287107+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63973,
+      "signal": "SIGSTOP",
+      "at": "2026-10-15T13:25:56.287116+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63978,
+      "signal": "SIGSTOP",
+      "at": "2026-10-15T13:25:56.287122+00:00",
+      "sent": true
+    },
+    {
+      "pid": 65909,
+      "signal": "SIGSTOP",
+      "at": "2026-10-15T13:25:56.287139+00:00",
+      "sent": true
+    },
+    {
+      "pid": 65912,
+      "signal": "SIGSTOP",
+      "at": "2026-10-15T13:25:56.287146+00:00",
+      "sent": true
+    },
+    {
+      "pid": 62826,
+      "signal": "SIGTERM",
+      "at": "2026-10-15T13:25:56.308466+00:00",
+      "sent": true
+    },
+    {
+      "pid": 62838,
+      "signal": "SIGTERM",
+      "at": "2026-10-15T13:25:56.308491+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63963,
+      "signal": "SIGTERM",
+      "at": "2026-10-15T13:25:56.308494+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63964,
+      "signal": "SIGTERM",
+      "at": "2026-10-15T13:25:56.308497+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63973,
+      "signal": "SIGTERM",
+      "at": "2026-10-15T13:25:56.308500+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63978,
+      "signal": "SIGTERM",
+      "at": "2026-10-15T13:25:56.308503+00:00",
+      "sent": true
+    },
+    {
+      "pid": 65909,
+      "signal": "SIGTERM",
+      "at": "2026-10-15T13:25:56.308505+00:00",
+      "sent": true
+    },
+    {
+      "pid": 65912,
+      "signal": "SIGTERM",
+      "at": "2026-10-15T13:25:56.308507+00:00",
+      "sent": true
+    },
+    {
+      "pid": 62826,
+      "signal": "SIGCONT",
+      "at": "2026-10-15T13:25:56.308512+00:00",
+      "sent": true
+    },
+    {
+      "pid": 62838,
+      "signal": "SIGCONT",
+      "at": "2026-10-15T13:25:56.308516+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63963,
+      "signal": "SIGCONT",
+      "at": "2026-10-15T13:25:56.308521+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63964,
+      "signal": "SIGCONT",
+      "at": "2026-10-15T13:25:56.308526+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63973,
+      "signal": "SIGCONT",
+      "at": "2026-10-15T13:25:56.308532+00:00",
+      "sent": true
+    },
+    {
+      "pid": 63978,
+      "signal": "SIGCONT",
+      "at": "2026-10-15T13:25:56.308537+00:00",
+      "sent": true
+    },
+    {
+      "pid": 65909,
+      "signal": "SIGCONT",
+      "at": "2026-10-15T13:25:56.308547+00:00",
+      "sent": true
+    },
+    {
+      "pid": 65912,
+      "signal": "SIGCONT",
+      "at": "2026-10-15T13:25:56.308559+00:00",
+      "sent": true
+    }
+  ],
+  "remainingLiveOwnedProcesses": [],
+  "forcedKillPids": [],
+  "otherProcessesSignalled": false
+}

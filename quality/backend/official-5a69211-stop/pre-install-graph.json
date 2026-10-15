@@ -1,0 +1,10 @@
+{
+  "checkoutImportedStoreExists": true,
+  "checkoutImportedStoreSha256": "e663661012cf17a13e1f5dc8351886b2e0d771b6ba14dc1592b2d1e280d36065",
+  "localMobileZodExists": false,
+  "rootZodExists": false,
+  "sandboxHasSelectedSuite": true,
+  "sandboxHasImportedStore": false,
+  "manifestAppsMobileFiles": [],
+  "selectedSuiteInManifest": true
+}

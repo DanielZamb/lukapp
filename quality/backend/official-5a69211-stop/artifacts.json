@@ -1,0 +1,28 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "quality/backend/official-5a69211-stop/REPORT.md": "e31dffac4ff310938ab6c04af7e7715734e3842e75bdccb493de0321943a574b",
+    "quality/backend/official-5a69211-stop/accounting-interrupted.log.gz": "ca0117c9d37fdddc03e96c457b9527b622dc319349bf5b6ae558a10779de2be9",
+    "quality/backend/official-5a69211-stop/command-result.json": "dca376ada6352a09648705966249adc86cf42d8fe94cf825fda067b81e976da8",
+    "quality/backend/official-5a69211-stop/console.log.gz": "e4c63e99d1c7aa2e920e942983018eadb81c467e62d8bc3d6f52e766a9fffce1",
+    "quality/backend/official-5a69211-stop/pre-install-graph.json": "30b00d0fbdcdbb9b84543378c428be7816974ac3797b7128a7f30fa51d2543aa",
+    "quality/backend/official-5a69211-stop/process.json": "6456d8d04262111097c3851996506b28ad770732196f9ab3495221effd5e36dc",
+    "quality/backend/official-5a69211-stop/sandbox-inventory.json": "5044500809eccfcb9a50ee54c4a7ae84d26f0d8ebb4dca2d6b12d2543176072a",
+    "quality/backend/official-5a69211-stop/sandbox-regular-files.tar.gz": "28ed0cfaaa286cdf68a5e91c84d09071d44f42e936c43ad2947cbac739f477d6",
+    "quality/backend/official-5a69211-stop/start.json": "7421584e19bb2c9c6258b85df15349b358ffdc13483a5327abd437e02941c49e",
+    "quality/backend/official-5a69211-stop/stop-process-inventory.json": "3afd86565c61928c12a41533dc8ec796302c9c07eb73de38c7cd8fa17a640232",
+    "quality/backend/official-5a69211-stop/stop-receipt.json": "ef2badc61f4fc81f8f71daccd5e5d57c6cf091cfa1829f307af0532ecbfee4a0",
+    "quality/backend/official-5a69211-stop/termination.json": "9b46fa84caa3ccf73e760014af33aba668bbf04166f8ed6122ac8f90daf435b7",
+    "quality/backend/official-5a69211-stop/verifier-stderr.log.gz": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+    "quality/backend/official-5a69211-stop/verifier-stdout.log.gz": "9482165584a9608a670d46b8d4d159235762f61a39486cb89396b9927a237577",
+    "quality/backend/official-5a69211-stop/verifier.json": "375bf54b164beda6f7730200eb98bb6e27652dd9590270e553a4cb7c083ab29c",
+    "quality/backend/runs/2026-10-15T13-18-44-366Z-all/accounting-stryker.json": "7d2419a8400fe873b3971bd30e071a0cada8dcd4097962cfa8f1f84a3670885c",
+    "quality/backend/runs/2026-10-15T13-18-44-366Z-all/accounting.log": "d4c9409673da9f937db52aee609536d8a27a172fbfff2464e6330586bf2b8736",
+    "quality/backend/runs/2026-10-15T13-18-44-366Z-all/coverage-final.json.gz": "56c6c715284cfd951ebb0b9c08a3d4b2f97b41269ba5d2dc5b34e791e5b43dd3",
+    "quality/backend/runs/2026-10-15T13-18-44-366Z-all/coverage.log.gz": "7e065268d9fab5d84e3fc161596504feea8796bd1fa44b17155334844ba708aa",
+    "quality/backend/runs/2026-10-15T13-18-44-366Z-all/crap.json": "76bf739d58763d08b23e06f513ce42ff9b43f0fedefb540ab94b3532c1f696cc",
+    "quality/backend/runs/2026-10-15T13-18-44-366Z-all/manifest-before.json": "68de1ed9b4f1f69e7b906b5f6c402b79a0b918073e766296febbe05c844f16ff",
+    "quality/backend/runs/2026-10-15T13-18-44-366Z-all/receipt.json": "3992f4e241662f5731e6eb756a47ba18d75346759d62d56e4361a261bf914b07",
+    "quality/backend/runs/2026-10-15T13-18-44-366Z-all/regression.json": "b5a836799b24d11eab9d7b305a6819ec962a30e7ef9d71ee562e62dcfc151c0c"
+  }
+}
