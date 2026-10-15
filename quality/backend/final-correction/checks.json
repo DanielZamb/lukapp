@@ -1,0 +1,29 @@
+{
+  "inputDigest": "fcff44ffca34fb7e828d1f136dcdc06f7b5d3ba78dadfee3b10b645359e6f002",
+  "checks": {
+    "focusedToolTests": {
+      "passed": 67,
+      "failed": 0,
+      "skipped": 0,
+      "exitStatus": 0,
+      "workers": 1
+    },
+    "retainedCheckerValidation": {
+      "passed": true,
+      "historicalEngineExitStatus": 1,
+      "newEngineExecution": false
+    },
+    "offlineFrozenInstall": {
+      "exitStatus": 0
+    },
+    "patchOnlyLockChanges": true,
+    "workspaceOnlyPatchBinding": true,
+    "immutableFailedValidations": true
+  },
+  "productionSourceChanges": [],
+  "mutationSourceCount": 86,
+  "selectedTestCount": 31,
+  "excludedTestCount": 1,
+  "officialGatePassed": false,
+  "noThirdDryRun": true
+}

@@ -1,10 +1,24 @@
 import { readFileSync, existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { PATCHED_AST_COVERAGE_FORMAT } from "./backend-ast-coverage.mjs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { matchesGlob, resolve, relative, isAbsolute, dirname, join } from "node:path";
 import ts from "typescript";
 
-export const coverageFormat = { format: "vitest-v8-3.2.7-ast-v1", provider: "@vitest/coverage-v8", version: "3.2.7", experimentalAstAwareRemapping: true };
+const mapperRequire = createRequire(import.meta.resolve("@vitest/coverage-v8"));
+const mapperFile = relative(process.cwd(), mapperRequire.resolve("ast-v8-to-istanbul"));
+const mapperPackage = join(dirname(mapperFile), "../package.json");
+export const coverageFormat = { format: PATCHED_AST_COVERAGE_FORMAT, provider: "@vitest/coverage-v8", version: "3.2.7", experimentalAstAwareRemapping: true,
+  mapper: { package: "ast-v8-to-istanbul", version: "0.3.12", patch: "patches/ast-v8-to-istanbul@0.3.12.patch",
+    patchSha256: "c8e3d35eb7cffd753590c123b728c6fdb22e41bd810f34db8c290103ab9e08ce",
+    installedSha256: "a14ee93eecb5c0e8baadd5df5613c6afb012563fc3907b35f71ce51df68c4d06" } };
+function validateMapper() {
+  if (JSON.parse(readFileSync(mapperPackage)).version !== coverageFormat.mapper.version ||
+    sha256(readFileSync(mapperFile)) !== coverageFormat.mapper.installedSha256 ||
+    sha256(readFileSync(coverageFormat.mapper.patch)) !== coverageFormat.mapper.patchSha256)
+    throw new Error("Patched coverage mapper identity mismatch");
+}
 export const policy = JSON.parse(readFileSync("quality/backend/policy.json", "utf8"));
 export function trackedFiles() {
   return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { encoding: "utf8" }).trim().split("\n").filter(Boolean).sort();
@@ -80,6 +94,7 @@ export function importedInputs(seeds, root = process.cwd()) {
   return { files: [...files].sort(), configurations: [...configurations].sort() };
 }
 export function manifest() {
+  validateMapper();
   const installedCoverageVersion = JSON.parse(readFileSync(new URL(import.meta.resolve("@vitest/coverage-v8/package.json")), "utf8")).version;
   if (installedCoverageVersion !== coverageFormat.version) throw new Error(`Coverage format requires pinned ${coverageFormat.version}; installed ${installedCoverageVersion}`);
   const tracked = trackedFiles();
@@ -91,7 +106,7 @@ export function manifest() {
     ...tracked.filter(file => file === "tsconfig.json" || /^(src|convex)\/(.*\/)?tsconfig\.json$/.test(file)), ...imports.configurations])]);
   const files = [...new Set([...tracked.filter(file => /^(src|convex)\/.*\.(ts|js)$/.test(file) ||
     ["quality/backend/ast-remapping/fixture/nested.ts", "quality/backend/ast-remapping/fixture/nested.test.ts", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "vitest.config.ts", "vitest.mutation.config.ts", "stryker.config.json", "quality/backend/policy.json"].includes(file) || /^scripts\/.*\.(mjs|test\.mjs)$/.test(file)),
-    ...imports.files, ...compilerConfigurations])].sort();
+    ...imports.files, ...compilerConfigurations, mapperFile, mapperPackage, coverageFormat.mapper.patch])].sort();
   const hashes = Object.fromEntries(files.map(file => [file, sha256(readFileSync(file))]));
   return { coverageFormat, algorithm: "sha256", digest: sha256(JSON.stringify(hashes)), files: hashes, compilerConfigurations,
     importedInputs: imports.files, mutationFiles: backendFiles(),

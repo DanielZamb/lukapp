@@ -1,0 +1,860 @@
+[
+  {
+    "path": "sandbox-CwczD3/apps/mobile/node_modules",
+    "symlink": "/Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/apps/mobile/node_modules"
+  },
+  {
+    "path": "sandbox-CwczD3/apps/mobile/package.json",
+    "bytes": 1736,
+    "hash": "6b45062ec5e817edf618d4b21b85b004f6305dd94941f02189972b22e56b45ff"
+  },
+  {
+    "path": "sandbox-CwczD3/apps/mobile/src/access/input-contract.ts",
+    "bytes": 334,
+    "hash": "4d1a650447f6387509f96cec81e6376d184de20944e279c94ef9ad7c2e1f0b0f"
+  },
+  {
+    "path": "sandbox-CwczD3/apps/mobile/src/modules/local-entry-drafts/account-setup.ts",
+    "bytes": 2140,
+    "hash": "369cd26bddf6eec5fad18500e4d0feeeb52b66c292814c56dcd239a652b0cd9c"
+  },
+  {
+    "path": "sandbox-CwczD3/apps/mobile/src/modules/local-entry-drafts/money.ts",
+    "bytes": 1029,
+    "hash": "ca07cbfce23c396e9cba89a5fb2e7ee35fa18cbbd86501c91e4ba5ea364c53fe"
+  },
+  {
+    "path": "sandbox-CwczD3/apps/mobile/src/modules/local-entry-drafts/store.ts",
+    "bytes": 3400,
+    "hash": "d1b8868f970e70ad2e5ce3e120cd4496af1f38e37dd33aac63f2293f80f3e01d"
+  },
+  {
+    "path": "sandbox-CwczD3/apps/mobile/tsconfig.json",
+    "bytes": 263,
+    "hash": "fe157bb27c716c8553c8ea87f16681c824978793d3c66f1ec7cb1c6162839415"
+  },
+  {
+    "path": "sandbox-CwczD3/apps/mobile/vitest.config.ts",
+    "bytes": 159,
+    "hash": "df6572f60b264419a3ca79ed6f88bf711d10ed55411d17ff856bc7862324b7d1"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/_generated/api.d.ts",
+    "bytes": 2327,
+    "hash": "584464edccf934ce282e02978f165d834358a550acd164bf379a0368c980363a"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/_generated/api.js",
+    "bytes": 430,
+    "hash": "0682b9ee7b5a642e7468c59ae34eb83b18f9830784ca52f26bcb2de210f1b16a"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/_generated/dataModel.d.ts",
+    "bytes": 1752,
+    "hash": "2a18dc5323e2a7713bf739f777082da042cf354d63bcb62f2a27a604b9fef17f"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/_generated/server.d.ts",
+    "bytes": 5679,
+    "hash": "07558c2fb765fe3db09dd9183ffd5696acd72c9483758e7352ded80b1cb77f73"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/_generated/server.js",
+    "bytes": 3745,
+    "hash": "f0e4ffc7828812c41f86e2431d23c4f81cb873b5c99e540d957172a6864e107b"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/accountTransfer.test.ts",
+    "bytes": 9965,
+    "hash": "1a977f24781b0becd4d7ae91b861d0d30be4ef21907a2c27fae9e6d496f9aeed"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/accounting.ts",
+    "bytes": 29393,
+    "hash": "72929c765f7983932f9bb8c79b6aad181c318fea158044de5d24b95a37a8e5ee"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/accountingPlanningStore.ts",
+    "bytes": 9610,
+    "hash": "31130bbee97a104d5c440f6a3713df03617db652803b1868014668ca79a10314"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/auth.config.ts",
+    "bytes": 331,
+    "hash": "032d71f06f1e3e21e22d17bd711a2d2ed66c8c1f083abeb0adcc2dc1a80147e3"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/authConnection.test.ts",
+    "bytes": 2149,
+    "hash": "02075c61e7686488ceff4f93bec26455a4498feb18a419dd59bbbb267bc77a01"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/authConnection.ts",
+    "bytes": 4366,
+    "hash": "9a41f3cf1a9bdb3f35a01561a164cac828ff8550cec69b368b30531fe8f68b88"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/budget.test.ts",
+    "bytes": 30504,
+    "hash": "5ca5767b3011868016c4b359b9b8a83a4a2e2af7aceb48ea81368d61787ce77f"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/budget.ts",
+    "bytes": 10027,
+    "hash": "ce1b420ef594cb4d1747d31334fcfc71cdb59397dbe75db6ba315fd918988321"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/budgetAccess.test.ts",
+    "bytes": 14848,
+    "hash": "77d5879286514dca36aa6e8e504213cc6dfcd176a4195f1a3820b6d0e8db25f3"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/budgetCapacity.load.test.ts",
+    "bytes": 7180,
+    "hash": "2b68de7b5d35410ae3ccb9206706953e2f2697051e1651d4eee0bbc13b42a9b4"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/budgetCapacity.test.ts",
+    "bytes": 1594,
+    "hash": "520adf742ea220630f58218ef44551092b63f3c22db6819d7473288216b97f01"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/budgetStore.ts",
+    "bytes": 8993,
+    "hash": "c98ea69489c9d79b9a9cfdf3b74e3af39c0e404c160e8d18e6f09105f3c6e15f"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/budgetValidators.ts",
+    "bytes": 12667,
+    "hash": "a70622e7c3b979c12a83828a94692a06ef8ad0b365472daf39fc227e5d2fa0a4"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/cashExpense.test.ts",
+    "bytes": 8384,
+    "hash": "a3b17e7aad85114d30c246e613b4fced01bf70f5a3fe633a585ca51cc5bf7565"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/catalog.test.ts",
+    "bytes": 12168,
+    "hash": "df16d463e97d4669d31f2cd39518a6706b70759eadc786f6e2e1cb88a0d2b18f"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/categories.test.ts",
+    "bytes": 16468,
+    "hash": "cc2741d4a4fa630cf3e5412f3a5baaa1b70925fab6db28b5262414839aa45867"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/categoryAnnotationValidators.ts",
+    "bytes": 5362,
+    "hash": "8b733363cb2a440f20fb04e11f1ee791dffbe3390064f1b9ad578536331d7430"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/categoryValidators.ts",
+    "bytes": 4716,
+    "hash": "19b3dc7f229e94b78dd3cca270637aed0c49e2b65d4cbfa16e342e48ed47520c"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/clerkProvider.test.ts",
+    "bytes": 39491,
+    "hash": "94f048e88854b664af3e1e5ec6f0b87031f1d7d4d92ef26a13715d8095394315"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/clerkProvider.ts",
+    "bytes": 25445,
+    "hash": "78ab579e143c787953558a128ffc2565b484492f03ca608bd3caab64a69c0c79"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/clerkWebhook.ts",
+    "bytes": 5718,
+    "hash": "890a4d8ee00f383d96359d4b128d1e9cdb400d099a573223c99a217506ba85f4"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/deviceAccess.test.ts",
+    "bytes": 32802,
+    "hash": "c8633ba679afeb16e0dfdee48c9b70a16c348490e4b44b36406758e1b71a2231"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/deviceValidators.ts",
+    "bytes": 4399,
+    "hash": "3a213d797ad2c2895bb2531811a6c80eff6a0197cd3127876b913b50918f5ecc"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/devices.ts",
+    "bytes": 38695,
+    "hash": "3442730b33bd8d350334f5daf0e71e6cbe387a726349c9797725e163f5d14edf"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/householdWorkspace.test.ts",
+    "bytes": 32827,
+    "hash": "db11566968907c553254592a654b0844a9344be9638c304bcfdb0f331fc33775"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/http.ts",
+    "bytes": 1778,
+    "hash": "9dc205e2998307e528b167cff5ad3d22dfc58382e833e050a918f5b5d77682ec"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/lib/clerk.ts",
+    "bytes": 25192,
+    "hash": "558945a5405268f0fd4ab8d0ea1175d3d6adfed82e02bea42e5a3e6f0e8c060b"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/lib/deviceAccess.ts",
+    "bytes": 22084,
+    "hash": "3b05fd4330bc7786da7c0d8475137faa22e30bb3cc61775d32a0009b26abe11f"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/lib/onboarding.ts",
+    "bytes": 11098,
+    "hash": "cd7421102a496180432cf6b2c4370fd4b54511033324859228b3921dbf887888"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/lib/owner.ts",
+    "bytes": 8057,
+    "hash": "a5e559278f586c394d9e4987da69400bb0b7c793989fa538e0a0e8aff8c8ebb0"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/lib/personalWorkspace.ts",
+    "bytes": 5998,
+    "hash": "5423ba3c51b9031fdb1d8d242ef1e7aba9e7f4f8c1edf8776cbddc466a038846"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/lib/providerWork.ts",
+    "bytes": 3593,
+    "hash": "6c4a55644e0aa2e789e6a0f5d9bf40ee5948cf10dce6e76a42f34d15795950b7"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/mobileSetupRetry.test.ts",
+    "bytes": 3622,
+    "hash": "0177ad3dc644f2c7f2aca541e162df4a600c17d11c96e086cca403621b5ad45c"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/natures.test.ts",
+    "bytes": 5353,
+    "hash": "f6e1ff45c12ef1031178f53fb24f02ee50fea63a32185f64b93232e5b338d1c6"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/onboarding.test.ts",
+    "bytes": 4893,
+    "hash": "43dc213b426604fcad217841b36a77381e8570fd58035965cd0bf668e7230f3c"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/onboardingValidators.ts",
+    "bytes": 2837,
+    "hash": "05b77dcfc1a1985dfc77739ef33c26107b633cac3302e3bc1bde07a72ebb84d9"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/openingDateCorrection.test.ts",
+    "bytes": 14284,
+    "hash": "9edaca2284eff8efaa133ed88e19007bc386f685435b820c3a3a1cb2b6ffabff"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/openingPosition.test.ts",
+    "bytes": 13791,
+    "hash": "6328456222f68295b025cc05d2ac00f45be527a7b6fd3e64f349cc63bb6bc3d5"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/ownerAccess.test.ts",
+    "bytes": 14993,
+    "hash": "aea1ec807d4581c20a9573029e98080f75237f45a1aa7904182fb486a09c8dad"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/period.test.ts",
+    "bytes": 7370,
+    "hash": "11766a9a6a50bd1e7d1a51ad20b8bdf625eedecc0ce3d615235ddce9cb89b2d1"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/planningReadCapacity.test.ts",
+    "bytes": 3123,
+    "hash": "15a526ab99f63b1d8293d877a821f3b67d2a8c6c99aa3e8a09d293f64ff32bfb"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/planningReadCapacity.ts",
+    "bytes": 6826,
+    "hash": "a99199d22f74c7a52a36a31d981c9ceeeb360958cd157c4934040d2b4ae29cbf"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/planningUnion.integration.test.ts",
+    "bytes": 20525,
+    "hash": "27dc34a631d616692d315235c3c1dd3318662cd514e8becba41dd8052fdee117"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/posting.test.ts",
+    "bytes": 10632,
+    "hash": "b25b6e0f44876d976ef8b28f382acb17fa68054c71718646efa8cdafe79a8629"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/profileKinds.test.ts",
+    "bytes": 4871,
+    "hash": "dc9dc69157e27a82306ecebaaefa511312b9e7a64023180191dcbac7e67fcf60"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/providerValidators.ts",
+    "bytes": 5055,
+    "hash": "88587a7812cdf43d7113fbb367cd9f3a81b666704a2b0085f552161cc741f37d"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/providerWork.ts",
+    "bytes": 29434,
+    "hash": "2ff2b822e6b578804e9e6cbfb7b1ae76b03e55233490197a771e3b5d248a0d90"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/reclassification.test.ts",
+    "bytes": 28210,
+    "hash": "097b795bd2013f7f68f688e47d3d10d1436df9e6033bba5c6a2f39f32afb5cf4"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/recoverySourceEffects.integration.test.ts",
+    "bytes": 19766,
+    "hash": "3d414de0662873d224de6751eb9dbeb7b30950bfca8471c3262813e62cecb220"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/recoveryStore.ts",
+    "bytes": 7207,
+    "hash": "a9bf7f63cbe93d7126c5a51c6e0848b9cf2e9da5c713fc50d1f604e4d23c691d"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/recoveryValidators.ts",
+    "bytes": 10760,
+    "hash": "bea4d124f70d7e48e379a92974232768f5ea80110cd49dc61a0e0ac2ea84cd50"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/reversal.test.ts",
+    "bytes": 7252,
+    "hash": "3c8671e71990fa99cea3baf948de9091c1c25133beb69634bda8bc963ba0edee"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/savingsRecovery.test.ts",
+    "bytes": 45397,
+    "hash": "bbe89b174799217f60df66665cca44ef1759c0884daa4a3e4cca16d5e254715e"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/savingsRecovery.ts",
+    "bytes": 13751,
+    "hash": "9945093e7e6493478a62acb696e91f6145eaba69664d528f5a9b309b0863f5f3"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/schema.ts",
+    "bytes": 20322,
+    "hash": "7e8e267c5b3e7af08115a8a5ff13e200794f0cc79b2ece67d3c8630a6f16b70e"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/setupFinancialAccount.test.ts",
+    "bytes": 12353,
+    "hash": "5d6be0dc5bcd8478869355cf8f5cf91eeddf56f1efa486e9ab2d4fa64cf42004"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/store.ts",
+    "bytes": 46868,
+    "hash": "5df4e4531deb2fa0cd3e113ec2575357c3a25f3cd8643d1cdeee74af3bc040f0"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/tsconfig.json",
+    "bytes": 97,
+    "hash": "dbbdd29649fe28e138bf14047002bdf785c045cc7e26c82ad38ac4777e9d46ee"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/validators.ts",
+    "bytes": 11795,
+    "hash": "17be96209fb406d9802177b6694064c5ac1e56b4a8f181f3dcf95ead97dbc88e"
+  },
+  {
+    "path": "sandbox-CwczD3/convex/workspace.test.ts",
+    "bytes": 3412,
+    "hash": "99fffdd9af4591f3e0ac9dc94bc4275ae7c0e92cf5be79453cdcec2c9575dfd2"
+  },
+  {
+    "path": "sandbox-CwczD3/node_modules",
+    "symlink": "/Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/node_modules"
+  },
+  {
+    "path": "sandbox-CwczD3/package.json",
+    "bytes": 1030,
+    "hash": "10761ac4e527c9febb5ac36ecd0bae40283418a005e228452c71ecd3f4877fd2"
+  },
+  {
+    "path": "sandbox-CwczD3/pnpm-lock.yaml",
+    "bytes": 367292,
+    "hash": "78eb2b83d18d1a67f0fedff779395920b5ebfaf450959614a8585b0ff92c2df6"
+  },
+  {
+    "path": "sandbox-CwczD3/pnpm-workspace.yaml",
+    "bytes": 61,
+    "hash": "f14140f017baf7fd633531fe0ef70c0bad386ed672423a82696be3a41986eb4f"
+  },
+  {
+    "path": "sandbox-CwczD3/quality/backend/ast-remapping/fixture/nested.test.ts",
+    "bytes": 314,
+    "hash": "c41acc96c1d6fee85a11414873ac985fe2dd94789cc36fdef7919d40e15e25c9"
+  },
+  {
+    "path": "sandbox-CwczD3/quality/backend/ast-remapping/fixture/nested.ts",
+    "bytes": 548,
+    "hash": "6ffbf4b4714c5672760bedc28043926abd271d2694b8ea72607cd3c37054efc0"
+  },
+  {
+    "path": "sandbox-CwczD3/quality/backend/policy.json",
+    "bytes": 762,
+    "hash": "eb6d3620bf95a9c409eb7b2136dd2c4d3e0b69a6228eb434a27c8aae6a93605b"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-ast-coverage.mjs",
+    "bytes": 12450,
+    "hash": "74bf411e790f22dc70979cdfa1d1b904c11a299b27c8929c1c10ebad65877d88"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-ast-coverage.test.mjs",
+    "bytes": 9452,
+    "hash": "8acc7719595a3606f6e9b65015925b1af5d96497847de1254e7d3571d407c016"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-ast-experiment.mjs",
+    "bytes": 2680,
+    "hash": "ba03670821beecca4f7678b23a3294a51624a4f136a26f4ef3c4f2115cfc38df"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-ast-probe.mjs",
+    "bytes": 2655,
+    "hash": "1ea4587a2ea7714b906c7b222230eaeef456f19cde86bea8589bdd6d74eabe7f"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-complexity.mjs",
+    "bytes": 1421,
+    "hash": "00ec48af24bb7f4b09094a1cfdfa524c24390c1537aa32bce48ae65164d2a14b"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-graph.test.mjs",
+    "bytes": 11054,
+    "hash": "bca42a81714f0b77636da6a52fcb8bbed97ae88562e55d7229acbae96f45c539"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-mutation.mjs",
+    "bytes": 1302,
+    "hash": "602a95fafc2a5b1be535bc2b3c083365b0fbab8cb0741b9acc3cc001c39dbe9f"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-quality-r2.test.mjs",
+    "bytes": 4931,
+    "hash": "ace4ec97308f60064dfff2893b55c56bfbfcd66321a56178d0c1ecd1067e8285"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-quality-review.test.mjs",
+    "bytes": 14118,
+    "hash": "e4946f5c6acfb3c034f7b9c46571fc0b2d660b36320feaf53b024c8084c7520a"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-quality.mjs",
+    "bytes": 12923,
+    "hash": "f46f3945f357e695c5dec7ad49d400081df38923a9f18323ed2451fe0be35d3e"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-quality.test.mjs",
+    "bytes": 16395,
+    "hash": "9701e7639b05f63af0d139883a8b84caf912a8a8bd9b8c3b83b937a420d50458"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-review-validation.mjs",
+    "bytes": 3553,
+    "hash": "0a2975621b855206e485c6bb882839837d069351113dd9dc7501be0490c424e6"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-sandbox-dryrun.mjs",
+    "bytes": 3800,
+    "hash": "2f84c038864e334acb82ed654bbee83e31a1e5396fdb2e17447a5f1012b90e96"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-scope.mjs",
+    "bytes": 6430,
+    "hash": "9080065656a8120743615f21197adc588a2b2e170e26be987518da0a9c432eaf"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-suites.mjs",
+    "bytes": 6122,
+    "hash": "46636aa81994bc50d45fddc293876f38f49787a3005d5e9d08bec9ac8b5bfc56"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/backend-vitest-runner.mjs",
+    "bytes": 1994,
+    "hash": "faae49a1dfa6883a1058fc9655c67a05911edf3904aedbdfadcc702cc81cd366"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/crap-mapping-audit.mjs",
+    "bytes": 12219,
+    "hash": "93a0bd04fd57aea6e7fbf9bd7e7d135f5fca7b141fd21bd471ae088417fc1397"
+  },
+  {
+    "path": "sandbox-CwczD3/scripts/crap.mjs",
+    "bytes": 13376,
+    "hash": "0de361adb89b1a2a74ca97acfa7f0a9b8598e496f36c3606eed40c838d202456"
+  },
+  {
+    "path": "sandbox-CwczD3/src/access/admission.ts",
+    "bytes": 3943,
+    "hash": "f66bf7f11a873225c92478e90704226402ed173dbaefb83f9486c4f6fc266fe7"
+  },
+  {
+    "path": "sandbox-CwczD3/src/access/client.ts",
+    "bytes": 1938,
+    "hash": "dfef3d8c2365e07c0afa91c344ac944a325eb285c3dea079f809d3fed88976cb"
+  },
+  {
+    "path": "sandbox-CwczD3/src/access/convexHarness.ts",
+    "bytes": 1649,
+    "hash": "bf8c7ecd7eabbe9736290996e8922bbb06438f6ece39e29c758d031a79a654a1"
+  },
+  {
+    "path": "sandbox-CwczD3/src/access/protocol.test.ts",
+    "bytes": 3870,
+    "hash": "b31d268bf9c07e4d2cba33a7da1a99388ea93ef972b7f3156debd86af283b6e8"
+  },
+  {
+    "path": "sandbox-CwczD3/src/access/protocol.ts",
+    "bytes": 23703,
+    "hash": "2e3de56d269a5cf597d6479f4e018b40a7bbfb0e5b4c1f74d0824b584f84f01b"
+  },
+  {
+    "path": "sandbox-CwczD3/src/access/provider.ts",
+    "bytes": 796,
+    "hash": "28f202492b38cc5f73465baf7defe79346f14717dcd6702d0e108b43006d8e4a"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/cashActivity.ts",
+    "bytes": 10526,
+    "hash": "712a8689d87962a39c1b9f079b7154f1db8485cd551aec4c7a369a455e34bb3b"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/cashCategory.ts",
+    "bytes": 5486,
+    "hash": "31fed3d0413afe39b8cd3009a4f0c02b86677eaf44b9850f0d30db7b24b816fa"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/categories.ts",
+    "bytes": 25645,
+    "hash": "5e4de4239ae81adc64531541f9b555270947c9956f6bacda8d53c7459a6c4932"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/categoryPolicy.ts",
+    "bytes": 27473,
+    "hash": "d81a41399b185982296474b6d77834f5b9a2193fec7b5a1ee4b0f1b54242c3a7"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/categoryTypes.ts",
+    "bytes": 5083,
+    "hash": "d98d0e7b4a8beb4106b798a825df3c08806ef097933308aff6be3a90a4b02da3"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/chartOfAccounts.ts",
+    "bytes": 15255,
+    "hash": "8fdf71a6c2291b33dbe35b9e8b894293ec22105b1f9e966124bea10e3878f637"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/classification.ts",
+    "bytes": 11166,
+    "hash": "8aed50de365cbabc27595a26a8164368dbc0c269ec8686be65e8d7d136bd17f2"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commandIdentity.ts",
+    "bytes": 2729,
+    "hash": "2b853b9abe65312ab345f4f8977a8f69f74063bce69cc37dd69192389e2b1c58"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/createFinancialAccountProfile.ts",
+    "bytes": 6646,
+    "hash": "39d56e8a4a7ea77571e1aa472d0fb2143f5ae819c7342de260f056049318678f"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/createHouseholdWorkspace.ts",
+    "bytes": 5341,
+    "hash": "f1d251798c5e0e9c5ddc368c2eb84672edda018a66f3ca4b4f4da9b74f84431e"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/createPersonalWorkspace.ts",
+    "bytes": 2013,
+    "hash": "f20a3445805cee3a1489a979c2bd6c08f0dcc76485895eb551bce59913f91596"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/lockAccountingPeriod.ts",
+    "bytes": 3731,
+    "hash": "7a39d6478526381febab97f044378eb5439e91c897c89c6b33e77b58e3c870c3"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/recordAccountTransfer.ts",
+    "bytes": 4290,
+    "hash": "0efcd73122477cf6ee8d2f5a74842cd775e0dc10c52437ed82b145abc26f0866"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/recordCashExpense.ts",
+    "bytes": 2229,
+    "hash": "bf6f779605691bf839e9e30a04b06bc897f618a70d1d0f9f1be0de891458fe58"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/recordCashIncome.ts",
+    "bytes": 2224,
+    "hash": "773a7c4c34ceb0d2e4d3436f63098ea4f6bcbb456c6ab0fccd62f868e658452f"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/recordOpeningPosition.ts",
+    "bytes": 16976,
+    "hash": "390eba2649d48aa743eba70761d894453acfbbafec4448da3942c7e741b04c69"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/reversePostedEntry.ts",
+    "bytes": 8149,
+    "hash": "8c919451f9917df82bf91d23d0024995aad26b53929a71dfae33a07791bd9a7d"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/commands/setupFinancialAccount.ts",
+    "bytes": 3832,
+    "hash": "b9764f22d8e81f4233669c83487c56385f864e93da25509f592ea5fba6a1bf44"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/convexHarness.ts",
+    "bytes": 6388,
+    "hash": "d0564f183979c98a6c52d7f703de44e623642962e0976ae2ecdc5d199aeefafd"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/core.ts",
+    "bytes": 7226,
+    "hash": "7fe347abcca1628fff2989f365d7a9371ab607f7c11b7b6d1771bec260c8d625"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/currencies.ts",
+    "bytes": 13980,
+    "hash": "e474ea3f19d9be9048e308c8350cd5c0c57e7a03319548e3440a8de7a948d52a"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/errors.ts",
+    "bytes": 5848,
+    "hash": "f4270202c4450654f3d4247723f12d4084a6b45c3dbeb091eed7bb2835010e57"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/financialAccountProfiles.ts",
+    "bytes": 2330,
+    "hash": "dc304265075ec783a66637d446e57df9b54949cd4ee26d36ecef026b3210dce8"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/index.ts",
+    "bytes": 3036,
+    "hash": "364d4d681fbade3af4f615ab6a9825e58ab1572121dc96d4e97ba3dba54214b8"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/ledgerTotals.ts",
+    "bytes": 2908,
+    "hash": "5cd08986f05051f886a44d427e80ddaa5f43e538d2e3f410aadac9178dea84ec"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/membership.ts",
+    "bytes": 5375,
+    "hash": "2f62ea7d8cc06721e25d2ed695943a8e8bd5c813c106a51d4853c7dafe7b7203"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/money.ts",
+    "bytes": 3715,
+    "hash": "8ccaaec158275657637c9339c6af137ffc74f275822fed08a80fa7930000bacc"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/openingDate.ts",
+    "bytes": 8942,
+    "hash": "893d8b491275c1404dc791e66a8f472d4930ba07c1d1e4cc46bc4e5da17c25a5"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/period.ts",
+    "bytes": 9655,
+    "hash": "c2d801b9d68e62afa58d22c0101a9b815ae6d8f7c0dbfa998cd599b15737fb75"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/periodControl.ts",
+    "bytes": 4853,
+    "hash": "e761636eedba96c6a9031f8e659eccef60c19d0ebc72c5c0f6076e7d4b082b94"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/planningReads.ts",
+    "bytes": 6214,
+    "hash": "8f6fc4f0f6a5d2ede5d2b4ee0754f81e5ba538a0cccc9cb4cf76d891c4bc7f45"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/posting.ts",
+    "bytes": 26382,
+    "hash": "9ce9926bc6958f821ccfa02c394eaefd183ff04b82a1b990ed7866b859c65b55"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/balances.ts",
+    "bytes": 3997,
+    "hash": "712fcf44e3d59c3316fc6c5932aed0a5bf699ab6107c9677e837501ba07493bc"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/expenseEligibility.ts",
+    "bytes": 7857,
+    "hash": "8165ff52e0c3e65c721c7d552b6f123d72277d155e2d01889bf6273dd7519a8a"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/listCatalogAccounts.ts",
+    "bytes": 2104,
+    "hash": "24ea55464e56e2ed9a2a71b03c084538030537563dab96c399889b688bd3389c"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/listFinancialAccountProfiles.ts",
+    "bytes": 2067,
+    "hash": "659a1100d795df10cfbd96ae43466685b5ef3667868a1a414375facebbdaa8bd"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/listJournalEntries.ts",
+    "bytes": 4680,
+    "hash": "3f9448dfd0527cc656e968914d2efea89e8cd37cc99dacbb67164e618288cd2d"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/listLedgerAccounts.ts",
+    "bytes": 3676,
+    "hash": "9c04f6562ecf3a2c8e7f17e101c23a6a1f4534e25acad38e17a082191d560ca2"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/listOwnedWorkspaces.ts",
+    "bytes": 2385,
+    "hash": "44a0ae271d56251e382f4ac610012d246b1cb3ff4075e27915fbfb5fb0fc5423"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/listPostedExpenses.ts",
+    "bytes": 6419,
+    "hash": "63b7240cd1377507a8633ec4f9e5097fd290fb2a1cf3616f2fc3bbefa6d49184"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/openWorkspace.ts",
+    "bytes": 2617,
+    "hash": "db2894fe60f6cbeedc7c068285969bc481607a7455ba67b816ec5adeb573caab"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/queries/trialBalance.ts",
+    "bytes": 3279,
+    "hash": "4f37fdf022ba2c8145c680f9dd3e75c670f969a4dddacd9ce010aa46be4a8423"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/reclassification.ts",
+    "bytes": 45855,
+    "hash": "d1db970e44b7bf35d280b5d2f034016dcc81b0ec12f8cb2c5f91043dc7180537"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/rules.test.ts",
+    "bytes": 11358,
+    "hash": "c4a1364beff34ccebd7cf2ec5526027ec9621a8bdb14a680a60b395e5323fb61"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/templates/coPucPersonal.ts",
+    "bytes": 41306,
+    "hash": "87509fe991650abc65fe5d9a0cafbaee245ae8e6ed4bbe9f7504638b43394852"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/templates/usGaapPersonal.ts",
+    "bytes": 44062,
+    "hash": "b57172a692c9862496c24f6c6ed4193db5d5692c6f22f79d476363954e5f50cc"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/types.ts",
+    "bytes": 15810,
+    "hash": "8d374358f01c175bf4bf0b01ba8cb1cebf297214028af403f3b7eb405bf76813"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/views.ts",
+    "bytes": 13528,
+    "hash": "e99fff279b34a28a15552443aa1bf3164a05dae73106d8f7ab8fc01f338d6c56"
+  },
+  {
+    "path": "sandbox-CwczD3/src/accounting/workspaceProvisioning.ts",
+    "bytes": 3926,
+    "hash": "de9d6fd7c1eb63835af1f06b69343e31a96eb6eae922ce827767895c8db2e857"
+  },
+  {
+    "path": "sandbox-CwczD3/src/budget/calendar.ts",
+    "bytes": 2212,
+    "hash": "d403f6813e5410870db9bacb2faaa7451522c13a34468c78cb5c99fe25dc6e26"
+  },
+  {
+    "path": "sandbox-CwczD3/src/budget/commands.ts",
+    "bytes": 27118,
+    "hash": "29990ab560f6f291c90be896c7827cab6a2b1d881778258a9e56c798e36e37b3"
+  },
+  {
+    "path": "sandbox-CwczD3/src/budget/convexHarness.ts",
+    "bytes": 4785,
+    "hash": "ff383d8c98de9eac067ed7eb7adab1ab7ce72c69f515679e29fe59b0cbb081b1"
+  },
+  {
+    "path": "sandbox-CwczD3/src/budget/errors.ts",
+    "bytes": 2626,
+    "hash": "259538302cdc51b2fc535e08bcc4cab16286abcb450b35bce1d0aa2f9042fdcc"
+  },
+  {
+    "path": "sandbox-CwczD3/src/budget/evaluation.ts",
+    "bytes": 24054,
+    "hash": "4e43187f2e64f59fb6c636f98b60719ca90a0a72fbf280fac0900cdb2b065a32"
+  },
+  {
+    "path": "sandbox-CwczD3/src/budget/input.ts",
+    "bytes": 10159,
+    "hash": "dba5e029b3d860bebd355dede14d1290a2b219922aa3e65cc8c0b110d3811ed1"
+  },
+  {
+    "path": "sandbox-CwczD3/src/budget/types.ts",
+    "bytes": 3664,
+    "hash": "b055bf572f71f735700959d354133b5330ec97fb90fe05e97b41246f4d21a67b"
+  },
+  {
+    "path": "sandbox-CwczD3/src/savingsRecovery/allocation.ts",
+    "bytes": 8727,
+    "hash": "faef452f992cff79fbe91c39bdcf4757a78c767e90b1bc8cc8080c68d667649b"
+  },
+  {
+    "path": "sandbox-CwczD3/src/savingsRecovery/amounts.test.ts",
+    "bytes": 3982,
+    "hash": "93b197eb5f34e5d35a65c5baf383eb46300bf106e8771204dde305f3e2a13525"
+  },
+  {
+    "path": "sandbox-CwczD3/src/savingsRecovery/amounts.ts",
+    "bytes": 7306,
+    "hash": "085280c4e350e8e9011851c6f4f86255fdd3f6ae7f62f312541ab131aeda3cb9"
+  },
+  {
+    "path": "sandbox-CwczD3/src/savingsRecovery/commands.ts",
+    "bytes": 56575,
+    "hash": "e0bf16d9a10166e255463f960c1c55bb00aea291440f8e3d7f92f7ee472c5e53"
+  },
+  {
+    "path": "sandbox-CwczD3/src/savingsRecovery/progress.ts",
+    "bytes": 34238,
+    "hash": "02d952ad054a144c017c97a496dd475de064cca7523eceb01103334df65f3ac1"
+  },
+  {
+    "path": "sandbox-CwczD3/src/savingsRecovery/queries.ts",
+    "bytes": 34943,
+    "hash": "5dfa1c45d7a4e0c6cb41f946d56c24bd91c4d2e21f106d2bf0acb460d6f74242"
+  },
+  {
+    "path": "sandbox-CwczD3/src/savingsRecovery/schedule.ts",
+    "bytes": 9672,
+    "hash": "3c52b8910c81ef12a890e29ddf84cdd980f3f5cdcfb325bbed2a3f567f4ae267"
+  },
+  {
+    "path": "sandbox-CwczD3/src/savingsRecovery/types.ts",
+    "bytes": 3998,
+    "hash": "64cb7fa5d6ec476db51c6432dcf49f9243f85fad87af0a9a28e37440518589a6"
+  },
+  {
+    "path": "sandbox-CwczD3/stryker.config.json",
+    "bytes": 1270,
+    "hash": "0f1bf0fa150683fd2be9c5dbaa8c70fb559386da8fe194e520d159ec7582ac60"
+  },
+  {
+    "path": "sandbox-CwczD3/tsconfig.json",
+    "bytes": 347,
+    "hash": "7d1c5b5efa314fc2be4192d6481821443f7f9b7944dc841a8994db3a838e3930"
+  },
+  {
+    "path": "sandbox-CwczD3/vitest.config.ts",
+    "bytes": 588,
+    "hash": "2030c0cfd16e8e065fd225db032169c10278edd2445734c1f7cd4736a95382f3"
+  },
+  {
+    "path": "sandbox-CwczD3/vitest.mutation.config.ts",
+    "bytes": 254,
+    "hash": "1142c1862a83265c07d4ebf172bb21dff4cd4cf83f1c2b9462ca79c41b8bb06c"
+  }
+]

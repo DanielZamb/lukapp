@@ -1,0 +1,180 @@
+{
+  "installedPath": "/Users/zambamon/.t3/worktrees/finance-tracker-v2/pstack-core-v01-backend-gates/node_modules/.pnpm/ast-v8-to-istanbul@0.3.12/node_modules/ast-v8-to-istanbul/dist/index.mjs",
+  "originalHash": "587df5fbc5f6729bef6b546a670fc8db0d1e43475e66e722291c1db74b43f7bc",
+  "correctedHash": "a14ee93eecb5c0e8baadd5df5613c6afb012563fc3907b35f71ce51df68c4d06",
+  "runs": [
+    {
+      "dataset": "representative-before",
+      "inputHash": "f6f542df2422af43350d13d993412e7010c5529a3c22d8270a37235b870fac8a",
+      "originalReproducesRetained": true,
+      "counts": {
+        "original": {
+          "functions": 53,
+          "statements": 197,
+          "branches": 66
+        },
+        "corrected": {
+          "functions": 54,
+          "statements": 198,
+          "branches": 66
+        }
+      },
+      "counterChanges": {
+        "f": {
+          "changedOrMissing": [],
+          "added": [
+            {
+              "location": {
+                "decl": {
+                  "start": {
+                    "line": 188,
+                    "column": 77
+                  },
+                  "end": {
+                    "line": 188,
+                    "column": 85
+                  }
+                },
+                "loc": {
+                  "start": {
+                    "line": 188,
+                    "column": 85
+                  },
+                  "end": {
+                    "line": 188,
+                    "column": 108
+                  }
+                }
+              },
+              "count": 0
+            }
+          ]
+        },
+        "s": {
+          "changedOrMissing": [],
+          "added": [
+            {
+              "location": {
+                "start": {
+                  "line": 188,
+                  "column": 85
+                },
+                "end": {
+                  "line": 188,
+                  "column": 108
+                }
+              },
+              "count": 0
+            }
+          ]
+        },
+        "b": {
+          "changedOrMissing": [],
+          "added": []
+        }
+      }
+    },
+    {
+      "dataset": "representative-after",
+      "inputHash": "22285588371b023409c526b1732f500474173533eaa7b851dbffba033662ef1e",
+      "originalReproducesRetained": true,
+      "counts": {
+        "original": {
+          "functions": 53,
+          "statements": 197,
+          "branches": 66
+        },
+        "corrected": {
+          "functions": 54,
+          "statements": 198,
+          "branches": 66
+        }
+      },
+      "counterChanges": {
+        "f": {
+          "changedOrMissing": [],
+          "added": [
+            {
+              "location": {
+                "decl": {
+                  "start": {
+                    "line": 188,
+                    "column": 77
+                  },
+                  "end": {
+                    "line": 188,
+                    "column": 85
+                  }
+                },
+                "loc": {
+                  "start": {
+                    "line": 188,
+                    "column": 85
+                  },
+                  "end": {
+                    "line": 188,
+                    "column": 108
+                  }
+                }
+              },
+              "count": 1
+            }
+          ]
+        },
+        "s": {
+          "changedOrMissing": [],
+          "added": [
+            {
+              "location": {
+                "start": {
+                  "line": 188,
+                  "column": 85
+                },
+                "end": {
+                  "line": 188,
+                  "column": 108
+                }
+              },
+              "count": 1
+            }
+          ]
+        },
+        "b": {
+          "changedOrMissing": [],
+          "added": []
+        }
+      }
+    },
+    {
+      "dataset": "tiny",
+      "inputHash": "d39359b86e812517b938ca99ec03bfac78b698c5e0c5935a136774240c531680",
+      "originalReproducesRetained": true,
+      "counts": {
+        "original": {
+          "functions": 15,
+          "statements": 34,
+          "branches": 11
+        },
+        "corrected": {
+          "functions": 15,
+          "statements": 34,
+          "branches": 11
+        }
+      },
+      "counterChanges": {
+        "f": {
+          "changedOrMissing": [],
+          "added": []
+        },
+        "s": {
+          "changedOrMissing": [],
+          "added": []
+        },
+        "b": {
+          "changedOrMissing": [],
+          "added": []
+        }
+      }
+    }
+  ]
+}

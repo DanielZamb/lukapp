@@ -8,6 +8,7 @@ import { gzipSync } from "node:zlib";
 import { spawnSync } from "node:child_process";
 import { parseArguments, checkStages, mutationConfig, verifyReceipt } from "./backend-quality.mjs";
 import { manifest, compilerConfigurationFiles, areaFor, policy, sha256 } from "./backend-scope.mjs";
+import { TestStatus } from "./backend-suites.mjs";
 import { analyzeFile } from "./crap.mjs";
 
 function authReceipt(t) {
@@ -20,7 +21,7 @@ function authReceipt(t) {
   writeFileSync(join(directory, "auth-mutation.json.gz"), bytes);
   const suites = inputs.mutationTests.selected.map(file => ({ file, status: "pass", errors: [], tests: [{ name: "fixture test", status: "pass" }] }));
   const preflight = { inputDigest: inputs.digest, status: "complete", sandbox: { passed: true, failures: [] }, suites,
-    runnerTests: suites.map(suite => ({ id: `${suite.file}#fixture test`, status: "success" })) };
+    runnerTests: suites.map(suite => ({ id: `${suite.file}#fixture test`, status: TestStatus.Success })) };
   const preflightBytes = JSON.stringify(preflight);
   writeFileSync(join(directory, "auth-preflight.json"), preflightBytes);
   const receipt = { mode: "mutation", area: "auth", manifest: inputs, stages: [{ name: "auth", exitStatus: 0, passed: true }],
@@ -238,5 +239,21 @@ test("AST coverage receipts cannot omit or change their mapping format", t => {
     const result = verifyReceipt(fixture.directory);
     assert.equal(result.formatMatches, false);
     assert.equal(result.passed, false);
+  }
+});
+
+test("patched mapper bytes and patch identity invalidate mutation reuse when their bound hashes differ", t => {
+  const fixture = authReceipt(t);
+  const patch = "patches/ast-v8-to-istanbul@0.3.12.patch";
+  const mapper = Object.keys(fixture.receipt.manifest.files).find(file => file.endsWith("/ast-v8-to-istanbul/dist/index.mjs"));
+  assert.ok(mapper);
+  for (const file of [patch, mapper]) {
+    const previous = fixture.receipt.manifest.files[file];
+    fixture.receipt.manifest.files[file] = "changed";
+    fixture.save();
+    const result = verifyReceipt(fixture.directory);
+    assert.equal(result.passed, false);
+    assert.ok(result.changed.includes(file));
+    fixture.receipt.manifest.files[file] = previous;
   }
 });

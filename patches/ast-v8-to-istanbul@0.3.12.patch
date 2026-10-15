@@ -1,0 +1,26 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 275ab127848398bc52248f2492c77584da55c095..3582fa13e05d3456f04d2f3cf9efcb10066b8495 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -9,6 +9,7 @@ import jsTokens from "js-tokens";
+ //#region src/ast.ts
+ function getWalker() {
+ 	let nextIgnore = false;
++	const flattenedLogicalNodes = new WeakSet();
+ 	function onIgnore(node) {
+ 		nextIgnore = node;
+ 	}
+@@ -93,11 +94,11 @@ function getWalker() {
+ 						return visitors.onConditionalExpression(node, branches);
+ 					}
+ 					case "LogicalExpression": {
+-						if (isSkipped(node)) return;
++						if (isSkipped(node) || flattenedLogicalNodes.has(node)) return;
+ 						const branches = [];
+ 						function visit(child) {
+ 							if (child.type === "LogicalExpression") {
+-								setSkipped(child);
++								flattenedLogicalNodes.add(child);
+ 								if (getIgnoreHint(child) !== "next") {
+ 									visit(child.left);
+ 									return visit(child.right);

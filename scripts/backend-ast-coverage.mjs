@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 export const AST_COVERAGE_FORMAT = "vitest-v8-3.2.7-ast-v1";
+export const PATCHED_AST_COVERAGE_FORMAT = "vitest-v8-3.2.7-ast-flattened-logicals-v1";
 const isFunction = node => ts.isFunctionLike(node) && node.body !== undefined;
 const validCount = value => Number.isSafeInteger(value) && value >= 0;
 const logical = node => ts.isBinaryExpression(node) && [ts.SyntaxKind.AmpersandAmpersandToken,

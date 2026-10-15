@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  ast-v8-to-istanbul@0.3.12:
+    hash: c8e3d35eb7cffd753590c123b728c6fdb22e41bd810f34db8c290103ab9e08ce
+    path: patches/ast-v8-to-istanbul@0.3.12.patch
+
 importers:
 
   .:
@@ -6818,7 +6823,7 @@ snapshots:
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 1.0.2
-      ast-v8-to-istanbul: 0.3.12
+      ast-v8-to-istanbul: 0.3.12(patch_hash=c8e3d35eb7cffd753590c123b728c6fdb22e41bd810f34db8c290103ab9e08ce)
       debug: 4.4.3
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-report: 3.0.1
@@ -6989,7 +6994,7 @@ snapshots:
 
   assertion-error@2.0.1: {}
 
-  ast-v8-to-istanbul@0.3.12:
+  ast-v8-to-istanbul@0.3.12(patch_hash=c8e3d35eb7cffd753590c123b728c6fdb22e41bd810f34db8c290103ab9e08ce):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       estree-walker: 3.0.3

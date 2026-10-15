@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { importedInputs, manifest, sha256 } from "./backend-scope.mjs";
 import { mutationConfig, checkRegression } from "./backend-quality.mjs";
-import { checkSandbox, checkSuites, checkPreflight, snapshotSuites, sandboxHashes } from "./backend-suites.mjs";
+import { checkSandbox, checkSuites, checkPreflight, snapshotSuites, sandboxHashes, TestStatus } from "./backend-suites.mjs";
 import { guardRunner } from "./backend-vitest-runner.mjs";
 
 test("the real selected mobile import graph, package and compiler inputs survive Stryker selection without entering mutation scope", async () => {
@@ -44,7 +44,7 @@ test("transitive imported source changes invalidate reuse and missing input fail
   assert.throws(() => importedInputs(["test.ts"], root), /Unresolved local import/);
 });
 const suites = () => [{ file: "selected.test.ts", status: "pass", errors: [], tests: [{ name: "real case", status: "pass" }] }];
-const tests = () => [{ id: "selected.test.ts#real case", status: "success" }];
+const tests = () => [{ id: "selected.test.ts#real case", status: TestStatus.Success }];
 test("empty failed suites, missing files, skipped/uncollected cases and flattened omissions fail closed", () => {
   assert.equal(checkSuites(["selected.test.ts"], suites(), tests()).passed, true);
   for (const observed of [[], [{ ...suites()[0], status: "fail", tests: [] }], [{ ...suites()[0], tests: [] }],
@@ -52,7 +52,7 @@ test("empty failed suites, missing files, skipped/uncollected cases and flattene
     assert.equal(checkSuites(["selected.test.ts"], observed, tests()).passed, false);
   for (const status of ["skip", "todo", "fail"]) assert.equal(checkSuites(["selected.test.ts"], [{ ...suites()[0], tests: [{ name: "real case", status }] }]).passed, false);
   assert.equal(checkSuites(["selected.test.ts"], suites(), []).passed, false);
-  assert.equal(checkSuites(["selected.test.ts"], suites(), [{ id: "selected.test.ts#different case", status: "success" }]).passed, false);
+  assert.equal(checkSuites(["selected.test.ts"], suites(), [{ id: "selected.test.ts#different case", status: TestStatus.Success }]).passed, false);
 });
 test("preflight verification rederives identities and rejects absent or failed evidence", () => {
   const inputs = { digest: "bound", mutationTests: { selected: ["selected.test.ts"] } };
@@ -94,6 +94,8 @@ test("the actual all-mode CLI never invokes mutation after regression/suite-load
   mkdirSync(join(root, "quality/backend"), { recursive: true });
   for (const file of ["backend-quality.mjs", "backend-scope.mjs", "backend-suites.mjs", "backend-mutation.mjs", "crap.mjs", "backend-ast-coverage.mjs"])
     cpSync(`scripts/${file}`, join(root, "scripts", file));
+  mkdirSync(join(root, "patches"));
+  cpSync("patches/ast-v8-to-istanbul@0.3.12.patch", join(root, "patches/ast-v8-to-istanbul@0.3.12.patch"));
   cpSync("quality/backend/policy.json", join(root, "quality/backend/policy.json"));
   symlinkSync(resolve("node_modules"), join(root, "node_modules"));
   writeFileSync(join(root, "package.json"), '{"type":"module"}');
@@ -138,4 +140,28 @@ test("sandbox binding predicts the installed TypeScript config rewrite exactly a
   const changed = JSON.parse(expected); changed.compilerOptions.strict = false;
   writeFileSync(join(root, "tsconfig.json"), JSON.stringify(changed, null, 2));
   assert.equal(checkSandbox({ ...inputs, sandboxHashes: hashes }, root).passed, false);
+});
+
+test("the actual raw 31-suite 360-case numeric Stryker receipt passes the checker without changing its failed engine exit", () => {
+  const dir = "quality/backend/graph-correction/dry-run-r2";
+  const evidence = JSON.parse(readFileSync(`${dir}/preflight.json`));
+  const { inputs } = JSON.parse(readFileSync(`${dir}/preflight-inputs.json`));
+  const result = checkPreflight(evidence, inputs);
+  assert.equal(result.passed, true);
+  assert.equal(result.suites.files, 31);
+  assert.equal(result.suites.tests, 360);
+  assert.ok(evidence.runnerTests.every(test => test.status === TestStatus.Success));
+  assert.equal(JSON.parse(readFileSync(`${dir}/execution.json`)).exitStatus, 1);
+  for (const status of [TestStatus.Failed, TestStatus.Skipped, undefined, null, 99, "success"]) {
+    const changed = structuredClone(evidence);
+    changed.runnerTests[0].status = status;
+    assert.equal(checkPreflight(changed, inputs).passed, false);
+  }
+  const missing = structuredClone(evidence);
+  missing.runnerTests.pop();
+  assert.equal(checkPreflight(missing, inputs).passed, false);
+  const omitted = structuredClone(evidence);
+  omitted.suites = omitted.suites.filter(suite => suite.file !== "convex/mobileSetupRetry.test.ts");
+  omitted.runnerTests = omitted.runnerTests.filter(test => !test.id.startsWith("convex/mobileSetupRetry.test.ts#"));
+  assert.equal(checkPreflight(omitted, inputs).passed, false);
 });

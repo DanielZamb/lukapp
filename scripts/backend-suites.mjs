@@ -4,6 +4,9 @@ import { pathToFileURL } from "node:url";
 import { relative, resolve } from "node:path";
 import { sha256 } from "./backend-scope.mjs";
 
+const runnerRequire = createRequire(import.meta.resolve("@stryker-mutator/vitest-runner"));
+export const { TestStatus } = await import(pathToFileURL(runnerRequire.resolve("@stryker-mutator/api/test-runner")));
+
 export async function sandboxHashes(inputs, configured = {}) {
   await import("@stryker-mutator/core");
   const core = import.meta.resolve("@stryker-mutator/core");
@@ -56,7 +59,7 @@ export function checkSuites(selected, suites, runnerTests) {
   if (new Set(identities).size !== identities.length) failures.push({ reason: "duplicate-test-identity" });
   if (runnerTests) {
     const reported = runnerTests.map(test => test.id).sort();
-    if (JSON.stringify(reported) !== JSON.stringify([...identities].sort()) || runnerTests.some(test => test.status !== "success"))
+    if (JSON.stringify(reported) !== JSON.stringify([...identities].sort()) || runnerTests.some(test => test.status !== TestStatus.Success))
       failures.push({ reason: "runner-test-identity-or-status-mismatch" });
   }
   return { passed: failures.length === 0, files: selected.length, tests: identities.length, identities: identities.sort(), failures };

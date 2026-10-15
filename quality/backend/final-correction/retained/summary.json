@@ -1,0 +1,127 @@
+{
+  "inputDigest": "28d65137c75a52e38fd4a7238f4888f295934531a9a093e8bcb883ccf658eb0b",
+  "source": "c22958eebef597f367624688709a1dd5fbd85057",
+  "checkerHash": "04786ea870a283ad430c53feca6408ba311187dd9d283d84050464e4bdbc6b44",
+  "reporterHash": "ead75934ded5c8f446ef3dde31322be787353d60bae5c66ac14515fc0cd9a116",
+  "coverageFormat": {
+    "format": "vitest-v8-3.2.7-ast-flattened-logicals-v1",
+    "provider": "@vitest/coverage-v8",
+    "version": "3.2.7",
+    "experimentalAstAwareRemapping": true,
+    "mapper": {
+      "package": "ast-v8-to-istanbul",
+      "version": "0.3.12",
+      "patch": "patches/ast-v8-to-istanbul@0.3.12.patch",
+      "patchSha256": "c8e3d35eb7cffd753590c123b728c6fdb22e41bd810f34db8c290103ab9e08ce",
+      "installedSha256": "a14ee93eecb5c0e8baadd5df5613c6afb012563fc3907b35f71ce51df68c4d06"
+    }
+  },
+  "checkerValidationPassed": true,
+  "reports": [
+    {
+      "dataset": "representative",
+      "functions": 54,
+      "missing": 0,
+      "unassigned": 0,
+      "failures": 0,
+      "callback": {
+        "file": "src/savingsRecovery/commands.ts",
+        "function": "anonymous@188:78",
+        "line": 188,
+        "complexity": 1,
+        "statements": 0,
+        "branches": 0,
+        "coverage": 0,
+        "crap": 2,
+        "missingCoverage": false,
+        "statementObservations": 1,
+        "branchObservations": 0,
+        "functionEntries": [
+          0
+        ],
+        "mapping": "ast-fnMap",
+        "statementBasis": "ast-statements",
+        "mappingProblems": [],
+        "rejectedBranchObservations": [],
+        "entryProofs": [
+          {
+            "kind": "ast-fnMap",
+            "id": "51",
+            "count": 0,
+            "start": {
+              "line": 188,
+              "column": 85
+            },
+            "end": {
+              "line": 188,
+              "column": 108
+            },
+            "declaration": {
+              "start": {
+                "line": 188,
+                "column": 77
+              },
+              "end": {
+                "line": 188,
+                "column": 85
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "dataset": "representative-after-regression",
+      "functions": 54,
+      "missing": 0,
+      "unassigned": 0,
+      "failures": 0,
+      "callback": {
+        "file": "src/savingsRecovery/commands.ts",
+        "function": "anonymous@188:78",
+        "line": 188,
+        "complexity": 1,
+        "statements": 100,
+        "branches": 100,
+        "coverage": 100,
+        "crap": 1,
+        "missingCoverage": false,
+        "statementObservations": 1,
+        "branchObservations": 0,
+        "functionEntries": [
+          1
+        ],
+        "mapping": "ast-fnMap",
+        "statementBasis": "ast-statements",
+        "mappingProblems": [],
+        "rejectedBranchObservations": [],
+        "entryProofs": [
+          {
+            "kind": "ast-fnMap",
+            "id": "51",
+            "count": 1,
+            "start": {
+              "line": 188,
+              "column": 85
+            },
+            "end": {
+              "line": 188,
+              "column": 108
+            },
+            "declaration": {
+              "start": {
+                "line": 188,
+                "column": 77
+              },
+              "end": {
+                "line": 188,
+                "column": 85
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "officialAcceptance": false
+}

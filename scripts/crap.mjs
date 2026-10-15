@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import ts from "typescript";
-import { analyzeAstCoverage, AST_COVERAGE_FORMAT } from "./backend-ast-coverage.mjs";
+import { analyzeAstCoverage, AST_COVERAGE_FORMAT, PATCHED_AST_COVERAGE_FORMAT } from "./backend-ast-coverage.mjs";
 import { backendFiles, policy } from "./backend-scope.mjs";
 
 const isFunction = node => ts.isFunctionLike(node) && node.body !== undefined;
@@ -46,7 +46,7 @@ export function crapScore(complexity, coverage) {
   return complexity ** 2 * (1 - coverage / 100) ** 3 + complexity;
 }
 export function analyzeFile(file, text, coverage, format = "legacy") {
-  if (format === AST_COVERAGE_FORMAT) return analyzeAstCoverage(file, text, coverage, functionComplexity);
+  if ([AST_COVERAGE_FORMAT, PATCHED_AST_COVERAGE_FORMAT].includes(format)) return analyzeAstCoverage(file, text, coverage, functionComplexity);
   if (format !== "legacy") throw new Error(`Unknown coverage format: ${format}`);
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const functions = [];
