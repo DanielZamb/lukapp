@@ -1,0 +1,13 @@
+{
+  "failures": [
+    {
+      "file": "src/accounting/reclassification.ts",
+      "function": "previewCategoryReclassification",
+      "line": 14,
+      "complexity": 32,
+      "minimumCrapAtFullCoverage": 32,
+      "threshold": 30,
+      "sourceSha256": "c98c95fd11add2a0a349dbf40614dfac588560392ce30d83acd1573dc00a9285"
+    }
+  ]
+}

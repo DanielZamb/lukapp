@@ -1,0 +1,9 @@
+[33m00:32:47 (74339) WARN OptionsValidator[39m DEPRECATED. Use of "files" is deprecated, please use "ignorePatterns" instead (or remove "files" altogether will probably work as well). For now, rewriting them as ["**","!src/**/*.ts","!convex/**/*.ts","!convex/_generated/*.js","!package.json","!pnpm-lock.yaml","!pnpm-workspace.yaml","!tsconfig.json","!vitest.config.ts","!vitest.mutation.config.ts","!scripts/backend-scope.mjs","!quality/backend/policy.json"]. See https://stryker-mutator.io/docs/stryker-js/configuration/#ignorepatterns-string
+[32m00:32:47 (74339) INFO ProjectReader[39m Found 84 of 139 file(s) to be mutated.
+[32m00:32:48 (74339) INFO Instrumenter[39m Instrumented 84 source file(s) with 8457 mutant(s)
+[32m00:32:48 (74339) INFO ConcurrencyTokenProvider[39m Creating 2 test runner process(es).
+[32m00:32:48 (74339) INFO BroadcastReporter[39m Detected that current console does not support the "progress" reporter, downgrading to "progress-append-only" reporter
+[32m00:32:48 (74339) INFO DryRunExecutor[39m Note: running the dry-run only. No mutations will be tested.
+[32m00:32:48 (74339) INFO DryRunExecutor[39m Starting initial test run (vitest test runner with "perTest" coverage analysis). This may take a while.
+[32m00:33:00 (74339) INFO DryRunExecutor[39m Initial test run succeeded. Ran 353 tests in 11 seconds (net 7144.810790999999 ms, overhead 4353.189209000001 ms).
+[32m00:33:00 (74339) INFO MutationTestExecutor[39m The dry-run has been completed successfully. No mutations have been executed.

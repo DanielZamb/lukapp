@@ -4,17 +4,20 @@
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
   "vitest": {
-    "configFile": "vitest.config.ts",
+    "configFile": "vitest.mutation.config.ts",
     "related": false
   },
   "mutate": [
-    "src/accounting/**/*.ts",
-    "!src/accounting/**/*.test.ts",
-    "!src/accounting/convexHarness.ts",
+    "src/accounting/**/*.ts", "src/budget/**/*.ts", "src/savingsRecovery/**/*.ts", "src/access/protocol.ts", "convex/**/*.ts",
+    "!**/*.test.ts", "!**/*.d.ts", "!**/convexHarness.ts",
     "!src/accounting/types.ts",
-    "!src/accounting/index.ts"
+    "!src/accounting/categoryTypes.ts", "!src/accounting/index.ts", "!src/savingsRecovery/types.ts", "!convex/_generated/**", "!convex/auth.config.ts"
   ],
-  "incremental": true,
-  "ignoreStatic": true,
-  "reporters": ["clear-text", "progress", "html"]
+  "concurrency": 2,
+  "coverageAnalysis": "perTest",
+  "incremental": false,
+  "ignoreStatic": false,
+  "thresholds": { "high": 80, "low": 80, "break": 80 },
+  "ignorePatterns": ["**", "!src/**/*.ts", "!convex/**/*.ts", "!convex/_generated/*.js", "!package.json", "!pnpm-lock.yaml", "!pnpm-workspace.yaml", "!tsconfig.json", "!convex/tsconfig.json", "!vitest.config.ts", "!vitest.mutation.config.ts", "!scripts/backend-scope.mjs", "!quality/backend/policy.json"],
+  "reporters": ["clear-text", "progress-append-only", "json"]
 }
