@@ -148,11 +148,18 @@ sign-out cleans retained custody even on first launch after Session expiry. Nati
 retention checks include every installation key and all non-routing artifacts.
 They share the erase policy. Routing metadata and installation markers alone do
 not start another wipe after a clean process restart. An interrupted wipe resumes;
-a failed wipe retains its marker and requires explicit retry.
+a failed wipe keeps a controller-owned cleanup obligation until explicit retry
+finishes every phase. Admission, recovery and command guards respect that fact
+independently of display state or the in-flight Promise. The UI offers local
+cleanup retry. If marker creation itself fails, the in-process obligation does
+not establish durable crash persistence. Native marker policy is unchanged.
 
 Native storage owns `recovery-v2.json` and `revocations/` in each mode namespace.
 The versioned recovery record separates the exact intent from provider cleanup.
-An occupied cleanup slot is queried before dispatching completion. Pending or
+An occupied cleanup slot is queried before Begin creates a retrieve marker or
+dispatches, and before exact completion. Admission never calls Begin from a
+retrieve marker. Retrieve stays blocked until explicit Begin retry persists an
+exact intent and wipes. Pending or
 unavailable status preserves both facts and blocks admission. Observed success
 clears that slot under its captured revision. Completion then atomically installs
 the returned work ID and clears only that intent. No network request intervenes

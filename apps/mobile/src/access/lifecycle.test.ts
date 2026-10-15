@@ -127,9 +127,10 @@ it("keeps a consumed intent unresolved when a replacement Session receives repla
 
 it("does not overwrite an exact intent during Begin retry and blocks transport rejection", async () => {
   const h = harness(); await begin(h); h.seedRecovery("intent2", "work1");
+  h.answers.set("providerWork:status", () => ({ workId: "work1", state: { kind: "succeeded", at: 6000 } }));
   await h.controller.beginRecovery();
   expect(h.recoveryIntent()).toBe("intent2");
-  expect(h.recoveryWork()).toBe("work1");
+  expect(h.recoveryWork()).toBeNull();
   expect(h.events).not.toContain("clerkProvider:beginRecovery");
   const uncertain = harness(); await begin(uncertain);
   uncertain.answers.set("clerkProvider:beginRecovery", () => { throw new Error("offline"); });

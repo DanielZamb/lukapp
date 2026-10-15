@@ -25,6 +25,7 @@ import { publicConfig } from "./public-config";
 import { z } from "zod";
 import { usePathname } from "expo-router";
 import { requestScopedRpc } from "./request-scoped-rpc";
+import { CleanupRetry } from "./CleanupRetry";
 import { useSessionRpc } from "./use-session-rpc";
 
 type Runtime = {
@@ -62,6 +63,7 @@ function RuntimeSession({ children, rpc, observation, online, signOut, signIn, f
   }, [rpc, signOut, fixture]);
   const state = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getSnapshot);
   const cleanup = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getProviderCleanup);
+  const cleanupRequired = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getCleanupRequired);
   const revocations = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getRevocations);
   const pathname = usePathname();
   useEffect(() => { if (pathname !== "/security") runtime.controller.leaveSecurity(); }, [pathname, runtime]);
@@ -83,7 +85,7 @@ function RuntimeSession({ children, rpc, observation, online, signOut, signIn, f
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [nativeProof, setNativeProof] = useState("");
-  const allowed = state.kind === "ready" || state.kind === "provisioning";
+  const allowed = !cleanupRequired && (state.kind === "ready" || state.kind === "provisioning");
   return (
     <RuntimeContext.Provider value={runtime}>
       <InteractionContext.Provider value={() => runtime.controller.activity()}>
@@ -94,8 +96,8 @@ function RuntimeSession({ children, rpc, observation, online, signOut, signIn, f
           {allowed ? children : (
             <Screen>
               <Header title="Lukapp" />
-              <Copy title={observation.kind === "loading" ? "Opening Lukapp" : state.kind === "signed-out" ? "Your money, clearly" : "Your money stays private"}
-                detail={failure === "storage" ? "This device could not open secure storage. Use a supported device with strong biometrics." :
+              <Copy title={cleanupRequired ? "Finish local cleanup" : observation.kind === "loading" ? "Opening Lukapp" : state.kind === "signed-out" ? "Your money, clearly" : "Your money stays private"}
+                detail={cleanupRequired ? state.kind === "wiping" ? "Removing local input and signing out." : "Local cleanup did not finish. Retry cleanup before continuing." : failure === "storage" ? "This device could not open secure storage. Use a supported device with strong biometrics." :
                   failure === "sign-in" ? "Google sign-in did not finish. Try again online." :
                   observation.kind === "loading" ? "Waiting for secure sign-in to finish opening." :
                   state.kind === "wiping" ? "Removing local input and signing out." :
@@ -103,17 +105,17 @@ function RuntimeSession({ children, rpc, observation, online, signOut, signIn, f
                   !online ? "Reconnect before unlocking. Your saved Drafts stay on this device." :
                   state.kind === "blocked" ? "Access needs a fresh online check. Unlock again or sign in." :
                   state.kind === "checking" ? "Checking your access." : "Unlock with your biometrics to continue."} />
-              {state.kind === "signed-out" ? <PrimaryButton label={fixture ? "Sign in synthetic Owner" : "Continue with Google"} onPress={() => { setFailure(null); void signIn().catch(() => setFailure("sign-in")); }} /> :
+              {cleanupRequired ? <CleanupRetry controller={runtime.controller} pending={state.kind === "wiping"} /> : state.kind === "signed-out" ? <PrimaryButton label={fixture ? "Sign in synthetic Owner" : "Continue with Google"} onPress={() => { setFailure(null); void signIn().catch(() => setFailure("sign-in")); }} /> :
                 <PrimaryButton label={state.kind === "blocked" && state.code === "full_sign_in_required" ? "Full sign-in" : "Unlock"} loading={observation.kind === "loading" || state.kind === "checking" || state.kind === "wiping" || state.kind === "starting"}
                   disabled={!online || failure === "storage"} onPress={() => {
                     if (state.kind === "blocked" && state.code === "full_sign_in_required") void runtime.controller.wipe();
                     else void runtime.controller.admit();
                   }} />}
-              {state.kind !== "signed-out" && <SecondaryButton label={state.kind === "blocked" ? "Clear local input and sign in" : "Sign out"}
+              {!cleanupRequired && state.kind !== "signed-out" && <SecondaryButton label={state.kind === "blocked" ? "Clear local input and sign in" : "Sign out"}
                 disabled={state.kind === "wiping"} onPress={() => { void runtime.controller.wipe(); }} />}
-              {state.kind === "blocked" && online && observation.kind === "signed-in" && <>
+              {!cleanupRequired && state.kind === "blocked" && online && observation.kind === "signed-in" && <>
                 <Copy title="Recover access" detail="If your installation key or biometric enrollment changed, explicitly retire old bindings. Recovery signs you out, then requires a new full Google sign-in checked by the server." />
-                <SecondaryButton label="Retire old bindings and recover" onPress={() => { void runtime.controller.beginRecovery().catch(() => {}); }} />
+                <SecondaryButton label={state.code === "recovery_begin_retry_required" ? "Retry recovery and sign out" : "Retire old bindings and recover"} onPress={() => { void runtime.controller.beginRecovery().catch(() => {}); }} />
               </>}
               {fixture && __DEV__ && <>
                 <Copy title="Development native evidence" detail={"State: " + state.kind + (state.kind === "blocked" ? " · " + state.code : "") + " · " + custody.state().protection +

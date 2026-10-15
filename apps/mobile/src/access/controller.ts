@@ -48,6 +48,7 @@ export class AccessController {
   private state: AccessState = { kind: "starting" };
   private listeners = new Set<() => void>();
   private wiping: Promise<void> | undefined;
+  private cleanup: { kind: "clear" } | { kind: "required"; code: string } = { kind: "clear" };
   private securityGeneration: number | undefined;
   private activityContactAt = 0;
   private heartbeat: Promise<unknown> | undefined;
@@ -63,11 +64,15 @@ export class AccessController {
     mode: "live" | "fixture";
   }) {}
   getSnapshot = () => this.state;
+  getCleanupRequired = () => this.cleanup.kind === "required";
   getProviderCleanup = () => this.providerCleanup;
   getRevocations = () => this.revocations;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private ownsCustody() { return !this.closed && this.ports.native.state().mode === this.ports.mode; }
-  private publish(next: AccessState) { this.state = next; for (const listener of this.listeners) listener(); }
+  private publish(next: AccessState) {
+    this.state = this.cleanup.kind === "required" && next.kind !== "wiping" ? { kind: "blocked", code: this.cleanup.code } : next;
+    for (const listener of this.listeners) listener();
+  }
   private invalidate(next: AccessState, lock = true) {
     this.epoch++;
     if (lock) this.ports.native.lock(); else this.ports.native.closeInput();
@@ -76,7 +81,7 @@ export class AccessController {
     this.publish(this.wiping ? { kind: "wiping" } : next);
   }
   private current(epoch: number, generation?: number) {
-    if (this.closed || this.ports.native.state().mode !== this.ports.mode || epoch !== this.epoch || this.wiping || this.ports.native.state().wipePending ||
+    if (this.closed || this.ports.native.state().mode !== this.ports.mode || epoch !== this.epoch || this.cleanup.kind === "required" || this.wiping || this.ports.native.state().wipePending ||
       (generation !== undefined && this.ports.native.state().generation !== generation)) throw new StaleAccess();
   }
   async start() {
@@ -100,7 +105,7 @@ export class AccessController {
     const observation = this.observation;
     this.session = observation.kind === "signed-in" ? observation.sessionId : null;
     if (observation.kind === "signed-in") this.signedOutCleanupAttempted = false;
-    if (this.wiping) return;
+    if (this.wiping || this.cleanup.kind === "required") return;
     if (observation.kind === "signed-out" && !this.signedOutCleanupAttempted) {
       this.signedOutCleanupAttempted = true;
       try { if (this.ports.native.hasRetainedCustody(this.ports.mode)) { void this.wipe(); return; } }
@@ -123,7 +128,7 @@ export class AccessController {
     this.ports.clearMemory(); this.providerCleanup = null; this.revocations = []; this.publish({ kind: "locked" });
   }
   activity() {
-    if (!this.ownsCustody()) return;
+    if (!this.ownsCustody() || this.cleanup.kind === "required") return;
     this.ports.native.touch();
     if ((this.state.kind !== "ready" && this.state.kind !== "provisioning") || this.heartbeat ||
       performance.now() - this.activityContactAt < 60000) return;
@@ -158,6 +163,7 @@ export class AccessController {
   }
   async admit(fresh = false) {
     if (this.closed || this.ports.native.state().mode !== this.ports.mode) return;
+    if (this.cleanup.kind === "required") { this.publish(this.wiping ? { kind: "wiping" } : { kind: "blocked", code: this.cleanup.code }); return; }
     if (!this.session || !this.online || this.wiping) { this.invalidate({ kind: "blocked", code: "online_sign_in_required" }); return; }
     this.invalidate({ kind: "checking" }, false);
     const epoch = this.epoch;
@@ -169,19 +175,9 @@ export class AccessController {
       admissionGeneration = native.generation;
       this.current(epoch, native.generation);
       let recovery = this.readRecovery();
-      if (recovery.intent.kind !== "none") {
-        if (recovery.cleanup.kind === "work") {
-          const old = await this.ports.rpc.query(api.providerWork.status, { workId: recovery.cleanup.workId }, () => this.current(epoch, native.generation));
-          this.current(epoch, native.generation);
-          this.providerCleanup = old;
-          if (old.state.kind !== "succeeded") throw new ConvexError({ code: "recovery_cleanup_pending" });
-          recovery = await this.saveRecovery(recovery, { ...recovery, cleanup: { kind: "none" } }, epoch, native.generation);
-        }
-        if (recovery.intent.kind === "retrieve") {
-          const intent = await this.ports.rpc.action(api.clerkProvider.beginRecovery, {}, () => this.current(epoch, native.generation));
-          this.current(epoch, native.generation);
-          recovery = await this.saveRecovery(recovery, { ...recovery, intent: { kind: "exact", intentId: intent.intentId } }, epoch, native.generation);
-        }
+      if (recovery.intent.kind === "retrieve") { this.invalidate({ kind: "blocked", code: "recovery_begin_retry_required" }); return; }
+      if (recovery.intent.kind === "exact") {
+        recovery = await this.requireRecoverySlot(epoch, native.generation);
         if (recovery.intent.kind !== "exact") throw new StaleAccess();
         const work = await this.ports.rpc.action(api.clerkProvider.completeRecovery, { intentId: recovery.intent.intentId }, () => this.current(epoch, native.generation));
         this.current(epoch, native.generation);
@@ -265,11 +261,17 @@ export class AccessController {
   private async reconcileCleanup(epoch: number, generation: number) {
     this.current(epoch, generation);
     const recovery = this.readRecovery();
-    if (recovery.cleanup.kind !== "work") return;
+    if (recovery.cleanup.kind !== "work") return recovery;
     const work = await this.ports.rpc.query(api.providerWork.status, { workId: recovery.cleanup.workId }, () => this.current(epoch, generation));
     this.current(epoch, generation); this.providerCleanup = work;
-    if (work.state.kind === "succeeded") await this.saveRecovery(recovery, { ...recovery, cleanup: { kind: "none" } }, epoch, generation);
+    const next = work.state.kind === "succeeded" ? await this.saveRecovery(recovery, { ...recovery, cleanup: { kind: "none" } }, epoch, generation) : recovery;
     for (const listener of this.listeners) listener();
+    return next;
+  }
+  private async requireRecoverySlot(epoch: number, generation: number) {
+    const recovery = await this.reconcileCleanup(epoch, generation);
+    if (recovery.cleanup.kind === "work") throw new ConvexError({ code: "recovery_cleanup_pending" });
+    return recovery;
   }
   private async reconcileRevocations(epoch: number, generation: number) {
     this.current(epoch, generation);
@@ -340,7 +342,7 @@ export class AccessController {
     this.beginningRecovery = operation; return operation;
   }
   private async performBeginRecovery() {
-    if (this.closed || this.ports.native.state().mode !== this.ports.mode || !this.session || !this.online || this.wiping) throw new StaleAccess();
+    if (this.closed || this.ports.native.state().mode !== this.ports.mode || !this.session || !this.online || this.wiping || this.cleanup.kind === "required") throw new StaleAccess();
     const unavailableCustody = this.state.kind === "blocked";
     this.invalidate({ kind: "checking" });
     const epoch = this.epoch;
@@ -348,7 +350,7 @@ export class AccessController {
     try {
       if (!unavailableCustody) generation = (await this.ports.native.unlock("Confirm account recovery")).generation;
       this.current(epoch, generation);
-      let recovery = this.readRecovery();
+      let recovery = await this.requireRecoverySlot(epoch, generation);
       if (recovery.intent.kind === "none") recovery = await this.saveRecovery(recovery, { ...recovery, intent: { kind: "retrieve" } }, epoch, generation);
       if (recovery.intent.kind === "retrieve") {
         const intent = await this.ports.rpc.action(api.clerkProvider.beginRecovery, {}, () => this.current(epoch, generation));
@@ -365,6 +367,7 @@ export class AccessController {
     const state = this.state;
     if (state.kind !== "ready" && state.kind !== "provisioning") throw new StaleAccess();
     const { epoch, generation, deviceId } = state.contact;
+    this.current(epoch, generation);
     const current = () => { this.current(epoch, generation); actionGuard(); };
     const guarded = this.guarded(epoch, generation, actionGuard);
     const proof = async <Request extends object>(operation: AccessOperation, request: Request) => {
@@ -400,30 +403,38 @@ export class AccessController {
   async wipe(): Promise<void> {
     if (this.closed || this.ports.native.state().mode !== this.ports.mode) throw new StaleAccess();
     if (this.wiping) return this.wiping;
-    this.epoch++; this.ports.native.lock(); this.ports.clearMemory(); this.providerCleanup = null; this.revocations = []; this.publish({ kind: "wiping" });
+    this.cleanup = { kind: "required", code: "wipe_retry_required:marker" };
+    this.epoch++;
     let phase = "marker";
-    this.wiping = (async () => {
-      const phaseCurrent = () => { if (this.closed || this.ports.native.state().mode !== this.ports.mode) throw new StaleAccess(); };
-      phaseCurrent();
-      await this.ports.native.beginWipe(this.ports.mode);
-      phaseCurrent();
-      phase = "native";
-      await this.ports.native.erase(this.ports.mode);
-      phaseCurrent();
-      phase = "session";
-      await this.ports.signOut();
-      phaseCurrent();
-      phase = "finish";
-      await this.ports.native.finishWipe(this.ports.mode);
-      phaseCurrent();
-      this.scope = { kind: "discover" };
-      this.session = null; this.publish({ kind: "signed-out" });
-    })();
-    try { await this.wiping; } catch (error) {
-      const known = ["key_deletion_failed", "input_deletion_failed", "wipe_marker_deletion_failed"]
-        .find(code => error instanceof Error && error.message.includes(code));
-      this.publish({ kind: "blocked", code: "wipe_retry_required:" + phase + (known ? ":" + known : "") });
-    }
-    finally { this.wiping = undefined; }
+    const operation = (async () => {
+      try {
+        const phaseCurrent = () => { if (!this.ownsCustody()) throw new StaleAccess(); };
+        phaseCurrent();
+        this.ports.native.lock();
+        this.ports.clearMemory(); this.providerCleanup = null; this.revocations = [];
+        this.publish({ kind: "wiping" });
+        await this.ports.native.beginWipe(this.ports.mode);
+        phaseCurrent();
+        phase = "native";
+        await this.ports.native.erase(this.ports.mode);
+        phaseCurrent();
+        phase = "session";
+        await this.ports.signOut();
+        phaseCurrent();
+        phase = "finish";
+        await this.ports.native.finishWipe(this.ports.mode);
+        phaseCurrent();
+        this.scope = { kind: "discover" };
+        this.session = null; this.cleanup = { kind: "clear" }; this.publish({ kind: "signed-out" });
+      } catch (error) {
+        if (!this.ownsCustody()) return;
+        const known = ["key_deletion_failed", "input_deletion_failed", "wipe_marker_deletion_failed"]
+          .find(code => error instanceof Error && error.message.includes(code));
+        this.cleanup = { kind: "required", code: "wipe_retry_required:" + phase + (known ? ":" + known : "") };
+        this.publish({ kind: "blocked", code: this.cleanup.code });
+      }
+    })().finally(() => { if (this.wiping === operation) this.wiping = undefined; });
+    this.wiping = operation;
+    return operation;
   }
 }
