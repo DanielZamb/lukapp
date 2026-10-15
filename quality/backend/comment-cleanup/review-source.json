@@ -1,7 +1,0 @@
-{
-  "path": "/Users/zambamon/Work/finance-tracker-v2/.orchestrator/runs/2026-10-13-core/orchestrate/lukapp/reviews/V01-combined-correction-comments-terminal.json",
-  "sha256": "1468a914c3514f5ebffccaf946fbd61e0c8c80d117825efc1fdd64984a537068",
-  "baseHead": "b86f659c756dd44dcd62eb6eb2f16d9cff876b63",
-  "acceptedPatchSha256": "945506f368ea949055b20aa8ea2c4ad44c40669f41ac4f5aeca25b64512b3a26",
-  "reviewStatus": "completed"
-}

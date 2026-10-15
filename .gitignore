@@ -17,3 +17,7 @@ scratch/
 .stryker-tmp/
 reports/mutation/
 coverage/
+
+/quality/backend/*
+!/quality/backend/README.md
+!/quality/backend/policy.json

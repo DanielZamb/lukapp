@@ -1,6 +1,0 @@
-{
-  "command": "node scripts/backend-ast-probe.mjs quality/backend/ast-remapping/representative-after-regression",
-  "exitStatus": 0,
-  "elapsedSeconds": 2.294538974761963,
-  "timeoutSeconds": 180
-}

@@ -103,7 +103,7 @@ export function manifest() {
   const compilerConfigurations = compilerConfigurationFiles([...new Set([
     ...tracked.filter(file => file === "tsconfig.json" || /^(src|convex)\/(.*\/)?tsconfig\.json$/.test(file)), ...imports.configurations])]);
   const files = [...new Set([...tracked.filter(file => /^(src|convex)\/.*\.(ts|js)$/.test(file) ||
-    ["quality/backend/ast-remapping/fixture/nested.ts", "quality/backend/ast-remapping/fixture/nested.test.ts", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "vitest.config.ts", "vitest.mutation.config.ts", "stryker.config.json", "quality/backend/policy.json"].includes(file) || /^scripts\/.*\.(mjs|test\.mjs)$/.test(file)),
+    ["scripts/fixtures/backend-quality/ast-remapping/fixture/nested.ts", "scripts/fixtures/backend-quality/ast-remapping/fixture/nested.test.ts", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "vitest.config.ts", "vitest.mutation.config.ts", "stryker.config.json", "quality/backend/policy.json"].includes(file) || /^scripts\/.*\.(mjs|test\.mjs)$/.test(file)),
     ...imports.files, ...compilerConfigurations, mapperFile, mapperPackage, coverageFormat.mapper.patch])].sort();
   const hashes = Object.fromEntries(files.map(file => [file, sha256(readFileSync(file))]));
   return { coverageFormat, algorithm: "sha256", digest: sha256(JSON.stringify(hashes)), files: hashes, compilerConfigurations,

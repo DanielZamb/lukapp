@@ -222,8 +222,8 @@ test("the lower of owned statements and branches remains the function coverage",
   assert.equal(branchMissing.coverage, 0);
 });
 test("retained V8 named, anonymous, and unobserved callbacks map without new backend executions", () => {
-  const coverage = JSON.parse(gunzipSync(readFileSync("quality/backend/reporter-validation-expanded-coverage.json.gz")));
-  const snapshot = JSON.parse(gunzipSync(readFileSync("quality/backend/crap-mapping/source-snapshot.json.gz")));
+  const coverage = JSON.parse(gunzipSync(readFileSync("scripts/fixtures/backend-quality/legacy/coverage.json.gz")));
+  const snapshot = JSON.parse(gunzipSync(readFileSync("scripts/fixtures/backend-quality/legacy/sources.json.gz")));
   const rows = file => {
     assert.equal(sha256(snapshot.sources[file]), snapshot.sourceHashes[file]);
     return analyzeFile(file, snapshot.sources[file], coverage[Object.keys(coverage).find(key => key.endsWith(`/${file}`))]);

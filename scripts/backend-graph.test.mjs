@@ -132,7 +132,7 @@ test("sandbox binding predicts the installed TypeScript config rewrite exactly a
   const hashes = await sandboxHashes(inputs, { mutate: [] });
   const expected = JSON.stringify(JSON.parse(readFileSync("tsconfig.json")), null, 2);
   assert.equal(hashes["tsconfig.json"], sha256(expected));
-  const retained = JSON.parse(readFileSync("quality/backend/graph-correction/tsconfig-format-only.json"));
+  const retained = JSON.parse(readFileSync("scripts/fixtures/backend-quality/graph-correction/tsconfig-format-only.json"));
   assert.equal(retained.parsedIdentical, true);
   assert.equal(hashes["tsconfig.json"], retained.sandboxSha256);
   assert.notEqual(hashes["tsconfig.json"], inputs.files["tsconfig.json"]);
@@ -146,7 +146,7 @@ test("sandbox binding predicts the installed TypeScript config rewrite exactly a
 });
 
 test("historical raw numeric statuses retain suite identity validation but lack the new instrumented scope binding", () => {
-  const dir = "quality/backend/graph-correction/dry-run-r2";
+  const dir = "scripts/fixtures/backend-quality/graph-correction/dry-run-r2";
   const evidence = JSON.parse(readFileSync(`${dir}/preflight.json`));
   const { inputs } = JSON.parse(readFileSync(`${dir}/preflight-inputs.json`));
   assert.equal(checkPreflight(evidence, inputs, inputs.mutationFiles, "full-diagnostic").passed, false);

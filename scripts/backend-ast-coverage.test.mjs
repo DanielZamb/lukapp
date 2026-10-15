@@ -4,9 +4,9 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { analyzeFile } from "./crap.mjs";
 import { AST_COVERAGE_FORMAT as format } from "./backend-ast-coverage.mjs";
-const file = "quality/backend/ast-remapping/fixture/nested.ts";
+const file = "scripts/fixtures/backend-quality/ast-remapping/fixture/nested.ts";
 const source = readFileSync(file, "utf8");
-const original = Object.values(JSON.parse(readFileSync("quality/backend/ast-remapping/ast/coverage-final.json")))[0];
+const original = Object.values(JSON.parse(readFileSync("scripts/fixtures/backend-quality/ast-remapping/ast/coverage-final.json")))[0];
 const copy = () => structuredClone(original);
 const analyze = data => analyzeFile(file, source, data, format);
 const failed = rows => { assert.ok(rows.some(row => row.missingCoverage)); assert.ok(rows.filter(row => row.missingCoverage).every(row => row.coverage === 0)); };
@@ -29,7 +29,7 @@ test("retained real AST fixture assigns every counter, preserves nine zero paths
   assert.equal(rows.at(-1).coverage, 100);
   assert.equal(rows.find(row => row.function === "chosen").coverage, 0);
   assert.deepEqual(original.b[9], [0, 0]);
-  const legacy = Object.values(JSON.parse(readFileSync("quality/backend/ast-remapping/legacy/coverage-final.json")))[0];
+  const legacy = Object.values(JSON.parse(readFileSync("scripts/fixtures/backend-quality/ast-remapping/legacy/coverage-final.json")))[0];
   assert.equal(analyzeFile(file, source, legacy)[0].missingCoverage, true);
   assert.equal(analyzeFile(file, source, legacy)[0].crap, 110);
 });
@@ -80,13 +80,13 @@ test("same-line nested function selection belongs to the decision and does not i
   failed(analyzeFile("fixture.ts", text, coverage, format));
 });
 test("AST mode cannot reinterpret legacy branch roots or unknown format labels", () => {
-  const legacy = Object.values(JSON.parse(readFileSync("quality/backend/ast-remapping/legacy/coverage-final.json")))[0];
+  const legacy = Object.values(JSON.parse(readFileSync("scripts/fixtures/backend-quality/ast-remapping/legacy/coverage-final.json")))[0];
   failed(analyze(legacy));
   assert.throws(() => analyzeFile(file, source, original, "new-default"), /Unknown coverage format/);
 });
 
 test("retained representative AST counters have unique owners while the provider's missing callback remains failing", () => {
-  const dir = "quality/backend/ast-remapping/representative";
+  const dir = "scripts/fixtures/backend-quality/ast-remapping/representative";
   const data = Object.values(JSON.parse(readFileSync(`${dir}/coverage-final.json`)))[0];
   const text = readFileSync(`${dir}/source.ts.txt`, "utf8");
   const rows = analyzeFile("src/savingsRecovery/commands.ts", text, data, format);
@@ -123,7 +123,7 @@ test("an erased type alias observation cannot supply statement coverage for an i
 });
 
 test("the new public Recovery regression executes the raw V8 predicate but its absent AST observation still fails", () => {
-  const dir = "quality/backend/ast-remapping/representative-after-regression";
+  const dir = "scripts/fixtures/backend-quality/ast-remapping/representative-after-regression";
   const proof = JSON.parse(readFileSync(`${dir}/callback-raw-probe.json`));
   assert.deepEqual(proof.functions[0].ranges, [{ startOffset: 15948, endOffset: 15981, count: 1 }]);
   const data = Object.values(JSON.parse(readFileSync(`${dir}/coverage-final.json`)))[0];

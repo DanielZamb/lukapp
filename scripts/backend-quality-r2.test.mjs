@@ -78,8 +78,8 @@ test("review r2 accepted positive branches do not hide zero or positive rejected
 });
 
 test("review r2 retained zero range 142:0 makes its parent ambiguous despite the positive invocation proof", () => {
-  const raw = JSON.parse(gunzipSync(readFileSync("quality/backend/reporter-validation-expanded-coverage.json.gz")));
-  const snapshot = JSON.parse(gunzipSync(readFileSync("quality/backend/crap-mapping/source-snapshot.json.gz")));
+  const raw = JSON.parse(gunzipSync(readFileSync("scripts/fixtures/backend-quality/legacy/coverage.json.gz")));
+  const snapshot = JSON.parse(gunzipSync(readFileSync("scripts/fixtures/backend-quality/legacy/sources.json.gz")));
   const file = "src/savingsRecovery/commands.ts";
   const data = raw[Object.keys(raw).find(path => path.endsWith(`/${file}`))];
   const rows = analyzeFile(file, snapshot.sources[file], data);

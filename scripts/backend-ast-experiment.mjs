@@ -5,7 +5,8 @@ import { analyzeFile } from "./crap.mjs";
 import { sha256 } from "./backend-scope.mjs";
 
 const directory = "quality/backend/ast-remapping";
-const file = `${directory}/fixture/nested.ts`;
+const fixtureDirectory = "scripts/fixtures/backend-quality/ast-remapping/fixture";
+const file = `${fixtureDirectory}/nested.ts`;
 const source = readFileSync(file, "utf8");
 const summary = { sourceHash: sha256(source), fixture: file, experiments: [] };
 for (const ast of [false, true]) {
@@ -13,7 +14,7 @@ for (const ast of [false, true]) {
   const output = `${directory}/${label}`;
   mkdirSync(output, { recursive: true });
   const ctx = await createVitest("test", { config: false, watch: false, maxWorkers: 1,
-    include: [`${directory}/fixture/nested.test.ts`], reporters: ["default"], coverage: {
+    include: [`${fixtureDirectory}/nested.test.ts`], reporters: ["default"], coverage: {
       enabled: true, provider: "v8", include: [file], reporter: ["json"], reportsDirectory: output,
       processingConcurrency: 1, experimentalAstAwareRemapping: ast,
     } });

@@ -34,12 +34,12 @@ test("installed patch recovers actual retained callback counts zero and one with
   for (const [label, directory, count] of [
     ["representative-before", "representative", 0], ["representative-after", "representative-after-regression", 1],
   ]) {
-    const dir = `quality/backend/ast-remapping/${directory}`;
+    const dir = `scripts/fixtures/backend-quality/ast-remapping/${directory}`;
     const inputs = JSON.parse(gunzipSync(readFileSync(`${dir}/conversion-inputs.json.gz`)));
     const actual = JSON.parse(JSON.stringify(await convert(mapper, inputs[0])));
-    const expected = JSON.parse(readFileSync(`quality/backend/mapper-diagnosis/${label}-corrected.json`));
+    const expected = JSON.parse(readFileSync(`scripts/fixtures/backend-quality/mapper-diagnosis/${label}-corrected.json`));
     assert.deepEqual(actual, expected);
-    const summary = JSON.parse(readFileSync("quality/backend/mapper-diagnosis/comparison.json")).runs.find(run => run.dataset === label);
+    const summary = JSON.parse(readFileSync("scripts/fixtures/backend-quality/mapper-diagnosis/comparison.json")).runs.find(run => run.dataset === label);
     for (const kind of ["f", "s", "b"]) assert.deepEqual(summary.counterChanges[kind].changedOrMissing, []);
     const file = "src/savingsRecovery/commands.ts", text = readFileSync(`${dir}/source.ts.txt`, "utf8");
     const rows = analyzeFile(file, text, Object.values(actual)[0], coverageFormat.format);
@@ -51,9 +51,9 @@ test("installed patch recovers actual retained callback counts zero and one with
   }
 });
 test("installed patch preserves every retained tiny function and branch counter including all zero evidence", async () => {
-  const input = JSON.parse(readFileSync("quality/backend/ast-remapping/ast/conversion-inputs.json"))[0];
+  const input = JSON.parse(readFileSync("scripts/fixtures/backend-quality/ast-remapping/ast/conversion-inputs.json"))[0];
   const actual = JSON.parse(JSON.stringify(await convert(mapper, [input.filename, input.wrapperLength, input.sources, input.functions])));
-  const expected = JSON.parse(readFileSync("quality/backend/ast-remapping/ast/coverage-final.json"));
+  const expected = JSON.parse(readFileSync("scripts/fixtures/backend-quality/ast-remapping/ast/coverage-final.json"));
   assert.deepEqual(actual, expected);
   const data = Object.values(actual)[0];
   assert.equal(Object.values(data.f).filter(count => count === 0).length, 11);
@@ -65,7 +65,7 @@ async function originalMapper(t) {
   const directory = mkdtempSync(join(tmpdir(), "lukapp-original-mapper-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   symlinkSync(resolve(dirname(mapperFile), "../.."), join(directory, "node_modules"));
-  writeFileSync(join(directory, "original.mjs"), readFileSync("quality/backend/mapper-diagnosis/mapper-original.mjs.txt"));
+  writeFileSync(join(directory, "original.mjs"), readFileSync("scripts/fixtures/backend-quality/mapper-diagnosis/mapper-original.mjs.txt"));
   return (await import(pathToFileURL(join(directory, "original.mjs")))).default;
 }
 async function synthetic(map, code) {
