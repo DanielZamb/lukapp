@@ -2,9 +2,9 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, openSyn
 import { resolve, join } from "node:path";
 import { spawnSync, execFileSync } from "node:child_process";
 import { gzipSync, gunzipSync } from "node:zlib";
-import { backendFiles, areaFor, manifest, policy, sha256 } from "./backend-scope.mjs";
+import { areaFor, manifest, policy, sha256 } from "./backend-scope.mjs";
 import { reportCrap } from "./crap.mjs";
-import { checkSuites, regressionSuites, checkPreflight, sandboxHashes } from "./backend-suites.mjs";
+import { checkSuites, regressionSuites, checkPreflight, sandboxHashes, instrumentationFor } from "./backend-suites.mjs";
 import { analyzeMutation } from "./backend-mutation.mjs";
 
 export function parseArguments(args) {
@@ -31,6 +31,13 @@ export function checkStages(mode, area, stages) {
 export function mutationConfig(base, files, compilerConfigurations, reportPath) {
   return { ...base, mutate: files, ignorePatterns: [...base.ignorePatterns, ...compilerConfigurations.filter(file => !file.split("/").includes("node_modules")).map(file => `!${file}`)],
     jsonReporter: { fileName: reportPath } };
+}
+export async function prepareMutationStage(inputs, selection, base, reportPath) {
+  const instrumentation = instrumentationFor(inputs, selection);
+  const config = mutationConfig(base, instrumentation.files, Object.keys(inputs.files), reportPath);
+  const bound = { ...inputs, instrumentation };
+  bound.sandboxHashes = await sandboxHashes(bound, config);
+  return { config, inputs: bound };
 }
 export function checkRegression(regression, inputs = manifest()) {
   const suites = checkSuites([...inputs.mutationTests.selected, ...inputs.mutationTests.excluded], regressionSuites(regression));
@@ -59,7 +66,13 @@ export function verifyReceipt(area) {
       const result = analyzeMutation(report, files, current.files, policy.mutationScoreMinimum);
       const preflightName = `${stage.name}-preflight.json`;
       const evidence = receipt.artifacts[preflightName] ? JSON.parse(readFileSync(join(area, preflightName), "utf8")) : undefined;
-      const preflight = checkPreflight(evidence, current);
+      const bindingName = `${stage.name}-preflight-inputs.json`, configName = `${stage.name}-stryker.json`;
+      const binding = receipt.artifacts[bindingName] ? JSON.parse(readFileSync(join(area, bindingName), "utf8")) : {};
+      const config = receipt.artifacts[configName] ? JSON.parse(readFileSync(join(area, configName), "utf8")) : {};
+      const { instrumentation, sandboxHashes: expectedHashes, ...boundManifest } = binding.inputs ?? {};
+      const bound = { ...current, instrumentation, sandboxHashes: expectedHashes };
+      const preflight = checkPreflight(evidence, bound, config.mutate, stage.name);
+      if (JSON.stringify(boundManifest) !== JSON.stringify(current)) preflight.passed = false;
       if (receipt.mode === "all" && evidence) {
         const regression = JSON.parse(readFileSync(join(area, "regression.json"), "utf8"));
         const expected = checkSuites(current.mutationTests.selected, regressionSuites(regression).filter(suite => current.mutationTests.selected.includes(suite.file)));
@@ -123,21 +136,22 @@ async function main(args) {
   }
   if ((mode === "all" || mode === "mutation") && regressionAllowsMutation) {
     for (const selectedArea of area ? [area] : policy.areas) {
-      const files = backendFiles().filter(file => areaFor(file) === selectedArea);
       const base = JSON.parse(readFileSync("stryker.config.json", "utf8"));
       const reportPath = resolve(dir, `${selectedArea}-mutation.json`);
-      const config = mutationConfig(base, files, Object.keys(before.files), reportPath);
+      const prepared = await prepareMutationStage(before, selectedArea, base, reportPath);
+      const { config, inputs } = prepared;
+      const files = inputs.instrumentation.files;
       const configPath = join(dir, `${selectedArea}-stryker.json`);
       writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
       receipt.artifacts[`${selectedArea}-stryker.json`] = sha256(readFileSync(configPath));
       const preflightName = `${selectedArea}-preflight.json`;
       const preflightOutput = resolve(dir, preflightName);
       const preflightInputs = `${selectedArea}-preflight-inputs.json`;
-      retain(preflightInputs, JSON.stringify({ inputs: { ...before, sandboxHashes: await sandboxHashes(before, base) }, output: preflightOutput, expectedIdentities }, null, 2) + "\n");
+      retain(preflightInputs, JSON.stringify({ inputs, output: preflightOutput, expectedIdentities }, null, 2) + "\n");
       const execution = execute(selectedArea, ["exec", "stryker", "run", configPath], { LUKAPP_MUTATION_PREFLIGHT: resolve(dir, preflightInputs) });
       const evidence = existsSync(preflightOutput) ? JSON.parse(readFileSync(preflightOutput, "utf8")) : undefined;
       if (evidence) receipt.artifacts[preflightName] = sha256(readFileSync(preflightOutput));
-      const preflight = checkPreflight(evidence, before);
+      const preflight = checkPreflight(evidence, inputs, config.mutate, selectedArea);
       const report = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, "utf8")) : { files: {} };
       const { mutants, ...analysis } = analyzeMutation(report, files, before.files, policy.mutationScoreMinimum);
       const stage = { name: selectedArea, ...execution, ...analysis, preflight, passed: execution.exitStatus === 0 && analysis.passed && preflight.passed };

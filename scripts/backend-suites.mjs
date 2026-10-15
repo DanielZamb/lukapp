@@ -2,12 +2,47 @@ import { readFileSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { relative, resolve } from "node:path";
-import { sha256 } from "./backend-scope.mjs";
+import { sha256, areaFor, policy } from "./backend-scope.mjs";
 
 const runnerRequire = createRequire(import.meta.resolve("@stryker-mutator/vitest-runner"));
 export const { TestStatus } = await import(pathToFileURL(runnerRequire.resolve("@stryker-mutator/api/test-runner")));
 
+const sameSet = (actual, expected) => Array.isArray(actual) && actual.every(value => typeof value === "string") &&
+  new Set(actual).size === actual.length && JSON.stringify([...actual].sort()) === JSON.stringify([...expected].sort());
+export function instrumentationFor(inputs, selection) {
+  if (!Array.isArray(inputs.mutationFiles) || !sameSet(inputs.mutationFiles, inputs.mutationFiles) ||
+    inputs.mutationFiles.some(file => !Object.hasOwn(inputs.files, file))) throw new Error("Invalid full mutation manifest");
+  if (selection !== "full-diagnostic" && !policy.areas.includes(selection)) throw new Error("Missing or invalid instrumented selection");
+  return { selection, files: inputs.mutationFiles.filter(file => selection === "full-diagnostic" || areaFor(file) === selection) };
+}
+export function checkInstrumentation(inputs, configured, selection) {
+  try {
+    const expected = instrumentationFor(inputs, selection);
+    return inputs.instrumentation?.selection === selection && sameSet(inputs.instrumentation.files, expected.files) && sameSet(configured, expected.files);
+  } catch { return false; }
+}
+function sandboxBindingValid(inputs, configured, selection) {
+  if (!checkInstrumentation(inputs, configured, selection)) return false;
+  const copied = Object.keys(inputs.files).filter(file => !inputs.instrumentation.files.includes(file));
+  return inputs.sandboxHashes && sameSet(Object.keys(inputs.sandboxHashes), copied) &&
+    Object.values(inputs.sandboxHashes).every(hash => typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash));
+}
+export function checkSandboxObservations(inputs, sandbox, configured, selection) {
+  const failures = [];
+  if (!sandboxBindingValid(inputs, configured, selection) ||
+    JSON.stringify(sandbox?.instrumentation) !== JSON.stringify(inputs.instrumentation) || !sameSet(sandbox?.configured, configured ?? []))
+    return { passed: false, failures: [{ reason: "invalid-instrumented-scope" }] };
+  if (!sandbox.observations || !sameSet(Object.keys(sandbox.observations), Object.keys(inputs.files)))
+    failures.push({ reason: "incomplete-sandbox-observations" });
+  for (const file of Object.keys(inputs.files)) {
+    const observed = sandbox.observations?.[file];
+    if (typeof observed !== "string" || !/^[a-f0-9]{64}$/.test(observed)) failures.push({ file, reason: "missing-input" });
+    else if (!inputs.instrumentation.files.includes(file) && observed !== inputs.sandboxHashes[file]) failures.push({ file, reason: "changed-input" });
+  }
+  return { passed: !failures.length, failures };
+}
 export async function sandboxHashes(inputs, configured = {}) {
+  if (!checkInstrumentation(inputs, configured.mutate, inputs.instrumentation?.selection)) throw new Error("Invalid instrumented scope for preprocessing");
   await import("@stryker-mutator/core");
   const core = import.meta.resolve("@stryker-mutator/core");
   const require = createRequire(core);
@@ -17,7 +52,7 @@ export async function sandboxHashes(inputs, configured = {}) {
   const { TSConfigPreprocessor } = await import(new URL("./sandbox/ts-config-preprocessor.js", core));
   const options = { ...defaultOptions, ...configured };
   const files = new Map(), hashes = {};
-  for (const file of Object.keys(inputs.files).filter(file => !inputs.mutationFiles.includes(file))) {
+  for (const file of Object.keys(inputs.files).filter(file => !inputs.instrumentation.files.includes(file))) {
     let content = readFileSync(file, "utf8");
     // Dependency files are symlinked; only copied files enter preprocessing.
     if (file.split("/").includes("node_modules")) { hashes[file] = sha256(content); continue; }
@@ -30,14 +65,13 @@ export async function sandboxHashes(inputs, configured = {}) {
   for (const [file, expected] of files) hashes[relative(process.cwd(), file)] = sha256(await expected.readContent());
   return hashes;
 }
-export function checkSandbox(inputs, root = process.cwd()) {
-  const failures = [];
-  for (const [file, hash] of Object.entries(inputs.files)) {
+export function checkSandbox(inputs, root = process.cwd(), configured, selection = inputs.instrumentation?.selection) {
+  const observations = Object.fromEntries(Object.keys(inputs.files).map(file => {
     const path = resolve(root, file);
-    if (!existsSync(path)) failures.push({ file, reason: "missing-input" });
-    else if (!inputs.mutationFiles.includes(file) && sha256(readFileSync(path)) !== (inputs.sandboxHashes?.[file] ?? hash)) failures.push({ file, reason: "changed-input" });
-  }
-  return { passed: failures.length === 0, failures };
+    return [file, existsSync(path) ? sha256(readFileSync(path)) : null];
+  }));
+  const sandbox = { instrumentation: inputs.instrumentation, configured, observations };
+  return { ...sandbox, ...checkSandboxObservations(inputs, sandbox, configured, selection) };
 }
 export function checkSuites(selected, suites, runnerTests) {
   const failures = [];
@@ -82,11 +116,12 @@ export function regressionSuites(report, root = process.cwd()) {
     status: suite.status === "passed" ? "pass" : suite.status, errors: suite.message ? [suite.message] : [],
     tests: (suite.assertionResults ?? []).map(test => ({ name: test.fullName, status: test.status === "passed" ? "pass" : test.status })) }));
 }
-export function checkPreflight(evidence, inputs) {
+export function checkPreflight(evidence, inputs, configured, selection) {
   const failures = [];
   if (!evidence || evidence.inputDigest !== inputs.digest) return { passed: false, failures: [{ reason: "missing-or-unbound-preflight" }] };
   const sandbox = evidence.sandbox;
-  if (!sandbox?.passed || sandbox.failures?.length) failures.push({ reason: "sandbox-input-failure" });
+  if (!checkInstrumentation(inputs, evidence.configured, selection) || JSON.stringify(evidence.instrumentation) !== JSON.stringify(inputs.instrumentation) ||
+    !checkSandboxObservations(inputs, sandbox, configured, selection).passed || !sandbox?.passed || sandbox.failures?.length) failures.push({ reason: "sandbox-input-failure" });
   const suites = checkSuites(inputs.mutationTests.selected, evidence.suites ?? [], evidence.runnerTests ?? []);
   if (evidence.status !== "complete" || !suites.passed) failures.push({ reason: "suite-preflight-failure" });
   if (evidence.expectedIdentities && JSON.stringify(suites.identities) !== JSON.stringify([...evidence.expectedIdentities].sort()))

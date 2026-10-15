@@ -6,8 +6,9 @@ const installed = installedPlugins.find(plugin => plugin.name === "vitest");
 export function guardRunner(runner, inputs, output, expectedIdentities) {
   const dryRun = runner.dryRun.bind(runner);
   runner.dryRun = async options => {
-    const sandbox = checkSandbox(inputs);
-    const evidence = { inputDigest: inputs.digest, sandbox, expectedIdentities, status: "error", suites: [], runnerTests: [] };
+    const configured = runner.options?.mutate;
+    const sandbox = checkSandbox(inputs, process.cwd(), configured);
+    const evidence = { instrumentation: inputs.instrumentation, configured, inputDigest: inputs.digest, sandbox, expectedIdentities, status: "error", suites: [], runnerTests: [] };
     writeFileSync(output, JSON.stringify(evidence, null, 2) + "\n");
     if (!sandbox.passed) return { status: "error", errorMessage: `Backend sandbox inputs missing/changed: ${JSON.stringify(sandbox.failures)}` };
     try {
@@ -15,7 +16,7 @@ export function guardRunner(runner, inputs, output, expectedIdentities) {
       evidence.status = result.status;
       evidence.suites = snapshotSuites(runner.ctx.state.getFiles());
       evidence.runnerTests = result.tests ?? [];
-      evidence.check = checkPreflight(evidence, inputs);
+      evidence.check = checkPreflight(evidence, inputs, configured, inputs.instrumentation?.selection);
       writeFileSync(output, JSON.stringify(evidence, null, 2) + "\n");
       if (!evidence.check.passed) return { status: "error", errorMessage: `Backend selected-suite preflight failed: ${JSON.stringify(evidence.check)}` };
       return result;

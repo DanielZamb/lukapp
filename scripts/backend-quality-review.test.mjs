@@ -6,26 +6,33 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { spawnSync } from "node:child_process";
-import { parseArguments, checkStages, mutationConfig, verifyReceipt } from "./backend-quality.mjs";
+import { parseArguments, checkStages, mutationConfig, prepareMutationStage, verifyReceipt } from "./backend-quality.mjs";
 import { manifest, compilerConfigurationFiles, areaFor, policy, sha256 } from "./backend-scope.mjs";
 import { TestStatus } from "./backend-suites.mjs";
 import { analyzeFile } from "./crap.mjs";
 
-function authReceipt(t) {
+async function authReceipt(t) {
   const directory = mkdtempSync(join(tmpdir(), "lukapp-receipt-test-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const inputs = manifest();
+  const prepared = await prepareMutationStage(inputs, "auth", JSON.parse(readFileSync("stryker.config.json")), "fixture-report.json");
   const report = { files: Object.fromEntries(inputs.mutationFiles.filter(file => areaFor(file) === "auth")
     .map(file => [file, { source: readFileSync(file, "utf8"), mutants: [{ id: file, status: "Killed" }] }])) };
   const bytes = gzipSync(JSON.stringify(report));
   writeFileSync(join(directory, "auth-mutation.json.gz"), bytes);
   const suites = inputs.mutationTests.selected.map(file => ({ file, status: "pass", errors: [], tests: [{ name: "fixture test", status: "pass" }] }));
-  const preflight = { inputDigest: inputs.digest, status: "complete", sandbox: { passed: true, failures: [] }, suites,
+  const preflight = { inputDigest: inputs.digest, status: "complete", instrumentation: prepared.inputs.instrumentation, configured: prepared.config.mutate, sandbox: { passed: true, failures: [],
+    instrumentation: prepared.inputs.instrumentation, configured: prepared.config.mutate,
+    observations: { ...inputs.files, ...prepared.inputs.sandboxHashes } }, suites,
     runnerTests: suites.map(suite => ({ id: `${suite.file}#fixture test`, status: TestStatus.Success })) };
   const preflightBytes = JSON.stringify(preflight);
   writeFileSync(join(directory, "auth-preflight.json"), preflightBytes);
   const receipt = { mode: "mutation", area: "auth", manifest: inputs, stages: [{ name: "auth", exitStatus: 0, passed: true }],
     passed: true, changedDuringRun: false, artifacts: { "auth-mutation.json.gz": sha256(bytes), "auth-preflight.json": sha256(preflightBytes) } };
+  for (const [file, value] of [["auth-stryker.json", prepared.config], ["auth-preflight-inputs.json", { inputs: prepared.inputs }]]) {
+    const bytes = JSON.stringify(value);
+    writeFileSync(join(directory, file), bytes); receipt.artifacts[file] = sha256(bytes);
+  }
   const save = () => writeFileSync(join(directory, "receipt.json"), JSON.stringify(receipt));
   save();
   return { directory, receipt, save };
@@ -48,8 +55,8 @@ test("review A1 the CLI rejects all auth without starting a run", () => {
   assert.equal(result.stdout, "");
 });
 
-test("review A1 the actual verifier rejects a source-bound Auth-only receipt labelled all", t => {
-  const fixture = authReceipt(t);
+test("review A1 the actual verifier rejects a source-bound Auth-only receipt labelled all", async t => {
+  const fixture = await authReceipt(t);
   assert.equal(verifyReceipt(fixture.directory).passed, true, "the report itself supplies valid partial Auth evidence");
   assert.equal(verifyReceipt(fixture.directory).fullGatePassed, false);
   fixture.receipt.mode = "all";
@@ -74,8 +81,8 @@ test("review A1 runner and verifier stage plans require exact mode completeness 
   assert.equal(checkStages("all", undefined, undefined).valid, false);
 });
 
-test("review A1 the actual verifier rejects duplicate and incompatible stages", t => {
-  const fixture = authReceipt(t);
+test("review A1 the actual verifier rejects duplicate and incompatible stages", async t => {
+  const fixture = await authReceipt(t);
   fixture.receipt.stages.push({ ...fixture.receipt.stages[0] });
   fixture.save();
   assert.equal(verifyReceipt(fixture.directory).passed, false);
@@ -90,8 +97,8 @@ test("review A1 the actual verifier rejects duplicate and incompatible stages", 
   assert.equal(verifyReceipt(fixture.directory).passed, false);
 });
 
-test("review A2 the manifest binds the Convex child compiler configuration", t => {
-  const fixture = authReceipt(t);
+test("review A2 the manifest binds the Convex child compiler configuration", async t => {
+  const fixture = await authReceipt(t);
   const child = "convex/tsconfig.json";
   assert.equal(fixture.receipt.manifest.files[child], sha256(readFileSync(child)));
   fixture.receipt.manifest.files[child] = sha256('{ "extends": "../tsconfig.json", "compilerOptions": { "target": "ES2020" } }');
@@ -206,8 +213,8 @@ test("review A3 rejecting erased branches preserves independent named and V8 roo
   }
 });
 
-test("graph correction the final verifier rejects missing preflight and changed imported-mobile reuse", t => {
-  const fixture = authReceipt(t);
+test("graph correction the final verifier rejects missing preflight and changed imported-mobile reuse", async t => {
+  const fixture = await authReceipt(t);
   delete fixture.receipt.artifacts["auth-preflight.json"];
   fixture.save();
   assert.equal(verifyReceipt(fixture.directory).passed, false);
@@ -215,8 +222,8 @@ test("graph correction the final verifier rejects missing preflight and changed 
   fixture.save();
   assert.ok(verifyReceipt(fixture.directory).changed.includes("apps/mobile/src/modules/local-entry-drafts/store.ts"));
 });
-test("graph correction the final verifier rechecks a failed empty suite despite recorded passing flags", t => {
-  const fixture = authReceipt(t);
+test("graph correction the final verifier rechecks a failed empty suite despite recorded passing flags", async t => {
+  const fixture = await authReceipt(t);
   const path = join(fixture.directory, "auth-preflight.json");
   const evidence = JSON.parse(readFileSync(path));
   evidence.suites[0] = { ...evidence.suites[0], status: "fail", tests: [] };
@@ -228,8 +235,8 @@ test("graph correction the final verifier rechecks a failed empty suite despite 
   assert.equal(verifyReceipt(fixture.directory).passed, false);
 });
 
-test("AST coverage receipts cannot omit or change their mapping format", t => {
-  const fixture = authReceipt(t);
+test("AST coverage receipts cannot omit or change their mapping format", async t => {
+  const fixture = await authReceipt(t);
   fixture.receipt.mode = "coverage";
   delete fixture.receipt.area;
   fixture.receipt.stages = [{ name: "coverage-crap", exitStatus: 0 }];
@@ -242,8 +249,8 @@ test("AST coverage receipts cannot omit or change their mapping format", t => {
   }
 });
 
-test("patched mapper bytes and patch identity invalidate mutation reuse when their bound hashes differ", t => {
-  const fixture = authReceipt(t);
+test("patched mapper bytes and patch identity invalidate mutation reuse when their bound hashes differ", async t => {
+  const fixture = await authReceipt(t);
   const patch = "patches/ast-v8-to-istanbul@0.3.12.patch";
   const mapper = Object.keys(fixture.receipt.manifest.files).find(file => file.endsWith("/ast-v8-to-istanbul/dist/index.mjs"));
   assert.ok(mapper);

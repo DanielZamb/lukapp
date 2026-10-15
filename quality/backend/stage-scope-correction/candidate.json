@@ -1,0 +1,141 @@
+{
+  "kind": "Scoped tooling correction; final commit/tree reported in handoff. This committed packet binds the exact gate inputs.",
+  "baseHead": "2a2de8b9705157ea32c330c2814aff2c67b51727",
+  "baseTree": "b6a9bfab9aed46a8a0983ea95a754c92a4030625",
+  "previousInputDigest": "0feb95db95cbf1c9b7cc53a714443058c695565e153ebc65bee77691c4ef2ef3",
+  "inputDigest": "d7b0579e69dc395b306bfbb326489ea61e7f21f26eb442f79779b370ac32cb95",
+  "inputFileCount": 183,
+  "changedInputs": [
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "before": "7e113c45a5cabbb6948574ac7d9e7a6453846af9f13a41f93ad82ee141fc9aef",
+      "after": "64527e9883a79c05a0650ac440f738e5dce58a416d150330b0b89c783a9f2f87"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "before": "1839ffe529fe481f030e5b44c2587b2a43e300dde752ff6f6ab2d3f0db2b8888",
+      "after": "f54bdb38f1019299eac88f05b5c5cdb75f41009e7f3a7d2fe659431242ca6134"
+    },
+    {
+      "file": "scripts/backend-quality.mjs",
+      "before": "6b0f94929c6e95b3fd787c1b160ea9451b29e96f5b9ea608385dd5a4f8889c6b",
+      "after": "dfd03500de8d36dc762b35dc006e8051c3460c677374fa60ad5b89908cfe509e"
+    },
+    {
+      "file": "scripts/backend-sandbox-dryrun.mjs",
+      "before": "a577236a5b1bf38d202ea2282877b681cbd9765758ae963c5c4a12c96523c492",
+      "after": "6e022950bb3874d4b4e25ddb382644d136728e34361b7dcdee621be90534d5fa"
+    },
+    {
+      "file": "scripts/backend-suites.mjs",
+      "before": "b034c1381884237f671b355f7a2b223c8450d0dc69b3c8df0acecb79e16bb3cd",
+      "after": "ee9703accfdbefed432719cbc70dfa64bb77871c81df6f99f4a361d899265708"
+    },
+    {
+      "file": "scripts/backend-vitest-runner.mjs",
+      "before": "e0643e1d7c3ad5db897edeb24c2f5a4540f660eb1429ba9b524b5fed878672d8",
+      "after": "6f173292100c84434b1dac4c473d2c391ad70533cba3bb606d293d4788a89f83"
+    },
+    {
+      "file": "scripts/backend-stage-scope.test.mjs",
+      "before": null,
+      "after": "fc3e1ec086223a1915b807965d82cba478b0d0170e88bc146156beb6f9f6cf1a"
+    }
+  ],
+  "mutationFiles": 86,
+  "selectedBackendTestFiles": 31,
+  "excludedBackendTestFiles": 1,
+  "criteria": {
+    "minimumMutationScoreSeparatelyPerArea": 80,
+    "maximumAstFunctionCrap": 30,
+    "missingOrAmbiguousFails": true,
+    "unchanged": true
+  },
+  "areaInstrumentedCounts": {
+    "accounting": 44,
+    "auth": 12,
+    "budget": 6,
+    "recovery": 6,
+    "convex": 18,
+    "full-diagnostic": 86
+  },
+  "coverageFormat": {
+    "format": "vitest-v8-3.2.7-ast-flattened-logicals-v1",
+    "provider": "@vitest/coverage-v8",
+    "version": "3.2.7",
+    "experimentalAstAwareRemapping": true,
+    "mapper": {
+      "package": "ast-v8-to-istanbul",
+      "version": "0.3.12",
+      "patch": "patches/ast-v8-to-istanbul@0.3.12.patch",
+      "patchSha256": "c8e3d35eb7cffd753590c123b728c6fdb22e41bd810f34db8c290103ab9e08ce",
+      "installedSha256": "a14ee93eecb5c0e8baadd5df5613c6afb012563fc3907b35f71ce51df68c4d06"
+    }
+  },
+  "reviewHashes": {
+    "/Users/zambamon/Work/finance-tracker-v2/.orchestrator/runs/2026-10-13-core/orchestrate/lukapp/reviews/V01-combined-correction-r1-disposition.md": "9635cee4ccb2c8c083e174beac29a25bc3afd80329c5d0cac67be4deade9fde5",
+    "/Users/zambamon/Work/finance-tracker-v2/.orchestrator/runs/2026-10-13-core/orchestrate/lukapp/reviews/V01-combined-correction-correctness-a-terminal.json": "1673af1e303ba9f0e914e5fc97fb9fb3c4325a21acf7dbaf28ee120fa7c2e412",
+    "/Users/zambamon/Work/finance-tracker-v2/.orchestrator/runs/2026-10-13-core/orchestrate/lukapp/reviews/V01-combined-correction-correctness-b-terminal.json": "e9a79979cfe956decb8386be2574cde33647ef1e6a9dd12e66d6e8bac693a093"
+  },
+  "protectedChanges": [],
+  "historicalFailedValidations": {
+    "checked": 14,
+    "invalid": []
+  },
+  "actualMutantsGenerated": 0,
+  "actualMutantsExecuted": 0,
+  "engineExecution": false,
+  "officialGatePassed": false,
+  "officialGateHeld": true,
+  "historicalReceiptPolicy": "No historical receipt is rewritten or relabelled. Preflights without the new explicit scope and complete observations cannot satisfy current verification.",
+  "reuse": {
+    "mapperBackendNative": "Unchanged input bytes only; historical evidence remains historical and is not a new gate execution.",
+    "previous67ToolTests": "Historical reused evidence only. The new affected tooling checks are separate.",
+    "mappingRecalculation": false,
+    "backendExecution": false,
+    "nativeExecution": false,
+    "patchAndDependenciesUnchanged": true
+  },
+  "selectedBackendTestHashes": {
+    "convex/accountTransfer.test.ts": "9d08e90d49feedf42d55f8e971a67c044422263f9a9026290651455e4d5d6790",
+    "convex/authConnection.test.ts": "d6b16350d8d8f5ac1b866ca3092d88cd6315d1d29289ae33663d4fe3680edb09",
+    "convex/budget.test.ts": "0f33c5d9585ec3146c31a1dbd49e46750a4aa6dc4afc653782745bb52b74f9a4",
+    "convex/budgetAccess.test.ts": "373c33bf43e016dd04d4c84e56c6ba6d850748ebf12d25b5f22e5251e37cc34a",
+    "convex/budgetCapacity.test.ts": "cd6eb0a6ba9754cc0f5969fbdc10b4554d461e659796bed8d12f25206cab4fae",
+    "convex/cashExpense.test.ts": "69918df92533e12a444ef9440479ad66cf0f607b39b3250741e2645bcafd173f",
+    "convex/catalog.test.ts": "3742d2091f3d9d9fdbbb56949fe0ca94286c6636e6c775d1384cecf290cbd8bc",
+    "convex/categories.test.ts": "2efb2ca9a1e3c3f8c9c2b813d864933a392add6168e8c2ed8cad9e7d17069e01",
+    "convex/clerkProvider.test.ts": "87e7ad3a07f4c28a237f6edb92e9bfa8f6626dc05bd5b600f3279730fa0d3328",
+    "convex/deviceAccess.test.ts": "092a158e8425c78418bd2c7f4b52753374d40d1c3c1bbc46df3d3b0c9a7d6623",
+    "convex/householdWorkspace.test.ts": "267254831fd90c01a2a6a36056b231c3dddc63c3e4a214a2f3c9249afc2adbd6",
+    "convex/mobileSetupRetry.test.ts": "82d7282791e018f756544a20eb685aee64c64164e01c13cd079900c312a9fbe6",
+    "convex/natures.test.ts": "c7d0745ba8db43eb18639c7f1828bdead39bf0ad9b42295211e605c1d3e9a644",
+    "convex/onboarding.test.ts": "37c87cb57fad687156ef3d97058292f67bff80e5e59b780059a421fb8f186024",
+    "convex/openingDateCorrection.test.ts": "41ea424672c16df60daf30633205f6e94b7b9a7d45c02ac332458895e142bf8c",
+    "convex/openingPosition.test.ts": "0787ac736e11af424bc6c73c50e39b681888cf3da30769b91971b3f4346ad6ec",
+    "convex/ownerAccess.test.ts": "214eb4daac8d32acf8a12d190ed7ef09dec77a6556d7391ab05c106b84dd3acf",
+    "convex/period.test.ts": "d4f4c61beb360101893bb464ce75374dc7cfd341547823db69bf4f3a53a7d82f",
+    "convex/planningReadCapacity.test.ts": "afeb9d79c8729b77edf8857d818e1e4f15cac6e51623be5ad261d0ceb2200e1a",
+    "convex/planningUnion.integration.test.ts": "59066158ac3a6c808b9d3bf4c7588b694cb5e8a365f7051d715ecbe002ffbe70",
+    "convex/posting.test.ts": "cd022e537c5358e79002e952339ed57aae647136ad7841ed1aa82ff57924f39c",
+    "convex/profileKinds.test.ts": "c7429e9d7f86b80dacc248b177d8295537a199e0851f74a4cab66581e194772b",
+    "convex/reclassification.test.ts": "a407fba2b3ff10516a23267482f703d2acddc58fcf0725188e714087ed23c9f0",
+    "convex/recoverySourceEffects.integration.test.ts": "34475b60f338516a6fa24b8d1c7e5bb21de13d995164fd7b2dfcca09b75a1f90",
+    "convex/reversal.test.ts": "eb6904481120167a819f189d420bac10fe3e410baa2f6e9b7a4f67b34f5d7ef7",
+    "convex/savingsRecovery.test.ts": "d904f73b2c9e6d20d5bc700a56d1a5b39b3b2232e893a6b6e0efc5152ec0588e",
+    "convex/setupFinancialAccount.test.ts": "5477681df30ac1d9d10991f439f563f8fdb2f00ef2e3d3326f648ff017b94e89",
+    "convex/workspace.test.ts": "a6f6fd655bdb21fa8079e55eeb62a53ef821e06e75ed1d3a09e5bd559053cffb",
+    "src/access/protocol.test.ts": "6c46c62588e6b76f18a1b2e68e70448603b0b137139dde90d662064ab4c92476",
+    "src/accounting/rules.test.ts": "c997144631a2b1fcdeef920096820e0d1be1ed7afca0268452238268ab3f0f1a",
+    "src/savingsRecovery/amounts.test.ts": "bf2d6e512272204a5e304d263211ed001a9727abd3fbb53dae51063921ed03de"
+  },
+  "excludedBackendTestHashes": {
+    "convex/budgetCapacity.load.test.ts": "a77ac824a58fe108643d64b3ae4862168e28d131f4a579f1f0f1fc46a8c7e446"
+  },
+  "checksSha256": "ecc755b65260b0562f1d6bbf59a1662b38787998fb0313c16f3d1bd26f537891",
+  "stageBindingsSha256": "9121a1c09f87dfdc813abd7224eb06a821f84ed5147dc98e1bb31ba9b6f3dbfc",
+  "sourcePatchArtifact": "source.patch.gz",
+  "sourcePatchEncoding": "gzip",
+  "sourcePatchUncompressedSha256": "40542e718d04d39c6359c9d65129d795015554b5022db874f96a66651f9f8891",
+  "sourcePatchArtifactSha256": "a30a127218ced6ad8ecf503e48d5d2aae6b43530362affcdd6e2a9eda815b564"
+}

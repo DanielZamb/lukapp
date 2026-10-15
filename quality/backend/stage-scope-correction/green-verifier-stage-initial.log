@@ -1,0 +1,120 @@
+TAP version 13
+# Subtest: review A1 rejects incompatible CLI arguments before any execution
+ok 1 - review A1 rejects incompatible CLI arguments before any execution
+  ---
+  duration_ms: 0.643
+  type: 'test'
+  ...
+# Subtest: review A1 the CLI rejects all auth without starting a run
+ok 2 - review A1 the CLI rejects all auth without starting a run
+  ---
+  duration_ms: 169.486167
+  type: 'test'
+  ...
+# Subtest: review A1 the actual verifier rejects a source-bound Auth-only receipt labelled all
+ok 3 - review A1 the actual verifier rejects a source-bound Auth-only receipt labelled all
+  ---
+  duration_ms: 1247.93425
+  type: 'test'
+  ...
+# Subtest: review A1 runner and verifier stage plans require exact mode completeness and uniqueness
+ok 4 - review A1 runner and verifier stage plans require exact mode completeness and uniqueness
+  ---
+  duration_ms: 0.23275
+  type: 'test'
+  ...
+# Subtest: review A1 the actual verifier rejects duplicate and incompatible stages
+ok 5 - review A1 the actual verifier rejects duplicate and incompatible stages
+  ---
+  duration_ms: 837.88425
+  type: 'test'
+  ...
+# Subtest: review A2 the manifest binds the Convex child compiler configuration
+ok 6 - review A2 the manifest binds the Convex child compiler configuration
+  ---
+  duration_ms: 412.518959
+  type: 'test'
+  ...
+# Subtest: review A2 installed Stryker file selection preserves both applicable compiler configurations
+ok 7 - review A2 installed Stryker file selection preserves both applicable compiler configurations
+  ---
+  duration_ms: 6.822125
+  type: 'test'
+  ...
+# Subtest: review A2 TypeScript resolves transitive JSONC configuration dependencies and the sandbox keeps them
+ok 8 - review A2 TypeScript resolves transitive JSONC configuration dependencies and the sandbox keeps them
+  ---
+  duration_ms: 2.025625
+  type: 'test'
+  ...
+# Subtest: graph correction the final verifier rejects missing preflight and changed imported-mobile reuse
+ok 9 - graph correction the final verifier rejects missing preflight and changed imported-mobile reuse
+  ---
+  duration_ms: 625.645667
+  type: 'test'
+  ...
+# Subtest: graph correction the final verifier rechecks a failed empty suite despite recorded passing flags
+ok 10 - graph correction the final verifier rechecks a failed empty suite despite recorded passing flags
+  ---
+  duration_ms: 413.51025
+  type: 'test'
+  ...
+# Subtest: AST coverage receipts cannot omit or change their mapping format
+ok 11 - AST coverage receipts cannot omit or change their mapping format
+  ---
+  duration_ms: 814.477
+  type: 'test'
+  ...
+# Subtest: patched mapper bytes and patch identity invalidate mutation reuse when their bound hashes differ
+ok 12 - patched mapper bytes and patch identity invalidate mutation reuse when their bound hashes differ
+  ---
+  duration_ms: 609.740084
+  type: 'test'
+  ...
+# Subtest: Auth stage setup checks changed copied Recovery bytes and the actual final verifier rejects the receipt
+ok 13 - Auth stage setup checks changed copied Recovery bytes and the actual final verifier rejects the receipt
+  ---
+  duration_ms: 2208.701667
+  type: 'test'
+  ...
+# {"sandbox":false,"finalVerifier":false,"failures":[{"file":"src/savingsRecovery/commands.ts","reason":"changed-input"}]}
+# Subtest: Auth stage exact scope accepts predicted copied bytes and changes only to selected instrumented inputs
+ok 14 - Auth stage exact scope accepts predicted copied bytes and changes only to selected instrumented inputs
+  ---
+  duration_ms: 1751.018542
+  type: 'test'
+  ...
+# {"sandbox":true,"preflightStatus":"complete","finalVerifier":true}
+# Subtest: every actual per-area CLI setup retains the full manifest and uses exactly its configured instrumented files
+ok 15 - every actual per-area CLI setup retains the full manifest and uses exactly its configured instrumented files
+  ---
+  duration_ms: 6538.85525
+  type: 'test'
+  ...
+# Subtest: Auth setup rejects non-area accounting and imported mobile changes, and the verifier rechecks observations despite positive flags
+ok 16 - Auth setup rejects non-area accounting and imported mobile changes, and the verifier rechecks observations despite positive flags
+  ---
+  duration_ms: 2172.35175
+  type: 'test'
+  ...
+# Subtest: actual Auth guard and final verifier reject absent, overbroad, incomplete, duplicate and mismatched scope bindings
+ok 17 - actual Auth guard and final verifier reject absent, overbroad, incomplete, duplicate and mismatched scope bindings
+  ---
+  duration_ms: 6270.842542
+  type: 'test'
+  ...
+# Subtest: the complete 86-file scope is accepted only as an explicit full diagnostic and cannot label an Auth receipt
+ok 18 - the complete 86-file scope is accepted only as an explicit full diagnostic and cannot label an Auth receipt
+  ---
+  duration_ms: 2557.648583
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 27088.1895

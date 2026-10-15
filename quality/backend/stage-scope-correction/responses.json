@@ -1,0 +1,51 @@
+{
+  "finding": "Reviewer A P2: copied production outside the current area inherits the global instrumentation exemption",
+  "disposition": "Accepted and corrected",
+  "reproduction": {
+    "parent": "2a2de8b9705157ea32c330c2814aff2c67b51727",
+    "log": "red-corrected-fixture.log.gz",
+    "sandboxAcceptedChangedRecovery": true,
+    "finalVerifierAcceptedChangedRecovery": true,
+    "historicalCorruptionProven": false
+  },
+  "correction": [
+    "One explicit selection-derived instrumented set supplies the actual stage configuration and preprocessing exemptions.",
+    "The guard validates installed runner configuration against that set, hashes every input, and rejects changed copied non-area sources.",
+    "Preflight and final receipt verification independently rederive the expected area and check scope, full input binding, expected-hash keys and raw observed hashes.",
+    "Missing, duplicate, incomplete, overbroad or mismatched bindings fail. Only explicit full-diagnostic selection allows all 86 files."
+  ],
+  "affectedFiles": [
+    "scripts/backend-quality.mjs",
+    "scripts/backend-suites.mjs",
+    "scripts/backend-vitest-runner.mjs",
+    "scripts/backend-sandbox-dryrun.mjs"
+  ],
+  "regressions": [
+    "scripts/backend-stage-scope.test.mjs",
+    "scripts/backend-graph.test.mjs",
+    "scripts/backend-quality-review.test.mjs"
+  ],
+  "checks": {
+    "log": "green.log",
+    "passed": 29,
+    "failed": 0,
+    "workers": 1,
+    "unchangedMappingCasesOmitted": 4
+  },
+  "reviewerB": {
+    "verdict": "APPROVE on prior candidate",
+    "residual": "Conservative extra zero entry for a parenthesized arrow ignore-hint shape. No false-positive coverage proven. No patch or scope expansion."
+  },
+  "constraints": {
+    "productionChanges": false,
+    "backendTestChanges": false,
+    "dependencyChanges": false,
+    "mapperChanges": false,
+    "loadFixtureChanges": false,
+    "newEngineExecution": false,
+    "mappingRecalculation": false,
+    "delegation": false,
+    "officialGateHeld": true
+  },
+  "finalHeadBinding": "Single commit containing this packet; full commit/tree returned in the coordinator handoff."
+}

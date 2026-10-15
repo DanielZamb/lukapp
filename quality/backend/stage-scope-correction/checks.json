@@ -1,0 +1,171 @@
+{
+  "inputDigest": "d7b0579e69dc395b306bfbb326489ea61e7f21f26eb442f79779b370ac32cb95",
+  "command": "node --test --test-concurrency=1 --test-skip-pattern='review A3' scripts/backend-graph.test.mjs scripts/backend-quality-review.test.mjs scripts/backend-stage-scope.test.mjs",
+  "exitStatus": 0,
+  "workers": 1,
+  "passed": 29,
+  "failed": 0,
+  "nodeReportedSkipped": 0,
+  "registered": 33,
+  "selected": [
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "the real selected mobile import graph, package and compiler inputs survive Stryker selection without entering mutation scope"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "transitive imported source changes invalidate reuse and missing input fails sandbox validation"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "empty failed suites, missing files, skipped/uncollected cases and flattened omissions fail closed"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "preflight verification rederives identities and rejects absent or failed evidence"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "the installed-runner guard rejects its complete flattened result when the actual suite failed to collect"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "nested suite errors and unexecuted leaves survive snapshot flattening"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "regression summary rejects a missing or unloadable selected suite despite positive totals"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "the actual all-mode CLI never invokes mutation after regression/suite-load failure"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "sandbox binding predicts the installed TypeScript config rewrite exactly and still rejects changed options"
+    },
+    {
+      "file": "scripts/backend-graph.test.mjs",
+      "name": "historical raw numeric statuses retain suite identity validation but lack the new instrumented scope binding"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A1 rejects incompatible CLI arguments before any execution"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A1 the CLI rejects all auth without starting a run"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A1 the actual verifier rejects a source-bound Auth-only receipt labelled all"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A1 runner and verifier stage plans require exact mode completeness and uniqueness"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A1 the actual verifier rejects duplicate and incompatible stages"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A2 the manifest binds the Convex child compiler configuration"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A2 installed Stryker file selection preserves both applicable compiler configurations"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A2 TypeScript resolves transitive JSONC configuration dependencies and the sandbox keeps them"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "graph correction the final verifier rejects missing preflight and changed imported-mobile reuse"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "graph correction the final verifier rechecks a failed empty suite despite recorded passing flags"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "AST coverage receipts cannot omit or change their mapping format"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "patched mapper bytes and patch identity invalidate mutation reuse when their bound hashes differ"
+    },
+    {
+      "file": "scripts/backend-stage-scope.test.mjs",
+      "name": "Auth stage setup checks changed copied Recovery bytes and the actual final verifier rejects the receipt"
+    },
+    {
+      "file": "scripts/backend-stage-scope.test.mjs",
+      "name": "Auth stage exact scope accepts predicted copied bytes and changes only to selected instrumented inputs"
+    },
+    {
+      "file": "scripts/backend-stage-scope.test.mjs",
+      "name": "every actual per-area CLI setup retains the full manifest and uses exactly its configured instrumented files"
+    },
+    {
+      "file": "scripts/backend-stage-scope.test.mjs",
+      "name": "Auth setup rejects non-area accounting and imported mobile changes, and the verifier rechecks observations despite positive flags"
+    },
+    {
+      "file": "scripts/backend-stage-scope.test.mjs",
+      "name": "actual Auth guard and final verifier reject absent, overbroad, incomplete, duplicate and mismatched scope bindings"
+    },
+    {
+      "file": "scripts/backend-stage-scope.test.mjs",
+      "name": "the complete 86-file scope is accepted only as an explicit full diagnostic and cannot label an Auth receipt"
+    },
+    {
+      "file": "scripts/backend-stage-scope.test.mjs",
+      "name": "stage preflight and final verification reject missing instrumented files and missing observation or artifact bindings"
+    }
+  ],
+  "explicitlyOmitted": [
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A3 an erased-only branch cannot turn a missing CC10 function into a pass"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A3 a branch crossing a nested function cannot establish parent invocation"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A3 parameter branches require executable initializer positions and retain zero paths"
+    },
+    {
+      "file": "scripts/backend-quality-review.test.mjs",
+      "name": "review A3 rejecting erased branches preserves independent named and V8 root invocation proofs"
+    }
+  ],
+  "toolingTestHashes": {
+    "scripts/backend-graph.test.mjs": "64527e9883a79c05a0650ac440f738e5dce58a416d150330b0b89c783a9f2f87",
+    "scripts/backend-quality-review.test.mjs": "f54bdb38f1019299eac88f05b5c5cdb75f41009e7f3a7d2fe659431242ca6134",
+    "scripts/backend-stage-scope.test.mjs": "fc3e1ec086223a1915b807965d82cba478b0d0170e88bc146156beb6f9f6cf1a"
+  },
+  "logSha256": "a5678a950daf552e57f7039b24fa0696dca9cb3fc06b1e0c1ad25d95c4993453",
+  "red": {
+    "authoritative": "red-corrected-fixture.log.gz",
+    "parent": "2a2de8b9705157ea32c330c2814aff2c67b51727",
+    "exitStatus": 1,
+    "passed": 1,
+    "failed": 1,
+    "changedCopiedRecoverySandboxAccepted": true,
+    "changedCopiedRecoveryFinalVerifierAccepted": true,
+    "exactAuthControlAccepted": true,
+    "redLogSha256": "314f4ef68775f094336e382a8bde1b114e27a494f257e584191dba7b521e3c59",
+    "testSourceStatus": "Unfrozen test draft, before the additional scope regressions; current input/test hashes describe green execution only."
+  },
+  "syntheticCommandDouble": true,
+  "backendTestCasesExecuted": 0,
+  "engineExecutions": 0,
+  "mutantsGenerated": 0,
+  "mutantsExecuted": 0,
+  "acceptedMutationScore": null,
+  "officialGatePassed": false
+}
