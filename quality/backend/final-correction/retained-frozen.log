@@ -1,0 +1,25 @@
+{
+  "checkerValidationPassed": true,
+  "reports": [
+    {
+      "dataset": "representative",
+      "functions": 54,
+      "missing": 0,
+      "unassigned": 0,
+      "failures": 0,
+      "callbackCount": [
+        0
+      ]
+    },
+    {
+      "dataset": "representative-after-regression",
+      "functions": 54,
+      "missing": 0,
+      "unassigned": 0,
+      "failures": 0,
+      "callbackCount": [
+        1
+      ]
+    }
+  ]
+}

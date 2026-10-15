@@ -1,0 +1,70 @@
+{
+  "source": "9b42223aa4982d1f8dedc4d39beb3904433da7f2",
+  "tree": "9356b2cd79e998a0361949aebd128a7d0925c3f5",
+  "inputDigest": "fcff44ffca34fb7e828d1f136dcdc06f7b5d3ba78dadfee3b10b645359e6f002",
+  "frozenInputsMatch": true,
+  "trackedWorktreeClean": true,
+  "noOriginalEvidenceChanges": true,
+  "criteria": {
+    "minimumMutationScorePerArea": 80,
+    "maximumAstFunctionCrap": 30,
+    "missingOrAmbiguousFails": true
+  },
+  "coverageFormat": {
+    "format": "vitest-v8-3.2.7-ast-flattened-logicals-v1",
+    "provider": "@vitest/coverage-v8",
+    "version": "3.2.7",
+    "experimentalAstAwareRemapping": true,
+    "mapper": {
+      "package": "ast-v8-to-istanbul",
+      "version": "0.3.12",
+      "patch": "patches/ast-v8-to-istanbul@0.3.12.patch",
+      "patchSha256": "c8e3d35eb7cffd753590c123b728c6fdb22e41bd810f34db8c290103ab9e08ce",
+      "installedSha256": "a14ee93eecb5c0e8baadd5df5613c6afb012563fc3907b35f71ce51df68c4d06"
+    }
+  },
+  "checks": {
+    "tooling": {
+      "passed": 67,
+      "failed": 0,
+      "skipped": 0,
+      "exitStatus": 0,
+      "workers": 1
+    },
+    "retainedCheckerValidation": {
+      "passed": true,
+      "historicalEngineExitStatus": 1,
+      "newEngineExecution": false
+    },
+    "retainedPatchedMapping": {
+      "functionsPerRepresentative": 54,
+      "missing": 0,
+      "unassigned": 0,
+      "callbackCounts": [
+        0,
+        1
+      ],
+      "advisoryOnly": true
+    }
+  },
+  "mutation": {
+    "scopeFiles": 86,
+    "selectedTestFiles": 31,
+    "excludedTestFiles": 1,
+    "failedSandboxGenerations": [
+      8651,
+      8651
+    ],
+    "actualMutantsExecuted": [
+      0,
+      0
+    ],
+    "engineExitStatuses": [
+      1,
+      1
+    ],
+    "acceptedScore": null,
+    "staticFinalTotals": null
+  },
+  "officialGateHeld": true
+}
