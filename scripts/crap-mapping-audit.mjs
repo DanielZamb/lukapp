@@ -6,7 +6,7 @@ import { analyzeFile } from "./crap.mjs";
 import { policy, sha256, manifest } from "./backend-scope.mjs";
 
 const ref = "117ba020aa73e4fc8f60dba63a4ecc185980fbd5";
-const directory = process.argv[2] ?? "quality/backend/crap-mapping";
+const directory = process.argv[2] ?? "quality/backend/review-r1/retained-data";
 mkdirSync(directory, { recursive: true });
 const fromGit = file => execFileSync("git", ["show", `${ref}:${file}`], { encoding: "utf8" });
 const frozen = JSON.parse(fromGit("quality/backend/freeze-manifest.json"));
@@ -30,12 +30,16 @@ const rawPath = "quality/backend/reporter-validation-expanded-coverage.json.gz";
 const originalPath = "quality/backend/reporter-validation-expanded-crap.json.gz";
 const rawBytes = readFileSync(rawPath), originalBytes = readFileSync(originalPath);
 const coverage = JSON.parse(gunzipSync(rawBytes)), original = JSON.parse(gunzipSync(originalBytes));
+const reviewedPath = "quality/backend/crap-mapping/corrected-report.json.gz";
+const reviewedBytes = readFileSync(reviewedPath), reviewed = JSON.parse(gunzipSync(reviewedBytes));
 const oldModuleText = snapshot.originalReporter.replace('"typescript"', JSON.stringify(import.meta.resolve("typescript")))
   .replace('"./backend-scope.mjs"', JSON.stringify(new URL("./backend-scope.mjs", import.meta.url).href));
 const oldModule = await import(`data:text/javascript;base64,${Buffer.from(oldModuleText).toString("base64")}`);
 const key = row => `${row.file}:${row.line}:${row.function}`;
 const beforeByKey = new Map(original.functions.map(row => [key(row), row]));
+const reviewedByKey = new Map(reviewed.functions.map(row => [key(row), row]));
 if (beforeByKey.size !== original.functions.length) throw new Error("Ambiguous historical row identity");
+if (reviewedByKey.size !== original.functions.length || reviewed.sourceRef !== ref) throw new Error("Reviewed report identity mismatch");
 const metricFields = ["complexity", "statements", "branches", "coverage", "crap", "missingCoverage", "statementObservations", "branchObservations", "functionEntries"];
 const after = [], changes = [], recovered = { fnMap: 0, "branch-root": 0, "owned-body": 0, missing: 0, ambiguous: 0 };
 for (const [file, source] of Object.entries(snapshot.sources)) {
@@ -57,6 +61,17 @@ for (const [file, source] of Object.entries(snapshot.sources)) {
   }
 }
 if (after.length !== original.functions.length) throw new Error("Historical scope changed");
+const reviewedFields = [...metricFields, "mapping", "statementBasis", "mappingProblems", "entryProofs"];
+const changesFromReviewed = after.flatMap(row => {
+  const before = reviewedByKey.get(key(row));
+  if (!before || before.complexity !== row.complexity) throw new Error(`Reviewed AST identity/complexity changed: ${key(row)}`);
+  const effects = Object.fromEntries(reviewedFields.filter(field => JSON.stringify(before[field]) !== JSON.stringify(row[field]))
+    .map(field => [field, { before: before[field], after: row[field] }]));
+  return Object.keys(effects).length ? [{ file: row.file, function: row.function, line: row.line, effects,
+    rejectedBranchObservations: row.rejectedBranchObservations }] : [];
+});
+if (reviewed.functions.some(before => before.missingCoverage && !after.find(row => key(row) === key(before))?.missingCoverage))
+  throw new Error("A reviewed missing observation gained credit");
 const failures = after.filter(row => row.missingCoverage || row.crap > policy.maximumFunctionCrap);
 const report = { advisoryOnly: true, sourceRef: ref, criterion: policy.maximumFunctionCrap,
   functions: after.sort((a, b) => b.crap - a.crap), failures, passed: failures.length === 0 };
@@ -65,11 +80,12 @@ writeFileSync(`${directory}/corrected-report.json.gz`, revisedBytes);
 const inputManifest = manifest();
 const inputChanges = Object.keys({ ...frozen.files, ...inputManifest.files }).filter(file => frozen.files[file] !== inputManifest.files[file]);
 const coverageEffect = comparison => changes.filter(row => row.effects.coverage && comparison(row.effects.coverage.after, row.effects.coverage.before)).length;
-const summary = { advisoryOnly: true, command: "node scripts/crap-mapping-audit.mjs", sourceRef: ref,
+const summary = { advisoryOnly: true, command: `node scripts/crap-mapping-audit.mjs ${directory}`, sourceRef: ref,
   criterion: policy.maximumFunctionCrap, mutationCriteriaUnchanged: policy.mutationScoreMinimum,
   node: process.version, typescript: ts.version, inputManifest,
   inputs: { sourceSnapshotSha256: sha256(snapshotBytes), retainedCoverageSha256: sha256(rawBytes), retainedReportSha256: sha256(originalBytes),
     frozenReporterSha256: frozen.files["scripts/crap.mjs"], correctedReporterSha256: sha256(readFileSync("scripts/crap.mjs")),
+    reviewedReportSha256: sha256(reviewedBytes),
     installedV8ProviderSha256: sha256(readFileSync("node_modules/@vitest/coverage-v8/dist/provider.js")) },
   originalCalculationReproduced: true, sourceHashes: snapshot.sourceHashes, inputChanges,
   before: { functions: original.functions.length, emptyEntries: original.functions.filter(row => !row.functionEntries.length).length,
@@ -79,10 +95,15 @@ const summary = { advisoryOnly: true, command: "node scripts/crap-mapping-audit.
     missing: after.filter(row => row.missingCoverage).length, failures: failures.length, passed: report.passed },
   previouslyEmpty: recovered, changedFunctions: changes.length,
   coverageChanges: { increased: coverageEffect((a, b) => a > b), decreased: coverageEffect((a, b) => a < b), unchanged: after.length - coverageEffect((a, b) => a !== b) },
+  fromReviewed3084563: { changedFunctions: changesFromReviewed.length,
+    coverageIncreased: changesFromReviewed.filter(row => row.effects.coverage && row.effects.coverage.after > row.effects.coverage.before).length,
+    coverageDecreased: changesFromReviewed.filter(row => row.effects.coverage && row.effects.coverage.after < row.effects.coverage.before).length,
+    priorMissingObservationsRemainFailures: true },
   failures: failures.map(({ file, function: name, line, complexity, coverage, crap, missingCoverage, mappingProblems }) =>
     ({ file, function: name, line, complexity, coverage, crap, missingCoverage, mappingProblems })),
   originalReceiptsModified: false, backendExecutions: 0, correctedReportSha256: sha256(revisedBytes) };
 writeFileSync(`${directory}/effects.json.gz`, gzipSync(JSON.stringify(changes)));
+writeFileSync(`${directory}/effects-from-3084563.json.gz`, gzipSync(JSON.stringify(changesFromReviewed)));
 writeFileSync(`${directory}/summary.json`, JSON.stringify(summary, null, 2) + "\n");
 console.log(JSON.stringify({ before: summary.before, after: summary.after, previouslyEmpty: recovered,
-  changedFunctions: changes.length, coverageChanges: summary.coverageChanges, inputChanges }, null, 2));
+  changedFunctions: changes.length, coverageChanges: summary.coverageChanges, fromReviewed3084563: summary.fromReviewed3084563, inputChanges }, null, 2));

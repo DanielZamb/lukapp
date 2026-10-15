@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { matchesGlob } from "node:path";
+import { matchesGlob, resolve, relative, isAbsolute } from "node:path";
+import ts from "typescript";
 
 export const policy = JSON.parse(readFileSync("quality/backend/policy.json", "utf8"));
 export function trackedFiles() {
@@ -19,13 +20,37 @@ export function areaFor(file) {
   return "convex";
 }
 export function sha256(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
+export function compilerConfigurationFiles(seeds, root = process.cwd()) {
+  const files = new Set();
+  for (const seed of seeds) {
+    const config = ts.getParsedCommandLineOfConfigFile(resolve(root, seed), {}, {
+      ...ts.sys, getCurrentDirectory: () => root, readDirectory: () => [],
+      readFile(file) {
+        const text = ts.sys.readFile(file);
+        if (text !== undefined) {
+          const path = relative(root, file);
+          if (path === ".." || path.startsWith("../") || isAbsolute(path)) throw new Error(`Compiler configuration outside checkout: ${file}`);
+          files.add(path);
+        }
+        return text;
+      },
+      onUnRecoverableConfigFileDiagnostic(diagnostic) { throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")); },
+    });
+    const errors = config.errors.filter(diagnostic => diagnostic.code !== 18003);
+    if (errors.length) throw new Error(errors.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")).join("\n"));
+  }
+  return [...files].sort();
+}
 export function manifest() {
-  const files = trackedFiles().filter(file => /^(src|convex)\/.*\.(ts|js)$/.test(file) ||
-    ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "vitest.config.ts", "vitest.mutation.config.ts", "stryker.config.json", "quality/backend/policy.json"].includes(file) || /^scripts\/.*\.(mjs|test\.mjs)$/.test(file));
+  const tracked = trackedFiles();
+  const compilerConfigurations = compilerConfigurationFiles(tracked.filter(file => file === "tsconfig.json" || /^(src|convex)\/(.*\/)?tsconfig\.json$/.test(file)));
+  const files = [...new Set([...tracked.filter(file => /^(src|convex)\/.*\.(ts|js)$/.test(file) ||
+    ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.json", "vitest.config.ts", "vitest.mutation.config.ts", "stryker.config.json", "quality/backend/policy.json"].includes(file) || /^scripts\/.*\.(mjs|test\.mjs)$/.test(file)),
+    ...compilerConfigurations])].sort();
   const hashes = Object.fromEntries(files.map(file => [file, sha256(readFileSync(file))]));
   const tests = files.filter(file => file.endsWith(".test.ts"));
   const excludedTests = tests.filter(file => policy.mutationTestExclusions.includes(file));
   const selectedTests = tests.filter(file => !excludedTests.includes(file));
-  return { algorithm: "sha256", digest: sha256(JSON.stringify(hashes)), files: hashes, mutationFiles: backendFiles(),
+  return { algorithm: "sha256", digest: sha256(JSON.stringify(hashes)), files: hashes, compilerConfigurations, mutationFiles: backendFiles(),
     mutationTests: { selected: selectedTests, excluded: excludedTests, selectedCount: selectedTests.length, excludedCount: excludedTests.length }, policy };
 }

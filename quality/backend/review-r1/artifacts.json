@@ -1,0 +1,33 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "REPORT.md": "e3a3618bd1815bd8c7db9f05dacfaaa40969e74258e7a29a22e39c0c4f002f86",
+    "development/lukapp-v01-review-audit-1.log.gz": "1dde78528f48cd347635481efb89411301c8144ac84cc6ae136dcc5d65b312e3",
+    "development/lukapp-v01-review-green-1.log.gz": "930f6ce31bb6ac9058144849da21b0cc15b3597fc539e68fb38a9a277b2fb439",
+    "development/lukapp-v01-review-green-2.log.gz": "f97dbc26e428022de07a029e1331cb4f2acd7b1a9df9493fce43bdb14bff347d",
+    "development/lukapp-v01-review-green-3.log.gz": "a8c24aa823d9ed551f90d327bb968cfff1406be5baba92c7353e45f56c93e834",
+    "development/lukapp-v01-review-red.log.gz": "fb1db04c7bed7a58d4136b1a823677fd1fd1330511e954256f05ed7916013374",
+    "development/lukapp-v01-review-sandbox-red.log.gz": "a834d34ee0f4ffbbe11159f3d144fd9dc20fe92fbd136d5373767766627c3030",
+    "development/retained-data-first/corrected-report.json.gz": "e5f1a970c426d06df0c92e14e1b52e0011b90c687e0cd6e308d112aee991a1a9",
+    "development/retained-data-first/effects-from-3084563.json.gz": "9bc5b2d6c7a8159cd8ce636324f63cf49837843860aa8a0f12a5ea3a2dbeeb4b",
+    "development/retained-data-first/effects.json.gz": "115a6bbed18065cbfba481d33de6f2ba96175427be886f6752ea22275d519812",
+    "development/retained-data-first/source-snapshot.json.gz": "842772cd4da4d4d4ce44ba279c89b71f1916a2881cb2e9f91484bcce8377a1d3",
+    "development/retained-data-first/summary.json": "ce7bc2e9179a6251de76217a23da43ee680641b3549d219530193457c454e7e0",
+    "finding-responses.json": "13d70ce623514051adfdf87f8bded4d1505fe304a984729ec52b2064d8b71be0",
+    "integrity.json": "76db01d8c6ddea74183c7ca099b65a6163f5d8fbfbaeb298860b00de850894d5",
+    "review-inputs/V01-comments-r1-terminal.json": "9cb39af2a0087ae60aae9449958286418e5def4dbcba1477a52461debb1220ce",
+    "review-inputs/V01-quality-correctness-a-r1-terminal.json": "be3782022f7e9182d3cd35a5b892ea9d1041782eb034d02c8de3c4aca5efc69a",
+    "review-inputs/V01-quality-correctness-b-r1-terminal.json": "acb74bc8876411a0674999598d06d388aeb05b026fd02c4ab865bb697c00339b",
+    "review-inputs/V01-quality-r1-disposition.md": "a67ce9c486447f57f5846e3374bf1741ef27ce5cbb0edf1cc5f9506bd5f69f41",
+    "validation/receipt.json": "3a240910096684ec00ece746b3e7bb1af1bf9f96ac5809903dbc1bbf81cab0a5",
+    "validation/retained-data/corrected-report.json.gz": "ac9162e4625d9616d527aac1dbd448bddeca1dcade2fd4adacf66b7f326d82a2",
+    "validation/retained-data/effects-from-3084563.json.gz": "641b6484134e1eb20b4f9e4ef5f8d0da00f5b38ea0e0099037ca6f7001962ed5",
+    "validation/retained-data/effects.json.gz": "115a6bbed18065cbfba481d33de6f2ba96175427be886f6752ea22275d519812",
+    "validation/retained-data/source-snapshot.json.gz": "842772cd4da4d4d4ce44ba279c89b71f1916a2881cb2e9f91484bcce8377a1d3",
+    "validation/retained-data/summary.json": "176618ef4a8d8f602a3ea8f871cfdc29f75ffacd654772ebdda44f1da9d8b859",
+    "validation/retained-data-stderr.log.gz": "abfbb86f9f5ddfbd9fc1a72c43ab384702ce8bae86b60f3324748485e235e61e",
+    "validation/retained-data-stdout.log.gz": "a2a619b842201c49567affc5b2e15c4ecb56f60a5d8e3fedb5b5580689e721d4",
+    "validation/tooling-tests-stderr.log.gz": "abfbb86f9f5ddfbd9fc1a72c43ab384702ce8bae86b60f3324748485e235e61e",
+    "validation/tooling-tests-stdout.log.gz": "5c8358aa30777420511301f19f7db854fe18eaed24ee689e4596e0eb323096ab"
+  }
+}

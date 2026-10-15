@@ -6,8 +6,31 @@ import { backendFiles, areaFor, manifest, policy, sha256 } from "./backend-scope
 import { reportCrap } from "./crap.mjs";
 import { analyzeMutation } from "./backend-mutation.mjs";
 
-const mode = process.argv[2] ?? "all";
-const area = process.argv[3];
+export function parseArguments(args) {
+  const mode = args[0] ?? "all";
+  const area = args[1];
+  if (!["all", "coverage", "mutation", "verify"].includes(mode) ||
+    args.length > 2 || (["all", "coverage"].includes(mode) && args.length > 1) ||
+    (mode === "verify" && (args.length !== 2 || !area)) ||
+    (mode === "mutation" && area !== undefined && !policy.areas.includes(area))) throw new Error("Usage: pnpm quality:backend [all|coverage|mutation [area]|verify <run directory>]");
+  return { mode, area };
+}
+export function checkStages(mode, area, stages) {
+  const expected = mode === "all" && area === undefined ? ["coverage-crap", ...policy.areas] :
+    mode === "coverage" && area === undefined ? ["coverage-crap"] :
+    mode === "mutation" && area === undefined ? policy.areas :
+    mode === "mutation" && policy.areas.includes(area) ? [area] : undefined;
+  const names = Array.isArray(stages) ? stages.map(stage => stage.name) : [];
+  const missing = (expected ?? []).filter(name => !names.includes(name));
+  const unexpected = names.filter(name => !expected?.includes(name));
+  const duplicates = [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
+  return { valid: expected !== undefined && Array.isArray(stages) && !missing.length && !unexpected.length && !duplicates.length,
+    expected: expected ?? [], missing, unexpected, duplicates, invalidRequest: expected === undefined };
+}
+export function mutationConfig(base, files, compilerConfigurations, reportPath) {
+  return { ...base, mutate: files, ignorePatterns: [...base.ignorePatterns, ...compilerConfigurations.map(file => `!${file}`)],
+    jsonReporter: { fileName: reportPath } };
+}
 function checkRegression(regression) {
   const loadAssertions = (regression.testResults ?? []).filter(result => result.name.endsWith("/convex/budgetCapacity.load.test.ts"))
     .flatMap(result => result.assertionResults).filter(result => result.title === policy.mandatoryLoadTest);
@@ -15,15 +38,14 @@ function checkRegression(regression) {
     regressionPassed: regression.success === true && regression.numTotalTests > 0 && regression.numPassedTests === regression.numTotalTests &&
       loadAssertions.length === 1 && loadAssertions[0].status === "passed" };
 }
-if (!["all", "coverage", "mutation", "verify"].includes(mode) ||
-  (mode === "mutation" && area && !policy.areas.includes(area))) throw new Error("Usage: pnpm quality:backend [all|coverage|mutation [area]|verify <run directory>]");
-if (mode === "verify") {
+export function verifyReceipt(area) {
   const receipt = JSON.parse(readFileSync(join(area, "receipt.json"), "utf8"));
   const current = manifest();
   const changed = Object.keys({ ...receipt.manifest.files, ...current.files }).filter(file => receipt.manifest.files[file] !== current.files[file]);
   const invalidArtifacts = Object.entries(receipt.artifacts).filter(([file, hash]) => sha256(readFileSync(join(area, file))) !== hash).map(([file]) => file);
+  const stageCompleteness = checkStages(receipt.mode, receipt.area, receipt.stages);
   const stageChecks = [];
-  if (!changed.length && !invalidArtifacts.length) for (const stage of receipt.stages) {
+  if (stageCompleteness.valid && !changed.length && !invalidArtifacts.length) for (const stage of receipt.stages) {
     if (stage.name === "coverage-crap") {
       const coverage = JSON.parse(gunzipSync(readFileSync(join(area, "coverage-final.json.gz"))));
       const regression = JSON.parse(readFileSync(join(area, "regression.json"), "utf8"));
@@ -35,10 +57,18 @@ if (mode === "verify") {
       stageChecks.push({ name: stage.name, passed: stage.exitStatus === 0 && result.passed });
     }
   }
-  const passed = receipt.passed && !receipt.changedDuringRun && changed.length === 0 && invalidArtifacts.length === 0 && stageChecks.length > 0 && stageChecks.every(stage => stage.passed);
-  console.log(JSON.stringify({ passed, changed, invalidArtifacts, stageChecks, recordedPass: receipt.passed }, null, 2));
-  process.exitCode = passed ? 0 : 1;
-} else {
+  const passed = receipt.passed === true && !receipt.changedDuringRun && changed.length === 0 && invalidArtifacts.length === 0 &&
+    stageCompleteness.valid && stageChecks.length === stageCompleteness.expected.length && stageChecks.every(stage => stage.passed);
+  return { passed, fullGatePassed: passed && receipt.mode === "all", changed, invalidArtifacts, stageCompleteness, stageChecks, recordedPass: receipt.passed };
+}
+function main(args) {
+  const { mode, area } = parseArguments(args);
+  if (mode === "verify") {
+    const result = verifyReceipt(area);
+    console.log(JSON.stringify(result, null, 2));
+    process.exitCode = result.passed ? 0 : 1;
+    return;
+  }
   const dir = join("quality/backend/runs", new Date().toISOString().replace(/[:.]/g, "-") + "-" + mode + (area ? "-" + area : ""));
   mkdirSync(dir, { recursive: true });
   const before = manifest();
@@ -81,7 +111,7 @@ if (mode === "verify") {
       const files = backendFiles().filter(file => areaFor(file) === selectedArea);
       const base = JSON.parse(readFileSync("stryker.config.json", "utf8"));
       const reportPath = resolve(dir, `${selectedArea}-mutation.json`);
-      const config = { ...base, mutate: files, jsonReporter: { fileName: reportPath } };
+      const config = mutationConfig(base, files, before.compilerConfigurations, reportPath);
       const configPath = join(dir, `${selectedArea}-stryker.json`);
       writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
       receipt.artifacts[`${selectedArea}-stryker.json`] = sha256(readFileSync(configPath));
@@ -101,9 +131,12 @@ if (mode === "verify") {
   receipt.changedDuringRun = before.digest !== after.digest;
   receipt.inputChanges = Object.keys({ ...before.files, ...after.files }).filter(file => before.files[file] !== after.files[file]);
   receipt.finishedAt = new Date().toISOString();
-  receipt.passed = !receipt.changedDuringRun && receipt.stages.length > 0 && receipt.stages.every(stage => stage.passed);
+  receipt.stageCompleteness = checkStages(mode, area, receipt.stages);
+  receipt.passed = !receipt.changedDuringRun && receipt.stageCompleteness.valid && receipt.stages.every(stage => stage.passed);
+  receipt.fullGatePassed = receipt.passed && mode === "all";
   receipt.artifacts["manifest-before.json"] = sha256(readFileSync(join(dir, "manifest-before.json")));
   writeFileSync(join(dir, "receipt.json"), JSON.stringify(receipt, null, 2) + "\n");
   console.log(`Receipt: ${dir}/receipt.json; ${receipt.passed ? "PASS" : "FAIL"}`);
   process.exitCode = receipt.passed ? 0 : 1;
 }
+if (process.argv[1] && resolve(process.argv[1]) === resolve("scripts/backend-quality.mjs")) main(process.argv.slice(2));

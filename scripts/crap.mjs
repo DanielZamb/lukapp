@@ -14,7 +14,7 @@ function selectedFunctionValue(node) {
       ts.SyntaxKind.QuestionQuestionToken].includes(parent.operatorToken.kind) && parent.right === value) ||
     ((ts.isParameter(parent) || ts.isBindingElement(parent)) && parent.initializer === value);
 }
-function executableAnchors(node, source) {
+function executableAnchors(node, source, body = node.body) {
   const positions = [];
   function visit(child) {
     if (isFunction(child) || ts.isTypeNode(child) || ts.isTypeAliasDeclaration(child) || ts.isInterfaceDeclaration(child)) return;
@@ -24,7 +24,7 @@ function executableAnchors(node, source) {
       !ts.isTypeAssertionExpression(child) && !ts.isNonNullExpression(child) && !ts.isSatisfiesExpression(child)) positions.push(child.getStart(source));
     ts.forEachChild(child, visit);
   }
-  visit(node.body);
+  visit(body);
   return positions;
 }
 export function functionComplexity(node) {
@@ -119,17 +119,24 @@ export function analyzeFile(file, text, coverage) {
         fn.anchors.some(position => position >= observed.start && position < observed.end) &&
         !nested.some(child => observed.start < child.end && observed.end > child.start);
     }).map(([id]) => coverage.s?.[id]);
+    const rejectedBranchObservations = [];
     const branchCounts = branchRanges.filter(entry => {
       if (entry.entireFile) return false;
       if (entry.selectorOwner) return entry.selectorOwner === fn;
       if (entry.candidates.length) return rootBranches.includes(entry) && entry.candidates.length === 1;
       const observed = range(entry.location);
       const insideEnd = observed.end <= end || separators(text.slice(end, observed.end));
-      const bodyOwned = observed.start >= fn.bodyStart && observed.start < end && insideEnd;
-      const parameterOwned = node.parameters.some(parameter => parameter.initializer &&
+      const bodyRange = observed.start >= fn.bodyStart && observed.start < end && insideEnd;
+      const parameters = node.parameters.filter(parameter => parameter.initializer &&
         observed.start >= parameter.getStart(source) && observed.end <= parameter.end);
-      return (bodyOwned || parameterOwned) &&
-        !nested.some(child => observed.start >= child.start && observed.start < child.end);
+      if ((!bodyRange && !parameters.length) || nested.some(child => observed.start >= child.start && observed.start < child.end)) return false;
+      const executable = (bodyRange && fn.anchors.some(position => position >= observed.start && position < observed.end)) ||
+        parameters.some(parameter => executableAnchors(node, source, parameter.initializer)
+          .some(position => position >= observed.start && position < observed.end));
+      const reason = !executable ? "no-owned-executable-position" :
+        nested.some(child => observed.start < child.end && observed.end > child.start) ? "nested-function-overlap" : undefined;
+      if (reason) rejectedBranchObservations.push({ id: entry.id, count: entry.count, location: entry.location, reason });
+      return reason === undefined;
     }).map(entry => entry.count);
     if ([...statementCounts, ...branchCounts].some(count => !valid(count))) problems.push("missing-or-invalid-owned-count");
     const observations = statementCounts.length ? statementCounts : entries.length ? entries : branchCounts;
@@ -149,7 +156,7 @@ export function analyzeFile(file, text, coverage) {
       mapping: missingCoverage ? problems.some(problem => /ambiguous|conflicting/.test(problem)) ? "ambiguous" : "missing" :
         namedMatches.length ? "fnMap" : rootBranches.length ? "branch-root" : "owned-body",
       statementBasis: missingCoverage ? "none" : statementCounts.length ? "owned-statements" : entries.length ? "function-entry" : "owned-branches",
-      mappingProblems: problems, entryProofs: proofs.map(({ kind, id, count, location: observed }) => ({ kind, id, count,
+      mappingProblems: problems, rejectedBranchObservations, entryProofs: proofs.map(({ kind, id, count, location: observed }) => ({ kind, id, count,
         start: observed.start, end: observed.end })) };
   });
 }
