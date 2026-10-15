@@ -25,10 +25,10 @@ it("keeps the native owner across SDK callback churn and wipes on actual Session
     const controller = useMemo(() => new AccessController({ ...h.ports, signOut: ports.signOut }), [ports.rpc, ports.signOut]);
     owners.push(controller);
     useEffect(() => {
-      void controller.start().then(() => controller.context(session, true));
+      void controller.start().then(() => controller.observe(session ? { kind: "signed-in", sessionId: session } : { kind: "signed-out" }, true));
       return () => controller.dispose();
     }, [controller]);
-    useEffect(() => { if (controller.getSnapshot().kind !== "starting") controller.context(session, true); }, [controller, session]);
+    useEffect(() => { if (controller.getSnapshot().kind !== "starting") controller.observe(session ? { kind: "signed-in", sessionId: session } : { kind: "signed-out" }, true); }, [controller, session]);
     return null;
   }
   let renderer: ReactTestRenderer | undefined;

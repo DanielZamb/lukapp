@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { PropsWithChildren } from "react";
 import { AppState, Platform, Text, View } from "react-native";
 import { ClerkProvider, useAuth, useClerk, useSSO } from "@clerk/expo";
@@ -11,6 +11,7 @@ import { ConvexHttpClient } from "convex/browser";
 import * as Crypto from "expo-crypto";
 import { AccessController } from "./controller";
 import type { Rpc } from "./controller";
+import type { ProviderObservation } from "./lifecycle";
 import { custody, nativeDeviceKey } from "./native";
 import { createPostedActivitySource } from "../modules/posted-activity/source";
 import { phoneTransport } from "../modules/posted-activity/phone";
@@ -43,8 +44,8 @@ export function useAccess() {
 }
 const hash = { sha256Utf8: async (message: string) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, message) };
 WebBrowser.maybeCompleteAuthSession();
-function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixture }: PropsWithChildren<{
-  rpc: Rpc; session: string | null; online: boolean; signOut: () => Promise<void>; signIn: () => Promise<void>; fixture: boolean;
+function RuntimeSession({ children, rpc, observation, online, signOut, signIn, fixture }: PropsWithChildren<{
+  rpc: Rpc; observation: ProviderObservation; online: boolean; signOut: () => Promise<void>; signIn: () => Promise<void>; fixture: boolean;
 }>) {
   const [failure, setFailure] = useState<"storage" | "sign-in" | null>(null);
   const runtime = useMemo(() => {
@@ -61,11 +62,12 @@ function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixtu
   }, [rpc, signOut, fixture]);
   const state = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getSnapshot);
   const cleanup = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getProviderCleanup);
+  const revocations = useSyncExternalStore(runtime.controller.subscribe, runtime.controller.getRevocations);
   const pathname = usePathname();
   useEffect(() => { if (pathname !== "/security") runtime.controller.leaveSecurity(); }, [pathname, runtime]);
   useEffect(() => {
     let stopped = false;
-    void runtime.controller.start().then(() => { if (!stopped) runtime.controller.context(session, online); })
+    void runtime.controller.start()
       .catch(() => { if (!stopped) setFailure("storage"); });
     const native = custody.addListener("change", () => runtime.controller.nativeChanged());
     const app = AppState.addEventListener("change", value => {
@@ -73,9 +75,7 @@ function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixtu
     });
     return () => { stopped = true; native.remove(); app.remove(); runtime.controller.dispose(); };
   }, [runtime]);
-  useEffect(() => {
-    if (state.kind !== "starting") runtime.controller.context(session, online);
-  }, [runtime, session, online, state.kind]);
+  useLayoutEffect(() => { runtime.controller.observe(observation, online); }, [runtime, observation, online]);
   useEffect(() => {
     if (state.kind === "ready") runtime.posted.setScope({ kind: "connected", workspaceId: state.workspaceId });
     else runtime.posted.setScope({ kind: "unavailable", reason: online ? "signed-out" : "offline" });
@@ -90,27 +90,28 @@ function RuntimeSession({ children, rpc, session, online, signOut, signIn, fixtu
       <PostedActivityProvider source={runtime.posted}>
         <View style={{ flex: 1 }} onTouchStart={() => runtime.controller.activity()}>
           {fixture && <Text style={{ color: theme.mutedForeground, fontFamily: font.medium, padding: spacing.sm, paddingTop: insets.top }} accessibilityRole="header">Controlled development fixture · Synthetic Owner</Text>}
-          {allowed && cleanup?.state.kind === "pending" && <Text style={{ color: theme.mutedForeground, fontFamily: font.medium, padding: spacing.sm }} accessibilityRole="alert">Old sessions still need provider sign-out. Their device access is already revoked.</Text>}
+          {allowed && (cleanup?.state.kind === "pending" || revocations.some(item => item.record.outcome.kind === "response-unknown" || item.record.outcome.result.kind === "pending")) && <Text style={{ color: theme.mutedForeground, fontFamily: font.medium, padding: spacing.sm }} accessibilityRole="alert">Device sign-out needs an online status check. Open Security for the last observed result.</Text>}
           {allowed ? children : (
             <Screen>
               <Header title="Lukapp" />
-              <Copy title={state.kind === "signed-out" ? "Your money, clearly" : "Your money stays private"}
+              <Copy title={observation.kind === "loading" ? "Opening Lukapp" : state.kind === "signed-out" ? "Your money, clearly" : "Your money stays private"}
                 detail={failure === "storage" ? "This device could not open secure storage. Use a supported device with strong biometrics." :
                   failure === "sign-in" ? "Google sign-in did not finish. Try again online." :
+                  observation.kind === "loading" ? "Waiting for secure sign-in to finish opening." :
                   state.kind === "wiping" ? "Removing local input and signing out." :
                   state.kind === "signed-out" ? "Sign in to connect your money securely." :
                   !online ? "Reconnect before unlocking. Your saved Drafts stay on this device." :
                   state.kind === "blocked" ? "Access needs a fresh online check. Unlock again or sign in." :
                   state.kind === "checking" ? "Checking your access." : "Unlock with your biometrics to continue."} />
               {state.kind === "signed-out" ? <PrimaryButton label={fixture ? "Sign in synthetic Owner" : "Continue with Google"} onPress={() => { setFailure(null); void signIn().catch(() => setFailure("sign-in")); }} /> :
-                <PrimaryButton label={state.kind === "blocked" && state.code === "full_sign_in_required" ? "Full sign-in" : "Unlock"} loading={state.kind === "checking" || state.kind === "wiping" || state.kind === "starting"}
+                <PrimaryButton label={state.kind === "blocked" && state.code === "full_sign_in_required" ? "Full sign-in" : "Unlock"} loading={observation.kind === "loading" || state.kind === "checking" || state.kind === "wiping" || state.kind === "starting"}
                   disabled={!online || failure === "storage"} onPress={() => {
                     if (state.kind === "blocked" && state.code === "full_sign_in_required") void runtime.controller.wipe();
                     else void runtime.controller.admit();
                   }} />}
               {state.kind !== "signed-out" && <SecondaryButton label={state.kind === "blocked" ? "Clear local input and sign in" : "Sign out"}
                 disabled={state.kind === "wiping"} onPress={() => { void runtime.controller.wipe(); }} />}
-              {state.kind === "blocked" && online && <>
+              {state.kind === "blocked" && online && observation.kind === "signed-in" && <>
                 <Copy title="Recover access" detail="If your installation key or biometric enrollment changed, explicitly retire old bindings. Recovery signs you out, then requires a new full Google sign-in checked by the server." />
                 <SecondaryButton label="Retire old bindings and recover" onPress={() => { void runtime.controller.beginRecovery().catch(() => {}); }} />
               </>}
@@ -156,12 +157,11 @@ function LiveSession({ children, client }: PropsWithChildren<{ client: ConvexRea
     if (!flow.createdSessionId || !flow.setActive) throw new Error("Sign-in did not finish");
     await flow.setActive({ session: flow.createdSessionId });
   };
-  if (!isLoaded) return <Screen><Copy title="Opening Lukapp" /></Screen>;
-  return <RuntimeSession rpc={rpc} session={isSignedIn ? sessionId ?? null : null} online={online} signOut={signOut} signIn={signIn} fixture={false}>{children}</RuntimeSession>;
+  return <RuntimeSession rpc={rpc} observation={isLoaded && isSignedIn === false ? { kind: "signed-out" } : isLoaded && isSignedIn === true && sessionId ? { kind: "signed-in", sessionId } : { kind: "loading" }} online={online} signOut={signOut} signIn={signIn} fixture={false}>{children}</RuntimeSession>;
 }
 const fixtureObservation = z.object({ fixture: z.literal(true), sessionId: z.string().min(1).nullable(), online: z.boolean() });
 function FixtureSession({ children }: PropsWithChildren) {
-  const [observation, setObservation] = useState<z.infer<typeof fixtureObservation>>({ fixture: true, sessionId: null, online: false });
+  const [observation, setObservation] = useState<z.infer<typeof fixtureObservation> | null>(null);
   const revision = useRef(0);
   const platform = Platform.OS === "ios" ? "ios" : "android";
   const client = useMemo(() => requestScopedRpc(async () => new ConvexHttpClient("http://127.0.0.1:8094/" + platform, { skipConvexDeploymentUrlCheck: true, logger: false })), [platform]);
@@ -169,7 +169,7 @@ function FixtureSession({ children }: PropsWithChildren) {
     revision.current++;
     const result = await fetch("http://127.0.0.1:8094/" + platform + "/sign-out", { method: "POST" });
     if (!result.ok) throw new Error("Fixture sign-out unavailable");
-    setObservation(value => ({ ...value, sessionId: null }));
+    setObservation(value => value ? { ...value, sessionId: null } : null);
   }, [platform]);
   useEffect(() => {
     let stopped = false;
@@ -181,7 +181,7 @@ function FixtureSession({ children }: PropsWithChildren) {
         const next = fixtureObservation.parse(await response.json());
         if (!stopped && revision.current === expected) setObservation(next);
       } catch {
-        if (!stopped && revision.current === expected) setObservation(value => ({ ...value, online: false }));
+        if (!stopped && revision.current === expected) setObservation(value => value ? { ...value, online: false } : null);
       }
     };
     void observe();
@@ -195,7 +195,7 @@ function FixtureSession({ children }: PropsWithChildren) {
     const next = fixtureObservation.parse(await result.json());
     if (revision.current === expected) setObservation(next);
   };
-  return <RuntimeSession rpc={client} session={observation.sessionId} online={observation.online} signOut={signOut} signIn={signIn} fixture>{children}</RuntimeSession>;
+  return <RuntimeSession rpc={client} observation={!observation ? { kind: "loading" } : observation.sessionId ? { kind: "signed-in", sessionId: observation.sessionId } : { kind: "signed-out" }} online={observation?.online ?? false} signOut={signOut} signIn={signIn} fixture>{children}</RuntimeSession>;
 }
 export function AccessRoot({ children }: PropsWithChildren) {
   const [fixture, setFixture] = useState(false);

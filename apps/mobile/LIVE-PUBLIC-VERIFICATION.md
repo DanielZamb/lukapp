@@ -79,6 +79,12 @@ An unknown lost response is retained as a stopped request; it is not success.
 
 ## Loopback custody and receipts
 
+The explicit operator tap captures one controller action before loading the
+manifest. Component unmount or admission invalidation cancels it irreversibly.
+The same guard runs through proof creation and after token acquisition, immediately
+before public dispatch. A later ready admission cannot revive an earlier tap.
+Cancellation never retries or recalls an already-dispatched request.
+
 The explicit operator button loads the current platform's manifest from
 `127.0.0.1:8114` and starts the approved steps once. The loopback service only
 serves manifests and records app-reported public outcomes. It does not proxy

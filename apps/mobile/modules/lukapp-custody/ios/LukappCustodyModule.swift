@@ -72,29 +72,25 @@ public final class LukappCustodyModule: Module {
     }
     Function("state") { self.withLock { self.expireWindow(); return self.snapshot() } }
     Function("lock") { self.withLock { self.block() } }
-    Function("recoveryPending") { self.withLock { self.exists("recovery") } }
-    Function("recoveryIntent") { (mode: String) -> String? in try self.withLock { try self.requireMode(mode); return try? String(contentsOf: self.url("recovery"), encoding: .utf8) } }
-    AsyncFunction("setRecoveryIntent") { (id: String, mode: String) in try self.withLock {
+    Function("hasRetainedCustody") { (mode: String) -> Bool in try self.withLock {
       try self.requireMode(mode)
-      guard !id.isEmpty, id.utf8.count <= 200 else { throw CustodyFailure(code: "recovery_intent_invalid") }
-      try Data(id.utf8).write(to: self.url("recovery"), options: .atomic)
+      let keyQuery: [CFString: Any] = [kSecClass: kSecClassKey, kSecAttrApplicationTag: self.tag, kSecUseAuthenticationUI: kSecUseAuthenticationUIFail]
+      if SecItemCopyMatching(keyQuery as CFDictionary, nil) != errSecItemNotFound { return true }
+      for account in ["input-key", "sentinel"] {
+        let query: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: self.service, kSecAttrAccount: account, kSecUseAuthenticationUI: kSecUseAuthenticationUIFail]
+        if SecItemCopyMatching(query as CFDictionary, nil) != errSecItemNotFound { return true }
+      }
+      return try FileManager.default.contentsOfDirectory(at: self.directory(), includingPropertiesForKeys: nil).contains { !LifecycleRecords.preserved($0.lastPathComponent) }
     } }
-    AsyncFunction("setRecoveryPending") { (pending: Bool, mode: String) in try self.withLock {
-      try self.requireMode(mode)
-      if pending { try Data("retrieve".utf8).write(to: self.url("recovery"), options: .atomic) }
-      else if self.exists("recovery") { try FileManager.default.removeItem(at: self.url("recovery")) }
+    Function("readRecovery") { (mode: String) -> String in try self.withLock { try self.requireMode(mode); return try self.lifecycle().recoveryJSON() } }
+    AsyncFunction("writeRecovery") { (raw: String, revision: Double, mode: String, expected: Int) -> String in try self.withLock {
+      try self.requireMode(mode); guard expected == self.generation else { throw CustodyFailure(code: "lifecycle_owner_stale") }
+      return try self.lifecycle().writeRecovery(raw, expected: revision)
     } }
-    Function("recoveryWork") { (mode: String) -> String? in try self.withLock {
-      try self.requireMode(mode)
-      return try? String(contentsOf: self.url("recovery-work"), encoding: .utf8)
-    } }
-    AsyncFunction("setRecoveryWork") { (id: String?, mode: String, expected: Int) in try self.withLock {
-      try self.requireMode(mode)
-      try self.requireContact(expected)
-      if let id {
-        guard !id.isEmpty, id.utf8.count <= 200 else { throw CustodyFailure(code: "recovery_work_invalid") }
-        try Data(id.utf8).write(to: self.url("recovery-work"), options: .atomic)
-      } else if self.exists("recovery-work") { try FileManager.default.removeItem(at: self.url("recovery-work")) }
+    Function("readRevocations") { (mode: String) -> [String] in try self.withLock { try self.requireMode(mode); return try self.lifecycle().revocationsJSON() } }
+    AsyncFunction("writeRevocation") { (raw: String, revision: Double, mode: String, expected: Int) -> String in try self.withLock {
+      try self.requireMode(mode); guard expected == self.generation else { throw CustodyFailure(code: "lifecycle_owner_stale") }
+      return try self.lifecycle().writeRevocation(raw, expected: revision)
     } }
     Function("closeInput") { self.withLock { self.admitting = false; self.workspace = nil; self.generation += 1; self.emit() } }
     Function("touch") { self.withLock { self.expireWindow(); if self.unlocked && self.admitting && self.foreground { self.idleAt = ProcessInfo.processInfo.systemUptime } } }
@@ -201,7 +197,7 @@ public final class LukappCustodyModule: Module {
       for account in ["input-key", "sentinel"] { try self.removeSecret(account) }
       try self.removeSigningKey()
       for item in try FileManager.default.contentsOfDirectory(at: self.directory(), includingPropertiesForKeys: nil) {
-        if !["wipe", "recovery", "recovery-work"].contains(item.lastPathComponent) { try FileManager.default.removeItem(at: item) }
+        if !LifecycleRecords.preserved(item.lastPathComponent) || ["installed", "erased"].contains(item.lastPathComponent) { try FileManager.default.removeItem(at: item) }
       }
       try self.writeMarker("erased")
     } }
@@ -273,6 +269,7 @@ public final class LukappCustodyModule: Module {
     try dir.setResourceValues(values)
     return dir
   }
+  private func lifecycle() throws -> LifecycleRecords { LifecycleRecords(root: try directory()) }
   private func url(_ name: String) throws -> URL { try directory().appendingPathComponent(name) }
   private func exists(_ name: String) -> Bool { (try? url(name)).map { FileManager.default.fileExists(atPath: $0.path) } ?? false }
   private func writeMarker(_ name: String) throws { try Data([1]).write(to: url(name), options: .atomic) }

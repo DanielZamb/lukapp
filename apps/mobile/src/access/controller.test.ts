@@ -25,9 +25,9 @@ describe("access controller races and authority ordering (native unit double)", 
     const admission = h.controller.admit();
     await vi.waitFor(() => expect(h.events).toContain("clerkProvider:checkSession"));
     if (reason === "lock") h.controller.lock();
-    if (reason === "session") h.controller.context("replacement-session", true);
+    if (reason === "session") h.controller.observe({ kind: "signed-in", sessionId: "replacement-session" }, true);
     if (reason === "workspace") h.controller.workspace("workspace2");
-    if (reason === "disconnect") h.controller.context("unit-session", false);
+    if (reason === "disconnect") h.controller.observe({ kind: "signed-in", sessionId: "unit-session" }, false);
     if (reason === "wipe") await h.controller.wipe();
     provider.resolve({ kind: "active" }); await admission;
     expect(h.controller.getSnapshot().kind).not.toBe("ready");
@@ -90,7 +90,7 @@ describe("access controller races and authority ordering (native unit double)", 
     const h = harness(); h.setNativeState({ keyPresent: false }); await begin(h);
     h.answers.set("devices:status", () => ({ kind: "denied", code: "device_registration_required", directive: "register-device" }));
     h.answers.set("devices:register", () => { throw new Error("Interrupted before handler"); });
-    await h.controller.admit(); h.controller.context("different-session", true); await h.controller.admit();
+    await h.controller.admit(); h.controller.observe({ kind: "signed-in", sessionId: "different-session" }, true); await h.controller.admit();
     expect(h.controller.getSnapshot()).toEqual({ kind: "blocked", code: "old_binding_revoke_required" });
     expect(h.events.filter(name => name === "devices:register")).toHaveLength(1);
     expect(h.native.openInput).not.toHaveBeenCalled();
@@ -102,7 +102,7 @@ describe("access controller races and authority ordering (native unit double)", 
     await vi.waitFor(() => expect(h.events.at(-1)).toBe("accounting:localInputAuthority"));
     const lock = vi.spyOn(h.native, "lock");
     h.setNativeState({ mode: "live", generation: h.native.state().generation + 1, unlocked: true, workspaceId: "live-workspace" });
-    h.controller.dispose(); h.controller.activity(); h.controller.context("old-session", true); await h.controller.admit();
+    h.controller.dispose(); h.controller.activity(); h.controller.observe({ kind: "signed-in", sessionId: "old-session" }, true); await h.controller.admit();
     authority.resolve({ kind: "ready", workspaceId: "fixture-workspace" }); await admission;
     expect(lock).not.toHaveBeenCalled(); expect(h.native.touch).not.toHaveBeenCalled(); expect(h.native.openInput).not.toHaveBeenCalled();
     expect(h.native.state()).toMatchObject({ mode: "live", unlocked: true, workspaceId: "live-workspace" });

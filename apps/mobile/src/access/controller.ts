@@ -7,6 +7,8 @@ import type { NativeRequestHash, PrepareRequest } from "../../../../src/access/c
 import type { AccessOperation, NativeDeviceKey } from "../../../../src/access/protocol";
 import type { Custody } from "./native";
 import { ConvexError } from "convex/values";
+import { recoveryRecord, revocationRecord } from "./lifecycle";
+import type { ProviderObservation, RecoveryRecord, RevocationRecord, RevocationView } from "./lifecycle";
 
 export interface Rpc {
   query<Q extends FunctionReference<"query", "public">>(reference: Q, args: FunctionArgs<Q>, guard?: () => void): Promise<FunctionReturnType<Q>>;
@@ -20,14 +22,27 @@ export type AccessState =
   | { kind: "provisioning"; contact: Contact }
   | { kind: "ready"; contact: Contact; workspaceId: string };
 export class StaleAccess extends Error {}
+export interface UserAction {
+  readonly workspaceId: string;
+  readonly signal: AbortSignal;
+  assertCurrent(): void;
+  execute: AccessController["execute"];
+  cancel(): void;
+}
 export type ControllerCustody = Pick<Custody, "state" | "initialize" | "lock" | "touch" | "closeInput" | "unlock" | "resumeAdmission" |
-  "recoveryPending" | "setRecoveryPending" | "recoveryIntent" | "setRecoveryIntent" | "recoveryWork" | "setRecoveryWork" | "enrollmentPending" | "setEnrollmentPending" |
+  "hasRetainedCustody" | "readRecovery" | "writeRecovery" | "readRevocations" | "writeRevocation" | "enrollmentPending" | "setEnrollmentPending" |
   "openInput" | "beginWipe" | "erase" | "finishWipe">;
 
 export class AccessController {
   private epoch = 0;
   private closed = false;
   private session: string | null = null;
+  private observation: ProviderObservation = { kind: "loading" };
+  private initialized = false;
+  private signedOutCleanupAttempted = false;
+  private beginningRecovery: Promise<void> | undefined;
+  private revoking = new Map<string, Promise<void>>();
+  private revocations: readonly RevocationView[] = [];
   private online = false;
   private scope: { kind: "discover" } | { kind: "saved"; workspaceId: string } = { kind: "discover" };
   private state: AccessState = { kind: "starting" };
@@ -49,6 +64,7 @@ export class AccessController {
   }) {}
   getSnapshot = () => this.state;
   getProviderCleanup = () => this.providerCleanup;
+  getRevocations = () => this.revocations;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private ownsCustody() { return !this.closed && this.ports.native.state().mode === this.ports.mode; }
   private publish(next: AccessState) { this.state = next; for (const listener of this.listeners) listener(); }
@@ -56,7 +72,7 @@ export class AccessController {
     this.epoch++;
     if (lock) this.ports.native.lock(); else this.ports.native.closeInput();
     this.ports.clearMemory();
-    this.providerCleanup = null;
+    this.providerCleanup = null; this.revocations = [];
     this.publish(this.wiping ? { kind: "wiping" } : next);
   }
   private current(epoch: number, generation?: number) {
@@ -68,17 +84,30 @@ export class AccessController {
     const epoch = this.epoch;
     const state = await this.ports.native.initialize(this.ports.mode, this.ports.native.state().generation);
     if (this.closed || state.mode !== this.ports.mode || epoch !== this.epoch || state.generation !== this.ports.native.state().generation) throw new StaleAccess();
+    this.initialized = true;
     if (state.savedWorkspaceId) this.scope = { kind: "saved", workspaceId: state.savedWorkspaceId };
-    if (state.wipePending) await this.wipe();
-    else this.publish({ kind: "locked" });
+    if (state.wipePending) { this.signedOutCleanupAttempted = true; await this.wipe(); }
+    else this.applyObservation();
   }
-  context(session: string | null, online: boolean) {
-    if (!this.ownsCustody()) return;
-    if (session === this.session && online === this.online) return;
-    const lostSession = this.session !== null && session === null;
-    this.session = session; this.online = online;
-    this.invalidate(session ? { kind: "locked" } : { kind: "signed-out" });
-    if (lostSession) void this.wipe();
+  observe(observation: ProviderObservation, online: boolean) {
+    if (this.closed) return;
+    const changed = observation.kind !== this.observation.kind ||
+      (observation.kind === "signed-in" && this.observation.kind === "signed-in" && observation.sessionId !== this.observation.sessionId) || online !== this.online;
+    this.observation = observation; this.online = online;
+    if (this.initialized && this.ownsCustody() && changed) this.applyObservation();
+  }
+  private applyObservation() {
+    const observation = this.observation;
+    this.session = observation.kind === "signed-in" ? observation.sessionId : null;
+    if (observation.kind === "signed-in") this.signedOutCleanupAttempted = false;
+    if (this.wiping) return;
+    if (observation.kind === "signed-out" && !this.signedOutCleanupAttempted) {
+      this.signedOutCleanupAttempted = true;
+      try { if (this.ports.native.hasRetainedCustody(this.ports.mode)) { void this.wipe(); return; } }
+      catch { this.invalidate({ kind: "blocked", code: "custody_cleanup_check_unavailable" }); return; }
+    }
+    if (this.state.kind === "blocked" && (this.state.code.startsWith("wipe_retry_required") || this.state.code === "custody_cleanup_check_unavailable")) return;
+    this.invalidate(observation.kind === "signed-out" ? { kind: "signed-out" } : { kind: "locked" });
   }
   workspace(workspaceId: string) {
     if (!this.ownsCustody()) return;
@@ -91,7 +120,7 @@ export class AccessController {
     if (this.closed) return;
     this.closed = true; this.epoch++;
     if (this.ports.native.state().mode === this.ports.mode) this.ports.native.lock();
-    this.ports.clearMemory(); this.providerCleanup = null; this.publish({ kind: "locked" });
+    this.ports.clearMemory(); this.providerCleanup = null; this.revocations = []; this.publish({ kind: "locked" });
   }
   activity() {
     if (!this.ownsCustody()) return;
@@ -108,21 +137,22 @@ export class AccessController {
     const state = this.state;
     if ((state.kind === "ready" || state.kind === "provisioning") &&
       (!native.unlocked || native.generation !== state.contact.generation)) {
-      this.epoch++; this.ports.clearMemory(); this.providerCleanup = null; this.publish({ kind: "locked" });
+      this.epoch++; this.ports.clearMemory(); this.providerCleanup = null; this.revocations = []; this.publish({ kind: "locked" });
     }
   }
-  private guarded(epoch: number, generation: number) {
+  private guarded(epoch: number, generation: number, actionGuard: () => void = () => {}) {
+    const current = () => { this.current(epoch, generation); actionGuard(); };
     const nativeKey = this.ports.key(generation);
     return {
       hash: this.ports.hash,
       key: {
-        publicKey: async () => { this.current(epoch, generation); const result = await nativeKey.publicKey(); this.current(epoch, generation); return result; },
-        sign: async (message: string) => { this.current(epoch, generation); const result = await nativeKey.sign(message); this.current(epoch, generation); return result; },
+        publicKey: async () => { current(); const result = await nativeKey.publicKey(); current(); return result; },
+        sign: async (message: string) => { current(); const result = await nativeKey.sign(message); current(); return result; },
       },
       transport: { prepare: async (args: PrepareRequest) => {
-        this.current(epoch, generation);
-        const result = await this.ports.rpc.mutation(api.devices.prepare, args, () => this.current(epoch, generation));
-        this.current(epoch, generation); return result;
+        current();
+        const result = await this.ports.rpc.mutation(api.devices.prepare, args, current);
+        current(); return result;
       } },
     };
   }
@@ -131,35 +161,39 @@ export class AccessController {
     if (!this.session || !this.online || this.wiping) { this.invalidate({ kind: "blocked", code: "online_sign_in_required" }); return; }
     this.invalidate({ kind: "checking" }, false);
     const epoch = this.epoch;
+    let admissionGeneration: number | undefined;
     try {
       let native: ReturnType<ControllerCustody["state"]>;
       try { native = (!fresh && this.ports.native.resumeAdmission()) || await this.ports.native.unlock(fresh ? "Confirm security access" : "Unlock Lukapp"); }
       catch { if (epoch === this.epoch) this.invalidate({ kind: "blocked", code: "full_sign_in_required" }); return; }
+      admissionGeneration = native.generation;
       this.current(epoch, native.generation);
-      if (this.ports.native.recoveryPending()) {
-        if (!this.ports.native.recoveryWork(this.ports.mode)) {
-          let intentId = this.ports.native.recoveryIntent(this.ports.mode);
-          if (!intentId || intentId === "retrieve") {
-            const intent = await this.ports.rpc.action(api.clerkProvider.beginRecovery, {}, () => this.current(epoch, native.generation));
-            this.current(epoch, native.generation);
-            intentId = intent.intentId;
-            await this.ports.native.setRecoveryIntent(intentId, this.ports.mode);
-            this.current(epoch, native.generation);
-          }
-          const work = await this.ports.rpc.action(api.clerkProvider.completeRecovery, { intentId }, () => this.current(epoch, native.generation));
+      let recovery = this.readRecovery();
+      if (recovery.intent.kind !== "none") {
+        if (recovery.cleanup.kind === "work") {
+          const old = await this.ports.rpc.query(api.providerWork.status, { workId: recovery.cleanup.workId }, () => this.current(epoch, native.generation));
           this.current(epoch, native.generation);
-          await this.ports.native.setRecoveryWork(work.workId, this.ports.mode, native.generation);
-          this.current(epoch, native.generation);
-          this.providerCleanup = work;
+          this.providerCleanup = old;
+          if (old.state.kind !== "succeeded") throw new ConvexError({ code: "recovery_cleanup_pending" });
+          recovery = await this.saveRecovery(recovery, { ...recovery, cleanup: { kind: "none" } }, epoch, native.generation);
         }
-        await this.ports.native.setRecoveryPending(false, this.ports.mode);
+        if (recovery.intent.kind === "retrieve") {
+          const intent = await this.ports.rpc.action(api.clerkProvider.beginRecovery, {}, () => this.current(epoch, native.generation));
+          this.current(epoch, native.generation);
+          recovery = await this.saveRecovery(recovery, { ...recovery, intent: { kind: "exact", intentId: intent.intentId } }, epoch, native.generation);
+        }
+        if (recovery.intent.kind !== "exact") throw new StaleAccess();
+        const work = await this.ports.rpc.action(api.clerkProvider.completeRecovery, { intentId: recovery.intent.intentId }, () => this.current(epoch, native.generation));
         this.current(epoch, native.generation);
+        await this.saveRecovery(recovery, { ...recovery, intent: { kind: "none" }, cleanup: { kind: "work", workId: work.workId } }, epoch, native.generation);
+        this.providerCleanup = work;
       }
       const provider = await this.ports.rpc.action(api.clerkProvider.checkSession, {}, () => this.current(epoch, native.generation));
       this.current(epoch, native.generation);
       if (provider.kind === "denied") { await this.wipe(); return; }
       if (provider.kind === "unavailable") { this.invalidate({ kind: "blocked", code: provider.code }); return; }
       await this.reconcileCleanup(epoch, native.generation);
+      await this.reconcileRevocations(epoch, native.generation);
       this.current(epoch, native.generation);
       const guarded = this.guarded(epoch, native.generation);
       const sessionDigest = await this.ports.hash.sha256Utf8(this.session);
@@ -205,7 +239,7 @@ export class AccessController {
       this.publish({ kind: "ready", workspaceId: outcome.workspaceId, contact });
     } catch (error) {
       if (error instanceof StaleAccess) return;
-      if (epoch !== this.epoch) return;
+      try { this.current(epoch, admissionGeneration); } catch { return; }
       await this.reject(error);
     }
   }
@@ -213,80 +247,143 @@ export class AccessController {
     return this.state.kind === "ready" && this.securityGeneration === this.state.contact.generation;
   }
   leaveSecurity() { this.securityGeneration = undefined; }
+  private readRecovery() { return recoveryRecord.parse(JSON.parse(this.ports.native.readRecovery(this.ports.mode))); }
+  private async saveRecovery(prior: RecoveryRecord, next: RecoveryRecord, epoch: number, generation: number) {
+    this.current(epoch, generation);
+    const saved = recoveryRecord.parse(JSON.parse(await this.ports.native.writeRecovery(JSON.stringify({ ...next, revision: prior.revision + 1 }), prior.revision, this.ports.mode, generation)));
+    this.current(epoch, generation); return saved;
+  }
+  private readRevocations() { return this.ports.native.readRevocations(this.ports.mode).map(raw => revocationRecord.parse(JSON.parse(raw))); }
+  private async saveRevocation(prior: RevocationRecord | undefined, next: RevocationRecord, epoch: number, generation: number) {
+    this.current(epoch, generation);
+    const saved = revocationRecord.parse(JSON.parse(await this.ports.native.writeRevocation(JSON.stringify(next), prior?.revision ?? -1, this.ports.mode, generation)));
+    this.current(epoch, generation);
+    this.revocations = [...this.revocations.filter(item => item.record.deviceId !== saved.deviceId), { record: saved, refreshed: true }];
+    for (const listener of this.listeners) listener();
+    return saved;
+  }
   private async reconcileCleanup(epoch: number, generation: number) {
     this.current(epoch, generation);
-    const workId = this.ports.native.recoveryWork(this.ports.mode);
-    if (!workId) return;
-    const work = await this.ports.rpc.query(api.providerWork.status, { workId }, () => this.current(epoch, generation));
-    this.current(epoch, generation);
-    this.providerCleanup = work;
-    if (work.state.kind === "succeeded") {
-      await this.ports.native.setRecoveryWork(null, this.ports.mode, generation);
-      this.current(epoch, generation);
-    }
+    const recovery = this.readRecovery();
+    if (recovery.cleanup.kind !== "work") return;
+    const work = await this.ports.rpc.query(api.providerWork.status, { workId: recovery.cleanup.workId }, () => this.current(epoch, generation));
+    this.current(epoch, generation); this.providerCleanup = work;
+    if (work.state.kind === "succeeded") await this.saveRecovery(recovery, { ...recovery, cleanup: { kind: "none" } }, epoch, generation);
     for (const listener of this.listeners) listener();
+  }
+  private async reconcileRevocations(epoch: number, generation: number) {
+    this.current(epoch, generation);
+    const records = this.readRevocations();
+    this.revocations = records.map(record => ({ record, refreshed: false }));
+    for (const listener of this.listeners) listener();
+    for (const record of records) {
+      if (record.outcome.kind !== "observed") continue;
+      const work = await this.ports.rpc.query(api.providerWork.status, { workId: record.outcome.workId }, () => this.current(epoch, generation));
+      this.current(epoch, generation);
+      await this.saveRevocation(record, { ...record, revision: record.revision + 1, outcome: { kind: "observed", workId: work.workId, result: work.state } }, epoch, generation);
+    }
   }
   async refreshProviderCleanup() {
     const state = this.state;
     if (state.kind !== "ready") throw new StaleAccess();
-    try { await this.reconcileCleanup(state.contact.epoch, state.contact.generation); }
+    try { await this.reconcileCleanup(state.contact.epoch, state.contact.generation); await this.reconcileRevocations(state.contact.epoch, state.contact.generation); }
     catch (error) {
       this.current(state.contact.epoch, state.contact.generation);
       if (!(error instanceof StaleAccess)) await this.reject(error);
       throw error;
     }
   }
+  beginUserAction(): UserAction {
+    const initial = this.state;
+    if (initial.kind !== "ready") throw new StaleAccess();
+    this.current(initial.contact.epoch, initial.contact.generation);
+    const cancellation = new AbortController();
+    const cancel = () => { cancellation.abort(); unsubscribe(); };
+    const assertCurrent = () => {
+      if (cancellation.signal.aborted) throw new StaleAccess("scenario_admission_invalidated");
+      try { this.current(initial.contact.epoch, initial.contact.generation); if (this.state !== initial) throw new StaleAccess(); }
+      catch { cancel(); throw new StaleAccess("scenario_admission_invalidated"); }
+    };
+    const unsubscribe = this.subscribe(() => { try { assertCurrent(); } catch {} });
+    return { workspaceId: initial.workspaceId, signal: cancellation.signal, assertCurrent, cancel,
+      execute: async work => { assertCurrent(); return this.execute(work, assertCurrent); } };
+  }
   async listDevices() {
     await this.admit(true);
     return this.execute((_, rpc) => rpc.query(api.devices.list, {}));
   }
-  async revokeDevice(deviceId: Id<"mobileDevices">) {
-    await this.admit(true);
-    return this.execute(async (proof, rpc) => rpc.mutation(api.devices.revoke, await proof("devices.revoke", { deviceId })));
+  revokeDevice(deviceId: Id<"mobileDevices">): Promise<void> {
+    const pending = this.revoking.get(deviceId); if (pending) return pending;
+    const operation = this.performRevocation(deviceId).finally(() => { if (this.revoking.get(deviceId) === operation) this.revoking.delete(deviceId); });
+    this.revoking.set(deviceId, operation); return operation;
   }
-  async beginRecovery() {
+  private async performRevocation(deviceId: Id<"mobileDevices">) {
+    await this.admit(true);
+    let self = false;
+    await this.execute(async (proof, rpc) => {
+      const state = this.state;
+      if (state.kind !== "ready") throw new StaleAccess();
+      const { epoch, generation } = state.contact;
+      self = state.contact.deviceId === deviceId;
+      let record = this.readRevocations().find(item => item.deviceId === deviceId);
+      if (record?.outcome.kind === "observed") return;
+      if (!record) record = await this.saveRevocation(undefined, { version: 1, revision: 0, deviceId, outcome: { kind: "response-unknown" } }, epoch, generation);
+      const result = await rpc.mutation(api.devices.revoke, await proof("devices.revoke", { deviceId }));
+      await this.saveRevocation(record, { ...record, revision: record.revision + 1,
+        outcome: { kind: "observed", workId: result.workId, result: result.providerRevocation } }, epoch, generation);
+    });
+    if (self) await this.wipe();
+  }
+  beginRecovery(): Promise<void> {
+    if (this.beginningRecovery) return this.beginningRecovery;
+    const operation = this.performBeginRecovery().finally(() => { if (this.beginningRecovery === operation) this.beginningRecovery = undefined; });
+    this.beginningRecovery = operation; return operation;
+  }
+  private async performBeginRecovery() {
     if (this.closed || this.ports.native.state().mode !== this.ports.mode || !this.session || !this.online || this.wiping) throw new StaleAccess();
     const unavailableCustody = this.state.kind === "blocked";
     this.invalidate({ kind: "checking" });
     const epoch = this.epoch;
-    if (!unavailableCustody) {
-      const native = await this.ports.native.unlock("Confirm account recovery");
-      this.current(epoch, native.generation);
-    }
-    this.current(epoch);
-    await this.ports.native.setRecoveryPending(true, this.ports.mode);
+    let generation = this.ports.native.state().generation;
     try {
-      const intent = await this.ports.rpc.action(api.clerkProvider.beginRecovery, {}, () => this.current(epoch));
-      this.current(epoch);
-      await this.ports.native.setRecoveryIntent(intent.intentId, this.ports.mode);
-      this.current(epoch);
-      await this.wipe();
+      if (!unavailableCustody) generation = (await this.ports.native.unlock("Confirm account recovery")).generation;
+      this.current(epoch, generation);
+      let recovery = this.readRecovery();
+      if (recovery.intent.kind === "none") recovery = await this.saveRecovery(recovery, { ...recovery, intent: { kind: "retrieve" } }, epoch, generation);
+      if (recovery.intent.kind === "retrieve") {
+        const intent = await this.ports.rpc.action(api.clerkProvider.beginRecovery, {}, () => this.current(epoch, generation));
+        this.current(epoch, generation);
+        await this.saveRecovery(recovery, { ...recovery, intent: { kind: "exact", intentId: intent.intentId } }, epoch, generation);
+      }
+      this.current(epoch, generation); await this.wipe();
     } catch (error) {
-      if (epoch === this.epoch) this.invalidate({ kind: "blocked", code: "recovery_online_sign_in_required" });
-      throw error;
+      this.current(epoch, generation);
+      await this.reject(error); throw error;
     }
   }
-  async execute<T>(work: (proof: <Request extends object>(operation: AccessOperation, request: Request) => Promise<Request & { access: { challengeId: Id<"deviceChallenges">; signature: string } }>, rpc: Rpc) => Promise<T>): Promise<T> {
+  async execute<T>(work: (proof: <Request extends object>(operation: AccessOperation, request: Request) => Promise<Request & { access: { challengeId: Id<"deviceChallenges">; signature: string } }>, rpc: Rpc) => Promise<T>, actionGuard: () => void = () => {}): Promise<T> {
     const state = this.state;
     if (state.kind !== "ready" && state.kind !== "provisioning") throw new StaleAccess();
     const { epoch, generation, deviceId } = state.contact;
-    const guarded = this.guarded(epoch, generation);
+    const current = () => { this.current(epoch, generation); actionGuard(); };
+    const guarded = this.guarded(epoch, generation, actionGuard);
     const proof = async <Request extends object>(operation: AccessOperation, request: Request) => {
-      this.current(epoch, generation);
+      current();
       const signed = await proveDeviceRequest({ ...guarded, deviceId, operation, request });
-      this.current(epoch, generation); return signed;
+      current(); return signed;
     };
     try {
-      this.current(epoch, generation);
+      current();
       const rpc: Rpc = {
-        query: async (ref, args) => { this.current(epoch, generation); const value = await this.ports.rpc.query(ref, args, () => this.current(epoch, generation)); this.current(epoch, generation); return value; },
-        mutation: async (ref, args) => { this.current(epoch, generation); const value = await this.ports.rpc.mutation(ref, args, () => this.current(epoch, generation)); this.current(epoch, generation); return value; },
-        action: async (ref, args) => { this.current(epoch, generation); const value = await this.ports.rpc.action(ref, args, () => this.current(epoch, generation)); this.current(epoch, generation); return value; },
+        query: async (ref, args) => { current(); const value = await this.ports.rpc.query(ref, args, current); current(); return value; },
+        mutation: async (ref, args) => { current(); const value = await this.ports.rpc.mutation(ref, args, current); current(); return value; },
+        action: async (ref, args) => { current(); const value = await this.ports.rpc.action(ref, args, current); current(); return value; },
       };
       const result = await work(proof, rpc);
-      this.current(epoch, generation); return result;
+      current(); return result;
     } catch (error) {
-      if (!(error instanceof StaleAccess) && epoch === this.epoch) await this.reject(error);
+      current();
+      if (!(error instanceof StaleAccess)) await this.reject(error);
       throw error;
     }
   }
@@ -303,7 +400,7 @@ export class AccessController {
   async wipe(): Promise<void> {
     if (this.closed || this.ports.native.state().mode !== this.ports.mode) throw new StaleAccess();
     if (this.wiping) return this.wiping;
-    this.epoch++; this.ports.native.lock(); this.ports.clearMemory(); this.providerCleanup = null; this.publish({ kind: "wiping" });
+    this.epoch++; this.ports.native.lock(); this.ports.clearMemory(); this.providerCleanup = null; this.revocations = []; this.publish({ kind: "wiping" });
     let phase = "marker";
     this.wiping = (async () => {
       const phaseCurrent = () => { if (this.closed || this.ports.native.state().mode !== this.ports.mode) throw new StaleAccess(); };

@@ -3,7 +3,8 @@ import { ConvexError } from "convex/values";
 import { getFunctionName } from "convex/server";
 import { parseManifest, runLiveScenario } from "./live-scenario";
 import type { ScenarioManifest, ScenarioAdmission } from "./live-scenario";
-import type { AccessController, Rpc } from "../access/controller";
+import { StaleAccess } from "../access/controller";
+import type { UserAction, AccessController, Rpc } from "../access/controller";
 
 const baseline: ScenarioManifest = { contract: "lukapp-live-public-scenario@1", scenarioId: "closed-public-requests", platform: "ios",
   coordinatorAssertion: { deployedSha: "a".repeat(40), deploymentReceipt: "independent-coordinator-receipt", appEvidence: { sourceSha: "b".repeat(40), sourceTree: "c".repeat(40),
@@ -59,7 +60,10 @@ function runtime(changeAfterFirst = false, deny: false | "domain" | "transport" 
     const rpc: Rpc = { query, mutation, action };
     return work(proof, rpc);
   };
-  return { calls, context: { controller: { getSnapshot: () => state, execute }, fixture: false, platform: "ios" as const,
+  const cancellation = new AbortController();
+  const action: UserAction = { workspaceId: "personal", signal: cancellation.signal,
+    cancel: () => cancellation.abort(), assertCurrent: () => { if (cancellation.signal.aborted || state.kind !== "ready") throw new StaleAccess(); }, execute };
+  return { calls, context: { action, fixture: false, platform: "ios" as const,
     native: () => ({ mode: "live", generation: 7, wipePending: false, protection: "simulator-native-software-key" }) } };
 }
 test("each ordered step uses the controller proof path and keeps coordinator deployment assertions separate", async () => {

@@ -4,7 +4,7 @@ import type { Value } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import { api } from "../../../../convex/_generated/api";
 import { operations } from "../../../../src/access/protocol";
-import type { AccessController, AccessState } from "../access/controller";
+import type { UserAction, AccessController, AccessState } from "../access/controller";
 import { publicConfig } from "../access/public-config";
 import generatedContract from "./public-contract.json";
 
@@ -150,24 +150,22 @@ export type ScenarioReceipt = { contract: "lukapp-live-public-scenario@1"; scena
   coordinatorAssertion: ScenarioManifest["coordinatorAssertion"]; deploymentIndependentlyVerifiedByDriver: false; appBuildIndependentlyVerifiedByDriver: false;
   platform: "ios" | "android"; protection: string; ownerSubject: string; workspaceId: string;
   status: "passed" | "stopped"; steps: { id: string; operation: string; facts: Json; factsResolved: boolean; assertionPassed: boolean; result?: Json; errorCode?: string }[] };
-export async function runLiveScenario(input: unknown, context: { controller: { getSnapshot: () => ScenarioAdmission; execute: AccessController["execute"] };
+export async function runLiveScenario(input: unknown, context: { action: UserAction;
   fixture: boolean; platform: "ios" | "android"; native: () => { mode: string; generation: number; wipePending: boolean; protection: string } }): Promise<ScenarioReceipt> {
   if (!__DEV__ || context.fixture) throw new ScenarioFailure("live_development_only");
   const manifest = parseManifest(input, context.platform);
-  const initial = context.controller.getSnapshot();
-  if (initial.kind !== "ready") throw new ScenarioFailure("workspace_admission_required");
   const guard = () => {
-    const current = context.controller.getSnapshot(); const native = context.native();
-    if (current.kind !== "ready" || current.workspaceId !== initial.workspaceId || current.contact.epoch !== initial.contact.epoch ||
-      current.contact.generation !== initial.contact.generation || native.mode !== "live" || native.generation !== initial.contact.generation || native.wipePending) throw new ScenarioFailure("scenario_admission_invalidated");
+    try { context.action.assertCurrent(); } catch { throw new ScenarioFailure("scenario_admission_invalidated"); }
+    const native = context.native();
+    if (native.mode !== "live" || native.wipePending) throw new ScenarioFailure("scenario_admission_invalidated");
   };
   guard();
-  const connection = await context.controller.execute((_, rpc) => rpc.query(api.authConnection.connection, {}));
+  const connection = await context.action.execute((_, rpc) => rpc.query(api.authConnection.connection, {}));
   guard();
   if (connection.status !== "owner") throw new ScenarioFailure("owner_admission_required");
   const receipt: ScenarioReceipt = { contract: manifest.contract, scenarioId: manifest.scenarioId, coordinatorAssertion: manifest.coordinatorAssertion,
     deploymentIndependentlyVerifiedByDriver: false, appBuildIndependentlyVerifiedByDriver: false, platform: context.platform, protection: context.native().protection,
-    publicUrl: publicConfig.convexUrl, ownerSubject: connection.clerkSubject, workspaceId: initial.workspaceId, status: "stopped", steps: [] };
+    publicUrl: publicConfig.convexUrl, ownerSubject: connection.clerkSubject, workspaceId: context.action.workspaceId, status: "stopped", steps: [] };
   const prior = new Map<string, Map<typeof referenceFields[number], string>>();
   for (const item of manifest.steps) {
     const spec = contract[item.operation];
@@ -180,7 +178,7 @@ export async function runLiveScenario(input: unknown, context: { controller: { g
       factsResolved = true;
       if (!object(facts) || !matches(spec.args, facts)) throw new ScenarioFailure("scenario_arguments_invalid");
       const request: Record<string, Value> = z.record(z.string(), z.json()).parse(facts);
-      const result = await context.controller.execute(async (proof, rpc) => {
+      const result = await context.action.execute(async (proof, rpc) => {
         const signed = await proof(item.operation, request);
         const path = item.operation.replace(".", ":");
         try {
@@ -211,7 +209,8 @@ export async function runLiveScenario(input: unknown, context: { controller: { g
       prior.set(item.id, captured);
     } catch (error) {
       const data = error instanceof ConvexError && object(error.data) ? error.data : undefined;
-      const code = error instanceof ScenarioFailure ? error.code : typeof data?.code === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(data.code) ? data.code : "public_request_failed";
+      const cancelled = context.action.signal.aborted;
+      const code = cancelled ? "scenario_admission_invalidated" : error instanceof ScenarioFailure ? error.code : typeof data?.code === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(data.code) ? data.code : "public_request_failed";
       receipt.steps.push({ id: item.id, operation: item.operation, facts, factsResolved, errorCode: code, assertionPassed: false });
       return receipt;
     }

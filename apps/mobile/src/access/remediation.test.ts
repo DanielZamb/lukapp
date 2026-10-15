@@ -24,37 +24,37 @@ function recovery(h: ReturnType<typeof harness>) {
 it("completes the saved recovery before the ordinary registration barrier and keeps pending cleanup durable", async () => {
   const h = harness(); recovery(h); await begin(h);
   await h.controller.beginRecovery();
-  expect(h.native.recoveryIntent("fixture")).toBe("intent1");
+  expect(h.recoveryIntent()).toBe("intent1");
   expect(h.native.erase).toHaveBeenCalledOnce();
-  h.events.length = 0; h.controller.context("new-provider-session", true);
+  h.events.length = 0; h.controller.observe({ kind: "signed-in", sessionId: "new-provider-session" }, true);
   await h.controller.admit();
   expect(h.events[0]).toBe("clerkProvider:completeRecovery");
   expect(h.events.indexOf("clerkProvider:checkSession")).toBeGreaterThan(h.events.indexOf("clerkProvider:completeRecovery"));
   expect(h.controller.getSnapshot().kind).toBe("ready");
   expect(h.native.erase).toHaveBeenCalledOnce();
-  expect(h.native.recoveryPending()).toBe(false);
-  expect(h.native.recoveryWork("fixture")).toBe("work1");
+  expect(h.recoveryPending()).toBe(false);
+  expect(h.recoveryWork()).toBe("work1");
   expect(h.controller.getProviderCleanup()).toEqual({ workId: "work1", state: { kind: "pending", nextAttemptAt: 5000, error: "provider_unavailable" } });
   h.controller.lock();
   expect(h.controller.getProviderCleanup()).toBeNull();
-  expect(h.native.recoveryWork("fixture")).toBe("work1");
+  expect(h.recoveryWork()).toBe("work1");
   h.controller.dispose();
   const restarted = new AccessController(h.ports);
-  await restarted.start(); restarted.context("new-provider-session", true); await restarted.admit();
+  await restarted.start(); restarted.observe({ kind: "signed-in", sessionId: "new-provider-session" }, true); await restarted.admit();
   expect(restarted.getSnapshot().kind).toBe("ready");
   expect(restarted.getProviderCleanup()?.state.kind).toBe("pending");
   expect(h.events.filter(name => name === "clerkProvider:completeRecovery")).toHaveLength(1);
   h.answers.set("providerWork:status", () => ({ workId: "work1", state: { kind: "succeeded", at: 6000 } }));
   await restarted.refreshProviderCleanup();
   expect(restarted.getProviderCleanup()).toEqual({ workId: "work1", state: { kind: "succeeded", at: 6000 } });
-  expect(h.native.recoveryWork("fixture")).toBeNull();
+  expect(h.recoveryWork()).toBeNull();
   restarted.dispose();
 });
 
 it("does not bypass a terminal provider Session while completing saved recovery", async () => {
   const h = harness(); recovery(h); await begin(h); await h.controller.beginRecovery();
   h.answers.set("clerkProvider:completeRecovery", () => { throw new ConvexError({ code: "provider_session_terminal" }); });
-  h.controller.context("terminal-new-session", true); await h.controller.admit();
+  h.controller.observe({ kind: "signed-in", sessionId: "terminal-new-session" }, true); await h.controller.admit();
   expect(h.controller.getSnapshot().kind).toBe("signed-out");
   expect(h.events).not.toContain("devices:register");
   expect(h.native.openInput).not.toHaveBeenCalled();
@@ -63,13 +63,13 @@ it("does not bypass a terminal provider Session while completing saved recovery"
 
 it("discards an old cleanup rejection after a different Session is admitted", async () => {
   const h = harness(); recovery(h); await begin(h); await h.controller.beginRecovery();
-  h.controller.context("new-provider-session", true); await h.controller.admit();
+  h.controller.observe({ kind: "signed-in", sessionId: "new-provider-session" }, true); await h.controller.admit();
   const held = deferred<unknown>();
   h.answers.set("providerWork:status", () => held.promise);
   const operation = h.controller.refreshProviderCleanup();
   const result = expect(operation).rejects.toBeInstanceOf(StaleAccess);
   await vi.waitFor(() => expect(h.events.at(-1)).toBe("providerWork:status"));
-  h.controller.context("different-provider-session", true);
+  h.controller.observe({ kind: "signed-in", sessionId: "different-provider-session" }, true);
   h.answers.set("providerWork:status", () => ({ workId: "work1", state: { kind: "pending", nextAttemptAt: 5000 } }));
   await h.controller.admit();
   expect(h.controller.getSnapshot().kind).toBe("ready");

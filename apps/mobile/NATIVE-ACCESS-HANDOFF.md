@@ -140,20 +140,69 @@ simulators remain off. The corrected binaries and JavaScript exports have local
 build checks, but no corrected installed-device journey yet. The full native
 execution gate remains incomplete.
 
+## Lifecycle routing ownership
+
+`AccessController.observe` distinguishes loading, observed sign-out and a signed-in
+Session. It consumes the latest observation after native initialization. Observed
+sign-out cleans retained custody even on first launch after Session expiry. Native
+retention checks include every installation key and all non-routing artifacts.
+They share the erase policy. Routing metadata and installation markers alone do
+not start another wipe after a clean process restart. An interrupted wipe resumes;
+a failed wipe retains its marker and requires explicit retry.
+
+Native storage owns `recovery-v2.json` and `revocations/` in each mode namespace.
+The versioned recovery record separates the exact intent from provider cleanup.
+An occupied cleanup slot is queried before dispatching completion. Pending or
+unavailable status preserves both facts and blocks admission. Observed success
+clears that slot under its captured revision. Completion then atomically installs
+the returned work ID and clears only that intent. No network request intervenes
+before this commit. Lost or stale results remain unresolved. The server supports
+consumed-intent replay only for the same recovered Session. Another Session's
+conflict stays blocked.
+
+Both legacy recovery files migrate together without inferring an association.
+The validated replacement is written and reread before deleting either legacy
+file. Corruption blocks without deleting routing facts. Native writes check mode,
+generation and revision under the native lock. They do not require unlocked
+financial input. These records contain routing IDs and outcomes, no credentials,
+financial input or admission authority.
+
+Device revocation persists one response-unknown record per target before the
+signed mutation. Known work and the last observed provider result survive remount,
+restart and wipe. Same-target calls coalesce and never downgrade known work.
+Refresh uses actual public status. Unknown outcomes need explicit fresh-auth retry;
+there is no automatic privileged mutation retry. A current self-revocation result
+is persisted before local wipe. If invalidation wins, the unresolved record remains.
+
+The development manifest button captures a cancellable action before fetch.
+Unmount, lock, Session, Workspace, mode, generation and connection invalidation
+permanently cancel that action. Its guard reaches proof creation and the existing
+request-scoped guard after token acquisition, immediately before dispatch. A later
+admission cannot revive it. Already-dispatched requests cannot be recalled.
+
+Host Swift and Kotlin tests exercise the actual routing record implementation with
+injected migration interruption and real filesystem restart. They do not establish
+OS process-kill behavior, biometric matching, hardware custody or installed app
+execution. Native builds and JS exports are compile/export evidence only.
+
 ## Live readiness and remaining runtime checks
 
 The coordinator retains separate Chrome Owner/session and configuration
 receipts. Those receipts do not prove authenticated native admission. The last
 retained deployment evidence identifies `9fbf2ea`, before the F03 functions.
 The worker has not observed a newer deployment. Integration, deployment and
-fresh source reviews remain coordinator-owned. Native API and Clerk's actual
-30/90 settings remain unobserved here. No live recovery, provider administration
+fresh source reviews remain coordinator-owned. Preference 33 selects a seven-day
+Clerk development maximum with inactivity disabled. Local device 30/90 policy is
+separate. Native API and authenticated native admission remain unobserved here. No live recovery, provider administration
 or Chrome-session revocation was exercised by this worker.
 
 Preference 21 still separates simulated prompts and native software signing from
 actual sensing and hardware guarantees on both virtual devices. The physical
 phone trace does not close TEE/StrongBox or attestation checks. iOS hardware
-checks remain skipped, and further iOS runtime verification is user-deferred.
+checks remain skipped. Preferences 35–37 reauthorize both simulators for later
+non-authentication UX, UI and backend checks. Live sign-in and biometrics remain
+user-owned. Devices stay off during source work, builds and reviews. Final
+security and OWASP review remains a coordinator-owned gate.
 
 Remaining observable execution includes admitted real-provider first-run and
 first Expense; current SQLCipher storage and migration; fifteen-day expiry,

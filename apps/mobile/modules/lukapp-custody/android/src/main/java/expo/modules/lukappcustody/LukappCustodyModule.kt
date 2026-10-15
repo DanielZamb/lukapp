@@ -56,6 +56,7 @@ class LukappCustodyModule : Module() {
   private val context get() = requireNotNull(appContext.reactContext)
   private val root get() = File(context.noBackupFilesDir, "LukappDeviceOnly-" + mode).apply { mkdirs() }
   private fun file(name: String) = File(root, name)
+  private fun lifecycle() = LifecycleRecords(root, ::write) { AtomicFile(it).openRead().bufferedReader().use { reader -> reader.readText() } }
   private val timer = object : Runnable {
     override fun run() { synchronized(guard) { expireWindow() }; main.postDelayed(this, 1000) }
   }
@@ -79,29 +80,17 @@ class LukappCustodyModule : Module() {
     } }
     Function("state") { synchronized(guard) { expireWindow(); snapshot() } }
     Function("lock") { synchronized(guard) { block() } }
-    Function("recoveryPending") { synchronized(guard) { file("recovery").exists() } }
-    Function("recoveryIntent") { expectedMode: String -> synchronized(guard) { check(expectedMode == mode) { "custody_mode_changed" }; file("recovery").takeIf { it.exists() }?.readText() } }
-    AsyncFunction("setRecoveryIntent") { id: String, expectedMode: String -> synchronized(guard) {
+    Function("hasRetainedCustody") { expectedMode: String -> synchronized(guard) {
       check(expectedMode == mode) { "custody_mode_changed" }
-      require(id.isNotEmpty() && id.toByteArray().size <= 200) { "recovery_intent_invalid" }
-      write(file("recovery"), id.toByteArray())
+      listOf(signingAlias, sentinelAlias, inputAlias).any { keys.containsAlias(it) } || requireNotNull(root.listFiles()).any { !LifecycleRecords.preserved(it.name) }
     } }
-    AsyncFunction("setRecoveryPending") { pending: Boolean, expectedMode: String -> synchronized(guard) {
-      check(expectedMode == mode) { "custody_mode_changed" }
-      if (pending) write(file("recovery"), "retrieve".toByteArray())
-      else if (file("recovery").exists()) check(file("recovery").delete()) { "recovery_marker_deletion_failed" }
+    Function("readRecovery") { expectedMode: String -> synchronized(guard) { check(expectedMode == mode) { "custody_mode_changed" }; lifecycle().readRecovery().toString() } }
+    AsyncFunction("writeRecovery") { raw: String, revision: Double, expectedMode: String, expected: Int -> synchronized(guard) {
+      check(expectedMode == mode && expected == generation) { "lifecycle_owner_stale" }; check(revision.isFinite() && revision == revision.toLong().toDouble() && revision >= 0) { "lifecycle_metadata_invalid" }; lifecycle().writeRecovery(raw, revision.toLong())
     } }
-    Function("recoveryWork") { expectedMode: String -> synchronized(guard) {
-      check(expectedMode == mode) { "custody_mode_changed" }
-      file("recovery-work").takeIf { it.exists() }?.readText()
-    } }
-    AsyncFunction("setRecoveryWork") { id: String?, expectedMode: String, expected: Int -> synchronized(guard) {
-      check(expectedMode == mode) { "custody_mode_changed" }
-      requireContact(expected)
-      if (id != null) {
-        require(id.isNotEmpty() && id.toByteArray().size <= 200) { "recovery_work_invalid" }
-        write(file("recovery-work"), id.toByteArray())
-      } else if (file("recovery-work").exists()) check(file("recovery-work").delete()) { "recovery_marker_deletion_failed" }
+    Function("readRevocations") { expectedMode: String -> synchronized(guard) { check(expectedMode == mode) { "custody_mode_changed" }; lifecycle().readRevocations().map { it.toString() } } }
+    AsyncFunction("writeRevocation") { raw: String, revision: Double, expectedMode: String, expected: Int -> synchronized(guard) {
+      check(expectedMode == mode && expected == generation) { "lifecycle_owner_stale" }; check(revision.isFinite() && revision == revision.toLong().toDouble() && revision >= -1) { "lifecycle_metadata_invalid" }; lifecycle().writeRevocation(raw, revision.toLong())
     } }
     Function("closeInput") { synchronized(guard) { admitting = false; workspace = null; generation++; emit() } }
     Function("touch") { synchronized(guard) { expireWindow(); if (unlocked && admitting && foreground) idleAt = SystemClock.elapsedRealtime() } }
@@ -194,7 +183,7 @@ class LukappCustodyModule : Module() {
       block(); check(file("wipe").exists()) { "wipe_marker_required" }
       for (alias in listOf(signingAlias, sentinelAlias, inputAlias)) keys.deleteEntry(alias)
       for (item in requireNotNull(root.listFiles())) {
-        if (item.name !in listOf("wipe", "recovery", "recovery-work")) check(item.deleteRecursively()) { "input_deletion_failed" }
+        if (!LifecycleRecords.preserved(item.name) || item.name in listOf("installed", "erased")) check(item.deleteRecursively()) { "input_deletion_failed" }
       }
       write(file("erased"), byteArrayOf(1))
     } }

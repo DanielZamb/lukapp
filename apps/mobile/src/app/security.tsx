@@ -9,7 +9,7 @@ export default function Security() {
   const { controller } = useRuntime();
   const cleanup = useSyncExternalStore(controller.subscribe, controller.getProviderCleanup);
   const [devices, setDevices] = useState<FunctionReturnType<typeof api.devices.list> | null>(null);
-  const [message, setMessage] = useState("");
+  const revocations = useSyncExternalStore(controller.subscribe, controller.getRevocations);
   useEffect(() => {
     if (!controller.securityFresh()) { void controller.admit(true); return; }
     let stopped = false;
@@ -24,9 +24,14 @@ export default function Security() {
     </>}
     {devices?.map(device => <SecondaryButton key={device.id} label={device.name + (device.state.kind === "revoked" ? " · Revoked" : " · Revoke")}
       disabled={device.state.kind === "revoked"} onPress={() => {
-        void controller.revokeDevice(device.id).then(result => setMessage(result.providerRevocation.kind === "succeeded" ? "Revoked. Sign in again to enroll a replacement." : "Access is revoked. Provider sign-out is still pending.")).catch(() => {});
+        void controller.revokeDevice(device.id).catch(() => {});
       }} />)}
-    {message && <Copy title="Device access" detail={message} />}
+    {revocations.map(({ record, refreshed }) => <Copy key={record.deviceId} title="Device sign-out"
+      detail={record.outcome.kind === "response-unknown" ? "The request result is unknown. Retry explicitly to check the same device." :
+        (refreshed ? "Online result: " : "Last observed result: ") + (record.outcome.result.kind === "pending" ? "device access revoked; provider sign-out pending." : "provider sign-out completed.")} />)}
+    {revocations.filter(item => item.record.outcome.kind === "response-unknown").map(({ record }) =>
+      <SecondaryButton key={record.deviceId} label="Retry unresolved device sign-out" onPress={() => { void controller.revokeDevice(record.deviceId).catch(() => {}); }} />)}
+    {revocations.length > 0 && <SecondaryButton label="Refresh device sign-out results" onPress={() => { void controller.refreshProviderCleanup().catch(() => {}); }} />}
     <Copy title="Recover device access" detail="Recovery ends old device sessions. You'll sign out and make a new full Google sign-in after the server starts recovery." />
     <PrimaryButton label="Begin recovery and sign out" onPress={() => { void controller.beginRecovery().catch(() => {}); }} />
   </Screen>;
