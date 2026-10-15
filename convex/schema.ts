@@ -1,4 +1,5 @@
 import { providerActor, providerState, providerTarget } from "./providerValidators";
+import { firstRunResult } from "./onboardingValidators";
 import { categoryFields, userCategory, categorySnapshot, categoryCorrection } from "./categoryAnnotationValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
@@ -18,6 +19,8 @@ import { budgetTables } from "./budgetValidators";
 import { planFields, eventFields } from "./recoveryValidators";
 
 export default defineSchema({
+  firstRunCompletions: defineTable({ tokenIdentifier: v.string(), request: v.string(), result: firstRunResult })
+    .index("by_identity", ["tokenIdentifier"]),
   ...budgetTables,
   recoveryPlans: defineTable(planFields).index("by_workspace", ["workspaceId"]),
   recoveryEvents: defineTable(eventFields).index("by_workspace", ["workspaceId"]),

@@ -1,3 +1,4 @@
+import { useInteraction } from "./Interaction";
 import { inspectTarget } from "../dev/target-inspection";
 import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
@@ -5,11 +6,12 @@ import { font, fontSize, spacing, touchTarget } from "../theme/tokens";
 
 type HeaderProps = {
   title: string;
-  back?: { label: string; onPress: () => void };
+  back?: { label: string; onPress: () => void; disabled?: boolean };
   action?: { label: string; icon: string; onPress: () => void };
 };
 export function Header({ title, back, action }: HeaderProps) {
   const theme = useTheme();
+  const interact = useInteraction();
   return (
     <View
       style={{
@@ -24,7 +26,9 @@ export function Header({ title, back, action }: HeaderProps) {
           onLayout={inspectTarget("Header", back.label)}
           accessibilityRole="button"
           accessibilityLabel={back.label}
-          onPress={back.onPress}
+          accessibilityState={{ disabled: back.disabled ?? false }}
+          disabled={back.disabled}
+          onPress={() => { interact(); back.onPress(); }}
           hitSlop={spacing.xs}
           style={{
             width: touchTarget,
@@ -54,7 +58,7 @@ export function Header({ title, back, action }: HeaderProps) {
           onLayout={inspectTarget("Header", action.label)}
           accessibilityRole="button"
           accessibilityLabel={action.label}
-          onPress={action.onPress}
+          onPress={() => { interact(); action.onPress(); }}
           hitSlop={spacing.xs}
           style={{
             minWidth: touchTarget,

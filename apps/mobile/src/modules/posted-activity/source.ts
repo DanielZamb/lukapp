@@ -4,16 +4,17 @@ export type PostedActivityRow = Readonly<{
   supporting: string;
   signedAmount: string;
 }>;
+export type PhoneSummary = import("../../../../../src/access/client").FinancialResult<"phoneSummary">;
 export type PostedSnapshot =
   | {
       kind: "unavailable";
       reason: "no-workspace" | "offline" | "signed-out" | "inactive";
     }
   | { kind: "loading"; workspaceId: string }
-  | { kind: "ready"; workspaceId: string; rows: readonly PostedActivityRow[] }
+  | { kind: "ready"; workspaceId: string; rows: readonly PostedActivityRow[]; phone?: PhoneSummary }
   | { kind: "failed"; workspaceId: string; message: string };
 export type PostedUpdate =
-  | { kind: "ready"; rows: readonly PostedActivityRow[] }
+  | { kind: "ready"; rows: readonly PostedActivityRow[]; phone?: PhoneSummary }
   | { kind: "offline" }
   | { kind: "failed"; message: string };
 export type PostedTransport = {
@@ -69,7 +70,7 @@ export function createPostedActivitySource(transport: PostedTransport) {
           snapshot = { ...scope };
         } else if (update.kind === "failed")
           snapshot = { kind: "failed", workspaceId, message: update.message };
-        else snapshot = { kind: "ready", workspaceId, rows: update.rows };
+        else snapshot = { kind: "ready", workspaceId, rows: update.rows, ...(update.phone ? { phone: update.phone } : {}) };
         notify();
       });
       if (current === generation) stop = unsubscribe;

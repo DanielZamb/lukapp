@@ -1,3 +1,4 @@
+import { useInteraction } from "./Interaction";
 import { inspectTarget } from "../dev/target-inspection";
 import { ActivityIndicator, Pressable, Text } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
@@ -17,6 +18,7 @@ function Button({
   primary,
 }: ButtonProps & { primary: boolean }) {
   const theme = useTheme();
+  const interact = useInteraction();
   const unavailable = disabled || loading;
   const foreground = primary
     ? theme.primaryForeground
@@ -31,7 +33,7 @@ function Button({
       accessibilityLabel={label}
       accessibilityState={{ disabled: unavailable, busy: loading }}
       disabled={unavailable}
-      onPress={onPress}
+      onPress={() => { interact(); onPress?.(); }}
       style={({ pressed }) => ({
         minHeight: touchTarget,
         minWidth: touchTarget,

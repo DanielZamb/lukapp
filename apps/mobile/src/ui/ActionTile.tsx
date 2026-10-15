@@ -1,3 +1,4 @@
+import { useInteraction } from "./Interaction";
 import { inspectTarget } from "../dev/target-inspection";
 import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
@@ -15,12 +16,13 @@ export function ActionTile({
   onPress: () => void;
 }) {
   const theme = useTheme();
+  const interact = useInteraction();
   return (
     <Pressable
       onLayout={inspectTarget("ActionTile", title)}
       accessibilityRole="button"
       accessibilityLabel={[title, supporting, value].filter(Boolean).join(", ")}
-      onPress={onPress}
+      onPress={() => { interact(); onPress?.(); }}
       style={({ pressed }) => ({
         minHeight: touchTarget,
         minWidth: touchTarget,

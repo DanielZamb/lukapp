@@ -1,3 +1,4 @@
+import { useInteraction } from "./Interaction";
 import { inspectTarget } from "../dev/target-inspection";
 import { Pressable, Text } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
@@ -15,6 +16,7 @@ export function Choice({
   disabled?: boolean;
 }) {
   const theme = useTheme();
+  const interact = useInteraction();
   return (
     <Pressable
       onLayout={inspectTarget("Choice", label)}
@@ -22,7 +24,7 @@ export function Choice({
       accessibilityLabel={label}
       accessibilityState={{ selected, disabled }}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => { interact(); onPress?.(); }}
       style={({ pressed }) => ({
         minHeight: touchTarget,
         minWidth: touchTarget,

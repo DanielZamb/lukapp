@@ -22,3 +22,10 @@ export const functionalCurrencyCodes: ReadonlySet<string> = new Set([
   "UZS", "VED", "VES", "VND", "VUV", "WST", "XAF", "XCD", "XCG", "XOF",
   "XPF", "YER", "ZAR", "ZMW", "ZWG",
 ]);
+
+const zeroMinorUnits = new Set(["BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF"]);
+const threeMinorUnits = new Set(["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"]);
+export function functionalCurrencyDigits(currency: string): 0 | 2 | 3 {
+  if (!functionalCurrencyCodes.has(currency)) throw new Error("Functional Currency required");
+  return zeroMinorUnits.has(currency) ? 0 : threeMinorUnits.has(currency) ? 3 : 2;
+}
