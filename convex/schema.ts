@@ -38,6 +38,7 @@ export default defineSchema({
     requestedAt: v.number(),
     attempts: v.number(),
     completedAt: v.optional(v.number()),
+    reason: v.optional(v.literal("superseded")),
   }).index("by_session", ["clerkSessionId"]),
   personalDefaults: defineTable({
     ownerSubject: v.string(),

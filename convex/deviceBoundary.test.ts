@@ -28,6 +28,7 @@ const expenseArgs = {
 const expense = makeFunctionReference<"action">("securityFixture:expense");
 const expenseInternal = makeFunctionReference<"mutation">("securityFixture:expenseInternal");
 const read = makeFunctionReference<"query">("securityFixture:read");
+const raceRegister = makeFunctionReference<"action">("securityFixture:raceRegister");
 const modules = {
   ...import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]),
   // These representative adapters exist only in this test's module loader, never in the deployed API.
@@ -42,6 +43,16 @@ const modules = {
       const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "accounting:post" });
       return createAccountingCore(convexStore(ctx.db)).recordCashExpense({ ...args, actor });
     } }),
+    // Replays a terminal proof computed earlier, as a second client racing the first would.
+    raceRegister: action({
+      args: {
+        installId: v.string(), label: v.string(), platform: v.union(v.literal("ios"), v.literal("android")),
+        appVersion: v.string(), terminalSessionId: v.string(),
+      },
+      handler: async (ctx, args) => ctx.runMutation(internal.deviceAccessInternal.register, {
+        ...args, session: await verifyCurrentSession(ctx.auth),
+      }),
+    }),
     read: query({ args: { workspaceId: v.string() }, handler: async (ctx, args) => {
       const actor = await requireWorkspacePermission(ctx, { ...args, permission: "workspace:read" });
       return createAccountingCore(convexReadStore(ctx.db)).balances({ ...args, actor });
@@ -267,5 +278,236 @@ test("security listing requests provider pagination, while a foreign target neve
     clerkUserId: "foreign", clerkSessionId: "sess_foreign", clerkClientId: "client_foreign", ...registration, createdAt: Date.now(), lastSeenAt: Date.now(),
   }));
   await expect(client.action(api.deviceAccess.revoke, { deviceId: foreign })).rejects.toMatchObject({ data: { code: "device_not_found" } });
+  expect(await root.run((ctx) => ctx.db.query("clerkRevocations").collect())).toEqual([]);
+});
+
+const androidRegistration = {
+  installId: "install-android-fixture", label: "U01 Android", platform: "android", appVersion: "1",
+} as const;
+
+test("a matching Clerk client reclaims its install and the old session cannot return", async () => {
+  vi.useFakeTimers();
+  const { root, client, deviceId } = await fixture();
+  const first = await client.action(setup, {});
+  sessions.set("sess_android", session("sess_android"));
+  const android = root.withIdentity({ ...identity, sid: "sess_android" });
+  const androidId = await android.action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_android_next", { ...session("sess_android_next"), client_id: "client_sess_android" });
+  const next = root.withIdentity({ ...identity, sid: "sess_android_next" });
+  expect(await next.query(api.deviceAccess.status, {
+    installId: androidRegistration.installId, platform: "android",
+  })).toEqual({ status: "unregistered", wipeLocalInput: false });
+  expect(await next.action(api.deviceAccess.register, androidRegistration)).toBe(androidId);
+  expect(await next.query(api.deviceAccess.status, {
+    installId: androidRegistration.installId, platform: "android",
+  })).toEqual({ status: "registered", deviceId: androidId, wipeLocalInput: false });
+  expect(await next.query(read, { workspaceId: first.workspace.id })).toMatchObject([
+    { balance: { minorUnits: 1000 } },
+  ]);
+  expect(await android.query(api.deviceAccess.status, {
+    installId: androidRegistration.installId, platform: "android",
+  })).toEqual({ status: "revoked", wipeLocalInput: true });
+  await expect(android.query(read, { workspaceId: first.workspace.id })).rejects.toMatchObject({
+    data: { code: "device_revoked", wipeLocalInput: true },
+  });
+  await expect(android.action(setup, {})).rejects.toMatchObject({ data: { code: "device_revoked" } });
+  await expect(android.action(api.deviceAccess.register, androidRegistration))
+    .rejects.toMatchObject({ data: { code: "device_revoked", wipeLocalInput: true } });
+  expect(await client.query(api.deviceAccess.status, {})).toEqual({
+    status: "registered", deviceId, wipeLocalInput: false,
+  });
+  expect(await root.run((ctx) => ctx.db.get(androidId))).toMatchObject({
+    clerkSessionId: "sess_android_next",
+    clerkClientId: "client_sess_android",
+    installId: androidRegistration.installId,
+    platform: "android",
+  });
+  expect((await root.run((ctx) => ctx.db.get(androidId)))?.revokedAt).toBeUndefined();
+  expect(await root.run((ctx) => ctx.db.query("clerkRevocations").collect())).toMatchObject([
+    { clerkUserId: owner, clerkSessionId: "sess_android", reason: "superseded" },
+  ]);
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});
+
+test("a mismatched Clerk client cannot reclaim a live install", async () => {
+  const { root, client } = await fixture();
+  sessions.set("sess_android", session("sess_android"));
+  const android = root.withIdentity({ ...identity, sid: "sess_android" });
+  const androidId = await android.action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_emulator", session("sess_emulator"));
+  const emulator = root.withIdentity({ ...identity, sid: "sess_emulator" });
+  expect(await emulator.query(api.deviceAccess.status, {
+    installId: androidRegistration.installId, platform: "android",
+  })).toEqual({ status: "unregistered", wipeLocalInput: false });
+  await expect(emulator.action(api.deviceAccess.register, androidRegistration))
+    .rejects.toMatchObject({ data: { code: "device_slot_occupied", occupiedLabel: "U01 Android" } });
+  expect(await android.query(api.deviceAccess.status, {})).toEqual({
+    status: "registered", deviceId: androidId, wipeLocalInput: false,
+  });
+  expect(await root.run((ctx) => ctx.db.get(androidId))).toMatchObject({
+    clerkSessionId: "sess_android",
+    clerkClientId: "client_sess_android",
+  });
+  expect(await client.query(api.deviceAccess.status, {})).toMatchObject({ status: "registered" });
+  expect(await root.run((ctx) => ctx.db.query("clerkRevocations").collect())).toEqual([]);
+});
+
+test("a terminal stored session lets the same install reclaim from a new client", async () => {
+  vi.useFakeTimers();
+  const { root, client } = await fixture();
+  const first = await client.action(setup, {});
+  sessions.set("sess_android", session("sess_android"));
+  const android = root.withIdentity({ ...identity, sid: "sess_android" });
+  const androidId = await android.action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_android", { ...session("sess_android"), status: "ended" });
+  sessions.set("sess_android_next", session("sess_android_next"));
+  const next = root.withIdentity({ ...identity, sid: "sess_android_next" });
+  expect(await next.action(api.deviceAccess.register, androidRegistration)).toBe(androidId);
+  expect(await next.query(read, { workspaceId: first.workspace.id })).toMatchObject([
+    { balance: { minorUnits: 1000 } },
+  ]);
+  expect(await android.query(api.deviceAccess.status, {})).toEqual({
+    status: "revoked", wipeLocalInput: true,
+  });
+  expect(await root.run((ctx) => ctx.db.get(androidId))).toMatchObject({
+    clerkSessionId: "sess_android_next",
+    clerkClientId: "client_sess_android_next",
+  });
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});
+
+test("a foreign install cannot take an occupied platform slot and names the existing device", async () => {
+  const { root, client } = await fixture();
+  sessions.set("sess_android", session("sess_android"));
+  await root.withIdentity({ ...identity, sid: "sess_android" })
+    .action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_other_android", session("sess_other_android"));
+  const other = root.withIdentity({ ...identity, sid: "sess_other_android" });
+  await expect(other.action(api.deviceAccess.register, {
+    ...androidRegistration, installId: "install-foreign-android", label: "Other Android",
+  })).rejects.toMatchObject({ data: { code: "device_slot_occupied", occupiedLabel: "U01 Android" } });
+  expect(await other.query(api.deviceAccess.status, {
+    installId: "install-foreign-android", platform: "android",
+  })).toEqual({ status: "unregistered", wipeLocalInput: false });
+  expect(await client.query(api.deviceAccess.status, {})).toMatchObject({ status: "registered" });
+});
+
+test("a revoked device is not resurrected by the same install on a new session", async () => {
+  vi.useFakeTimers();
+  const { root, client } = await fixture();
+  sessions.set("sess_android", session("sess_android"));
+  const android = root.withIdentity({ ...identity, sid: "sess_android" });
+  const androidId = await android.action(api.deviceAccess.register, androidRegistration);
+  await android.action(api.deviceAccess.revoke, { deviceId: androidId });
+  expect(await android.query(api.deviceAccess.status, {
+    installId: androidRegistration.installId, platform: "android",
+  })).toEqual({ status: "revoked", wipeLocalInput: true });
+  sessions.set("sess_android_next", session("sess_android_next"));
+  const next = root.withIdentity({ ...identity, sid: "sess_android_next" });
+  expect(await next.query(api.deviceAccess.status, {
+    installId: androidRegistration.installId, platform: "android",
+  })).toEqual({ status: "unregistered", wipeLocalInput: false });
+  await expect(android.action(api.deviceAccess.register, androidRegistration))
+    .rejects.toMatchObject({ data: { code: "device_revoked", wipeLocalInput: true } });
+  const replacement = await next.action(api.deviceAccess.register, androidRegistration);
+  expect(replacement).not.toBe(androidId);
+  expect(await root.run((ctx) => ctx.db.get(androidId))).toMatchObject({ revokedAt: expect.any(Number) });
+  expect(await root.run((ctx) => ctx.db.get(replacement))).toMatchObject({
+    clerkSessionId: "sess_android_next",
+    installId: androidRegistration.installId,
+  });
+  expect((await root.run((ctx) => ctx.db.get(replacement)))?.revokedAt).toBeUndefined();
+  expect(await client.query(api.deviceAccess.status, {})).toMatchObject({ status: "registered" });
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});
+
+test("a denied session cannot reclaim an install that still occupies the slot", async () => {
+  const { root, client } = await fixture();
+  sessions.set("sess_android", session("sess_android"));
+  const android = root.withIdentity({ ...identity, sid: "sess_android" });
+  const androidId = await android.action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_denied", session("sess_denied"));
+  await root.run(async (ctx) => {
+    await ctx.db.insert("clerkRevocations", {
+      clerkUserId: owner, clerkSessionId: "sess_denied", requestedAt: Date.now(), attempts: 0, completedAt: Date.now(),
+    });
+  });
+  const denied = root.withIdentity({ ...identity, sid: "sess_denied" });
+  expect(await denied.query(api.deviceAccess.status, {
+    installId: androidRegistration.installId, platform: "android",
+  })).toEqual({ status: "revoked", wipeLocalInput: true });
+  await expect(denied.action(api.deviceAccess.register, androidRegistration))
+    .rejects.toMatchObject({ data: { code: "device_revoked", wipeLocalInput: true } });
+  expect(await android.query(api.deviceAccess.status, {
+    installId: androidRegistration.installId, platform: "android",
+  })).toEqual({ status: "registered", deviceId: androidId, wipeLocalInput: false });
+  expect(await client.query(api.deviceAccess.status, {})).toMatchObject({ status: "registered" });
+  expect((await root.run((ctx) => ctx.db.get(androidId)))?.revokedAt).toBeUndefined();
+});
+
+test("a stale terminal proof cannot move a slot another session already reclaimed", async () => {
+  vi.useFakeTimers();
+  const { root } = await fixture();
+  sessions.set("sess_android", session("sess_android"));
+  const android = root.withIdentity({ ...identity, sid: "sess_android" });
+  const androidId = await android.action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_android", { ...session("sess_android"), status: "ended" });
+  sessions.set("sess_first", session("sess_first"));
+  sessions.set("sess_second", session("sess_second"));
+  const first = root.withIdentity({ ...identity, sid: "sess_first" });
+  const second = root.withIdentity({ ...identity, sid: "sess_second" });
+  expect(await first.action(api.deviceAccess.register, androidRegistration)).toBe(androidId);
+  await expect(second.action(raceRegister, { ...androidRegistration, terminalSessionId: "sess_android" }))
+    .rejects.toMatchObject({ data: { code: "device_slot_occupied", occupiedLabel: "U01 Android" } });
+  expect(await root.run((ctx) => ctx.db.get(androidId))).toMatchObject({
+    clerkSessionId: "sess_first", clerkClientId: "client_sess_first",
+  });
+  expect(await first.query(api.deviceAccess.status, {})).toEqual({
+    status: "registered", deviceId: androidId, wipeLocalInput: false,
+  });
+  const denied = await root.run((ctx) => ctx.db.query("clerkRevocations").collect());
+  expect(denied.map((row) => row.clerkSessionId)).toEqual(["sess_android"]);
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});
+
+test("a Clerk reply for another session or owner gives no terminal proof", async () => {
+  const { root } = await fixture();
+  sessions.set("sess_android", session("sess_android"));
+  const android = root.withIdentity({ ...identity, sid: "sess_android" });
+  const androidId = await android.action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_next", session("sess_next"));
+  const next = root.withIdentity({ ...identity, sid: "sess_next" });
+  for (const reply of [
+    { ...session("sess_android", "someone-else"), status: "ended" },
+    { ...session("sess_unrelated"), status: "ended" },
+  ]) {
+    sessions.set("sess_android", reply);
+    await expect(next.action(api.deviceAccess.register, androidRegistration))
+      .rejects.toMatchObject({ data: { code: "device_slot_occupied", occupiedLabel: "U01 Android" } });
+  }
+  expect(await root.run((ctx) => ctx.db.get(androidId))).toMatchObject({ clerkSessionId: "sess_android" });
+  expect(await root.run((ctx) => ctx.db.query("clerkRevocations").collect())).toEqual([]);
+});
+
+test("a failed lookup of the stored session refuses instead of reclaiming", async () => {
+  const { root } = await fixture();
+  sessions.set("sess_android", session("sess_android"));
+  const android = root.withIdentity({ ...identity, sid: "sess_android" });
+  const androidId = await android.action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_next", session("sess_next"));
+  const next = root.withIdentity({ ...identity, sid: "sess_next" });
+  const answer = transport.getMockImplementation()!;
+  for (const failure of [
+    async () => new Response("", { status: 503 }),
+    async () => new Response("", { status: 429 }),
+    async () => Response.json({ unexpected: true }),
+    async (): Promise<Response> => { throw new DOMException("timed out", "TimeoutError"); },
+  ]) {
+    transport.mockImplementation(async (input, options) =>
+      new URL(String(input)).pathname === "/v1/sessions/sess_android" ? failure() : answer(input, options));
+    await expect(next.action(api.deviceAccess.register, androidRegistration))
+      .rejects.toMatchObject({ data: { code: "device_slot_occupied", occupiedLabel: "U01 Android" } });
+  }
+  expect(await root.run((ctx) => ctx.db.get(androidId))).toMatchObject({ clerkSessionId: "sess_android" });
   expect(await root.run((ctx) => ctx.db.query("clerkRevocations").collect())).toEqual([]);
 });

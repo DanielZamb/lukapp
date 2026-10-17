@@ -7,9 +7,13 @@ import { requireLiveObservation } from "./lib/session";
 import { revokeClerkSession } from "./lib/clerkProvider";
 
 export const register = internalMutation({
-  args: { session: liveSession, installId: v.string(), label: v.string(), platform: mobilePlatform, appVersion: v.string() },
+  args: {
+    session: liveSession, installId: v.string(), label: v.string(), platform: mobilePlatform, appVersion: v.string(),
+    terminalSessionId: v.optional(v.string()),
+  },
   returns: v.id("mobileDevices"),
-  handler: async (ctx, { session, ...metadata }) => registerDevice(ctx, session, metadata),
+  handler: async (ctx, { session, terminalSessionId, ...metadata }) =>
+    registerDevice(ctx, session, metadata, terminalSessionId),
 });
 
 export const ownedDevices = internalQuery({

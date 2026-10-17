@@ -1,7 +1,10 @@
 import { ConvexError } from "convex/values";
 import { z } from "zod";
 
-const securityError = z.object({ code: z.string() });
+const securityError = z.object({
+  code: z.string(),
+  occupiedLabel: z.string().trim().min(1).max(80).optional(),
+});
 export type AdmissionFailure = {
   kind: "retry" | "denied";
   message: string;
@@ -11,12 +14,15 @@ export function admissionFailure(error: unknown): AdmissionFailure {
   const parsed = securityError.safeParse(
     error instanceof ConvexError ? error.data : undefined,
   );
-  switch (parsed.success ? parsed.data.code : undefined) {
+  const code = parsed.success ? parsed.data.code : undefined;
+  const occupiedLabel = parsed.success ? parsed.data.occupiedLabel : undefined;
+  switch (code) {
     case "device_slot_occupied":
       return {
         kind: "retry",
-        message:
-          "A device already occupies this slot. Explicitly revoke that device before trying again. No device was replaced.",
+        message: occupiedLabel
+          ? `“${occupiedLabel}” already occupies this slot. Explicitly revoke that device before trying again. No device was replaced.`
+          : "A device already occupies this slot. Explicitly revoke that device before trying again. No device was replaced.",
       };
     case "device_revoked":
       return { kind: "denied", message: "This device’s access was revoked." };

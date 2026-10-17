@@ -6,7 +6,9 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api } from "../features/api";
 import { DeviceAdmissionGate } from "./DeviceAdmissionGate";
 
-type Status = Pick<FunctionReturnType<typeof api.deviceAccess.status>, "status" | "wipeLocalInput">;
+type Status = Pick<FunctionReturnType<typeof api.deviceAccess.status>, "status" | "wipeLocalInput"> & {
+  existingLabel?: string;
+};
 type QueryState =
   | { status: "pending" }
   | { status: "success"; data: Status }
@@ -18,11 +20,13 @@ const sdk = vi.hoisted(() => ({
   interaction: vi.fn(),
   report: vi.fn((_error: unknown) => false),
   queryNames: new Array<string>(),
+  queryArgs: new Array<unknown>(),
   actionNames: new Array<string>(),
 }));
 vi.mock("convex/react", () => ({
-  useQuery_experimental: ({ query }: { query: typeof api.deviceAccess.status }) => {
+  useQuery_experimental: ({ query, args }: { query: typeof api.deviceAccess.status; args: unknown }) => {
     sdk.queryNames.push(getFunctionName(query));
+    sdk.queryArgs.push(args);
     return sdk.status;
   },
   useAction: (action: typeof api.deviceAccess.register) => {
@@ -77,6 +81,7 @@ beforeEach(() => {
   sdk.signOut.mockResolvedValue(undefined);
   sdk.report.mockReturnValue(false);
   sdk.queryNames.length = 0;
+  sdk.queryArgs.length = 0;
   sdk.actionNames.length = 0;
   mounts = unmounts = 0;
 });
@@ -119,17 +124,39 @@ test("registration sends only allowed metadata and waits for the query acknowled
 });
 
 test("occupied slots deny access without invoking any revocation and allow an explicit retry", async () => {
-  sdk.register.mockRejectedValueOnce(new ConvexError({ code: "device_slot_occupied" }));
+  sdk.register.mockRejectedValueOnce(new ConvexError({
+    code: "device_slot_occupied", occupiedLabel: "U01 Android",
+  }));
   await open({ status: "success", data: { status: "unregistered", wipeLocalInput: false } });
   await nameDevice();
   await act(async () => button("Register device").props.onPress());
   expect(mounts).toBe(0);
+  expect(JSON.stringify(root?.toJSON())).toContain("U01 Android");
   expect(JSON.stringify(root?.toJSON())).toContain("No device was replaced");
+  expect(sdk.report).toHaveBeenCalledExactlyOnceWith(new ConvexError({
+    code: "device_slot_occupied", occupiedLabel: "U01 Android",
+  }));
   expect(root?.root.findByType("input").props.value).toBe("  My phone  ");
   await act(async () => button("Register device").props.onPress());
   expect(sdk.register).toHaveBeenCalledTimes(2);
   expect(sdk.register.mock.calls[1]).toEqual(sdk.register.mock.calls[0]);
   expect(mounts).toBe(0);
+});
+
+test("a known install reclaims without showing the naming form", async () => {
+  await open({
+    status: "success",
+    data: { status: "unregistered", wipeLocalInput: false, existingLabel: "U01 Android" },
+  });
+  expect(sdk.queryArgs[0]).toEqual({ installId: "existing-install-marker", platform: "android" });
+  expect(JSON.stringify(root?.toJSON())).not.toContain("Name this device");
+  expect(JSON.stringify(root?.toJSON())).toContain("Confirming device access");
+  expect(sdk.register).toHaveBeenCalledExactlyOnceWith({
+    installId: "existing-install-marker", label: "U01 Android", platform: "android", appVersion: "0.1.0",
+  });
+  expect(mounts).toBe(0);
+  await update({ status: "registered", wipeLocalInput: false });
+  expect(mounts).toBe(1);
 });
 
 test("provider failures preserve name, hide server messages and support retry", async () => {

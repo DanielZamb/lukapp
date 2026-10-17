@@ -42,6 +42,12 @@ export async function getClerkSession(sid: string): Promise<ClerkSession | null>
   return parse(response, clerkSession);
 }
 
+const terminalStatuses = new Set(["revoked", "ended", "expired", "abandoned", "removed"]);
+export function isTerminalClerkSession(session: ClerkSession | null, now = Date.now()) {
+  if (!session) return true;
+  return terminalStatuses.has(session.status) || session.expire_at <= now || session.abandon_at <= now;
+}
+
 export async function listActiveClerkSessions(userId: string) {
   const sessions: ClerkSession[] = [];
   const pageSchema = z.object({

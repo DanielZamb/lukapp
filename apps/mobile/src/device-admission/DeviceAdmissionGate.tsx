@@ -28,7 +28,14 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
   const report = useDeviceAccessFailure();
   const { signOut } = useClerk();
   const register = useAction(api.deviceAccess.register);
-  const status = useQuery_experimental({ query: api.deviceAccess.status, args: {} });
+  const platform = Platform.OS;
+  const appVersion = Constants.nativeAppVersion ?? Constants.expoConfig?.version;
+  const nativePlatform = platform === "ios" || platform === "android" ? platform : null;
+  const validBuild = !!nativePlatform && !!appVersion && appVersion.length <= 40;
+  const status = useQuery_experimental({
+    query: api.deviceAccess.status,
+    args: nativePlatform ? { installId, platform: nativePlatform } : { installId },
+  });
   useLayoutEffect(() => {
     if (status.status === "error") report(status.error);
     else if (status.status === "success" && status.data.status === "revoked")
@@ -44,20 +51,18 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  const platform = Platform.OS;
-  const appVersion = Constants.nativeAppVersion ?? Constants.expoConfig?.version;
-  const validBuild = (platform === "ios" || platform === "android") &&
-    !!appVersion && appVersion.length <= 40;
   const validName = name.trim().length > 0 && name.trim().length <= 80;
+  const existingLabel = status.status === "success" && status.data.status === "unregistered"
+    ? status.data.existingLabel : undefined;
 
-  async function submit() {
-    if (submitting.current || submitted || !validName || !validBuild ||
+  async function registerNamed(label: string) {
+    if (submitting.current || submitted || !nativePlatform || !appVersion || !validBuild ||
       status.status !== "success" || status.data.status !== "unregistered") return;
     submitting.current = true;
     setBusy(true);
     setFailure(null);
     try {
-      await register({ installId, label: name.trim(), platform, appVersion });
+      await register({ installId, label, platform: nativePlatform, appVersion });
       if (mounted.current) setSubmitted(true);
     } catch (error) {
       if (report(error)) return;
@@ -67,6 +72,10 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
       if (mounted.current) setBusy(false);
     }
   }
+  useEffect(() => {
+    if (!existingLabel) return;
+    void registerNamed(existingLabel);
+  }, [existingLabel]);
   async function leave() {
     if (submitting.current) return;
     submitting.current = true;
@@ -85,19 +94,20 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     : status.status === "success" && status.data.status === "revoked"
       ? { kind: "denied", message: "This device’s access was revoked." } satisfies AdmissionFailure
       : failure?.kind === "denied" ? failure : null;
-  if (denied || !validBuild) return (
+  const closed = denied ?? (existingLabel && failure ? failure : null);
+  if (closed || !validBuild) return (
     <Screen>
       <Header title="Device access unavailable" />
       <Text accessibilityRole="alert" style={ui.error}>
-        {denied?.message ?? "This build does not support native device registration."}
+        {closed?.message ?? "This build does not support native device registration."}
       </Text>
-      {denied?.kind === "retry" && <PrimaryButton label="Try again" onPress={retry} />}
+      {closed?.kind === "retry" && <PrimaryButton label="Try again" onPress={retry} />}
       <SecondaryButton label={busy ? "Signing out…" : "Sign out"} disabled={busy} onPress={() => void leave()} />
     </Screen>
   );
   if (status.status === "success" && status.data.status === "registered")
     return <ProtectedReadBoundary>{children}</ProtectedReadBoundary>;
-  if (status.status === "pending" || submitted) return (
+  if (status.status === "pending" || submitted || !!existingLabel) return (
     <Screen>
       <ActivityIndicator />
       <Text style={ui.body}>Confirming device access…</Text>
@@ -112,7 +122,7 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
       canSubmit={validName}
       error={failure?.message ?? ""}
       onNameChange={(value) => { interaction(); setName(value); }}
-      onSubmit={() => void submit()}
+      onSubmit={() => { if (validName) void registerNamed(name.trim()); }}
       onSignOut={() => void leave()}
     />
   );
