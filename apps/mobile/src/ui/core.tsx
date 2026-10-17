@@ -108,9 +108,11 @@ export function Header({
       )}
       <View style={{ flex: 1 }}>
         {eyebrow && <Text style={ui.label}>{eyebrow}</Text>}
-        <Text accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
-          {title}
-        </Text>
+        {title ? (
+          <Text accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
+            {title}
+          </Text>
+        ) : null}
       </View>
       {onUser && (
         <Pressable
