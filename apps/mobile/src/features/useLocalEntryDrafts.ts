@@ -3,6 +3,7 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { useLocalInputLease } from "../local-auth/localInput";
 import {
+  countDraftsInMonth,
   findLiveDraft,
   keepIn,
   mutateLocalEntryDocument,
@@ -17,31 +18,36 @@ import {
 export function useLocalEntryDrafts(input: {
   subject: string;
   workspaceId: string;
+  month?: { year: number; month: number };
 }): {
   count: number | null;
+  monthCount: number | null;
   items: DraftListItem[];
   error: string;
   port: LocalEntryDraftsPort;
 } {
   const lease = useLocalInputLease();
   const [count, setCount] = useState<number | null>(null);
+  const [monthCount, setMonthCount] = useState<number | null>(null);
   const [items, setItems] = useState<DraftListItem[]>([]);
   const [error, setError] = useState("");
   const refresh = useCallback(async () => {
     try {
       const document = await syncLocalEntryDocument(lease, input.subject);
-      const view = viewDocument(
-        document,
-        input.workspaceId,
-        Date.now(),
-      );
+      const now = Date.now();
+      const view = viewDocument(document, input.workspaceId, now);
       setItems(view.items);
       setCount(view.count);
+      setMonthCount(
+        input.month
+          ? countDraftsInMonth(document, input.workspaceId, input.month, now)
+          : null,
+      );
       setError("");
     } catch {
       setError("Could not load Drafts on this device.");
     }
-  }, [input.subject, input.workspaceId, lease]);
+  }, [input.subject, input.workspaceId, input.month?.year, input.month?.month, lease]);
   useFocusEffect(
     useCallback(() => {
       void refresh();
@@ -72,5 +78,5 @@ export function useLocalEntryDrafts(input: {
     }),
     [input.subject, input.workspaceId, lease, refresh],
   );
-  return { count, items, error, port };
+  return { count, monthCount, items, error, port };
 }

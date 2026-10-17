@@ -35,6 +35,7 @@ import {
   syncLocalEntryDocument,
   viewDocument,
   writeDocument,
+  countDraftsInMonth,
   type LocalEntryDocument,
   type LocalEntryFacts,
   type PostableCommand,
@@ -321,6 +322,64 @@ test("restore without draftId binds the unique live posting and never an open dr
       now,
     ),
   ).toEqual({ kind: "blocked" });
+});
+
+test("Month Close counts only live listed drafts dated in that workspace month", () => {
+  const october = keepIn(empty, { facts }, now, () => "oct-open");
+  const september = keepIn(
+    october.document,
+    { facts: { ...facts, accountingDate: "2026-09-30" } },
+    now,
+    () => "sept-open",
+  );
+  const posting = beginPostIn(
+    september.document,
+    {
+      command: {
+        ...expense,
+        payload: { ...expense.payload, accountingDate: "2026-10-02" },
+      },
+    },
+    now,
+    () => "oct-post",
+  );
+  const setupRow = beginPostIn(
+    posting.document,
+    { command: setup },
+    now,
+    () => "setup-1",
+  );
+  const foreign = keepIn(
+    setupRow.document,
+    { facts: { ...facts, workspaceId: "other" } },
+    now,
+    () => "other-oct",
+  );
+  expect(
+    countDraftsInMonth(foreign.document, "workspace", { year: 2026, month: 10 }, now),
+  ).toBe(2);
+  expect(
+    countDraftsInMonth(foreign.document, "workspace", { year: 2026, month: 9 }, now),
+  ).toBe(1);
+  expect(
+    countDraftsInMonth(
+      {
+        v: 1,
+        drafts: [
+          {
+            id: "expired",
+            createdAt: now - ttl,
+            expiresAt: now,
+            status: "open",
+            facts,
+          },
+        ],
+      },
+      "workspace",
+      { year: 2026, month: 10 },
+      now,
+    ),
+  ).toBe(0);
 });
 
 test("the Home view omits setup and opening retry rows from the draft count", () => {
