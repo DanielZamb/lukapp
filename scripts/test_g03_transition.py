@@ -17,6 +17,52 @@ g03 = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(g03)
 
 
+class RowComparisonTests(unittest.TestCase):
+    def test_exact_numeric_equivalence_in_nested_rows(self):
+        left = [{'nested': [0, {'value': 2 ** 60}], 'fraction': 0.125}, {'value': 7}]
+        right = [{'value': 7.0}, {'fraction': 0.125, 'nested': [0.0, {'value': float(2 ** 60)}]}]
+        self.assertTrue(g03.rows_equal(left, right))
+        self.assertTrue(g03.rows_equal(right, left))
+        self.assertEqual(g03.encode({'value': 7.0}), b'{"value":7.0}\n')
+
+    def test_negative_zero_stays_distinct_from_integer_and_positive_zero(self):
+        self.assertTrue(g03.rows_equal([{'value': -0.0}], [{'value': -0.0}]))
+        for value in [0, 0.0]:
+            self.assertFalse(g03.rows_equal([{'nested': [-0.0]}], [{'nested': [value]}]))
+            self.assertFalse(g03.rows_equal([{'nested': [value]}], [{'nested': [-0.0]}]))
+
+    def test_numeric_drift_is_exact_without_rounding_or_tolerance(self):
+        for left, right in [(1, 1.0000000000000002), (0.125, 0.12500000000000003),
+                            (2 ** 53 + 1, float(2 ** 53 + 1)), (2 ** 60, 2 ** 60 + 1)]:
+            with self.subTest(left=left, right=right):
+                self.assertFalse(g03.rows_equal([{'value': left}], [{'value': right}]))
+                self.assertFalse(g03.rows_equal([{'value': right}], [{'value': left}]))
+
+    def test_other_json_types_and_encoded_strings_stay_distinct(self):
+        for left, right in [(True, 1), (False, 0.0), ('1', 1.0), (None, 0),
+                            ('{"value":1}', '{"value":1.0}'), ([1], {'value': 1})]:
+            with self.subTest(left=left, right=right):
+                self.assertFalse(g03.rows_equal([{'nested': [left]}], [{'nested': [right]}]))
+                self.assertFalse(g03.rows_equal([{'nested': [right]}], [{'nested': [left]}]))
+
+    def test_row_duplicates_array_order_and_object_fields_are_preserved(self):
+        self.assertTrue(g03.rows_equal([{'value': 1}, {'value': 1}],
+                                       [{'value': 1.0}, {'value': 1.0}]))
+        for left, right in [
+            ([{'value': 1}, {'value': 1}, {'value': 2}],
+             [{'value': 1.0}, {'value': 2.0}, {'value': 2.0}]),
+            ([{'value': [1, 2]}], [{'value': [2.0, 1.0]}]),
+            ([{}], [{'value': None}]),
+            ([{'value': 1}], [{'value': 1.0, 'extra': True}]),
+        ]:
+            self.assertFalse(g03.rows_equal(left, right))
+
+    def test_nonfinite_numbers_still_refuse(self):
+        for value in [float('nan'), float('inf'), float('-inf')]:
+            with self.assertRaises(ValueError):
+                g03.rows_equal([{'value': value}], [{'value': value}])
+
+
 class AdministrativeReadTests(unittest.TestCase):
     def read(self, source, timeout=2):
         children = []
@@ -110,6 +156,7 @@ class TransitionTests(unittest.TestCase):
     def test_reproducible_payloads_system_fields_and_private_modes(self):
         second_sha, _ = g03.prepare(g03.RECEIPTS, self.directory / 'second')
         self.assertEqual(self.sha, second_sha)
+        self.assertEqual(self.sha, 'a29f6d01d1c3c7067aa25b76a16ffaaf5f16601fa36ee9fcd009a198b2794f60')
         before, after, schema = g03.load_bundle(self.bundle, self.sha)
         self.assertTrue(before == self.before and after == self.after and schema == self.schema)
         self.assertEqual(stat.S_IMODE(self.bundle.stat().st_mode), 0o700)
@@ -269,6 +316,25 @@ class TransitionTests(unittest.TestCase):
         with patch.object(g03, 'cli', side_effect=self.fake_cli(self.before, [])), \
                 patch.object(g03, 'admin_query', side_effect=scheduled):
             self.assertRefused(self.command)
+
+    def test_imported_numeric_tombstones_resume_but_changed_data_refuses(self):
+        live = copy.deepcopy(self.before)
+        live['clerkRevocations'] = self.live_target()['clerkRevocations']
+        for row in live['clerkRevocations']:
+            for field in ['attempts', 'requestedAt', 'completedAt']:
+                row[field] = float(row[field])
+        with patch.object(g03, 'cli', side_effect=self.fake_cli(live, [])), \
+                patch.object(g03, 'admin_query', side_effect=self.fake_admin):
+            self.assertIn('--table accountingPeriods ', self.command())
+            self.assertIn('both tombstones remain', self.command(True))
+        for field, value in [('attempts', 1.0), ('attempts', False),
+                             ('requestedAt', live['clerkRevocations'][0]['requestedAt'] + 1),
+                             ('completedAt', 'changed')]:
+            changed = copy.deepcopy(live)
+            changed['clerkRevocations'][0][field] = value
+            with patch.object(g03, 'cli', side_effect=self.fake_cli(changed, [])), \
+                    patch.object(g03, 'admin_query', side_effect=self.fake_admin):
+                self.assertRefused(self.command)
 
     def test_running_unknown_or_failed_admin_reads_refuse_before_export(self):
         for response in [{'state': 'running'}, {}, {'state': 'paused', 'unexpected': True},
