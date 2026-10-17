@@ -9,6 +9,12 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  personalDefaults: defineTable({
+    ownerSubject: v.string(),
+    workspaceId: v.id("workspaces"),
+    financialAccountProfileId: v.id("financialAccountProfiles"),
+    startingMinorUnits: v.number(),
+  }).index("by_owner", ["ownerSubject"]),
   workspaces: defineTable({
     kind: v.literal("Personal"),
     functionalCurrency: v.string(),

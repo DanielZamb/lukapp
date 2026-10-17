@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Lukapp U01",
+    "slug": "lukapp-u01",
+    "version": "0.1.0",
+    "scheme": "lukapp-u01",
+    "orientation": "portrait",
+    "ios": {
+      "bundleIdentifier": "com.lukapp.u01.dev",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "com.lukapp.u01.dev",
+      "versionCode": 1
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

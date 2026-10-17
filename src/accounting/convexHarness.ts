@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { convexTest } from "convex-test";
 import { api } from "../../convex/_generated/api";
 import schema from "../../convex/schema";
@@ -12,14 +13,15 @@ export type AccountingTest = ReturnType<typeof convexAccounting>;
 export function convexAccounting(
   modules: Record<string, () => Promise<unknown>>,
 ) {
-  return convexTest(schema, modules);
+  vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", owner.userId);
+  vi.setSystemTime(septNow);
+  return convexTest(schema, modules).withIdentity({ subject: owner.userId });
 }
 
 export async function createOwnedWorkspace(t: AccountingTest, now = septNow) {
+  vi.setSystemTime(now);
   return t.mutation(api.accounting.createPersonalWorkspace, {
-    userId: owner.userId,
     functionalCurrency: "COP",
-    now,
   });
 }
 
@@ -30,7 +32,6 @@ export async function createProfile(
   productKind: FinancialAccountProductKind,
 ) {
   return t.mutation(api.accounting.createFinancialAccountProfile, {
-    userId: owner.userId,
     workspaceId,
     name,
     productKind,
@@ -52,7 +53,6 @@ export function groceries(
   },
 ) {
   return {
-    userId: owner.userId,
     workspaceId,
     financialAccountProfileId: profileId,
     amount: { currency: "COP", minorUnits: extra?.amount ?? 150000 },
@@ -63,7 +63,7 @@ export function groceries(
 }
 
 export function reader(t: AccountingTest, workspaceId: string) {
-  const args = { userId: owner.userId, workspaceId };
+  const args = { workspaceId };
   return {
     entries: () => t.query(api.accounting.listJournalEntries, args),
     balances: () => t.query(api.accounting.balances, args),
@@ -79,7 +79,6 @@ export function lock(
   reason?: string,
 ) {
   return t.mutation(api.accounting.lockAccountingPeriod, {
-    userId: owner.userId,
     workspaceId,
     period,
     ...(reason ? { reason } : {}),
@@ -93,7 +92,6 @@ export function reverse(
   extra?: { accountingDate?: string; description?: string; idempotencyKey?: string },
 ) {
   return t.mutation(api.accounting.reversePostedEntry, {
-    userId: owner.userId,
     workspaceId,
     journalEntryId,
     idempotencyKey: extra?.idempotencyKey ?? `reverse-${journalEntryId}`,

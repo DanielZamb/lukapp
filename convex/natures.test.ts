@@ -112,9 +112,7 @@ test("a Workspace needs an active ISO 4217 Functional Currency", async () => {
   for (const functionalCurrency of ["", "cop", "PESOS", "ZZZ"]) {
     const error = await caught(
       t.mutation(api.accounting.createPersonalWorkspace, {
-        userId: owner.userId,
         functionalCurrency,
-        now: Date.UTC(2026, 8, 24),
       }),
     );
     expect(error).toMatchObject({ data: { code: "functional_currency_invalid" } });
@@ -132,7 +130,7 @@ test("malformed ids read as missing rather than crashing", async () => {
     t.mutation(api.accounting.recordCashExpense, groceries(workspace.id, workspace.id)),
   );
   const noWorkspace = await caught(
-    t.query(api.accounting.balances, { userId: owner.userId, workspaceId: "garbage" }),
+    t.query(api.accounting.balances, { workspaceId: "garbage" }),
   );
 
   expect(profile).toMatchObject({ data: { code: "financial_account_profile_not_found" } });

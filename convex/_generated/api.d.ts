@@ -9,6 +9,10 @@
  */
 
 import type * as accounting from "../accounting.js";
+import type * as authConnection from "../authConnection.js";
+import type * as lib_admission from "../lib/admission.js";
+import type * as lib_functions from "../lib/functions.js";
+import type * as personalDefaults from "../personalDefaults.js";
 import type * as store from "../store.js";
 import type * as validators from "../validators.js";
 
@@ -20,6 +24,10 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   accounting: typeof accounting;
+  authConnection: typeof authConnection;
+  "lib/admission": typeof lib_admission;
+  "lib/functions": typeof lib_functions;
+  personalDefaults: typeof personalDefaults;
   store: typeof store;
   validators: typeof validators;
 }>;

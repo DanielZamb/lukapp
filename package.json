@@ -8,8 +8,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "crap": "vitest run --coverage && node scripts/crap.mjs",
-    "typecheck": "tsc --noEmit",
-    "mutate": "stryker run"
+    "typecheck": "tsc --noEmit && pnpm --filter @lukapp/mobile typecheck",
+    "mutate": "stryker run",
+    "mobile": "pnpm --filter @lukapp/mobile start"
   },
   "devDependencies": {
     "@edge-runtime/vm": "5.0.0",
@@ -23,6 +24,7 @@
     "vitest": "3.2.7"
   },
   "dependencies": {
-    "convex": "1.46.0"
+    "convex": "1.46.0",
+    "convex-helpers": "0.1.128"
   }
 }

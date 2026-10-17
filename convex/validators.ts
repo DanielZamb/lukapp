@@ -26,6 +26,7 @@ export const productKind = v.union(
 );
 
 export const postingPolicy = v.union(
+  v.literal("start-tracking@1"),
   v.literal("cash-expense@1"),
   v.literal("cash-income@1"),
   v.literal("reversal@1"),

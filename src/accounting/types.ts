@@ -62,7 +62,7 @@ export type FinancialAccountProductKind =
   | "loan";
 
 /** Versioned rule that built a Journal Entry, kept as provenance. */
-export type PostingPolicy = "cash-expense@1" | "cash-income@1" | "reversal@1";
+export type PostingPolicy = "cash-expense@1" | "cash-income@1" | "reversal@1" | "start-tracking@1";
 
 export type Workspace = {
   id: string;

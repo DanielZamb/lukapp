@@ -140,7 +140,6 @@ test("Posting requires Workspace Membership", async () => {
 test("Posting treats any changed fact under a used key as a conflict", async () => {
   const { t, workspace, daily, expenses, post, balanced } = await kernel();
   const card = await t.mutation(api.accounting.createFinancialAccountProfile, {
-    userId: owner.userId,
     workspaceId: workspace.id,
     name: "Visa",
     productKind: "creditCard",
@@ -180,7 +179,6 @@ test("Posting refuses links to a profile or entry outside the Workspace", async 
   const other = await createOwnedWorkspace(t);
   const otherDaily = await createDaily(t, other.id);
   const otherEntry = await t.mutation(api.accounting.recordCashExpense, {
-    userId: owner.userId,
     workspaceId: other.id,
     financialAccountProfileId: otherDaily.id,
     amount: { currency: "COP", minorUnits: 10 },

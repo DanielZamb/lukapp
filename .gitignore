@@ -16,3 +16,8 @@ scratch/
 .stryker-tmp/
 reports/mutation/
 coverage/
+.expo/
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/dist/
+apps/mobile/.env*
