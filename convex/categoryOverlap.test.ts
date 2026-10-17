@@ -26,6 +26,39 @@ async function setup() {
   };
 }
 
+test.each([
+  { kind: "expense", write: api.accounting.recordCashExpense },
+  { kind: "income", write: api.accounting.recordCashIncome },
+])("empty scalar and array categories reject a public $kind without changing money or activity", async ({ kind, write }) => {
+  const s = await setup();
+  const seed = await s.t.action(api.accounting.recordCashExpense, {
+    ...s.input,
+    idempotencyKey: "existing-expense",
+  });
+  const before = {
+    ledger: await s.t.query(api.accounting.listJournalEntries, { workspaceId: s.workspaceId }),
+    balances: await s.t.query(api.accounting.balances, { workspaceId: s.workspaceId }),
+    activity: await s.read(),
+  };
+  expect(before.activity).toMatchObject({
+    monthSpendMinorUnits: 150000,
+    accounts: [{ balance: { minorUnits: -150000 } }],
+    rows: [{ id: seed.id, amount: { minorUnits: -150000 } }],
+  });
+  for (const selection of [{ userCategoryId: "" }, { userCategoryIds: [""] }]) {
+    await expect(s.t.action(write, {
+      ...s.input,
+      idempotencyKey: `invalid-category-${kind}`,
+      ...selection,
+    })).rejects.toMatchObject({ data: { kind: "accounting", code: "category_selection_invalid" } });
+    expect({
+      ledger: await s.t.query(api.accounting.listJournalEntries, { workspaceId: s.workspaceId }),
+      balances: await s.t.query(api.accounting.balances, { workspaceId: s.workspaceId }),
+      activity: await s.read(),
+    }).toEqual(before);
+  }
+});
+
 test("three categories count the full amount each while the ledger, cash and spending count once", async () => {
   const s = await setup();
   const ids = await Promise.all([s.custom("Weekend"), s.custom("Family"), s.custom("Essentials")]);

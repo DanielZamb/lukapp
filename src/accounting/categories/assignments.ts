@@ -10,7 +10,10 @@ export type CategoryAssignments = {
 };
 
 export function assignedCategoryIds(input: CategoryAssignments): string[] {
-  return input.userCategoryIds ?? (input.userCategoryId ? [input.userCategoryId] : []);
+  return (
+    input.userCategoryIds ??
+    (input.userCategoryId !== undefined ? [input.userCategoryId] : [])
+  );
 }
 
 export function requireCategoryAssignments(input: CategoryAssignments): string[] {
