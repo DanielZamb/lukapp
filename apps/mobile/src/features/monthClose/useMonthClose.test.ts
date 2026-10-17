@@ -21,10 +21,18 @@ function ready(
     ...overrides,
   });
 }
+type LockInput = Parameters<MonthCloseTransport["lockWhenClear"]>[0];
 function transport() {
+  const lock = vi.fn(async (_input: LockInput) => undefined);
+  const draftsInMonth = vi.fn(async (_period: LockInput["period"]) => 0);
   return {
-    lock: vi.fn<MonthCloseTransport["lock"]>(async () => undefined),
-    draftsInMonth: vi.fn(async () => 0),
+    lock,
+    draftsInMonth,
+    lockWhenClear: vi.fn(async (input: LockInput) => {
+      const found = await draftsInMonth(input.period);
+      if (found === 0) await lock(input);
+      return found;
+    }),
     reportFailure: vi.fn(() => false),
   };
 }
@@ -184,4 +192,23 @@ test("a draft that appears before lock returns the review and device denial stay
   });
   expect(api.reportFailure).toHaveBeenCalledWith(denial);
   expect(page.current().phase).toEqual({ kind: "locking", period: october });
+});
+
+test("a failed lock keeps its retry when the month rolls over before the server confirms", async () => {
+  const api = transport();
+  api.lock.mockRejectedValueOnce(new Error("Lost response"));
+  const page = await open(api, ready());
+  await act(async () => page.current().request());
+  await act(async () => {
+    await page.current().confirm();
+  });
+  expect(page.current().phase.kind).toBe("failed");
+  // After midnight the requested October is no longer the current period: a mismatch, not a lock.
+  await page.change(ready({ periodStatus: "mismatch" }));
+  expect(page.current().phase).toMatchObject({ kind: "failed", period: october });
+  await act(async () => {
+    await page.current().confirm();
+  });
+  expect(api.lock.mock.calls.map(([input]) => input.period)).toEqual([october, october]);
+  expect(page.current().phase).toMatchObject({ kind: "closed", period: october });
 });

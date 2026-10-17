@@ -13,11 +13,10 @@ export type MonthClosePhase =
   | { kind: "closed"; period: ClosePeriod };
 
 export type MonthCloseTransport = {
-  lock: (input: {
-    workspaceId: string;
-    period: ClosePeriod;
-  }) => Promise<void>;
-  draftsInMonth: (period: ClosePeriod) => Promise<number>;
+  // Counts Drafts dated in the period and locks only when there are none, holding the local
+  // input lease across both so no Draft can be written between the count and the lock.
+  // Returns the Draft count it found; 0 means the period was locked.
+  lockWhenClear: (input: { workspaceId: string; period: ClosePeriod }) => Promise<number>;
   reportFailure: (error: unknown) => boolean;
 };
 
@@ -61,10 +60,10 @@ export function useMonthClose(
       return;
     }
     if (
-      (now.kind === "confirm" || now.kind === "failed") &&
       readiness &&
       samePeriod(readiness.period, now.period) &&
-      !readiness.canLock
+      !readiness.canLock &&
+      (now.kind === "confirm" || (now.kind === "failed" && readiness.alreadyLocked))
     )
       change(
         readiness.alreadyLocked
@@ -84,14 +83,9 @@ export function useMonthClose(
     const period = now.period;
     change({ kind: "locking", period });
     try {
-      const drafts = await transport.draftsInMonth(period);
+      const drafts = await transport.lockWhenClear({ workspaceId, period });
       if (!mounted.active) return;
-      if (drafts > 0) {
-        change({ kind: "review" });
-        return;
-      }
-      await transport.lock({ workspaceId, period });
-      if (mounted.active) change({ kind: "closed", period });
+      change(drafts > 0 ? { kind: "review" } : { kind: "closed", period });
     } catch (error) {
       if (!mounted.active || transport.reportFailure(error)) return;
       change({ kind: "failed", period, message: lockFailureMessage(error) });

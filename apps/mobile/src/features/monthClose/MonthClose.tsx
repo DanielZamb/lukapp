@@ -2,6 +2,8 @@ import { useAction } from "convex/react";
 import { useMemo } from "react";
 import { ActivityIndicator, Text } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
+import { useLocalInputLease } from "../../local-auth/localInput";
+import { lockWhenClear } from "./lockWhenClear";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Header, Screen, ui } from "../../ui/core";
 import { api } from "../api";
@@ -42,15 +44,17 @@ export function MonthClose({
   const lock = useAction(api.accounting.lockAccountingPeriod);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
+  const lease = useLocalInputLease();
   const transport = useMemo<MonthCloseTransport>(
     () => ({
-      lock: async (input) => {
-        await lock(input);
+      lockWhenClear: async (input) => {
+        const found = await lockWhenClear(lease, subject, input, lock);
+        if (found > 0) void drafts.countMonth(input.period);
+        return found;
       },
-      draftsInMonth: drafts.countMonth,
       reportFailure,
     }),
-    [lock, drafts.countMonth, reportFailure],
+    [lease, subject, lock, drafts.countMonth, reportFailure],
   );
   const readiness =
     drafts.monthCount === null
