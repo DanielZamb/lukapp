@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import { mobilePlatform } from "./lib/securityValues";
 import { requireSession, verifyCurrentSession } from "./lib/session";
 import { getClerkSession, listActiveClerkSessions } from "./lib/clerkProvider";
-import { requireDeviceManagement } from "./lib/deviceRegistry";
+import { findOwnedInstall, requireDeviceManagement } from "./lib/deviceRegistry";
 
 export const register = action({
   args: { installId: v.string(), label: v.string(), platform: mobilePlatform, appVersion: v.string() },
@@ -18,14 +18,18 @@ export const register = action({
 });
 
 const deviceStatus = v.union(
-  v.object({ status: v.literal("unregistered"), wipeLocalInput: v.literal(false) }),
+  v.object({
+    status: v.literal("unregistered"),
+    wipeLocalInput: v.literal(false),
+    existingLabel: v.optional(v.string()),
+  }),
   v.object({ status: v.literal("revoked"), wipeLocalInput: v.literal(true) }),
   v.object({ status: v.literal("registered"), deviceId: v.id("mobileDevices"), wipeLocalInput: v.literal(false) }),
 );
 export const status = query({
-  args: {},
+  args: { installId: v.optional(v.string()), platform: v.optional(mobilePlatform) },
   returns: deviceStatus,
-  handler: async (ctx): Promise<Infer<typeof deviceStatus>> => {
+  handler: async (ctx, args): Promise<Infer<typeof deviceStatus>> => {
     const actor = await requireSession(ctx.auth);
     const revoked = await ctx.db.query("clerkRevocations")
       .withIndex("by_session", (q) => q.eq("clerkSessionId", actor.clerkSessionId)).unique();
@@ -34,9 +38,16 @@ export const status = query({
     if (revoked || (device?.clerkUserId === actor.userId && device.revokedAt !== undefined))
       return { status: "revoked", wipeLocalInput: true };
     await requireDeviceManagement(ctx);
-    if (!device || device.clerkUserId !== actor.userId)
-      return { status: "unregistered", wipeLocalInput: false };
-    return { status: "registered", deviceId: device._id, wipeLocalInput: false };
+    if (device && device.clerkUserId === actor.userId)
+      return { status: "registered", deviceId: device._id, wipeLocalInput: false };
+    if (args.installId) {
+      const known = await findOwnedInstall(ctx, {
+        userId: actor.userId, installId: args.installId, platform: args.platform,
+      });
+      if (known)
+        return { status: "unregistered", wipeLocalInput: false, existingLabel: known.label };
+    }
+    return { status: "unregistered", wipeLocalInput: false };
   },
 });
 

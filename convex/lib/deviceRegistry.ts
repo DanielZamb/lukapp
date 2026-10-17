@@ -35,6 +35,16 @@ export async function requireDeviceManagement(ctx: Pick<QueryCtx, "db" | "auth">
   return actor;
 }
 
+export async function findOwnedInstall(
+  ctx: Pick<QueryCtx, "db">,
+  args: { userId: string; installId: string; platform?: "ios" | "android" },
+) {
+  const devices = await ctx.db.query("mobileDevices")
+    .withIndex("by_user", (q) => q.eq("clerkUserId", args.userId)).collect();
+  return devices.find((d) => d.revokedAt === undefined && d.installId === args.installId &&
+    (args.platform === undefined || d.platform === args.platform));
+}
+
 export async function registerDevice(ctx: MutationCtx, session: LiveSession, input: Registration) {
   const actor = await requireLiveObservation(ctx.auth, session);
   await requireDeviceManagement(ctx);
@@ -56,9 +66,21 @@ export async function registerDevice(ctx: MutationCtx, session: LiveSession, inp
   }
   const devices = await ctx.db.query("mobileDevices")
     .withIndex("by_user", (q) => q.eq("clerkUserId", actor.userId)).collect();
-  if (devices.some((d) => d.revokedAt === undefined &&
-      (d.platform === metadata.platform || d.clerkClientId === session.clerkClientId || d.installId === metadata.installId)))
-    throw new ConvexError({ code: "device_slot_occupied" });
+  // Move the existing named-device row onto this verified session; install metadata is not new authority.
+  const reclaimable = devices.find((d) => d.revokedAt === undefined &&
+    d.platform === metadata.platform && d.installId === metadata.installId);
+  if (reclaimable) {
+    await ctx.db.patch(reclaimable._id, {
+      clerkSessionId: actor.clerkSessionId, clerkClientId: session.clerkClientId,
+      label: metadata.label, appVersion: metadata.appVersion, lastSeenAt: Date.now(),
+    });
+    return reclaimable._id;
+  }
+  const occupiers = devices.filter((d) => d.revokedAt === undefined &&
+    (d.platform === metadata.platform || d.clerkClientId === session.clerkClientId || d.installId === metadata.installId));
+  const occupier = occupiers.find((d) => d.platform === metadata.platform) ?? occupiers[0];
+  if (occupier)
+    throw new ConvexError({ code: "device_slot_occupied", occupiedLabel: occupier.label });
   return ctx.db.insert("mobileDevices", {
     ...metadata, clerkUserId: actor.userId, clerkSessionId: actor.clerkSessionId,
     clerkClientId: session.clerkClientId, createdAt: Date.now(), lastSeenAt: Date.now(),
