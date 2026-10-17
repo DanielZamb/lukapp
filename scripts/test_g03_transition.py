@@ -17,11 +17,68 @@ g03 = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(g03)
 
 
+class AdministrativeReadTests(unittest.TestCase):
+    def read(self, source, timeout=2):
+        children = []
+        popen = subprocess.Popen
+        def start(*args, **kwargs):
+            child = popen(*args, **kwargs)
+            children.append(child)
+            return child
+        try:
+            with patch.object(g03.subprocess, 'Popen', side_effect=start):
+                return g03.first_subscription_result(
+                    [os.sys.executable, '-u', '-c', source], timeout=timeout)
+        finally:
+            self.assertEqual(len(children), 1)
+            self.assertIsNotNone(children[0].poll())
+            self.assertTrue(children[0].stdout.closed and children[0].stderr.closed)
+
+    def test_first_complete_result_and_no_provider_logs(self):
+        result = self.read('''
+import os, time
+os.write(2, b'private provider error body' * 10000)
+os.write(1, b'{"state":')
+time.sleep(0.02)
+os.write(1, b'"paused"}\\n{"state":"running"}\\n')
+time.sleep(10)
+''')
+        self.assertEqual(result, {'state': 'paused'})
+
+    def test_errors_malformed_results_and_timeouts_refuse(self):
+        for source in [
+            'import sys; print("private provider error", file=sys.stderr); sys.exit(1)',
+            'print("{malformed private response")',
+            'print("[]")',
+            'import time; time.sleep(10)',
+        ]:
+            with self.subTest(source=source), self.assertRaises(g03.Refusal) as raised:
+                self.read(source, timeout=0.25)
+            self.assertNotIn('private', str(raised.exception))
+
+    def test_all_system_reads_use_named_administrative_subscription(self):
+        for kind, name, args in [
+            ('state', '_system/frontend/deploymentState:deploymentState', {}),
+            ('schema', '_system/frontend/getSchemas:default', {}),
+            ('scheduler', '_system/frontend/paginatedScheduledJobs:default',
+             {'paginationOpts': {'numItems': 1, 'cursor': None}}),
+        ]:
+            with patch.object(g03, 'first_subscription_result', return_value={'observed': kind}) as read:
+                self.assertEqual(g03.admin_query(kind), {'observed': kind})
+            self.assertEqual(read.call_args.args[0], [
+                'pnpm', 'exec', 'convex', 'run', name, json.dumps(args),
+                '--watch', '--codegen', 'disable', '--deployment', 'compassionate-opossum-63'])
+
+
 class TransitionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        (g03.ROOT / 'scratch').mkdir(mode=0o700, exist_ok=True)
         cls.before, cls.after, cls.schema = g03.load_sources(g03.RECEIPTS)
-        cls.live_schema = {'active': json.dumps({'tables': list(cls.schema['tables'].values())}), 'pending': None}
+        tables = [{**table, 'stagedDocumentType': None, 'stagedDbIndexes': [],
+                   'stagedSearchIndexes': [], 'stagedVectorIndexes': []}
+                  for table in cls.schema['tables'].values()]
+        cls.live_schema = {'active': json.dumps({'tables': tables, 'schemaValidation': True})}
 
     def setUp(self):
         self.directory = Path(tempfile.mkdtemp(prefix='g03-test-', dir=g03.ROOT / 'scratch'))
@@ -109,6 +166,28 @@ class TransitionTests(unittest.TestCase):
             self.assertRefused(lambda: g03.check_live(self.before, self.after, self.schema, self.before, schema, g03.URL))
         self.assertRefused(lambda: g03.check_live(self.before, self.after, self.schema, self.before, self.live_schema, 'https://other.convex.cloud'))
 
+    def test_live_schema_metadata_matches_receipt_without_hiding_drift(self):
+        self.assertEqual(g03.declared_schema(self.live_schema), self.schema['tables'])
+        original = json.loads(self.live_schema['active'])
+        changes = [
+            lambda s: s.update(schemaValidation=False),
+            lambda s: s.update(unknown=True),
+            lambda s: s['tables'].append(s['tables'][0]),
+            lambda s: s['tables'][0].update(unknown=True),
+            lambda s: s['tables'][0].pop('stagedDocumentType'),
+        ]
+        for key in ['stagedDocumentType', 'stagedDbIndexes', 'stagedSearchIndexes', 'stagedVectorIndexes']:
+            changes.append(lambda s, k=key: s['tables'][0].update({k: {'type': 'any'} if k == 'stagedDocumentType' else [{}]}))
+        for change in changes:
+            active = copy.deepcopy(original)
+            change(active)
+            self.assertRefused(lambda: g03.declared_schema({'active': json.dumps(active)}))
+        for field in ['documentType', 'indexes', 'searchIndexes', 'vectorIndexes']:
+            active = copy.deepcopy(original)
+            active['tables'][0][field] = {'type': 'any'} if field == 'documentType' else [{}]
+            self.assertRefused(lambda: g03.check_live(self.before, self.after, self.schema,
+                                                    self.before, {'active': json.dumps(active)}, g03.URL))
+
     def test_manifest_and_payload_tampering_refused(self):
         self.assertRefused(lambda: g03.load_bundle(self.bundle, '0' * 64))
         with (self.bundle / 'after/workspaces.jsonl').open('ab') as stream:
@@ -134,12 +213,6 @@ class TransitionTests(unittest.TestCase):
             seen.append(args)
             if args[0] == 'function-spec':
                 return g03.encode({'url': g03.URL})
-            if args[0] == 'run':
-                if 'deploymentState:deploymentState' in args[1]:
-                    return g03.encode({'state': 'paused'})
-                if 'paginatedScheduledJobs:default' in args[1]:
-                    return g03.encode({'page': [], 'isDone': True, 'continueCursor': ''})
-                return g03.encode(self.live_schema)
             self.assertEqual(args[0], 'export')
             with zipfile.ZipFile(args[2], 'w') as archive:
                 for table, rows in live.items():
@@ -148,61 +221,92 @@ class TransitionTests(unittest.TestCase):
             return b''
         return call
 
+    def fake_admin(self, kind):
+        return {
+            'state': {'state': 'paused'},
+            'scheduler': {'page': [], 'isDone': True, 'continueCursor': '',
+                          'pageStatus': None, 'splitCursor': None},
+            'schema': self.live_schema,
+        }[kind]
+
     def command(self, rollback=False):
         return g03.next_command(self.bundle, self.sha, g03.DEPLOYMENT, g03.URL, True, rollback)
 
     def test_wrong_environment_or_missing_pause_refuses_before_reads(self):
-        with patch.object(g03, 'cli', side_effect=AssertionError('Provider contacted')):
+        with patch.object(g03, 'cli', side_effect=AssertionError('Provider contacted')), \
+                patch.object(g03, 'admin_query', side_effect=AssertionError('Provider contacted')):
             for name, url, paused in [('prod', g03.URL, True), (g03.DEPLOYMENT, 'https://other.convex.cloud', True), (g03.DEPLOYMENT, g03.URL, False)]:
                 self.assertRefused(lambda: g03.next_command(self.bundle, self.sha, name, url, paused))
 
     def test_forward_resume_and_rollback_emit_only_one_supported_command(self):
         for live, rollback, expected in [(self.before, False, 'clerkRevocations'), (self.live_target(), True, 'workspaces')]:
             seen = []
-            with patch.object(g03, 'cli', side_effect=self.fake_cli(live, seen)):
+            with patch.object(g03, 'cli', side_effect=self.fake_cli(live, seen)), \
+                    patch.object(g03, 'admin_query', side_effect=self.fake_admin):
                 command = self.command(rollback)
             self.assertIn(f'--replace --table {expected} ', command)
             self.assertIn(f'--deployment {g03.DEPLOYMENT}', command)
             self.assertNotIn('--replace-all', command)
-            self.assertTrue(all(call[0] in ['function-spec', 'run', 'export'] for call in seen))
+            self.assertTrue(all(call[0] in ['function-spec', 'export'] for call in seen))
         live = copy.deepcopy(self.before)
         live['clerkRevocations'] = self.live_target()['clerkRevocations']
-        with patch.object(g03, 'cli', side_effect=self.fake_cli(live, [])):
+        with patch.object(g03, 'cli', side_effect=self.fake_cli(live, [])), \
+                patch.object(g03, 'admin_query', side_effect=self.fake_admin):
             self.assertIn('--table accountingPeriods ', self.command())
-        with patch.object(g03, 'cli', side_effect=self.fake_cli(self.live_target(), [])):
+        with patch.object(g03, 'cli', side_effect=self.fake_cli(self.live_target(), [])), \
+                patch.object(g03, 'admin_query', side_effect=self.fake_admin):
             self.assertIn('Prepared target reached', self.command())
-        with patch.object(g03, 'cli', side_effect=self.fake_cli(self.before, [])):
+        with patch.object(g03, 'cli', side_effect=self.fake_cli(self.before, [])), \
+                patch.object(g03, 'admin_query', side_effect=self.fake_admin):
             self.assertIn('no tombstones have been imported', self.command(True))
-        with patch.object(g03, 'cli', side_effect=self.fake_cli(live, [])):
+        with patch.object(g03, 'cli', side_effect=self.fake_cli(live, [])), \
+                patch.object(g03, 'admin_query', side_effect=self.fake_admin):
             self.assertIn('both tombstones remain', self.command(True))
 
     def test_scheduled_work_refuses_command(self):
-        fake = self.fake_cli(self.before, [])
-        def scheduled(*args):
-            return g03.encode({'page': [{}], 'isDone': False}) if any('paginatedScheduledJobs' in str(a) for a in args) else fake(*args)
-        with patch.object(g03, 'cli', side_effect=scheduled):
+        def scheduled(kind):
+            return {'page': [{}], 'isDone': False} if kind == 'scheduler' else self.fake_admin(kind)
+        with patch.object(g03, 'cli', side_effect=self.fake_cli(self.before, [])), \
+                patch.object(g03, 'admin_query', side_effect=scheduled):
             self.assertRefused(self.command)
 
+    def test_running_unknown_or_failed_admin_reads_refuse_before_export(self):
+        for response in [{'state': 'running'}, {}, {'state': 'paused', 'unexpected': True},
+                         g03.Refusal('Administrative read failed')]:
+            seen = []
+            with patch.object(g03, 'cli', side_effect=self.fake_cli(self.before, seen)), \
+                    patch.object(g03, 'admin_query', side_effect=response if isinstance(response, Exception)
+                                 else lambda kind: response):
+                self.assertRefused(self.command)
+            self.assertEqual(seen, [('function-spec',)])
+
     def test_pause_loss_or_background_arrival_during_export_refuses_command(self):
-        for arrival in ['unpause', 'job']:
+        for arrival in ['unpause', 'job', 'schema']:
             fake = self.fake_cli(self.before, [])
             exported = False
             def during_export(*args):
                 nonlocal exported
                 if args[0] == 'export':
                     exported = True
-                if exported and arrival == 'unpause' and 'deploymentState:deploymentState' in str(args):
-                    return g03.encode({'state': 'running'})
-                if exported and arrival == 'job' and 'paginatedScheduledJobs:default' in str(args):
-                    return g03.encode({'page': [{}], 'isDone': False})
                 return fake(*args)
-            with patch.object(g03, 'cli', side_effect=during_export):
+            def administrative(kind):
+                if exported:
+                    if arrival == 'unpause' and kind == 'state':
+                        return {'state': 'running'}
+                    if arrival == 'job' and kind == 'scheduler':
+                        return {'page': [{}], 'isDone': False}
+                    if arrival == 'schema' and kind == 'schema':
+                        return {'active': json.dumps({'tables': []})}
+                return self.fake_admin(kind)
+            with patch.object(g03, 'cli', side_effect=during_export), \
+                    patch.object(g03, 'admin_query', side_effect=administrative):
                 self.assertRefused(self.command)
 
     def test_changed_state_guard_emits_no_command(self):
         live = copy.deepcopy(self.before)
         live['deviceSessionDenials'][0]['at'] += 1
-        with patch.object(g03, 'cli', side_effect=self.fake_cli(live, [])):
+        with patch.object(g03, 'cli', side_effect=self.fake_cli(live, [])), \
+                patch.object(g03, 'admin_query', side_effect=self.fake_admin):
             self.assertRefused(self.command)
         with patch.object(g03, 'cli', return_value=g03.encode({'url': 'https://wrong.convex.cloud'})) as cli:
             self.assertRefused(self.command)
@@ -210,5 +314,4 @@ class TransitionTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    (g03.ROOT / 'scratch').mkdir(exist_ok=True)
     unittest.main()

@@ -1,6 +1,6 @@
 # Prepare and execute the G03 development data transition
 
-This change prepares data for `https://compassionate-opossum-63.convex.cloud` only. G03 has performed no provider reads or writes, imports, deploys, configuration changes, session changes, device operations, or pushes. Preparation reads the coordinator receipts and private files offline. No failed PR5 source is restored.
+This change prepares data for `https://compassionate-opossum-63.convex.cloud` only. G03 has performed read-only administrative probes against that development deployment. It has performed no provider writes, pause changes, imports, deploys, configuration changes, session changes, device operations, or pushes. Preparation reads the coordinator receipts and private files offline. No failed PR5 source is restored.
 
 The parent reports U01, U02, and G02 integrated at `ff059e5`, with no schema changes since the G03 base `3367167`. Integrate this local tooling commit before execution. Finish reviewing the integrated source locally, then perform this data transition **before** deploying its schema. The guard requires the exact currently deployed schema from the root receipt throughout the transition.
 
@@ -46,6 +46,8 @@ The `--writers-paused` flag attests to the dashboard pause, completed pre-pause 
 ## Execute one guarded command at a time
 
 Use normal configured Convex CLI credentials from the integrated worktree. Its installed CLI must match the repository's Convex `1.46.0` dependency. The tool passes the exact deployment name on every CLI call and verifies the resolved URL before inspecting data. It never receives or prints a credential.
+
+The three system reads use `convex run --watch --codegen disable`, capture the first complete JSON object, and stop the subscription process group. Each subscription has a 45-second deadline and discards provider logs. In the installed `1.46.0` implementation, `--watch` selects `subscribeAndLog` and the administrative WebSocket query transport used by MCP `tables` through `runSystemQuery`. Ordinary `convex run` selects an HTTP function call and fails to resolve these system functions. Do not remove `--watch`, substitute an application API, or infer a paused state when a read fails.
 
 After establishing the pause, run:
 
@@ -128,8 +130,18 @@ After the integrated schema is deployed, this rollback refuses. Do not relax tha
 
 ## Local evidence and remaining gates
 
-Fifteen offline tests pass. They exercise the actual immutable private backup, exact surviving document contents, denial coverage, recursive and JSON-encoded references, deterministic payloads, supported empty JSONL files, private permissions, wrong-environment refusal before provider contact, manifest tampering, schema changes, changed live rows, scheduled arrivals, pause loss during export, partial forward progress, and denial-preserving rollback. Simulated administrative reads test the guard logic; they are not provider acceptance.
+Twenty offline tests pass under the discovery command above, starting with no `scratch/` directory. Test setup now creates its private scratch parent before allocating temporary directories. The tests exercise the actual immutable private backup, exact surviving document contents, denial coverage, recursive and JSON-encoded references, deterministic payloads, supported empty JSONL files, private permissions, wrong-environment refusal before provider contact, manifest tampering, schema changes, changed live rows, scheduled arrivals, pause loss and schema changes during export, partial forward progress, and denial-preserving rollback. Local subprocess tests also exercise fragmented subscription output, discarded provider logs, first-result selection, process cleanup, malformed responses, errors, and timeouts. Simulated administrative reads test the guard logic; they are not provider acceptance.
 
-No Convex administrative read, pause, import, or deploy has been executed by G03. The guard's system-query compatibility while paused and administrative import behavior still require the parent's live check. The system query names follow the installed CLI's schema inspection and the [official backend's deployment state](https://github.com/get-convex/convex-backend/blob/main/npm-packages/system-udfs/convex/_system/frontend/deploymentState.ts), [scheduler](https://github.com/get-convex/convex-backend/blob/main/npm-packages/system-udfs/convex/_system/frontend/paginatedScheduledJobs.ts), and [schema inspection](https://github.com/get-convex/convex-backend/blob/main/npm-packages/system-udfs/convex/_system/frontend/getSchemas.ts) code. A different provider response causes refusal. No unpause fallback is built.
+Read-only probes on 2026-10-17 used the installed CLI and normal configured credentials against the named development deployment. `function-spec` resolved the exact URL above. The bounded adapter read these actual response shapes without printing or saving credentials, rows, or identity values:
+
+| Administrative query | Observed response |
+| --- | --- |
+| `_system/frontend/deploymentState:deploymentState` | Object with `state: "running"`. The live paused-state guard refused as required. |
+| `_system/frontend/paginatedScheduledJobs:default` | `page: []`, `isDone: true`, `continueCursor` string, `pageStatus: null`, `splitCursor: null`. Arguments were `paginationOpts: {numItems: 1, cursor: null}`. |
+| `_system/frontend/getSchemas:default` | Object containing `active` as a JSON string. Parsed keys were `schemaValidation` and `tables`, with validation enabled and 30 declared tables. |
+
+The raw schema response includes `stagedDocumentType: null` and three empty lists per table, `stagedDbIndexes`, `stagedSearchIndexes`, and `stagedVectorIndexes`. The installed MCP `tables` tool validates and retains only `tableName`, `documentType`, `indexes`, `searchIndexes`, and `vectorIndexes`, which produced the pinned receipt. The guard now requires the observed raw field set, enabled schema validation, and empty staged metadata before comparing all five retained fields of every table exactly with that unchanged receipt. Those fields match the live deployment. Nonempty staged metadata, unknown fields, duplicate table names, pending transitions, and changed declared schemas cause refusal. The 33-table export comparison remains separate and unchanged.
+
+While-paused system-query compatibility, export access, and administrative import behavior still require coordinator verification. These probes observed a running deployment and do not establish those gates. No pause, unpause, live export, import, or deploy was attempted. Keep the deployment paused during the coordinator's checks. Any administrative failure must stop execution without an import or fallback. The installed source paths supporting the transport choice are `node_modules/convex/src/cli/lib/run.ts` and `node_modules/convex/src/cli/lib/mcp/tools/tables.ts`.
 
 Final integrated schema acceptance, actual authenticated Clerk admission, normal public API requests, webhook retry reconciliation, native UI acceptance, and physical-device checks remain open under root `AGENTS.md`. The historical data establishes compatibility requirements only.
