@@ -17,6 +17,7 @@ import { PlaceSheet } from "../src/features/posting/PlaceSheet";
 import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
 import { usePostingEditor } from "../src/features/posting/usePostingEditor";
 import { usePostingTransport } from "../src/features/posting/usePostingTransport";
+import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import {
   canPostCategories,
   needsPrimary,
@@ -27,10 +28,12 @@ function PostMoney({
   defaults,
   subject,
   initialProfileId,
+  draftId,
 }: {
   defaults: Defaults;
   subject: string;
   initialProfileId?: string;
+  draftId?: string;
 }) {
   const recordInteraction = useLocalEntryInteraction();
   const [categoryVisible, setCategoryVisible] = useState(false);
@@ -49,6 +52,10 @@ function PostMoney({
   const setupSheet = useRef<BottomSheetModal>(null);
   const setupPresented = useRef(false);
   const { workspace, financialAccountProfile: defaultProfile } = defaults;
+  const drafts = useLocalEntryDrafts({
+    subject,
+    workspaceId: workspace.id,
+  });
   const editor = usePostingEditor(
     {
       workspaceId: workspace.id,
@@ -56,6 +63,7 @@ function PostMoney({
       currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
     },
     usePostingTransport(subject),
+    { drafts: drafts.port, draftId },
   );
   const profile = profiles?.find((place) => place.id === editor.profileId);
   const categoryEnabled = editor.entryType === "normal";
@@ -143,6 +151,12 @@ function PostMoney({
         onCategory={() => setCategoryVisible(true)}
         onDate={() => dateSheet.current?.present()}
         onPost={() => void editor.submit()}
+        onKeepDraft={() => {
+          void editor.keepDraft().then((id) => {
+            if (id) router.setParams({ draftId: id });
+          });
+        }}
+        canKeepDraft={editor.canKeepDraft}
         onDone={editor.dismissPosted}
       />
       {categoryEnabled && (
@@ -241,12 +255,16 @@ function PostMoney({
 export default function PostRoute() {
   const defaults = usePersonalDefaults();
   const { userId } = useAuth();
-  const { profileId } = useLocalSearchParams<{ profileId?: string }>();
+  const { profileId, draftId } = useLocalSearchParams<{
+    profileId?: string;
+    draftId?: string;
+  }>();
   return defaults && userId ? (
     <PostMoney
       defaults={defaults}
       subject={userId}
       initialProfileId={profileId}
+      draftId={typeof draftId === "string" ? draftId : undefined}
     />
   ) : defaults === null ? (
     <Redirect href="/" />

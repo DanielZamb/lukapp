@@ -1,6 +1,6 @@
 import { useAction } from "convex/react";
 import * as Crypto from "expo-crypto";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import {
   runLocalInputWrite,
@@ -8,16 +8,19 @@ import {
 } from "../../local-auth/localInput";
 import { api } from "../api";
 import {
-  clearPendingExpense,
-  loadPendingPosting,
-  savePendingPosting,
-} from "../pendingExpense";
+  beginPostIn,
+  parseLocalEntryDocument,
+  readRaw,
+  removeIn,
+  writeDocument,
+} from "../localEntryDrafts";
 import type { PendingPosting } from "./pendingPostingSchema";
 import type { PostingTransport } from "./usePostingEditor";
 
 export function usePostingTransport(subject: string): PostingTransport {
   const lease = useLocalInputLease();
   const reportFailure = useDeviceAccessFailure();
+  const postingId = useRef<string | undefined>(undefined);
   const expense = useAction(api.accounting.recordCashExpense);
   const income = useAction(api.accounting.recordCashIncome);
   const transfer = useAction(api.accounting.recordAccountTransfer);
@@ -25,11 +28,45 @@ export function usePostingTransport(subject: string): PostingTransport {
   const setup = useAction(api.accounting.setupFinancialAccountProfile);
   return useMemo(
     () => ({
-      load: () => loadPendingPosting(subject),
-      save: (entry: PendingPosting) =>
-        runLocalInputWrite(lease, () => savePendingPosting(subject, entry)),
+      load: async () => {
+        const now = Date.now();
+        const parsed = parseLocalEntryDocument(await readRaw(subject), now);
+        if (parsed.dirty)
+          await runLocalInputWrite(lease, () =>
+            writeDocument(subject, parsed.document),
+          );
+        const postings = parsed.document.drafts.filter(
+          (draft) => draft.status === "posting",
+        );
+        if (postings.length !== 1) {
+          postingId.current = undefined;
+          return null;
+        }
+        postingId.current = postings[0].id;
+        return postings[0].command;
+      },
+      save: (entry: PendingPosting, draftId?: string) =>
+        runLocalInputWrite(lease, async () => {
+          const now = Date.now();
+          const parsed = parseLocalEntryDocument(await readRaw(subject), now);
+          const begun = beginPostIn(
+            parsed.document,
+            { draftId: draftId ?? postingId.current, command: entry },
+            now,
+            Crypto.randomUUID,
+          );
+          postingId.current = begun.draft.id;
+          await writeDocument(subject, begun.document);
+        }),
       clear: () =>
-        runLocalInputWrite(lease, () => clearPendingExpense(subject)),
+        runLocalInputWrite(lease, async () => {
+          const id = postingId.current;
+          if (!id) return;
+          const now = Date.now();
+          const parsed = parseLocalEntryDocument(await readRaw(subject), now);
+          await writeDocument(subject, removeIn(parsed.document, id));
+          postingId.current = undefined;
+        }),
       reportFailure,
       newKey: Crypto.randomUUID,
       post: async (entry: PendingPosting) => {

@@ -3,6 +3,12 @@ import { ConvexError } from "convex/values";
 import { formatMoney, localDate, parseMoney } from "../money";
 import type { TransactionCategories } from "../categories/transactionSelection";
 import type { PendingPosting, PlaceKind } from "./pendingPostingSchema";
+import type {
+  LocalEntryDraft,
+  LocalEntryDraftId,
+  LocalEntryDraftsPort,
+  LocalEntryFacts,
+} from "../localEntryDrafts";
 
 import type { EntryType } from "./PostingForm";
 export type PostingReceipt = {
@@ -13,7 +19,7 @@ export type PostingReceipt = {
 };
 export type PostingTransport = {
   load: () => Promise<PendingPosting | null>;
-  save: (entry: PendingPosting) => Promise<void>;
+  save: (entry: PendingPosting, draftId?: LocalEntryDraftId) => Promise<void>;
   post: (entry: PendingPosting) => Promise<PostingReceipt>;
   clear: () => Promise<void>;
   newKey: () => string;
@@ -31,11 +37,18 @@ export type PlaceDraft = {
   date: string;
   target?: Extract<PendingPosting, { kind: "setup" }>["target"];
 };
+export type PostingDraftsSession = {
+  drafts?: LocalEntryDraftsPort | null;
+  draftId?: LocalEntryDraftId;
+};
 
 export function usePostingEditor(
   account: Account,
   transport: PostingTransport,
+  session: PostingDraftsSession = {},
 ) {
+  const drafts = session.drafts ?? null;
+  const requestedId = session.draftId;
   const [amount, setAmount] = useState("-");
   const [description, setDescription] = useState("");
   const [categories, setCategories] = useState<TransactionCategories>({
@@ -48,15 +61,121 @@ export function usePostingEditor(
   const [destinationId, setDestinationId] = useState<string | null>(null);
   const [setup, setSetup] = useState<PlaceDraft | null>(null);
   const [pending, setPending] = useState<PendingPosting | null>(null);
+  const [draftId, setDraftId] = useState<LocalEntryDraftId | undefined>(
+    requestedId,
+  );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [keeping, setKeeping] = useState(false);
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<PostingReceipt | null>(null);
   const submitting = useRef(false);
+  const keepingLock = useRef(false);
+  const appliedDraft = useRef<LocalEntryDraftId | undefined>(undefined);
   const lifetime = useRef({ active: false });
   const editable = !busy && !pending && !loading;
+  const canKeepDraft =
+    drafts !== null &&
+    editable &&
+    !keeping &&
+    !setup &&
+    entryType !== "initial";
   const canEdit = () =>
     lifetime.current.active && !submitting.current && !pending && !loading;
+  function hydrateFromCommand(value: PendingPosting) {
+    const payload = value.payload;
+    setDate(payload.accountingDate);
+    setAmount(
+      formatMoney({
+        ...payload.amount,
+        minorUnits:
+          value.kind === "expense"
+            ? -payload.amount.minorUnits
+            : payload.amount.minorUnits,
+      }).replace(`${payload.amount.currency} `, ""),
+    );
+    setDescription("description" in payload ? payload.description : "");
+    setEntryType(
+      value.kind === "transfer"
+        ? "transfer"
+        : value.kind === "opening"
+          ? "initial"
+          : "normal",
+    );
+    if (value.kind === "setup")
+      setSetup({
+        name: value.payload.name,
+        productKind: value.payload.productKind,
+        amount: formatMoney(value.payload.amount).replace(
+          `${payload.amount.currency} `,
+          "",
+        ),
+        date: payload.accountingDate,
+        target: value.target,
+      });
+    else if (value.kind === "transfer") {
+      setProfileId(value.payload.sourceFinancialAccountProfileId);
+      setDestinationId(value.payload.destinationFinancialAccountProfileId);
+    } else setProfileId(value.payload.financialAccountProfileId);
+    if (value.kind === "expense" || value.kind === "income")
+      setCategories({
+        ids:
+          value.payload.userCategoryIds ??
+          (value.payload.userCategoryId
+            ? [value.payload.userCategoryId]
+            : []),
+        primaryId: value.payload.primaryUserCategoryId ?? null,
+      });
+  }
+  function hydrateFromFacts(facts: LocalEntryFacts) {
+    setAmount(facts.amountText);
+    setDescription(facts.description);
+    setDate(facts.accountingDate);
+    setEntryType(facts.entryType);
+    setProfileId(facts.profileId);
+    setDestinationId(facts.destinationId);
+    setCategories({
+      ids: [...facts.categories.ids],
+      primaryId: facts.categories.primaryId,
+    });
+    setSetup(null);
+  }
+  function assertSameWorkspace(draft: LocalEntryDraft) {
+    const workspaceId =
+      draft.status === "open"
+        ? draft.facts.workspaceId
+        : draft.command.payload.workspaceId;
+    const currency =
+      draft.status === "open"
+        ? draft.facts.currency
+        : draft.command.payload.amount.currency;
+    if (workspaceId !== account.workspaceId || currency !== account.currency)
+      throw new Error("Pending entry belongs to another workspace");
+  }
+  function resume(draft: LocalEntryDraft): "applied" | "blocked-by-pending" {
+    if (pending || loading) return "blocked-by-pending";
+    assertSameWorkspace(draft);
+    if (draft.status === "posting") {
+      hydrateFromCommand(draft.command);
+      setPending(draft.command);
+    } else hydrateFromFacts(draft.facts);
+    setDraftId(draft.id);
+    appliedDraft.current = draft.id;
+    return "applied";
+  }
+  function snapshotFacts(): LocalEntryFacts {
+    return {
+      workspaceId: account.workspaceId,
+      currency: account.currency,
+      entryType: entryType === "transfer" ? "transfer" : "normal",
+      amountText: amount,
+      accountingDate: date,
+      description,
+      profileId,
+      destinationId,
+      categories: { ids: [...categories.ids], primaryId: categories.primaryId },
+    };
+  }
   useLayoutEffect(() => {
     const mounted = { active: true };
     lifetime.current = mounted;
@@ -71,53 +190,7 @@ export function usePostingEditor(
         )
           throw new Error("Pending entry belongs to another workspace");
         setPending(value);
-        if (value) {
-          const payload = value.payload;
-          setDate(payload.accountingDate);
-          setAmount(
-            formatMoney({
-              ...payload.amount,
-              minorUnits:
-                value.kind === "expense"
-                  ? -payload.amount.minorUnits
-                  : payload.amount.minorUnits,
-            }).replace(`${payload.amount.currency} `, ""),
-          );
-          setDescription("description" in payload ? payload.description : "");
-          setEntryType(
-            value.kind === "transfer"
-              ? "transfer"
-              : value.kind === "opening"
-                ? "initial"
-                : "normal",
-          );
-          if (value.kind === "setup")
-            setSetup({
-              name: value.payload.name,
-              productKind: value.payload.productKind,
-              amount: formatMoney(value.payload.amount).replace(
-                `${payload.amount.currency} `,
-                "",
-              ),
-              date: payload.accountingDate,
-              target: value.target,
-            });
-          else if (value.kind === "transfer") {
-            setProfileId(value.payload.sourceFinancialAccountProfileId);
-            setDestinationId(
-              value.payload.destinationFinancialAccountProfileId,
-            );
-          } else setProfileId(value.payload.financialAccountProfileId);
-          if (value.kind === "expense" || value.kind === "income")
-            setCategories({
-              ids:
-                value.payload.userCategoryIds ??
-                (value.payload.userCategoryId
-                  ? [value.payload.userCategoryId]
-                  : []),
-              primaryId: value.payload.primaryUserCategoryId ?? null,
-            });
-        }
+        if (value) hydrateFromCommand(value);
         setLoading(false);
       })
       .catch((error: unknown) => {
@@ -130,6 +203,28 @@ export function usePostingEditor(
       mounted.active = false;
     };
   }, [account.workspaceId, account.currency, transport]);
+  useLayoutEffect(() => {
+    if (loading || !requestedId || !drafts || pending) return;
+    if (appliedDraft.current === requestedId) return;
+    const mounted = lifetime.current;
+    appliedDraft.current = requestedId;
+    void drafts
+      .read(requestedId)
+      .then((draft) => {
+        if (!mounted.active) return;
+        if (!draft) {
+          setError("This draft is no longer on this device.");
+          return;
+        }
+        resume(draft);
+      })
+      .catch((error: unknown) => {
+        if (mounted.active && !transport.reportFailure?.(error))
+          setError(
+            "Could not restore this draft. Reopen this page to try again.",
+          );
+      });
+  }, [loading, requestedId, drafts, pending, transport]);
 
   let minorUnits: number | null = null;
   try {
@@ -212,6 +307,37 @@ export function usePostingEditor(
     !busy &&
     !loading &&
     (!!pending || (setup ? setupValid : amountValid && validTransfer));
+  async function keepDraft() {
+    const mounted = lifetime.current;
+    if (
+      !drafts ||
+      !editable ||
+      setup ||
+      entryType === "initial" ||
+      keepingLock.current ||
+      submitting.current
+    )
+      return;
+    keepingLock.current = true;
+    setKeeping(true);
+    setError("");
+    try {
+      const id = await drafts.keep({
+        draftId,
+        facts: snapshotFacts(),
+      });
+      if (!mounted.active) return;
+      setDraftId(id);
+      appliedDraft.current = id;
+      return id;
+    } catch (error) {
+      if (transport.reportFailure?.(error) || !mounted.active) return;
+      setError("Could not keep this draft on this device.");
+    } finally {
+      keepingLock.current = false;
+      if (mounted.active) setKeeping(false);
+    }
+  }
   async function submit() {
     const mounted = lifetime.current;
     if (!mounted.active || submitting.current || !canSubmit) return;
@@ -221,7 +347,7 @@ export function usePostingEditor(
     setPosted(null);
     try {
       const entry = pending ?? buildEntry();
-      await transport.save(entry);
+      await transport.save(entry, draftId);
       if (!mounted.active) return;
       setPending(entry);
       const receipt = await transport.post(entry);
@@ -229,6 +355,8 @@ export function usePostingEditor(
       await transport.clear();
       if (!mounted.active) return;
       setPending(null);
+      setDraftId(undefined);
+      appliedDraft.current = undefined;
       setAmount(entryType === "initial" ? "0" : "-");
       setDescription("");
       setCategories({ ids: [], primaryId: null });
@@ -337,6 +465,10 @@ export function usePostingEditor(
     posted,
     editable,
     canSubmit,
+    canKeepDraft,
+    draftId,
+    keepDraft,
+    resume,
     submit,
     dismissPosted: () => setPosted(null),
   };

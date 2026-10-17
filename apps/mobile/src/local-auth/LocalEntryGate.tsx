@@ -13,7 +13,7 @@ import { ActivityIndicator, AppState, Text, View } from "react-native";
 import { LocalInstallation } from "./installation";
 import { DeviceAccessFailure, requiresLocalWipe } from "./accessFailure";
 import { LocalInput } from "./localInput";
-import { clearPendingExpense } from "../features/pendingExpense";
+import { clearPendingExpense } from "../features/localEntryDrafts";
 import { LocalEntryInteraction } from "./interaction";
 import { EntryController } from "./entryController";
 import {

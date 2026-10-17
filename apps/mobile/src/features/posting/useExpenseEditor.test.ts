@@ -20,7 +20,7 @@ type ExpenseTransport = {
   newKey: () => string;
   reportFailure?: (error: unknown) => boolean;
 };
-import type { PendingExpense } from "../pendingExpense";
+import type { PendingExpense } from "../pendingExpenseSchema";
 
 const account = {
   workspaceId: "workspace",

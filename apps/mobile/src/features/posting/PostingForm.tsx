@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import {
+  Field,
   Header,
   ListGroup,
   ListRow,
@@ -50,6 +51,8 @@ export type PostingFormProps = {
   onDate: () => void;
   onPost: () => void;
   onDone: () => void;
+  canKeepDraft?: boolean;
+  onKeepDraft?: () => void;
 };
 
 export function PostingForm(props: PostingFormProps) {
@@ -138,19 +141,15 @@ export function PostingForm(props: PostingFormProps) {
           </Pressable>
         ))}
       </View>
-      <View style={styles.description}>
-        <Text style={styles.descriptionLabel}>Description</Text>
-        <TextInput
-          accessibilityLabel="Description"
-          value={props.description}
-          onChangeText={props.onDescriptionChange}
-          editable={props.editable}
-          placeholder="What was it"
-          placeholderTextColor={theme.mutedForeground}
-          maxLength={500}
-          style={styles.descriptionInput}
-        />
-      </View>
+      <Field
+        label="Description"
+        accessibilityLabel="Description"
+        value={props.description}
+        onChangeText={props.onDescriptionChange}
+        editable={props.editable}
+        placeholder="What was it"
+        maxLength={500}
+      />
       <ListGroup>
         <ListRow
           title="Place"
@@ -213,6 +212,13 @@ export function PostingForm(props: PostingFormProps) {
         disabled={!props.canSubmit}
         onPress={props.onPost}
       />
+      {props.onKeepDraft ? (
+        <SecondaryButton
+          label="Keep as Draft"
+          onPress={props.onKeepDraft}
+          disabled={!props.canKeepDraft}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -305,18 +311,6 @@ const styles = StyleSheet.create({
   chipText: {
     fontFamily: font.bold,
     fontSize: (fontSize.label + fontSize.body) / 2,
-    color: theme.foreground,
-  },
-  description: { marginBottom: spacing.xxl },
-  descriptionLabel: {
-    fontFamily: font.semibold,
-    fontSize: fontSize.body,
-    color: theme.mutedForeground,
-  },
-  descriptionInput: {
-    minHeight: touchTarget,
-    fontFamily: font.regular,
-    fontSize: fontSize.body,
     color: theme.foreground,
   },
 });
