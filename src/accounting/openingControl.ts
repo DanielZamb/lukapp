@@ -16,8 +16,10 @@ export async function findActiveOpening(
   workspaceId: string,
   profileId: string,
 ): Promise<StoredOpeningMarker | undefined> {
+  // The newest unreversed marker governs. A zero start has no entry to reverse, so a later
+  // Start Tracking supersedes it instead; see requireOpeningOnProfile.
   const markers = await store.listOpeningMarkersByProfile(workspaceId, profileId);
-  for (const marker of markers) {
+  for (const marker of [...markers].reverse()) {
     if (!marker.journalEntryId) return marker;
     if (!(await store.findReversalOf(marker.journalEntryId))) return marker;
   }
@@ -45,7 +47,7 @@ export async function requireOpeningOnProfile(
       (entry) => isOpening(entry) && !reversed.has(entry.id) && touches(entry),
     );
     if (
-      (activeOpening && activeOpening.idempotencyKey !== draft.idempotencyKey) ||
+      (activeOpening?.journalEntryId && activeOpening.idempotencyKey !== draft.idempotencyKey) ||
       (journalOpening && journalOpening.idempotencyKey !== draft.idempotencyKey)
     )
       throw new AccountingError("opening_already_exists");

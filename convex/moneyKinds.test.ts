@@ -432,7 +432,7 @@ test("atomic account setup converges on one profile/opening, including zero, and
   ).toHaveLength(2);
 });
 
-test("zero Start Tracking still blocks earlier activity, replays, and conflicts on a changed amount or second opening", async () => {
+test("zero Start Tracking blocks earlier activity, replays, conflicts on a changed amount, and can be restarted earlier", async () => {
   const { t, workspaceId, bank, read } = await fixture();
   const args = {
     ...opening(workspaceId, bank.id, 0, "2026-10-01"),
@@ -467,13 +467,31 @@ test("zero Start Tracking still blocks earlier activity, replays, and conflicts 
       amount: { currency: "COP", minorUnits: 2500 },
     }),
   ).rejects.toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  // A zero start has no entry to reverse, so restarting earlier supersedes it.
+  expect(
+    await t.action(api.accounting.recordOpeningPosition, {
+      ...opening(workspaceId, bank.id, 0, "2026-09-01"),
+      idempotencyKey: "earlier-zero",
+    }),
+  ).toBeNull();
+  expect(await read.entries()).toEqual([]);
+  const earlier = await t.action(
+    api.accounting.recordCashExpense,
+    groceries(workspaceId, bank.id, { accountingDate: "2026-09-15", idempotencyKey: "after-restart" }),
+  );
+  expect(earlier.accountingDate).toBe("2026-09-15");
+  await expect(
+    t.action(
+      api.accounting.recordCashExpense,
+      groceries(workspaceId, bank.id, { accountingDate: "2026-08-15", idempotencyKey: "before-restart" }),
+    ),
+  ).rejects.toMatchObject({ data: { code: "activity_before_opening" } });
   await expect(
     t.action(api.accounting.recordOpeningPosition, {
-      ...opening(workspaceId, bank.id, 0, "2026-10-02"),
-      idempotencyKey: "another-zero",
+      ...opening(workspaceId, bank.id, 0, "2026-09-20"),
+      idempotencyKey: "after-activity",
     }),
-  ).rejects.toMatchObject({ data: { code: "opening_already_exists" } });
-  expect(await read.entries()).toEqual([]);
+  ).rejects.toMatchObject({ data: { code: "opening_after_activity" } });
 });
 
 test("account history includes the destination transfer and its reversal, signed for that place", async () => {
