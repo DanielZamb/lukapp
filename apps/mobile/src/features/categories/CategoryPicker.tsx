@@ -18,10 +18,13 @@ export function CategoryPicker({
   ...selection
 }: CategoryPickerProps) {
   const sheet = useRef<BottomSheetModal>(null);
+  const presented = useRef(false);
   const picker = useCategoryPicker({ kind: "posting", ...selection }, onClose);
   useEffect(() => {
     if (visible) sheet.current?.present();
-    else sheet.current?.dismiss();
+    // Dismissing Gorhom's never-presented modal blocks its first portal mount.
+    else if (presented.current) sheet.current?.dismiss();
+    presented.current = visible;
   }, [visible]);
   return <CategorySheet {...picker.sheet} sheetRef={sheet} />;
 }
