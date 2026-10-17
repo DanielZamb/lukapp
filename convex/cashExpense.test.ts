@@ -28,6 +28,7 @@ test("a posted cash expense can be read back with its profile and lines", async 
     groceries(workspace.id, daily.id),
   );
   const activity = await t.query(api.accounting.listJournalEntries, {
+    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -52,9 +53,11 @@ test("repeating an idempotency key posts the cash expense once", async () => {
   const first = await t.mutation(api.accounting.recordCashExpense, input);
   const second = await t.mutation(api.accounting.recordCashExpense, input);
   const activity = await t.query(api.accounting.listJournalEntries, {
+    userId: owner.userId,
     workspaceId: workspace.id,
   });
   const balances = await t.query(api.accounting.balances, {
+    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -124,6 +127,7 @@ test("a posted cash expense is balanced in Functional Currency", async () => {
     groceries(workspace.id, daily.id),
   );
   const trial = await t.query(api.accounting.trialBalance, {
+    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -153,6 +157,7 @@ test("balances move only after a cash expense is posted", async () => {
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const empty = await t.query(api.accounting.balances, {
+    userId: owner.userId,
     workspaceId: workspace.id,
   });
   await t.mutation(
@@ -160,6 +165,7 @@ test("balances move only after a cash expense is posted", async () => {
     groceries(workspace.id, daily.id),
   );
   const after = await t.query(api.accounting.balances, {
+    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -203,6 +209,7 @@ test("a non-finite or fractional amount cannot become Posted", async () => {
     })
     .catch((caught: unknown) => caught);
   const activity = await t.query(api.accounting.listJournalEntries, {
+    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -225,6 +232,7 @@ test("a zero-amount cash expense cannot become Posted", async () => {
     )
     .catch((caught: unknown) => caught);
   const activity = await t.query(api.accounting.listJournalEntries, {
+    userId: owner.userId,
     workspaceId: workspace.id,
   });
 

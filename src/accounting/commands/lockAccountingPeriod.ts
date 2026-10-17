@@ -17,7 +17,7 @@ export async function lockAccountingPeriod(
   clock: AccountingClock,
   input: { actor: Actor; workspaceId: string; period: PeriodKey; reason?: string },
 ): Promise<AccountingPeriod> {
-  await requireWorkspace(store, input.workspaceId, input.actor, "managePeriods");
+  await requireWorkspace(store, input.workspaceId, input.actor);
   const period = requirePeriodKey(input.period);
   const stored = await store.getAccountingPeriod(input.workspaceId, period);
   if (stored?.status === "locked") {

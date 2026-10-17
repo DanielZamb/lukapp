@@ -1,3 +1,4 @@
+/* The Workspace Chart of Accounts: template lookup, locked classification, and sparse activation (ADR-0007, ADR-0082). */
 import { AccountingError, type AccountingErrorCode } from "./errors";
 import { coPucPersonalTemplate } from "./templates/coPucPersonal";
 import { usGaapPersonalTemplate } from "./templates/usGaapPersonal";
@@ -13,19 +14,19 @@ import type {
   StoredWorkspace,
 } from "./types";
 
-/** The template a new Personal or Household Workspace starts from unless it asks for another. */
+/** The template a new Personal Workspace starts from unless it asks for another. */
 export const personalChartTemplate: ChartOfAccountsTemplate = coPucPersonalTemplate;
 
 const templates = new Map<string, ChartOfAccountsTemplate>(
   [coPucPersonalTemplate, usGaapPersonalTemplate].map((template) => [template.version, template]),
 );
 
-type RecordingUse = Extract<CatalogUse, "expense" | "income" | "openingBalance">;
+/** Uses a recording flow may ask for, and the error when a code belongs to another use. */
+type RecordingUse = Extract<CatalogUse, "expense" | "income">;
 
 const wrongUse: Record<RecordingUse, AccountingErrorCode> = {
   expense: "cash_expense_account_invalid",
   income: "cash_income_account_invalid",
-  openingBalance: "opening_balance_account_invalid",
 };
 
 export function chartTemplate(version: string): ChartOfAccountsTemplate {
@@ -117,8 +118,12 @@ export async function requireTemplateAccount(
   use: RecordingUse,
   code?: string,
 ): Promise<LedgerAccount> {
-  const account = resolveTemplateAccount(workspace, use, code);
-  return activate(store, workspace.id, chartTemplate(workspace.chartOfAccountsTemplate), account);
+  const template = chartTemplate(workspace.chartOfAccountsTemplate);
+  const account = catalogAccount(template, code ?? template.defaults[use]);
+  if (account.use !== use) {
+    throw new AccountingError(wrongUse[use]);
+  }
+  return activate(store, workspace.id, template, account);
 }
 
 /** Next auxiliary code under a profile parent: 111005 → 11100501, 11100502, … up to 99. Template accounts never sit under a profile parent. */
@@ -167,11 +172,4 @@ export function catalogView(
 /** Clase, grupo, cuenta, and subcuenta above a code: 51959595 → 5, 51, 5195, 519595. */
 export function ancestorCodes(code: string): string[] {
   return [1, 2, 4, 6].filter((length) => length < code.length).map((length) => code.slice(0, length));
-}
-
-export function resolveTemplateAccount(workspace: StoredWorkspace, use: RecordingUse, code?: string) {
-  const template = chartTemplate(workspace.chartOfAccountsTemplate);
-  const account = catalogAccount(template, code ?? template.defaults[use]);
-  if (account.use !== use) throw new AccountingError(wrongUse[use]);
-  return { ...account, ...classify(template, account) };
 }

@@ -7,13 +7,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "crap": "node scripts/backend-quality.mjs coverage",
-    "quality:backend": "node scripts/backend-quality.mjs",
+    "crap": "vitest run --coverage && node scripts/crap.mjs",
     "typecheck": "tsc --noEmit",
-    "mutate": "node scripts/backend-quality.mjs mutation",
-    "mobile:start": "pnpm --filter @lukapp/mobile start",
-    "mobile:typecheck": "pnpm --filter @lukapp/mobile typecheck",
-    "mobile:test": "pnpm --filter @lukapp/mobile test"
+    "mutate": "stryker run"
   },
   "devDependencies": {
     "@edge-runtime/vm": "5.0.0",
@@ -27,8 +23,6 @@
     "vitest": "3.2.7"
   },
   "dependencies": {
-    "@clerk/backend": "3.23.2",
-    "convex": "1.46.0",
-    "convex-helpers": "0.1.128"
+    "convex": "1.46.0"
   }
 }

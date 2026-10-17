@@ -9,7 +9,6 @@ import type { ChartOfAccountsTemplate } from "../types";
 
 export const coPucPersonalTemplate = {
   version: "co-puc-personal@1",
-  applicableWorkspaceKinds: ["Personal", "Household"],
   natureByClass: {
     "1": "Asset",
     "2": "Liability",
@@ -24,11 +23,6 @@ export const coPucPersonalTemplate = {
     savingsAccount: "112005",
     creditCard: "210510",
     loan: "210510",
-    securedReceivable: "137005",
-    unsecuredReceivable: "137010",
-    termDeposit: "122505",
-    investmentFund: "124505",
-    personalDebt: "219505",
   },
   accounts: [
     // 1 Activo
@@ -132,11 +126,6 @@ export const coPucPersonalTemplate = {
     { code: "540505", name: "Impuesto de renta y complementarios", use: "expense" },
   ],
   summaryNames: {
-    "219505": "Obligaciones con particulares",
-    "124505": "Fideicomisos de inversión moneda nacional",
-    "122505": "Certificados de depósito a término (CDT)",
-    "137010": "Préstamos a particulares con garantía personal",
-    "137005": "Préstamos a particulares con garantía real",
     "1": "Activo",
     "11": "Disponible",
     "1105": "Caja",

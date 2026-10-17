@@ -24,35 +24,13 @@ export function toWorkspace(
   };
 }
 
-export async function toProfile(
-  store: AccountingStore,
-  profile: StoredProfile,
-): Promise<FinancialAccountProfile> {
+export function toProfile(profile: StoredProfile): FinancialAccountProfile {
   return {
     id: profile.id,
     workspaceId: profile.workspaceId,
     name: profile.name,
     productKind: profile.productKind,
-    ...(profile.classificationAnswers ? { classificationAnswers: profile.classificationAnswers } : {}),
     ledgerAccountId: profile.postingAccountId,
-    opening: !profile.opening
-      ? { status: "not_started" }
-      : profile.opening.kind === "zero"
-        ? {
-            status: "zero",
-            accountingDate: profile.opening.accountingDate,
-            amount: profile.opening.amount,
-            idempotencyKey: profile.opening.idempotencyKey,
-          }
-        : {
-            status: (await store.findReversalOf(profile.opening.journalEntryId))
-              ? "reversed"
-              : "posted",
-            accountingDate: profile.opening.accountingDate,
-            amount: profile.opening.amount,
-            idempotencyKey: profile.opening.idempotencyKey,
-            journalEntryId: profile.opening.journalEntryId,
-          },
   };
 }
 
@@ -69,9 +47,6 @@ export async function journalContext(
     workspace,
     accounts: new Map(accounts.map((account) => [account.id, account])),
     profiles: new Map(profiles.map((profile) => [profile.id, profile])),
-    profileByAccount: new Map(
-      profiles.map((profile) => [profile.postingAccountId, profile.id]),
-    ),
   };
 }
 
@@ -83,10 +58,7 @@ export async function toPostedJournalEntry(
   entry: StoredJournalEntry,
   links: { replay: boolean; reversedByEntryId?: string },
 ): Promise<PostedJournalEntry> {
-  const period = await store.getAccountingPeriod(
-    context.workspace.id,
-    entry.period,
-  );
+  const period = await store.getAccountingPeriod(context.workspace.id, entry.period);
   if (!period) {
     throw new AccountingError("accounting_period_not_found");
   }
@@ -96,33 +68,20 @@ export async function toPostedJournalEntry(
   const view: PostedJournalEntry = {
     id: entry.id,
     policy: entry.policy,
-    ...(entry.cashCategoryInput ? { cashCategoryInput: entry.cashCategoryInput } : {}),
-    ...(entry.sourceExpenseEffects ? { sourceExpenseEffects: entry.sourceExpenseEffects } : {}),
     description: entry.description,
     accountingDate: entry.accountingDate,
     accountingPeriod: period,
     amount: {
       currency: context.workspace.functionalCurrency,
-      minorUnits: entry.lines.reduce(
-        (sum, line) => sum + line.debitMinorUnits,
-        0,
-      ),
+      minorUnits: entry.lines.reduce((sum, line) => sum + line.debitMinorUnits, 0),
     },
     postedBy: entry.postedBy,
     postedAt: entry.postedAt,
     replay: links.replay,
     lines: entry.lines.map((line) => {
       const account = requireAccount(context.accounts, line.ledgerAccountId);
-      const financialAccountProfileId = context.profileByAccount.get(
-        line.ledgerAccountId,
-      );
       return {
-        ...(line.category ? { category: line.category } : {}),
-        ...(line.categoryCorrection ? { categoryCorrection: line.categoryCorrection } : {}),
         ledgerAccountId: line.ledgerAccountId,
-        ...(financialAccountProfileId !== undefined
-          ? { financialAccountProfileId }
-          : {}),
         code: account.code,
         name: account.name,
         nature: account.nature,
@@ -134,23 +93,6 @@ export async function toPostedJournalEntry(
   if (profile) {
     view.financialAccountProfileId = profile.id;
     view.financialAccountProfileName = profile.name;
-  }
-  if (entry.policy === "account-transfer@1") {
-    const sourceLine = view.lines.find((line) => line.creditMinorUnits > 0);
-    const destinationLine = view.lines.find((line) => line.debitMinorUnits > 0);
-    if (
-      !sourceLine?.financialAccountProfileId ||
-      !destinationLine?.financialAccountProfileId
-    ) {
-      throw new AccountingError("financial_account_profile_not_found");
-    }
-    view.accountTransfer = {
-      sourceFinancialAccountProfileId: sourceLine.financialAccountProfileId,
-      destinationFinancialAccountProfileId:
-        destinationLine.financialAccountProfileId,
-      sourceNature: sourceLine.nature,
-      destinationNature: destinationLine.nature,
-    };
   }
   if (entry.reversesEntryId) {
     view.reversesEntryId = entry.reversesEntryId;

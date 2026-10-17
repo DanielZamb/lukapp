@@ -1,60 +1,18 @@
 import { AccountingError } from "./errors";
-import type {
-  AccountingStore,
-  Actor,
-  StoredWorkspace,
-  WorkspaceRole,
-} from "./types";
+import type { AccountingStore, Actor, StoredWorkspace } from "./types";
 
-export type WorkspacePermission =
-  | "view"
-  | "prepare"
-  | "post"
-  | "correct"
-  | "manageRecoveryPlans"
-  | "managePeriods"
-  | "administerMembership"
-  | "manageBudgets";
-
-export const workspaceRolePolicyVersion = "workspace-roles@3";
-
-export const workspaceRolePolicy = {
-  Owner: [
-    "view",
-    "prepare",
-    "post",
-    "correct",
-    "managePeriods",
-    "administerMembership",
-    "manageBudgets",
-    "manageRecoveryPlans",
-  ],
-  Accountant: ["view", "prepare", "post", "correct", "managePeriods"],
-  Preparer: ["view", "prepare"],
-  Viewer: ["view"],
-} satisfies Record<WorkspaceRole, readonly WorkspacePermission[]>;
-
-export function hasWorkspacePermission(
-  role: WorkspaceRole,
-  permission: WorkspacePermission,
-): boolean {
-  const permissions: readonly WorkspacePermission[] = workspaceRolePolicy[role];
-  return permissions.includes(permission);
-}
-
+/** Workspace scope: every command and query acts inside one Workspace its actor belongs to. */
 export async function requireWorkspace(
-  store: Pick<AccountingStore, "membershipRole" | "getWorkspace">,
+  store: AccountingStore,
   workspaceId: string,
   actor: Actor,
-  permission: WorkspacePermission = "view",
 ): Promise<StoredWorkspace> {
-  const role = await store.membershipRole(workspaceId, actor.userId);
-  const workspace = role && (await store.getWorkspace(workspaceId));
-  if (!role || !workspace) {
+  if (!(await store.isMember(workspaceId, actor.userId))) {
     throw new AccountingError("workspace_membership_required");
   }
-  if (!hasWorkspacePermission(role, permission)) {
-    throw new AccountingError("workspace_permission_required");
+  const workspace = await store.getWorkspace(workspaceId);
+  if (!workspace) {
+    throw new AccountingError("workspace_membership_required");
   }
   return workspace;
 }

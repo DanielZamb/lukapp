@@ -6,7 +6,6 @@ import {
   convexAccounting,
   createDaily,
   createOwnedWorkspace,
-  createAdditionalWorkspaceFixture,
   groceries,
   lock,
   reader,
@@ -167,7 +166,7 @@ test("an explicit reversal date must be postable and not precede the original", 
 
 test("a missing, malformed, or foreign entry cannot be reversed", async () => {
   const { t, workspace, posted } = await postedGroceries();
-  const other = await createAdditionalWorkspaceFixture(t);
+  const other = await createOwnedWorkspace(t);
 
   const malformed = await caught(reverse(t, workspace.id, "not-an-id"));
   const wrongTable = await caught(reverse(t, workspace.id, workspace.id));

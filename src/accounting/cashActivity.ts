@@ -1,5 +1,3 @@
-import { commandIdentity } from "./commandIdentity";
-import { resolveCashCategory } from "./cashCategory";
 import { requireTemplateAccount } from "./chartOfAccounts";
 import { AccountingError } from "./errors";
 import { requireWorkspace } from "./membership";
@@ -32,29 +30,17 @@ export async function recordCashActivity(
     counterpart: "expense" | "income";
   },
 ): Promise<PostedJournalEntry> {
-  const workspace = await requireWorkspace(store, input.workspaceId, input.actor, "post");
+  const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
   const amount = requireFunctionalAmount(workspace, input.amount);
   const profile = await store.getProfile(input.financialAccountProfileId);
   if (!profile || profile.workspaceId !== input.workspaceId) {
     throw new AccountingError("financial_account_profile_not_found");
   }
-  const cashCategoryInput = input.userCategoryId === undefined ? undefined : {
-    userCategoryId: input.userCategoryId,
-    ...(input.categoryRevision !== undefined ? { categoryRevision: input.categoryRevision } : {}),
-    ...(input.ledgerAccountCode !== undefined ? { ledgerAccountCode: input.ledgerAccountCode } : {}),
-  };
-  const existing = await store.findJournalEntryByIdempotencyKey(input.workspaceId, input.idempotencyKey);
-  if (existing && commandIdentity(existing.cashCategoryInput) !== commandIdentity(cashCategoryInput))
-    throw new AccountingError("idempotency_key_conflict");
-  const saved = existing?.lines.find(line => line.category)?.category;
-  if (existing && input.userCategoryId !== undefined && (!saved || saved.categoryId !== input.userCategoryId))
-    throw new AccountingError("idempotency_key_conflict");
-  const category = await resolveCashCategory(store, input, treatment.counterpart, saved);
   const counterpart = await requireTemplateAccount(
     store,
     workspace,
     treatment.counterpart,
-    input.ledgerAccountCode ?? category?.account.accountCode,
+    input.ledgerAccountCode,
   );
   const debitAccountId =
     treatment.direction === "out" ? counterpart.id : profile.postingAccountId;
@@ -68,13 +54,10 @@ export async function recordCashActivity(
       description: input.description,
       idempotencyKey: input.idempotencyKey,
       policy: treatment.policy,
-      ...(cashCategoryInput ? { cashCategoryInput } : {}),
       financialAccountProfileId: profile.id,
       lines: [
-        { ledgerAccountId: debitAccountId, debitMinorUnits: amount, creditMinorUnits: 0,
-          ...(category && treatment.direction === "out" ? { category } : {}) },
-        { ledgerAccountId: creditAccountId, debitMinorUnits: 0, creditMinorUnits: amount,
-          ...(category && treatment.direction === "in" ? { category } : {}) },
+        { ledgerAccountId: debitAccountId, debitMinorUnits: amount, creditMinorUnits: 0 },
+        { ledgerAccountId: creditAccountId, debitMinorUnits: 0, creditMinorUnits: amount },
       ],
     },
   });

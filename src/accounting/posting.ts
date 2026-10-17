@@ -1,5 +1,4 @@
-import { commandIdentity } from "./commandIdentity";
-import { assertOpeningDates } from "./openingDate";
+/* The one entry point that writes to the General Ledger. Commands build drafts; this recognizes them. */
 import { AccountingError } from "./errors";
 import { requireWorkspace } from "./membership";
 import { periodFromAccountingDate } from "./period";
@@ -24,7 +23,7 @@ export async function postJournalEntry(
   input: { actor: Actor; workspaceId: string; draft: JournalEntryDraft },
 ): Promise<PostingResult> {
   const { draft } = input;
-  await requireWorkspace(store, input.workspaceId, input.actor, "post");
+  await requireWorkspace(store, input.workspaceId, input.actor);
   if (!draft.idempotencyKey) {
     throw new AccountingError("idempotency_key_required");
   }
@@ -38,19 +37,10 @@ export async function postJournalEntry(
     }
     return { entry: existing, replay: true };
   }
-  if (
-    await store.findOpeningPositionByKey(
-      input.workspaceId,
-      draft.idempotencyKey,
-    )
-  ) {
-    throw new AccountingError("idempotency_key_conflict");
-  }
   assertBalancedLines(draft.lines);
   await assertPostingAccounts(store, input.workspaceId, draft.lines);
   await assertLinkedRecords(store, input.workspaceId, draft);
   const period = periodFromAccountingDate(draft.accountingDate);
-  await assertOpeningDates(store, input.workspaceId, draft);
   await requirePostablePeriod(store, input.workspaceId, draft.accountingDate);
   const entry = await store.insertJournalEntry({
     ...draft,
@@ -76,7 +66,7 @@ export function assertBalancedLines(lines: DraftJournalLine[]): void {
       !Number.isSafeInteger(c) ||
       d < 0 ||
       c < 0 ||
-      d > 0 === c > 0
+      (d > 0) === (c > 0)
     ) {
       throw new AccountingError("journal_line_invalid");
     }
@@ -88,6 +78,7 @@ export function assertBalancedLines(lines: DraftJournalLine[]): void {
   }
 }
 
+/** Every line hits an existing account in this Workspace. All accounts are Posting Accounts until Summary Accounts exist. */
 async function assertPostingAccounts(
   store: AccountingStore,
   workspaceId: string,
@@ -101,27 +92,12 @@ async function assertPostingAccounts(
   }
 }
 
+/** A draft may only link to a profile or an entry in its own Workspace. */
 async function assertLinkedRecords(
   store: AccountingStore,
   workspaceId: string,
   draft: JournalEntryDraft,
 ): Promise<void> {
-  for (const effect of draft.sourceExpenseEffects ?? []) {
-    const source = await store.getJournalEntry(effect.sourceEntryId);
-    if (!source || source.workspaceId !== workspaceId || (source.policy !== "cash-expense@1" && source.policy !== "cash-income@1"))
-      throw new AccountingError("journal_entry_not_found");
-    if (!Number.isSafeInteger(effect.expenseDeltaMinorUnits)) throw new AccountingError("journal_line_invalid");
-  }
-  for (const line of draft.lines) {
-    if (line.category) {
-      const category = await store.getCategory(line.category.categoryId);
-      if (!category || category.workspaceId !== workspaceId) throw new AccountingError("category_not_found");
-    }
-    for (const ref of line.categoryCorrection?.sources ?? []) {
-      const source = await store.getJournalEntry(ref.entryId);
-      if (!source || source.workspaceId !== workspaceId || !source.lines[ref.lineNumber]) throw new AccountingError("journal_entry_not_found");
-    }
-  }
   if (draft.financialAccountProfileId !== undefined) {
     const profile = await store.getProfile(draft.financialAccountProfileId);
     if (!profile || profile.workspaceId !== workspaceId) {
@@ -136,16 +112,11 @@ async function assertLinkedRecords(
   }
 }
 
-function sameDraft(
-  entry: StoredJournalEntry,
-  draft: JournalEntryDraft,
-): boolean {
+function sameDraft(entry: StoredJournalEntry, draft: JournalEntryDraft): boolean {
   return (
     entry.accountingDate === draft.accountingDate &&
     entry.description === draft.description &&
     entry.policy === draft.policy &&
-    commandIdentity(entry.cashCategoryInput) === commandIdentity(draft.cashCategoryInput) &&
-    commandIdentity(entry.sourceExpenseEffects) === commandIdentity(draft.sourceExpenseEffects) &&
     entry.financialAccountProfileId === draft.financialAccountProfileId &&
     entry.reversesEntryId === draft.reversesEntryId &&
     entry.lines.length === draft.lines.length &&
@@ -153,8 +124,6 @@ function sameDraft(
       const other = draft.lines[index];
       return (
         other !== undefined &&
-        commandIdentity(line.category) === commandIdentity(other.category) &&
-        commandIdentity(line.categoryCorrection) === commandIdentity(other.categoryCorrection) &&
         line.ledgerAccountId === other.ledgerAccountId &&
         line.debitMinorUnits === other.debitMinorUnits &&
         line.creditMinorUnits === other.creditMinorUnits

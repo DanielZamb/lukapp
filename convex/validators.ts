@@ -1,4 +1,3 @@
-import { categorySnapshot, categoryCorrection } from "./categoryAnnotationValidators";
 import { v } from "convex/values";
 
 export const accountNature = v.union(
@@ -24,24 +23,12 @@ export const productKind = v.union(
   v.literal("savingsAccount"),
   v.literal("creditCard"),
   v.literal("loan"),
-  v.literal("receivable"),
-  v.literal("investment"),
-  v.literal("personalDebt"),
-);
-
-export const profileClassificationAnswers = v.union(
-  v.object({ kind: v.literal("receivable"), security: v.union(v.literal("secured"), v.literal("unsecured")), counterpartyName: v.string() }),
-  v.object({ kind: v.literal("investment"), form: v.union(v.literal("termDeposit"), v.literal("fund")), counterpartyName: v.optional(v.string()) }),
-  v.object({ kind: v.literal("personalDebt"), counterpartyName: v.string() }),
 );
 
 export const postingPolicy = v.union(
   v.literal("cash-expense@1"),
   v.literal("cash-income@1"),
   v.literal("reversal@1"),
-  v.literal("account-transfer@1"),
-  v.literal("opening-position@1"),
-  v.literal("category-reclassification@1"),
 );
 
 export const periodStatus = v.union(v.literal("open"), v.literal("locked"));
@@ -68,53 +55,18 @@ export const accountingPeriod = v.object({
 
 export const workspace = v.object({
   id: v.string(),
-  kind: v.union(v.literal("Personal"), v.literal("Household")),
+  kind: v.literal("Personal"),
   functionalCurrency: v.string(),
   chartOfAccountsTemplate: v.string(),
   currentAccountingPeriod: accountingPeriod,
 });
-
-export const storedOpening = v.union(
-  v.object({
-    kind: v.literal("zero"),
-    accountingDate: v.string(),
-    idempotencyKey: v.string(),
-    amount: money,
-  }),
-  v.object({
-    kind: v.literal("posted"),
-    accountingDate: v.string(),
-    idempotencyKey: v.string(),
-    amount: money,
-    journalEntryId: v.string(),
-  }),
-);
-
-export const openingStatus = v.union(
-  v.object({ status: v.literal("not_started") }),
-  v.object({
-    status: v.literal("zero"),
-    accountingDate: v.string(),
-    idempotencyKey: v.string(),
-    amount: money,
-  }),
-  v.object({
-    status: v.union(v.literal("posted"), v.literal("reversed")),
-    accountingDate: v.string(),
-    idempotencyKey: v.string(),
-    amount: money,
-    journalEntryId: v.string(),
-  }),
-);
 
 export const financialAccountProfile = v.object({
   id: v.string(),
   workspaceId: v.string(),
   name: v.string(),
   productKind,
-  classificationAnswers: v.optional(profileClassificationAnswers),
   ledgerAccountId: v.string(),
-  opening: openingStatus,
 });
 
 export const ledgerAccount = v.object({
@@ -139,10 +91,7 @@ export const catalogAccount = v.object({
 });
 
 export const journalLine = v.object({
-  category: v.optional(categorySnapshot),
-  categoryCorrection: v.optional(categoryCorrection),
   ledgerAccountId: v.string(),
-  financialAccountProfileId: v.optional(v.string()),
   code: v.string(),
   name: v.string(),
   nature: accountNature,
@@ -150,27 +99,15 @@ export const journalLine = v.object({
   creditMinorUnits: v.number(),
 });
 
-export const cashCategoryInput = v.object({ userCategoryId: v.string(), categoryRevision: v.optional(v.number()), ledgerAccountCode: v.optional(v.string()) });
-
 export const postedJournalEntry = v.object({
-  cashCategoryInput: v.optional(cashCategoryInput),
   id: v.string(),
   policy: postingPolicy,
-  sourceExpenseEffects: v.optional(v.array(v.object({ sourceEntryId: v.string(), expenseDeltaMinorUnits: v.number() }))),
   description: v.string(),
   accountingDate: v.string(),
   accountingPeriod,
   amount: money,
   financialAccountProfileId: v.optional(v.string()),
   financialAccountProfileName: v.optional(v.string()),
-  accountTransfer: v.optional(
-    v.object({
-      sourceFinancialAccountProfileId: v.string(),
-      destinationFinancialAccountProfileId: v.string(),
-      sourceNature: accountNature,
-      destinationNature: accountNature,
-    }),
-  ),
   reversesEntryId: v.optional(v.string()),
   reversedByEntryId: v.optional(v.string()),
   postedBy: v.string(),
@@ -195,19 +132,4 @@ export const trialBalanceRow = v.object({
   nature: accountNature,
   debitMinorUnits: v.number(),
   creditMinorUnits: v.number(),
-});
-
-export const openingPositionResult = v.object({
-  profile: financialAccountProfile,
-  journalEntry: v.union(postedJournalEntry, v.null()),
-  replay: v.boolean(),
-});
-
-export const postedExpense = v.object({
-  entryId: v.string(), accountingDate: v.string(), description: v.string(), amount: money,
-  currentEligibleAmount: money,
-  sourceEffects: v.array(v.object({ workspaceId: v.string(), sourceEntryId: v.string(), journalEntryId: v.string(),
-    expenseDeltaMinorUnits: v.number(), sourceSequence: v.number(), accountingDate: v.string(), recordedAt: v.number(), reversedByEntryId: v.union(v.string(), v.null()) })),
-  expenseLines: v.array(v.object({ ledgerAccountId: v.string(), amount: money })),
-  reversal: v.union(v.null(), v.object({ entryId: v.string(), accountingDate: v.string(), recordedAt: v.number() })),
 });

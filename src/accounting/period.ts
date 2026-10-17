@@ -1,6 +1,7 @@
 import { AccountingError } from "./errors";
 
 export function dateFromTimestamp(now: number): Date {
+  // Stryker disable next-line ConditionalExpression,BlockStatement -- Invalid Date also rejects non-finite
   if (!Number.isFinite(now)) {
     throw new AccountingError("clock_required");
   }
@@ -35,7 +36,9 @@ export function periodFromAccountingDate(accountingDate: string): {
   const utc = new Date(Date.UTC(year, month - 1, day));
   if (
     utc.getUTCFullYear() !== year ||
+    // Stryker disable next-line ConditionalExpression -- overflow always changes another field too
     utc.getUTCMonth() + 1 !== month ||
+    // Stryker disable next-line ConditionalExpression -- overflow always changes another field too
     utc.getUTCDate() !== day
   ) {
     throw new AccountingError("accounting_date_required");

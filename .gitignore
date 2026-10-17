@@ -8,7 +8,6 @@ docs/
 exports/
 .DS_Store
 node_modules/
-.native-tools/
 .pnpm/
 .pnpm-store/
 .env.local
@@ -17,7 +16,3 @@ scratch/
 .stryker-tmp/
 reports/mutation/
 coverage/
-
-/quality/backend/*
-!/quality/backend/README.md
-!/quality/backend/policy.json
