@@ -20,6 +20,7 @@ import { ActivityIndicator, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "../src/features/api";
+import { LocalEntryGate } from "../src/local-auth/LocalEntryGate";
 import {
   Header,
   PrimaryButton,
@@ -44,7 +45,11 @@ export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
     </SafeAreaProvider>
   );
 }
-function SignIn() {
+function SignIn({
+  onSessionCreated,
+}: {
+  onSessionCreated: (sessionId: string) => void;
+}) {
   const { startSSOFlow } = useSSO();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -59,9 +64,10 @@ function SignIn() {
           path: "oauth-callback",
         }),
       });
-      if (result.createdSessionId && result.setActive)
+      if (result.createdSessionId && result.setActive) {
+        onSessionCreated(result.createdSessionId);
         await result.setActive({ session: result.createdSessionId });
-      else if (
+      } else if (
         result.authSessionResult?.type !== "cancel" &&
         result.authSessionResult?.type !== "dismiss"
       )
@@ -106,7 +112,12 @@ function Admission() {
         <Text style={ui.body}>Connecting…</Text>
       </Screen>
     );
-  if (!isSignedIn) return <SignIn />;
+  if (!isSignedIn)
+    return (
+      <Screen>
+        <ActivityIndicator />
+      </Screen>
+    );
   if (
     !isAuthenticated ||
     connection?.status === "not-owner" ||
@@ -163,11 +174,17 @@ export default function Layout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-          <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-            <BottomSheetModalProvider>
-              <Admission />
-            </BottomSheetModalProvider>
-          </ConvexProviderWithClerk>
+          <LocalEntryGate
+            renderSignIn={(onSessionCreated) => (
+              <SignIn onSessionCreated={onSessionCreated} />
+            )}
+          >
+            <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+              <BottomSheetModalProvider>
+                <Admission />
+              </BottomSheetModalProvider>
+            </ConvexProviderWithClerk>
+          </LocalEntryGate>
         </ClerkProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
