@@ -18,6 +18,7 @@ import { spentMonthEyebrow } from "../src/features/timeZones";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
+import { inboxBadgeCount } from "../src/features/inboxCount";
 import {
   ActionTile,
   ConfirmationScreen,
@@ -44,11 +45,12 @@ function Home({
   const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
-  const intake = useIntakeCandidates({ subject, workspaceId });
-  const inboxCount =
-    drafts.count === null && intake.count === null
-      ? undefined
-      : (drafts.count ?? 0) + (intake.count ?? 0);
+  const intake = useIntakeCandidates({
+    subject,
+    workspaceId,
+    currency: currency === "USD" ? "USD" : "COP",
+  });
+  const inboxCount = inboxBadgeCount(drafts.count, intake.count);
   const actions = useRef<BottomSheetModal>(null);
   const [paceOpen, setPaceOpen] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();

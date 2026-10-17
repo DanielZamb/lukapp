@@ -67,6 +67,7 @@ function PostMoney({
   const intake = useIntakeCandidates({
     subject,
     workspaceId: workspace.id,
+    currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
   });
   const confirmOne = useAction(api.notificationIntake.confirmOne);
   const [binding, setBinding] = useState<IntakeBinding | null>(null);
@@ -117,6 +118,7 @@ function PostMoney({
       drafts: candidateId ? null : drafts.port,
       draftId: candidateId ? undefined : draftId,
       intake: binding,
+      intakeRoute: !!candidateId,
     },
   );
   const profile = profiles?.find((place) => place.id === editor.profileId);
@@ -132,12 +134,13 @@ function PostMoney({
     if (editor.blockedByPendingPostings) router.replace("/drafts");
   }, [editor.blockedByPendingPostings]);
   useEffect(() => {
+    if (candidateId) return;
     if (setup !== null && !setupPresented.current)
       setupSheet.current?.present();
     else if (setup === null && setupPresented.current)
       setupSheet.current?.dismiss();
     setupPresented.current = setup !== null;
-  }, [setup]);
+  }, [setup, candidateId]);
   function interaction(action: () => void) {
     recordInteraction();
     action();
@@ -168,6 +171,7 @@ function PostMoney({
     <>
       <PostingForm
         {...editor}
+        lockEntryType={editor.lockEntryType}
         currency={workspace.functionalCurrency}
         place={profile?.name ?? "Choose a place"}
         destination={

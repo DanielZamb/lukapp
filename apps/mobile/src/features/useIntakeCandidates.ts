@@ -19,6 +19,7 @@ import { captureToCandidate, type NotificationSource } from "./intake/source";
 export function useIntakeCandidates(input: {
   subject: string;
   workspaceId: string;
+  currency: "COP" | "USD";
   source?: NotificationSource | null;
 }) {
   const lease = useLocalInputLease();
@@ -54,7 +55,12 @@ export function useIntakeCandidates(input: {
         await readIntakeRaw(input.subject),
         Date.now(),
       );
-      const view = viewInbox(parsed.document, input.workspaceId, Date.now());
+      const view = viewInbox(
+        parsed.document,
+        input.workspaceId,
+        Date.now(),
+        input.currency,
+      );
       setNow(view.now);
       setWait(view.wait);
       setReady(view.ready);
@@ -63,7 +69,7 @@ export function useIntakeCandidates(input: {
     } catch {
       setError("Could not load Candidates on this device.");
     }
-  }, [input.source, input.subject, input.workspaceId, lease]);
+  }, [input.source, input.subject, input.workspaceId, input.currency, lease]);
   useFocusEffect(
     useCallback(() => {
       void refresh();

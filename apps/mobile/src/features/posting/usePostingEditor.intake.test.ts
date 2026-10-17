@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   usePostingEditor,
@@ -61,11 +62,15 @@ function transport() {
   } satisfies PostingTransport;
 }
 
-async function open(intake: IntakeBinding) {
+async function open(
+  intake: IntakeBinding,
+  api: PostingTransport = transport(),
+  session: { intakeRoute?: boolean } = {},
+) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let editor: ReturnType<typeof usePostingEditor> | undefined;
   function Harness() {
-    editor = usePostingEditor(account, transport(), { intake });
+    editor = usePostingEditor(account, api, { intake, ...session });
     return null;
   }
   await act(async () => {
@@ -76,6 +81,18 @@ async function open(intake: IntakeBinding) {
     return editor;
   };
 }
+
+const pendingExpense = {
+  kind: "expense",
+  payload: {
+    workspaceId: "workspace",
+    amount: { currency: "COP", minorUnits: 50000 },
+    accountingDate: "2026-10-17",
+    description: "Pending food",
+    idempotencyKey: "draft-key",
+    financialAccountProfileId: "wallet",
+  },
+} satisfies PendingPosting;
 
 test("a Candidate prefills the shared posting form", async () => {
   const editor = await open({
@@ -135,4 +152,141 @@ test("confirming a Candidate posts once and consumes it", async () => {
     await editor().submit();
   });
   expect(confirm).toHaveBeenCalledOnce();
+});
+
+test("a Candidate route is blocked when a posting Draft exists and never touches it", async () => {
+  const confirm = vi.fn();
+  const api = {
+    ...transport(),
+    load: vi.fn(async (_id?: string, resume?: boolean): Promise<LoadResult> => {
+      if (resume === false) return { kind: "blocked" };
+      return { kind: "pending", id: "post-1", command: pendingExpense };
+    }),
+  };
+  const editor = await open(
+    {
+      id: "candidate-groceries",
+      facts,
+      suggestion,
+      parserVersion: "parser@1",
+      consentVersion: "consent@1",
+      confirm,
+      consume: vi.fn(),
+      fail: vi.fn(),
+    },
+    api,
+    { intakeRoute: true },
+  );
+  expect(api.load).toHaveBeenCalledWith(undefined, false);
+  expect(editor().blockedByPendingPostings).toBe(true);
+  expect(editor().pending).toBe(false);
+  expect(editor().description).not.toBe("Pending food");
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(api.abort).not.toHaveBeenCalled();
+  expect(api.clear).not.toHaveBeenCalled();
+  expect(api.save).not.toHaveBeenCalled();
+});
+
+test("a bound Candidate stays a cash in or out and refuses setup", async () => {
+  const editor = await open({
+    id: "candidate-groceries",
+    facts,
+    suggestion,
+    parserVersion: "parser@1",
+    consentVersion: "consent@1",
+    confirm: vi.fn(),
+    consume: vi.fn(),
+    fail: vi.fn(),
+  });
+  expect(editor().lockEntryType).toBe(true);
+  await act(async () => {
+    editor().setEntryType("transfer");
+    editor().setSetup({
+      name: "New place",
+      productKind: "bankAccount",
+      amount: "0",
+      date: "2026-10-17",
+    });
+  });
+  expect(editor().entryType).toBe("normal");
+  expect(editor().setup).toBeNull();
+});
+
+test("idempotency conflict consumes the Candidate; a timeout leaves it", async () => {
+  const consume = vi.fn(async () => {});
+  const fail = vi.fn(async () => {});
+  const confirm = vi.fn(async () => {
+    throw new ConvexError({
+      kind: "intake",
+      code: "idempotency_key_conflict",
+      message: "idempotency_key_conflict",
+    });
+  });
+  const editor = await open({
+    id: "candidate-groceries",
+    facts,
+    suggestion,
+    parserVersion: "parser@1",
+    consentVersion: "consent@1",
+    confirm,
+    consume,
+    fail,
+  });
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(consume).toHaveBeenCalledOnce();
+  expect(fail).not.toHaveBeenCalled();
+  const timeout = vi.fn(async () => {
+    throw new Error("network timeout");
+  });
+  const retryFail = vi.fn(async () => {});
+  const retryConsume = vi.fn(async () => {});
+  const retry = await open({
+    id: "candidate-groceries",
+    facts,
+    suggestion,
+    parserVersion: "parser@1",
+    consentVersion: "consent@1",
+    confirm: timeout,
+    consume: retryConsume,
+    fail: retryFail,
+  });
+  await act(async () => {
+    await retry().submit();
+  });
+  expect(retryConsume).not.toHaveBeenCalled();
+  expect(retryFail).not.toHaveBeenCalled();
+});
+
+test("a definite accounting rejection fails the Candidate and never aborts a Draft", async () => {
+  const fail = vi.fn(async () => {});
+  const api = transport();
+  const editor = await open(
+    {
+      id: "candidate-groceries",
+      facts,
+      suggestion,
+      parserVersion: "parser@1",
+      consentVersion: "consent@1",
+      confirm: vi.fn(async () => {
+        throw new ConvexError({
+          kind: "accounting",
+          code: "period_locked",
+          message: "Locked Period",
+        });
+      }),
+      consume: vi.fn(),
+      fail,
+    },
+    api,
+  );
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(fail).toHaveBeenCalledWith("Locked Period");
+  expect(api.abort).not.toHaveBeenCalled();
 });

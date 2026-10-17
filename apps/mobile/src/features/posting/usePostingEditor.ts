@@ -16,6 +16,10 @@ import type {
   ConfirmCandidateInput,
   IntakeSuggestion,
 } from "../../../../../src/notificationIntake/types";
+import {
+  intakeConfirmOutcome,
+  intakeErrorMessage,
+} from "../../../../../src/notificationIntake/outcome";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -31,7 +35,7 @@ export type SavedPosting = {
   command: PendingPosting;
 };
 export type PostingTransport = {
-  load: (draftId?: LocalEntryDraftId) => Promise<LoadResult>;
+  load: (draftId?: LocalEntryDraftId, resume?: boolean) => Promise<LoadResult>;
   save: (
     entry: PendingPosting,
     draftId?: LocalEntryDraftId,
@@ -69,6 +73,7 @@ export type PostingDraftsSession = {
   drafts?: LocalEntryDraftsPort | null;
   draftId?: LocalEntryDraftId;
   intake?: IntakeBinding | null;
+  intakeRoute?: boolean;
 };
 
 export function usePostingEditor(
@@ -79,6 +84,7 @@ export function usePostingEditor(
   const drafts = session.drafts ?? null;
   const requestedId = session.draftId;
   const intake = session.intake ?? null;
+  const isolate = session.intakeRoute === true || intake !== null;
   const [amount, setAmount] = useState("-");
   const [description, setDescription] = useState("");
   const [categories, setCategories] = useState<TransactionCategories>({
@@ -230,9 +236,18 @@ export function usePostingEditor(
     const mounted = { active: true };
     lifetime.current = mounted;
     transport
-      .load(requestedId)
+      .load(isolate ? undefined : requestedId, isolate ? false : true)
       .then((value) => {
         if (!mounted.active) return;
+        if (isolate && (value.kind === "pending" || value.kind === "blocked")) {
+          setBlocked(true);
+          setLoading(false);
+          return;
+        }
+        if (isolate) {
+          setLoading(false);
+          return;
+        }
         if (value.kind === "blocked") {
           setBlocked(true);
           setLoading(false);
@@ -260,7 +275,7 @@ export function usePostingEditor(
     return () => {
       mounted.active = false;
     };
-  }, [account.workspaceId, account.currency, transport]);
+  }, [account.workspaceId, account.currency, transport, isolate]);
   useLayoutEffect(() => {
     if (loading || !requestedId || !drafts || pending || blocked) return;
     if (appliedDraft.current === requestedId) return;
@@ -373,6 +388,11 @@ export function usePostingEditor(
     !loading &&
     !keeping &&
     !blocked &&
+    (!intake ||
+      (!pending &&
+        entryType === "normal" &&
+        !setup &&
+        intake.suggestion.amount.currency === account.currency)) &&
     (!!pending || (setup ? setupValid : amountValid && validTransfer));
   async function keepDraft() {
     const mounted = lifetime.current;
@@ -420,6 +440,10 @@ export function usePostingEditor(
     setPosted(null);
     try {
       if (intake) {
+        if (pending) {
+          setError("A posting is already in progress. Finish it from Drafts.");
+          return;
+        }
         const receipt = await intake.confirm({
           workspaceId: account.workspaceId,
           candidateId: intake.id,
@@ -472,21 +496,46 @@ export function usePostingEditor(
     } catch (error) {
       if (transport.reportFailure?.(error)) return;
       if (intake) {
-        const data: unknown = error instanceof ConvexError ? error.data : null;
-        const message =
-          data !== null &&
-          typeof data === "object" &&
-          "message" in data &&
-          typeof data.message === "string"
-            ? data.message
-            : error instanceof Error
-              ? error.message
-              : "Could not confirm this Candidate.";
-        try {
-          await intake.fail(message);
-        } catch {
-          /* The Candidate stays for retry if fail cannot write. */
+        const message = intakeErrorMessage(
+          error,
+          "Could not confirm this Candidate.",
+        );
+        const outcome = intakeConfirmOutcome(error);
+        if (outcome === "consume") {
+          try {
+            await intake.consume();
+          } catch {
+            /* A replay still belongs on this device until consume writes. */
+          }
+          if (!mounted.active) return;
+          setAmount("-");
+          setDescription("");
+          setCategories({ ids: [], primaryId: null });
+          setPosted({
+            description: description.trim() || "Entry",
+            amount: {
+              currency: account.currency,
+              minorUnits:
+                (direction === "out" ? -1 : 1) *
+                Math.abs(minorUnits ?? 0),
+            },
+          });
+          return;
         }
+        if (outcome === "fail") {
+          try {
+            await intake.fail(message);
+          } catch {
+            /* The Candidate stays for retry if fail cannot write. */
+          }
+        }
+        if (mounted.active)
+          setError(
+            outcome === "fail"
+              ? message
+              : "Could not confirm posting. Retry to safely check the same entry.",
+          );
+        return;
       }
       if (error instanceof LocalEntryDraftGoneError) {
         if (!mounted.active) return;
@@ -555,7 +604,7 @@ export function usePostingEditor(
     },
     entryType,
     setEntryType: (value: EntryType) => {
-      if (canEdit()) {
+      if (canEdit() && !intake) {
         setEntryType(value);
         setCategories({ ids: [], primaryId: null });
         setError("");
@@ -571,7 +620,7 @@ export function usePostingEditor(
     },
     setup,
     setSetup: (value: PlaceDraft | null) => {
-      if (canEdit()) setSetup(value);
+      if (canEdit() && !intake) setSetup(value);
     },
     direction,
     categories,
@@ -593,6 +642,7 @@ export function usePostingEditor(
     editable,
     canSubmit,
     canKeepDraft,
+    lockEntryType: intake !== null,
     draftId,
     blockedByPendingPostings: blocked,
     keepDraft,

@@ -2,7 +2,10 @@ import { ConvexError, type Infer } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { verifyCurrentSession } from "./lib/session";
-import { requireIntakeBatch } from "../src/notificationIntake/policy";
+import {
+  isWipeBearingError,
+  requireIntakeBatch,
+} from "../src/notificationIntake/policy";
 import { runIntake } from "./notificationIntakeErrors";
 import {
   confirmCandidatesArgs,
@@ -48,6 +51,7 @@ export const confirmCandidates = action({
         );
         results.push({ candidateId: item.candidateId, ok: true, result });
       } catch (error) {
+        if (isWipeBearingError(error)) throw error;
         const data = error instanceof ConvexError ? error.data : null;
         const message =
           data !== null &&

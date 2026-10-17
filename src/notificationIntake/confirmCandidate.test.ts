@@ -33,7 +33,10 @@ function input(
   };
 }
 
-function store(seed: IntakeReceipt[] = []): IntakeStore {
+function store(
+  seed: IntakeReceipt[] = [],
+  postedById: Record<string, PostedIntakeEntry> = {},
+): IntakeStore {
   const rows = [...seed];
   return {
     findReceipt: async (workspaceId, idempotencyKey) =>
@@ -47,6 +50,7 @@ function store(seed: IntakeReceipt[] = []): IntakeStore {
       rows.push(row);
       return row;
     },
+    readPosted: async (journalEntryId) => postedById[journalEntryId] ?? null,
   };
 }
 
@@ -80,16 +84,17 @@ test("confirming a Candidate posts once with intake key and a Receipt", async ()
 });
 
 test("retrying the same Candidate returns the Receipt and does not insert another", async () => {
-  const receipts = store();
+  const posted: PostedIntakeEntry = {
+    id: "je-1",
+    description: "Groceries",
+    amount: { currency: "COP", minorUnits: 126400 },
+    replay: false,
+  };
+  const receipts = store([], { "je-1": posted });
   let calls = 0;
   const post = async () => {
     calls += 1;
-    return {
-      id: "je-1",
-      description: "Groceries",
-      amount: { currency: "COP", minorUnits: 126400 },
-      replay: calls > 1,
-    };
+    return posted;
   };
   const first = await confirmCandidate(receipts, post, {
     ...input(),
@@ -101,10 +106,45 @@ test("retrying the same Candidate returns the Receipt and does not insert anothe
     actorId: "owner",
     now: 2,
   });
-  expect(calls).toBe(2);
+  expect(calls).toBe(1);
   expect(second.replay).toBe(true);
+  expect(second.posted).toEqual({ ...posted, replay: true });
   expect(second.receipt.id).toBe(first.receipt.id);
   expect(second.receipt.confirmedAt).toBe(1);
+});
+
+test("an existing Receipt is a replay and does not post again", async () => {
+  const receipt: IntakeReceipt = {
+    id: "receipt-1",
+    workspaceId: "workspace",
+    journalEntryId: "je-1",
+    idempotencyKey: intakeKey("candidate-groceries"),
+    suggestion,
+    changedFields: [],
+    parserVersion: "parser@1",
+    consentVersion: "consent@1",
+    actorId: "owner",
+    confirmedAt: 1,
+  };
+  const posted: PostedIntakeEntry = {
+    id: "je-1",
+    description: "Groceries",
+    amount: { currency: "COP", minorUnits: 126400 },
+    replay: false,
+  };
+  const posts: string[] = [];
+  const result = await confirmCandidate(
+    store([receipt], { "je-1": posted }),
+    async (body) => {
+      posts.push(body.idempotencyKey);
+      throw new Error("must not post when a Receipt already exists");
+    },
+    { ...input(), actorId: "owner", now: 9 },
+  );
+  expect(posts).toEqual([]);
+  expect(result.replay).toBe(true);
+  expect(result.receipt.id).toBe("receipt-1");
+  expect(result.posted).toEqual({ ...posted, replay: true });
 });
 
 test("a replay with a missing Receipt still writes one Receipt", async () => {

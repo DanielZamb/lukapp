@@ -2,6 +2,7 @@
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
 import {
+  accountingFixture,
   convexAccounting,
   createDaily,
   createOwnedWorkspace,
@@ -90,4 +91,19 @@ test("a partial batch keeps only the failed Candidate", async () => {
   });
   expect(entries).toHaveLength(1);
   expect(entries[0]?.description).toBe("Coffee");
+});
+
+test("a wipe-bearing revocation is not reduced to a per-item string", async () => {
+  const { t, deviceId } = await accountingFixture(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const daily = await createDaily(t, workspace.id);
+  await t.action(api.deviceAccess.revoke, { deviceId });
+  await expect(
+    t.action(api.notificationIntake.confirmCandidates, {
+      workspaceId: workspace.id,
+      items: [item(workspace.id, daily.id, "c1")],
+    }),
+  ).rejects.toMatchObject({
+    data: { code: "device_revoked", wipeLocalInput: true },
+  });
 });

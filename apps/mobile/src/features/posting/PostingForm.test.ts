@@ -70,3 +70,25 @@ test("description uses Field and Keep as Draft is optional", async () => {
   await act(async () => keep?.props.onPress());
   expect(onKeepDraft).toHaveBeenCalledOnce();
 });
+
+test("a Candidate locks Transfer and Initial balance", async () => {
+  const onEntryType = vi.fn();
+  await act(async () => {
+    root = create(
+      createElement(PostingForm, {
+        ...emptyPostingForm,
+        ...handlers,
+        onEntryType,
+        lockEntryType: true,
+      }),
+    );
+  });
+  const chips = root?.root
+    .findAllByType("button")
+    .filter((node) => node.props.accessibilityRole === "radio");
+  expect(
+    chips?.every((chip) => chip.props.accessibilityState?.disabled === true),
+  ).toBe(true);
+  expect(chips?.every((chip) => chip.props.onPress === undefined)).toBe(true);
+  expect(onEntryType).not.toHaveBeenCalled();
+});

@@ -63,9 +63,17 @@ beforeEach(() => {
 
 test("a ready Candidate is listed and consumed after confirm", () => {
   const accepted = acceptIn({ v: 1, candidates: [] }, candidate("c1"), now);
-  expect(isReadyCandidate(accepted.candidates[0]!)).toBe(true);
-  expect(viewInbox(accepted, "workspace", now).ready).toHaveLength(1);
+  expect(isReadyCandidate(accepted.candidates[0]!, "COP")).toBe(true);
+  expect(viewInbox(accepted, "workspace", now, "COP").ready).toHaveLength(1);
   expect(consumeIn(accepted, "c1").candidates).toEqual([]);
+});
+
+test("a Candidate in a foreign currency is never Ready", () => {
+  const usd = candidate("usd", { currency: "USD" });
+  const inbox = viewInbox({ v: 1, candidates: [usd] }, "workspace", now, "COP");
+  expect(isReadyCandidate(usd, "COP")).toBe(false);
+  expect(inbox.ready).toEqual([]);
+  expect(inbox.now.map((row) => row.id)).toEqual(["usd"]);
 });
 
 test("Needs you now holds review, errors, and soon-to-expire rows", () => {
@@ -82,7 +90,7 @@ test("Needs you now holds review, errors, and soon-to-expire rows", () => {
     v: 1 as const,
     candidates: [review, failed, soon, later],
   };
-  const inbox = viewInbox(document, "workspace", now);
+  const inbox = viewInbox(document, "workspace", now, "COP");
   expect(inbox.now.map((row) => row.id)).toEqual(["review", "failed", "soon"]);
   expect(inbox.wait.map((row) => row.id)).toEqual(["later"]);
   expect(failIn(document, "later", "Locked Period").candidates[3]?.error).toBe(

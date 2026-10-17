@@ -99,9 +99,13 @@ export function parseIntakeDocument(raw: unknown, now: number) {
   };
 }
 
-export function isPriorityCandidate(candidate: IntakeCandidate, now: number) {
+export function isPriorityCandidate(
+  candidate: IntakeCandidate,
+  now: number,
+  currency?: "COP" | "USD",
+) {
   return (
-    !isReadyCandidate(candidate) ||
+    !isReadyCandidate(candidate, currency) ||
     candidate.expiresAt - now <= INTAKE_PRIORITY_MS
   );
 }
@@ -157,16 +161,17 @@ export function viewInbox(
   document: IntakeDocument,
   workspaceId: string,
   now: number,
+  currency: "COP" | "USD",
 ) {
   const live = document.candidates.filter(
     (row) => row.expiresAt > now && row.workspaceId === workspaceId,
   );
-  const nowRows = live.filter((row) => isPriorityCandidate(row, now));
-  const waitRows = live.filter((row) => !isPriorityCandidate(row, now));
+  const nowRows = live.filter((row) => isPriorityCandidate(row, now, currency));
+  const waitRows = live.filter((row) => !isPriorityCandidate(row, now, currency));
   return {
     now: nowRows,
     wait: waitRows,
-    ready: live.filter(isReadyCandidate),
+    ready: live.filter((row) => isReadyCandidate(row, currency)),
     count: live.length,
   };
 }

@@ -18,6 +18,16 @@ export async function confirmCandidate(
   if (!input.confirmed.financialAccountProfileId)
     throw new IntakeError("account_required");
   const key = intakeKey(input.candidateId);
+  const existing = await store.findReceipt(input.workspaceId, key);
+  if (existing) {
+    const posted = await store.readPosted(existing.journalEntryId);
+    if (!posted) throw new IntakeError("journal_entry_not_found");
+    return {
+      posted: { ...posted, replay: true },
+      receipt: existing,
+      replay: true,
+    };
+  }
   const posted = await post({
     kind: input.confirmed.direction,
     workspaceId: input.workspaceId,
@@ -33,12 +43,6 @@ export async function confirmCandidate(
       ? { primaryUserCategoryId: input.confirmed.primaryUserCategoryId }
       : {}),
   });
-  const existing = await store.findReceipt(input.workspaceId, key);
-  if (existing) {
-    if (existing.journalEntryId !== posted.id)
-      throw new IntakeError("idempotency_key_conflict");
-    return { posted, receipt: existing, replay: true };
-  }
   const receipt = await store.insertReceipt({
     workspaceId: input.workspaceId,
     journalEntryId: posted.id,

@@ -4,14 +4,20 @@ import { spacing } from "../ui/tokens";
 import { formatMoney } from "./money";
 import type { DraftListItem, LocalEntryDraftId } from "./localEntryDrafts";
 import type { IntakeCandidate, IntakeCandidateId } from "./intake/candidates";
-import { isReadyCandidate } from "./intake/ready";
+import { currencyMismatchReason, isReadyCandidate } from "./intake/ready";
 
 export type InboxSegment = "now" | "wait";
 
-function candidateDetail(candidate: IntakeCandidate) {
+function candidateDetail(
+  candidate: IntakeCandidate,
+  workspaceCurrency: "COP" | "USD",
+) {
   const expiry = `Expires ${new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(candidate.expiresAt))}`;
+  const mismatch = currencyMismatchReason(candidate.currency, workspaceCurrency);
+  if (mismatch) return `${mismatch} · ${expiry}`;
   if (candidate.error) return `${candidate.error} · ${expiry}`;
-  if (!isReadyCandidate(candidate)) return `Needs review · ${expiry}`;
+  if (!isReadyCandidate(candidate, workspaceCurrency))
+    return `Needs review · ${expiry}`;
   return expiry;
 }
 
@@ -119,7 +125,7 @@ export function DraftsScreen({
             <ListRow
               key={candidate.id}
               title={candidate.suggestion.description.trim() || "Needs review"}
-              detail={candidateDetail(candidate)}
+              detail={candidateDetail(candidate, currency)}
               value={formatMoney({
                 currency: candidate.currency,
                 minorUnits:

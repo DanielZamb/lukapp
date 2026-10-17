@@ -175,3 +175,37 @@ test("a Candidate row opens the shared form and Confirm all Ready posts the read
   });
   expect(text()).toContain("Incomplete draft");
 });
+
+test("a foreign-currency Candidate shows why it is not Ready", async () => {
+  await act(async () => {
+    root = create(
+      createElement(
+        DraftsScreen,
+        render({
+          now: [{ ...candidate, currency: "USD" }],
+          currency: "COP",
+        }),
+      ),
+    );
+  });
+  expect(text()).toContain("Uses USD. This workspace uses COP.");
+  expect(text()).toContain("0 ready to add");
+});
+
+test("Drafts still render when Candidates fail to load", async () => {
+  await act(async () => {
+    root = create(
+      createElement(
+        DraftsScreen,
+        render({
+          drafts,
+          readyToShow: true,
+          error: "Could not load Candidates on this device.",
+        }),
+      ),
+    );
+  });
+  expect(root?.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  expect(text()).toContain("Could not load Candidates on this device.");
+  expect(text()).toContain("Food");
+});

@@ -13,6 +13,18 @@ export function intakeKey(candidateId: string) {
   return `intake:${candidateId}`;
 }
 
+export function isWipeBearingError(error: unknown) {
+  if (error === null || typeof error !== "object" || !("data" in error))
+    return false;
+  const data = error.data;
+  return (
+    data !== null &&
+    typeof data === "object" &&
+    "wipeLocalInput" in data &&
+    data.wipeLocalInput === true
+  );
+}
+
 export function requireIntakeBatch(count: number) {
   if (count < 1) throw new IntakeError("candidates_required");
   if (count > INTAKE_BATCH_LIMIT) throw new IntakeError("batch_too_large");

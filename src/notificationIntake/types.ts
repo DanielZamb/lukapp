@@ -51,6 +51,7 @@ export type IntakeStore = {
     idempotencyKey: string,
   ): Promise<IntakeReceipt | null>;
   insertReceipt(receipt: Omit<IntakeReceipt, "id">): Promise<IntakeReceipt>;
+  readPosted(journalEntryId: string): Promise<PostedIntakeEntry | null>;
 };
 
 export type PostCashActivity = (input: {
