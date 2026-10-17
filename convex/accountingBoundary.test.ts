@@ -93,6 +93,8 @@ async function financialState(
     lines: await ctx.db.query("journalLines").collect(),
     defaults: await ctx.db.query("personalDefaults").collect(),
     setups: await ctx.db.query("financialAccountSetups").collect(),
+    openings: await ctx.db.query("financialAccountOpenings").collect(),
+    entryProfiles: await ctx.db.query("journalEntryProfiles").collect(),
     periods: await ctx.db.query("accountingPeriods").collect(),
     decisions: await ctx.db.query("periodControlDecisions").collect(),
     accounts: await ctx.db.query("ledgerAccounts").collect(),

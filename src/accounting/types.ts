@@ -235,6 +235,15 @@ export type AccountingClock = {
 export type AccountingStore = {
   findAccountSetup(workspaceId: string, idempotencyKey: string): Promise<StoredAccountSetup | undefined>;
   insertAccountSetup(setup: StoredAccountSetup): Promise<void>;
+  findOpeningMarkerByIdempotencyKey(
+    workspaceId: string,
+    idempotencyKey: string,
+  ): Promise<StoredOpeningMarker | undefined>;
+  listOpeningMarkersByProfile(
+    workspaceId: string,
+    profileId: string,
+  ): Promise<StoredOpeningMarker[]>;
+  insertOpeningMarker(marker: StoredOpeningMarker): Promise<void>;
   insertCategory(category: Omit<UserCategory, "id">): Promise<UserCategory>;
   getCategory(categoryId: string): Promise<UserCategory | undefined>;
   listCategories(workspaceId: string): Promise<UserCategory[]>;
@@ -383,6 +392,16 @@ export type AccountSetupInput = Omit<OpeningPositionInput, "financialAccountProf
 export type StoredAccountSetup = Omit<AccountSetupInput, "actor"> & {
   financialAccountProfileId: string;
   openingJournalEntryId?: string;
+};
+export type StoredOpeningMarker = {
+  workspaceId: string;
+  financialAccountProfileId: string;
+  accountingDate: string;
+  idempotencyKey: string;
+  amount: Money;
+  description: string;
+  policy: PostingPolicy;
+  journalEntryId?: string;
 };
 export type AccountSetupResult = {
   financialAccountProfile: FinancialAccountProfile;

@@ -1,7 +1,9 @@
 import { chartTemplate } from "../chartOfAccounts";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
+import { requireOpeningOnProfile } from "../openingControl";
 import { periodFromAccountingDate } from "../period";
+import { requirePostablePeriod } from "../periodControl";
 import { journalContext, toPostedJournalEntry } from "../views";
 import { postJournalEntry } from "../posting";
 import type {
@@ -9,7 +11,23 @@ import type {
   AccountingStore,
   OpeningPositionInput,
   PostingPolicy,
+  StoredOpeningMarker,
 } from "../types";
+
+function sameOpening(
+  marker: StoredOpeningMarker,
+  input: OpeningPositionInput,
+  policy: StoredOpeningMarker["policy"],
+) {
+  return (
+    marker.financialAccountProfileId === input.financialAccountProfileId &&
+    marker.accountingDate === input.accountingDate &&
+    marker.amount.currency === input.amount.currency &&
+    marker.amount.minorUnits === input.amount.minorUnits &&
+    marker.description === input.description &&
+    marker.policy === policy
+  );
+}
 
 export async function recordOpeningPosition(
   store: AccountingStore,
@@ -42,12 +60,50 @@ export async function recordOpeningPosition(
     (a) => a.code === equityCode,
   );
   if (!equity) throw new AccountingError("ledger_account_not_found");
-  const existing = await store.findJournalEntryByIdempotencyKey(
+  const marker = await store.findOpeningMarkerByIdempotencyKey(
     workspace.id,
     input.idempotencyKey,
   );
+  if (marker) {
+    if (!sameOpening(marker, input, policy))
+      throw new AccountingError("idempotency_key_conflict");
+    if (!marker.journalEntryId) return null;
+    const entry = await store.getJournalEntry(marker.journalEntryId);
+    if (!entry) throw new AccountingError("journal_entry_not_found");
+    const reversal = await store.findReversalOf(entry.id);
+    return toPostedJournalEntry(
+      store,
+      await journalContext(store, workspace),
+      entry,
+      {
+        replay: true,
+        ...(reversal ? { reversedByEntryId: reversal.id } : {}),
+      },
+    );
+  }
   if (amount === 0) {
-    if (existing) throw new AccountingError("idempotency_key_conflict");
+    if (
+      await store.findJournalEntryByIdempotencyKey(
+        workspace.id,
+        input.idempotencyKey,
+      )
+    )
+      throw new AccountingError("idempotency_key_conflict");
+    await requireOpeningOnProfile(store, workspace.id, profile.id, {
+      policy,
+      accountingDate: input.accountingDate,
+      idempotencyKey: input.idempotencyKey,
+    });
+    await requirePostablePeriod(store, workspace.id, input.accountingDate);
+    await store.insertOpeningMarker({
+      workspaceId: workspace.id,
+      financialAccountProfileId: profile.id,
+      accountingDate: input.accountingDate,
+      idempotencyKey: input.idempotencyKey,
+      amount: input.amount,
+      description: input.description,
+      policy,
+    });
     return null;
   }
   const held = account.normalSide === "Debit";
@@ -74,6 +130,23 @@ export async function recordOpeningPosition(
       ],
     },
   });
+  if (
+    !(await store.findOpeningMarkerByIdempotencyKey(
+      workspace.id,
+      input.idempotencyKey,
+    ))
+  ) {
+    await store.insertOpeningMarker({
+      workspaceId: workspace.id,
+      financialAccountProfileId: profile.id,
+      accountingDate: input.accountingDate,
+      idempotencyKey: input.idempotencyKey,
+      amount: input.amount,
+      description: input.description,
+      policy,
+      journalEntryId: entry.id,
+    });
+  }
   const reversal = await store.findReversalOf(entry.id);
   return toPostedJournalEntry(
     store,

@@ -2,7 +2,7 @@ import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
 import type { AccountingStore, Actor, StoredJournalEntry } from "../types";
 import { journalContext, toPostedJournalEntry } from "../views";
-import { activityRow } from "./activityRow";
+import { activityRow, profileNamesByPostingAccount } from "./activityRow";
 
 export type HistoryPageOptions = {
   cursor: string | null;
@@ -50,8 +50,14 @@ export async function postedHistory(
         replay: false,
         ...(reversal ? { reversedByEntryId: reversal.id } : {}),
       });
-      const profile = entry.financialAccountProfileId ? context.profiles.get(entry.financialAccountProfileId) : undefined;
-      return activityRow(entry, profile?.postingAccountId);
+      const viewingId =
+        input.financialAccountProfileId ?? stored.financialAccountProfileId;
+      const viewing = viewingId ? context.profiles.get(viewingId) : undefined;
+      return activityRow(
+        entry,
+        viewing?.postingAccountId,
+        profileNamesByPostingAccount(context.profiles.values()),
+      );
     })),
   };
 }

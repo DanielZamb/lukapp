@@ -17,23 +17,67 @@ function fallbackLabel(entry: PostedJournalEntry) {
   }
 }
 
-export function activityRow(entry: PostedJournalEntry, profilePostingAccountId?: string) {
+export function profileNamesByPostingAccount(
+  profiles: Iterable<{ postingAccountId: string; name: string }>,
+) {
+  return new Map(
+    [...profiles].map((profile) => [profile.postingAccountId, profile.name]),
+  );
+}
+
+function placesDetail(
+  entry: PostedJournalEntry,
+  namesByLedgerAccountId?: ReadonlyMap<string, string>,
+) {
+  if (!namesByLedgerAccountId) return fallbackLabel(entry);
+  const named = (side: "debitMinorUnits" | "creditMinorUnits") =>
+    entry.lines.flatMap((line) => {
+      if (line[side] <= 0) return [];
+      const name = namesByLedgerAccountId.get(line.ledgerAccountId);
+      return name ? [name] : [];
+    });
+  const from = named("creditMinorUnits");
+  const to = named("debitMinorUnits");
+  return from.length && to.length
+    ? `${from.join(" · ")} → ${to.join(" · ")}`
+    : fallbackLabel(entry);
+}
+
+export function activityRow(
+  entry: PostedJournalEntry,
+  profilePostingAccountId?: string,
+  namesByLedgerAccountId?: ReadonlyMap<string, string>,
+) {
   const userCategories = entry.lines.flatMap((line) => line.userCategories);
-  const primaryUserCategoryId = entry.lines.find((line) => line.primaryUserCategoryId)?.primaryUserCategoryId;
-  const profileLines = entry.lines.filter((line) => line.ledgerAccountId === profilePostingAccountId);
-  const minorUnits = profileLines.reduce((sum, line) => sum + line.debitMinorUnits - line.creditMinorUnits, 0);
-  const label = fallbackLabel(entry);
+  const primaryUserCategoryId = entry.lines.find(
+    (line) => line.primaryUserCategoryId,
+  )?.primaryUserCategoryId;
+  const profileLines = entry.lines.filter(
+    (line) => line.ledgerAccountId === profilePostingAccountId,
+  );
+  const minorUnits = profileLines.reduce(
+    (sum, line) => sum + line.debitMinorUnits - line.creditMinorUnits,
+    0,
+  );
+  const label = placesDetail(entry, namesByLedgerAccountId);
   return {
     id: entry.id,
-    ...(entry.financialAccountProfileId ? { financialAccountProfileId: entry.financialAccountProfileId } : {}),
-    title: entry.description || label,
+    ...(entry.financialAccountProfileId
+      ? { financialAccountProfileId: entry.financialAccountProfileId }
+      : {}),
+    title: entry.description || fallbackLabel(entry),
     date: entry.accountingDate,
     detail: userCategories.map((category) => category.name).join(" · ") || label,
     userCategories,
     ...(primaryUserCategoryId ? { primaryUserCategoryId } : {}),
     reversed: entry.reversedByEntryId !== undefined,
     ...(entry.reversesEntryId ? { reversesEntryId: entry.reversesEntryId } : {}),
-    ...(entry.reversedByEntryId ? { reversedByEntryId: entry.reversedByEntryId } : {}),
-    amount: { ...entry.amount, minorUnits: profileLines.length ? minorUnits : entry.amount.minorUnits },
+    ...(entry.reversedByEntryId
+      ? { reversedByEntryId: entry.reversedByEntryId }
+      : {}),
+    amount: {
+      ...entry.amount,
+      minorUnits: profileLines.length ? minorUnits : entry.amount.minorUnits,
+    },
   };
 }

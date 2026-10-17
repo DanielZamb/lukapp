@@ -55,12 +55,7 @@ export type PostingFormProps = {
 export function PostingForm(props: PostingFormProps) {
   return (
     <Screen contentStyle={{ gap: spacing.xl }}>
-      <Header
-        title="Post money"
-        eyebrow="NEW ENTRY"
-        onBack={props.onBack}
-        titleStyle={styles.heading}
-      />
+      <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
       {props.posted !== null && (
         <View accessibilityRole="alert" style={styles.banner}>
           <Ionicons name="checkmark-circle" size={24} color={theme.positive} />
@@ -223,11 +218,6 @@ export function PostingForm(props: PostingFormProps) {
 }
 
 const styles = StyleSheet.create({
-  heading: {
-    fontFamily: font.extrabold,
-    fontSize: fontSize.hero - spacing.md,
-    lineHeight: spacing.section,
-  },
   rowTitle: { fontFamily: font.bold },
   rowValue: { fontFamily: font.semibold },
   banner: {

@@ -145,7 +145,7 @@ test("income, card payment and loan payment share Posting, move normal balances 
   });
   expect(activity.monthSpendMinorUnits).toBe(0);
   expect(activity.rows.find((row) => row.id === posted.id)).toMatchObject({
-    detail: "Account Transfer",
+    detail: "Bank → Card",
     amount: { minorUnits: -2500 },
   });
   const history = await t.query(api.accounting.postedHistory, {
@@ -153,7 +153,7 @@ test("income, card payment and loan payment share Posting, move normal balances 
     paginationOpts: { cursor: null, numItems: 50 },
   });
   expect(history.page.find((row) => row.id === posted.id)).toMatchObject({
-    detail: "Account Transfer",
+    detail: "Bank → Card",
     amount: { minorUnits: -2500 },
   });
   expect(await read.entries()).toHaveLength(6);
@@ -432,6 +432,102 @@ test("atomic account setup converges on one profile/opening, including zero, and
   ).toHaveLength(2);
 });
 
+test("zero Start Tracking still blocks earlier activity, replays, and conflicts on a changed amount or second opening", async () => {
+  const { t, workspaceId, bank, read } = await fixture();
+  const args = {
+    ...opening(workspaceId, bank.id, 0, "2026-10-01"),
+    idempotencyKey: "zero-start",
+  };
+  expect(
+    await t.action(api.accounting.recordOpeningPosition, args),
+  ).toBeNull();
+  expect(
+    await t.action(api.accounting.recordOpeningPosition, args),
+  ).toBeNull();
+  expect(await read.entries()).toEqual([]);
+  expect(
+    await t.run((ctx) => ctx.db.query("financialAccountOpenings").collect()),
+  ).toMatchObject([
+    {
+      financialAccountProfileId: bank.id,
+      accountingDate: "2026-10-01",
+      idempotencyKey: "zero-start",
+      amount: { currency: "COP", minorUnits: 0 },
+    },
+  ]);
+  await expect(
+    t.action(
+      api.accounting.recordCashExpense,
+      groceries(workspaceId, bank.id, { accountingDate: "2026-09-15" }),
+    ),
+  ).rejects.toMatchObject({ data: { code: "activity_before_opening" } });
+  await expect(
+    t.action(api.accounting.recordOpeningPosition, {
+      ...args,
+      amount: { currency: "COP", minorUnits: 2500 },
+    }),
+  ).rejects.toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  await expect(
+    t.action(api.accounting.recordOpeningPosition, {
+      ...opening(workspaceId, bank.id, 0, "2026-10-02"),
+      idempotencyKey: "another-zero",
+    }),
+  ).rejects.toMatchObject({ data: { code: "opening_already_exists" } });
+  expect(await read.entries()).toEqual([]);
+});
+
+test("account history includes the destination transfer and its reversal, signed for that place", async () => {
+  const { t, workspaceId, bank, card } = await fixture();
+  await t.action(
+    api.accounting.recordOpeningPosition,
+    opening(workspaceId, bank.id, 100000),
+  );
+  await t.action(
+    api.accounting.recordOpeningPosition,
+    opening(workspaceId, card.id, 10000),
+  );
+  const posted = await t.action(
+    api.accounting.recordAccountTransfer,
+    transfer(workspaceId, bank.id, card.id),
+  );
+  const destination = await t.query(api.accounting.postedHistory, {
+    workspaceId,
+    financialAccountProfileId: card.id,
+    paginationOpts: { cursor: null, numItems: 50 },
+  });
+  expect(destination.page.find((row) => row.id === posted.id)).toMatchObject({
+    detail: "Bank → Card",
+    amount: { minorUnits: 2500 },
+  });
+  const source = await t.query(api.accounting.postedHistory, {
+    workspaceId,
+    financialAccountProfileId: bank.id,
+    paginationOpts: { cursor: null, numItems: 50 },
+  });
+  expect(source.page.find((row) => row.id === posted.id)).toMatchObject({
+    detail: "Bank → Card",
+    amount: { minorUnits: -2500 },
+  });
+  const detail = await t.query(api.accounting.postedEntry, {
+    workspaceId,
+    journalEntryId: posted.id,
+  });
+  expect(detail.row.detail).toBe("Bank → Card");
+  const correction = await reverse(t, workspaceId, posted.id);
+  const after = await t.query(api.accounting.postedHistory, {
+    workspaceId,
+    financialAccountProfileId: card.id,
+    paginationOpts: { cursor: null, numItems: 50 },
+  });
+  expect(after.page.map((row) => row.id).sort()).toEqual(
+    [...destination.page.map((row) => row.id), correction.id].sort(),
+  );
+  expect(after.page.find((row) => row.id === correction.id)).toMatchObject({
+    reversesEntryId: posted.id,
+    amount: { minorUnits: -2500 },
+  });
+});
+
 test("negative/zero openings and openings after existing activity do not change ledger or balances", async () => {
   const { t, workspaceId, bank, read } = await fixture();
   const args = opening(workspaceId, bank.id);
@@ -441,13 +537,6 @@ test("negative/zero openings and openings after existing activity do not change 
       amount: { currency: "COP", minorUnits: -1 },
     }),
   ).rejects.toMatchObject({ data: { code: "opening_amount_invalid" } });
-  expect(
-    await t.action(api.accounting.recordOpeningPosition, {
-      ...args,
-      amount: { currency: "COP", minorUnits: 0 },
-    }),
-  ).toBeNull();
-  expect(await read.entries()).toEqual([]);
   await t.action(
     api.accounting.recordCashExpense,
     groceries(workspaceId, bank.id),

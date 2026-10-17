@@ -42,7 +42,8 @@ import { listUserCategories as listCategories } from "../src/accounting/queries/
 import { postedActivity as readPostedActivity } from "../src/accounting/queries/postedActivity";
 import { categoryTotals as readCategoryTotals } from "../src/accounting/queries/categoryTotals";
 import { createAccountingCore } from "../src/accounting";
-import { convexReadStore, convexHistoryStore } from "./store";
+import { convexHistoryStore } from "./historyStore";
+import { convexReadStore } from "./store";
 import { readPersonalDefaults } from "./personalDefaults";
 import {
   accountBalance,
