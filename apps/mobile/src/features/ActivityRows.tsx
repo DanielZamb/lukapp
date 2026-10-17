@@ -16,7 +16,7 @@ export function ActivityRows({ rows }: { rows: Row[] }) {
         <ListRow
           key={row.id}
           title={row.title}
-          detail={`${row.date} · ${row.reversed ? "Reversed" : row.detail}`}
+          detail={`${row.date} · ${row.detail}${row.reversed ? " · Reversed" : ""}`}
           value={formatMoney(row.amount)}
         />
       ))}

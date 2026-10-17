@@ -1,3 +1,4 @@
+import { categoryFields } from "./categoryValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
@@ -9,11 +10,16 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  userCategories: defineTable({
+    workspaceId: v.id("workspaces"),
+    ...categoryFields,
+  }).index("by_workspace", ["workspaceId"]),
   personalDefaults: defineTable({
     ownerSubject: v.string(),
     workspaceId: v.id("workspaces"),
     financialAccountProfileId: v.id("financialAccountProfiles"),
     startingMinorUnits: v.number(),
+    categorySetupSignature: v.optional(v.string()),
   }).index("by_owner", ["ownerSubject"]),
   workspaces: defineTable({
     kind: v.literal("Personal"),
@@ -62,6 +68,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     journalEntryId: v.id("journalEntries"),
     lineNumber: v.number(),
+    userCategoryId: v.optional(v.id("userCategories")),
     ledgerAccountId: v.id("ledgerAccounts"),
     debitMinorUnits: v.number(),
     creditMinorUnits: v.number(),

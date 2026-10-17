@@ -92,6 +92,8 @@ export const catalogAccount = v.object({
 });
 
 export const journalLine = v.object({
+  userCategoryId: v.optional(v.string()),
+  userCategoryName: v.optional(v.string()),
   ledgerAccountId: v.string(),
   code: v.string(),
   name: v.string(),

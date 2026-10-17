@@ -1,10 +1,11 @@
+import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { Redirect, router } from "expo-router";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Platform } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
@@ -28,6 +29,10 @@ function PostMoney({
   defaults: Defaults;
   subject: string;
 }) {
+  const [categoryVisible, setCategoryVisible] = useState(false);
+  const categories = useQuery(api.accounting.listUserCategories, {
+    workspaceId: defaults.workspace.id,
+  });
   const post = useMutation(api.accounting.recordCashExpense);
   const dateSheet = useRef<BottomSheetModal>(null);
   const placeSheet = useRef<BottomSheetModal>(null);
@@ -56,6 +61,12 @@ function PostMoney({
       <PostingForm
         currency={workspace.functionalCurrency}
         place={profile.name}
+        category={
+          editor.userCategoryId
+            ? (categories?.find((c) => c.id === editor.userCategoryId)?.name ??
+              "Saved category")
+            : "No category"
+        }
         {...editor}
         date={new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
           new Date(`${editor.date}T12:00:00`),
@@ -69,9 +80,17 @@ function PostMoney({
         onDescriptionChange={editor.setDescription}
         onBack={() => router.back()}
         onPlace={() => placeSheet.current?.present()}
+        onCategory={() => setCategoryVisible(true)}
         onDate={() => dateSheet.current?.present()}
         onPost={() => void editor.submit()}
         onDone={editor.dismissPosted}
+      />
+      <CategoryPicker
+        workspaceId={workspace.id}
+        value={editor.userCategoryId}
+        onChange={editor.setUserCategoryId}
+        visible={categoryVisible && editor.editable}
+        onClose={() => setCategoryVisible(false)}
       />
       <BottomSheetModal
         ref={placeSheet}

@@ -1,3 +1,4 @@
+import type { UserCategory } from "../src/accounting/categories/types";
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import { AccountingError } from "../src/accounting/errors";
 import type {
@@ -15,6 +16,8 @@ type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
 type ReadMethods = Omit<AccountingStore, WriteMethod>;
 type WriteMethod =
+  | "insertCategory"
+  | "restyleCategory"
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
@@ -84,6 +87,11 @@ function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
   };
 }
 
+function toCategory(doc: Doc<"userCategories">): UserCategory {
+  const { _id, _creationTime, ...category } = doc;
+  return { id: _id, ...category };
+}
+
 function toEntry(
   doc: Doc<"journalEntries">,
   lines: Doc<"journalLines">[],
@@ -103,6 +111,7 @@ function toEntry(
       .sort((a, b) => a.lineNumber - b.lineNumber)
       .map((line) => ({
         ledgerAccountId: line.ledgerAccountId,
+        ...(line.userCategoryId ? { userCategoryId: line.userCategoryId } : {}),
         debitMinorUnits: line.debitMinorUnits,
         creditMinorUnits: line.creditMinorUnits,
       })),
@@ -129,6 +138,20 @@ function readStore(db: ReadDb): ReadMethods {
   }
 
   return {
+    async getCategory(categoryId) {
+      const id = idFor(db, "userCategories", categoryId);
+      const doc = id && (await db.get(id));
+      return doc ? toCategory(doc) : undefined;
+    },
+    async listCategories(workspaceId) {
+      const docs = await db
+        .query("userCategories")
+        .withIndex("by_workspace", (q) =>
+          q.eq("workspaceId", storedId<"workspaces">(workspaceId)),
+        )
+        .collect();
+      return docs.map(toCategory);
+    },
     async getWorkspace(workspaceId) {
       const id = idFor(db, "workspaces", workspaceId);
       const doc = id && (await db.get(id));
@@ -259,6 +282,20 @@ function readStore(db: ReadDb): ReadMethods {
 
 function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
   return {
+    async insertCategory(category) {
+      const id = await db.insert("userCategories", {
+        ...category,
+        workspaceId: storedId<"workspaces">(category.workspaceId),
+      });
+      return { id, ...category };
+    },
+    async restyleCategory(categoryId, style) {
+      const id = storedId<"userCategories">(categoryId);
+      await db.patch(id, { style });
+      const doc = await db.get(id);
+      if (!doc) throw new AccountingError("category_not_found");
+      return toCategory(doc);
+    },
     async insertWorkspace(workspace, ownerUserId) {
       const workspaceId = await db.insert("workspaces", workspace);
       await db.insert("workspaceMemberships", {
@@ -306,7 +343,11 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
             }
           : {}),
         ...(entry.reversesEntryId
-          ? { reversesEntryId: storedId<"journalEntries">(entry.reversesEntryId) }
+          ? {
+              reversesEntryId: storedId<"journalEntries">(
+                entry.reversesEntryId,
+              ),
+            }
           : {}),
       });
       for (const [lineNumber, line] of entry.lines.entries()) {
@@ -314,6 +355,11 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
           workspaceId,
           journalEntryId,
           lineNumber,
+          ...(line.userCategoryId
+            ? {
+                userCategoryId: storedId<"userCategories">(line.userCategoryId),
+              }
+            : {}),
           ledgerAccountId: storedId<"ledgerAccounts">(line.ledgerAccountId),
           debitMinorUnits: line.debitMinorUnits,
           creditMinorUnits: line.creditMinorUnits,
@@ -365,12 +411,15 @@ function unavailable(method: string): never {
 
 function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
   return {
+    insertCategory: async () => unavailable("insertCategory"),
+    restyleCategory: async () => unavailable("restyleCategory"),
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),
     insertJournalEntry: async () => unavailable("insertJournalEntry"),
     insertAccountingPeriod: async () => unavailable("insertAccountingPeriod"),
-    setAccountingPeriodStatus: async () => unavailable("setAccountingPeriodStatus"),
+    setAccountingPeriodStatus: async () =>
+      unavailable("setAccountingPeriodStatus"),
     insertPeriodControlDecision: async () =>
       unavailable("insertPeriodControlDecision"),
   };

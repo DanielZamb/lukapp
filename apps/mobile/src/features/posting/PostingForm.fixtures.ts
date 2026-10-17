@@ -6,6 +6,7 @@ type Fixture = Omit<
   | "onDescriptionChange"
   | "onBack"
   | "onPlace"
+  | "onCategory"
   | "onDate"
   | "onPost"
   | "onDone"
@@ -16,6 +17,7 @@ export const emptyPostingForm = {
   description: "",
   date: "August 23, 2026",
   place: "My money",
+  category: "No category",
   editable: true,
   loading: false,
   busy: false,
