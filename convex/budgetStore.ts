@@ -3,6 +3,7 @@ import type { Doc } from "./_generated/dataModel";
 import type { Actor } from "../src/accounting/types";
 import type { BudgetReadStore, BudgetRevision, BudgetWriteStore } from "../src/budget/types";
 import { BudgetError } from "../src/budget/policy";
+import { workspaceTimeZone } from "../src/accounting/timeZone";
 import { categoryTotals } from "../src/accounting/queries/categoryTotals";
 import { convexReadStore } from "./store";
 
@@ -19,6 +20,11 @@ export function budgetReadStore(ctx: Pick<QueryCtx, "db">, workspaceId: string, 
       const workspace = await ctx.db.get(id);
       if (!workspace) throw new BudgetError("workspace_not_found");
       return workspace.functionalCurrency;
+    },
+    timeZone: async () => {
+      const workspace = await ctx.db.get(id);
+      if (!workspace) throw new BudgetError("workspace_not_found");
+      return workspaceTimeZone(workspace);
     },
     listRevisions: async () => (await ctx.db.query("budgetLimitRevisions")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", id)).collect()).map(revisionView),

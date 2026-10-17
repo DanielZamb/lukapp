@@ -78,6 +78,7 @@ export type Workspace = {
   kind: WorkspaceKind;
   functionalCurrency: string;
   chartOfAccountsTemplate: string;
+  timeZone: string;
   currentAccountingPeriod: AccountingPeriod;
 };
 
@@ -173,6 +174,7 @@ export type StoredWorkspace = {
   kind: WorkspaceKind;
   functionalCurrency: string;
   chartOfAccountsTemplate: string;
+  timeZone: string;
 };
 
 export type StoredProfile = {
@@ -302,6 +304,7 @@ export type AccountingCore = {
     functionalCurrency: string;
     /** COA Template version; co-puc-personal@1 when omitted. */
     chartOfAccountsTemplate?: string;
+    timeZone?: string;
   }): Promise<Workspace>;
   openWorkspace(input: {
     actor: Actor;

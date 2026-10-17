@@ -8,6 +8,7 @@ import {
 } from "../src/features/activity";
 import { formatMoney } from "../src/features/money";
 import { Setup } from "../src/features/Setup";
+import { spentMonthEyebrow } from "../src/features/timeZones";
 import {
   ActionTile,
   ConfirmationScreen,
@@ -22,18 +23,20 @@ import { spacing, touchTarget } from "../src/ui/tokens";
 function Home({
   workspaceId,
   currency,
+  timeZone,
 }: {
   workspaceId: string;
   currency: string;
+  timeZone: string;
 }) {
-  const activity = usePostedActivity(workspaceId);
+  const activity = usePostedActivity(workspaceId, timeZone);
   const actions = useRef<BottomSheetModal>(null);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   return (
     <Screen>
       <Header
         title=""
-        eyebrow={`SPENT IN ${new Intl.DateTimeFormat("en", { month: "long" }).format(new Date()).toUpperCase()}`}
+        eyebrow={spentMonthEyebrow(timeZone)}
         onUser={() => router.push("/settings")}
       />
       {posted && (
@@ -131,6 +134,7 @@ export default function Index() {
     <Home
       workspaceId={defaults.workspace.id}
       currency={defaults.workspace.functionalCurrency}
+      timeZone={defaults.workspace.timeZone}
     />
   );
 }

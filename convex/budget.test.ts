@@ -137,7 +137,7 @@ test("invalid limits, foreign/income categories and past/future edits leave the 
 
 test("a save crossing the server's month boundary is rejected rather than applied to a different month", async () => {
   const s = await setup();
-  vi.setSystemTime(Date.UTC(2026, 9, 1));
+  vi.setSystemTime(Date.UTC(2026, 9, 1, 12));
   await expect(s.t.action(api.budget.setCategoryLimit, s.request)).rejects.toMatchObject({ data: { code: "month_changed" } });
   expect(await s.read()).toMatchObject({ currentMonth: "2026-10", month: "2026-10", jars: [] });
   const saved = await s.t.action(api.budget.setCategoryLimit, { ...s.request, effectiveMonth: "2026-10" });

@@ -1,6 +1,7 @@
 import type { UserCategory } from "../src/accounting/categories/types";
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import { AccountingError } from "../src/accounting/errors";
+import { workspaceTimeZone } from "../src/accounting/timeZone";
 import type {
   AccountingPeriod,
   AccountingStore,
@@ -217,6 +218,7 @@ function readStore(db: ReadDb): ReadMethods {
         kind: doc.kind,
         functionalCurrency: doc.functionalCurrency,
         chartOfAccountsTemplate: doc.chartOfAccountsTemplate,
+        timeZone: workspaceTimeZone(doc),
       };
       return stored;
     },

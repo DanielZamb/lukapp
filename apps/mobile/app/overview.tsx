@@ -9,8 +9,8 @@ import { ActivityRows } from "../src/features/ActivityRows";
 import { formatMoney } from "../src/features/money";
 import { Header, ListGroup, ListRow, Screen, SecondaryButton, ui } from "../src/ui/core";
 
-function Overview({ workspaceId }: { workspaceId: string }) {
-  const activity = usePostedActivity(workspaceId);
+function Overview({ workspaceId, timeZone }: { workspaceId: string; timeZone: string }) {
+  const activity = usePostedActivity(workspaceId, timeZone);
   const recent = useRecentActivity(workspaceId, 4);
   return (
     <Screen>
@@ -42,7 +42,7 @@ function Overview({ workspaceId }: { workspaceId: string }) {
 export default function OverviewRoute() {
   const defaults = usePersonalDefaults();
   return defaults ? (
-    <Overview workspaceId={defaults.workspace.id} />
+    <Overview workspaceId={defaults.workspace.id} timeZone={defaults.workspace.timeZone} />
   ) : defaults === null ? (
     <Redirect href="/" />
   ) : (

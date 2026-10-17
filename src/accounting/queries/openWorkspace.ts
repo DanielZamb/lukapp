@@ -1,5 +1,6 @@
 import { requireWorkspace } from "../membership";
 import { clockMonth, dateFromTimestamp } from "../period";
+import { workspaceTimeZone } from "../timeZone";
 import type { AccountingClock, AccountingStore, Actor, Workspace } from "../types";
 import { toWorkspace } from "../views";
 
@@ -11,6 +12,7 @@ export async function openWorkspace(
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
   const month = clockMonth(
     input.now === undefined ? clock.now() : dateFromTimestamp(input.now),
+    workspaceTimeZone(workspace),
   );
   const stored = await store.getAccountingPeriod(input.workspaceId, month);
   return toWorkspace(workspace, stored ?? { ...month, status: "not_opened" });

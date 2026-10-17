@@ -36,6 +36,7 @@ import type * as lib_session from "../lib/session.js";
 import type * as personalDefaults from "../personalDefaults.js";
 import type * as store from "../store.js";
 import type * as validators from "../validators.js";
+import type * as workspaceBackfill from "../workspaceBackfill.js";
 
 import type {
   ApiFromModules,
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   personalDefaults: typeof personalDefaults;
   store: typeof store;
   validators: typeof validators;
+  workspaceBackfill: typeof workspaceBackfill;
 }>;
 
 /**

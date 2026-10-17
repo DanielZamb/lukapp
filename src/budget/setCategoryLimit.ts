@@ -19,7 +19,8 @@ export async function setCategoryLimit(
       throw new BudgetError("idempotency_key_conflict");
     return { revision: prior, replay: true };
   }
-  if (input.effectiveMonth !== currentBudgetMonth(input.now)) throw new BudgetError("month_changed");
+  if (input.effectiveMonth !== currentBudgetMonth(input.now, await store.timeZone()))
+    throw new BudgetError("month_changed");
   const category = (await store.listCategories()).find((category) => category.id === input.categoryId);
   if (!category) throw new BudgetError("category_not_found");
   if (category.nature !== "Expense") throw new BudgetError("expense_category_required");

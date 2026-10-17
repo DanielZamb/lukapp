@@ -29,6 +29,7 @@ export type BudgetCategory = {
 
 export type BudgetReadStore = {
   functionalCurrency: () => Promise<string>;
+  timeZone: () => Promise<string>;
   listRevisions: () => Promise<BudgetRevision[]>;
   listCategories: () => Promise<BudgetCategory[]>;
   categoryConsumption: (month: string) => Promise<{

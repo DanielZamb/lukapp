@@ -12,6 +12,8 @@ import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { api } from "./api";
 import { parseMoney } from "./money";
+import { TimeZonePicker } from "./TimeZonePicker";
+import { deviceTimeZone } from "./timeZones";
 import { Choice, Field, Header, PrimaryButton, theme, ui } from "../ui/core";
 import { spacing } from "../ui/tokens";
 
@@ -22,6 +24,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   const ensure = useAction(api.accounting.ensurePersonalDefaults);
   const [categories, setCategories] = useState<CategorySelection[]>([]);
   const [currency, setCurrency] = useState("COP");
+  const [timeZone, setTimeZone] = useState(deviceTimeZone);
   const [starting, setStarting] = useState("0");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -39,6 +42,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         functionalCurrency: currency,
         startingMinorUnits,
         categories,
+        timeZone,
       });
       sheet.current?.dismiss();
       onComplete();
@@ -56,7 +60,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   return (
     <>
       <Header title="Make it yours" />
-      <Text style={ui.body}>Four quick answers to get started.</Text>
+      <Text style={ui.body}>A few answers to get started.</Text>
       <PrimaryButton
         label="Start setup"
         onPress={() => sheet.current?.present()}
@@ -104,13 +108,21 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               }}
             />
           </View>
+          <TimeZonePicker
+            value={timeZone}
+            disabled={busy}
+            onChange={(next) => {
+              recordInteraction();
+              setTimeZone(next);
+            }}
+          />
           <View style={ui.section}>
-            <Text style={ui.label}>3 · PURCHASE ALERTS</Text>
+            <Text style={ui.label}>4 · PURCHASE ALERTS</Text>
             <Text style={ui.body}>Not now</Text>
             <Text style={ui.muted}>Post expenses manually for now.</Text>
           </View>
           <View style={ui.section}>
-            <Text style={ui.label}>4 · STARTING AMOUNT</Text>
+            <Text style={ui.label}>5 · STARTING AMOUNT</Text>
             <Field
               label="Starting amount"
               helperText="How much do you hold today? Use a comma for cents."
