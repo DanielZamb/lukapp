@@ -44,3 +44,20 @@ G01 owns thin verified-Clerk-sid registration, revocation checks, and the exact 
 - [Expo SDK 55 FileSystem](https://docs.expo.dev/versions/v55.0.0/sdk/filesystem/)
 - [Clerk Expo quickstart and official cache](https://clerk.com/docs/expo/getting-started/quickstart)
 - [Android sensitive activity protection](https://developer.android.com/security/fraud-prevention/activities)
+
+## Android APK receipt
+
+The local-entry source is `2e2b38b9f827c88e801ff46b8ea6384d888ea27f`. Android prebuild and native debug assembly exited zero at that clean commit. The APK is `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk` in the U01 worktree, with SHA-256 `baccab157c8c2256cad08c92c35ed80fb9f0feb056e8cb69234664999a216fce`.
+
+`aapt dump badging` confirms package `com.lukapp.u01.dev`, version `0.1.0`, version code `2`, debuggable, minimum SDK 24, target SDK 36, and `arm64-v8a`. The merged manifest includes the biometric permissions. The generated Kotlin activity includes the initial secure flag and native lifecycle privacy hooks, and compiles successfully. Android backup is disabled. The generated iOS Info.plist contains `Use Face ID to unlock your financial information in Lukapp.`
+
+From the repository root, reproduce without launching a device:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter @lukapp/mobile exec expo prebuild --platform android --no-install
+cd apps/mobile/android
+JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' ANDROID_HOME='/Users/zambamon/Library/Android/sdk' ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a --console=plain
+```
+
+Build log: `/tmp/u01-entry-android-build.log`. The native build uses Gradle 9.0.0, JDK 21.0.10, SDK/build tools 36, and NDK 27.1.12297006. This development APK requires the integrated JavaScript from Metro. Neither the installed previous APK nor a build-only result proves biometric or real-provider acceptance. The parent controls device installation, Metro, provider verification, and integration of G01 and U02. No hardware check was bypassed here.
