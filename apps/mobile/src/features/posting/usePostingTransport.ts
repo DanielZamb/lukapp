@@ -24,7 +24,7 @@ export function usePostingTransport(subject: string): PostingTransport {
   const setup = useAction(api.accounting.setupFinancialAccountProfile);
   return useMemo(
     () => ({
-      load: () =>
+      load: (draftId?: string) =>
         mutateLocalEntryDocument<LoadResult>(
           lease,
           subject,
@@ -32,8 +32,13 @@ export function usePostingTransport(subject: string): PostingTransport {
             const postings = document.drafts.filter(
               (draft) => draft.status === "posting",
             );
+            const chosen = postings.find((draft) => draft.id === draftId);
             let result: LoadResult;
-            if (postings.length === 1) {
+            if (chosen) {
+              // The user picked this posting row from Drafts, so resume it even when others wait.
+              postingId.current = chosen.id;
+              result = { kind: "pending", id: chosen.id, command: chosen.command };
+            } else if (postings.length === 1) {
               postingId.current = postings[0].id;
               result = {
                 kind: "pending",

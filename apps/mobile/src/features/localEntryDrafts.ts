@@ -11,6 +11,8 @@ import {
   pendingPostingSchema,
   type PendingPosting,
 } from "./posting/pendingPostingSchema";
+import { LocalEntryDraftGoneError } from "./localEntryDraftErrors";
+export { LocalEntryDraftGoneError };
 
 export const LOCAL_ENTRY_DRAFT_TTL_MS = 15 * 24 * 60 * 60 * 1000;
 export type LocalEntryDraftId = string;
@@ -293,6 +295,7 @@ export function keepIn(
 ): { document: LocalEntryDocument; id: LocalEntryDraftId } {
   const drafts = liveDrafts(document, now);
   const existing = drafts.find((draft) => draft.id === input.draftId);
+  if (input.draftId && !existing) throw new LocalEntryDraftGoneError(input.draftId);
   if (existing?.status === "posting")
     throw new Error("Cannot edit a posting draft");
   if (existing?.status === "open") {
@@ -330,6 +333,7 @@ export function beginPostIn(
 } {
   const drafts = liveDrafts(document, now);
   const existing = drafts.find((draft) => draft.id === input.draftId);
+  if (input.draftId && !existing) throw new LocalEntryDraftGoneError(input.draftId);
   if (existing?.status === "posting")
     return {
       document: { v: 1, drafts },

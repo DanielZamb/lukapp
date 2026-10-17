@@ -411,3 +411,37 @@ test("restored setup from To selects the new destination and keeps its original 
   expect(editor().destinationId).toBe("new-card");
   expect(editor().entryType).toBe("transfer");
 });
+
+test("an accounting rejection after leaving the screen still reopens the draft", async () => {
+  const api = transport();
+  let reject: (error: unknown) => void = () => {};
+  api.post.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-12,50");
+    editor().setDescription("Taxi");
+  });
+  let submitted: Promise<void> | undefined;
+  await act(async () => {
+    submitted = editor().submit();
+  });
+  await act(async () => root?.unmount());
+  root = undefined;
+  reject(new ConvexError({ kind: "accounting", code: "locked_period", message: "Locked Period" }));
+  await submitted;
+  expect(api.abort).toHaveBeenCalledTimes(1);
+  expect(api.clear).not.toHaveBeenCalled();
+});
+
+test("opening a posting row chosen from Drafts asks the transport for that row", async () => {
+  const api = transport();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  function Harness() {
+    usePostingEditor(account, api, { draftId: "row-b" });
+    return null;
+  }
+  await act(async () => {
+    root = create(createElement(Harness));
+  });
+  expect(api.load).toHaveBeenCalledWith("row-b");
+});

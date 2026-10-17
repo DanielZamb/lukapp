@@ -19,6 +19,7 @@ import {
   LocalInputLease,
   runLocalInputWrite,
 } from "../local-auth/localInput";
+import { LocalEntryDraftGoneError } from "./localEntryDraftErrors";
 import {
   LOCAL_ENTRY_DRAFT_TTL_MS,
   beginPostIn,
@@ -500,4 +501,16 @@ test("Home expiry purge does not restore a draft that posted while it waited", a
   await Promise.all([hold, posted, sync]);
   const after = parseLocalEntryDocument(await readRaw("owner"), Date.now());
   expect(after.document.drafts.map((draft) => draft.id)).not.toContain("live");
+});
+
+test("a draft posted or removed by another editor is gone, never recreated under a new key", () => {
+  // Editor A posted and cleared row "posted-elsewhere"; editor B still holds that id.
+  const other = keepIn(empty, { facts }, now, () => "still-open").document;
+  for (const act of [
+    () => keepIn(other, { draftId: "posted-elsewhere", facts }, now, newId),
+    () => beginPostIn(other, { draftId: "posted-elsewhere", command: expense }, now, newId),
+  ]) {
+    expect(act).toThrow(LocalEntryDraftGoneError);
+  }
+  expect(other.drafts.map((draft) => draft.id)).toEqual(["still-open"]);
 });

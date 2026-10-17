@@ -9,7 +9,7 @@ import type {
   LocalEntryDraftsPort,
   LocalEntryFacts,
 } from "../localEntryDrafts";
-
+import { LocalEntryDraftGoneError } from "../localEntryDraftErrors";
 import type { EntryType } from "./PostingForm";
 export type PostingReceipt = {
   description: string;
@@ -26,7 +26,7 @@ export type SavedPosting = {
   command: PendingPosting;
 };
 export type PostingTransport = {
-  load: () => Promise<LoadResult>;
+  load: (draftId?: LocalEntryDraftId) => Promise<LoadResult>;
   save: (
     entry: PendingPosting,
     draftId?: LocalEntryDraftId,
@@ -195,7 +195,7 @@ export function usePostingEditor(
     const mounted = { active: true };
     lifetime.current = mounted;
     transport
-      .load()
+      .load(requestedId)
       .then((value) => {
         if (!mounted.active) return;
         if (value.kind === "blocked") {
@@ -356,6 +356,12 @@ export function usePostingEditor(
       return id;
     } catch (error) {
       if (transport.reportFailure?.(error) || !mounted.active) return;
+      if (error instanceof LocalEntryDraftGoneError) {
+        setDraftId(undefined);
+        appliedDraft.current = undefined;
+        setError("This draft was already posted or removed. Keep again to save it as a new draft.");
+        return;
+      }
       setError("Could not keep this draft on this device.");
     } finally {
       opLock.current = false;
@@ -405,7 +411,15 @@ export function usePostingEditor(
       }
       setPosted(receipt);
     } catch (error) {
-      if (transport.reportFailure?.(error) || !mounted.active) return;
+      if (transport.reportFailure?.(error)) return;
+      if (error instanceof LocalEntryDraftGoneError) {
+        if (!mounted.active) return;
+        setPending(null);
+        setDraftId(undefined);
+        appliedDraft.current = undefined;
+        setError("This draft was already posted or removed. Nothing was posted again.");
+        return;
+      }
       const data: unknown = error instanceof ConvexError ? error.data : null;
       if (
         data !== null &&
@@ -413,6 +427,7 @@ export function usePostingEditor(
         "kind" in data &&
         data.kind === "accounting"
       ) {
+        // Reopen the facts even if the screen is gone, so the rejected draft can be corrected.
         try {
           await transport.abort();
           if (!mounted.active) return;
@@ -429,7 +444,7 @@ export function usePostingEditor(
             ? data.message
             : "Entry was rejected. Check the places, category, amount and date.",
         );
-      } else
+      } else if (mounted.active)
         setError(
           "Could not confirm posting. Retry to safely check the same entry.",
         );
