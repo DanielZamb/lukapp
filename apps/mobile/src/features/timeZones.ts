@@ -191,5 +191,11 @@ export function nextWorkspaceMidnight(now: Date, timeZone: string): number {
   for (let i = 0; i < 3; i++) {
     instant = asUtc - zoneOffsetMs(new Date(instant), timeZone);
   }
+  // Where daylight saving skips midnight (Beirut, Santiago), local 00:00 does not exist and
+  // the estimate lands before the date changes. Step forward to the first minute of the new
+  // date so a caller never re-arms on a time that is still "today".
+  for (let step = 0; step < 26 * 60 && (instant <= now.getTime() || calendarDate(new Date(instant), timeZone) === today); step++) {
+    instant += 60_000;
+  }
   return instant;
 }

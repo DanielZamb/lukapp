@@ -72,3 +72,19 @@ test("the next Workspace midnight is the zone's civil midnight, not 24 hours lat
   expect(calendarDate(new Date(next - 1), "America/Bogota")).toBe("2026-10-31");
   expect(calendarDate(new Date(next), "America/Bogota")).toBe("2026-11-01");
 });
+
+test("the next midnight is the first minute of the new date, even where DST skips midnight", () => {
+  // Beirut and Santiago move clocks forward at local midnight, so 00:00 never happens.
+  for (const [timeZone, nowIso, newDate] of [
+    ["Asia/Beirut", "2026-03-28T12:00:00Z", "2026-03-29"],
+    ["America/Santiago", "2026-09-05T12:00:00Z", "2026-09-06"],
+    ["America/Bogota", "2026-10-31T23:30:00-05:00", "2026-11-01"],
+    ["America/New_York", "2026-03-07T12:00:00Z", "2026-03-08"],
+  ] as const) {
+    const now = new Date(nowIso);
+    const next = nextWorkspaceMidnight(now, timeZone);
+    expect(next).toBeGreaterThan(now.getTime());
+    expect(calendarDate(new Date(next), timeZone)).toBe(newDate);
+    expect(calendarDate(new Date(next - 60_000), timeZone)).not.toBe(newDate);
+  }
+});

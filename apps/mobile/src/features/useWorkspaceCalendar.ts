@@ -8,8 +8,9 @@ export function useWorkspaceCalendar(timeZone: string) {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const tick = () => setNow(new Date());
     const arm = () => {
+      // nextWorkspaceMidnight is always in the future; the floor only guards a clock jump.
       const delay = Math.max(
-        1,
+        1_000,
         nextWorkspaceMidnight(new Date(), timeZone) - Date.now(),
       );
       timeout = setTimeout(() => {
