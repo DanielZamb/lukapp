@@ -5,7 +5,7 @@ import { action, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { mobilePlatform } from "./lib/securityValues";
 import { requireSession, verifyCurrentSession } from "./lib/session";
-import { getClerkSession, listActiveClerkSessions } from "./lib/clerkProvider";
+import { getClerkSession, isTerminalClerkSession, listActiveClerkSessions } from "./lib/clerkProvider";
 import { findOwnedInstall, requireDeviceManagement } from "./lib/deviceRegistry";
 
 export const register = action({
@@ -13,7 +13,13 @@ export const register = action({
   returns: v.id("mobileDevices"),
   handler: async (ctx, args): Promise<Id<"mobileDevices">> => {
     const session = await verifyCurrentSession(ctx.auth);
-    return ctx.runMutation(internal.deviceAccessInternal.register, { ...args, session });
+    const devices = await ctx.runQuery(internal.deviceAccessInternal.ownedDevices, {});
+    const stored = devices.find((d) => d.revokedAt === undefined &&
+      d.installId === args.installId && d.platform === args.platform);
+    const storedSessionTerminal = !!stored && stored.clerkSessionId !== session.clerkSessionId &&
+      stored.clerkClientId !== session.clerkClientId &&
+      isTerminalClerkSession(await getClerkSession(stored.clerkSessionId));
+    return ctx.runMutation(internal.deviceAccessInternal.register, { ...args, session, storedSessionTerminal });
   },
 });
 
@@ -44,7 +50,9 @@ export const status = query({
       const known = await findOwnedInstall(ctx, {
         userId: actor.userId, installId: args.installId, platform: args.platform,
       });
-      if (known)
+      const storedDenied = known && await ctx.db.query("clerkRevocations")
+        .withIndex("by_session", (q) => q.eq("clerkSessionId", known.clerkSessionId)).unique();
+      if (known && storedDenied)
         return { status: "unregistered", wipeLocalInput: false, existingLabel: known.label };
     }
     return { status: "unregistered", wipeLocalInput: false };

@@ -45,7 +45,9 @@ export async function findOwnedInstall(
     (args.platform === undefined || d.platform === args.platform));
 }
 
-export async function registerDevice(ctx: MutationCtx, session: LiveSession, input: Registration) {
+export async function registerDevice(
+  ctx: MutationCtx, session: LiveSession, input: Registration, storedSessionTerminal = false,
+) {
   const actor = await requireLiveObservation(ctx.auth, session);
   await requireDeviceManagement(ctx);
   const parsed = registration.safeParse(input);
@@ -66,14 +68,21 @@ export async function registerDevice(ctx: MutationCtx, session: LiveSession, inp
   }
   const devices = await ctx.db.query("mobileDevices")
     .withIndex("by_user", (q) => q.eq("clerkUserId", actor.userId)).collect();
-  // Move the existing named-device row onto this verified session; install metadata is not new authority.
   const reclaimable = devices.find((d) => d.revokedAt === undefined &&
     d.platform === metadata.platform && d.installId === metadata.installId);
   if (reclaimable) {
+    const storedDenied = await ctx.db.query("clerkRevocations")
+      .withIndex("by_session", (q) => q.eq("clerkSessionId", reclaimable.clerkSessionId)).unique();
+    if (reclaimable.clerkClientId !== session.clerkClientId && !storedDenied && !storedSessionTerminal)
+      throw new ConvexError({ code: "device_slot_occupied", occupiedLabel: reclaimable.label });
+    const oldSid = reclaimable.clerkSessionId;
+    // Patch before denial so denySession cannot mark the moved row revoked.
     await ctx.db.patch(reclaimable._id, {
       clerkSessionId: actor.clerkSessionId, clerkClientId: session.clerkClientId,
       label: metadata.label, appVersion: metadata.appVersion, lastSeenAt: Date.now(),
     });
+    if (oldSid !== actor.clerkSessionId)
+      await queueRevocation(ctx, actor.userId, oldSid, "superseded");
     return reclaimable._id;
   }
   const occupiers = devices.filter((d) => d.revokedAt === undefined &&
@@ -112,11 +121,14 @@ export async function recordClerkTerminalSession(ctx: MutationCtx, userId: strin
   });
 }
 
-export async function queueRevocation(ctx: MutationCtx, userId: string, sid: string) {
+export async function queueRevocation(
+  ctx: MutationCtx, userId: string, sid: string, reason?: "superseded",
+) {
   const existing = await denySession(ctx, userId, sid);
   if (existing) return existing._id;
   const id = await ctx.db.insert("clerkRevocations", {
     clerkUserId: userId, clerkSessionId: sid, requestedAt: Date.now(), attempts: 0,
+    ...(reason ? { reason } : {}),
   });
   await ctx.scheduler.runAfter(0, internal.deviceAccessInternal.reconcileRevocation, { id });
   return id;
