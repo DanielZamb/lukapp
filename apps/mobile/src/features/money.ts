@@ -24,8 +24,21 @@ export function parseMoney(text: string, locale = "es-CO"): number {
   return sign * Number(minor);
 }
 
-export function formatMoney(amount: { currency: string; minorUnits: number }) {
-  return `${amount.minorUnits < 0 ? "−" : ""}${amount.currency} ${new Intl.NumberFormat("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(amount.minorUnits) / 100)}`;
+export type FormatMoneyOptions = {
+  hideZeroDecimals?: boolean;
+};
+
+export function formatMoney(
+  amount: { currency: string; minorUnits: number },
+  options?: FormatMoneyOptions,
+) {
+  const absMinor = Math.abs(amount.minorUnits);
+  const hideZeroDecimals =
+    options?.hideZeroDecimals === true && absMinor % 100 === 0;
+  const fractionDigits = hideZeroDecimals
+    ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+    : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  return `${amount.minorUnits < 0 ? "−" : ""}${amount.currency} ${new Intl.NumberFormat("es-CO", fractionDigits).format(absMinor / 100)}`;
 }
 export function localDate(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
