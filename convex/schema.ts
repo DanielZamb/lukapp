@@ -2,6 +2,7 @@ import { categoryFields } from "./categoryValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { mobilePlatform } from "./lib/securityValues";
+import { revisionFields } from "./budgetValues";
 import {
   accountNature,
   normalSide,
@@ -21,6 +22,9 @@ export default defineSchema({
     financialAccountProfileId: v.id("financialAccountProfiles"),
     openingJournalEntryId: v.optional(v.id("journalEntries")),
   }).index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"]),
+  budgetLimitRevisions: defineTable(revisionFields)
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"]),
   userCategories: defineTable({
     workspaceId: v.id("workspaces"),
     ...categoryFields,
