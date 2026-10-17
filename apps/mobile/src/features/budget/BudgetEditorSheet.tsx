@@ -1,8 +1,15 @@
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { Header, ListGroup, PrimaryButton, SecondaryButton, theme, ui } from "../../ui/core";
-import { spacing, touchTarget } from "../../ui/tokens";
+import { ActivityIndicator, Text, View } from "react-native";
+import {
+  Choice,
+  Header,
+  PrimaryButton,
+  SecondaryButton,
+  theme,
+  ui,
+} from "../../ui/core";
+import { spacing } from "../../ui/tokens";
 import type { BudgetCategory } from "./model";
 
 export type BudgetEditorSheetProps = {
@@ -54,17 +61,16 @@ export function BudgetEditorSheet(props: BudgetEditorSheetProps) {
               placeholderTextColor={theme.mutedForeground} value={props.search} onChangeText={props.onSearch}
               editable={props.editable} style={ui.input} />
             {categories === undefined ? <ActivityIndicator /> : categories.length ? (
-              <ListGroup>
-                {categories.map((category) => (
-                  <Pressable key={category.id} accessibilityRole="radio"
-                    accessibilityState={{ checked: category.id === props.categoryId, disabled: !props.editable }}
-                    disabled={!props.editable} onPress={() => props.onCategory(category.id)}
-                    style={{ minHeight: touchTarget, padding: spacing.lg, flexDirection: "row", justifyContent: "space-between" }}>
-                    <Text style={ui.body}>{category.emoji} {category.name}</Text>
-                    <Text style={ui.body}>{category.id === props.categoryId ? "●" : "○"}</Text>
-                  </Pressable>
-                ))}
-              </ListGroup>
+              categories.map((category) => (
+                <Choice
+                  key={category.id}
+                  label={`${category.emoji} ${category.name}`}
+                  selected={category.id === props.categoryId}
+                  onPress={() => {
+                    if (props.editable) props.onCategory(category.id);
+                  }}
+                />
+              ))
             ) : <Text style={ui.muted}>No categories available. Add an expense category from Post money first.</Text>}
           </>
         )}

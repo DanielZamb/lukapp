@@ -36,3 +36,11 @@ test("formats the ledger balance with its currency and two decimal digits", () =
     "−COP 1.500,00",
   );
 });
+test("hideZeroDecimals drops ,00 when minor units are whole", () => {
+  expect(
+    formatMoney({ currency: "COP", minorUnits: 300_000 }, { hideZeroDecimals: true }),
+  ).toBe("COP 3.000");
+  expect(
+    formatMoney({ currency: "COP", minorUnits: 150_050 }, { hideZeroDecimals: true }),
+  ).toBe("COP 1.500,50");
+});
