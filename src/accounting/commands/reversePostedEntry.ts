@@ -58,6 +58,7 @@ export async function reversePostedEntry(
     policy: "reversal@1" as const,
     reversesEntryId: original.id,
     lines: original.lines.map((line) => ({
+      ...(line.userCategoryId ? { userCategoryId: line.userCategoryId } : {}),
       ledgerAccountId: line.ledgerAccountId,
       debitMinorUnits: line.creditMinorUnits,
       creditMinorUnits: line.debitMinorUnits,

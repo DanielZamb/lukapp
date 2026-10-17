@@ -1,3 +1,17 @@
+import {
+  categoryNature,
+  categorySelection,
+  categoryStyle,
+  createCategoryResult,
+  userCategory,
+} from "./categoryValidators";
+import { createUserCategory as createCategory } from "../src/accounting/commands/createUserCategory";
+import { restyleUserCategory as restyleCategory } from "../src/accounting/commands/restyleUserCategory";
+import { listUserCategories as listCategories } from "../src/accounting/queries/listUserCategories";
+import {
+  listCategoryPresets as categoryPresets,
+  suggestCategoryNature as suggestNature,
+} from "../src/accounting/categories/policy";
 /* Convex commands for the accounting kernel. Walkthrough: src/accounting/index.ts. */
 import { ConvexError, v } from "convex/values";
 import {
@@ -37,6 +51,7 @@ const cashActivity = {
   description: v.string(),
   idempotencyKey: v.string(),
   ledgerAccountCode: v.optional(v.string()),
+  userCategoryId: v.optional(v.string()),
 };
 
 async function run<T>(work: () => Promise<T>): Promise<T> {
@@ -227,7 +242,11 @@ export const personalDefaults = query({
 });
 
 export const ensurePersonalDefaults = mutation({
-  args: { functionalCurrency: v.string(), startingMinorUnits: v.number() },
+  args: {
+    functionalCurrency: v.string(),
+    startingMinorUnits: v.number(),
+    categories: v.optional(v.array(categorySelection)),
+  },
   returns: defaults,
   handler: async (ctx, args) => run(() => ensureDefaults(ctx, ctx.actor, args)),
 });
@@ -261,5 +280,45 @@ export const postedActivity = query({
         ...args,
         actor: ctx.actor,
       }),
+    ),
+});
+
+export const listCategoryPresets = query({
+  args: { nature: v.optional(categoryNature) },
+  handler: async (_ctx, args) => categoryPresets(args.nature),
+});
+
+export const suggestCategoryNature = query({
+  args: {
+    name: v.string(),
+    direction: v.optional(v.union(v.literal("out"), v.literal("in"))),
+  },
+  handler: async (_ctx, args) => suggestNature(args.name, args.direction),
+});
+
+export const createUserCategory = mutation({
+  args: { ...inWorkspace, selection: categorySelection },
+  returns: createCategoryResult,
+  handler: async (ctx, args) =>
+    run(() =>
+      createCategory(convexStore(ctx.db), { ...args, actor: ctx.actor }),
+    ),
+});
+
+export const listUserCategories = query({
+  args: inWorkspace,
+  returns: v.array(userCategory),
+  handler: async (ctx, args) =>
+    run(() =>
+      listCategories(convexReadStore(ctx.db), { ...args, actor: ctx.actor }),
+    ),
+});
+
+export const restyleUserCategory = mutation({
+  args: { ...inWorkspace, categoryId: v.string(), style: categoryStyle },
+  returns: userCategory,
+  handler: async (ctx, args) =>
+    run(() =>
+      restyleCategory(convexStore(ctx.db), { ...args, actor: ctx.actor }),
     ),
 });

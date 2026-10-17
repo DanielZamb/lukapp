@@ -1,3 +1,5 @@
+import { SetupCategories } from "./categories/SetupCategories";
+import type { CategorySelection } from "./categories/model";
 import {
   BottomSheetModal,
   BottomSheetScrollView,
@@ -14,6 +16,7 @@ import { spacing } from "../ui/tokens";
 export function Setup({ onComplete }: { onComplete: () => void }) {
   const sheet = useRef<BottomSheetModal>(null);
   const ensure = useMutation(api.accounting.ensurePersonalDefaults);
+  const [categories, setCategories] = useState<CategorySelection[]>([]);
   const [currency, setCurrency] = useState("COP");
   const [starting, setStarting] = useState("0");
   const [busy, setBusy] = useState(false);
@@ -28,7 +31,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
       if (startingMinorUnits < 0)
         throw new Error("Enter zero or the amount you hold.");
       setBusy(true);
-      await ensure({ functionalCurrency: currency, startingMinorUnits });
+      await ensure({
+        functionalCurrency: currency,
+        startingMinorUnits,
+        categories,
+      });
       sheet.current?.dismiss();
       onComplete();
     } catch (error) {
@@ -62,13 +69,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
           contentContainerStyle={{ padding: spacing.xxl, gap: spacing.xxl }}
         >
           <Header title="Make it yours" eyebrow="FIRST SETUP" />
-          <View style={ui.section}>
-            <Text style={ui.label}>1 · CATEGORIES</Text>
-            <Text style={ui.body}>Start without categories</Text>
-            <Text style={ui.muted}>
-              Keep your first expense simple. Categories come later.
-            </Text>
-          </View>
+          <SetupCategories
+            selections={categories}
+            onChange={setCategories}
+            disabled={busy}
+          />
           <View style={ui.section}>
             <Text style={ui.label}>2 · CURRENCY</Text>
             <Choice

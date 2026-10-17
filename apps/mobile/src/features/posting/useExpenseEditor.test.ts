@@ -135,3 +135,58 @@ test("a restored pending expense is acknowledged without generating a new key or
     amount: { currency: "COP", minorUnits: 500 },
   });
 });
+
+test("an uncertain category expense locks selection and retries the exact category, then clears it on Posted", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new Error("Network interrupted"));
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-1.500,00");
+    editor().setDescription("Food");
+    editor().setUserCategoryId("food-category");
+  });
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(api.post.mock.calls[0][0]).toMatchObject({
+    userCategoryId: "food-category",
+    idempotencyKey: "expense-1",
+  });
+  await act(async () => {
+    editor().setUserCategoryId("other-category");
+  });
+  expect(editor().userCategoryId).toBe("food-category");
+  expect(editor().editable).toBe(false);
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(api.post.mock.calls[1][0]).toEqual(api.post.mock.calls[0][0]);
+  expect(editor().posted?.description).toBe("Food");
+  expect(editor().userCategoryId).toBeNull();
+  await act(async () => {
+    editor().dismissPosted();
+  });
+  expect(editor().posted).toBeNull();
+  expect(api.post).toHaveBeenCalledTimes(2);
+});
+
+test("restoring a saved expense retains its category and sends it with the original idempotency key", async () => {
+  const api = transport();
+  const saved: PendingExpense = {
+    ...account,
+    amount: { currency: "COP", minorUnits: 500 },
+    accountingDate: "2026-10-16",
+    description: "Bus",
+    idempotencyKey: "saved-key",
+    userCategoryId: "transport-category",
+  };
+  api.load.mockResolvedValue(saved);
+  const editor = await open(api);
+  expect(editor().userCategoryId).toBe("transport-category");
+  expect(editor().editable).toBe(false);
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(api.post).toHaveBeenCalledExactlyOnceWith(saved);
+  expect(editor().userCategoryId).toBeNull();
+});

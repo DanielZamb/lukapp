@@ -1,3 +1,5 @@
+import { createUserCategory } from "../src/accounting/commands/createUserCategory";
+import type { CategorySelection } from "../src/accounting/categories/types";
 import { ConvexError } from "convex/values";
 import { createAccountingCore } from "../src/accounting";
 import { requireFunctionalCurrencyCode } from "../src/accounting/money";
@@ -32,7 +34,11 @@ export async function readPersonalDefaults(ctx: QueryCtx, actor: Actor) {
 export async function ensurePersonalDefaults(
   ctx: MutationCtx,
   actor: Actor,
-  args: { functionalCurrency: string; startingMinorUnits: number },
+  args: {
+    functionalCurrency: string;
+    startingMinorUnits: number;
+    categories?: CategorySelection[];
+  },
 ) {
   requireFunctionalCurrencyCode(args.functionalCurrency);
   if (
@@ -41,6 +47,17 @@ export async function ensurePersonalDefaults(
   ) {
     throw new ConvexError({ code: "starting_amount_invalid" });
   }
+  const categorySetupSignature = JSON.stringify(
+    (args.categories ?? [])
+      .map((selection) => [
+        selection.kind,
+        selection.kind === "preset" ? selection.presetId : selection.name,
+        selection.kind === "custom" ? selection.answer : null,
+        selection.style.emoji,
+        selection.style.tone,
+      ])
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+  );
   const existing = await readPersonalDefaults(ctx, actor);
   if (existing) {
     const defaults = await ctx.db
@@ -49,7 +66,8 @@ export async function ensurePersonalDefaults(
       .unique();
     if (
       existing.workspace.functionalCurrency !== args.functionalCurrency ||
-      defaults?.startingMinorUnits !== args.startingMinorUnits
+      defaults?.startingMinorUnits !== args.startingMinorUnits ||
+      (defaults?.categorySetupSignature ?? "[]") !== categorySetupSignature
     ) {
       throw new ConvexError({
         code: "setup_conflict",
@@ -65,6 +83,19 @@ export async function ensurePersonalDefaults(
     actor,
     functionalCurrency: args.functionalCurrency,
   });
+  for (const selection of args.categories ?? []) {
+    const result = await createUserCategory(store, {
+      actor,
+      workspaceId: workspace.id,
+      selection,
+    });
+    if (result.kind === "accountSetupRequired") {
+      throw new ConvexError({
+        code: "account_setup_required",
+        message: "Add a place for this money before continuing",
+      });
+    }
+  }
   const financialAccountProfile = await core.createFinancialAccountProfile({
     actor,
     workspaceId: workspace.id,
@@ -96,6 +127,7 @@ export async function ensurePersonalDefaults(
     workspaceId,
     financialAccountProfileId: profileId,
     startingMinorUnits: args.startingMinorUnits,
+    categorySetupSignature,
   });
   return { workspace, financialAccountProfile };
 }

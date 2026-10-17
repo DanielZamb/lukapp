@@ -98,6 +98,15 @@ async function assertLinkedRecords(
   workspaceId: string,
   draft: JournalEntryDraft,
 ): Promise<void> {
+  for (const line of draft.lines) {
+    if (line.userCategoryId !== undefined) {
+      const category = await store.getCategory(line.userCategoryId);
+      if (!category || category.workspaceId !== workspaceId) {
+        throw new AccountingError("category_not_found");
+      }
+      if (!category.nature) throw new AccountingError("category_nature_required");
+    }
+  }
   if (draft.financialAccountProfileId !== undefined) {
     const profile = await store.getProfile(draft.financialAccountProfileId);
     if (!profile || profile.workspaceId !== workspaceId) {
@@ -125,6 +134,7 @@ function sameDraft(entry: StoredJournalEntry, draft: JournalEntryDraft): boolean
       return (
         other !== undefined &&
         line.ledgerAccountId === other.ledgerAccountId &&
+        line.userCategoryId === other.userCategoryId &&
         line.debitMinorUnits === other.debitMinorUnits &&
         line.creditMinorUnits === other.creditMinorUnits
       );

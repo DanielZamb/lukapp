@@ -32,11 +32,12 @@ export async function postedActivity(
       title: entry.description || "Expense",
       date: entry.accountingDate,
       detail:
-        entry.policy === "start-tracking@1"
+        entry.lines.find((line) => line.userCategoryName)?.userCategoryName ??
+        (entry.policy === "start-tracking@1"
           ? "Starting amount"
           : entry.policy === "cash-income@1"
             ? "Income"
-            : "Expense",
+            : "Expense"),
       reversed: entry.reversedByEntryId !== undefined,
       amount: {
         ...entry.amount,
