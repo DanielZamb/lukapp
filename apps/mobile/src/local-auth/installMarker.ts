@@ -5,6 +5,12 @@ export const installMarkerSchema = z.discriminatedUnion("kind", [
   z.object({ ...base, kind: z.literal("sign-in-required") }),
   z.object({
     ...base,
+    kind: z.literal("wipe-required"),
+    subject: z.string().min(1),
+    sessionId: z.string().min(1),
+  }),
+  z.object({
+    ...base,
     kind: z.literal("enrolled"),
     subject: z.string().min(1),
     sessionId: z.string().min(1),

@@ -1,5 +1,7 @@
 # U01 local handoff
 
+Current security/admission instructions are in [DEVICE_ADMISSION.md](DEVICE_ADMISSION.md). The initial setup/API examples and security gaps below record earlier checkpoints; use the current G01/U02 action contract after integration, including named registration before any financial request.
+
 This slice targets L1 on `frontend/u01-first-expense-20261017`, based on `fcb3065858de587734829d34ca4a6b4cb8d28d9e`. The source identifier is the commit containing this file, obtained with `git rev-parse HEAD`. App identity is `com.lukapp.u01.dev`, version `0.1.0`, iOS build `1`, Android version code `1`. Expo SDK 55 and React Native 0.83.10 are pinned in the lockfile.
 
 Local checks passed: `pnpm test` with 111 tests, `pnpm typecheck` for backend and mobile, and native Hermes exports for iOS and Android. These are local regression and bundle evidence. The original L1 checkpoint had no native binary. The correction now has an Android debug APK, recorded below. Installation, actual Clerk admission, deployed source match, and UI acceptance remain open. CocoaPods was absent. Installing it through Homebrew failed with `undefined method '[]' for nil` in `Utils::Bottles.load_tab`. Native prebuild completed without installing pods. No simulator was opened or driven.

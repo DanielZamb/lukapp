@@ -79,6 +79,9 @@ export async function unlockBiometry(marker: InstallMarker, subject: string) {
   if (sentinel !== sentinelValue(marker, subject))
     throw new Error("Biometric enrollment changed");
 }
+export async function clearBiometricEnrollment(marker: InstallMarker) {
+  await SecureStore.deleteItemAsync(sentinelKey(marker), sentinelOptions);
+}
 export async function cancelBiometricPrompt() {
   if (Platform.OS === "android") await LocalAuthentication.cancelAuthenticate();
 }
