@@ -1,5 +1,6 @@
 import {
   currentRecoveryMonth,
+  isAssetProductKind,
   RecoveryError,
   requireIdempotencyKey,
   suggestContribution,
@@ -37,6 +38,8 @@ export async function activatePlan(
   );
   if (!destination || destination.workspaceId !== input.workspaceId)
     throw new RecoveryError("destination_not_found");
+  if (!isAssetProductKind(destination.productKind))
+    throw new RecoveryError("destination_must_be_asset");
   const suggestion = suggestContribution({
     principalMinorUnits: source.amountMinorUnits,
     installmentCount: input.installmentCount,

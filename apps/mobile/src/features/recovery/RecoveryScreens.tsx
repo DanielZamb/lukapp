@@ -202,7 +202,7 @@ export function RecoveryPlanScreen(props: {
         <ListRow title="Remaining on the plan" value={remaining} />
         <ListRow title="Destination" value={props.plan.destinationName} />
         <ListRow title="Original plan" value={`${props.plan.installmentCount} months`} />
-        <ListRow title="Implied self-charge" value={formatRate(props.plan.impliedAnnualRateBps)} />
+        <ListRow title="Implied monthly self-charge" value={formatRate(props.plan.impliedAnnualRateBps)} />
       </ListGroup>
       {!complete && (
         <PrimaryButton label="Move money" onPress={props.onMove} />

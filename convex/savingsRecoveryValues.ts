@@ -40,10 +40,15 @@ export const activateResult = v.object({
   replay: v.boolean(),
 });
 export const contributeArgs = {
-  workspaceId: v.string(), planId: v.string(), transferJournalEntryId: v.string(),
-  idempotencyKey: v.string(),
+  workspaceId: v.string(), planId: v.string(),
+  sourceFinancialAccountProfileId: v.string(),
+  amount: v.object({ currency: v.string(), minorUnits: v.number() }),
+  accountingDate: v.string(), description: v.string(), idempotencyKey: v.string(),
 };
 export const contributeResult = v.object({
+  transfer: v.object({
+    id: v.string(), amount: v.object({ currency: v.string(), minorUnits: v.number() }),
+  }),
   contribution: v.object({
     id: v.string(), workspaceId: v.string(), planId: v.string(),
     transferJournalEntryId: v.string(), amountMinorUnits: v.number(),

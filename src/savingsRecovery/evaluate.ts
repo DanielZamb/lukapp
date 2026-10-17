@@ -1,4 +1,7 @@
-import { currentRecoveryMonth, RecoveryError, requireMonth } from "./policy";
+import {
+  currentRecoveryMonth, isAssetProductKind, planTargetMinorUnits, RecoveryError, requireMonth,
+  scheduledDueMinorUnits,
+} from "./policy";
 import type {
   RecoveryContribution,
   RecoveryLedgerEntry,
@@ -10,8 +13,11 @@ export async function planProgress(
   plan: RecoveryPlan,
   contributions: RecoveryContribution[],
   reversed: (transferId: string) => Promise<boolean>,
+  viewedMonth: string,
 ) {
-  const target = plan.installmentCount * plan.installmentMinorUnits;
+  const target = planTargetMinorUnits(
+    plan.principalMinorUnits, plan.installmentCount, plan.installmentMinorUnits,
+  );
   let recovered = 0;
   for (const contribution of contributions.filter((item) => item.planId === plan.id)) {
     if (!(await reversed(contribution.transferJournalEntryId)))
@@ -24,7 +30,7 @@ export async function planProgress(
     recoveredMinorUnits: recovered,
     remainingMinorUnits: remaining,
     targetMinorUnits: target,
-    dueMinorUnits: remaining === 0 ? 0 : Math.min(plan.installmentMinorUnits, remaining),
+    dueMinorUnits: Math.max(0, scheduledDueMinorUnits(plan, viewedMonth) - recovered),
   };
 }
 
@@ -42,7 +48,8 @@ export async function evaluateWorkspace(
     store.listExpenseEntries(),
   ]);
   const reserved = new Set(plans.map((plan) => plan.sourceJournalEntryId));
-  const destinations = profiles
+  const assets = profiles.filter((profile) => isAssetProductKind(profile.productKind));
+  const destinations = assets
     .slice()
     .sort((a, b) => Number(b.productKind === "savingsAccount") - Number(a.productKind === "savingsAccount")
       || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -51,8 +58,7 @@ export async function evaluateWorkspace(
     .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
     .map(async (plan) => {
       const progress = await planProgress(plan, contributions, async (entryId) =>
-        Boolean(await store.findReversalOf(entryId)),
-      );
+        Boolean(await store.findReversalOf(entryId)), month);
       const source = await store.getEntry(plan.sourceJournalEntryId);
       const destination = destinations.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
       return {
@@ -83,7 +89,7 @@ export async function evaluateWorkspace(
     destinations: destinations.map((profile) => ({
       id: profile.id, name: profile.name, productKind: profile.productKind,
     })),
-    sources: profiles
+    sources: assets
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
       .map((profile) => ({ id: profile.id, name: profile.name, productKind: profile.productKind })),

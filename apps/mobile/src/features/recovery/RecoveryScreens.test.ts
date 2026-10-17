@@ -46,7 +46,7 @@ test("Plans recovery lists progress and starts a plan from a posted expense", as
     currency: "COP", plans: [plan], candidates: [candidate],
     onBack: () => {}, onPlan, onStart,
   }));
-  expect(screen.findAll((node) => node.props.detail === "COP 2.300,00 of COP 12.000,00 moved back to savings")).toHaveLength(1);
+  expect(screen.findAll((node) => node.props.detail === "COP 2.300,00 of COP 13.800,00 moved back to savings")).toHaveLength(1);
   expect(screen.findAll((node) => node.props.value === "COP 12.000,00" && node.props.title === "Laptop repair")).toHaveLength(1);
   await act(async () => {
     screen.findAll((node) => node.props.title === "Laptop repair" && node.props.onPress)[0].props.onPress();

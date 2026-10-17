@@ -1,4 +1,4 @@
-import { RecoveryError, requireIdempotencyKey } from "./policy";
+import { currentRecoveryMonth, isAssetProductKind, RecoveryError, requireIdempotencyKey } from "./policy";
 import { planProgress } from "./evaluate";
 import type { RecordContribution, RecoveryWriteStore } from "./types";
 
@@ -26,12 +26,19 @@ export async function recordContribution(
   if (await store.findReversalOf(transfer.id)) throw new RecoveryError("transfer_reversed");
   if (transfer.destinationFinancialAccountProfileId !== plan.destinationFinancialAccountProfileId)
     throw new RecoveryError("transfer_destination_mismatch");
+  const profiles = await store.listProfiles();
+  const source = profiles.find((profile) => profile.id === transfer.financialAccountProfileId);
+  const destination = profiles.find((profile) => profile.id === transfer.destinationFinancialAccountProfileId);
+  if (!source || !isAssetProductKind(source.productKind))
+    throw new RecoveryError("source_must_be_asset");
+  if (!destination || !isAssetProductKind(destination.productKind))
+    throw new RecoveryError("destination_must_be_asset");
   const claimed = (await store.listContributions()).some(
     (contribution) => contribution.transferJournalEntryId === transfer.id,
   );
   if (claimed) throw new RecoveryError("transfer_already_attributed");
   const remaining = (await planProgress(plan, await store.listContributions(), async (entryId) =>
-    Boolean(await store.findReversalOf(entryId)),
+    Boolean(await store.findReversalOf(entryId)), currentRecoveryMonth(input.now),
   )).remainingMinorUnits;
   if (remaining <= 0) throw new RecoveryError("plan_already_complete");
   const amount = Math.min(transfer.amountMinorUnits, remaining);

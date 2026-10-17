@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { impliedAnnualRateBps, minInstallment, suggestContribution } from "./policy";
+import { impliedMonthlyRateBps, minInstallment, suggestContribution } from "./policy";
 
 test("the default suggestion is the zero-rate split that still covers the principal", () => {
   expect(suggestContribution({ principalMinorUnits: 1_200_000, installmentCount: 6 })).toEqual({
@@ -12,13 +12,20 @@ test("the default suggestion is the zero-rate split that still covers the princi
     premiumMinorUnits: 0,
     targetMinorUnits: 1_200_000,
   });
-  expect(minInstallment(1_200_001, 6)).toBe(200_001);
-  expect(suggestContribution({
-    principalMinorUnits: 1_200_001, installmentCount: 6, installmentMinorUnits: 200_001,
-  }).premiumMinorUnits).toBe(5);
+  expect(minInstallment(1_200_001, 6)).toBe(200_000);
+  expect(suggestContribution({ principalMinorUnits: 1_200_001, installmentCount: 6 })).toEqual({
+    principalMinorUnits: 1_200_001,
+    installmentCount: 6,
+    installmentMinorUnits: 200_000,
+    minInstallmentMinorUnits: 200_000,
+    maxInstallmentMinorUnits: 1_200_001,
+    impliedAnnualRateBps: 0,
+    premiumMinorUnits: 0,
+    targetMinorUnits: 1_200_001,
+  });
 });
 
-test("an edited amount above the split reports extra saving and a positive implied annual rate", () => {
+test("an edited amount above the split reports extra saving and a positive monthly rate", () => {
   const four = suggestContribution({
     principalMinorUnits: 1_200_000, installmentCount: 4, installmentMinorUnits: 330_000,
   });
@@ -36,15 +43,15 @@ test("an edited amount above the split reports extra saving and a positive impli
   expect(six.impliedAnnualRateBps).toBeGreaterThan(four.impliedAnnualRateBps);
 });
 
-test("the implied rate recovers a known monthly charge within one basis point", () => {
+test("the implied rate is the monthly charge in basis points", () => {
   const principal = 2_181_700;
   const monthly = 0.026;
   const growth = (1 + monthly) ** 8;
   const payment = Math.round((principal * monthly * growth) / (growth - 1));
-  expect(impliedAnnualRateBps(principal, 8, payment)).toBeCloseTo(3120, -1);
+  expect(impliedMonthlyRateBps(principal, 8, payment)).toBeCloseTo(260, -1);
   expect(suggestContribution({
     principalMinorUnits: principal, installmentCount: 8, installmentMinorUnits: payment,
-  }).impliedAnnualRateBps).toBe(impliedAnnualRateBps(principal, 8, payment));
+  }).impliedAnnualRateBps).toBe(impliedMonthlyRateBps(principal, 8, payment));
 });
 
 test("suggestion math names its inputs and rejects amounts that cannot finish the plan", () => {

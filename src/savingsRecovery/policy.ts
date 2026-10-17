@@ -28,8 +28,49 @@ export function requirePositiveAmount(minorUnits: number) {
   return minorUnits;
 }
 
+export const ASSET_PRODUCT_KINDS = ["cash", "bankAccount", "savingsAccount"] as const;
+
+export function isAssetProductKind(kind: string) {
+  return (ASSET_PRODUCT_KINDS as readonly string[]).includes(kind);
+}
+
 export function minInstallment(principalMinorUnits: number, installmentCount: number) {
-  return Math.ceil(principalMinorUnits / installmentCount);
+  return Math.floor(principalMinorUnits / installmentCount);
+}
+
+export function planTargetMinorUnits(
+  principalMinorUnits: number,
+  installmentCount: number,
+  installmentMinorUnits: number,
+) {
+  const even = installmentMinorUnits * installmentCount;
+  return even < principalMinorUnits ? principalMinorUnits : even;
+}
+
+export function monthsElapsed(activationMonth: string, viewedMonth: string) {
+  requireMonth(activationMonth);
+  requireMonth(viewedMonth);
+  const [startYear, startMonth] = activationMonth.split("-").map(Number);
+  const [viewYear, viewMonth] = viewedMonth.split("-").map(Number);
+  return (viewYear - startYear) * 12 + (viewMonth - startMonth) + 1;
+}
+
+export function scheduledDueMinorUnits(
+  plan: {
+    activationMonth: string;
+    installmentCount: number;
+    installmentMinorUnits: number;
+    principalMinorUnits: number;
+  },
+  viewedMonth: string,
+) {
+  const elapsed = monthsElapsed(plan.activationMonth, viewedMonth);
+  if (elapsed <= 0) return 0;
+  const target = planTargetMinorUnits(
+    plan.principalMinorUnits, plan.installmentCount, plan.installmentMinorUnits,
+  );
+  if (elapsed >= plan.installmentCount) return target;
+  return elapsed * plan.installmentMinorUnits;
 }
 
 function paymentFromMonthlyRate(principal: number, monthlyRate: number, count: number) {
@@ -38,13 +79,12 @@ function paymentFromMonthlyRate(principal: number, monthlyRate: number, count: n
   return (principal * monthlyRate * growth) / (growth - 1);
 }
 
-export function impliedAnnualRateBps(
+export function impliedMonthlyRateBps(
   principalMinorUnits: number,
   installmentCount: number,
   installmentMinorUnits: number,
 ) {
-  const target = installmentMinorUnits * installmentCount;
-  if (target === principalMinorUnits) return 0;
+  if (installmentMinorUnits * installmentCount <= principalMinorUnits) return 0;
   let low = 0;
   let high = 10;
   for (let step = 0; step < 64; step += 1) {
@@ -53,7 +93,7 @@ export function impliedAnnualRateBps(
       high = mid;
     else low = mid;
   }
-  return Math.round(12 * ((low + high) / 2) * 10_000);
+  return Math.round(((low + high) / 2) * 10_000);
 }
 
 export function suggestContribution(input: {
@@ -70,14 +110,14 @@ export function suggestContribution(input: {
   requirePositiveAmount(installment);
   if (installment < min) throw new RecoveryError("installment_below_minimum");
   if (installment > principal) throw new RecoveryError("installment_above_principal");
-  const target = installment * input.installmentCount;
+  const target = planTargetMinorUnits(principal, input.installmentCount, installment);
   return {
     principalMinorUnits: principal,
     installmentCount: input.installmentCount,
     installmentMinorUnits: installment,
     minInstallmentMinorUnits: min,
     maxInstallmentMinorUnits: principal,
-    impliedAnnualRateBps: impliedAnnualRateBps(principal, input.installmentCount, installment),
+    impliedAnnualRateBps: impliedMonthlyRateBps(principal, input.installmentCount, installment),
     premiumMinorUnits: target - principal,
     targetMinorUnits: target,
   };

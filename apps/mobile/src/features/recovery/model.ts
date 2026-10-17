@@ -10,7 +10,7 @@ export const INSTALLMENT_COUNTS = [4, 6, 8, 12] as const;
 export const DEFAULT_INSTALLMENT_COUNT = 6;
 
 export function minInstallment(principalMinorUnits: number, installmentCount: number) {
-  return Math.ceil(principalMinorUnits / installmentCount);
+  return Math.floor(principalMinorUnits / installmentCount);
 }
 
 export function suggestionFor(
@@ -19,7 +19,8 @@ export function suggestionFor(
   installmentMinorUnits = minInstallment(principalMinorUnits, installmentCount),
 ) {
   const min = minInstallment(principalMinorUnits, installmentCount);
-  const target = installmentMinorUnits * installmentCount;
+  const even = installmentMinorUnits * installmentCount;
+  const target = even < principalMinorUnits ? principalMinorUnits : even;
   return {
     installmentMinorUnits,
     minInstallmentMinorUnits: min,
@@ -34,8 +35,8 @@ export function formatRate(bps: number) {
   return `${(bps / 100).toFixed(1)}%`;
 }
 
-export function progressRatio(plan: Pick<RecoveryPlanView, "recoveredMinorUnits" | "principalMinorUnits">) {
-  return plan.principalMinorUnits === 0 ? 0 : plan.recoveredMinorUnits / plan.principalMinorUnits;
+export function progressRatio(plan: Pick<RecoveryPlanView, "recoveredMinorUnits" | "targetMinorUnits">) {
+  return plan.targetMinorUnits === 0 ? 0 : plan.recoveredMinorUnits / plan.targetMinorUnits;
 }
 
 export function limitsCopy(
@@ -56,6 +57,24 @@ export function limitsCopy(
 
 export function progressCopy(plan: RecoveryPlanView) {
   const recovered = formatMoney({ currency: plan.currency, minorUnits: plan.recoveredMinorUnits });
-  const principal = formatMoney({ currency: plan.currency, minorUnits: plan.principalMinorUnits });
-  return `${recovered} of ${principal} moved back to savings`;
+  const target = formatMoney({ currency: plan.currency, minorUnits: plan.targetMinorUnits });
+  return `${recovered} of ${target} moved back to savings`;
+}
+
+export function movedCopy(input: {
+  currency: string;
+  title: string;
+  movedMinorUnits: number;
+  countedMinorUnits: number;
+  recoveredMinorUnits: number;
+  targetMinorUnits: number;
+}) {
+  const percent = Math.round(progressRatio({
+    recoveredMinorUnits: input.recoveredMinorUnits,
+    targetMinorUnits: input.targetMinorUnits,
+  }) * 100);
+  const recovered = `${input.title} is now ${percent}% recovered. The savings balance stays separate from plan progress.`;
+  if (input.movedMinorUnits === input.countedMinorUnits) return recovered;
+  const counted = formatMoney({ currency: input.currency, minorUnits: input.countedMinorUnits });
+  return `${counted} counted toward ${input.title}. ${recovered}`;
 }

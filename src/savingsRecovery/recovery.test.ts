@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { activatePlan } from "./activatePlan";
 import { evaluateWorkspace } from "./evaluate";
 import { recordContribution } from "./recordContribution";
+import { recordRecoveryMove, type PostRecoveryTransfer } from "./recordRecoveryMove";
 import { RecoveryError } from "./policy";
 import type {
   RecoveryContribution,
@@ -109,8 +110,12 @@ test("a contribution counts a posted transfer and a reversed transfer lowers pro
   });
   expect(await s.contribute(transfer.id)).toEqual({ ...gift, replay: true });
   expect((await s.read()).plans[0]).toMatchObject({
-    recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, dueMinorUnits: 230_000,
+    recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, dueMinorUnits: 0,
   });
+  expect((await evaluateWorkspace(s.store, { now: Date.UTC(2026, 9, 17), month: "2026-10" })).plans[0])
+    .toMatchObject({ dueMinorUnits: 230_000, recoveredMinorUnits: 230_000 });
+  expect((await evaluateWorkspace(s.store, { now: Date.UTC(2026, 7, 17), month: "2026-08" })).plans[0])
+    .toMatchObject({ dueMinorUnits: 0 });
   s.put({
     id: "rev-1", workspaceId: "ws", policy: "reversal@1", description: "Reversal",
     accountingDate: "2026-09-19", amountMinorUnits: 230_000, reversesEntryId: transfer.id,
@@ -118,6 +123,8 @@ test("a contribution counts a posted transfer and a reversed transfer lowers pro
   expect((await s.read()).plans[0]).toMatchObject({
     recoveredMinorUnits: 0, remainingMinorUnits: 1_380_000, dueMinorUnits: 230_000,
   });
+  expect((await evaluateWorkspace(s.store, { now: Date.UTC(2026, 9, 17), month: "2026-10" })).plans[0])
+    .toMatchObject({ recoveredMinorUnits: 0, dueMinorUnits: 460_000 });
   expect(await s.store.listContributions()).toHaveLength(1);
 });
 
@@ -136,4 +143,58 @@ test("idempotent retries replay and changed keys or reused transfers are rejecte
     accountingDate: "2026-09-01", amountMinorUnits: 230_000,
   });
   await expect(s.contribute("income-1", "gift-c")).rejects.toMatchObject({ code: "transfer_not_found" });
+});
+
+test("only an asset-to-asset transfer into the plan destination counts", async () => {
+  const s = memory();
+  s.profiles.push({ id: "card", workspaceId: "ws", name: "Card", productKind: "creditCard" });
+  await expect(s.activate({
+    destinationFinancialAccountProfileId: "card", idempotencyKey: "activate-card",
+  })).rejects.toMatchObject({ code: "destination_must_be_asset" });
+  await s.activate();
+  s.transfer("xfer-card", 230_000);
+  s.put({
+    id: "xfer-card", workspaceId: "ws", policy: "account-transfer@1",
+    description: "Pay card", accountingDate: "2026-09-18", amountMinorUnits: 230_000,
+    financialAccountProfileId: "card", destinationFinancialAccountProfileId: "savings",
+  });
+  await expect(s.contribute("xfer-card")).rejects.toMatchObject({ code: "source_must_be_asset" });
+});
+
+test("a crash after the transfer posts retries the same pair under one key", async () => {
+  const s = memory();
+  await s.activate();
+  const posted = new Map<string, { id: string; amountMinorUnits: number; accountingDate: string }>();
+  const postTransfer: PostRecoveryTransfer = async (input) => {
+    const prior = posted.get(input.idempotencyKey);
+    if (prior) return prior;
+    const entry = s.transfer(`xfer-${posted.size + 1}`, input.amount.minorUnits);
+    const receipt = { id: entry.id, amountMinorUnits: entry.amountMinorUnits, accountingDate: entry.accountingDate };
+    posted.set(input.idempotencyKey, receipt);
+    return receipt;
+  };
+  const insert = s.store.insertContribution;
+  let crash = true;
+  s.store.insertContribution = async (contribution) => {
+    if (crash) { crash = false; throw new Error("crash between steps"); }
+    return insert(contribution);
+  };
+  const input = {
+    workspaceId: "ws", planId: (await s.store.listPlans())[0].id,
+    sourceFinancialAccountProfileId: "daily",
+    amount: { currency: "COP", minorUnits: 230_000 },
+    accountingDate: "2026-09-18", description: "Recovery: Laptop repair",
+    idempotencyKey: "move-1", actorId: "owner", now: Date.UTC(2026, 8, 18),
+  };
+  await expect(recordRecoveryMove(s.store, postTransfer, input)).rejects.toThrow("crash between steps");
+  const first = await recordRecoveryMove(s.store, postTransfer, input);
+  const replay = await recordRecoveryMove(s.store, postTransfer, input);
+  expect(posted.size).toBe(1);
+  expect(first).toMatchObject({
+    replay: false,
+    transfer: { id: "xfer-1", amountMinorUnits: 230_000 },
+    contribution: { transferJournalEntryId: "xfer-1", amountMinorUnits: 230_000 },
+  });
+  expect(replay).toEqual({ ...first, replay: true });
+  expect(await s.store.listContributions()).toHaveLength(1);
 });

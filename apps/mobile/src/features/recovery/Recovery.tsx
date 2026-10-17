@@ -7,7 +7,7 @@ import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { ConfirmationScreen, Screen } from "../../ui/core";
 import { api } from "../api";
 import { formatMoney } from "../money";
-import type { RecoveryCandidate } from "./model";
+import { movedCopy, type RecoveryCandidate } from "./model";
 import {
   RecoveryBoard,
   RecoveryDraft,
@@ -27,9 +27,8 @@ type View =
     name: "moved";
     planId: string;
     title: string;
-    amountMinorUnits: number;
-    recoveredMinorUnits: number;
-    principalMinorUnits: number;
+    movedMinorUnits: number;
+    countedMinorUnits: number;
     currency: string;
   };
 
@@ -74,13 +73,19 @@ export function Recovery({ workspaceId, onBack }: { workspaceId: string; onBack:
     );
   }
   if (view.name === "moved") {
-    const percent = view.principalMinorUnits === 0
-      ? 0
-      : Math.round((view.recoveredMinorUnits / view.principalMinorUnits) * 100);
+    const live = board.plans.find((item) => item.id === view.planId);
+    if (!live) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
     return (
       <ConfirmationScreen
-        title={`${formatMoney({ currency: view.currency, minorUnits: view.amountMinorUnits })} moved`}
-        detail={`${view.title} is now ${percent}% recovered. The savings balance stays separate from plan progress.`}
+        title={`${formatMoney({ currency: view.currency, minorUnits: view.movedMinorUnits })} moved`}
+        detail={movedCopy({
+          currency: view.currency,
+          title: view.title,
+          movedMinorUnits: view.movedMinorUnits,
+          countedMinorUnits: view.countedMinorUnits,
+          recoveredMinorUnits: live.recoveredMinorUnits,
+          targetMinorUnits: live.targetMinorUnits,
+        })}
         buttonLabel="View recovery plan"
         onContinue={() => setView({ name: "plan", id: view.planId })}
       />
@@ -102,9 +107,8 @@ export function Recovery({ workspaceId, onBack }: { workspaceId: string; onBack:
             name: "moved",
             planId: plan.id,
             title: plan.title,
-            amountMinorUnits: receipt.contribution.amountMinorUnits,
-            recoveredMinorUnits: plan.recoveredMinorUnits + receipt.contribution.amountMinorUnits,
-            principalMinorUnits: plan.principalMinorUnits,
+            movedMinorUnits: receipt.transfer.amount.minorUnits,
+            countedMinorUnits: receipt.contribution.amountMinorUnits,
             currency: plan.currency,
           });
         }}
@@ -173,12 +177,11 @@ function Move({
   onClose: () => void;
   onMoved: Parameters<typeof useRecoveryMove>[1]["onMoved"];
 }) {
-  const transfer = useAction(api.accounting.recordAccountTransfer);
   const contribute = useAction(api.savingsRecovery.recordContribution);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
   const move = useRecoveryMove({ workspaceId, plan, sources }, {
-    transfer, contribute, reportFailure, newKey: Crypto.randomUUID, onMoved,
+    move: contribute, reportFailure, newKey: Crypto.randomUUID, onMoved,
   });
   return (
     <RecoveryMoveScreen
