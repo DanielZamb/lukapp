@@ -1,6 +1,15 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { ComponentProps, PropsWithChildren } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { font, fontSize, radius, spacing, themes, touchTarget } from "./tokens";
 
@@ -49,12 +58,15 @@ export const ui = StyleSheet.create({
   section: { gap: spacing.md },
 });
 
-export function Screen({ children }: PropsWithChildren) {
+export function Screen({
+  children,
+  contentStyle,
+}: PropsWithChildren<{ contentStyle?: StyleProp<ViewStyle> }>) {
   return (
     <SafeAreaView style={ui.screen}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={ui.content}
+        contentContainerStyle={[ui.content, contentStyle]}
       >
         {children}
       </ScrollView>
@@ -67,11 +79,13 @@ export function Header({
   eyebrow,
   onBack,
   onUser,
+  titleStyle,
 }: {
   title: string;
   eyebrow?: string;
   onBack?: () => void;
   onUser?: () => void;
+  titleStyle?: StyleProp<TextStyle>;
 }) {
   return (
     <View style={styles.header}>
@@ -87,7 +101,7 @@ export function Header({
       )}
       <View style={{ flex: 1 }}>
         {eyebrow && <Text style={ui.label}>{eyebrow}</Text>}
-        <Text accessibilityRole="header" style={ui.title}>
+        <Text accessibilityRole="header" style={[ui.title, titleStyle]}>
           {title}
         </Text>
       </View>
@@ -110,6 +124,7 @@ type ButtonProps = {
   onPress: () => void;
   disabled?: boolean;
   accessibilityLabel?: string;
+  trailingIcon?: ComponentProps<typeof Ionicons>["name"];
 };
 function Button({
   label,
@@ -117,6 +132,7 @@ function Button({
   disabled,
   accessibilityLabel,
   primary,
+  trailingIcon,
 }: ButtonProps & { primary: boolean }) {
   return (
     <Pressable
@@ -130,6 +146,9 @@ function Button({
         {
           backgroundColor: primary ? theme.primary : theme.secondary,
           opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
         },
       ]}
     >
@@ -142,6 +161,13 @@ function Button({
       >
         {label}
       </Text>
+      {trailingIcon && (
+        <Ionicons
+          name={trailingIcon}
+          size={24}
+          color={primary ? theme.primaryForeground : theme.secondaryForeground}
+        />
+      )}
     </Pressable>
   );
 }
@@ -160,19 +186,23 @@ export function ListRow({
   detail,
   value,
   onPress,
+  titleStyle,
+  valueStyle,
 }: {
   title: string;
   detail?: string;
   value?: string;
   onPress?: () => void;
+  titleStyle?: StyleProp<TextStyle>;
+  valueStyle?: StyleProp<TextStyle>;
 }) {
   const content = (
     <>
       <View style={{ flex: 1, gap: spacing.xs }}>
-        <Text style={ui.body}>{title}</Text>
+        <Text style={[ui.body, titleStyle]}>{title}</Text>
         {detail && <Text style={ui.muted}>{detail}</Text>}
       </View>
-      {value && <Text style={ui.body}>{value}</Text>}
+      {value && <Text style={[ui.body, valueStyle]}>{value}</Text>}
       {onPress && <Text style={ui.muted}>›</Text>}
     </>
   );
