@@ -1,0 +1,105 @@
+import { currentRecoveryMonth, RecoveryError, requireMonth } from "./policy";
+import type {
+  RecoveryContribution,
+  RecoveryLedgerEntry,
+  RecoveryPlan,
+  RecoveryReadStore,
+} from "./types";
+
+export async function planProgress(
+  plan: RecoveryPlan,
+  contributions: RecoveryContribution[],
+  reversed: (transferId: string) => Promise<boolean>,
+) {
+  const target = plan.installmentCount * plan.installmentMinorUnits;
+  let recovered = 0;
+  for (const contribution of contributions.filter((item) => item.planId === plan.id)) {
+    if (!(await reversed(contribution.transferJournalEntryId)))
+      recovered += contribution.amountMinorUnits;
+  }
+  if (!Number.isSafeInteger(recovered) || !Number.isSafeInteger(target - recovered))
+    throw new RecoveryError("amount_out_of_range");
+  const remaining = Math.max(0, target - recovered);
+  return {
+    recoveredMinorUnits: recovered,
+    remainingMinorUnits: remaining,
+    targetMinorUnits: target,
+    dueMinorUnits: remaining === 0 ? 0 : Math.min(plan.installmentMinorUnits, remaining),
+  };
+}
+
+export async function evaluateWorkspace(
+  store: RecoveryReadStore,
+  input: { now: number; month?: string },
+) {
+  const month = input.month ?? currentRecoveryMonth(input.now);
+  requireMonth(month);
+  const [currency, plans, contributions, profiles, expenses] = await Promise.all([
+    store.functionalCurrency(),
+    store.listPlans(),
+    store.listContributions(),
+    store.listProfiles(),
+    store.listExpenseEntries(),
+  ]);
+  const reserved = new Set(plans.map((plan) => plan.sourceJournalEntryId));
+  const destinations = profiles
+    .slice()
+    .sort((a, b) => Number(b.productKind === "savingsAccount") - Number(a.productKind === "savingsAccount")
+      || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  const views = await Promise.all(plans
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
+    .map(async (plan) => {
+      const progress = await planProgress(plan, contributions, async (entryId) =>
+        Boolean(await store.findReversalOf(entryId)),
+      );
+      const source = await store.getEntry(plan.sourceJournalEntryId);
+      const destination = destinations.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
+      return {
+        id: plan.id,
+        title: plan.title,
+        sourceJournalEntryId: plan.sourceJournalEntryId,
+        sourceTitle: source?.description || plan.title,
+        destinationFinancialAccountProfileId: plan.destinationFinancialAccountProfileId,
+        destinationName: destination?.name ?? "Savings",
+        principalMinorUnits: plan.principalMinorUnits,
+        installmentCount: plan.installmentCount,
+        installmentMinorUnits: plan.installmentMinorUnits,
+        impliedAnnualRateBps: plan.impliedAnnualRateBps,
+        activationMonth: plan.activationMonth,
+        currency: plan.currency,
+        ...progress,
+      };
+    }));
+  return {
+    month,
+    currentMonth: currentRecoveryMonth(input.now),
+    currency,
+    plans: views,
+    candidates: expenses
+      .filter((entry) => !entry.reversesEntryId && !reserved.has(entry.id))
+      .sort((a, b) => b.accountingDate.localeCompare(a.accountingDate) || b.id.localeCompare(a.id))
+      .map((entry) => candidateView(entry, profiles)),
+    destinations: destinations.map((profile) => ({
+      id: profile.id, name: profile.name, productKind: profile.productKind,
+    })),
+    sources: profiles
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+      .map((profile) => ({ id: profile.id, name: profile.name, productKind: profile.productKind })),
+  };
+}
+
+function candidateView(entry: RecoveryLedgerEntry, profiles: { id: string; name: string }[]) {
+  const place = entry.financialAccountProfileId
+    ? profiles.find((profile) => profile.id === entry.financialAccountProfileId)?.name
+    : undefined;
+  return {
+    journalEntryId: entry.id,
+    title: entry.description || "Expense",
+    accountingDate: entry.accountingDate,
+    amountMinorUnits: entry.amountMinorUnits,
+    financialAccountProfileId: entry.financialAccountProfileId,
+    placeName: place,
+  };
+}
