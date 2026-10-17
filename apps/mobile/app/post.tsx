@@ -1,3 +1,4 @@
+import { useLocalEntryInteraction } from "../src/local-auth/interaction";
 import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -29,6 +30,7 @@ function PostMoney({
   defaults: Defaults;
   subject: string;
 }) {
+  const recordInteraction = useLocalEntryInteraction();
   const [categoryVisible, setCategoryVisible] = useState(false);
   const categories = useQuery(api.accounting.listUserCategories, {
     workspaceId: defaults.workspace.id,
@@ -76,8 +78,14 @@ function PostMoney({
             ? `${editor.posted.description || "Entry"} · ${formatMoney({ ...editor.posted.amount, minorUnits: -editor.posted.amount.minorUnits })}`
             : null
         }
-        onAmountChange={editor.setAmount}
-        onDescriptionChange={editor.setDescription}
+        onAmountChange={(value) => {
+          recordInteraction();
+          editor.setAmount(value);
+        }}
+        onDescriptionChange={(value) => {
+          recordInteraction();
+          editor.setDescription(value);
+        }}
         onBack={() => router.back()}
         onPlace={() => placeSheet.current?.present()}
         onCategory={() => setCategoryVisible(true)}
@@ -118,7 +126,10 @@ function PostMoney({
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={(_, selected) => {
-              if (selected) setDate(localDate(selected));
+              if (selected) {
+                recordInteraction();
+                setDate(localDate(selected));
+              }
               if (Platform.OS !== "ios") dateSheet.current?.dismiss();
             }}
           />

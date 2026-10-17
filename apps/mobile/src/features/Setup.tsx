@@ -1,3 +1,4 @@
+import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { SetupCategories } from "./categories/SetupCategories";
 import type { CategorySelection } from "./categories/model";
 import {
@@ -14,6 +15,7 @@ import { Choice, Header, PrimaryButton, theme, ui } from "../ui/core";
 import { spacing } from "../ui/tokens";
 
 export function Setup({ onComplete }: { onComplete: () => void }) {
+  const recordInteraction = useLocalEntryInteraction();
   const sheet = useRef<BottomSheetModal>(null);
   const ensure = useMutation(api.accounting.ensurePersonalDefaults);
   const [categories, setCategories] = useState<CategorySelection[]>([]);
@@ -80,13 +82,23 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               label="Colombian peso"
               detail="COP"
               selected={currency === "COP"}
-              onPress={() => !busy && setCurrency("COP")}
+              onPress={() => {
+                if (!busy) {
+                  recordInteraction();
+                  setCurrency("COP");
+                }
+              }}
             />
             <Choice
               label="US dollar"
               detail="USD"
               selected={currency === "USD"}
-              onPress={() => !busy && setCurrency("USD")}
+              onPress={() => {
+                if (!busy) {
+                  recordInteraction();
+                  setCurrency("USD");
+                }
+              }}
             />
           </View>
           <View style={ui.section}>
@@ -102,7 +114,10 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             <BottomSheetTextInput
               accessibilityLabel="Starting amount"
               value={starting}
-              onChangeText={setStarting}
+              onChangeText={(value) => {
+                recordInteraction();
+                setStarting(value);
+              }}
               editable={!busy}
               keyboardType="decimal-pad"
               style={ui.input}
