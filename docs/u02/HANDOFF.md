@@ -6,7 +6,7 @@ The source requirements are the current SEN-71, SEN-60, SEN-57, and SEN-58 descr
 
 ## Public API flow
 
-All protected writes now use G01's tested thin-sid boundary from `f4e66c5`. Public actions verify the live Clerk session, then call internal mutations that check current device, membership, and operation permission in the same transaction. Reads remain reactive queries with local current guards. [The write migration receipt](WRITE-MIGRATION.md) records all endpoints, permissions, and remaining cleanup gaps. No challenge or attestation API is used.
+All protected writes now use G01's tested thin-sid boundary from `f4e66c5`. Public actions verify the live Clerk session, then call internal mutations that check current device, membership, and operation permission in the same transaction. Reads remain reactive queries with local current guards. [The write migration receipt](WRITE-MIGRATION.md) records all endpoints, permissions, cleanup integration, and remaining acceptance gaps. No challenge or attestation API is used.
 
 The following calls use the app's normally authenticated Convex client. This sequence describes the public contract; it is not a real-provider execution receipt.
 
@@ -94,11 +94,13 @@ Posting uses a searchable native sheet with existing categories, suggestions, **
 
 Deliberate setup, posting, category search, create, and restyle edits call U01's `useLocalEntryInteraction` from controller handlers. Restored storage values and provider updates do not count as user activity.
 
+The posting transport captures U01's admitted local-input lease and fences both pending saves and clears. Caught confirmed wipe signals in setup, category, and posting controllers report through U01's cleanup hook. The editor returns without its own deletion or sign-out when that hook takes ownership. The inner protected-read boundary handles thrown read errors. See [the cleanup receipt](WRITE-MIGRATION.md#error-classification-and-privacy-handoff).
+
 The pending expense schema now preserves optional `userCategoryId` through SecureStore JSON. Existing saved expenses without categories remain valid. `useExpenseEditor` restores category identity, locks selection while a payload is pending, and retries that exact payload and key after an uncertain response. A confirmed post clears the category with the other entry fields. The page stays open with **Posted**, and **Done** dismisses only the banner.
 
 ## Local evidence and remaining gaps
 
-`node scripts/verify-u02.mjs` runs the full Vitest suite, backend and mobile typechecks, and `git diff --check`. The local receipt is 207 passing tests in 18 files, with both typechecks passing. The existing Vitest configuration and react-test-renderer emit deprecation notices.
+`node scripts/verify-u02.mjs` runs the full Vitest suite, backend and mobile typechecks, and `git diff --check`. The local receipt is 230 passing tests in 20 files, with both typechecks passing. The existing Vitest configuration and react-test-renderer emit deprecation notices.
 
 The public-handler tests cover both template mappings, name normalization and typo suggestions, nature-scoped rent, unknown and missing-account fallbacks, account-door refusal, setup atomicity and retries, category identity conflicts, advanced overrides, and reversal labels. Mobile hook and schema tests cover category persistence, restoration, exact-payload retry, locking, and clearing after acknowledgement.
 

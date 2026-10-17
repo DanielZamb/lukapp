@@ -1,3 +1,4 @@
+import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { useAction, useQuery } from "convex/react";
 import { useRef, useState } from "react";
@@ -33,6 +34,7 @@ export function useCategoryPicker(
   onClose: () => void,
 ) {
   const recordInteraction = useLocalEntryInteraction();
+  const reportFailure = useDeviceAccessFailure();
   const categories = useQuery(
     api.accounting.listUserCategories,
     mode.kind === "posting" ? { workspaceId: mode.workspaceId } : "skip",
@@ -174,7 +176,8 @@ export function useCategoryPicker(
         ]);
         setEditor(null);
       }
-    } catch {
+    } catch (error) {
+      if (reportFailure(error)) return;
       setError(
         "Could not save this category. Your answers are still here. Try again.",
       );

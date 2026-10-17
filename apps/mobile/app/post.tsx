@@ -1,3 +1,8 @@
+import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
+import {
+  runLocalInputWrite,
+  useLocalInputLease,
+} from "../src/local-auth/localInput";
 import { useLocalEntryInteraction } from "../src/local-auth/interaction";
 import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import { useAuth } from "@clerk/expo";
@@ -31,6 +36,8 @@ function PostMoney({
   subject: string;
 }) {
   const recordInteraction = useLocalEntryInteraction();
+  const reportFailure = useDeviceAccessFailure();
+  const lease = useLocalInputLease();
   const [categoryVisible, setCategoryVisible] = useState(false);
   const categories = useQuery(api.accounting.listUserCategories, {
     workspaceId: defaults.workspace.id,
@@ -42,12 +49,15 @@ function PostMoney({
   const transport = useMemo(
     () => ({
       load: () => loadPendingExpense(subject),
-      save: (payload: PendingExpense) => savePendingExpense(subject, payload),
+      save: (payload: PendingExpense) =>
+        runLocalInputWrite(lease, () => savePendingExpense(subject, payload)),
       post,
-      clear: () => clearPendingExpense(subject),
+      clear: () =>
+        runLocalInputWrite(lease, () => clearPendingExpense(subject)),
+      reportFailure,
       newKey: Crypto.randomUUID,
     }),
-    [subject, post],
+    [subject, post, lease, reportFailure],
   );
   const editor = useExpenseEditor(
     {
