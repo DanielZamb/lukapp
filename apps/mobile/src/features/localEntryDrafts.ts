@@ -1,6 +1,11 @@
 import { z } from "zod";
 import * as SecureStore from "expo-secure-store";
+import {
+  runLocalInputWrite,
+  type LocalInputLease,
+} from "../local-auth/localInput";
 import type { TransactionCategories } from "./categories/transactionSelection";
+import { formatMoney } from "./money";
 import {
   parsePendingPosting,
   pendingPostingSchema,
@@ -55,6 +60,7 @@ export type SessionQuery = {
 };
 export type RestoredSession =
   | { kind: "blank" }
+  | { kind: "blocked" }
   | { kind: "missing"; draftId: LocalEntryDraftId }
   | { kind: "open"; draft: OpenDraft }
   | { kind: "posting"; draft: PostingDraft };
@@ -204,6 +210,15 @@ function listKind(draft: LocalEntryDraft): DraftListItem["kind"] {
   return draft.facts.entryType === "transfer" ? "transfer" : "normal";
 }
 
+function isRetryOnlyCommand(command: PostableCommand) {
+  return command.kind === "setup" || command.kind === "opening";
+}
+
+export function isListedDraft(draft: LocalEntryDraft) {
+  if (draft.status === "open") return true;
+  return !isRetryOnlyCommand(draft.command);
+}
+
 export function findLiveDraft(
   document: LocalEntryDocument,
   id: LocalEntryDraftId,
@@ -224,7 +239,10 @@ export function viewDocument(
     .filter((draft) => draft.expiresAt <= now)
     .map((draft) => draft.id);
   const items = liveDrafts(document, now)
-    .filter((draft) => workspaceOf(draft) === workspaceId)
+    .filter(
+      (draft) =>
+        workspaceOf(draft) === workspaceId && isListedDraft(draft),
+    )
     .sort((left, right) => right.createdAt - left.createdAt)
     .map((draft) => ({
       id: draft.id,
@@ -261,6 +279,7 @@ export function restoreFromDocument(
       workspaceOf(draft) === query.workspaceId &&
       currencyOf(draft) === query.currency,
   );
+  if (postings.length > 1) return { kind: "blocked" };
   return postings.length === 1
     ? { kind: "posting", draft: postings[0] }
     : { kind: "blank" };
@@ -317,23 +336,135 @@ export function beginPostIn(
       draft: existing,
       usedStoredCommand: true,
     };
+  const replaceOpen =
+    existing?.status === "open" && !isRetryOnlyCommand(input.command);
   const draft: PostingDraft = {
-    id: existing?.id ?? input.draftId ?? newId(),
-    createdAt: existing?.createdAt ?? now,
-    expiresAt: existing?.expiresAt ?? now + LOCAL_ENTRY_DRAFT_TTL_MS,
+    id: replaceOpen && existing ? existing.id : newId(),
+    createdAt: replaceOpen && existing ? existing.createdAt : now,
+    expiresAt:
+      replaceOpen && existing
+        ? existing.expiresAt
+        : now + LOCAL_ENTRY_DRAFT_TTL_MS,
     status: "posting",
     command: input.command,
   };
   return {
     document: {
       v: 1,
-      drafts: existing
-        ? drafts.map((row) => (row.id === existing.id ? draft : row))
-        : [...drafts, draft],
+      drafts:
+        replaceOpen && existing
+          ? drafts.map((row) => (row.id === existing.id ? draft : row))
+          : [...drafts, draft],
     },
     draft,
     usedStoredCommand: false,
   };
+}
+
+export function factsFromCommand(command: PostableCommand): LocalEntryFacts {
+  if (isRetryOnlyCommand(command))
+    throw new Error("Retry-only commands cannot reopen as drafts");
+  if (command.kind === "transfer") {
+    const payload = command.payload;
+    return {
+      workspaceId: payload.workspaceId,
+      currency: payload.amount.currency,
+      entryType: "transfer",
+      amountText: formatMoney(payload.amount).replace(
+        `${payload.amount.currency} `,
+        "",
+      ),
+      accountingDate: payload.accountingDate,
+      description: payload.description,
+      profileId: payload.sourceFinancialAccountProfileId,
+      destinationId: payload.destinationFinancialAccountProfileId,
+      categories: { ids: [], primaryId: null },
+    };
+  }
+  const payload = command.payload;
+  const signed =
+    command.kind === "expense"
+      ? -payload.amount.minorUnits
+      : payload.amount.minorUnits;
+  return {
+    workspaceId: payload.workspaceId,
+    currency: payload.amount.currency,
+    entryType: "normal",
+    amountText: formatMoney({
+      ...payload.amount,
+      minorUnits: signed,
+    }).replace(`${payload.amount.currency} `, ""),
+    accountingDate: payload.accountingDate,
+    description: payload.description,
+    profileId: payload.financialAccountProfileId,
+    destinationId: null,
+    categories: {
+      ids:
+        payload.userCategoryIds ??
+        (payload.userCategoryId ? [payload.userCategoryId] : []),
+      primaryId: payload.primaryUserCategoryId ?? null,
+    },
+  };
+}
+
+export function rejectPostIn(
+  document: LocalEntryDocument,
+  id: LocalEntryDraftId,
+): LocalEntryDocument {
+  const existing = document.drafts.find((draft) => draft.id === id);
+  if (!existing || existing.status !== "posting") return document;
+  if (isRetryOnlyCommand(existing.command)) return removeIn(document, id);
+  const next: OpenDraft = {
+    id: existing.id,
+    createdAt: existing.createdAt,
+    expiresAt: existing.expiresAt,
+    status: "open",
+    facts: factsFromCommand(existing.command),
+  };
+  return {
+    v: 1,
+    drafts: document.drafts.map((draft) =>
+      draft.id === id ? next : draft,
+    ),
+  };
+}
+
+export async function mutateLocalEntryDocument<T>(
+  lease: LocalInputLease,
+  subject: string,
+  mutate: (
+    document: LocalEntryDocument,
+    now: number,
+    dirty: boolean,
+  ) => { document: LocalEntryDocument; result: T; write: boolean },
+): Promise<T> {
+  let completed = false;
+  let result!: T;
+  await runLocalInputWrite(lease, async () => {
+    const now = Date.now();
+    const parsed = parseLocalEntryDocument(await readRaw(subject), now);
+    const next = mutate(parsed.document, now, parsed.dirty);
+    if (next.write) await writeDocument(subject, next.document);
+    result = next.result;
+    completed = true;
+  });
+  if (!completed) throw new Error("Local entry mutation did not complete");
+  return result;
+}
+
+export function syncLocalEntryDocument(
+  lease: LocalInputLease,
+  subject: string,
+) {
+  return mutateLocalEntryDocument(
+    lease,
+    subject,
+    (document, _now, dirty) => ({
+      document,
+      result: document,
+      write: dirty,
+    }),
+  );
 }
 
 export function removeIn(

@@ -1,17 +1,15 @@
 import * as Crypto from "expo-crypto";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import {
-  runLocalInputWrite,
-  useLocalInputLease,
-} from "../local-auth/localInput";
+import { useLocalInputLease } from "../local-auth/localInput";
 import {
   findLiveDraft,
   keepIn,
+  mutateLocalEntryDocument,
   parseLocalEntryDocument,
   readRaw,
+  syncLocalEntryDocument,
   viewDocument,
-  writeDocument,
   type DraftListItem,
   type LocalEntryDraftsPort,
 } from "./localEntryDrafts";
@@ -30,14 +28,13 @@ export function useLocalEntryDrafts(input: {
   const [items, setItems] = useState<DraftListItem[]>([]);
   const [error, setError] = useState("");
   const refresh = useCallback(async () => {
-    const now = Date.now();
     try {
-      const parsed = parseLocalEntryDocument(await readRaw(input.subject), now);
-      if (parsed.dirty)
-        await runLocalInputWrite(lease, () =>
-          writeDocument(input.subject, parsed.document),
-        );
-      const view = viewDocument(parsed.document, input.workspaceId, now);
+      const document = await syncLocalEntryDocument(lease, input.subject);
+      const view = viewDocument(
+        document,
+        input.workspaceId,
+        Date.now(),
+      );
       setItems(view.items);
       setCount(view.count);
       setError("");
@@ -53,17 +50,14 @@ export function useLocalEntryDrafts(input: {
   const port = useMemo<LocalEntryDraftsPort>(
     () => ({
       keep: async (form) => {
-        let id = "";
-        const now = Date.now();
-        await runLocalInputWrite(lease, async () => {
-          const parsed = parseLocalEntryDocument(
-            await readRaw(input.subject),
-            now,
-          );
-          const kept = keepIn(parsed.document, form, now, Crypto.randomUUID);
-          await writeDocument(input.subject, kept.document);
-          id = kept.id;
-        });
+        const id = await mutateLocalEntryDocument(
+          lease,
+          input.subject,
+          (document, now) => {
+            const kept = keepIn(document, form, now, Crypto.randomUUID);
+            return { document: kept.document, result: kept.id, write: true };
+          },
+        );
         await refresh();
         return id;
       },

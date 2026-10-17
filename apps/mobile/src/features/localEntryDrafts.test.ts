@@ -1,8 +1,12 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
 const memory = vi.hoisted(() => new Map<string, string>());
+const events = vi.hoisted(() => [] as string[]);
 vi.mock("expo-secure-store", () => ({
-  getItemAsync: async (key: string) => memory.get(key) ?? null,
+  getItemAsync: async (key: string) => {
+    events.push("read");
+    return memory.get(key) ?? null;
+  },
   setItemAsync: async (key: string, value: string) => {
     memory.set(key, value);
   },
@@ -12,6 +16,10 @@ vi.mock("expo-secure-store", () => ({
 }));
 
 import {
+  LocalInputLease,
+  runLocalInputWrite,
+} from "../local-auth/localInput";
+import {
   LOCAL_ENTRY_DRAFT_TTL_MS,
   beginPostIn,
   clearPendingExpense,
@@ -19,9 +27,11 @@ import {
   loadPendingPosting,
   parseLocalEntryDocument,
   readRaw,
+  rejectPostIn,
   removeIn,
   restoreFromDocument,
   storageKey,
+  syncLocalEntryDocument,
   viewDocument,
   writeDocument,
   type LocalEntryDocument,
@@ -56,8 +66,32 @@ const expense = {
 } satisfies PostableCommand;
 const empty: LocalEntryDocument = { v: 1, drafts: [] };
 
+const opening = {
+  kind: "opening",
+  payload: {
+    workspaceId: "workspace",
+    financialAccountProfileId: "cash",
+    amount: { currency: "COP", minorUnits: 0 },
+    accountingDate: "2026-10-17",
+    description: "",
+    idempotencyKey: "opening-key",
+  },
+} satisfies PostableCommand;
+const setup = {
+  kind: "setup",
+  payload: {
+    workspaceId: "workspace",
+    amount: { currency: "COP", minorUnits: 0 },
+    accountingDate: "2026-10-17",
+    idempotencyKey: "setup-key",
+    name: "Card",
+    productKind: "creditCard",
+  },
+} satisfies PostableCommand;
+
 beforeEach(() => {
   memory.clear();
+  events.length = 0;
 });
 
 test("an empty store is an empty collection", () => {
@@ -285,7 +319,66 @@ test("restore without draftId binds the unique live posting and never an open dr
       { workspaceId: "workspace", currency: "COP" },
       now,
     ),
-  ).toEqual({ kind: "blank" });
+  ).toEqual({ kind: "blocked" });
+});
+
+test("the Home view omits setup and opening retry rows from the draft count", () => {
+  const kept = keepIn(empty, { facts }, now, () => "open-1");
+  const opened = beginPostIn(
+    kept.document,
+    { command: opening },
+    now + 1,
+    () => "opening-1",
+  );
+  const viewed = viewDocument(opened.document, "workspace", now);
+  expect(viewed.count).toBe(1);
+  expect(viewed.items.map((item) => item.id)).toEqual(["open-1"]);
+});
+
+test("setup and opening posts append their own rows instead of replacing an expense draft", () => {
+  const kept = keepIn(
+    empty,
+    { facts: { ...facts, description: "Groceries" } },
+    now,
+    () => "groceries",
+  );
+  const posted = beginPostIn(
+    kept.document,
+    { draftId: "groceries", command: setup },
+    now,
+    () => "setup-1",
+  );
+  expect(posted.draft.id).toBe("setup-1");
+  expect(
+    posted.document.drafts.find((draft) => draft.id === "groceries"),
+  ).toMatchObject({ status: "open", facts: { description: "Groceries" } });
+  expect(
+    posted.document.drafts.find((draft) => draft.id === "setup-1"),
+  ).toMatchObject({ status: "posting", command: setup });
+});
+
+test("an accounting rejection reopens a money draft with its facts", () => {
+  const posted = beginPostIn(empty, { command: expense }, now, () => "food");
+  const reopened = rejectPostIn(posted.document, "food");
+  expect(reopened.drafts).toEqual([
+    {
+      id: "food",
+      createdAt: now,
+      expiresAt: now + ttl,
+      status: "open",
+      facts: {
+        workspaceId: "workspace",
+        currency: "COP",
+        entryType: "normal",
+        amountText: "−1.500,00",
+        accountingDate: "2026-10-17",
+        description: "Food",
+        profileId: "cash",
+        destinationId: null,
+        categories: { ids: [], primaryId: null },
+      },
+    },
+  ]);
 });
 
 test("restore with draftId hydrates an open draft and reports missing or foreign rows", () => {
@@ -329,4 +422,82 @@ test("wipe deletes u01.expense.${subject} after a collection write", async () =>
   expect(memory.has("u01.expense.owner")).toBe(false);
   expect(await readRaw("owner")).toBeNull();
   expect(await loadPendingPosting("owner")).toBeNull();
+});
+
+test("Home expiry purge does not read the store until it holds the local-input lease", async () => {
+  const createdAt = Date.now();
+  const expired = {
+    id: "expired",
+    createdAt: createdAt - ttl,
+    expiresAt: createdAt - 1,
+    status: "open" as const,
+    facts,
+  };
+  const live = {
+    id: "live",
+    createdAt,
+    expiresAt: createdAt + ttl,
+    status: "posting" as const,
+    command: expense,
+  };
+  await writeDocument("owner", { v: 1, drafts: [expired, live] });
+  events.length = 0;
+  const lease = new LocalInputLease("owner", "session");
+  let release!: () => void;
+  const hold = runLocalInputWrite(
+    lease,
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  const sync = syncLocalEntryDocument(lease, "owner");
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(events).toEqual([]);
+  release();
+  await hold;
+  await sync;
+  expect(events).toContain("read");
+});
+
+test("Home expiry purge does not restore a draft that posted while it waited", async () => {
+  const createdAt = Date.now();
+  const expired = {
+    id: "expired",
+    createdAt: createdAt - ttl,
+    expiresAt: createdAt - 1,
+    status: "open" as const,
+    facts,
+  };
+  const live = {
+    id: "live",
+    createdAt,
+    expiresAt: createdAt + ttl,
+    status: "posting" as const,
+    command: expense,
+  };
+  await writeDocument("owner", { v: 1, drafts: [expired, live] });
+  const lease = new LocalInputLease("owner", "session");
+  let release!: () => void;
+  const hold = runLocalInputWrite(
+    lease,
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  const posted = runLocalInputWrite(lease, async () => {
+    const parsed = parseLocalEntryDocument(await readRaw("owner"), Date.now());
+    await writeDocument("owner", removeIn(parsed.document, "live"));
+  });
+  const sync = syncLocalEntryDocument(lease, "owner");
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  release();
+  await Promise.all([hold, posted, sync]);
+  const after = parseLocalEntryDocument(await readRaw("owner"), Date.now());
+  expect(after.document.drafts.map((draft) => draft.id)).not.toContain("live");
 });

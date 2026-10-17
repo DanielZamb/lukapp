@@ -75,6 +75,9 @@ function PostMoney({
       !!profiles?.some((place) => place.id === editor.destinationId));
   const setup = editor.setup;
   useEffect(() => {
+    if (editor.blockedByPendingPostings) router.replace("/drafts");
+  }, [editor.blockedByPendingPostings]);
+  useEffect(() => {
     if (setup !== null && !setupPresented.current)
       setupSheet.current?.present();
     else if (setup === null && setupPresented.current)

@@ -17,11 +17,23 @@ export type PostingReceipt = {
   financialAccountProfileId?: string;
   title?: string;
 };
+export type LoadResult =
+  | { kind: "none" }
+  | { kind: "pending"; id: LocalEntryDraftId; command: PendingPosting }
+  | { kind: "blocked" };
+export type SavedPosting = {
+  id: LocalEntryDraftId;
+  command: PendingPosting;
+};
 export type PostingTransport = {
-  load: () => Promise<PendingPosting | null>;
-  save: (entry: PendingPosting, draftId?: LocalEntryDraftId) => Promise<void>;
+  load: () => Promise<LoadResult>;
+  save: (
+    entry: PendingPosting,
+    draftId?: LocalEntryDraftId,
+  ) => Promise<SavedPosting>;
   post: (entry: PendingPosting) => Promise<PostingReceipt>;
   clear: () => Promise<void>;
+  abort: () => Promise<void>;
   newKey: () => string;
   reportFailure?: (error: unknown) => boolean;
 };
@@ -61,19 +73,18 @@ export function usePostingEditor(
   const [destinationId, setDestinationId] = useState<string | null>(null);
   const [setup, setSetup] = useState<PlaceDraft | null>(null);
   const [pending, setPending] = useState<PendingPosting | null>(null);
-  const [draftId, setDraftId] = useState<LocalEntryDraftId | undefined>(
-    requestedId,
-  );
+  const [draftId, setDraftId] = useState<LocalEntryDraftId | undefined>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [keeping, setKeeping] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<PostingReceipt | null>(null);
+  const opLock = useRef(false);
   const submitting = useRef(false);
-  const keepingLock = useRef(false);
   const appliedDraft = useRef<LocalEntryDraftId | undefined>(undefined);
   const lifetime = useRef({ active: false });
-  const editable = !busy && !pending && !loading;
+  const editable = !busy && !pending && !loading && !blocked;
   const canKeepDraft =
     drafts !== null &&
     editable &&
@@ -81,7 +92,11 @@ export function usePostingEditor(
     !setup &&
     entryType !== "initial";
   const canEdit = () =>
-    lifetime.current.active && !submitting.current && !pending && !loading;
+    lifetime.current.active &&
+    !submitting.current &&
+    !pending &&
+    !loading &&
+    !blocked;
   function hydrateFromCommand(value: PendingPosting) {
     const payload = value.payload;
     setDate(payload.accountingDate);
@@ -153,7 +168,7 @@ export function usePostingEditor(
       throw new Error("Pending entry belongs to another workspace");
   }
   function resume(draft: LocalEntryDraft): "applied" | "blocked-by-pending" {
-    if (pending || loading) return "blocked-by-pending";
+    if (pending || loading || blocked) return "blocked-by-pending";
     assertSameWorkspace(draft);
     if (draft.status === "posting") {
       hydrateFromCommand(draft.command);
@@ -183,14 +198,22 @@ export function usePostingEditor(
       .load()
       .then((value) => {
         if (!mounted.active) return;
-        if (
-          value &&
-          (value.payload.workspaceId !== account.workspaceId ||
-            value.payload.amount.currency !== account.currency)
-        )
-          throw new Error("Pending entry belongs to another workspace");
-        setPending(value);
-        if (value) hydrateFromCommand(value);
+        if (value.kind === "blocked") {
+          setBlocked(true);
+          setLoading(false);
+          return;
+        }
+        if (value.kind === "pending") {
+          if (
+            value.command.payload.workspaceId !== account.workspaceId ||
+            value.command.payload.amount.currency !== account.currency
+          )
+            throw new Error("Pending entry belongs to another workspace");
+          setPending(value.command);
+          setDraftId(value.id);
+          appliedDraft.current = value.id;
+          hydrateFromCommand(value.command);
+        }
         setLoading(false);
       })
       .catch((error: unknown) => {
@@ -204,7 +227,7 @@ export function usePostingEditor(
     };
   }, [account.workspaceId, account.currency, transport]);
   useLayoutEffect(() => {
-    if (loading || !requestedId || !drafts || pending) return;
+    if (loading || !requestedId || !drafts || pending || blocked) return;
     if (appliedDraft.current === requestedId) return;
     const mounted = lifetime.current;
     appliedDraft.current = requestedId;
@@ -224,7 +247,7 @@ export function usePostingEditor(
             "Could not restore this draft. Reopen this page to try again.",
           );
       });
-  }, [loading, requestedId, drafts, pending, transport]);
+  }, [loading, requestedId, drafts, pending, blocked, transport]);
 
   let minorUnits: number | null = null;
   try {
@@ -306,6 +329,8 @@ export function usePostingEditor(
   const canSubmit =
     !busy &&
     !loading &&
+    !keeping &&
+    !blocked &&
     (!!pending || (setup ? setupValid : amountValid && validTransfer));
   async function keepDraft() {
     const mounted = lifetime.current;
@@ -314,11 +339,10 @@ export function usePostingEditor(
       !editable ||
       setup ||
       entryType === "initial" ||
-      keepingLock.current ||
-      submitting.current
+      opLock.current
     )
       return;
-    keepingLock.current = true;
+    opLock.current = true;
     setKeeping(true);
     setError("");
     try {
@@ -334,25 +358,36 @@ export function usePostingEditor(
       if (transport.reportFailure?.(error) || !mounted.active) return;
       setError("Could not keep this draft on this device.");
     } finally {
-      keepingLock.current = false;
+      opLock.current = false;
       if (mounted.active) setKeeping(false);
     }
   }
   async function submit() {
     const mounted = lifetime.current;
-    if (!mounted.active || submitting.current || !canSubmit) return;
+    if (!mounted.active || opLock.current || !canSubmit) return;
+    opLock.current = true;
     submitting.current = true;
     setBusy(true);
     setError("");
     setPosted(null);
     try {
-      const entry = pending ?? buildEntry();
-      await transport.save(entry, draftId);
-      if (!mounted.active) return;
-      setPending(entry);
-      const receipt = await transport.post(entry);
-      if (!mounted.active) return;
-      await transport.clear();
+      const built = pending ?? buildEntry();
+      const saved = await transport.save(built, draftId);
+      if (mounted.active) {
+        setPending(saved.command);
+        setDraftId(saved.id);
+        appliedDraft.current = saved.id;
+      }
+      const receipt = await transport.post(saved.command);
+      try {
+        await transport.clear();
+      } catch {
+        if (mounted.active)
+          setError(
+            "Could not clear the saved entry. Retry to check its status.",
+          );
+        return;
+      }
       if (!mounted.active) return;
       setPending(null);
       setDraftId(undefined);
@@ -361,9 +396,9 @@ export function usePostingEditor(
       setDescription("");
       setCategories({ ids: [], primaryId: null });
       setSetup(null);
-      if (entry.kind === "setup" && receipt.financialAccountProfileId) {
-        if (entry.target?.kind === "destination") {
-          setProfileId(entry.target.sourceProfileId);
+      if (saved.command.kind === "setup" && receipt.financialAccountProfileId) {
+        if (saved.command.target?.kind === "destination") {
+          setProfileId(saved.command.target.sourceProfileId);
           setDestinationId(receipt.financialAccountProfileId);
           setEntryType("transfer");
         } else setProfileId(receipt.financialAccountProfileId);
@@ -379,7 +414,7 @@ export function usePostingEditor(
         data.kind === "accounting"
       ) {
         try {
-          await transport.clear();
+          await transport.abort();
           if (!mounted.active) return;
           setPending(null);
         } catch {
@@ -399,6 +434,7 @@ export function usePostingEditor(
           "Could not confirm posting. Retry to safely check the same entry.",
         );
     } finally {
+      opLock.current = false;
       submitting.current = false;
       if (mounted.active) setBusy(false);
     }
@@ -467,6 +503,7 @@ export function usePostingEditor(
     canSubmit,
     canKeepDraft,
     draftId,
+    blockedByPendingPostings: blocked,
     keepDraft,
     resume,
     submit,

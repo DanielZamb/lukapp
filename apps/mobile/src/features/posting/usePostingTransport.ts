@@ -2,20 +2,16 @@ import { useAction } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { useMemo, useRef } from "react";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
-import {
-  runLocalInputWrite,
-  useLocalInputLease,
-} from "../../local-auth/localInput";
+import { useLocalInputLease } from "../../local-auth/localInput";
 import { api } from "../api";
 import {
   beginPostIn,
-  parseLocalEntryDocument,
-  readRaw,
+  mutateLocalEntryDocument,
+  rejectPostIn,
   removeIn,
-  writeDocument,
 } from "../localEntryDrafts";
 import type { PendingPosting } from "./pendingPostingSchema";
-import type { PostingTransport } from "./usePostingEditor";
+import type { LoadResult, PostingTransport } from "./usePostingEditor";
 
 export function usePostingTransport(subject: string): PostingTransport {
   const lease = useLocalInputLease();
@@ -28,44 +24,73 @@ export function usePostingTransport(subject: string): PostingTransport {
   const setup = useAction(api.accounting.setupFinancialAccountProfile);
   return useMemo(
     () => ({
-      load: async () => {
-        const now = Date.now();
-        const parsed = parseLocalEntryDocument(await readRaw(subject), now);
-        if (parsed.dirty)
-          await runLocalInputWrite(lease, () =>
-            writeDocument(subject, parsed.document),
-          );
-        const postings = parsed.document.drafts.filter(
-          (draft) => draft.status === "posting",
-        );
-        if (postings.length !== 1) {
-          postingId.current = undefined;
-          return null;
-        }
-        postingId.current = postings[0].id;
-        return postings[0].command;
-      },
+      load: () =>
+        mutateLocalEntryDocument<LoadResult>(
+          lease,
+          subject,
+          (document, _now, dirty) => {
+            const postings = document.drafts.filter(
+              (draft) => draft.status === "posting",
+            );
+            let result: LoadResult;
+            if (postings.length === 1) {
+              postingId.current = postings[0].id;
+              result = {
+                kind: "pending",
+                id: postings[0].id,
+                command: postings[0].command,
+              };
+            } else {
+              postingId.current = undefined;
+              result =
+                postings.length === 0
+                  ? { kind: "none" }
+                  : { kind: "blocked" };
+            }
+            return { document, write: dirty, result };
+          },
+        ),
       save: (entry: PendingPosting, draftId?: string) =>
-        runLocalInputWrite(lease, async () => {
-          const now = Date.now();
-          const parsed = parseLocalEntryDocument(await readRaw(subject), now);
+        mutateLocalEntryDocument(lease, subject, (document, now) => {
           const begun = beginPostIn(
-            parsed.document,
+            document,
             { draftId: draftId ?? postingId.current, command: entry },
             now,
             Crypto.randomUUID,
           );
           postingId.current = begun.draft.id;
-          await writeDocument(subject, begun.document);
+          return {
+            document: begun.document,
+            write: true,
+            result: {
+              id: begun.draft.id,
+              command: begun.draft.command,
+            },
+          };
         }),
       clear: () =>
-        runLocalInputWrite(lease, async () => {
+        mutateLocalEntryDocument(lease, subject, (document, now, dirty) => {
           const id = postingId.current;
-          if (!id) return;
-          const now = Date.now();
-          const parsed = parseLocalEntryDocument(await readRaw(subject), now);
-          await writeDocument(subject, removeIn(parsed.document, id));
           postingId.current = undefined;
+          if (!id)
+            return { document, write: dirty, result: undefined };
+          return {
+            document: removeIn(document, id),
+            write: true,
+            result: undefined,
+          };
+        }),
+      abort: () =>
+        mutateLocalEntryDocument(lease, subject, (document, now, dirty) => {
+          const id = postingId.current;
+          postingId.current = undefined;
+          if (!id)
+            return { document, write: dirty, result: undefined };
+          return {
+            document: rejectPostIn(document, id),
+            write: true,
+            result: undefined,
+          };
         }),
       reportFailure,
       newKey: Crypto.randomUUID,
