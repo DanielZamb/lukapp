@@ -10,11 +10,11 @@ export const themes = {
     primaryForeground: "#f5f3ff", // --primary-foreground oklch(0.969 0.016 293.756)
     secondary: "#f4f4f5", // --secondary oklch(0.967 0.001 286.375)
     secondaryForeground: "#18181b", // --secondary-foreground oklch(0.21 0.006 285.885)
-    mutedForeground: "#737373", // --muted-foreground oklch(0.556 0 0)
+    mutedForeground: "#6e6e6e", // 4.64:1 on secondary, user-approved 2026-10-17
     border: "#e5e5e5", // --border oklch(0.922 0 0)
-    ring: "#a3a3a3", // --ring oklch(0.708 0 0)
+    ring: "#8a8a8a", // 3.45:1 against white, user-approved 2026-10-17
     positive: "#047857",
-    warning: "#a16207",
+    warning: "#9c5f06", // 4.71:1 on secondary, user-approved 2026-10-17
     danger: "#b91c1c",
   },
   dark: {
@@ -23,7 +23,7 @@ export const themes = {
     // Spec --primary oklch(0.432 0.232 292.759) = #5b21b6 sits at ~2.9:1
     // against the near-black background; the dark --sidebar-primary violet
     // reads clearly as a surface, so tiles use it instead.
-    primary: "#8b5cf6", // --sidebar-primary oklch(0.606 0.25 292.717)
+    primary: "#7c3aed", // 5.20:1 under primaryForeground, user-approved 2026-10-17
     primaryForeground: "#f5f3ff", // --primary-foreground oklch(0.969 0.016 293.756)
     secondary: "#27272a", // --secondary oklch(0.274 0.006 286.033)
     secondaryForeground: "#fafafa", // --secondary-foreground oklch(0.985 0 0)
