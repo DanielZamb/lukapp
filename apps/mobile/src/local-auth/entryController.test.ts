@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { EntryController, type EntryDependencies } from "./entryController";
 import { parseInstallMarker, type InstallMarker } from "./installMarker";
+import { runLocalInputWrite } from "./localInput";
 
 const installId = "497af871-e049-4102-b496-4cd529cf60b6";
 const identity = { subject: "owner", sessionId: "session-one" };
@@ -26,6 +27,8 @@ function fixture(marker: InstallMarker = enrolled) {
     hide: vi.fn(async () => {}),
     reveal: vi.fn(async () => {}),
     cancelPrompt: vi.fn(async () => {}),
+    clearInput: vi.fn(async (_subject: string) => {}),
+    clearEnrollment: vi.fn(async (_marker: InstallMarker) => {}),
   } satisfies EntryDependencies;
   const gate = new EntryController(deps);
   return {
@@ -271,4 +274,92 @@ test("the stable install ID is available only after unlock and disappears when l
   time(121_000);
   gate.tick();
   expect(gate.unlockedInstallId()).toBeNull();
+});
+
+test("confirmed loss closes before await, drains in-flight saves, and fences old saves and clears", async () => {
+  const { gate, deps, stored } = await opened();
+  const lease = gate.unlockedInputLease();
+  if (!lease) throw new Error("Missing admitted lease");
+  let pending = "old entry";
+  let finishSave = () => {};
+  const save = runLocalInputWrite(lease, () => new Promise<void>((resolve) => {
+    finishSave = () => { pending = "late old save"; resolve(); };
+  }));
+  await Promise.resolve();
+  deps.clearInput.mockImplementation(async () => { pending = ""; });
+  const cleanup = gate.denyAccessFor(lease);
+  expect(gate.getSnapshot()).toEqual({ state: { kind: "revocation", cleanup: "running" }, obscured: true });
+  expect(gate.isOpenFor(identity)).toBe(false);
+  expect(deps.clearInput).not.toHaveBeenCalled();
+  const lateSave = runLocalInputWrite(lease, async () => { pending = "recreated"; });
+  const rejectedSave = expect(lateSave).rejects.toThrow("admission ended");
+  finishSave();
+  await Promise.all([save, cleanup, rejectedSave]);
+  expect(pending).toBe("");
+  expect(deps.clearEnrollment).toHaveBeenCalledOnce();
+  expect(deps.signOut).toHaveBeenCalledOnce();
+  expect(stored().kind).toBe("sign-in-required");
+  await gate.setIdentity(null);
+  gate.approveSignIn("new-session");
+  await gate.setIdentity({ subject: "owner", sessionId: "new-session" });
+  await gate.unlock();
+  const nextLease = gate.unlockedInputLease();
+  if (!nextLease) throw new Error("Missing new lease");
+  await runLocalInputWrite(nextLease, async () => { pending = "new entry"; });
+  await expect(runLocalInputWrite(lease, async () => { pending = ""; })).rejects.toThrow("admission ended");
+  expect(pending).toBe("new entry");
+  const cleanups = deps.clearInput.mock.calls.length;
+  await gate.denyAccessFor(lease);
+  expect(gate.isOpenFor({ subject: "owner", sessionId: "new-session" })).toBe(true);
+  expect(deps.clearInput).toHaveBeenCalledTimes(cleanups);
+});
+
+test("failed deletion keeps a durable denial, cannot unlock, and resumes cleanup on restart", async () => {
+  const { gate, deps, stored } = await opened();
+  deps.clearInput.mockRejectedValueOnce(new Error("Storage unavailable"));
+  await gate.denyAccess();
+  expect(gate.getSnapshot()).toEqual({ state: { kind: "revocation", cleanup: "failed" }, obscured: true });
+  expect(stored()).toEqual({ ...enrolled, kind: "wipe-required" });
+  expect(deps.signOut).not.toHaveBeenCalled();
+  await gate.unlock();
+  expect(gate.isOpenFor(identity)).toBe(false);
+  const restart = new EntryController(deps);
+  await restart.setIdentity(identity);
+  expect(deps.clearInput).toHaveBeenCalledTimes(2);
+  expect(deps.signOut).toHaveBeenCalledOnce();
+  expect(stored().kind).toBe("sign-in-required");
+  expect(restart.isOpenFor(identity)).toBe(false);
+});
+
+test("cleanup retries storage and SDK sign-out failures without allowing a new enrollment", async () => {
+  const { gate, deps } = await opened();
+  deps.signOut.mockRejectedValueOnce(new Error("Offline"));
+  await gate.denyAccess();
+  expect(gate.getSnapshot().state).toEqual({ kind: "revocation", cleanup: "failed" });
+  gate.approveSignIn("other");
+  await gate.unlock();
+  expect(deps.enroll).not.toHaveBeenCalled();
+  await gate.retryCleanup();
+  expect(deps.signOut).toHaveBeenCalledTimes(2);
+  expect(gate.getSnapshot().state.kind).toBe("reauthentication");
+});
+
+test("Clerk authentication loss also clears local input before the sign-in screen", async () => {
+  const { gate, deps } = await opened();
+  await gate.setIdentity(null);
+  expect(deps.clearInput).toHaveBeenCalledExactlyOnceWith("owner");
+  expect(deps.clearEnrollment).toHaveBeenCalledOnce();
+  expect(gate.getSnapshot().state.kind).toBe("sign-in");
+});
+
+test("fresh enrollment clears owner input surviving reinstall even when no Clerk session survived", async () => {
+  const { gate, deps } = fixture({ version: 1, installId, kind: "sign-in-required" });
+  await gate.setIdentity(null);
+  gate.approveSignIn("new-session");
+  await gate.setIdentity({ subject: "owner", sessionId: "new-session" });
+  deps.clearInput.mockRejectedValueOnce(new Error("Storage failed"));
+  await gate.unlock();
+  expect(gate.isOpenFor({ subject: "owner", sessionId: "new-session" })).toBe(false);
+  expect(deps.enroll).not.toHaveBeenCalled();
+  expect(deps.clearInput).toHaveBeenCalledExactlyOnceWith("owner");
 });

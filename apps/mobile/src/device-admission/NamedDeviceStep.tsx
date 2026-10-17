@@ -1,5 +1,6 @@
+import React from "react";
 import { Text, TextInput, View } from "react-native";
-import { Header, PrimaryButton, Screen, SecondaryButton, ui } from "../ui/core";
+import { Header, PrimaryButton, Screen, SecondaryButton, theme, ui } from "../ui/core";
 
 export function NamedDeviceStep({
   name,
@@ -33,7 +34,9 @@ export function NamedDeviceStep({
           editable={!busy}
           autoCapitalize="words"
           autoCorrect={false}
+          maxLength={80}
           placeholder="My phone"
+          placeholderTextColor={theme.mutedForeground}
           style={ui.input}
         />
       </View>

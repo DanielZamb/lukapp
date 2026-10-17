@@ -1,4 +1,5 @@
 import { requireNewSignIn, type InstallMarker } from "./installMarker";
+import { drainLocalInputWrites, LocalInputLease } from "./localInput";
 
 export const ordinaryInactivityMs = 2 * 60_000;
 export const monthCloseInactivityMs = 10 * 60_000;
@@ -10,6 +11,7 @@ export type EntryState =
   | { kind: "authenticating" }
   | { kind: "open" }
   | { kind: "reauthentication" }
+  | { kind: "revocation"; cleanup: "running" | "failed" }
   | { kind: "unavailable" };
 export type EntrySnapshot = { state: EntryState; obscured: boolean };
 export type EntryDependencies = {
@@ -23,6 +25,8 @@ export type EntryDependencies = {
   hide: () => Promise<void>;
   reveal: () => Promise<void>;
   cancelPrompt: () => Promise<void>;
+  clearInput: (subject: string) => Promise<void>;
+  clearEnrollment: (marker: InstallMarker) => Promise<void>;
 };
 
 function sensitivePath(path: string) {
@@ -47,6 +51,9 @@ export class EntryController {
   private disposed = false;
   private initialized: Promise<InstallMarker> | null = null;
   private privacyWork: Promise<void> = Promise.resolve();
+  private inputLease: LocalInputLease | null = null;
+  private cleanupWork: Promise<void> | null = null;
+  private clearedIdentity: EntryIdentity = null;
   constructor(private readonly deps: EntryDependencies) {}
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => {
@@ -84,12 +91,23 @@ export class EntryController {
   }
   async setIdentity(identity: EntryIdentity) {
     this.disposed = false;
+    const previous = this.identity;
     this.identity = identity;
     const generation = ++this.generation;
     this.publish({ kind: "checking" });
     try {
       this.marker ??= await this.initialize();
       if (!this.current(generation)) return;
+      if (this.marker.kind === "wipe-required") {
+        await this.retryCleanup();
+        return;
+      }
+      if (previous &&
+        (previous.subject !== this.clearedIdentity?.subject || previous.sessionId !== this.clearedIdentity.sessionId) &&
+        (!identity || previous.subject !== identity.subject || previous.sessionId !== identity.sessionId)) {
+        await this.denyAccess(previous);
+        return;
+      }
       if (!identity) {
         this.approvedSession = null;
         this.publish({ kind: "sign-in" });
@@ -132,6 +150,9 @@ export class EntryController {
       await this.deps.writeMarker(pending);
       if (!this.current(generation)) return;
       this.marker = pending;
+      await drainLocalInputWrites(identity.subject);
+      await this.deps.clearInput(identity.subject);
+      if (!this.current(generation)) return;
       await this.deps.enroll(pending, identity.subject);
       if (!this.current(generation)) return;
       const enrolled: InstallMarker = {
@@ -175,6 +196,12 @@ export class EntryController {
     }
   }
   private open() {
+    if (!this.identity) return;
+    if (!this.inputLease || this.inputLease.subject !== this.identity.subject ||
+      this.inputLease.sessionId !== this.identity.sessionId) {
+      this.inputLease?.deny();
+      this.inputLease = new LocalInputLease(this.identity.subject, this.identity.sessionId);
+    }
     this.lastInteraction = this.deps.now();
     if (this.awaySince !== null) this.awaySince = this.lastInteraction;
     this.publish({ kind: "open" });
@@ -216,6 +243,55 @@ export class EntryController {
       ? this.marker.installId
       : null;
   }
+  unlockedInputLease() {
+    return this.snapshot.state.kind === "open" ? this.inputLease : null;
+  }
+  denyAccessFor(lease: LocalInputLease) {
+    if (lease !== this.inputLease || !this.identity ||
+      lease.subject !== this.identity.subject || lease.sessionId !== this.identity.sessionId)
+      return Promise.resolve();
+    return this.denyAccess();
+  }
+  denyAccess = (identity = this.identity) => {
+    if (!this.marker || !identity) return Promise.resolve();
+    this.generation++;
+    this.approvedSession = null;
+    this.inputLease?.deny();
+    this.marker = {
+      version: 1, installId: this.marker.installId, kind: "wipe-required", ...identity,
+    };
+    this.publish({ kind: "revocation", cleanup: "running" });
+    return this.retryCleanup();
+  };
+  retryCleanup = (): Promise<void> => {
+    if (this.cleanupWork) return this.cleanupWork;
+    const marker = this.marker;
+    if (marker?.kind !== "wipe-required") return Promise.resolve();
+    this.inputLease?.deny();
+    this.publish({ kind: "revocation", cleanup: "running" });
+    this.cleanupWork = (async () => {
+      try {
+        // Persist denial before touching storage or signing out, including across a crash.
+        await this.deps.writeMarker(marker);
+        await drainLocalInputWrites(marker.subject);
+        await this.deps.clearInput(marker.subject);
+        await this.deps.clearEnrollment(marker);
+        await this.deps.signOut();
+        const reset = requireNewSignIn(marker);
+        await this.deps.writeMarker(reset);
+        this.marker = reset;
+        this.inputLease = null;
+        this.clearedIdentity = { subject: marker.subject, sessionId: marker.sessionId };
+        this.approvedSession = null;
+        this.publish(this.identity ? { kind: "reauthentication" } : { kind: "sign-in" });
+      } catch {
+        this.publish({ kind: "revocation", cleanup: "failed" });
+      } finally {
+        this.cleanupWork = null;
+      }
+    })();
+    return this.cleanupWork;
+  };
   needsPathUnlock(path: string) {
     return path !== this.path && sensitivePath(path);
   }
@@ -279,6 +355,8 @@ export class EntryController {
   dispose() {
     this.disposed = true;
     this.generation++;
+    this.inputLease?.deny();
+    this.inputLease = null;
     this.listeners.clear();
     this.snapshot = { state: { kind: "locked" }, obscured: true };
     this.privacyWork = this.privacyWork

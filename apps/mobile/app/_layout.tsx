@@ -15,12 +15,14 @@ import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Stack, type ErrorBoundaryProps } from "expo-router";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { ActivityIndicator, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "../src/features/api";
 import { LocalEntryGate } from "../src/local-auth/LocalEntryGate";
+import { DeviceAdmissionGate } from "../src/device-admission/DeviceAdmissionGate";
+import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import {
   Header,
   PrimaryButton,
@@ -34,7 +36,9 @@ const url = process.env.EXPO_PUBLIC_CONVEX_URL;
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const convex = url ? new ConvexReactClient(url) : null;
 
-export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const report = useDeviceAccessFailure();
+  useLayoutEffect(() => { report(error); }, [error, report]);
   return (
     <SafeAreaProvider>
       <Screen>
@@ -139,6 +143,7 @@ function Admission() {
       </Screen>
     );
   return (
+    <DeviceAdmissionGate>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="post" />
@@ -147,6 +152,7 @@ function Admission() {
       <Stack.Screen name="settings" />
       <Stack.Screen name="oauth-callback" />
     </Stack>
+    </DeviceAdmissionGate>
   );
 }
 export default function Layout() {
