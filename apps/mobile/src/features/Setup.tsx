@@ -1,3 +1,4 @@
+import { useDeviceAccessFailure } from "../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { SetupCategories } from "./categories/SetupCategories";
 import type { CategorySelection } from "./categories/model";
@@ -16,6 +17,7 @@ import { spacing } from "../ui/tokens";
 
 export function Setup({ onComplete }: { onComplete: () => void }) {
   const recordInteraction = useLocalEntryInteraction();
+  const reportFailure = useDeviceAccessFailure();
   const sheet = useRef<BottomSheetModal>(null);
   const ensure = useAction(api.accounting.ensurePersonalDefaults);
   const [categories, setCategories] = useState<CategorySelection[]>([]);
@@ -41,6 +43,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
       sheet.current?.dismiss();
       onComplete();
     } catch (error) {
+      if (reportFailure(error)) return;
       setError(
         error instanceof Error && !busy
           ? error.message

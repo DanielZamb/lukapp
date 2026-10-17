@@ -1,3 +1,9 @@
+import { requiresLocalWipe } from "../../local-auth/accessFailure";
+import {
+  LocalInputLease,
+  drainLocalInputWrites,
+  runLocalInputWrite,
+} from "../../local-auth/localInput";
 import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -280,4 +286,139 @@ test("a framework validation error without an accounting marker keeps uncertaint
   expect(editor().pending).toBe(true);
   expect(editor().editable).toBe(false);
   expect(api.clear).not.toHaveBeenCalled();
+});
+
+for (const code of [
+  "session_inactive",
+  "device_revoked",
+  "membership_required",
+]) {
+  test(`${code} with a confirmed wipe signal hands cleanup over without editor-owned deletion`, async () => {
+    const reportFailure = vi.fn((error: unknown) => requiresLocalWipe(error));
+    const api = { ...transport(), reportFailure };
+    const denied = new ConvexError({ code, wipeLocalInput: true });
+    api.post.mockRejectedValueOnce(denied);
+    const editor = await open(api);
+    await act(async () => {
+      editor().setAmount("-1,00");
+      editor().setUserCategoryId("food-category");
+    });
+    await act(async () => {
+      await editor().submit();
+    });
+    expect(reportFailure).toHaveBeenCalledExactlyOnceWith(denied);
+    expect(api.clear).not.toHaveBeenCalled();
+    expect(editor().posted).toBeNull();
+    expect(editor().pending).toBe(true);
+    expect(editor().error).toBe("");
+  });
+}
+
+test("a failed acknowledgement delete keeps the same payload and key for safe retry", async () => {
+  const api = transport();
+  api.clear.mockRejectedValueOnce(new Error("Storage delete failed"));
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-1,00");
+    editor().setUserCategoryId("food-category");
+  });
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(editor().pending).toBe(true);
+  expect(editor().editable).toBe(false);
+  expect(editor().posted).toBeNull();
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(api.post.mock.calls[1][0]).toEqual(api.post.mock.calls[0][0]);
+  expect(editor().posted?.amount.minorUnits).toBe(100);
+  expect(editor().pending).toBe(false);
+});
+
+test("a late post response cannot clear the pending entry of a new admission", async () => {
+  const oldLease = new LocalInputLease("late-response-owner", "old-session");
+  const newLease = new LocalInputLease("late-response-owner", "new-session");
+  let stored = "";
+  let acknowledge: (receipt: {
+    description: string;
+    amount: {
+      currency: PendingExpense["amount"]["currency"];
+      minorUnits: number;
+    };
+  }) => void = () => {};
+  const response = new Promise<{
+    description: string;
+    amount: {
+      currency: PendingExpense["amount"]["currency"];
+      minorUnits: number;
+    };
+  }>((resolve) => {
+    acknowledge = resolve;
+  });
+  const api = {
+    ...transport(),
+    save: (payload: PendingExpense) =>
+      runLocalInputWrite(oldLease, async () => {
+        stored = payload.idempotencyKey;
+      }),
+    clear: () =>
+      runLocalInputWrite(oldLease, async () => {
+        stored = "";
+      }),
+  };
+  api.post.mockImplementationOnce(() => response);
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-1,00");
+  });
+  let submission: Promise<void> | undefined;
+  await act(async () => {
+    submission = editor().submit();
+    await Promise.resolve();
+  });
+  expect(api.post).toHaveBeenCalledOnce();
+  oldLease.deny();
+  await drainLocalInputWrites(oldLease.subject);
+  stored = "";
+  await runLocalInputWrite(newLease, async () => {
+    stored = "new-admission-key";
+  });
+  await act(async () => {
+    acknowledge({
+      description: "Old expense",
+      amount: { currency: "COP", minorUnits: 100 },
+    });
+    await submission;
+  });
+  expect(stored).toBe("new-admission-key");
+  expect(editor().posted).toBeNull();
+  expect(editor().pending).toBe(true);
+});
+
+test("an old mounted transport cannot save or start another post after its lease is denied", async () => {
+  const lease = new LocalInputLease("late-save-owner", "old-session");
+  let stored = "new-admission-key";
+  const api = {
+    ...transport(),
+    save: (payload: PendingExpense) =>
+      runLocalInputWrite(lease, async () => {
+        stored = payload.idempotencyKey;
+      }),
+    clear: () =>
+      runLocalInputWrite(lease, async () => {
+        stored = "";
+      }),
+  };
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-1,00");
+  });
+  lease.deny();
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(stored).toBe("new-admission-key");
+  expect(api.post).not.toHaveBeenCalled();
+  expect(editor().posted).toBeNull();
 });

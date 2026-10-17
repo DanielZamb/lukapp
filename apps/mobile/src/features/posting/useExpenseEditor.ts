@@ -17,6 +17,7 @@ export type ExpenseTransport = {
   post: (payload: PendingExpense) => Promise<Receipt>;
   clear: () => Promise<void>;
   newKey: () => string;
+  reportFailure?: (error: unknown) => boolean;
 };
 
 export function useExpenseEditor(
@@ -61,11 +62,13 @@ export function useExpenseEditor(
         }
         setLoading(false);
       })
-      .catch(() => {
-        if (active)
+      .catch((error: unknown) => {
+        if (active) {
+          if (transport.reportFailure?.(error)) return;
           setError(
             "Could not restore your pending expense. Reopen this page to try again.",
           );
+        }
       });
     return () => {
       active = false;
@@ -108,6 +111,7 @@ export function useExpenseEditor(
       setUserCategoryId(null);
       setPosted(receipt);
     } catch (error) {
+      if (transport.reportFailure?.(error)) return;
       const data: unknown = error instanceof ConvexError ? error.data : null;
       if (
         data !== null &&
