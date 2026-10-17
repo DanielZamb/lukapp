@@ -6,6 +6,7 @@ import type { TransactionCategories } from "./transactionSelection";
 
 export type CategoryPickerProps = {
   workspaceId: string;
+  direction?: "in" | "out";
   value: TransactionCategories;
   onChange: (value: TransactionCategories) => void;
   visible: boolean;

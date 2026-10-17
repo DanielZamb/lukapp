@@ -22,6 +22,7 @@ import type * as categoryValidators from "../categoryValidators.js";
 import type * as clerkWebhooks from "../clerkWebhooks.js";
 import type * as deviceAccess from "../deviceAccess.js";
 import type * as deviceAccessInternal from "../deviceAccessInternal.js";
+import type * as historyBackfill from "../historyBackfill.js";
 import type * as http from "../http.js";
 import type * as lib_admission from "../lib/admission.js";
 import type * as lib_clerkProvider from "../lib/clerkProvider.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   clerkWebhooks: typeof clerkWebhooks;
   deviceAccess: typeof deviceAccess;
   deviceAccessInternal: typeof deviceAccessInternal;
+  historyBackfill: typeof historyBackfill;
   http: typeof http;
   "lib/admission": typeof lib_admission;
   "lib/clerkProvider": typeof lib_clerkProvider;

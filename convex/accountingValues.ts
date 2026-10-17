@@ -57,3 +57,27 @@ export const categoryRestyle = {
   style: categoryStyle,
 };
 export const defaults = v.object({ workspace, financialAccountProfile });
+
+export const openingPosition = {
+  ...inWorkspace,
+  financialAccountProfileId: v.string(),
+  amount: money,
+  accountingDate: v.string(),
+  description: v.string(),
+  idempotencyKey: v.string(),
+};
+export const accountTransfer = {
+  ...inWorkspace,
+  sourceFinancialAccountProfileId: v.string(),
+  destinationFinancialAccountProfileId: v.string(),
+  amount: money,
+  accountingDate: v.string(),
+  description: v.string(),
+  idempotencyKey: v.string(),
+};
+export const accountSetup = {
+  ...profileCreation,
+  amount: money,
+  accountingDate: v.string(),
+  idempotencyKey: v.string(),
+};

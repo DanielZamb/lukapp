@@ -38,7 +38,12 @@ function Account({
       ) : (
         <ActivityIndicator />
       )}
-      <PrimaryButton label="Post money" onPress={() => router.push("/post")} />
+      <PrimaryButton
+        label="Post money"
+        onPress={() =>
+          router.push({ pathname: "/post", params: { profileId } })
+        }
+      />
       <Text style={ui.title}>Recent activity</Text>
       {recent && (
         <ActivityRows

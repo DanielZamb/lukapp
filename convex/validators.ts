@@ -27,6 +27,8 @@ export const productKind = v.union(
 
 export const postingPolicy = v.union(
   v.literal("start-tracking@1"),
+  v.literal("opening-position@1"),
+  v.literal("account-transfer@1"),
   v.literal("cash-expense@1"),
   v.literal("cash-income@1"),
   v.literal("reversal@1"),
@@ -138,4 +140,10 @@ export const trialBalanceRow = v.object({
   nature: accountNature,
   debitMinorUnits: v.number(),
   creditMinorUnits: v.number(),
+});
+
+export const accountSetupResult = v.object({
+  financialAccountProfile,
+  openingEntry: v.union(v.null(), postedJournalEntry),
+  replay: v.boolean(),
 });

@@ -9,7 +9,17 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
-import { useExpenseEditor, type ExpenseTransport } from "./useExpenseEditor";
+import { usePostingEditor } from "./usePostingEditor";
+import type { PendingPosting } from "./pendingPostingSchema";
+type Receipt = { description: string; amount: { currency: string; minorUnits: number } };
+type ExpenseTransport = {
+  load: () => Promise<PendingExpense | null>;
+  save: (payload: PendingExpense) => Promise<void>;
+  post: (payload: PendingExpense) => Promise<Receipt>;
+  clear: () => Promise<void>;
+  newKey: () => string;
+  reportFailure?: (error: unknown) => boolean;
+};
 import type { PendingExpense } from "../pendingExpense";
 
 const account = {
@@ -25,9 +35,25 @@ afterEach(async () => {
 });
 async function open(transport: ExpenseTransport) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  let editor: ReturnType<typeof useExpenseEditor> | undefined;
+  let editor: ReturnType<typeof usePostingEditor> | undefined;
+  // Keep the literal expense assertions while driving the shared entry lifecycle.
+  const shared = {
+    ...transport,
+    load: async (): Promise<PendingPosting | null> => {
+      const payload = await transport.load();
+      return payload ? { kind: "expense", payload } : null;
+    },
+    save: async (entry: PendingPosting) => {
+      if (entry.kind !== "expense") throw new Error("Expected expense");
+      await transport.save(entry.payload);
+    },
+    post: async (entry: PendingPosting) => {
+      if (entry.kind !== "expense") throw new Error("Expected expense");
+      return transport.post(entry.payload);
+    },
+  };
   function Harness() {
-    editor = useExpenseEditor(account, transport);
+    editor = usePostingEditor(account, shared);
     return null;
   }
   await act(async () => {

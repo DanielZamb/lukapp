@@ -12,6 +12,43 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  financialAccountSetups: defineTable({
+    workspaceId: v.id("workspaces"),
+    idempotencyKey: v.string(),
+    name: v.string(),
+    productKind,
+    amount: v.object({ currency: v.string(), minorUnits: v.number() }),
+    accountingDate: v.string(),
+    financialAccountProfileId: v.id("financialAccountProfiles"),
+    openingJournalEntryId: v.optional(v.id("journalEntries")),
+  }).index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"]),
+  financialAccountOpenings: defineTable({
+    workspaceId: v.id("workspaces"),
+    financialAccountProfileId: v.id("financialAccountProfiles"),
+    accountingDate: v.string(),
+    idempotencyKey: v.string(),
+    amount: v.object({ currency: v.string(), minorUnits: v.number() }),
+    description: v.string(),
+    policy: postingPolicy,
+    journalEntryId: v.optional(v.id("journalEntries")),
+  })
+    .index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"])
+    .index("by_workspace_profile", ["workspaceId", "financialAccountProfileId"]),
+  journalEntryProfiles: defineTable({
+    workspaceId: v.id("workspaces"),
+    journalEntryId: v.id("journalEntries"),
+    financialAccountProfileId: v.id("financialAccountProfiles"),
+    accountingDate: v.string(),
+    postedAt: v.number(),
+    reversesEntryId: v.optional(v.id("journalEntries")),
+  })
+    .index("by_workspace_profile_date", [
+      "workspaceId",
+      "financialAccountProfileId",
+      "accountingDate",
+      "postedAt",
+    ])
+    .index("by_entry", ["journalEntryId"]),
   budgetLimitRevisions: defineTable(revisionFields)
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_request", ["workspaceId", "idempotencyKey"]),

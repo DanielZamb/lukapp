@@ -33,6 +33,10 @@ export {
 } from "./errors";
 export type {
   AccountBalance,
+  AccountSetupInput,
+  AccountSetupResult,
+  AccountTransferInput,
+  OpeningPositionInput,
   AccountingCore,
   AccountingPeriod,
   AccountNature,

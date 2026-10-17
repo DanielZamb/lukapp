@@ -103,18 +103,23 @@ export async function ensurePersonalDefaults(
     productKind: "cash",
   });
   if (args.startingMinorUnits > 0) {
-    await recordOpeningPosition(store, clock, {
-      actor,
-      workspaceId: workspace.id,
-      financialAccountProfileId: financialAccountProfile.id,
-      amount: {
-        currency: workspace.functionalCurrency,
-        minorUnits: args.startingMinorUnits,
+    await recordOpeningPosition(
+      store,
+      clock,
+      {
+        actor,
+        workspaceId: workspace.id,
+        financialAccountProfileId: financialAccountProfile.id,
+        amount: {
+          currency: workspace.functionalCurrency,
+          minorUnits: args.startingMinorUnits,
+        },
+        accountingDate: clock.now().toISOString().slice(0, 10),
+        description: "Starting amount",
+        idempotencyKey: "personal-defaults-opening@1",
       },
-      accountingDate: clock.now().toISOString().slice(0, 10),
-      description: "Starting amount",
-      idempotencyKey: "personal-defaults-opening@1",
-    });
+      "start-tracking@1",
+    );
   }
   const workspaceId = ctx.db.normalizeId("workspaces", workspace.id);
   const profileId = ctx.db.normalizeId(

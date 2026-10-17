@@ -14,6 +14,9 @@ import {
 } from "./lib/deviceAuthorization";
 import { run } from "./accountingErrors";
 import {
+  accountSetup,
+  accountTransfer,
+  openingPosition,
   categoryCreation,
   categoryRestyle,
   cashActivity,
@@ -39,11 +42,13 @@ import { listUserCategories as listCategories } from "../src/accounting/queries/
 import { postedActivity as readPostedActivity } from "../src/accounting/queries/postedActivity";
 import { categoryTotals as readCategoryTotals } from "../src/accounting/queries/categoryTotals";
 import { createAccountingCore } from "../src/accounting";
-import { convexReadStore, convexHistoryStore } from "./store";
+import { convexHistoryStore } from "./historyStore";
+import { convexReadStore } from "./store";
 import { readPersonalDefaults } from "./personalDefaults";
 import {
   accountBalance,
   accountNature,
+  accountSetupResult,
   accountingPeriod,
   catalogAccount,
   financialAccountProfile,
@@ -383,6 +388,42 @@ export const restyleUserCategory = action({
   handler: async (ctx, args): Promise<Infer<typeof userCategory>> => {
     const session = await verifyCurrentSession(ctx.auth);
     return ctx.runMutation(internal.accountingWrites.restyleUserCategory, {
+      ...args,
+      session,
+    });
+  },
+});
+
+export const recordAccountTransfer = action({
+  args: accountTransfer,
+  returns: postedJournalEntry,
+  handler: async (ctx, args): Promise<Infer<typeof postedJournalEntry>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.recordAccountTransfer, {
+      ...args,
+      session,
+    });
+  },
+});
+
+export const recordOpeningPosition = action({
+  args: openingPosition,
+  returns: v.union(v.null(), postedJournalEntry),
+  handler: async (ctx, args): Promise<Infer<typeof postedJournalEntry> | null> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.recordOpeningPosition, {
+      ...args,
+      session,
+    });
+  },
+});
+
+export const setupFinancialAccountProfile = action({
+  args: accountSetup,
+  returns: accountSetupResult,
+  handler: async (ctx, args): Promise<Infer<typeof accountSetupResult>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.setupFinancialAccountProfile, {
       ...args,
       session,
     });

@@ -1,5 +1,5 @@
 import { balances } from "./balances";
-import { activityRow } from "./activityRow";
+import { activityRow, profileNamesByPostingAccount } from "./activityRow";
 import { requireWorkspace } from "../membership";
 import { journalContext, toPostedJournalEntry } from "../views";
 import type { AccountingStore, Actor } from "../types";
@@ -31,7 +31,11 @@ export async function postedActivity(
         ...(reversalId ? { reversedByEntryId: reversalId } : {}),
       });
       const profile = entry.financialAccountProfileId ? context.profiles.get(entry.financialAccountProfileId) : undefined;
-      return activityRow(entry, profile?.postingAccountId);
+      return activityRow(
+        entry,
+        profile?.postingAccountId,
+        profileNamesByPostingAccount(context.profiles.values()),
+      );
     }));
   return {
     accounts: accounts.map((account) => ({

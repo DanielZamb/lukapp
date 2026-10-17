@@ -6,17 +6,19 @@ import type {
   AccountingStore,
   LedgerAccount,
   StoredJournalEntry,
+  StoredOpeningMarker,
   StoredPeriodStatus,
   StoredProfile,
   StoredWorkspace,
 } from "../src/accounting/types";
 import type { DataModel, Doc, Id, TableNames } from "./_generated/dataModel";
-import type { HistoryStore } from "../src/accounting/queries/postedHistory";
 
-type ReadDb = GenericQueryCtx<DataModel>["db"];
+export type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
 type ReadMethods = Omit<AccountingStore, WriteMethod>;
 type WriteMethod =
+  | "insertAccountSetup"
+  | "insertOpeningMarker"
   | "insertCategory"
   | "restyleCategory"
   | "insertWorkspace"
@@ -37,7 +39,7 @@ function idFor<Table extends TableNames>(
 }
 
 /** Only for ids the kernel got back from this store, never raw caller input. */
-function storedId<Table extends TableNames>(id: string): Id<Table> {
+export function storedId<Table extends TableNames>(id: string): Id<Table> {
   return id as Id<Table>;
 }
 
@@ -88,12 +90,25 @@ function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
   };
 }
 
+function toOpening(doc: Doc<"financialAccountOpenings">): StoredOpeningMarker {
+  return {
+    workspaceId: doc.workspaceId,
+    financialAccountProfileId: doc.financialAccountProfileId,
+    accountingDate: doc.accountingDate,
+    idempotencyKey: doc.idempotencyKey,
+    amount: doc.amount,
+    description: doc.description,
+    policy: doc.policy,
+    ...(doc.journalEntryId ? { journalEntryId: doc.journalEntryId } : {}),
+  };
+}
+
 function toCategory(doc: Doc<"userCategories">): UserCategory {
   const { _id, _creationTime, ...category } = doc;
   return { id: _id, ...category };
 }
 
-function toEntry(
+export function toEntry(
   doc: Doc<"journalEntries">,
   lines: Doc<"journalLines">[],
 ): StoredJournalEntry {
@@ -141,6 +156,42 @@ function readStore(db: ReadDb): ReadMethods {
   }
 
   return {
+    async findAccountSetup(workspaceId, idempotencyKey) {
+      const doc = await db
+        .query("financialAccountSetups")
+        .withIndex("by_workspace_idempotency", (q) =>
+          q.eq("workspaceId", storedId<"workspaces">(workspaceId)).eq("idempotencyKey", idempotencyKey),
+        )
+        .unique();
+      if (!doc) return undefined;
+      const { _id, _creationTime, ...setup } = doc;
+      return setup;
+    },
+    async findOpeningMarkerByIdempotencyKey(workspaceId, idempotencyKey) {
+      const doc = await db
+        .query("financialAccountOpenings")
+        .withIndex("by_workspace_idempotency", (q) =>
+          q
+            .eq("workspaceId", storedId<"workspaces">(workspaceId))
+            .eq("idempotencyKey", idempotencyKey),
+        )
+        .unique();
+      return doc ? toOpening(doc) : undefined;
+    },
+    async listOpeningMarkersByProfile(workspaceId, profileId) {
+      const docs = await db
+        .query("financialAccountOpenings")
+        .withIndex("by_workspace_profile", (q) =>
+          q
+            .eq("workspaceId", storedId<"workspaces">(workspaceId))
+            .eq(
+              "financialAccountProfileId",
+              storedId<"financialAccountProfiles">(profileId),
+            ),
+        )
+        .collect();
+      return docs.map(toOpening);
+    },
     async getCategory(categoryId) {
       const id = idFor(db, "userCategories", categoryId);
       const doc = id && (await db.get(id));
@@ -285,6 +336,28 @@ function readStore(db: ReadDb): ReadMethods {
 
 function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
   return {
+    async insertAccountSetup({ openingJournalEntryId, ...setup }) {
+      await db.insert("financialAccountSetups", {
+        ...setup,
+        workspaceId: storedId<"workspaces">(setup.workspaceId),
+        financialAccountProfileId: storedId<"financialAccountProfiles">(setup.financialAccountProfileId),
+        ...(openingJournalEntryId
+          ? { openingJournalEntryId: storedId<"journalEntries">(openingJournalEntryId) }
+          : {}),
+      });
+    },
+    async insertOpeningMarker({ journalEntryId, ...marker }) {
+      await db.insert("financialAccountOpenings", {
+        ...marker,
+        workspaceId: storedId<"workspaces">(marker.workspaceId),
+        financialAccountProfileId: storedId<"financialAccountProfiles">(
+          marker.financialAccountProfileId,
+        ),
+        ...(journalEntryId
+          ? { journalEntryId: storedId<"journalEntries">(journalEntryId) }
+          : {}),
+      });
+    },
     async insertCategory(category) {
       const id = await db.insert("userCategories", {
         ...category,
@@ -370,6 +443,32 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
           creditMinorUnits: line.creditMinorUnits,
         });
       }
+      const profiles = await db
+        .query("financialAccountProfiles")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .collect();
+      for (const profile of profiles) {
+        if (
+          !entry.lines.some(
+            (line) => line.ledgerAccountId === profile.postingAccountId,
+          )
+        )
+          continue;
+        await db.insert("journalEntryProfiles", {
+          workspaceId,
+          journalEntryId,
+          financialAccountProfileId: profile._id,
+          accountingDate: entry.accountingDate,
+          postedAt: entry.postedAt,
+          ...(entry.reversesEntryId
+            ? {
+                reversesEntryId: storedId<"journalEntries">(
+                  entry.reversesEntryId,
+                ),
+              }
+            : {}),
+        });
+      }
       return { ...entry, id: journalEntryId };
     },
 
@@ -416,6 +515,8 @@ function unavailable(method: string): never {
 
 function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
   return {
+    insertAccountSetup: async () => unavailable("insertAccountSetup"),
+    insertOpeningMarker: async () => unavailable("insertOpeningMarker"),
     insertCategory: async () => unavailable("insertCategory"),
     restyleCategory: async () => unavailable("restyleCategory"),
     insertWorkspace: async () => unavailable("insertWorkspace"),
@@ -436,29 +537,4 @@ export function convexReadStore(db: ReadDb): AccountingStore {
 
 export function convexStore(db: WriteDb): AccountingStore {
   return { ...readStore(db), ...writeStore(db) };
-}
-
-export function convexHistoryStore(db: ReadDb): HistoryStore {
-  const store = convexReadStore(db);
-  return {
-    ...store,
-    async pageJournalEntries(input) {
-      const workspaceId = storedId<"workspaces">(input.workspaceId);
-      const profileId = input.financialAccountProfileId;
-      const query = profileId
-        ? db.query("journalEntries").withIndex("by_workspace_profile_date", (q) =>
-            q.eq("workspaceId", workspaceId).eq("financialAccountProfileId", storedId<"financialAccountProfiles">(profileId)))
-        : db.query("journalEntries").withIndex("by_workspace_date", (q) => q.eq("workspaceId", workspaceId));
-      const ordered = query.order("desc");
-      const page = await (input.includeReversals ? ordered : ordered.filter((q) => q.eq(q.field("reversesEntryId"), undefined)))
-        .paginate({ ...input.paginationOpts, numItems: Math.min(50, input.paginationOpts.numItems) });
-      return {
-        ...page,
-        page: await Promise.all(page.page.map(async (doc) => {
-          const lines = await db.query("journalLines").withIndex("by_entry", (q) => q.eq("journalEntryId", doc._id)).collect();
-          return toEntry(doc, lines);
-        })),
-      };
-    },
-  };
 }

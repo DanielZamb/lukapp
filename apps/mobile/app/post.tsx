@@ -1,147 +1,231 @@
-import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
-import {
-  runLocalInputWrite,
-  useLocalInputLease,
-} from "../src/local-auth/localInput";
 import { useLocalEntryInteraction } from "../src/local-auth/interaction";
 import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
-import { useAction, useQuery } from "convex/react";
-import * as Crypto from "expo-crypto";
-import { Redirect, router } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useQuery } from "convex/react";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate } from "../src/features/money";
-import {
-  clearPendingExpense,
-  loadPendingExpense,
-  savePendingExpense,
-  type PendingExpense,
-} from "../src/features/pendingExpense";
-import { Choice, Header, Screen, SecondaryButton } from "../src/ui/core";
+import { Header, Screen, SecondaryButton } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
-import { useExpenseEditor } from "../src/features/posting/useExpenseEditor";
-import { canPostCategories, needsPrimary } from "../src/features/categories/transactionSelection";
+import { PlaceSheet } from "../src/features/posting/PlaceSheet";
+import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
+import { usePostingEditor } from "../src/features/posting/usePostingEditor";
+import { usePostingTransport } from "../src/features/posting/usePostingTransport";
+import {
+  canPostCategories,
+  needsPrimary,
+} from "../src/features/categories/transactionSelection";
 
 type Defaults = NonNullable<ReturnType<typeof usePersonalDefaults>>;
 function PostMoney({
   defaults,
   subject,
+  initialProfileId,
 }: {
   defaults: Defaults;
   subject: string;
+  initialProfileId?: string;
 }) {
   const recordInteraction = useLocalEntryInteraction();
-  const reportFailure = useDeviceAccessFailure();
-  const lease = useLocalInputLease();
   const [categoryVisible, setCategoryVisible] = useState(false);
+  const [placeTarget, setPlaceTarget] = useState<"source" | "destination">(
+    "source",
+  );
+  const [search, setSearch] = useState("");
   const categories = useQuery(api.accounting.listUserCategories, {
     workspaceId: defaults.workspace.id,
   });
-  const post = useAction(api.accounting.recordCashExpense);
+  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, {
+    workspaceId: defaults.workspace.id,
+  });
   const dateSheet = useRef<BottomSheetModal>(null);
   const placeSheet = useRef<BottomSheetModal>(null);
-  const { workspace, financialAccountProfile: profile } = defaults;
-  const transport = useMemo(
-    () => ({
-      load: () => loadPendingExpense(subject),
-      save: (payload: PendingExpense) =>
-        runLocalInputWrite(lease, () => savePendingExpense(subject, payload)),
-      post,
-      clear: () =>
-        runLocalInputWrite(lease, () => clearPendingExpense(subject)),
-      reportFailure,
-      newKey: Crypto.randomUUID,
-    }),
-    [subject, post, lease, reportFailure],
-  );
-  const editor = useExpenseEditor(
+  const setupSheet = useRef<BottomSheetModal>(null);
+  const setupPresented = useRef(false);
+  const { workspace, financialAccountProfile: defaultProfile } = defaults;
+  const editor = usePostingEditor(
     {
       workspaceId: workspace.id,
-      financialAccountProfileId: profile.id,
+      financialAccountProfileId: initialProfileId ?? defaultProfile.id,
       currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
     },
-    transport,
+    usePostingTransport(subject),
   );
-  const { date, setDate } = editor;
+  const profile = profiles?.find((place) => place.id === editor.profileId);
+  const categoryEnabled = editor.entryType === "normal";
+  const categoryValid =
+    !categoryEnabled || canPostCategories(editor.categories, categories);
+  const placesValid =
+    !!profile &&
+    (editor.entryType !== "transfer" ||
+      !!profiles?.some((place) => place.id === editor.destinationId));
+  const setup = editor.setup;
+  useEffect(() => {
+    if (setup !== null && !setupPresented.current)
+      setupSheet.current?.present();
+    else if (setup === null && setupPresented.current)
+      setupSheet.current?.dismiss();
+    setupPresented.current = setup !== null;
+  }, [setup]);
+  function interaction(action: () => void) {
+    recordInteraction();
+    action();
+  }
+  const hint =
+    editor.entryType === "transfer"
+      ? "Move money from Place to To. Paying a card or loan reduces what you owe. Record any fee as a separate expense."
+      : editor.entryType === "initial"
+        ? `${profile?.productKind === "creditCard" || profile?.productKind === "loan" ? "Enter the amount owed" : "Enter the amount held"} on the starting date. Use zero or a positive amount. Earlier activity is outside Start Tracking.`
+        : "Use a positive amount for income and a negative amount for spending. Choose up to three categories; each counts the full amount.";
+  const selectedDate = setup?.date ?? editor.date;
   return (
     <>
       <PostingForm
-        currency={workspace.functionalCurrency}
-        place={profile.name}
-        category={
-          editor.categories.ids.length
-            ? editor.categories.ids.map((id) => categories?.find((c) => c.id === id)?.name ?? "Saved category").join(" · ")
-            : "No category"
-        }
         {...editor}
-        categoryNeedsPrimary={!!categories && needsPrimary(editor.categories.ids, categories) && !editor.categories.primaryId}
-        canSubmit={editor.canSubmit && (editor.pending || canPostCategories(editor.categories, categories))}
+        currency={workspace.functionalCurrency}
+        place={profile?.name ?? "Choose a place"}
+        destination={
+          profiles?.find((place) => place.id === editor.destinationId)?.name
+        }
+        category={
+          editor.categories.ids
+            .map(
+              (id) =>
+                categories?.find((category) => category.id === id)?.name ??
+                "Saved category",
+            )
+            .join(" · ") || "No category"
+        }
+        categoryEnabled={categoryEnabled}
+        hint={hint}
+        categoryNeedsPrimary={
+          categoryEnabled &&
+          !!categories &&
+          needsPrimary(editor.categories.ids, categories) &&
+          !editor.categories.primaryId
+        }
+        canSubmit={
+          !setup &&
+          editor.canSubmit &&
+          (editor.pending || (categoryValid && placesValid))
+        }
         date={new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
           new Date(`${editor.date}T12:00:00`),
         )}
         posted={
           editor.posted
-            ? `${editor.posted.description || "Entry"} · ${formatMoney({ ...editor.posted.amount, minorUnits: -editor.posted.amount.minorUnits })}`
+            ? `${editor.posted.description || "Entry"} · ${formatMoney(editor.posted.amount)}`
             : null
         }
-        onAmountChange={(value) => {
-          recordInteraction();
-          editor.setAmount(value);
-        }}
-        onDescriptionChange={(value) => {
-          recordInteraction();
-          editor.setDescription(value);
-        }}
+        postedTitle={editor.posted?.title}
+        onAmountChange={(value) => interaction(() => editor.setAmount(value))}
+        onDescriptionChange={(value) =>
+          interaction(() => editor.setDescription(value))
+        }
+        onEntryType={(value) => interaction(() => editor.setEntryType(value))}
         onBack={() => router.back()}
-        onPlace={() => placeSheet.current?.present()}
+        onPlace={() => {
+          setPlaceTarget("source");
+          setSearch("");
+          placeSheet.current?.present();
+        }}
+        onDestination={() => {
+          setPlaceTarget("destination");
+          setSearch("");
+          placeSheet.current?.present();
+        }}
         onCategory={() => setCategoryVisible(true)}
         onDate={() => dateSheet.current?.present()}
         onPost={() => void editor.submit()}
         onDone={editor.dismissPosted}
       />
-      <CategoryPicker
-        workspaceId={workspace.id}
-        value={editor.categories}
-        onChange={editor.setCategories}
-        visible={categoryVisible && editor.editable}
-        onClose={() => setCategoryVisible(false)}
+      {categoryEnabled && (
+        <CategoryPicker
+          key={editor.direction}
+          direction={editor.direction}
+          workspaceId={workspace.id}
+          value={editor.categories}
+          onChange={editor.setCategories}
+          visible={categoryVisible && editor.editable}
+          onClose={() => setCategoryVisible(false)}
+        />
+      )}
+      <PlaceSheet
+        sheetRef={placeSheet}
+        title={placeTarget === "source" ? "Place" : "To"}
+        search={search}
+        onSearch={(value) => interaction(() => setSearch(value))}
+        places={profiles}
+        selectedId={
+          placeTarget === "source" ? editor.profileId : editor.destinationId
+        }
+        excludedId={
+          placeTarget === "destination"
+            ? editor.profileId
+            : (editor.destinationId ?? undefined)
+        }
+        disabled={!editor.editable}
+        onSelect={(id) =>
+          interaction(() => {
+            if (placeTarget === "source") editor.setProfileId(id);
+            else editor.setDestinationId(id);
+            placeSheet.current?.dismiss();
+          })
+        }
+        onAdd={() =>
+          interaction(() => {
+            placeSheet.current?.dismiss();
+            editor.setSetup({
+              name: "",
+              productKind: "bankAccount",
+              amount: "0",
+              date: localDate(),
+              target:
+                placeTarget === "destination"
+                  ? { kind: "destination", sourceProfileId: editor.profileId }
+                  : { kind: "source" },
+            });
+          })
+        }
       />
-      <BottomSheetModal
-        ref={placeSheet}
-        snapPoints={["35%"]}
-        enableDynamicSizing={false}
-      >
-        <BottomSheetView style={{ padding: spacing.xxl, gap: spacing.xl }}>
-          <Header title="Place" />
-          <Choice
-            label="My money"
-            selected
-            onPress={() => placeSheet.current?.dismiss()}
-          />
-        </BottomSheetView>
-      </BottomSheetModal>
+      <AccountSetupForm
+        sheetRef={setupSheet}
+        value={setup}
+        currency={workspace.functionalCurrency}
+        editable={editor.editable}
+        busy={editor.busy}
+        pending={editor.pending}
+        error={editor.error}
+        canSubmit={editor.canSubmit}
+        onChange={(value) => interaction(() => editor.setSetup(value))}
+        onDate={() => dateSheet.current?.present()}
+        onSubmit={() => void editor.submit()}
+        onDismiss={() => editor.setSetup(null)}
+      />
       <BottomSheetModal
         ref={dateSheet}
         snapPoints={["55%"]}
         enableDynamicSizing={false}
       >
         <BottomSheetView style={{ padding: spacing.xxl, gap: spacing.xl }}>
-          <Header title="Date occurred" />
+          <Header title={setup ? "Starting date" : "Date occurred"} />
           <DateTimePicker
-            value={new Date(`${date}T12:00:00`)}
+            value={new Date(`${selectedDate}T12:00:00`)}
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={(_, selected) => {
-              if (selected) {
-                recordInteraction();
-                setDate(localDate(selected));
-              }
+              if (selected)
+                interaction(() => {
+                  if (setup)
+                    editor.setSetup({ ...setup, date: localDate(selected) });
+                  else editor.setDate(localDate(selected));
+                });
               if (Platform.OS !== "ios") dateSheet.current?.dismiss();
             }}
           />
@@ -157,8 +241,13 @@ function PostMoney({
 export default function PostRoute() {
   const defaults = usePersonalDefaults();
   const { userId } = useAuth();
+  const { profileId } = useLocalSearchParams<{ profileId?: string }>();
   return defaults && userId ? (
-    <PostMoney defaults={defaults} subject={userId} />
+    <PostMoney
+      defaults={defaults}
+      subject={userId}
+      initialProfileId={profileId}
+    />
   ) : defaults === null ? (
     <Redirect href="/" />
   ) : (

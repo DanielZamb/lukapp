@@ -26,6 +26,12 @@ function writeArgs(workspaceId = "foreign", profileId = "foreign") {
     },
     lockAccountingPeriod: { workspaceId, period: { year: 2026, month: 9 } },
     recordCashExpense: groceries(workspaceId, profileId),
+    recordOpeningPosition: { ...groceries(workspaceId, profileId), idempotencyKey: "opening" },
+    recordAccountTransfer: {
+      workspaceId, sourceFinancialAccountProfileId: profileId, destinationFinancialAccountProfileId: "destination",
+      amount: { currency: "COP", minorUnits: 100 }, accountingDate: "2026-09-24", description: "Move", idempotencyKey: "move",
+    },
+    setupFinancialAccountProfile: { workspaceId, name: "Bank", productKind: "bankAccount", amount: { currency: "COP", minorUnits: 0 }, accountingDate: "2026-09-24", idempotencyKey: "setup" },
     recordCashIncome: {
       ...groceries(workspaceId, profileId),
       idempotencyKey: "income",
@@ -86,6 +92,9 @@ async function financialState(
     entries: await ctx.db.query("journalEntries").collect(),
     lines: await ctx.db.query("journalLines").collect(),
     defaults: await ctx.db.query("personalDefaults").collect(),
+    setups: await ctx.db.query("financialAccountSetups").collect(),
+    openings: await ctx.db.query("financialAccountOpenings").collect(),
+    entryProfiles: await ctx.db.query("journalEntryProfiles").collect(),
     periods: await ctx.db.query("accountingPeriods").collect(),
     decisions: await ctx.db.query("periodControlDecisions").collect(),
     accounts: await ctx.db.query("ledgerAccounts").collect(),
@@ -465,4 +474,13 @@ test("normal category expense replay remains exact after transient security fail
   ).rejects.toMatchObject({
     data: { kind: "accounting", code: "idempotency_key_conflict" },
   });
+});
+
+test("every money-kind action rejects signed-out and different-owner callers before any financial effect", async () => {
+  const { t, root } = await accountingFixture(modules);
+  const before = await financialState(t);
+  await expectWritesDenied(root, writeArgs(), "authentication_required");
+  const foreign = root.withIdentity({ ...fixtureIdentity, subject: "another-real-user-fixture" });
+  await expectWritesDenied(foreign, writeArgs(), "owner_required");
+  expect(await financialState(t)).toEqual(before);
 });

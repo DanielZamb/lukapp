@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { liveSession } from "./lib/securityValues";
 import {
@@ -11,6 +12,9 @@ import { ensurePersonalDefaults as ensureDefaults } from "./personalDefaults";
 import { convexStore } from "./store";
 import { run } from "./accountingErrors";
 import {
+  accountSetup,
+  accountTransfer,
+  openingPosition,
   categoryCreation,
   categoryRestyle,
   cashActivity,
@@ -21,6 +25,7 @@ import {
   reversal,
 } from "./accountingValues";
 import {
+  accountSetupResult,
   accountingPeriod,
   financialAccountProfile,
   postedJournalEntry,
@@ -142,5 +147,55 @@ export const restyleUserCategory = internalMutation({
       permission: "category:manage",
     });
     return run(() => restyleCategory(convexStore(ctx.db), { ...args, actor }));
+  },
+});
+
+export const recordAccountTransfer = internalMutation({
+  args: { ...accountTransfer, session: liveSession },
+  returns: postedJournalEntry,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, {
+      session,
+      workspaceId: args.workspaceId,
+      permission: "accounting:post",
+    });
+    return run(() =>
+      createAccountingCore(convexStore(ctx.db)).recordAccountTransfer({ ...args, actor }),
+    );
+  },
+});
+
+export const recordOpeningPosition = internalMutation({
+  args: { ...openingPosition, session: liveSession },
+  returns: v.union(v.null(), postedJournalEntry),
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, {
+      session,
+      workspaceId: args.workspaceId,
+      permission: "accounting:post",
+    });
+    return run(() =>
+      createAccountingCore(convexStore(ctx.db)).recordOpeningPosition({ ...args, actor }),
+    );
+  },
+});
+
+export const setupFinancialAccountProfile = internalMutation({
+  args: { ...accountSetup, session: liveSession },
+  returns: accountSetupResult,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, {
+      session,
+      workspaceId: args.workspaceId,
+      permission: "workspace:admin",
+    });
+    await requireSubmission(ctx, {
+      session,
+      workspaceId: args.workspaceId,
+      permission: "accounting:post",
+    });
+    return run(() =>
+      createAccountingCore(convexStore(ctx.db)).setupFinancialAccountProfile({ ...args, actor }),
+    );
   },
 });
