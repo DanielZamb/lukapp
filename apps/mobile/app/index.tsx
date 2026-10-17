@@ -12,6 +12,7 @@ import { Setup } from "../src/features/Setup";
 import { spentMonthEyebrow } from "../src/features/timeZones";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
+import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import {
   ActionTile,
   ConfirmationScreen,
@@ -37,6 +38,11 @@ function Home({
   const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
+  const intake = useIntakeCandidates({ subject, workspaceId });
+  const inboxCount =
+    drafts.count === null && intake.count === null
+      ? undefined
+      : (drafts.count ?? 0) + (intake.count ?? 0);
   const actions = useRef<BottomSheetModal>(null);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   return (
@@ -74,7 +80,7 @@ function Home({
           detail="On this device"
           icon="document-text-outline"
           primary
-          count={drafts.count ?? undefined}
+          count={inboxCount}
           onPress={() => router.push("/drafts")}
         />
         <ActionTile
