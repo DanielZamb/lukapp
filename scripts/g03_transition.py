@@ -6,10 +6,13 @@ import json
 import math
 import os
 from pathlib import Path
+import selectors
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -217,12 +220,29 @@ def load_bundle(bundle, reviewed_sha):
     return before, after, read_json(bundle / 'schema.json')
 
 
+def declared_schema(live_schema):
+    require(set(live_schema) <= {'active', 'pending', 'inProgress'}, 'Unknown schema response fields')
+    require(live_schema.get('pending') is None and live_schema.get('inProgress') is None, 'Pending schema transition')
+    active = json.loads(live_schema['active']) if isinstance(live_schema.get('active'), str) else live_schema.get('active')
+    require(isinstance(active, dict) and set(active) == {'tables', 'schemaValidation'}
+            and isinstance(active['tables'], list) and active['schemaValidation'] is True, 'Missing or disabled active schema')
+    fields = {'tableName', 'documentType', 'indexes', 'searchIndexes', 'vectorIndexes'}
+    staged = {'stagedDocumentType': None, 'stagedDbIndexes': [],
+              'stagedSearchIndexes': [], 'stagedVectorIndexes': []}
+    tables = {}
+    for table in active['tables']:
+        require(isinstance(table, dict) and set(table) == fields | set(staged), 'Unknown schema table fields')
+        require(all(table[k] == v for k, v in staged.items()), 'Staged schema transition')
+        name = table['tableName']
+        require(isinstance(name, str) and name not in tables, 'Invalid or duplicate schema table')
+        # MCP tables validates these five fields and strips the empty staged metadata.
+        tables[name] = {k: table[k] for k in fields}
+    return tables
+
+
 def check_live(before, after, schema, live, live_schema, url):
     require(url == URL, 'Resolved deployment URL differs from named development deployment')
-    require(not live_schema.get('pending') and not live_schema.get('inProgress'), 'Pending schema transition')
-    active = json.loads(live_schema['active']) if isinstance(live_schema.get('active'), str) else live_schema.get('active')
-    require(isinstance(active, dict) and isinstance(active.get('tables'), list), 'Missing active schema')
-    require({t['tableName']: t for t in active['tables']} == schema['tables'], 'Active schema changed; stop for parent review')
+    require(declared_schema(live_schema) == schema['tables'], 'Active schema changed; stop for parent review')
     require(not (set(live) - set(before)), 'Unexpected live table')
     statuses = {}
     for table in before:
@@ -246,11 +266,69 @@ def cli(*args):
     return result.stdout
 
 
+def first_subscription_result(command, timeout=45):
+    """Read one administrative CLI subscription result without exposing logs."""
+    process = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, start_new_session=True)
+    try:
+        with selectors.DefaultSelector() as streams:
+            streams.register(process.stdout, selectors.EVENT_READ)
+            streams.register(process.stderr, selectors.EVENT_READ)
+            output = b''
+            deadline = time.monotonic() + timeout
+            while True:
+                remaining = deadline - time.monotonic()
+                require(remaining > 0, 'Convex administrative query timed out; stop')
+                events = streams.select(remaining)
+                for key, _ in events:
+                    chunk = os.read(key.fileobj.fileno(), 65536)
+                    if not chunk:
+                        require(key.fileobj is not process.stdout,
+                                'Convex administrative query ended without a result; stop')
+                        streams.unregister(key.fileobj)
+                    elif key.fileobj is process.stdout:
+                        output += chunk
+                        require(len(output) <= 4 * 1024 * 1024, 'Administrative response exceeds limit')
+                        try:
+                            result, _ = json.JSONDecoder().raw_decode(output.decode().lstrip())
+                        except ValueError:
+                            continue
+                        require(isinstance(result, dict), 'Unexpected administrative response shape')
+                        return result
+                    # Drain and discard stderr, including any provider error bodies.
+    finally:
+        if process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGINT)
+            except ProcessLookupError:
+                pass
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+        process.stdout.close()
+        process.stderr.close()
+
+
+def admin_query(kind):
+    queries = {
+        'state': ('_system/frontend/deploymentState:deploymentState', {}),
+        'scheduler': ('_system/frontend/paginatedScheduledJobs:default',
+                      {'paginationOpts': {'numItems': 1, 'cursor': None}}),
+        'schema': ('_system/frontend/getSchemas:default', {}),
+    }
+    name, args = queries[kind]
+    # In Convex 1.46.0 --watch uses the same admin WebSocket query path as
+    # MCP tables/runSystemQuery. Ordinary run uses the application HTTP path.
+    return first_subscription_result(['pnpm', 'exec', 'convex', 'run', name, json.dumps(args),
+                                      '--watch', '--codegen', 'disable', '--deployment', DEPLOYMENT])
+
+
 def paused_and_idle():
-    state = json.loads(cli('run', '_system/frontend/deploymentState:deploymentState', '{}', '--codegen', 'disable'))
+    state = admin_query('state')
     require(state == {'state': 'paused'}, 'Deployment must remain paused in Convex dashboard')
-    jobs = json.loads(cli('run', '_system/frontend/paginatedScheduledJobs:default',
-                          '{"paginationOpts":{"numItems":1,"cursor":null}}', '--codegen', 'disable'))
+    jobs = admin_query('scheduler')
     require(jobs.get('page') == [] and jobs.get('isDone') is True, 'Scheduled work exists; stop for parent review')
 
 
@@ -261,7 +339,7 @@ def next_command(bundle, reviewed_sha, deployment, url, quiesced, rollback=False
     spec = json.loads(cli('function-spec'))
     require(spec.get('url') == URL, 'CLI resolved a different deployment URL')
     paused_and_idle()
-    live_schema = json.loads(cli('run', '_system/frontend/getSchemas:default', '{}', '--codegen', 'disable'))
+    live_schema = admin_query('schema')
     with tempfile.TemporaryDirectory(prefix='live-', dir=bundle) as temporary:
         os.chmod(temporary, 0o700)
         path = Path(temporary) / 'snapshot.zip'
@@ -270,7 +348,7 @@ def next_command(bundle, reviewed_sha, deployment, url, quiesced, rollback=False
         live = read_export(path)
     statuses = check_live(before, after, schema, live, live_schema, spec['url'])
     paused_and_idle()
-    latest_schema = json.loads(cli('run', '_system/frontend/getSchemas:default', '{}', '--codegen', 'disable'))
+    latest_schema = admin_query('schema')
     require(latest_schema == live_schema, 'Schema changed during live inspection')
     order = list(reversed(ORDER[1:])) if rollback else ORDER
     wanted = 'after' if rollback else 'before'
