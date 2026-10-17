@@ -16,7 +16,7 @@ A successful explicit Clerk sign-in flow identifies the newly created session be
 
 The nonsecret install marker lives in the app's cache container, which is excluded from backup. It contains a random install ID and either a sign-in-required state or the enrolled Clerk subject and session ID. A missing, malformed, or unsupported marker requires sign-in. If Clerk rehydrates a surviving Keychain session on such an install, the gate blocks access and calls the official Clerk sign-out method before accepting new sign-in. If that fails, the app remains locked. Cache eviction conservatively behaves like reinstall. The marker and sentinel contain no Clerk token, provider secret, or independent bearer credential.
 
-The controller rejects late biometric completions after background interruption, identity change, or teardown. Clock rollback also locks access. Security-route and identity guards hide children during render before their effects can run.
+The controller rejects late biometric completions after background interruption, identity change, or teardown. Identity-loss cleanup drains pending enrollment and serialized marker writes before final deletion. An enrolled marker supplies the old identity when Clerk loads null or mismatched after a cold start. Cleanup failure remains denied and resumes through the existing retry path. The [F01 correction receipt](DEVICE_ADMISSION.md#f01-entry-race-corrections-on-ff059e5) records local reproduction and checks. Clock rollback also locks access. Security-route and identity guards hide children during render before their effects can run.
 
 ## Screen privacy and native configuration
 

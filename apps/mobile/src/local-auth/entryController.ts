@@ -53,6 +53,8 @@ export class EntryController {
   private privacyWork: Promise<void> = Promise.resolve();
   private inputLease: LocalInputLease | null = null;
   private cleanupWork: Promise<void> | null = null;
+  private enrollmentWork: Promise<void> | null = null;
+  private markerWork: Promise<void> = Promise.resolve();
   private clearedIdentity: EntryIdentity = null;
   constructor(private readonly deps: EntryDependencies) {}
   getSnapshot = () => this.snapshot;
@@ -89,6 +91,11 @@ export class EntryController {
       .then(() => this.deps.readMarker());
     return this.initialized;
   }
+  private writeMarker(marker: InstallMarker) {
+    const work = this.markerWork.then(() => this.deps.writeMarker(marker));
+    this.markerWork = work.catch(() => {});
+    return work;
+  }
   async setIdentity(identity: EntryIdentity) {
     this.disposed = false;
     const previous = this.identity;
@@ -102,10 +109,11 @@ export class EntryController {
         await this.retryCleanup();
         return;
       }
-      if (previous &&
-        (previous.subject !== this.clearedIdentity?.subject || previous.sessionId !== this.clearedIdentity.sessionId) &&
-        (!identity || previous.subject !== identity.subject || previous.sessionId !== identity.sessionId)) {
-        await this.denyAccess(previous);
+      const retained = this.marker.kind === "enrolled" ? this.marker : previous;
+      if (retained &&
+        (retained.subject !== this.clearedIdentity?.subject || retained.sessionId !== this.clearedIdentity.sessionId) &&
+        (!identity || retained.subject !== identity.subject || retained.sessionId !== identity.sessionId)) {
+        await this.denyAccess({ subject: retained.subject, sessionId: retained.sessionId });
         return;
       }
       if (!identity) {
@@ -125,7 +133,7 @@ export class EntryController {
         this.publish({ kind: "locked" });
       } else {
         this.marker = requireNewSignIn(this.marker);
-        await this.deps.writeMarker(this.marker);
+        await this.writeMarker(this.marker);
         if (this.current(generation)) {
           this.publish({ kind: "reauthentication" });
           await this.reauthenticate();
@@ -147,7 +155,7 @@ export class EntryController {
     this.publish({ kind: "authenticating" });
     try {
       const pending = requireNewSignIn(this.marker);
-      await this.deps.writeMarker(pending);
+      await this.writeMarker(pending);
       if (!this.current(generation)) return;
       this.marker = pending;
       await drainLocalInputWrites(identity.subject);
@@ -161,7 +169,7 @@ export class EntryController {
         subject: identity.subject,
         sessionId: identity.sessionId,
       };
-      await this.deps.writeMarker(enrolled);
+      await this.writeMarker(enrolled);
       if (!this.current(generation)) return;
       this.marker = enrolled;
       this.approvedSession = null;
@@ -177,12 +185,18 @@ export class EntryController {
       !this.marker ||
       !this.identity ||
       !this.active ||
-      !this.focused
+      !this.focused ||
+      this.enrollmentWork !== null
     )
       return;
     const generation = ++this.generation;
     if (this.approvedSession === this.identity.sessionId) {
-      await this.enroll(generation, this.identity);
+      this.enrollmentWork = this.enroll(generation, this.identity);
+      try {
+        await this.enrollmentWork;
+      } finally {
+        this.enrollmentWork = null;
+      }
       return;
     }
     this.publish({ kind: "authenticating" });
@@ -211,7 +225,7 @@ export class EntryController {
     this.approvedSession = null;
     this.marker = requireNewSignIn(this.marker);
     try {
-      await this.deps.writeMarker(this.marker);
+      await this.writeMarker(this.marker);
       if (this.current(generation)) this.publish({ kind: "reauthentication" });
     } catch {
       if (this.current(generation)) this.publish({ kind: "unavailable" });
@@ -272,13 +286,14 @@ export class EntryController {
     this.cleanupWork = (async () => {
       try {
         // Persist denial before touching storage or signing out, including across a crash.
-        await this.deps.writeMarker(marker);
+        await this.writeMarker(marker);
+        await this.enrollmentWork;
         await drainLocalInputWrites(marker.subject);
         await this.deps.clearInput(marker.subject);
         await this.deps.clearEnrollment(marker);
         await this.deps.signOut();
         const reset = requireNewSignIn(marker);
-        await this.deps.writeMarker(reset);
+        await this.writeMarker(reset);
         this.marker = reset;
         this.inputLease = null;
         this.clearedIdentity = { subject: marker.subject, sessionId: marker.sessionId };

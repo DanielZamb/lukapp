@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
 import type { PendingExpense } from "../pendingExpense";
 import { formatMoney, localDate, parseMoney } from "../money";
@@ -34,12 +34,14 @@ export function useExpenseEditor(
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<Receipt | null>(null);
   const submitting = useRef(false);
-  useEffect(() => {
-    let active = true;
+  const lifetime = useRef({ active: false });
+  useLayoutEffect(() => {
+    const mounted = { active: true };
+    lifetime.current = mounted;
     transport
       .load()
       .then((value) => {
-        if (!active) return;
+        if (!mounted.active) return;
         if (
           value &&
           (value.workspaceId !== account.workspaceId ||
@@ -63,7 +65,7 @@ export function useExpenseEditor(
         setLoading(false);
       })
       .catch((error: unknown) => {
-        if (active) {
+        if (mounted.active) {
           if (transport.reportFailure?.(error)) return;
           setError(
             "Could not restore your pending expense. Reopen this page to try again.",
@@ -71,7 +73,7 @@ export function useExpenseEditor(
         }
       });
     return () => {
-      active = false;
+      mounted.active = false;
     };
   }, [
     account.workspaceId,
@@ -86,7 +88,8 @@ export function useExpenseEditor(
     /* Incomplete edits stay editable. */
   }
   async function submit() {
-    if (submitting.current || loading || !amountValid) return;
+    const mounted = lifetime.current;
+    if (!mounted.active || submitting.current || loading || !amountValid) return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -102,9 +105,12 @@ export function useExpenseEditor(
         ...(userCategoryId ? { userCategoryId } : {}),
       };
       await transport.save(payload);
+      if (!mounted.active) return;
       setPending(payload);
       const receipt = await transport.post(payload);
+      if (!mounted.active) return;
       await transport.clear();
+      if (!mounted.active) return;
       setPending(null);
       setAmount("-");
       setDescription("");
@@ -112,6 +118,7 @@ export function useExpenseEditor(
       setPosted(receipt);
     } catch (error) {
       if (transport.reportFailure?.(error)) return;
+      if (!mounted.active) return;
       const data: unknown = error instanceof ConvexError ? error.data : null;
       if (
         data !== null &&
@@ -121,8 +128,10 @@ export function useExpenseEditor(
       ) {
         try {
           await transport.clear();
+          if (!mounted.active) return;
           setPending(null);
         } catch {
+          if (!mounted.active) return;
           setError(
             "Could not clear the saved expense. Retry to check its status.",
           );
@@ -137,7 +146,7 @@ export function useExpenseEditor(
         );
     } finally {
       submitting.current = false;
-      setBusy(false);
+      if (mounted.active) setBusy(false);
     }
   }
   return {

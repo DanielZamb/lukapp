@@ -363,3 +363,76 @@ test("fresh enrollment clears owner input surviving reinstall even when no Clerk
   expect(deps.enroll).not.toHaveBeenCalled();
   expect(deps.clearInput).toHaveBeenCalledExactlyOnceWith("owner");
 });
+
+for (const loaded of [null, { subject: "other", sessionId: "other-session" }, { subject: "owner", sessionId: "replacement-session" }]) {
+  test(`cold enrolled marker cleans its durable owner when Clerk loads ${JSON.stringify(loaded)}`, async () => {
+    const { gate, deps, stored } = fixture();
+    let input = "owner's pending expense";
+    let sentinel = "owner's enrollment";
+    deps.clearInput.mockImplementation(async subject => { if (subject === "owner") input = ""; });
+    deps.clearEnrollment.mockImplementation(async () => { sentinel = ""; });
+    await gate.setIdentity(loaded);
+    expect({ input, sentinel, marker: stored().kind, state: gate.getSnapshot().state.kind }).toEqual({
+      input: "", sentinel: "", marker: "sign-in-required", state: loaded ? "reauthentication" : "sign-in",
+    });
+    expect(deps.clearInput).toHaveBeenCalledExactlyOnceWith("owner");
+    expect(deps.signOut).toHaveBeenCalledOnce();
+    expect(gate.isOpenFor(loaded)).toBe(false);
+  });
+}
+
+function deferred() {
+  let resolve = () => {};
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+for (const stage of ["sentinel", "marker"]) {
+  test.each([false, true])(`identity loss drains the pending enrollment ${stage} write before cleanup, deletion fails: %s`, async deletionFails => {
+    const { gate, deps, stored } = fixture({ version: 1, installId, kind: "sign-in-required" });
+    const started = deferred();
+    const finish = deferred();
+    let sentinel = "";
+    deps.enroll.mockImplementation(async () => {
+      if (stage === "sentinel") { started.resolve(); await finish.promise; }
+      sentinel = "late enrollment";
+    });
+    const writeMarker = deps.writeMarker.getMockImplementation();
+    if (!writeMarker) throw new Error("Missing marker store");
+    deps.writeMarker.mockImplementation(async marker => {
+      if (stage === "marker" && marker.kind === "enrolled") { started.resolve(); await finish.promise; }
+      await writeMarker(marker);
+    });
+    deps.clearEnrollment.mockImplementation(async () => { sentinel = ""; });
+    if (deletionFails) deps.clearEnrollment.mockRejectedValueOnce(new Error("Deletion failed"));
+    await gate.setIdentity(null);
+    gate.approveSignIn(identity.sessionId);
+    await gate.setIdentity(identity);
+    const enrollment = gate.unlock();
+    await started.promise;
+    const cleanup = gate.setIdentity(null);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(gate.getSnapshot().obscured).toBe(true);
+    finish.resolve();
+    await Promise.all([enrollment, cleanup]);
+    if (deletionFails) {
+      expect({ sentinel, marker: stored().kind, state: gate.getSnapshot() }).toEqual({
+        sentinel: "late enrollment", marker: "wipe-required",
+        state: { state: { kind: "revocation", cleanup: "failed" }, obscured: true },
+      });
+      expect(deps.signOut).not.toHaveBeenCalled();
+      gate.approveSignIn("replacement");
+      await gate.unlock();
+      expect(gate.isOpenFor(identity)).toBe(false);
+      const restart = new EntryController(deps);
+      await restart.setIdentity(null);
+      expect(restart.getSnapshot().state.kind).toBe("sign-in");
+      expect({ sentinel, marker: stored().kind }).toEqual({ sentinel: "", marker: "sign-in-required" });
+      return;
+    }
+    expect({ sentinel, marker: stored().kind, state: gate.getSnapshot().state.kind }).toEqual({
+      sentinel: "", marker: "sign-in-required", state: "sign-in",
+    });
+    expect(deps.signOut).toHaveBeenCalledOnce();
+  });
+}
