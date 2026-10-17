@@ -1,11 +1,18 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { ComponentProps, PropsWithChildren } from "react";
+import type { ComponentProps, ComponentType, PropsWithChildren } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+} from "react";
 import {
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
+  ActivityIndicator,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -52,7 +59,7 @@ export const ui = StyleSheet.create({
   },
   error: {
     fontFamily: font.regular,
-    fontSize: fontSize.body,
+    fontSize: fontSize.label,
     color: theme.danger,
   },
   section: { gap: spacing.md },
@@ -101,7 +108,7 @@ export function Header({
       )}
       <View style={{ flex: 1 }}>
         {eyebrow && <Text style={ui.label}>{eyebrow}</Text>}
-        <Text accessibilityRole="header" style={[ui.title, titleStyle]}>
+        <Text accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
           {title}
         </Text>
       </View>
@@ -126,14 +133,45 @@ type ButtonProps = {
   accessibilityLabel?: string;
   trailingIcon?: ComponentProps<typeof Ionicons>["name"];
 };
-function Button({
+
+export function PrimaryButton({
+  label,
+  onPress,
+  disabled,
+  pending,
+  accessibilityLabel,
+  trailingIcon = "arrow-forward",
+}: ButtonProps & { pending?: boolean }) {
+  const inactive = disabled || pending;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled: !!inactive, busy: !!pending }}
+      disabled={inactive}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.primaryButton,
+        inactive && styles.buttonDisabled,
+        pressed && !inactive && styles.buttonPressed,
+      ]}
+    >
+      <Text style={styles.primaryButtonLabel}>{label}</Text>
+      {pending ? (
+        <ActivityIndicator color={theme.primaryForeground} />
+      ) : (
+        <Ionicons name={trailingIcon} size={24} color={theme.primaryForeground} />
+      )}
+    </Pressable>
+  );
+}
+
+export function SecondaryButton({
   label,
   onPress,
   disabled,
   accessibilityLabel,
-  primary,
-  trailingIcon,
-}: ButtonProps & { primary: boolean }) {
+}: ButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -142,45 +180,84 @@ function Button({
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.button,
-        {
-          backgroundColor: primary ? theme.primary : theme.secondary,
-          opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        },
+        styles.secondaryButton,
+        disabled && styles.buttonDisabled,
+        pressed && !disabled && styles.buttonPressed,
       ]}
     >
-      <Text
-        style={{
-          fontFamily: font.bold,
-          fontSize: fontSize.action,
-          color: primary ? theme.primaryForeground : theme.secondaryForeground,
-        }}
-      >
-        {label}
-      </Text>
-      {trailingIcon && (
-        <Ionicons
-          name={trailingIcon}
-          size={24}
-          color={primary ? theme.primaryForeground : theme.secondaryForeground}
-        />
-      )}
+      <Text style={styles.secondaryButtonLabel}>{label}</Text>
     </Pressable>
   );
 }
-export function PrimaryButton(props: ButtonProps) {
-  return <Button {...props} primary />;
-}
-export function SecondaryButton(props: ButtonProps) {
-  return <Button {...props} primary={false} />;
+
+type FieldProps = {
+  label: string;
+  helperText?: string;
+  error?: string;
+  invalid?: boolean;
+  InputComponent?: ComponentType<ComponentProps<typeof TextInput>>;
+} & ComponentProps<typeof TextInput>;
+
+export function Field({
+  label,
+  helperText,
+  error,
+  invalid,
+  InputComponent = TextInput,
+  style,
+  ...inputProps
+}: FieldProps) {
+  const showError = invalid || !!error;
+  const hint = error ?? helperText;
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <InputComponent
+        style={[
+          styles.fieldInput,
+          showError && styles.fieldInputInvalid,
+          style,
+        ]}
+        placeholderTextColor={theme.mutedForeground}
+        cursorColor={theme.primary}
+        selectionColor={theme.primary}
+        {...inputProps}
+      />
+      {hint ? (
+        <Text
+          accessibilityRole={error ? "alert" : undefined}
+          style={error ? ui.error : styles.fieldHelper}
+        >
+          {hint}
+        </Text>
+      ) : null}
+    </View>
+  );
 }
 
 export function ListGroup({ children }: PropsWithChildren) {
-  return <View style={styles.group}>{children}</View>;
+  const items = Children.toArray(children).filter(Boolean);
+  return (
+    <View style={styles.group}>
+      {items.map((child, index) =>
+        isValidElement(child)
+          ? cloneElement(child, { isLast: index === items.length - 1 } as ListRowProps)
+          : child,
+      )}
+    </View>
+  );
 }
+
+type ListRowProps = {
+  title: string;
+  detail?: string;
+  value?: string;
+  onPress?: () => void;
+  titleStyle?: StyleProp<TextStyle>;
+  valueStyle?: StyleProp<TextStyle>;
+  isLast?: boolean;
+};
+
 export function ListRow({
   title,
   detail,
@@ -188,32 +265,32 @@ export function ListRow({
   onPress,
   titleStyle,
   valueStyle,
-}: {
-  title: string;
-  detail?: string;
-  value?: string;
-  onPress?: () => void;
-  titleStyle?: StyleProp<TextStyle>;
-  valueStyle?: StyleProp<TextStyle>;
-}) {
+  isLast,
+}: ListRowProps) {
   const content = (
     <>
-      <View style={{ flex: 1, gap: spacing.xs }}>
-        <Text style={[ui.body, titleStyle]}>{title}</Text>
-        {detail && <Text style={ui.muted}>{detail}</Text>}
+      <View style={styles.rowCopy}>
+        <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
+        {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
       </View>
-      {value && <Text style={[ui.body, valueStyle]}>{value}</Text>}
-      {onPress && <Text style={ui.muted}>›</Text>}
+      {value ? (
+        <Text style={[styles.rowValue, valueStyle]}>{value}</Text>
+      ) : null}
+      {onPress ? (
+        <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
+      ) : null}
     </>
   );
+  const rowStyle = [styles.row, isLast && styles.rowLast];
   return onPress ? (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.row}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={rowStyle}>
       {content}
     </Pressable>
   ) : (
-    <View style={styles.row}>{content}</View>
+    <View style={rowStyle}>{content}</View>
   );
 }
+
 export function Choice({
   label,
   detail,
@@ -232,19 +309,22 @@ export function Choice({
       onPress={onPress}
       style={[
         styles.choice,
-        { borderColor: selected ? theme.primary : theme.border },
+        selected && styles.choiceSelected,
       ]}
     >
-      <View style={{ flex: 1 }}>
-        <Text style={ui.title}>{label}</Text>
-        {detail && <Text style={ui.muted}>{detail}</Text>}
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowTitle}>{label}</Text>
+        {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
       </View>
-      <Text style={{ color: selected ? theme.primary : theme.mutedForeground }}>
-        {selected ? "●" : "○"}
-      </Text>
+      <Ionicons
+        name={selected ? "checkmark-circle" : "ellipse-outline"}
+        size={24}
+        color={selected ? theme.primary : theme.mutedForeground}
+      />
     </Pressable>
   );
 }
+
 export function ActionTile({
   title,
   detail,
@@ -289,6 +369,7 @@ export function ActionTile({
     <View style={style}>{content}</View>
   );
 }
+
 export function ProgressBar({
   value,
   label,
@@ -315,25 +396,32 @@ export function ProgressBar({
     </View>
   );
 }
+
 export function ConfirmationScreen({
   title,
   detail,
   onContinue,
+  buttonLabel = "Continue",
 }: {
   title: string;
   detail: string;
   onContinue: () => void;
+  buttonLabel?: string;
 }) {
   return (
-    <Screen>
-      <View style={{ flex: 1, justifyContent: "center", gap: spacing.xxl }}>
-        <Text style={ui.hero}>{title}</Text>
-        <Text style={ui.body}>{detail}</Text>
-        <PrimaryButton label="Continue" onPress={onContinue} />
+    <Screen contentStyle={styles.confirmationContent}>
+      <View style={styles.confirmation}>
+        <View style={styles.confirmIcon}>
+          <Ionicons name="checkmark" size={36} color={theme.primaryForeground} />
+        </View>
+        <Text style={styles.confirmTitle}>{title}</Text>
+        <Text style={styles.confirmDetail}>{detail}</Text>
+        <PrimaryButton label={buttonLabel} onPress={onContinue} />
       </View>
     </Screen>
   );
 }
+
 const styles = StyleSheet.create({
   icon: {
     width: touchTarget,
@@ -344,38 +432,123 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  button: {
+  headerTitle: {
+    fontFamily: font.extrabold,
+    fontSize: 32,
+    lineHeight: 37,
+    letterSpacing: -0.7,
+    color: theme.foreground,
+  },
+  buttonDisabled: { opacity: 0.45 },
+  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
+  primaryButton: {
+    minHeight: 56,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: theme.primary,
+  },
+  primaryButtonLabel: {
+    fontFamily: font.bold,
+    fontSize: fontSize.action,
+    color: theme.primaryForeground,
+  },
+  secondaryButton: {
     minHeight: touchTarget,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: 10,
+    alignItems: "center",
     justifyContent: "center",
+    backgroundColor: theme.background,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  secondaryButtonLabel: {
+    fontFamily: font.semibold,
+    fontSize: fontSize.body,
+    color: theme.foreground,
+    textAlign: "center",
+  },
+  field: { gap: spacing.sm },
+  fieldLabel: {
+    fontFamily: font.semibold,
+    fontSize: 14,
+    color: theme.foreground,
+  },
+  fieldInput: {
+    minHeight: 56,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: theme.ring,
+    backgroundColor: theme.secondary,
+    color: theme.foreground,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontFamily: font.regular,
+    fontSize: fontSize.body,
+  },
+  fieldInputInvalid: { borderColor: theme.danger },
+  fieldHelper: {
+    fontFamily: font.regular,
+    fontSize: fontSize.label,
+    color: theme.mutedForeground,
   },
   group: {
     backgroundColor: theme.secondary,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: theme.border,
   },
   row: {
-    minHeight: 64,
+    minHeight: 70,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    padding: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.border,
   },
+  rowLast: { borderBottomWidth: 0 },
+  rowCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
+  rowTitle: {
+    fontFamily: font.semibold,
+    fontSize: fontSize.body,
+    lineHeight: 22,
+    color: theme.foreground,
+  },
+  rowDetail: {
+    fontFamily: font.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: theme.mutedForeground,
+  },
+  rowValue: {
+    maxWidth: "42%",
+    fontFamily: font.semibold,
+    fontSize: 14,
+    lineHeight: 20,
+    color: theme.foreground,
+    textAlign: "right",
+  },
   choice: {
-    minHeight: touchTarget,
+    minHeight: 76,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 2,
-    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: radius.md,
     padding: spacing.lg,
     gap: spacing.md,
+    backgroundColor: theme.secondary,
   },
+  choiceSelected: { borderWidth: 2, borderColor: theme.primary },
   tile: {
     width: "47%",
     minHeight: 156,
@@ -389,5 +562,32 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: theme.border,
     overflow: "hidden",
+  },
+  confirmationContent: { flexGrow: 1, justifyContent: "center" },
+  confirmation: {
+    alignItems: "center",
+    gap: spacing.xl,
+  },
+  confirmIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: radius.full,
+    backgroundColor: theme.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmTitle: {
+    fontFamily: font.extrabold,
+    fontSize: 30,
+    lineHeight: 36,
+    color: theme.foreground,
+    textAlign: "center",
+  },
+  confirmDetail: {
+    fontFamily: font.regular,
+    fontSize: fontSize.body,
+    lineHeight: 24,
+    color: theme.mutedForeground,
+    textAlign: "center",
   },
 });

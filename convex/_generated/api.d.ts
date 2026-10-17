@@ -9,10 +9,15 @@
  */
 
 import type * as accounting from "../accounting.js";
-import type * as accountingWrites from "../accountingWrites.js";
-import type * as accountingValues from "../accountingValues.js";
 import type * as accountingErrors from "../accountingErrors.js";
+import type * as accountingValues from "../accountingValues.js";
+import type * as accountingWrites from "../accountingWrites.js";
 import type * as authConnection from "../authConnection.js";
+import type * as budget from "../budget.js";
+import type * as budgetErrors from "../budgetErrors.js";
+import type * as budgetStore from "../budgetStore.js";
+import type * as budgetValues from "../budgetValues.js";
+import type * as budgetWrites from "../budgetWrites.js";
 import type * as categoryValidators from "../categoryValidators.js";
 import type * as clerkWebhooks from "../clerkWebhooks.js";
 import type * as deviceAccess from "../deviceAccess.js";
@@ -37,10 +42,15 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   accounting: typeof accounting;
-  accountingWrites: typeof accountingWrites;
-  accountingValues: typeof accountingValues;
   accountingErrors: typeof accountingErrors;
+  accountingValues: typeof accountingValues;
+  accountingWrites: typeof accountingWrites;
   authConnection: typeof authConnection;
+  budget: typeof budget;
+  budgetErrors: typeof budgetErrors;
+  budgetStore: typeof budgetStore;
+  budgetValues: typeof budgetValues;
+  budgetWrites: typeof budgetWrites;
   categoryValidators: typeof categoryValidators;
   clerkWebhooks: typeof clerkWebhooks;
   deviceAccess: typeof deviceAccess;
