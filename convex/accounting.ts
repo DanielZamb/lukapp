@@ -1,30 +1,40 @@
+import { ConvexError, v, type Infer } from "convex/values";
+import { action } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { ownerQuery as query } from "./lib/functions";
+import { verifyCurrentSession } from "./lib/session";
+import {
+  requireDevice,
+  requirePersonalRead,
+  requireWorkspacePermission,
+} from "./lib/deviceAuthorization";
+import { run } from "./accountingErrors";
+import {
+  categoryCreation,
+  categoryRestyle,
+  cashActivity,
+  defaults,
+  inWorkspace,
+  periodLock,
+  personalSetup,
+  profileCreation,
+  reversal,
+  workspaceCreation,
+} from "./accountingValues";
 import {
   categoryNature,
-  categorySelection,
-  categoryStyle,
   createCategoryResult,
   userCategory,
 } from "./categoryValidators";
-import { createUserCategory as createCategory } from "../src/accounting/commands/createUserCategory";
-import { restyleUserCategory as restyleCategory } from "../src/accounting/commands/restyleUserCategory";
-import { listUserCategories as listCategories } from "../src/accounting/queries/listUserCategories";
 import {
   listCategoryPresets as categoryPresets,
   suggestCategoryNature as suggestNature,
 } from "../src/accounting/categories/policy";
-/* Convex commands for the accounting kernel. Walkthrough: src/accounting/index.ts. */
-import { ConvexError, v } from "convex/values";
-import {
-  ownerMutation as mutation,
-  ownerQuery as query,
-} from "./lib/functions";
+import { listUserCategories as listCategories } from "../src/accounting/queries/listUserCategories";
 import { postedActivity as readPostedActivity } from "../src/accounting/queries/postedActivity";
-import { AccountingError, createAccountingCore } from "../src/accounting";
-import { convexReadStore, convexStore } from "./store";
-import {
-  ensurePersonalDefaults as ensureDefaults,
-  readPersonalDefaults,
-} from "./personalDefaults";
+import { createAccountingCore } from "../src/accounting";
+import { convexReadStore } from "./store";
+import { readPersonalDefaults } from "./personalDefaults";
 import {
   accountBalance,
   accountingPeriod,
@@ -32,90 +42,67 @@ import {
   financialAccountProfile,
   ledgerAccount,
   money,
-  periodKey,
   postedJournalEntry,
-  productKind,
   trialBalanceRow,
   workspace,
 } from "./validators";
 
-const inWorkspace = {
-  workspaceId: v.string(),
-};
-
-const cashActivity = {
-  ...inWorkspace,
-  financialAccountProfileId: v.string(),
-  amount: money,
-  accountingDate: v.string(),
-  description: v.string(),
-  idempotencyKey: v.string(),
-  ledgerAccountCode: v.optional(v.string()),
-  userCategoryId: v.optional(v.string()),
-};
-
-async function run<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (error) {
-    if (error instanceof AccountingError) {
-      throw new ConvexError({ code: error.code, message: error.message });
-    }
-    throw error;
-  }
-}
-
-export const createPersonalWorkspace = mutation({
-  args: {
-    functionalCurrency: v.string(),
-    chartOfAccountsTemplate: v.optional(v.string()),
-  },
+export const createPersonalWorkspace = action({
+  args: workspaceCreation,
   returns: workspace,
-  handler: async (ctx, args) =>
-    run(() => {
-      const core = createAccountingCore(convexStore(ctx.db));
-      return core.createPersonalWorkspace({
-        actor: ctx.actor,
-        functionalCurrency: args.functionalCurrency,
-        ...(args.chartOfAccountsTemplate
-          ? { chartOfAccountsTemplate: args.chartOfAccountsTemplate }
-          : {}),
-      });
-    }),
+  handler: async (ctx): Promise<Infer<typeof workspace>> => {
+    await verifyCurrentSession(ctx.auth);
+    throw new ConvexError({
+      code: "workspace_creation_disabled",
+      message: "Use first setup to create the Personal workspace",
+    });
+  },
 });
 
 export const openWorkspace = query({
   args: inWorkspace,
   returns: workspace,
   handler: async (ctx, args) =>
-    run(() =>
+    run(async () =>
       createAccountingCore(convexReadStore(ctx.db)).openWorkspace({
         ...args,
-        actor: ctx.actor,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
       }),
     ),
 });
 
-export const createFinancialAccountProfile = mutation({
-  args: { ...inWorkspace, name: v.string(), productKind },
+export const createFinancialAccountProfile = action({
+  args: profileCreation,
   returns: financialAccountProfile,
-  handler: async (ctx, args) =>
-    run(() =>
-      createAccountingCore(convexStore(ctx.db)).createFinancialAccountProfile({
-        ...args,
-        actor: ctx.actor,
-      }),
-    ),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<Infer<typeof financialAccountProfile>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(
+      internal.accountingWrites.createFinancialAccountProfile,
+      { ...args, session },
+    );
+  },
 });
 
 export const listFinancialAccountProfiles = query({
   args: inWorkspace,
   returns: v.array(financialAccountProfile),
   handler: async (ctx, args) =>
-    run(() =>
+    run(async () =>
       createAccountingCore(
         convexReadStore(ctx.db),
-      ).listFinancialAccountProfiles({ ...args, actor: ctx.actor }),
+      ).listFinancialAccountProfiles({
+        ...args,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
+      }),
     ),
 });
 
@@ -123,10 +110,13 @@ export const listLedgerAccounts = query({
   args: inWorkspace,
   returns: v.array(ledgerAccount),
   handler: async (ctx, args) =>
-    run(() =>
+    run(async () =>
       createAccountingCore(convexReadStore(ctx.db)).listLedgerAccounts({
         ...args,
-        actor: ctx.actor,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
       }),
     ),
 });
@@ -135,76 +125,76 @@ export const listCatalogAccounts = query({
   args: inWorkspace,
   returns: v.array(catalogAccount),
   handler: async (ctx, args) =>
-    run(() =>
+    run(async () =>
       createAccountingCore(convexReadStore(ctx.db)).listCatalogAccounts({
         ...args,
-        actor: ctx.actor,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
       }),
     ),
 });
 
-export const lockAccountingPeriod = mutation({
-  args: { ...inWorkspace, period: periodKey, reason: v.optional(v.string()) },
+export const lockAccountingPeriod = action({
+  args: periodLock,
   returns: accountingPeriod,
-  handler: async (ctx, args) =>
-    run(() =>
-      createAccountingCore(convexStore(ctx.db)).lockAccountingPeriod({
-        ...args,
-        actor: ctx.actor,
-      }),
-    ),
-});
-
-export const recordCashExpense = mutation({
-  args: cashActivity,
-  returns: postedJournalEntry,
-  handler: async (ctx, args) =>
-    run(() =>
-      createAccountingCore(convexStore(ctx.db)).recordCashExpense({
-        ...args,
-        actor: ctx.actor,
-      }),
-    ),
-});
-
-export const recordCashIncome = mutation({
-  args: cashActivity,
-  returns: postedJournalEntry,
-  handler: async (ctx, args) =>
-    run(() =>
-      createAccountingCore(convexStore(ctx.db)).recordCashIncome({
-        ...args,
-        actor: ctx.actor,
-      }),
-    ),
-});
-
-export const reversePostedEntry = mutation({
-  args: {
-    ...inWorkspace,
-    journalEntryId: v.string(),
-    accountingDate: v.optional(v.string()),
-    description: v.optional(v.string()),
-    idempotencyKey: v.string(),
+  handler: async (ctx, args): Promise<Infer<typeof accountingPeriod>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.lockAccountingPeriod, {
+      ...args,
+      session,
+    });
   },
+});
+
+export const recordCashExpense = action({
+  args: cashActivity,
   returns: postedJournalEntry,
-  handler: async (ctx, args) =>
-    run(() =>
-      createAccountingCore(convexStore(ctx.db)).reversePostedEntry({
-        ...args,
-        actor: ctx.actor,
-      }),
-    ),
+  handler: async (ctx, args): Promise<Infer<typeof postedJournalEntry>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.recordCashExpense, {
+      ...args,
+      session,
+    });
+  },
+});
+
+export const recordCashIncome = action({
+  args: cashActivity,
+  returns: postedJournalEntry,
+  handler: async (ctx, args): Promise<Infer<typeof postedJournalEntry>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.recordCashIncome, {
+      ...args,
+      session,
+    });
+  },
+});
+
+export const reversePostedEntry = action({
+  args: reversal,
+  returns: postedJournalEntry,
+  handler: async (ctx, args): Promise<Infer<typeof postedJournalEntry>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.reversePostedEntry, {
+      ...args,
+      session,
+    });
+  },
 });
 
 export const listJournalEntries = query({
   args: inWorkspace,
   returns: v.array(postedJournalEntry),
   handler: async (ctx, args) =>
-    run(() =>
+    run(async () =>
       createAccountingCore(convexReadStore(ctx.db)).listJournalEntries({
         ...args,
-        actor: ctx.actor,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
       }),
     ),
 });
@@ -213,10 +203,13 @@ export const balances = query({
   args: inWorkspace,
   returns: v.array(accountBalance),
   handler: async (ctx, args) =>
-    run(() =>
+    run(async () =>
       createAccountingCore(convexReadStore(ctx.db)).balances({
         ...args,
-        actor: ctx.actor,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
       }),
     ),
 });
@@ -225,30 +218,34 @@ export const trialBalance = query({
   args: inWorkspace,
   returns: v.array(trialBalanceRow),
   handler: async (ctx, args) =>
-    run(() =>
+    run(async () =>
       createAccountingCore(convexReadStore(ctx.db)).trialBalance({
         ...args,
-        actor: ctx.actor,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
       }),
     ),
 });
 
-const defaults = v.object({ workspace, financialAccountProfile });
-
 export const personalDefaults = query({
   args: {},
   returns: v.union(v.null(), defaults),
-  handler: async (ctx) => run(() => readPersonalDefaults(ctx, ctx.actor)),
+  handler: async (ctx) =>
+    run(async () => readPersonalDefaults(ctx, await requirePersonalRead(ctx))),
 });
 
-export const ensurePersonalDefaults = mutation({
-  args: {
-    functionalCurrency: v.string(),
-    startingMinorUnits: v.number(),
-    categories: v.optional(v.array(categorySelection)),
-  },
+export const ensurePersonalDefaults = action({
+  args: personalSetup,
   returns: defaults,
-  handler: async (ctx, args) => run(() => ensureDefaults(ctx, ctx.actor, args)),
+  handler: async (ctx, args): Promise<Infer<typeof defaults>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.ensurePersonalDefaults, {
+      ...args,
+      session,
+    });
+  },
 });
 
 export const postedActivity = query({
@@ -275,17 +272,23 @@ export const postedActivity = query({
     monthSpendMinorUnits: v.number(),
   }),
   handler: async (ctx, args) =>
-    run(() =>
+    run(async () =>
       readPostedActivity(convexReadStore(ctx.db), {
         ...args,
-        actor: ctx.actor,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
       }),
     ),
 });
 
 export const listCategoryPresets = query({
   args: { nature: v.optional(categoryNature) },
-  handler: async (_ctx, args) => categoryPresets(args.nature),
+  handler: async (ctx, args) => {
+    await requireDevice(ctx);
+    return categoryPresets(args.nature);
+  },
 });
 
 export const suggestCategoryNature = query({
@@ -293,32 +296,47 @@ export const suggestCategoryNature = query({
     name: v.string(),
     direction: v.optional(v.union(v.literal("out"), v.literal("in"))),
   },
-  handler: async (_ctx, args) => suggestNature(args.name, args.direction),
+  handler: async (ctx, args) => {
+    await requireDevice(ctx);
+    return suggestNature(args.name, args.direction);
+  },
 });
 
-export const createUserCategory = mutation({
-  args: { ...inWorkspace, selection: categorySelection },
+export const createUserCategory = action({
+  args: categoryCreation,
   returns: createCategoryResult,
-  handler: async (ctx, args) =>
-    run(() =>
-      createCategory(convexStore(ctx.db), { ...args, actor: ctx.actor }),
-    ),
+  handler: async (ctx, args): Promise<Infer<typeof createCategoryResult>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.createUserCategory, {
+      ...args,
+      session,
+    });
+  },
 });
 
 export const listUserCategories = query({
   args: inWorkspace,
   returns: v.array(userCategory),
   handler: async (ctx, args) =>
-    run(() =>
-      listCategories(convexReadStore(ctx.db), { ...args, actor: ctx.actor }),
+    run(async () =>
+      listCategories(convexReadStore(ctx.db), {
+        ...args,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
+      }),
     ),
 });
 
-export const restyleUserCategory = mutation({
-  args: { ...inWorkspace, categoryId: v.string(), style: categoryStyle },
+export const restyleUserCategory = action({
+  args: categoryRestyle,
   returns: userCategory,
-  handler: async (ctx, args) =>
-    run(() =>
-      restyleCategory(convexStore(ctx.db), { ...args, actor: ctx.actor }),
-    ),
+  handler: async (ctx, args): Promise<Infer<typeof userCategory>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.restyleUserCategory, {
+      ...args,
+      session,
+    });
+  },
 });

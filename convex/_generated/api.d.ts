@@ -9,6 +9,9 @@
  */
 
 import type * as accounting from "../accounting.js";
+import type * as accountingWrites from "../accountingWrites.js";
+import type * as accountingValues from "../accountingValues.js";
+import type * as accountingErrors from "../accountingErrors.js";
 import type * as authConnection from "../authConnection.js";
 import type * as categoryValidators from "../categoryValidators.js";
 import type * as clerkWebhooks from "../clerkWebhooks.js";
@@ -34,6 +37,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   accounting: typeof accounting;
+  accountingWrites: typeof accountingWrites;
+  accountingValues: typeof accountingValues;
+  accountingErrors: typeof accountingErrors;
   authConnection: typeof authConnection;
   categoryValidators: typeof categoryValidators;
   clerkWebhooks: typeof clerkWebhooks;

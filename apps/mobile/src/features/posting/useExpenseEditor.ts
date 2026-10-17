@@ -108,7 +108,13 @@ export function useExpenseEditor(
       setUserCategoryId(null);
       setPosted(receipt);
     } catch (error) {
-      if (error instanceof ConvexError) {
+      const data: unknown = error instanceof ConvexError ? error.data : null;
+      if (
+        data !== null &&
+        typeof data === "object" &&
+        "kind" in data &&
+        data.kind === "accounting"
+      ) {
         try {
           await transport.clear();
           setPending(null);

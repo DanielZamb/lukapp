@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
@@ -189,4 +190,94 @@ test("restoring a saved expense retains its category and sends it with the origi
   });
   expect(api.post).toHaveBeenCalledExactlyOnceWith(saved);
   expect(editor().userCategoryId).toBeNull();
+});
+
+for (const code of [
+  "authentication_required",
+  "owner_required",
+  "session_required",
+  "session_inactive",
+  "provider_unavailable",
+  "session_verification_required",
+  "device_registration_required",
+  "device_revoked",
+  "membership_required",
+  "permission_denied",
+  "device_slot_occupied",
+  "device_conflict",
+  "device_metadata_invalid",
+  "device_not_found",
+  "session_owner_mismatch",
+  "unknown_future_guard",
+]) {
+  test(`${code} after an uncertain post retains its exact category payload and key until acknowledgement`, async () => {
+    const api = transport();
+    api.post.mockRejectedValueOnce(new Error("response lost"));
+    api.post.mockRejectedValueOnce(new ConvexError({ code }));
+    const editor = await open(api);
+    await act(async () => {
+      editor().setAmount("-1.500,00");
+      editor().setDescription("Food");
+      editor().setUserCategoryId("food-category");
+    });
+    await act(async () => {
+      await editor().submit();
+    });
+    const original = api.post.mock.calls[0][0];
+    await act(async () => {
+      await editor().submit();
+    });
+    expect(editor().pending).toBe(true);
+    expect(editor().editable).toBe(false);
+    expect(editor().userCategoryId).toBe("food-category");
+    expect(editor().posted).toBeNull();
+    expect(api.clear).not.toHaveBeenCalled();
+    expect(api.post.mock.calls[1][0]).toEqual(original);
+    await act(async () => {
+      await editor().submit();
+    });
+    expect(api.post.mock.calls[2][0]).toEqual(original);
+    expect(editor().posted?.description).toBe("Food");
+    expect(editor().pending).toBe(false);
+    expect(api.clear).toHaveBeenCalledOnce();
+  });
+}
+
+test("only an explicitly classified accounting rejection unlocks an expense for correction", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(
+    new ConvexError({
+      kind: "accounting",
+      code: "locked_period",
+      message: "Locked Period",
+    }),
+  );
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-1,00");
+    editor().setUserCategoryId("food-category");
+  });
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(editor().pending).toBe(false);
+  expect(editor().editable).toBe(true);
+  expect(editor().userCategoryId).toBe("food-category");
+  expect(api.clear).toHaveBeenCalledOnce();
+  expect(editor().posted).toBeNull();
+});
+
+test("a framework validation error without an accounting marker keeps uncertainty", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new ConvexError("Argument validation failed"));
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-1,00");
+  });
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(editor().pending).toBe(true);
+  expect(editor().editable).toBe(false);
+  expect(api.clear).not.toHaveBeenCalled();
 });

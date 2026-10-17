@@ -3,7 +3,7 @@ import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { Redirect, router } from "expo-router";
 import { useMemo, useRef, useState } from "react";
@@ -35,7 +35,7 @@ function PostMoney({
   const categories = useQuery(api.accounting.listUserCategories, {
     workspaceId: defaults.workspace.id,
   });
-  const post = useMutation(api.accounting.recordCashExpense);
+  const post = useAction(api.accounting.recordCashExpense);
   const dateSheet = useRef<BottomSheetModal>(null);
   const placeSheet = useRef<BottomSheetModal>(null);
   const { workspace, financialAccountProfile: profile } = defaults;
