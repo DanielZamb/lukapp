@@ -1,6 +1,6 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
-import { accountingFixture, fixtureIdentity } from "../src/accounting/convexHarness";
+import { accountingFixture, fixtureIdentity, octNow } from "../src/accounting/convexHarness";
 
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
 
@@ -124,4 +124,45 @@ test("recovery writes require an admitted owner and leave the ledger untouched o
   })).rejects.toMatchObject({ data: { kind: "recovery", code: "installment_below_minimum" } });
   expect(await s.ledger()).toEqual(before);
   expect((await s.read()).plans).toEqual([]);
+});
+
+test("a retry that changes the date, description or currency conflicts instead of replaying", async () => {
+  const s = await setup();
+  const plan = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const args = {
+    workspaceId: s.workspaceId, planId: plan.plan.id, sourceFinancialAccountProfileId: s.dailyId,
+    amount: { currency: "COP", minorUnits: 230_000 }, accountingDate: "2026-09-18",
+    description: "Recovery: Laptop repair", idempotencyKey: "move-changed",
+  };
+  const gift = await s.t.action(api.savingsRecovery.recordContribution, args);
+  for (const changed of [
+    { ...args, accountingDate: "2026-09-19" },
+    { ...args, description: "Something else" },
+    { ...args, amount: { currency: "USD", minorUnits: 230_000 } },
+  ]) {
+    await expect(s.t.action(api.savingsRecovery.recordContribution, changed))
+      .rejects.toMatchObject({ data: { code: expect.stringMatching(/idempotency_key_conflict|currency_mismatch/) } });
+  }
+  expect(await s.t.action(api.savingsRecovery.recordContribution, args)).toEqual({ ...gift, replay: true });
+  const after = await s.ledger();
+  expect(after.entries.filter((entry) => entry.policy === "account-transfer@1")).toHaveLength(1);
+});
+
+test("progress for a month counts only contributions made by that month's end", async () => {
+  const s = await setup();
+  const plan = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  vi.setSystemTime(octNow);
+  await s.t.action(api.savingsRecovery.recordContribution, {
+    workspaceId: s.workspaceId, planId: plan.plan.id, sourceFinancialAccountProfileId: s.dailyId,
+    amount: { currency: "COP", minorUnits: 230_000 }, accountingDate: "2026-10-02",
+    description: "Recovery: Laptop repair", idempotencyKey: "move-october",
+  });
+  const month = (value: string) =>
+    s.t.query(api.savingsRecovery.evaluate, { workspaceId: s.workspaceId, month: value });
+  expect((await month("2026-09")).plans[0]).toMatchObject({
+    recoveredMinorUnits: 0, remainingMinorUnits: 1_380_000, dueMinorUnits: 230_000,
+  });
+  expect((await month("2026-10")).plans[0]).toMatchObject({
+    recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, dueMinorUnits: 230_000,
+  });
 });

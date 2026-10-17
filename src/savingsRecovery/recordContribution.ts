@@ -1,5 +1,5 @@
-import { currentRecoveryMonth, isAssetProductKind, RecoveryError, requireIdempotencyKey } from "./policy";
-import { planProgress } from "./evaluate";
+import { isAssetProductKind, RecoveryError, requireIdempotencyKey } from "./policy";
+import { ALL_MONTHS, planProgress } from "./evaluate";
 import type { RecordContribution, RecoveryWriteStore } from "./types";
 
 export async function recordContribution(
@@ -37,8 +37,10 @@ export async function recordContribution(
     (contribution) => contribution.transferJournalEntryId === transfer.id,
   );
   if (claimed) throw new RecoveryError("transfer_already_attributed");
+  // The cap counts every unreversed contribution, including future-dated ones, so a plan is
+  // never attributed past its target.
   const remaining = (await planProgress(plan, await store.listContributions(), async (entryId) =>
-    Boolean(await store.findReversalOf(entryId)), currentRecoveryMonth(input.now),
+    Boolean(await store.findReversalOf(entryId)), ALL_MONTHS,
   )).remainingMinorUnits;
   if (remaining <= 0) throw new RecoveryError("plan_already_complete");
   const amount = Math.min(transfer.amountMinorUnits, remaining);

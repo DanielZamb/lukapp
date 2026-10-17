@@ -9,6 +9,9 @@ import type {
   RecoveryReadStore,
 } from "./types";
 
+// Sorts after every real YYYY-MM, so progress counts all contributions.
+export const ALL_MONTHS = "9999-12";
+
 export async function planProgress(
   plan: RecoveryPlan,
   contributions: RecoveryContribution[],
@@ -18,8 +21,11 @@ export async function planProgress(
   const target = planTargetMinorUnits(
     plan.principalMinorUnits, plan.installmentCount, plan.installmentMinorUnits,
   );
+  // Progress for a month counts only what had been contributed by that month's end, so a
+  // later transfer never makes an earlier month look recovered or erase what was due then.
   let recovered = 0;
-  for (const contribution of contributions.filter((item) => item.planId === plan.id)) {
+  for (const contribution of contributions.filter((item) =>
+    item.planId === plan.id && item.contributionDate.slice(0, 7) <= viewedMonth)) {
     if (!(await reversed(contribution.transferJournalEntryId)))
       recovered += contribution.amountMinorUnits;
   }

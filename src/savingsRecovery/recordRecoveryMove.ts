@@ -29,17 +29,7 @@ export async function recordRecoveryMove(
 ) {
   requireIdempotencyKey(input.idempotencyKey);
   const prior = await store.findContributionRequest(input.idempotencyKey);
-  if (prior) {
-    if (prior.planId !== input.planId) throw new RecoveryError("idempotency_key_conflict");
-    const transfer = await store.getEntry(prior.transferJournalEntryId);
-    if (!transfer) throw new RecoveryError("transfer_not_found");
-    if (
-      transfer.financialAccountProfileId !== input.sourceFinancialAccountProfileId ||
-      transfer.amountMinorUnits !== input.amount.minorUnits
-    )
-      throw new RecoveryError("idempotency_key_conflict");
-    return pair(transfer, prior, true);
-  }
+  if (prior && prior.planId !== input.planId) throw new RecoveryError("idempotency_key_conflict");
   const plan = (await store.listPlans()).find((item) => item.id === input.planId);
   if (!plan || plan.workspaceId !== input.workspaceId)
     throw new RecoveryError("plan_not_found");
@@ -50,6 +40,8 @@ export async function recordRecoveryMove(
   const destination = profiles.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
   if (!destination || destination.workspaceId !== input.workspaceId || !isAssetProductKind(destination.productKind))
     throw new RecoveryError("destination_must_be_asset");
+  // A retry goes back through the U03 transfer command with the same key, so its own
+  // idempotency check rejects any changed account, amount, date, description or currency.
   const posted = await postTransfer({
     workspaceId: input.workspaceId,
     sourceFinancialAccountProfileId: source.id,
@@ -59,6 +51,10 @@ export async function recordRecoveryMove(
     description: input.description,
     idempotencyKey: input.idempotencyKey,
   });
+  if (prior) {
+    if (prior.transferJournalEntryId !== posted.id) throw new RecoveryError("idempotency_key_conflict");
+    return pair(posted, prior, true);
+  }
   const { contribution, replay } = await recordContribution(store, {
     workspaceId: input.workspaceId,
     planId: plan.id,
