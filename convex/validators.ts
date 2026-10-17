@@ -61,6 +61,7 @@ export const workspace = v.object({
   kind: v.literal("Personal"),
   functionalCurrency: v.string(),
   chartOfAccountsTemplate: v.string(),
+  timeZone: v.string(),
   currentAccountingPeriod: accountingPeriod,
 });
 

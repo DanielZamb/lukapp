@@ -10,6 +10,7 @@ import { ActivityIndicator, Platform } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate } from "../src/features/money";
+import { defaultAccountingDate } from "../src/features/timeZones";
 import { Header, Screen, SecondaryButton } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
@@ -54,6 +55,7 @@ function PostMoney({
       workspaceId: workspace.id,
       financialAccountProfileId: initialProfileId ?? defaultProfile.id,
       currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
+      timeZone: workspace.timeZone,
     },
     usePostingTransport(subject),
   );
@@ -185,7 +187,7 @@ function PostMoney({
               name: "",
               productKind: "bankAccount",
               amount: "0",
-              date: localDate(),
+              date: defaultAccountingDate(workspace.timeZone),
               target:
                 placeTarget === "destination"
                   ? { kind: "destination", sourceProfileId: editor.profileId }

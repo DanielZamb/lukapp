@@ -12,6 +12,7 @@ export const inWorkspace = { workspaceId: v.string() };
 export const workspaceCreation = {
   functionalCurrency: v.string(),
   chartOfAccountsTemplate: v.optional(v.string()),
+  timeZone: v.optional(v.string()),
 };
 export const cashActivity = {
   ...inWorkspace,
@@ -46,6 +47,7 @@ export const personalSetup = {
   functionalCurrency: v.string(),
   startingMinorUnits: v.number(),
   categories: v.optional(v.array(categorySelection)),
+  timeZone: v.string(),
 };
 export const categoryCreation = {
   ...inWorkspace,

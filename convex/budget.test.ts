@@ -6,7 +6,7 @@ const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.
 async function setup() {
   const fixture = await accountingFixture(modules);
   const { t } = fixture;
-  const { workspace, financialAccountProfile } = await t.action(api.accounting.ensurePersonalDefaults, { functionalCurrency: "COP", startingMinorUnits: 0 });
+  const { workspace, financialAccountProfile } = await t.action(api.accounting.ensurePersonalDefaults, { functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota" });
   const category = async (name: string, answer: "spend" | "receive" = "spend") => {
     const result = await t.action(api.accounting.createUserCategory, {
       workspaceId: workspace.id,
@@ -137,7 +137,7 @@ test("invalid limits, foreign/income categories and past/future edits leave the 
 
 test("a save crossing the server's month boundary is rejected rather than applied to a different month", async () => {
   const s = await setup();
-  vi.setSystemTime(Date.UTC(2026, 9, 1));
+  vi.setSystemTime(Date.UTC(2026, 9, 1, 12));
   await expect(s.t.action(api.budget.setCategoryLimit, s.request)).rejects.toMatchObject({ data: { code: "month_changed" } });
   expect(await s.read()).toMatchObject({ currentMonth: "2026-10", month: "2026-10", jars: [] });
   const saved = await s.t.action(api.budget.setCategoryLimit, { ...s.request, effectiveMonth: "2026-10" });

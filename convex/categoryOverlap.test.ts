@@ -9,7 +9,7 @@ const style = { emoji: "🏷️", tone: "primary" } as const;
 async function setup() {
   const { t } = await accountingFixture(modules);
   const { workspace, financialAccountProfile } = await t.action(api.accounting.ensurePersonalDefaults, {
-    functionalCurrency: "COP", startingMinorUnits: 0,
+    functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota",
   });
   const create = async (selection: CategorySelection) => {
     const result = await t.action(api.accounting.createUserCategory, { workspaceId: workspace.id, selection });

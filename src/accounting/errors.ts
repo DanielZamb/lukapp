@@ -22,6 +22,7 @@ export const accountingErrorMessages = {
   accounting_period_not_found: "Accounting Period not found",
   accounting_period_invalid: "Accounting Period must be a real year and month",
   clock_required: "Clock required",
+  time_zone_invalid: "Choose a real IANA timezone",
   name_required: "Name required",
   idempotency_key_required: "Idempotency key required",
   idempotency_key_conflict: "Idempotency key already used",

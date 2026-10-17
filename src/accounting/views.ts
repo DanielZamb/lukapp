@@ -1,5 +1,6 @@
 import { AccountingError } from "./errors";
 import { assignedCategoryIds } from "./categories/assignments";
+import { workspaceTimeZone } from "./timeZone";
 import type {
   AccountingPeriod,
   AccountingStore,
@@ -21,6 +22,7 @@ export function toWorkspace(
     kind: workspace.kind,
     functionalCurrency: workspace.functionalCurrency,
     chartOfAccountsTemplate: workspace.chartOfAccountsTemplate,
+    timeZone: workspaceTimeZone(workspace),
     currentAccountingPeriod,
   };
 }

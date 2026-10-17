@@ -17,7 +17,11 @@ const modules = import.meta.glob([
 test("concurrent setup and retries return one canonical Personal workspace and zero-balance cash profile", async () => {
   const t = await convexAccounting(modules);
   expect(await t.query(api.accounting.personalDefaults, {})).toBeNull();
-  const args = { functionalCurrency: "COP", startingMinorUnits: 0 };
+  const args = {
+    functionalCurrency: "COP",
+    startingMinorUnits: 0,
+    timeZone: "America/Bogota",
+  };
   const first = await t.action(api.accounting.ensurePersonalDefaults, args);
   const retries = await Promise.all(
     Array.from({ length: 5 }, () =>
@@ -55,6 +59,7 @@ test("first concurrent setup converges, including its one opening entry", async 
       t.action(api.accounting.ensurePersonalDefaults, {
         functionalCurrency: "COP",
         startingMinorUnits: 1000000,
+        timeZone: "America/Bogota",
       }),
     ),
   );
@@ -81,9 +86,9 @@ test("first concurrent setup converges, including its one opening entry", async 
 test("invalid setup and conflicting retries cannot leave partial or duplicate records", async () => {
   const t = await convexAccounting(modules);
   for (const args of [
-    { functionalCurrency: "XXX", startingMinorUnits: 0 },
-    { functionalCurrency: "COP", startingMinorUnits: -1 },
-    { functionalCurrency: "COP", startingMinorUnits: 1.5 },
+    { functionalCurrency: "XXX", startingMinorUnits: 0, timeZone: "America/Bogota" },
+    { functionalCurrency: "COP", startingMinorUnits: -1, timeZone: "America/Bogota" },
+    { functionalCurrency: "COP", startingMinorUnits: 1.5, timeZone: "America/Bogota" },
   ]) {
     await expect(
       t.action(api.accounting.ensurePersonalDefaults, args),
@@ -96,17 +101,20 @@ test("invalid setup and conflicting retries cannot leave partial or duplicate re
   await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   await expect(
     t.action(api.accounting.ensurePersonalDefaults, {
       functionalCurrency: "USD",
       startingMinorUnits: 0,
+      timeZone: "America/Bogota",
     }),
   ).rejects.toMatchObject({ data: { code: "setup_conflict" } });
   await expect(
     t.action(api.accounting.ensurePersonalDefaults, {
       functionalCurrency: "COP",
       startingMinorUnits: 1,
+      timeZone: "America/Bogota",
     }),
   ).rejects.toMatchObject({ data: { code: "setup_conflict" } });
 });
@@ -116,6 +124,7 @@ test("first expense reloads from the ledger, replays once, rejects changed paylo
   const defaults = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   const workspaceId = defaults.workspace.id;
   const payload = groceries(workspaceId, defaults.financialAccountProfile.id);
@@ -161,11 +170,30 @@ test("first expense reloads from the ledger, replays once, rejects changed paylo
   expect(reversed.rows).toHaveLength(1);
 });
 
+test("first setup requires a timezone and does not silently assume Bogotá", async () => {
+  const t = await convexAccounting(modules);
+  await expect(
+    t.action(api.accounting.ensurePersonalDefaults, {
+      functionalCurrency: "COP",
+      startingMinorUnits: 0,
+    } as never),
+  ).rejects.toThrow();
+  await expect(
+    t.action(api.accounting.ensurePersonalDefaults, {
+      functionalCurrency: "COP",
+      startingMinorUnits: 0,
+      timeZone: "",
+    }),
+  ).rejects.toThrow();
+  expect(await t.query(api.accounting.personalDefaults, {})).toBeNull();
+});
+
 test("ordinary expense rejects foreign IDs, invalid amounts, dates, currency and a locked period without posting", async () => {
   const t = await convexAccounting(modules);
   const defaults = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   const foreign = await createOwnedWorkspace(t);
   const other = await createDaily(t, foreign.id);

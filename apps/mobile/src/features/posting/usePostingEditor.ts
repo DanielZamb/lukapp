@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
-import { formatMoney, localDate, parseMoney } from "../money";
+import { formatMoney, parseMoney } from "../money";
+import { defaultAccountingDate } from "../timeZones";
 import type { TransactionCategories } from "../categories/transactionSelection";
 import type { PendingPosting, PlaceKind } from "./pendingPostingSchema";
 
@@ -23,6 +24,7 @@ type Account = {
   workspaceId: string;
   financialAccountProfileId: string;
   currency: "COP" | "USD";
+  timeZone: string;
 };
 export type PlaceDraft = {
   name: string;
@@ -42,7 +44,9 @@ export function usePostingEditor(
     ids: [],
     primaryId: null,
   });
-  const [date, setDate] = useState(localDate());
+  const [date, setDate] = useState(() =>
+    defaultAccountingDate(account.timeZone),
+  );
   const [entryType, setEntryType] = useState<EntryType>("normal");
   const [profileId, setProfileId] = useState(account.financialAccountProfileId);
   const [destinationId, setDestinationId] = useState<string | null>(null);

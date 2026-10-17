@@ -1,3 +1,5 @@
+import { calendarDate } from "../accounting/timeZone";
+import { dateFromTimestamp } from "../accounting/period";
 import type { BudgetRevision } from "./types";
 
 export class BudgetError extends Error {
@@ -9,9 +11,8 @@ export function requireMonth(month: string) {
     throw new BudgetError("month_invalid");
 }
 
-// Matches the accounting kernel's UTC clock month; no Workspace timezone exists yet.
-export function currentBudgetMonth(now: number) {
-  return new Date(now).toISOString().slice(0, 7);
+export function currentBudgetMonth(now: number, timeZone: string) {
+  return calendarDate(dateFromTimestamp(now), timeZone).slice(0, 7);
 }
 
 export function effectiveRevision(revisions: BudgetRevision[], month: string) {

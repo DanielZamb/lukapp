@@ -4,6 +4,7 @@ import { ConvexError } from "convex/values";
 import { createAccountingCore } from "../src/accounting";
 import { requireFunctionalCurrencyCode } from "../src/accounting/money";
 import { recordOpeningPosition } from "../src/accounting/commands/recordOpeningPosition";
+import { calendarDate, requireTimeZone } from "../src/accounting/timeZone";
 import type { Actor } from "../src/accounting";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { convexReadStore, convexStore } from "./store";
@@ -38,6 +39,7 @@ export async function ensurePersonalDefaults(
     functionalCurrency: string;
     startingMinorUnits: number;
     categories?: CategorySelection[];
+    timeZone: string;
   },
 ) {
   requireFunctionalCurrencyCode(args.functionalCurrency);
@@ -58,6 +60,7 @@ export async function ensurePersonalDefaults(
       ])
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   );
+  const timeZone = requireTimeZone(args.timeZone);
   const existing = await readPersonalDefaults(ctx, actor);
   if (existing) {
     const defaults = await ctx.db
@@ -66,6 +69,7 @@ export async function ensurePersonalDefaults(
       .unique();
     if (
       existing.workspace.functionalCurrency !== args.functionalCurrency ||
+      existing.workspace.timeZone !== timeZone ||
       defaults?.startingMinorUnits !== args.startingMinorUnits ||
       (defaults?.categorySetupSignature ?? "[]") !== categorySetupSignature
     ) {
@@ -82,6 +86,7 @@ export async function ensurePersonalDefaults(
   const workspace = await core.createPersonalWorkspace({
     actor,
     functionalCurrency: args.functionalCurrency,
+    timeZone,
   });
   for (const selection of args.categories ?? []) {
     const result = await createUserCategory(store, {
@@ -114,7 +119,7 @@ export async function ensurePersonalDefaults(
           currency: workspace.functionalCurrency,
           minorUnits: args.startingMinorUnits,
         },
-        accountingDate: clock.now().toISOString().slice(0, 10),
+        accountingDate: calendarDate(clock.now(), timeZone),
         description: "Starting amount",
         idempotencyKey: "personal-defaults-opening@1",
       },

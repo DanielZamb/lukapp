@@ -1,6 +1,7 @@
 import * as Crypto from "expo-crypto";
 import { useAction, useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
@@ -11,11 +12,13 @@ import { BudgetEditorSheet } from "./BudgetEditorSheet";
 import { monthLabel, shiftMonth, type BudgetCategory } from "./model";
 import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 
-export function Budget({ workspaceId, onBack }: { workspaceId: string; onBack: () => void }) {
+export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string; timeZone: string; onBack: () => void }) {
+  const calendar = useWorkspaceCalendar(timeZone);
   const [month, setMonth] = useState<string | undefined>(undefined);
   const [editor, setEditor] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
   const [saved, setSaved] = useState(false);
   const [refreshKey, refresh] = useState(Crypto.randomUUID);
+  useEffect(() => { refresh(Crypto.randomUUID()); }, [calendar.month]);
   const board = useQuery(api.budget.evaluate, { workspaceId, refreshKey, ...(month ? { month } : {}) });
   const interact = useLocalEntryInteraction();
   if (!board) return <Screen><ActivityIndicator accessibilityLabel="Loading Budget" /></Screen>;

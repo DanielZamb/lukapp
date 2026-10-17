@@ -41,6 +41,7 @@ import type * as savingsRecoveryValues from "../savingsRecoveryValues.js";
 import type * as savingsRecoveryWrites from "../savingsRecoveryWrites.js";
 import type * as store from "../store.js";
 import type * as validators from "../validators.js";
+import type * as workspaceBackfill from "../workspaceBackfill.js";
 
 import type {
   ApiFromModules,
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   savingsRecoveryWrites: typeof savingsRecoveryWrites;
   store: typeof store;
   validators: typeof validators;
+  workspaceBackfill: typeof workspaceBackfill;
 }>;
 
 /**

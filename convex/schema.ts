@@ -120,6 +120,7 @@ export default defineSchema({
     kind: v.literal("Personal"),
     functionalCurrency: v.string(),
     chartOfAccountsTemplate: v.string(),
+    timeZone: v.optional(v.string()),
   }),
   workspaceMemberships: defineTable({
     workspaceId: v.id("workspaces"),

@@ -12,11 +12,13 @@ import { Header, PrimaryButton, Screen, SecondaryButton, ui } from "../src/ui/co
 function Account({
   workspaceId,
   profileId,
+  timeZone,
 }: {
   workspaceId: string;
   profileId: string;
+  timeZone: string;
 }) {
-  const activity = usePostedActivity(workspaceId);
+  const activity = usePostedActivity(workspaceId, timeZone);
   const recent = useRecentActivity(workspaceId, 3, profileId);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const account = activity?.accounts.find(
@@ -62,6 +64,7 @@ export default function AccountRoute() {
     <Account
       workspaceId={defaults.workspace.id}
       profileId={profileId ?? defaults.financialAccountProfile.id}
+      timeZone={defaults.workspace.timeZone}
     />
   ) : defaults === null ? (
     <Redirect href="/" />

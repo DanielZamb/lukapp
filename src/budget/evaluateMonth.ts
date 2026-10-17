@@ -3,8 +3,9 @@ import type { BudgetReadStore } from "./types";
 
 export async function evaluateMonth(store: BudgetReadStore, input: { month: string; now: number }) {
   requireMonth(input.month);
-  const [currency, revisions, categories, consumption] = await Promise.all([
-    store.functionalCurrency(), store.listRevisions(), store.listCategories(), store.categoryConsumption(input.month),
+  const [currency, timeZone, revisions, categories, consumption] = await Promise.all([
+    store.functionalCurrency(), store.timeZone(), store.listRevisions(), store.listCategories(),
+    store.categoryConsumption(input.month),
   ]);
   const expenseCategories = categories.filter((category) => category.nature === "Expense")
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -21,7 +22,7 @@ export async function evaluateMonth(store: BudgetReadStore, input: { month: stri
     }] : [];
   });
   return {
-    month: input.month, currentMonth: currentBudgetMonth(input.now), currency,
+    month: input.month, currentMonth: currentBudgetMonth(input.now, timeZone), currency,
     totalsOverlap: true as const, jars,
     availableCategories: expenseCategories.filter((category) => !jars.some((jar) => jar.category.id === category.id))
       .map((category) => ({ id: category.id, name: category.name, emoji: category.emoji })),

@@ -16,7 +16,9 @@ export const evaluate = ownerQuery({
   handler: async (ctx, args) => {
     const actor = await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
     const now = Date.now();
-    return runBudget(() => evaluateMonth(budgetReadStore(ctx, args.workspaceId, actor), { month: args.month ?? currentBudgetMonth(now), now }));
+    const store = budgetReadStore(ctx, args.workspaceId, actor);
+    const timeZone = await store.timeZone();
+    return runBudget(() => evaluateMonth(store, { month: args.month ?? currentBudgetMonth(now, timeZone), now }));
   },
 });
 
