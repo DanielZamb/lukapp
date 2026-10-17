@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { ActivityIndicator, AppState, Text, View } from "react-native";
+import { LocalInstallation } from "./installation";
 import { LocalEntryInteraction } from "./interaction";
 import { EntryController } from "./entryController";
 import {
@@ -121,7 +122,9 @@ export function LocalEntryGate({
           accessibilityElementsHidden={obscured}
         >
           <LocalEntryInteraction.Provider value={controller.interaction}>
-            {children}
+            <LocalInstallation.Provider value={controller.unlockedInstallId()}>
+              {children}
+            </LocalInstallation.Provider>
           </LocalEntryInteraction.Provider>
         </View>
         {obscured && (

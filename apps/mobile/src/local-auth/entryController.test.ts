@@ -261,3 +261,14 @@ test("install-marker schema treats missing, corrupt and foreign-version data as 
     expect(parseInstallMarker(raw)).toBeNull();
   expect(parseInstallMarker(JSON.stringify(enrolled))).toEqual(enrolled);
 });
+
+test("the stable install ID is available only after unlock and disappears when locked", async () => {
+  const { gate, time } = fixture();
+  await gate.setIdentity(identity);
+  expect(gate.unlockedInstallId()).toBeNull();
+  await gate.unlock();
+  expect(gate.unlockedInstallId()).toBe(installId);
+  time(121_000);
+  gate.tick();
+  expect(gate.unlockedInstallId()).toBeNull();
+});

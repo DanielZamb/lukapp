@@ -210,6 +210,12 @@ export class EntryController {
       identity.sessionId === this.identity.sessionId
     );
   }
+  unlockedInstallId() {
+    return this.snapshot.state.kind === "open" &&
+      this.marker?.kind === "enrolled"
+      ? this.marker.installId
+      : null;
+  }
   needsPathUnlock(path: string) {
     return path !== this.path && sensitivePath(path);
   }
