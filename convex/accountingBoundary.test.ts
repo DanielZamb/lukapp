@@ -44,6 +44,7 @@ function writeArgs(workspaceId = "foreign", profileId = "foreign") {
     ensurePersonalDefaults: {
       functionalCurrency: "COP",
       startingMinorUnits: 0,
+      timeZone: "America/Bogota",
     },
     createUserCategory: {
       workspaceId,
@@ -163,11 +164,13 @@ test("raw workspace creation is denied even for the registered live Owner", asyn
   const first = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   expect(
     await t.action(api.accounting.ensurePersonalDefaults, {
       functionalCurrency: "COP",
       startingMinorUnits: 0,
+      timeZone: "America/Bogota",
     }),
   ).toEqual(first);
   expect((await financialState(t)).workspaces).toHaveLength(1);
@@ -228,6 +231,7 @@ test("every internal write binds its observation to the current signed identity 
   const first = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   const args = writeArgs(first.workspace.id, first.financialAccountProfile.id);
   for (const patch of [
@@ -276,6 +280,7 @@ test("local revocation after live verification wins every action-to-mutation han
   const first = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   const before = await financialState(t);
   transport.mockImplementationOnce(async () => {
@@ -306,6 +311,7 @@ test("current membership removal after live verification blocks all writes, setu
   const first = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   transport.mockImplementationOnce(async () => {
     await t.run(async (ctx) => {
@@ -335,6 +341,7 @@ test("changed provider client binding and caller-injected session or actor never
   const first = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   const args = writeArgs(first.workspace.id, first.financialAccountProfile.id);
   transport.mockClear();
@@ -369,6 +376,7 @@ test("real action handlers request the exact operation permissions; setup keeps 
     const first = await t.action(api.accounting.ensurePersonalDefaults, {
       functionalCurrency: "COP",
       startingMinorUnits: 1000,
+      timeZone: "America/Bogota",
     });
     expect(setup).toHaveBeenCalledOnce();
     const workspaceId = first.workspace.id;
@@ -432,6 +440,7 @@ test("normal category expense replay remains exact after transient security fail
   const first = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
+    timeZone: "America/Bogota",
   });
   const category = await t.action(api.accounting.createUserCategory, {
     workspaceId: first.workspace.id,

@@ -47,7 +47,7 @@ export const personalSetup = {
   functionalCurrency: v.string(),
   startingMinorUnits: v.number(),
   categories: v.optional(v.array(categorySelection)),
-  timeZone: v.optional(v.string()),
+  timeZone: v.string(),
 };
 export const categoryCreation = {
   ...inWorkspace,

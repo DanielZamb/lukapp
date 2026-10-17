@@ -16,11 +16,13 @@ const account = {
   workspaceId: "workspace",
   financialAccountProfileId: "bank",
   currency: "COP",
+  timeZone: "America/Bogota",
 } as const;
 let root: ReactTestRenderer | undefined;
 afterEach(async () => {
   await act(async () => root?.unmount());
   root = undefined;
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 function transport() {
@@ -42,11 +44,14 @@ function transport() {
     newKey: () => `entry-${++key}`,
   } satisfies PostingTransport;
 }
-async function open(api: PostingTransport) {
+async function open(
+  api: PostingTransport,
+  timeZone: string = account.timeZone,
+) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let editor: ReturnType<typeof usePostingEditor> | undefined;
   function Harness() {
-    editor = usePostingEditor(account, api);
+    editor = usePostingEditor({ ...account, timeZone }, api);
     return null;
   }
   await act(async () => {
@@ -365,6 +370,18 @@ test("the shared storage schema reads legacy expenses and every new pending kind
   expect(() =>
     parsePendingPosting({ kind: "transfer", payload: legacy }),
   ).toThrow();
+});
+
+test("a fresh editor defaults the accounting date to the Workspace calendar day", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-31T23:30:00-05:00"));
+  const bogota = await open(transport(), "America/Bogota");
+  expect(bogota().date).toBe("2026-10-31");
+  await act(async () => root?.unmount());
+  root = undefined;
+  const auckland = await open(transport(), "Pacific/Auckland");
+  expect(auckland().date).toBe("2026-11-01");
+  vi.useRealTimers();
 });
 
 test("restored setup from To selects the new destination and keeps its original source", async () => {

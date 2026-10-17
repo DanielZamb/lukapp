@@ -18,17 +18,53 @@ export const LATIN_AMERICA_TIME_ZONES = [
   "America/Puerto_Rico",
 ] as const;
 
-const OTHER_TIME_ZONES = [
-  "America/New_York",
+const FALLBACK_TIME_ZONES = [
+  ...LATIN_AMERICA_TIME_ZONES,
+  "UTC",
+  "Africa/Cairo",
+  "Africa/Johannesburg",
+  "Africa/Lagos",
+  "Africa/Nairobi",
+  "America/Anchorage",
   "America/Chicago",
   "America/Denver",
   "America/Los_Angeles",
+  "America/New_York",
   "America/Toronto",
-  "Europe/Madrid",
+  "America/Vancouver",
+  "Asia/Bangkok",
+  "Asia/Dubai",
+  "Asia/Hong_Kong",
+  "Asia/Jakarta",
+  "Asia/Jerusalem",
+  "Asia/Kolkata",
+  "Asia/Manila",
+  "Asia/Seoul",
+  "Asia/Shanghai",
+  "Asia/Singapore",
+  "Asia/Taipei",
+  "Asia/Tokyo",
+  "Australia/Melbourne",
+  "Australia/Perth",
+  "Australia/Sydney",
+  "Europe/Amsterdam",
+  "Europe/Athens",
+  "Europe/Berlin",
+  "Europe/Brussels",
+  "Europe/Dublin",
+  "Europe/Istanbul",
   "Europe/Lisbon",
   "Europe/London",
-  "UTC",
+  "Europe/Madrid",
+  "Europe/Moscow",
+  "Europe/Paris",
+  "Europe/Rome",
+  "Europe/Stockholm",
+  "Europe/Warsaw",
+  "Europe/Zurich",
   "Pacific/Auckland",
+  "Pacific/Fiji",
+  "Pacific/Honolulu",
 ] as const;
 
 const TIME_ZONE_LABELS: Record<string, string> = {
@@ -69,9 +105,16 @@ export function timeZoneLabel(timeZone: string): string {
   return TIME_ZONE_LABELS[timeZone] ?? timeZone.replaceAll("_", " ");
 }
 
+function supportedTimeZones(): string[] {
+  const values = Intl.supportedValuesOf?.("timeZone");
+  return values && values.length > 0 ? [...values] : [...FALLBACK_TIME_ZONES];
+}
+
 export function orderedTimeZones(deviceZone: string): string[] {
-  const unique = [...new Set([...LATIN_AMERICA_TIME_ZONES, ...OTHER_TIME_ZONES, deviceZone])];
   const latinAmerica = new Set<string>(LATIN_AMERICA_TIME_ZONES);
+  const unique = [
+    ...new Set([...LATIN_AMERICA_TIME_ZONES, deviceZone, ...supportedTimeZones()]),
+  ];
   return [
     ...unique.filter((zone) => latinAmerica.has(zone)),
     ...unique.filter((zone) => !latinAmerica.has(zone)),
@@ -103,4 +146,50 @@ export function calendarDate(now: Date, timeZone: string): string {
 
 export function spentMonthEyebrow(timeZone: string, now = new Date()): string {
   return `SPENT IN ${new Intl.DateTimeFormat("en", { month: "long", timeZone }).format(now).toUpperCase()}`;
+}
+
+export function defaultAccountingDate(timeZone: string, now = new Date()): string {
+  return calendarDate(now, timeZone);
+}
+
+function zoneOffsetMs(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return (
+    Date.UTC(
+      read("year"),
+      read("month") - 1,
+      read("day"),
+      read("hour"),
+      read("minute"),
+      read("second"),
+    ) - instant.getTime()
+  );
+}
+
+export function nextWorkspaceMidnight(now: Date, timeZone: string): number {
+  const today = calendarDate(now, timeZone);
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
+  const day = Number(today.slice(8, 10));
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  const nextYear = next.getUTCFullYear();
+  const nextMonth = next.getUTCMonth() + 1;
+  const nextDay = next.getUTCDate();
+  const asUtc = Date.UTC(nextYear, nextMonth - 1, nextDay);
+  let instant = asUtc;
+  for (let i = 0; i < 3; i++) {
+    instant = asUtc - zoneOffsetMs(new Date(instant), timeZone);
+  }
+  return instant;
 }

@@ -1,14 +1,15 @@
 import { useQuery } from "convex/react";
 import { api } from "./api";
-import { calendarDate } from "./timeZones";
+import { useWorkspaceCalendar } from "./useWorkspaceCalendar";
 
 export function usePersonalDefaults() {
   return useQuery(api.accounting.personalDefaults, {});
 }
 export function usePostedActivity(workspaceId: string, timeZone: string) {
+  const { month } = useWorkspaceCalendar(timeZone);
   return useQuery(api.accounting.postedActivity, {
     workspaceId,
-    month: calendarDate(new Date(), timeZone).slice(0, 7),
+    month,
     includeRows: false,
   });
 }

@@ -69,7 +69,7 @@ const actions = {
     journalEntryId: "foreign",
     idempotencyKey: "x",
   },
-  ensurePersonalDefaults: { functionalCurrency: "COP", startingMinorUnits: 0 },
+  ensurePersonalDefaults: { functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota" },
   createUserCategory: {
     workspaceId: "foreign",
     selection: {

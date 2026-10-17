@@ -2,14 +2,25 @@ import { AccountingError } from "./errors";
 
 export const FALLBACK_WORKSPACE_TIME_ZONE = "America/Bogota";
 
+const OFFSET_IDENTIFIER = /^(?:[+-]\d{2}(?::\d{2})?|(?:GMT|UTC)[+-].+)$/i;
+
 export function requireTimeZone(value: string): string {
-  if (!value.trim()) throw new AccountingError("time_zone_invalid");
+  const trimmed = value.trim();
+  if (
+    !trimmed ||
+    OFFSET_IDENTIFIER.test(trimmed) ||
+    (trimmed !== "UTC" && !trimmed.includes("/"))
+  ) {
+    throw new AccountingError("time_zone_invalid");
+  }
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date(0));
+    const resolved = new Intl.DateTimeFormat("en-US", {
+      timeZone: trimmed,
+    }).resolvedOptions().timeZone;
+    return resolved === "Etc/UTC" || trimmed === "Etc/UTC" ? "UTC" : resolved;
   } catch {
     throw new AccountingError("time_zone_invalid");
   }
-  return value;
 }
 
 export function workspaceTimeZone(workspace: { timeZone?: string }): string {

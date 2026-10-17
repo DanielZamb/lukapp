@@ -9,6 +9,7 @@ import {
 import { formatMoney } from "../src/features/money";
 import { Setup } from "../src/features/Setup";
 import { spentMonthEyebrow } from "../src/features/timeZones";
+import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import {
   ActionTile,
   ConfirmationScreen,
@@ -29,6 +30,7 @@ function Home({
   currency: string;
   timeZone: string;
 }) {
+  const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
   const actions = useRef<BottomSheetModal>(null);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
@@ -36,7 +38,7 @@ function Home({
     <Screen>
       <Header
         title=""
-        eyebrow={spentMonthEyebrow(timeZone)}
+        eyebrow={spentMonthEyebrow(timeZone, calendar.now)}
         onUser={() => router.push("/settings")}
       />
       {posted && (

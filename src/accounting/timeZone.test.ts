@@ -55,3 +55,11 @@ test("an IANA timezone is accepted and an unknown zone is rejected", () => {
     "clock_required",
   );
 });
+
+test("offset identifiers are rejected and named zones are canonicalized", () => {
+  expectAccountingError(() => requireTimeZone("+01:00"), "time_zone_invalid");
+  expectAccountingError(() => requireTimeZone("-05:00"), "time_zone_invalid");
+  expectAccountingError(() => requireTimeZone("UTC+1"), "time_zone_invalid");
+  expect(requireTimeZone("UTC")).toBe("UTC");
+  expect(requireTimeZone("Etc/UTC")).toBe("UTC");
+});

@@ -36,7 +36,7 @@ const modules = {
     setup: action({ args: {}, handler: async (ctx): Promise<Setup> => ctx.runMutation(setupInternal, { session: await verifyCurrentSession(ctx.auth) }) }),
     setupInternal: internalMutation({ args: { session: liveSession }, handler: async (ctx, { session }) => {
       const actor = await requirePersonalSetup(ctx, session);
-      return ensurePersonalDefaults(ctx, actor, { functionalCurrency: "COP", startingMinorUnits: 1000 });
+      return ensurePersonalDefaults(ctx, actor, { functionalCurrency: "COP", startingMinorUnits: 1000, timeZone: "America/Bogota" });
     } }),
     expense: action({ args: expenseArgs, handler: async (ctx, args) => ctx.runMutation(expenseInternal, { ...args, session: await verifyCurrentSession(ctx.auth) }) }),
     expenseInternal: internalMutation({ args: { ...expenseArgs, session: liveSession }, handler: async (ctx, { session, ...args }) => {

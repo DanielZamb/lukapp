@@ -6,7 +6,7 @@ const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.
 async function setup() {
   const fixture = await accountingFixture(modules);
   const { t } = fixture;
-  const { workspace, financialAccountProfile } = await t.action(api.accounting.ensurePersonalDefaults, { functionalCurrency: "COP", startingMinorUnits: 0 });
+  const { workspace, financialAccountProfile } = await t.action(api.accounting.ensurePersonalDefaults, { functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota" });
   const category = async (name: string, answer: "spend" | "receive" = "spend") => {
     const result = await t.action(api.accounting.createUserCategory, {
       workspaceId: workspace.id,

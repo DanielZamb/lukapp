@@ -313,6 +313,7 @@ test("setup persists server categories atomically, retries once and rejects chan
   const input = {
     functionalCurrency: "COP",
     startingMinorUnits: 100000,
+    timeZone: "America/Bogota",
     categories: [food, custom("Friday things")],
   };
   const first = await t.action(api.accounting.ensurePersonalDefaults, input);
@@ -340,6 +341,7 @@ test("an account-door setup answer rolls back the entire setup", async () => {
     t.action(api.accounting.ensurePersonalDefaults, {
       functionalCurrency: "COP",
       startingMinorUnits: 0,
+      timeZone: "America/Bogota",
       categories: [food, custom("Savings", "stillMine")],
     }),
   ).rejects.toMatchObject({ data: { code: "account_setup_required" } });

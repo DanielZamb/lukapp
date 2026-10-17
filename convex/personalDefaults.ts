@@ -4,11 +4,7 @@ import { ConvexError } from "convex/values";
 import { createAccountingCore } from "../src/accounting";
 import { requireFunctionalCurrencyCode } from "../src/accounting/money";
 import { recordOpeningPosition } from "../src/accounting/commands/recordOpeningPosition";
-import {
-  FALLBACK_WORKSPACE_TIME_ZONE,
-  calendarDate,
-  requireTimeZone,
-} from "../src/accounting/timeZone";
+import { calendarDate, requireTimeZone } from "../src/accounting/timeZone";
 import type { Actor } from "../src/accounting";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { convexReadStore, convexStore } from "./store";
@@ -43,7 +39,7 @@ export async function ensurePersonalDefaults(
     functionalCurrency: string;
     startingMinorUnits: number;
     categories?: CategorySelection[];
-    timeZone?: string;
+    timeZone: string;
   },
 ) {
   requireFunctionalCurrencyCode(args.functionalCurrency);
@@ -64,7 +60,7 @@ export async function ensurePersonalDefaults(
       ])
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   );
-  const timeZone = requireTimeZone(args.timeZone ?? FALLBACK_WORKSPACE_TIME_ZONE);
+  const timeZone = requireTimeZone(args.timeZone);
   const existing = await readPersonalDefaults(ctx, actor);
   if (existing) {
     const defaults = await ctx.db

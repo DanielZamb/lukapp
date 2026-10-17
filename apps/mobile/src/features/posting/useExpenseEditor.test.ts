@@ -26,6 +26,7 @@ const account = {
   workspaceId: "workspace",
   financialAccountProfileId: "cash",
   currency: "COP",
+  timeZone: "America/Bogota",
 } as const;
 let root: ReactTestRenderer | undefined;
 afterEach(async () => {
