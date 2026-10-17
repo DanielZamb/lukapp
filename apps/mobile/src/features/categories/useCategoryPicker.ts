@@ -1,3 +1,4 @@
+import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { useMutation, useQuery } from "convex/react";
 import { useRef, useState } from "react";
 import { api } from "../api";
@@ -31,6 +32,7 @@ export function useCategoryPicker(
   mode: CategoryPickerMode,
   onClose: () => void,
 ) {
+  const recordInteraction = useLocalEntryInteraction();
   const categories = useQuery(
     api.accounting.listUserCategories,
     mode.kind === "posting" ? { workspaceId: mode.workspaceId } : "skip",
@@ -85,6 +87,7 @@ export function useCategoryPicker(
   }
   function select(key: string) {
     if (saving.current) return;
+    recordInteraction();
     if (mode.kind === "posting") {
       mode.onChange(key);
       onClose();
@@ -92,6 +95,7 @@ export function useCategoryPicker(
       mode.onChange(mode.selections.filter((s) => selectionKey(s) !== key));
   }
   function editStyle(key: string) {
+    recordInteraction();
     const option = options?.find((o) => o.key === key);
     if (option) {
       setEditor({ kind: "restyle", option, style: option.style });
@@ -99,6 +103,7 @@ export function useCategoryPicker(
     }
   }
   function preset(preset: CategoryPreset) {
+    recordInteraction();
     setEditor({ kind: "preset", preset, style: defaultCategoryStyle });
     setError("");
   }
@@ -112,6 +117,7 @@ export function useCategoryPicker(
         effectiveAnswer === "payDebt")
     )
       return;
+    recordInteraction();
     saving.current = true;
     setBusy(true);
     setError("");
@@ -178,16 +184,19 @@ export function useCategoryPicker(
     }
   }
   function name(name: string) {
+    recordInteraction();
     setEditor((current) =>
       current?.kind === "custom" ? { ...current, name, answer: null } : current,
     );
   }
   function answer(answer: NatureAnswer) {
+    recordInteraction();
     setEditor((current) =>
       current?.kind === "custom" ? { ...current, answer } : current,
     );
   }
   function style(style: CategoryStyle) {
+    recordInteraction();
     setEditor((current) => (current ? { ...current, style } : current));
   }
   const includes = (name: string) =>
@@ -217,11 +226,15 @@ export function useCategoryPicker(
             !!effectiveAnswer &&
             effectiveAnswer !== "stillMine" &&
             effectiveAnswer !== "payDebt")),
-      onSearch: setSearch,
+      onSearch: (value: string) => {
+        recordInteraction();
+        setSearch(value);
+      },
       onSelect: select,
       onRestyle: editStyle,
       onPreset: preset,
       onCreate: () => {
+        recordInteraction();
         setEditor({
           kind: "custom",
           name: search,
