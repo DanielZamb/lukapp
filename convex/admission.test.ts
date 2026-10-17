@@ -15,6 +15,8 @@ const queries = {
   listLedgerAccounts: { workspaceId: "foreign" },
   listCatalogAccounts: { workspaceId: "foreign" },
   listJournalEntries: { workspaceId: "foreign" },
+  postedHistory: { workspaceId: "foreign", paginationOpts: { cursor: null, numItems: 50 } },
+  postedEntry: { workspaceId: "foreign", journalEntryId: "foreign" },
   balances: { workspaceId: "foreign" },
   trialBalance: { workspaceId: "foreign" },
   personalDefaults: {},

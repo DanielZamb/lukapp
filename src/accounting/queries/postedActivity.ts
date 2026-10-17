@@ -1,64 +1,43 @@
 import { balances } from "./balances";
-import { listJournalEntries } from "./listJournalEntries";
+import { activityRow } from "./activityRow";
+import { requireWorkspace } from "../membership";
+import { journalContext, toPostedJournalEntry } from "../views";
 import type { AccountingStore, Actor } from "../types";
 
 export async function postedActivity(
   store: AccountingStore,
-  input: { actor: Actor; workspaceId: string; month: string },
+  input: { actor: Actor; workspaceId: string; month: string; includeRows?: boolean },
 ) {
-  const [accounts, entries] = await Promise.all([
+  const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
+  const [accounts, entries, context] = await Promise.all([
     balances(store, input),
-    listJournalEntries(store, input),
+    store.listJournalEntries(input.workspaceId),
+    journalContext(store, workspace),
   ]);
   const monthSpendMinorUnits = entries
     .filter((entry) => entry.accountingDate.slice(0, 7) === input.month)
     .flatMap((entry) => entry.lines)
-    .filter((line) => line.nature === "Expense")
-    .reduce(
-      (sum, line) => sum + line.debitMinorUnits - line.creditMinorUnits,
-      0,
-    );
-  const rows = entries
+    .filter((line) => context.accounts.get(line.ledgerAccountId)?.nature === "Expense")
+    .reduce((sum, line) => sum + line.debitMinorUnits - line.creditMinorUnits, 0);
+  const reversedBy = new Map(entries.flatMap((entry) =>
+    entry.reversesEntryId ? [[entry.reversesEntryId, entry.id] as const] : []));
+  const rows = input.includeRows === false ? [] : await Promise.all(entries
     .filter((entry) => !entry.reversesEntryId)
-    .sort(
-      (a, b) =>
-        b.accountingDate.localeCompare(a.accountingDate) ||
-        b.postedAt - a.postedAt ||
-        b.id.localeCompare(a.id),
-    )
-    .map((entry) => {
-      const userCategories = entry.lines.flatMap((line) => line.userCategories);
-      const primaryUserCategoryId = entry.lines.find(
-        (line) => line.primaryUserCategoryId,
-      )?.primaryUserCategoryId;
-      return {
-        id: entry.id,
-        financialAccountProfileId: entry.financialAccountProfileId,
-        title: entry.description || "Expense",
-        date: entry.accountingDate,
-        detail:
-          userCategories.map((category) => category.name).join(" · ") ||
-          (entry.policy === "start-tracking@1"
-            ? "Starting amount"
-            : entry.policy === "cash-income@1"
-              ? "Income"
-              : "Expense"),
-        userCategories,
-        ...(primaryUserCategoryId ? { primaryUserCategoryId } : {}),
-        reversed: entry.reversedByEntryId !== undefined,
-        amount: {
-          ...entry.amount,
-          minorUnits:
-            entry.policy === "cash-expense@1"
-              ? -entry.amount.minorUnits
-              : entry.amount.minorUnits,
-        },
-      };
-    });
+    .sort((a, b) => b.accountingDate.localeCompare(a.accountingDate) || b.postedAt - a.postedAt || b.id.localeCompare(a.id))
+    .map(async (stored) => {
+      const reversalId = reversedBy.get(stored.id);
+      const entry = await toPostedJournalEntry(store, context, stored, {
+        replay: false,
+        ...(reversalId ? { reversedByEntryId: reversalId } : {}),
+      });
+      const profile = entry.financialAccountProfileId ? context.profiles.get(entry.financialAccountProfileId) : undefined;
+      return activityRow(entry, profile?.postingAccountId);
+    }));
   return {
     accounts: accounts.map((account) => ({
       financialAccountProfileId: account.financialAccountProfileId,
       name: account.name,
+      nature: account.nature,
       balance: account.balance,
     })),
     rows,

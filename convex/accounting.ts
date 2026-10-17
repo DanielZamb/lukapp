@@ -1,4 +1,8 @@
 import { ConvexError, v, type Infer } from "convex/values";
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
+import { postedHistory as readPostedHistory } from "../src/accounting/queries/postedHistory";
+import { postedEntry as readPostedEntry } from "../src/accounting/queries/postedEntry";
+import { activityRow } from "./historyValidators";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ownerQuery as query } from "./lib/functions";
@@ -35,10 +39,11 @@ import { listUserCategories as listCategories } from "../src/accounting/queries/
 import { postedActivity as readPostedActivity } from "../src/accounting/queries/postedActivity";
 import { categoryTotals as readCategoryTotals } from "../src/accounting/queries/categoryTotals";
 import { createAccountingCore } from "../src/accounting";
-import { convexReadStore } from "./store";
+import { convexReadStore, convexHistoryStore } from "./store";
 import { readPersonalDefaults } from "./personalDefaults";
 import {
   accountBalance,
+  accountNature,
   accountingPeriod,
   catalogAccount,
   financialAccountProfile,
@@ -201,6 +206,29 @@ export const listJournalEntries = query({
     ),
 });
 
+export const postedHistory = query({
+  args: {
+    ...inWorkspace,
+    financialAccountProfileId: v.optional(v.string()),
+    includeReversals: v.optional(v.boolean()),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(activityRow),
+  handler: async (ctx, args) => run(async () => readPostedHistory(convexHistoryStore(ctx.db), {
+    ...args,
+    actor: await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" }),
+  })),
+});
+
+export const postedEntry = query({
+  args: { ...inWorkspace, journalEntryId: v.string() },
+  returns: v.object({ entry: postedJournalEntry, row: activityRow }),
+  handler: async (ctx, args) => run(async () => readPostedEntry(convexReadStore(ctx.db), {
+    ...args,
+    actor: await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" }),
+  })),
+});
+
 export const balances = query({
   args: inWorkspace,
   returns: v.array(accountBalance),
@@ -251,28 +279,17 @@ export const ensurePersonalDefaults = action({
 });
 
 export const postedActivity = query({
-  args: { ...inWorkspace, month: v.string() },
+  args: { ...inWorkspace, month: v.string(), includeRows: v.optional(v.boolean()) },
   returns: v.object({
     accounts: v.array(
       v.object({
         financialAccountProfileId: v.string(),
         name: v.string(),
+        nature: accountNature,
         balance: money,
       }),
     ),
-    rows: v.array(
-      v.object({
-        id: v.string(),
-        financialAccountProfileId: v.optional(v.string()),
-        title: v.string(),
-        date: v.string(),
-        detail: v.string(),
-        userCategories: v.array(v.object({ id: v.string(), name: v.string() })),
-        primaryUserCategoryId: v.optional(v.string()),
-        reversed: v.boolean(),
-        amount: money,
-      }),
-    ),
+    rows: v.array(activityRow),
     monthSpendMinorUnits: v.number(),
   }),
   handler: async (ctx, args) =>

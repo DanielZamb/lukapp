@@ -53,6 +53,8 @@ function readArgs(workspaceId: string) {
     listLedgerAccounts: { workspaceId },
     listCatalogAccounts: { workspaceId },
     listJournalEntries: { workspaceId },
+    postedHistory: { workspaceId, paginationOpts: { cursor: null, numItems: 50 } },
+    postedEntry: { workspaceId, journalEntryId: "foreign" },
     balances: { workspaceId },
     trialBalance: { workspaceId },
     postedActivity: { workspaceId, month: "2026-09" },

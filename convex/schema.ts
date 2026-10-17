@@ -83,6 +83,8 @@ export default defineSchema({
     postedAt: v.number(),
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_date", ["workspaceId", "accountingDate", "postedAt"])
+    .index("by_workspace_profile_date", ["workspaceId", "financialAccountProfileId", "accountingDate", "postedAt"])
     .index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"])
     .index("by_reverses", ["reversesEntryId"]),
   journalLines: defineTable({

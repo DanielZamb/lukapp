@@ -11,6 +11,7 @@ import type {
   StoredWorkspace,
 } from "../src/accounting/types";
 import type { DataModel, Doc, Id, TableNames } from "./_generated/dataModel";
+import type { HistoryStore } from "../src/accounting/queries/postedHistory";
 
 type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
@@ -435,4 +436,29 @@ export function convexReadStore(db: ReadDb): AccountingStore {
 
 export function convexStore(db: WriteDb): AccountingStore {
   return { ...readStore(db), ...writeStore(db) };
+}
+
+export function convexHistoryStore(db: ReadDb): HistoryStore {
+  const store = convexReadStore(db);
+  return {
+    ...store,
+    async pageJournalEntries(input) {
+      const workspaceId = storedId<"workspaces">(input.workspaceId);
+      const profileId = input.financialAccountProfileId;
+      const query = profileId
+        ? db.query("journalEntries").withIndex("by_workspace_profile_date", (q) =>
+            q.eq("workspaceId", workspaceId).eq("financialAccountProfileId", storedId<"financialAccountProfiles">(profileId)))
+        : db.query("journalEntries").withIndex("by_workspace_date", (q) => q.eq("workspaceId", workspaceId));
+      const ordered = query.order("desc");
+      const page = await (input.includeReversals ? ordered : ordered.filter((q) => q.eq(q.field("reversesEntryId"), undefined)))
+        .paginate({ ...input.paginationOpts, numItems: Math.min(50, input.paginationOpts.numItems) });
+      return {
+        ...page,
+        page: await Promise.all(page.page.map(async (doc) => {
+          const lines = await db.query("journalLines").withIndex("by_entry", (q) => q.eq("journalEntryId", doc._id)).collect();
+          return toEntry(doc, lines);
+        })),
+      };
+    },
+  };
 }

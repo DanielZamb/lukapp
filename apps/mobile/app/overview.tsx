@@ -3,13 +3,15 @@ import { ActivityIndicator, Text } from "react-native";
 import {
   usePersonalDefaults,
   usePostedActivity,
+  useRecentActivity,
 } from "../src/features/activity";
 import { ActivityRows } from "../src/features/ActivityRows";
 import { formatMoney } from "../src/features/money";
-import { Header, ListGroup, ListRow, Screen, ui } from "../src/ui/core";
+import { Header, ListGroup, ListRow, Screen, SecondaryButton, ui } from "../src/ui/core";
 
 function Overview({ workspaceId }: { workspaceId: string }) {
   const activity = usePostedActivity(workspaceId);
+  const recent = useRecentActivity(workspaceId, 4);
   return (
     <Screen>
       <Header title="Overview" onBack={() => router.back()} />
@@ -21,13 +23,15 @@ function Overview({ workspaceId }: { workspaceId: string }) {
               <ListRow
                 key={account.financialAccountProfileId}
                 title={account.name}
+                detail={account.nature === "Liability" ? "Owed" : undefined}
                 value={formatMoney(account.balance)}
-                onPress={() => router.push("/account")}
+                onPress={() => router.push({ pathname: "/account", params: { profileId: account.financialAccountProfileId } })}
               />
             ))}
           </ListGroup>
           <Text style={ui.title}>Recent activity</Text>
-          <ActivityRows rows={activity.rows.slice(0, 4)} />
+          {recent ? <ActivityRows rows={recent.page} onEntry={(entryId) => router.push({ pathname: "/entry", params: { entryId } })} /> : <ActivityIndicator />}
+          <SecondaryButton label="View all activity" onPress={() => router.push("/history")} />
         </>
       ) : (
         <ActivityIndicator />

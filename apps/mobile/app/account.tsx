@@ -3,10 +3,11 @@ import { ActivityIndicator, Text } from "react-native";
 import {
   usePersonalDefaults,
   usePostedActivity,
+  useRecentActivity,
 } from "../src/features/activity";
 import { ActivityRows } from "../src/features/ActivityRows";
 import { formatMoney } from "../src/features/money";
-import { Header, PrimaryButton, Screen, ui } from "../src/ui/core";
+import { Header, PrimaryButton, Screen, SecondaryButton, ui } from "../src/ui/core";
 
 function Account({
   workspaceId,
@@ -16,19 +17,20 @@ function Account({
   profileId: string;
 }) {
   const activity = usePostedActivity(workspaceId);
+  const recent = useRecentActivity(workspaceId, 3, profileId);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const account = activity?.accounts.find(
     (a) => a.financialAccountProfileId === profileId,
   );
   return (
     <Screen>
-      <Header title="My money" eyebrow="CASH" onBack={() => router.back()} />
+      <Header title={account?.name ?? "My money"} onBack={() => router.back()} />
       {posted && (
         <Text accessibilityRole="alert" style={ui.body}>
           ✓ Posted
         </Text>
       )}
-      <Text style={ui.muted}>Current balance</Text>
+      <Text style={ui.muted}>{account?.nature === "Liability" ? "Balance owed" : "Current balance"}</Text>
       {account ? (
         <Text adjustsFontSizeToFit numberOfLines={1} style={ui.hero}>
           {formatMoney(account.balance)}
@@ -38,22 +40,23 @@ function Account({
       )}
       <PrimaryButton label="Post money" onPress={() => router.push("/post")} />
       <Text style={ui.title}>Recent activity</Text>
-      {activity && (
+      {recent && (
         <ActivityRows
-          rows={activity.rows
-            .filter((r) => r.financialAccountProfileId === profileId)
-            .slice(0, 3)}
+          rows={recent.page}
+          onEntry={(entryId) => router.push({ pathname: "/entry", params: { entryId } })}
         />
       )}
+      <SecondaryButton label="View all activity" onPress={() => router.push({ pathname: "/history", params: { profileId } })} />
     </Screen>
   );
 }
 export default function AccountRoute() {
   const defaults = usePersonalDefaults();
+  const { profileId } = useLocalSearchParams<{ profileId?: string }>();
   return defaults ? (
     <Account
       workspaceId={defaults.workspace.id}
-      profileId={defaults.financialAccountProfile.id}
+      profileId={profileId ?? defaults.financialAccountProfile.id}
     />
   ) : defaults === null ? (
     <Redirect href="/" />
