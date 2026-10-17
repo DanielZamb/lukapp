@@ -53,8 +53,21 @@ def read_json(path):
     return json.loads(Path(path).read_bytes())
 
 
+def comparison_value(value):
+    """Unify exact integral JSON numbers, preserving negative zero."""
+    if isinstance(value, dict):
+        return {k: comparison_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [comparison_value(v) for v in value]
+    if (isinstance(value, float) and value.is_integer()
+            and (value != 0 or math.copysign(1, value) > 0)):
+        return int(value)
+    return value
+
+
 def rows_equal(left, right):
-    return sorted(encode(row) for row in left) == sorted(encode(row) for row in right)
+    return (sorted(encode(comparison_value(row)) for row in left)
+            == sorted(encode(comparison_value(row)) for row in right))
 
 
 def strings(value):
