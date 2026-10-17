@@ -7,7 +7,7 @@ export default function PlansRoute() {
       <Header title="Plans" onBack={() => router.back()} />
       <ListGroup>
         <ListRow title="Budget" detail="What is left in each category" onPress={() => router.push("/budget")} />
-        <ListRow title="Savings Recovery" detail="Coming later" />
+        <ListRow title="Savings Recovery" detail="Replenish an expense through saving" onPress={() => router.push("/recovery")} />
       </ListGroup>
     </Screen>
   );

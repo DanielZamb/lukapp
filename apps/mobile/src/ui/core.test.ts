@@ -95,3 +95,24 @@ test("ListRow shows chevron only when actionable and marks the last grouped row"
     : rowStyle;
   expect(flatStyle?.borderBottomWidth).toBe(0);
 });
+
+test("primary ActionTile detail text uses full opacity on primaryForeground", async () => {
+  await act(async () => {
+    root = create(
+      createElement(ActionTile, {
+        title: "Drafts",
+        detail: "Coming later",
+        icon: "document-text-outline",
+        primary: true,
+      }),
+    );
+  });
+  const detailNode = root?.root
+    .findAllByType("text")
+    .find((node) => node.children.join("") === "Coming later");
+  const style = detailNode?.props.style;
+  const flatStyle = Array.isArray(style)
+    ? Object.assign({}, ...style.filter(Boolean))
+    : style;
+  expect(flatStyle?.opacity).toBeUndefined();
+});
