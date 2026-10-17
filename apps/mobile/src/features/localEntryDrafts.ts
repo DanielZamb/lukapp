@@ -221,6 +221,28 @@ export function isListedDraft(draft: LocalEntryDraft) {
   return !isRetryOnlyCommand(draft.command);
 }
 
+export function accountingDateOf(draft: LocalEntryDraft) {
+  if (draft.status === "open") return draft.facts.accountingDate;
+  return "accountingDate" in draft.command.payload
+    ? draft.command.payload.accountingDate
+    : undefined;
+}
+
+export function countDraftsInMonth(
+  document: LocalEntryDocument,
+  workspaceId: string,
+  period: { year: number; month: number },
+  now: number,
+) {
+  const prefix = `${String(period.year).padStart(4, "0")}-${String(period.month).padStart(2, "0")}`;
+  return liveDrafts(document, now).filter((draft) => {
+    if (workspaceOf(draft) !== workspaceId || !isListedDraft(draft))
+      return false;
+    const date = accountingDateOf(draft);
+    return date !== undefined && date.startsWith(`${prefix}-`);
+  }).length;
+}
+
 export function findLiveDraft(
   document: LocalEntryDocument,
   id: LocalEntryDraftId,

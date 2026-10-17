@@ -59,14 +59,17 @@ const items: DraftListItem[] = [
 test("empty Drafts copy stays available and resume opens a row", async () => {
   const onResume = vi.fn();
   const onBack = vi.fn();
+  const onCompleteMonth = vi.fn();
   await act(async () => {
     root = create(
       createElement(DraftsScreen, {
         items: [],
         ready: false,
         error: "",
+        completeLabel: "Complete October",
         onBack,
         onResume,
+        onCompleteMonth,
       }),
     );
   });
@@ -78,13 +81,16 @@ test("empty Drafts copy stays available and resume opens a row", async () => {
         items: [],
         ready: true,
         error: "",
+        completeLabel: "Complete October",
         onBack,
         onResume,
+        onCompleteMonth,
       }),
     );
   });
   expect(text()).toContain("No Drafts to review");
   expect(text()).toContain("The Drafts destination remains available.");
+  expect(text()).toContain("Complete October");
   const expires = new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
     new Date(expiresAt),
   );
@@ -94,8 +100,10 @@ test("empty Drafts copy stays available and resume opens a row", async () => {
         items,
         ready: true,
         error: "",
+        completeLabel: "Complete October",
         onBack,
         onResume,
+        onCompleteMonth,
       }),
     );
   });
@@ -104,7 +112,18 @@ test("empty Drafts copy stays available and resume opens a row", async () => {
   expect(text()).toContain(`Retry posting · Expires ${expires}`);
   const resumeRow = root?.root
     .findAllByType("button")
-    .filter((node) => node.props.accessibilityLabel !== "Back")[1];
+    .filter(
+      (node) =>
+        node.props.accessibilityLabel !== "Back" &&
+        node.props.accessibilityLabel !== "Complete October",
+    )[1];
   await act(async () => resumeRow?.props.onPress());
   expect(onResume).toHaveBeenCalledWith("post-1");
+  await act(async () => {
+    root?.root
+      .findAllByType("button")
+      .find((node) => node.props.accessibilityLabel === "Complete October")
+      ?.props.onPress();
+  });
+  expect(onCompleteMonth).toHaveBeenCalledOnce();
 });

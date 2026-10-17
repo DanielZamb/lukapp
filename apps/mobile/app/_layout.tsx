@@ -148,6 +148,7 @@ function Admission() {
       <Stack.Screen name="index" />
       <Stack.Screen name="post" />
       <Stack.Screen name="drafts" />
+      <Stack.Screen name="month-close" />
       <Stack.Screen name="account" />
       <Stack.Screen name="overview" />
       <Stack.Screen name="plans" />
