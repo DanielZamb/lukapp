@@ -1,25 +1,35 @@
 import { chartTemplate } from "../chartOfAccounts";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
-import { requireFunctionalAmount } from "../money";
+import { periodFromAccountingDate } from "../period";
+import { journalContext, toPostedJournalEntry } from "../views";
 import { postJournalEntry } from "../posting";
 import type {
   AccountingClock,
   AccountingStore,
-  CashActivityInput,
+  OpeningPositionInput,
+  PostingPolicy,
 } from "../types";
 
 export async function recordOpeningPosition(
   store: AccountingStore,
   clock: AccountingClock,
-  input: CashActivityInput,
+  input: OpeningPositionInput,
+  policy: Extract<PostingPolicy, "start-tracking@1" | "opening-position@1"> = "opening-position@1",
 ) {
   const workspace = await requireWorkspace(
     store,
     input.workspaceId,
     input.actor,
   );
-  const amount = requireFunctionalAmount(workspace, input.amount);
+  const amount = input.amount.minorUnits;
+  if (!Number.isSafeInteger(amount) || amount < 0)
+    throw new AccountingError("opening_amount_invalid");
+  if (input.amount.currency !== workspace.functionalCurrency)
+    throw new AccountingError("currency_mismatch");
+  periodFromAccountingDate(input.accountingDate);
+  if (!input.idempotencyKey)
+    throw new AccountingError("idempotency_key_required");
   const profile = await store.getProfile(input.financialAccountProfileId);
   if (!profile || profile.workspaceId !== workspace.id) {
     throw new AccountingError("financial_account_profile_not_found");
@@ -32,14 +42,22 @@ export async function recordOpeningPosition(
     (a) => a.code === equityCode,
   );
   if (!equity) throw new AccountingError("ledger_account_not_found");
+  const existing = await store.findJournalEntryByIdempotencyKey(
+    workspace.id,
+    input.idempotencyKey,
+  );
+  if (amount === 0) {
+    if (existing) throw new AccountingError("idempotency_key_conflict");
+    return null;
+  }
   const held = account.normalSide === "Debit";
-  return postJournalEntry(store, clock, {
+  const { entry, replay } = await postJournalEntry(store, clock, {
     actor: input.actor,
     workspaceId: workspace.id,
     draft: {
-      policy: "start-tracking@1",
+      policy,
       accountingDate: input.accountingDate,
-      description: "Starting amount",
+      description: input.description,
       idempotencyKey: input.idempotencyKey,
       financialAccountProfileId: profile.id,
       lines: [
@@ -56,4 +74,14 @@ export async function recordOpeningPosition(
       ],
     },
   });
+  const reversal = await store.findReversalOf(entry.id);
+  return toPostedJournalEntry(
+    store,
+    await journalContext(store, workspace),
+    entry,
+    {
+      replay,
+      ...(reversal ? { reversedByEntryId: reversal.id } : {}),
+    },
+  );
 }

@@ -18,6 +18,7 @@ export type CategoryPickerMode =
   | {
       kind: "posting";
       workspaceId: string;
+      direction?: "in" | "out";
       value: TransactionCategories;
       onChange: (value: TransactionCategories) => void;
     }
@@ -41,7 +42,7 @@ export function useCategoryPicker(
     mode.kind === "posting" ? { workspaceId: mode.workspaceId } : "skip",
   );
   const presets = useQuery(api.accounting.listCategoryPresets, {
-    nature: "Expense",
+    nature: mode.kind === "posting" && mode.direction === "in" ? "Income" : "Expense",
   });
   const create = useAction(api.accounting.createUserCategory);
   const restyle = useAction(api.accounting.restyleUserCategory);
@@ -57,7 +58,7 @@ export function useCategoryPicker(
     editor?.kind === "custom"
       ? {
           name: editor.name,
-          ...(mode.kind === "posting" ? { direction: "out" as const } : {}),
+          ...(mode.kind === "posting" ? { direction: mode.direction ?? "out" } : {}),
         }
       : "skip",
   );
@@ -68,7 +69,7 @@ export function useCategoryPicker(
   const options: CategoryOption[] | undefined =
     mode.kind === "posting"
       ? categories
-          ?.filter((c) => c.nature === "Expense")
+          ?.filter((c) => c.nature === (mode.direction === "in" ? "Income" : "Expense"))
           .map((c) => ({
             key: c.id,
             name: c.name,
@@ -223,7 +224,7 @@ export function useCategoryPicker(
     suggestion?.allowed ??
     (mode.kind === "setup"
       ? ["spend", "receive", "stillMine", "payDebt"]
-      : ["spend", "stillMine", "payDebt"]);
+      : mode.direction === "in" ? ["receive", "stillMine", "payDebt"] : ["spend", "stillMine", "payDebt"]);
   return {
     categories,
     allPresets: presets,

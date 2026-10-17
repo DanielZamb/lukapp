@@ -17,6 +17,7 @@ type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
 type ReadMethods = Omit<AccountingStore, WriteMethod>;
 type WriteMethod =
+  | "insertAccountSetup"
   | "insertCategory"
   | "restyleCategory"
   | "insertWorkspace"
@@ -141,6 +142,17 @@ function readStore(db: ReadDb): ReadMethods {
   }
 
   return {
+    async findAccountSetup(workspaceId, idempotencyKey) {
+      const doc = await db
+        .query("financialAccountSetups")
+        .withIndex("by_workspace_idempotency", (q) =>
+          q.eq("workspaceId", storedId<"workspaces">(workspaceId)).eq("idempotencyKey", idempotencyKey),
+        )
+        .unique();
+      if (!doc) return undefined;
+      const { _id, _creationTime, ...setup } = doc;
+      return setup;
+    },
     async getCategory(categoryId) {
       const id = idFor(db, "userCategories", categoryId);
       const doc = id && (await db.get(id));
@@ -285,6 +297,16 @@ function readStore(db: ReadDb): ReadMethods {
 
 function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
   return {
+    async insertAccountSetup({ openingJournalEntryId, ...setup }) {
+      await db.insert("financialAccountSetups", {
+        ...setup,
+        workspaceId: storedId<"workspaces">(setup.workspaceId),
+        financialAccountProfileId: storedId<"financialAccountProfiles">(setup.financialAccountProfileId),
+        ...(openingJournalEntryId
+          ? { openingJournalEntryId: storedId<"journalEntries">(openingJournalEntryId) }
+          : {}),
+      });
+    },
     async insertCategory(category) {
       const id = await db.insert("userCategories", {
         ...category,
@@ -416,6 +438,7 @@ function unavailable(method: string): never {
 
 function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
   return {
+    insertAccountSetup: async () => unavailable("insertAccountSetup"),
     insertCategory: async () => unavailable("insertCategory"),
     restyleCategory: async () => unavailable("restyleCategory"),
     insertWorkspace: async () => unavailable("insertWorkspace"),

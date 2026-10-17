@@ -75,7 +75,7 @@ test("first concurrent setup converges, including its one opening entry", async 
   ]);
   expect(
     await t.query(api.accounting.listJournalEntries, { workspaceId }),
-  ).toHaveLength(1);
+  ).toMatchObject([{ policy: "start-tracking@1" }]);
 });
 
 test("invalid setup and conflicting retries cannot leave partial or duplicate records", async () => {

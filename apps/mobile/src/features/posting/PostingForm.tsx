@@ -19,7 +19,15 @@ import {
 } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 
+export type EntryType = "normal" | "initial" | "transfer";
 export type PostingFormProps = {
+  entryType?: EntryType;
+  onEntryType?: (value: EntryType) => void;
+  destination?: string;
+  onDestination?: () => void;
+  categoryEnabled?: boolean;
+  hint?: string;
+  postedTitle?: string;
   currency: string;
   amount: string;
   description: string;
@@ -57,7 +65,9 @@ export function PostingForm(props: PostingFormProps) {
         <View accessibilityRole="alert" style={styles.banner}>
           <Ionicons name="checkmark-circle" size={24} color={theme.positive} />
           <View style={{ flex: 1, gap: spacing.xs }}>
-            <Text style={styles.bannerTitle}>Posted</Text>
+            <Text style={styles.bannerTitle}>
+              {props.postedTitle ?? "Posted"}
+            </Text>
             <Text style={styles.detail}>{props.posted}</Text>
           </View>
           <SecondaryButton label="Done" onPress={props.onDone} />
@@ -101,30 +111,37 @@ export function PostingForm(props: PostingFormProps) {
           ]}
         />
       </View>
-      <View style={styles.types}>
-        <View
-          accessibilityRole="radio"
-          accessibilityState={{ checked: true }}
-          style={[styles.chip, { borderColor: theme.primary }]}
-        >
-          <Text style={styles.chipText}>Normal</Text>
-        </View>
-        <Pressable
-          accessibilityRole="radio"
-          accessibilityState={{ checked: false, disabled: true }}
-          disabled
-          style={styles.chip}
-        >
-          <Text style={styles.chipText}>Initial balance</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="radio"
-          accessibilityState={{ checked: false, disabled: true }}
-          disabled
-          style={styles.chip}
-        >
-          <Text style={styles.chipText}>Transfer</Text>
-        </Pressable>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Entry type"
+        style={styles.types}
+      >
+        {(
+          [
+            ["normal", "Normal"],
+            ["initial", "Initial balance"],
+            ["transfer", "Transfer"],
+          ] satisfies Array<[EntryType, string]>
+        ).map(([value, label]) => (
+          <Pressable
+            key={value}
+            accessibilityRole="radio"
+            accessibilityState={{
+              checked: (props.entryType ?? "normal") === value,
+              disabled: !props.editable,
+            }}
+            disabled={!props.editable || !props.onEntryType}
+            onPress={() => props.onEntryType?.(value)}
+            style={[
+              styles.chip,
+              (props.entryType ?? "normal") === value && {
+                borderColor: theme.primary,
+              },
+            ]}
+          >
+            <Text style={styles.chipText}>{label}</Text>
+          </Pressable>
+        ))}
       </View>
       <View style={styles.description}>
         <Text style={styles.descriptionLabel}>Description</Text>
@@ -147,10 +164,23 @@ export function PostingForm(props: PostingFormProps) {
           value={`💰 ${props.place}`}
           onPress={props.editable ? props.onPlace : undefined}
         />
+        {props.entryType === "transfer" && (
+          <ListRow
+            title="To"
+            value={props.destination ?? "Choose a place"}
+            onPress={props.editable ? props.onDestination : undefined}
+            titleStyle={styles.rowTitle}
+            valueStyle={styles.rowValue}
+          />
+        )}
         <ListRow
           title="Category"
-          value={props.category}
-          onPress={props.editable ? props.onCategory : undefined}
+          value={props.categoryEnabled === false ? "Not used" : props.category}
+          onPress={
+            props.editable && props.categoryEnabled !== false
+              ? props.onCategory
+              : undefined
+          }
           titleStyle={styles.rowTitle}
           valueStyle={styles.rowValue}
         />
@@ -165,7 +195,8 @@ export function PostingForm(props: PostingFormProps) {
       <Text style={styles.detail}>
         {props.categoryNeedsPrimary
           ? "Open Category to choose which category is primary."
-          : "Choose up to three categories. Each counts the full amount; your spending total counts it once."}
+          : (props.hint ??
+            "Choose up to three categories. Each counts the full amount; your spending total counts it once.")}
       </Text>
       {props.loading && <ActivityIndicator color={theme.primary} />}
       {!!props.error && (
@@ -175,8 +206,8 @@ export function PostingForm(props: PostingFormProps) {
       )}
       {props.pending && (
         <Text style={styles.detail}>
-          This expense is saved for retry. Its answers stay fixed until posting
-          is confirmed.
+          This entry is saved for retry. Its answers stay fixed until posting is
+          confirmed.
         </Text>
       )}
       <PrimaryButton

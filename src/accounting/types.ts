@@ -65,7 +65,13 @@ export type FinancialAccountProductKind =
   | "loan";
 
 /** Versioned rule that built a Journal Entry, kept as provenance. */
-export type PostingPolicy = "cash-expense@1" | "cash-income@1" | "reversal@1" | "start-tracking@1";
+export type PostingPolicy =
+  | "cash-expense@1"
+  | "cash-income@1"
+  | "reversal@1"
+  | "start-tracking@1"
+  | "opening-position@1"
+  | "account-transfer@1";
 
 export type Workspace = {
   id: string;
@@ -227,6 +233,8 @@ export type AccountingClock = {
 };
 
 export type AccountingStore = {
+  findAccountSetup(workspaceId: string, idempotencyKey: string): Promise<StoredAccountSetup | undefined>;
+  insertAccountSetup(setup: StoredAccountSetup): Promise<void>;
   insertCategory(category: Omit<UserCategory, "id">): Promise<UserCategory>;
   getCategory(categoryId: string): Promise<UserCategory | undefined>;
   listCategories(workspaceId: string): Promise<UserCategory[]>;
@@ -311,6 +319,9 @@ export type AccountingCore = {
   }): Promise<CatalogAccountView[]>;
   recordCashExpense(input: CashActivityInput): Promise<PostedJournalEntry>;
   recordCashIncome(input: CashActivityInput): Promise<PostedJournalEntry>;
+  recordAccountTransfer(input: AccountTransferInput): Promise<PostedJournalEntry>;
+  recordOpeningPosition(input: OpeningPositionInput): Promise<PostedJournalEntry | null>;
+  setupFinancialAccountProfile(input: AccountSetupInput): Promise<AccountSetupResult>;
   reversePostedEntry(input: {
     actor: Actor;
     workspaceId: string;
@@ -350,4 +361,31 @@ export type CashActivityInput = CategoryAssignments & {
   idempotencyKey: string;
   /** Advanced override; otherwise use the category policy or the template default. */
   ledgerAccountCode?: string;
+};
+
+export type OpeningPositionInput = {
+  actor: Actor;
+  workspaceId: string;
+  financialAccountProfileId: string;
+  amount: Money;
+  accountingDate: string;
+  description: string;
+  idempotencyKey: string;
+};
+export type AccountTransferInput = Omit<OpeningPositionInput, "financialAccountProfileId"> & {
+  sourceFinancialAccountProfileId: string;
+  destinationFinancialAccountProfileId: string;
+};
+export type AccountSetupInput = Omit<OpeningPositionInput, "financialAccountProfileId" | "description"> & {
+  name: string;
+  productKind: FinancialAccountProductKind;
+};
+export type StoredAccountSetup = Omit<AccountSetupInput, "actor"> & {
+  financialAccountProfileId: string;
+  openingJournalEntryId?: string;
+};
+export type AccountSetupResult = {
+  financialAccountProfile: FinancialAccountProfile;
+  openingEntry: PostedJournalEntry | null;
+  replay: boolean;
 };

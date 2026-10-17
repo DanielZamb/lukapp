@@ -25,14 +25,14 @@ function category(id: string, code = "same"): Category {
   return { id, workspaceId: "workspace", name: id, normalizedName: id, nature: "Expense", natureSource: "answered",
     classification: { kind: "fallback", version: "test" }, style: { emoji: "🏷️", tone: "primary" }, resolvedPostingAccountCode: code };
 }
-async function open(categories: Category[]) {
+async function open(categories: Category[], direction: "in" | "out" = "out") {
   provider.categories = categories;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let value: TransactionCategories = { ids: [], primaryId: null };
   let picker: ReturnType<typeof useCategoryPicker> | undefined;
   const close = vi.fn();
   function Harness() {
-    picker = useCategoryPicker({ kind: "posting", workspaceId: "workspace", value,
+    picker = useCategoryPicker({ kind: "posting", workspaceId: "workspace", direction, value,
       onChange: (next) => { value = next; root?.update(createElement(Harness)); } }, close);
     return null;
   }
@@ -108,4 +108,17 @@ test("posting waits for all selected classification details and an explicit prim
   expect(canPostCategories(selected, mixed)).toBe(false);
   expect(canPostCategories({ ...selected, primaryId: "outside" }, mixed)).toBe(false);
   expect(canPostCategories({ ...selected, primaryId: "food" }, mixed)).toBe(true);
+});
+
+test("income uses Income categories and receive classification answers in the shared picker", async () => {
+  const salary = { ...category("salary"), nature: "Income" as const };
+  const picker = await open([category("food"), salary], "in");
+  expect(picker.sheet().options?.map((option) => option.key)).toEqual(["salary"]);
+  await act(async () => picker.sheet().onCreate());
+  expect(picker.sheet().allowedAnswers).toEqual(["receive", "stillMine", "payDebt"]);
+  await act(async () => { picker.sheet().onName("Salary"); picker.sheet().onAnswer("receive"); });
+  provider.create.mockResolvedValueOnce({ kind: "category", category: salary });
+  await act(async () => picker.sheet().onConfirm());
+  expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: { kind: "custom", name: "Salary", answer: "receive", style: { emoji: "🏷️", tone: "primary" } } });
+  expect(picker.value()).toEqual({ ids: ["salary"], primaryId: null });
 });

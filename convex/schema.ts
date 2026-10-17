@@ -11,6 +11,16 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  financialAccountSetups: defineTable({
+    workspaceId: v.id("workspaces"),
+    idempotencyKey: v.string(),
+    name: v.string(),
+    productKind,
+    amount: v.object({ currency: v.string(), minorUnits: v.number() }),
+    accountingDate: v.string(),
+    financialAccountProfileId: v.id("financialAccountProfiles"),
+    openingJournalEntryId: v.optional(v.id("journalEntries")),
+  }).index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"]),
   userCategories: defineTable({
     workspaceId: v.id("workspaces"),
     ...categoryFields,

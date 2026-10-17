@@ -1,4 +1,5 @@
 /* The one entry point that writes to the General Ledger. Commands build drafts; this recognizes them. */
+import { requireOpeningDate } from "./openingControl";
 import { AccountingError } from "./errors";
 import { requireCategoryAssignments, sameCategoryAssignments } from "./categories/assignments";
 import { requireWorkspace } from "./membership";
@@ -42,6 +43,7 @@ export async function postJournalEntry(
   await assertPostingAccounts(store, input.workspaceId, draft.lines);
   await assertLinkedRecords(store, input.workspaceId, draft);
   const period = periodFromAccountingDate(draft.accountingDate);
+  await requireOpeningDate(store, input.workspaceId, draft);
   await requirePostablePeriod(store, input.workspaceId, draft.accountingDate);
   const entry = await store.insertJournalEntry({
     ...draft,

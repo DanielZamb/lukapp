@@ -1,4 +1,10 @@
 export const accountingErrorMessages = {
+  transfer_profiles_must_differ: "Choose two different places for an Account Transfer",
+  opening_already_exists: "Reverse the active starting amount before replacing it",
+  activity_before_opening: "Activity cannot be dated before this place's starting date",
+  opening_after_activity: "The starting date cannot follow existing activity",
+  opening_amount_invalid: "Enter zero or a positive starting amount on the account's normal side",
+  account_setup_conflict: "This account setup was already submitted with different answers",
   category_selection_invalid: "Choose each category once using one selection format",
   category_limit_exceeded: "Choose up to three categories, or create one that encompasses the concept",
   category_primary_invalid: "The primary category must belong to the selection",
