@@ -2,7 +2,7 @@
 
 This slice targets L1 on `frontend/u01-first-expense-20261017`, based on `fcb3065858de587734829d34ca4a6b4cb8d28d9e`. The source identifier is the commit containing this file, obtained with `git rev-parse HEAD`. App identity is `com.lukapp.u01.dev`, version `0.1.0`, iOS build `1`, Android version code `1`. Expo SDK 55 and React Native 0.83.10 are pinned in the lockfile.
 
-Local checks passed: `pnpm test` with 111 tests, `pnpm typecheck` for backend and mobile, and native Hermes exports for iOS and Android. These are local regression and bundle evidence. No native binary, installation, actual Clerk admission, deployed source match, or UI acceptance is claimed. CocoaPods was absent. Installing it through Homebrew failed with `undefined method '[]' for nil` in `Utils::Bottles.load_tab`. Native prebuild completed without installing pods. No simulator was opened or driven.
+Local checks passed: `pnpm test` with 111 tests, `pnpm typecheck` for backend and mobile, and native Hermes exports for iOS and Android. These are local regression and bundle evidence. The original L1 checkpoint had no native binary. The correction now has an Android debug APK, recorded below. Installation, actual Clerk admission, deployed source match, and UI acceptance remain open. CocoaPods was absent. Installing it through Homebrew failed with `undefined method '[]' for nil` in `Utils::Bottles.load_tab`. Native prebuild completed without installing pods. No simulator was opened or driven.
 
 The coordinator owns integration and development deployment. No production work, deployment, push, environment update, or device interaction occurred here. `convex codegen` generated local bindings using its documented read-only analysis operation. Its progress text includes “Uploading functions”; the CLI codegen implementation explicitly sets a dry run and does not deploy source.
 
@@ -98,3 +98,21 @@ Categories and category creation, Notification Intake, Drafts, Batch, Plans, pur
 The One/Batch pill track and Normal/Initial balance/Transfer chips follow the SEN-27 fixture. Batch, Initial balance, Transfer, and Category are deferred; no category module or picker is implemented here.
 
 `PostingForm.fixtures.ts` supplies empty and acknowledged values for independent layout inspection under a UI-only host. Supply callbacks from that host; no authentication or accounting provider is required to render the form. Local correction checks cover acknowledgement reset, Done dismissal, a new entry with a new key, retry of an uncertain response, restoration, and double-submit protection.
+
+
+## Android build receipt
+
+The posting correction is committed at `dc90360b99a4e38f79320d6e6b3c64ea9dc7a9ef`. At that clean source commit, Android prebuild and native debug assembly both exited zero. The build ran with the installed Android SDK, JDK 21.0.10 from Android Studio, Gradle 9.0.0, build tools 36.0.0, compile SDK 36, and NDK 27.1.12297006.
+
+From the repository root, reproduce the build without device interaction:
+
+```sh
+node scripts/mobile-env.mjs /Users/zambamon/Work/finance-tracker-v2/.env.local
+pnpm --filter @lukapp/mobile exec expo prebuild --platform android --no-install
+cd apps/mobile/android
+JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' ANDROID_HOME='/Users/zambamon/Library/Android/sdk' ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a --console=plain
+```
+
+The artifact is `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk` in the U01 worktree. SHA-256 is `82fe673bb664148852874431336aa411431722bdc48e263f63d0fd4f65e6a30b`. `aapt dump badging` confirms `com.lukapp.u01.dev`, version `0.1.0`, version code `1`, debuggable, minimum SDK 24, target SDK 36, and `arm64-v8a` native code. Build log: `/tmp/u01-android-build.log`. Prebuild log: `/tmp/u01-android-prebuild.log`.
+
+This development client loads JavaScript from Metro. Start Metro from the same source checkout with `pnpm mobile`. The matching iOS and Android Hermes exports passed, along with 111 regression tests and both typechecks. Native library compilation does not verify Clerk admission or the UI journey. No APK installation, device launch, deployment, allowlist change, or production action occurred. iOS native build, real-provider acceptance, and the previously listed security/device gaps remain open.
