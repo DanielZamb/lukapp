@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { api } from "./api";
 import { parseMoney } from "./money";
-import { Choice, Header, PrimaryButton, theme, ui } from "../ui/core";
+import { Choice, Field, Header, PrimaryButton, theme, ui } from "../ui/core";
 import { spacing } from "../ui/tokens";
 
 export function Setup({ onComplete }: { onComplete: () => void }) {
@@ -111,10 +111,9 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
           </View>
           <View style={ui.section}>
             <Text style={ui.label}>4 · STARTING AMOUNT</Text>
-            <Text style={ui.muted}>
-              How much do you hold today? Use a comma for cents.
-            </Text>
-            <BottomSheetTextInput
+            <Field
+              label="Starting amount"
+              helperText="How much do you hold today? Use a comma for cents."
               accessibilityLabel="Starting amount"
               value={starting}
               onChangeText={(value) => {
@@ -123,7 +122,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
               }}
               editable={!busy}
               keyboardType="decimal-pad"
-              style={ui.input}
+              InputComponent={BottomSheetTextInput}
             />
           </View>
           {error && (
@@ -132,8 +131,8 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
             </Text>
           )}
           <PrimaryButton
-            label={busy ? "Setting up…" : "Start tracking"}
-            disabled={busy}
+            label="Start tracking"
+            pending={busy}
             onPress={() => void finish()}
           />
         </BottomSheetScrollView>
