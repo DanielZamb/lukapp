@@ -24,6 +24,7 @@ export function useLocalEntryDrafts(input: {
   monthCount: number | null;
   items: DraftListItem[];
   error: string;
+  countMonth: (period: { year: number; month: number }) => Promise<number>;
   port: LocalEntryDraftsPort;
 } {
   const lease = useLocalInputLease();
@@ -31,6 +32,14 @@ export function useLocalEntryDrafts(input: {
   const [monthCount, setMonthCount] = useState<number | null>(null);
   const [items, setItems] = useState<DraftListItem[]>([]);
   const [error, setError] = useState("");
+  const monthKey = input.month
+    ? `${input.month.year}-${input.month.month}`
+    : "";
+  const [countedMonth, setCountedMonth] = useState(monthKey);
+  if (monthKey !== countedMonth) {
+    setCountedMonth(monthKey);
+    setMonthCount(null);
+  }
   const refresh = useCallback(async () => {
     try {
       const document = await syncLocalEntryDocument(lease, input.subject);
@@ -52,6 +61,27 @@ export function useLocalEntryDrafts(input: {
     useCallback(() => {
       void refresh();
     }, [refresh]),
+  );
+  const countMonth = useCallback(
+    async (period: { year: number; month: number }) => {
+      const found = await mutateLocalEntryDocument(
+        lease,
+        input.subject,
+        (document, now, dirty) => ({
+          document,
+          write: dirty,
+          result: countDraftsInMonth(document, input.workspaceId, period, now),
+        }),
+      );
+      if (
+        input.month &&
+        input.month.year === period.year &&
+        input.month.month === period.month
+      )
+        setMonthCount(found);
+      return found;
+    },
+    [input.subject, input.workspaceId, input.month?.year, input.month?.month, lease],
   );
   const port = useMemo<LocalEntryDraftsPort>(
     () => ({
@@ -78,5 +108,5 @@ export function useLocalEntryDrafts(input: {
     }),
     [input.subject, input.workspaceId, lease, refresh],
   );
-  return { count, monthCount, items, error, port };
+  return { count, monthCount, items, error, countMonth, port };
 }

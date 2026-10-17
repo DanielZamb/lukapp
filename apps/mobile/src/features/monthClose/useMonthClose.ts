@@ -7,21 +7,28 @@ import {
 
 export type MonthClosePhase =
   | { kind: "review" }
-  | { kind: "confirm" }
-  | { kind: "locking" }
-  | { kind: "failed"; message: string }
-  | { kind: "closed" };
+  | { kind: "confirm"; period: ClosePeriod }
+  | { kind: "locking"; period: ClosePeriod }
+  | { kind: "failed"; period: ClosePeriod; message: string }
+  | { kind: "closed"; period: ClosePeriod };
 
 export type MonthCloseTransport = {
   lock: (input: {
     workspaceId: string;
     period: ClosePeriod;
   }) => Promise<void>;
+  draftsInMonth: (period: ClosePeriod) => Promise<number>;
   reportFailure: (error: unknown) => boolean;
 };
 
+function samePeriod(left: ClosePeriod, right: ClosePeriod) {
+  return left.year === right.year && left.month === right.month;
+}
+
 function openingPhase(readiness: MonthCloseReadiness | null): MonthClosePhase {
-  return readiness?.alreadyLocked ? { kind: "closed" } : { kind: "review" };
+  return readiness?.alreadyLocked
+    ? { kind: "closed", period: readiness.period }
+    : { kind: "review" };
 }
 
 export function useMonthClose(
@@ -47,31 +54,47 @@ export function useMonthClose(
     };
   }, [workspaceId, transport]);
   useLayoutEffect(() => {
-    if (readiness?.alreadyLocked) change({ kind: "closed" });
-    else if (
+    const now = current.current;
+    if (now.kind === "review") {
+      if (readiness?.alreadyLocked)
+        change({ kind: "closed", period: readiness.period });
+      return;
+    }
+    if (
+      (now.kind === "confirm" || now.kind === "failed") &&
       readiness &&
-      !readiness.canLock &&
-      current.current.kind !== "locking" &&
-      current.current.kind !== "closed"
+      samePeriod(readiness.period, now.period) &&
+      !readiness.canLock
     )
-      change({ kind: "review" });
-  }, [readiness?.alreadyLocked, readiness?.canLock]);
+      change(
+        readiness.alreadyLocked
+          ? { kind: "closed", period: now.period }
+          : { kind: "review" },
+      );
+  }, [readiness?.alreadyLocked, readiness?.canLock, readiness?.period]);
 
   async function confirm() {
     const mounted = lifetime.current;
+    const now = current.current;
     if (
       !mounted.active ||
-      !readiness?.canLock ||
-      (current.current.kind !== "confirm" && current.current.kind !== "failed")
+      (now.kind !== "confirm" && now.kind !== "failed")
     )
       return;
-    change({ kind: "locking" });
+    const period = now.period;
+    change({ kind: "locking", period });
     try {
-      await transport.lock({ workspaceId, period: readiness.period });
-      if (mounted.active) change({ kind: "closed" });
+      const drafts = await transport.draftsInMonth(period);
+      if (!mounted.active) return;
+      if (drafts > 0) {
+        change({ kind: "review" });
+        return;
+      }
+      await transport.lock({ workspaceId, period });
+      if (mounted.active) change({ kind: "closed", period });
     } catch (error) {
       if (!mounted.active || transport.reportFailure(error)) return;
-      change({ kind: "failed", message: lockFailureMessage(error) });
+      change({ kind: "failed", period, message: lockFailureMessage(error) });
     }
   }
 
@@ -83,7 +106,7 @@ export function useMonthClose(
         readiness?.canLock &&
         current.current.kind === "review"
       )
-        change({ kind: "confirm" });
+        change({ kind: "confirm", period: readiness.period });
     },
     cancel: () => {
       if (lifetime.current.active && current.current.kind === "confirm")

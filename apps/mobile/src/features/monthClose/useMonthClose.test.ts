@@ -24,6 +24,7 @@ function ready(
 function transport() {
   return {
     lock: vi.fn<MonthCloseTransport["lock"]>(async () => undefined),
+    draftsInMonth: vi.fn(async () => 0),
     reportFailure: vi.fn(() => false),
   };
 }
@@ -76,7 +77,7 @@ test("Candidates warn but still allow one lock of the month", async () => {
   const page = await open(api, ready({ candidateCount: 2 }));
   expect(page.current().phase).toEqual({ kind: "review" });
   await act(async () => page.current().request());
-  expect(page.current().phase).toEqual({ kind: "confirm" });
+  expect(page.current().phase).toEqual({ kind: "confirm", period: october });
   await act(async () => page.current().cancel());
   expect(page.current().phase).toEqual({ kind: "review" });
   await act(async () => page.current().request());
@@ -87,7 +88,7 @@ test("Candidates warn but still allow one lock of the month", async () => {
     workspaceId: "workspace",
     period: october,
   });
-  expect(page.current().phase).toEqual({ kind: "closed" });
+  expect(page.current().phase).toEqual({ kind: "closed", period: october });
 });
 
 test("an uncertain lock retries the same month and a second success is still closed", async () => {
@@ -100,6 +101,7 @@ test("an uncertain lock retries the same month and a second success is still clo
   });
   expect(page.current().phase).toEqual({
     kind: "failed",
+    period: october,
     message: "Could not confirm the close. Retry to lock the same month safely.",
   });
   await act(async () => {
@@ -109,7 +111,7 @@ test("an uncertain lock retries the same month and a second success is still clo
     { workspaceId: "workspace", period: october },
     { workspaceId: "workspace", period: october },
   ]);
-  expect(page.current().phase).toEqual({ kind: "closed" });
+  expect(page.current().phase).toEqual({ kind: "closed", period: october });
 });
 
 test("a month that is already locked opens finished and never calls lock", async () => {
@@ -118,7 +120,7 @@ test("a month that is already locked opens finished and never calls lock", async
     api,
     ready({ periodStatus: "locked", draftCount: 1 }),
   );
-  expect(page.current().phase).toEqual({ kind: "closed" });
+  expect(page.current().phase).toEqual({ kind: "closed", period: october });
   await act(async () => page.current().request());
   await act(async () => {
     await page.current().confirm();
@@ -126,11 +128,50 @@ test("a month that is already locked opens finished and never calls lock", async
   expect(api.lock).not.toHaveBeenCalled();
 });
 
+test("a retry after midnight still locks the month that was requested", async () => {
+  const api = transport();
+  api.lock.mockRejectedValueOnce(new Error("Lost response"));
+  const page = await open(api, ready());
+  await act(async () => page.current().request());
+  await act(async () => {
+    await page.current().confirm();
+  });
+  await page.change(
+    evaluateMonthClose({
+      period: { year: 2026, month: 11 },
+      periodStatus: "open",
+      draftCount: 0,
+      candidateCount: 0,
+    }),
+  );
+  await act(async () => {
+    await page.current().confirm();
+  });
+  expect(api.lock.mock.calls.map(([input]) => input)).toEqual([
+    { workspaceId: "workspace", period: october },
+    { workspaceId: "workspace", period: october },
+  ]);
+  expect(page.current().phase).toEqual({ kind: "closed", period: october });
+});
+
+test("a draft written while the screen is open blocks the lock", async () => {
+  const api = transport();
+  api.draftsInMonth.mockResolvedValueOnce(1);
+  const page = await open(api, ready());
+  await act(async () => page.current().request());
+  await act(async () => {
+    await page.current().confirm();
+  });
+  expect(api.draftsInMonth).toHaveBeenCalledWith(october);
+  expect(api.lock).not.toHaveBeenCalled();
+  expect(page.current().phase).toEqual({ kind: "review" });
+});
+
 test("a draft that appears before lock returns the review and device denial stays locking", async () => {
   const api = transport();
   const page = await open(api);
   await act(async () => page.current().request());
-  expect(page.current().phase).toEqual({ kind: "confirm" });
+  expect(page.current().phase).toEqual({ kind: "confirm", period: october });
   await page.change(ready({ draftCount: 1 }));
   expect(page.current().phase).toEqual({ kind: "review" });
   const denial = new ConvexError({ code: "device_revoked", wipeLocalInput: true });
@@ -142,5 +183,5 @@ test("a draft that appears before lock returns the review and device denial stay
     await page.current().confirm();
   });
   expect(api.reportFailure).toHaveBeenCalledWith(denial);
-  expect(page.current().phase).toEqual({ kind: "locking" });
+  expect(page.current().phase).toEqual({ kind: "locking", period: october });
 });

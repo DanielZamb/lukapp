@@ -6,13 +6,12 @@ import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Header, Screen, ui } from "../../ui/core";
 import { api } from "../api";
 import { useLocalEntryDrafts } from "../useLocalEntryDrafts";
-import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import { MonthCloseScreen } from "./MonthCloseScreen";
 import {
   evaluateMonthClose,
   monthLabel,
-  periodFromMonthKey,
   periodStatusOf,
+  type ClosePeriod,
   type PeriodStatus,
 } from "./model";
 import { noPendingCandidates } from "./pendingCandidates";
@@ -22,22 +21,24 @@ const pendingCandidates = noPendingCandidates();
 
 export function MonthClose({
   workspaceId,
-  timeZone,
+  requestedPeriod,
   currentPeriod,
   subject,
   onBack,
   onReviewDrafts,
 }: {
   workspaceId: string;
-  timeZone: string;
+  requestedPeriod: ClosePeriod;
   currentPeriod: { year: number; month: number; status: PeriodStatus };
   subject: string;
   onBack: () => void;
   onReviewDrafts: () => void;
 }) {
-  const calendar = useWorkspaceCalendar(timeZone);
-  const period = periodFromMonthKey(calendar.month);
-  const drafts = useLocalEntryDrafts({ subject, workspaceId, month: period });
+  const drafts = useLocalEntryDrafts({
+    subject,
+    workspaceId,
+    month: requestedPeriod,
+  });
   const lock = useAction(api.accounting.lockAccountingPeriod);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
@@ -46,21 +47,22 @@ export function MonthClose({
       lock: async (input) => {
         await lock(input);
       },
+      draftsInMonth: drafts.countMonth,
       reportFailure,
     }),
-    [lock, reportFailure],
+    [lock, drafts.countMonth, reportFailure],
   );
   const readiness =
     drafts.monthCount === null
       ? null
       : evaluateMonthClose({
-          period,
-          periodStatus: periodStatusOf(period, currentPeriod),
+          period: requestedPeriod,
+          periodStatus: periodStatusOf(requestedPeriod, currentPeriod),
           draftCount: drafts.monthCount,
-          candidateCount: pendingCandidates.countForMonth(period),
+          candidateCount: pendingCandidates.countForMonth(requestedPeriod),
         });
   const close = useMonthClose(workspaceId, readiness, transport);
-  const title = `Complete ${monthLabel(period)}`;
+  const title = `Complete ${monthLabel(requestedPeriod)}`;
   if (drafts.error)
     return (
       <Screen>

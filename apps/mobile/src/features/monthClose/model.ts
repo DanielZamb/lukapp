@@ -1,7 +1,7 @@
 import { ConvexError } from "convex/values";
 
 export type ClosePeriod = { year: number; month: number };
-export type PeriodStatus = "open" | "locked" | "not_opened";
+export type PeriodStatus = "open" | "locked" | "not_opened" | "mismatch";
 
 export type MonthCloseReadiness = {
   period: ClosePeriod;
@@ -20,6 +20,10 @@ export function periodFromMonthKey(month: string): ClosePeriod {
   return { year: Number(match[1]), month: Number(match[2]) };
 }
 
+export function monthKey(period: ClosePeriod) {
+  return `${String(period.year).padStart(4, "0")}-${String(period.month).padStart(2, "0")}`;
+}
+
 export function monthLabel(period: ClosePeriod) {
   return new Intl.DateTimeFormat("en", {
     month: "long",
@@ -33,7 +37,7 @@ export function periodStatusOf(
 ): PeriodStatus {
   return current.year === period.year && current.month === period.month
     ? current.status
-    : "not_opened";
+    : "mismatch";
 }
 
 export function evaluateMonthClose(input: {
@@ -43,7 +47,8 @@ export function evaluateMonthClose(input: {
   candidateCount: number;
 }): MonthCloseReadiness {
   const alreadyLocked = input.periodStatus === "locked";
-  const blocked = !alreadyLocked && input.draftCount > 0;
+  const mismatched = input.periodStatus === "mismatch";
+  const blocked = !alreadyLocked && !mismatched && input.draftCount > 0;
   return {
     period: input.period,
     monthLabel: monthLabel(input.period),
@@ -52,7 +57,7 @@ export function evaluateMonthClose(input: {
     candidateCount: input.candidateCount,
     blocked,
     alreadyLocked,
-    canLock: !blocked && !alreadyLocked,
+    canLock: !blocked && !alreadyLocked && !mismatched,
   };
 }
 
@@ -90,6 +95,10 @@ export function closedTitle(period: ClosePeriod) {
 
 export function closedDetail() {
   return "The month is locked. Balances and posted activity did not change because of the close itself.";
+}
+
+export function mismatchDetail() {
+  return "This device and the workspace do not agree on the current month yet.";
 }
 
 export function lockFailureMessage(error: unknown) {

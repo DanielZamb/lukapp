@@ -3,33 +3,34 @@ import { Redirect, router } from "expo-router";
 import { ActivityIndicator } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { DraftsScreen } from "../src/features/DraftsScreen";
-import { footerLabel, periodFromMonthKey } from "../src/features/monthClose/model";
+import { footerLabel, monthKey } from "../src/features/monthClose/model";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
-import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { Screen } from "../src/ui/core";
 
 function Drafts({
   subject,
   workspaceId,
-  timeZone,
+  currentPeriod,
 }: {
   subject: string;
   workspaceId: string;
-  timeZone: string;
+  currentPeriod: { year: number; month: number };
 }) {
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
-  const calendar = useWorkspaceCalendar(timeZone);
+  const period = { year: currentPeriod.year, month: currentPeriod.month };
   return (
     <DraftsScreen
       items={drafts.items}
       ready={drafts.count !== null}
       error={drafts.error}
-      completeLabel={footerLabel(periodFromMonthKey(calendar.month))}
+      completeLabel={footerLabel(period)}
       onBack={() => router.back()}
       onResume={(id) =>
         router.push({ pathname: "/post", params: { draftId: id } })
       }
-      onCompleteMonth={() => router.push("/month-close")}
+      onCompleteMonth={() =>
+        router.push({ pathname: "/month-close", params: { month: monthKey(period) } })
+      }
     />
   );
 }
@@ -41,7 +42,7 @@ export default function DraftsRoute() {
     <Drafts
       subject={userId}
       workspaceId={defaults.workspace.id}
-      timeZone={defaults.workspace.timeZone}
+      currentPeriod={defaults.workspace.currentAccountingPeriod}
     />
   ) : defaults === null ? (
     <Redirect href="/" />

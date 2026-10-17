@@ -103,7 +103,7 @@ test("Candidates stay a warning and the finished state uses ConfirmationScreen",
     root?.update(
       createElement(MonthCloseScreen, {
         readiness: warned,
-        phase: { kind: "confirm" },
+        phase: { kind: "confirm", period: { year: 2026, month: 10 } },
         ...handlers,
       }),
     );
@@ -117,7 +117,7 @@ test("Candidates stay a warning and the finished state uses ConfirmationScreen",
     root?.update(
       createElement(MonthCloseScreen, {
         readiness: warned,
-        phase: { kind: "closed" },
+        phase: { kind: "closed", period: { year: 2026, month: 10 } },
         ...handlers,
       }),
     );
@@ -128,4 +128,16 @@ test("Candidates stay a warning and the finished state uses ConfirmationScreen",
   );
   await act(async () => button("Back to Drafts").props.onPress());
   expect(handlers.onReviewDrafts).toHaveBeenCalledOnce();
+});
+
+test("the finished title keeps the month that was locked after the calendar rolls", async () => {
+  const november = evaluateMonthClose({
+    period: { year: 2026, month: 11 },
+    periodStatus: "open",
+    draftCount: 0,
+    candidateCount: 0,
+  });
+  await show(november, { kind: "closed", period: { year: 2026, month: 10 } });
+  expect(text()).toContain("October is complete");
+  expect(text()).not.toContain("November is complete");
 });

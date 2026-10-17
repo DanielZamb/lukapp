@@ -67,6 +67,29 @@ test("a locked month is already finished even when leftover drafts remain", () =
   });
 });
 
+test("a device month that is not the workspace month cannot lock", () => {
+  const september = { year: 2026, month: 9 };
+  const status = periodStatusOf(september, {
+    year: 2026,
+    month: 10,
+    status: "locked",
+  });
+  expect(status).toBe("mismatch");
+  expect(
+    evaluateMonthClose({
+      period: september,
+      periodStatus: status,
+      draftCount: 0,
+      candidateCount: 0,
+    }),
+  ).toMatchObject({
+    periodStatus: "mismatch",
+    canLock: false,
+    alreadyLocked: false,
+    blocked: false,
+  });
+});
+
 test("the inbox footer names the workspace month and Candidates stay at zero until U08", () => {
   expect(periodFromMonthKey("2026-10")).toEqual(october);
   expect(monthLabel(october)).toBe("October");
@@ -76,6 +99,6 @@ test("the inbox footer names the workspace month and Candidates stay at zero unt
     periodStatusOf(october, { year: 2026, month: 10, status: "open" }),
   ).toBe("open");
   expect(
-    periodStatusOf(october, { year: 2026, month: 9, status: "locked" }),
+    periodStatusOf(october, { year: 2026, month: 10, status: "not_opened" }),
   ).toBe("not_opened");
 });
