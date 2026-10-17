@@ -70,7 +70,7 @@ function Home({
           detail="Coming later"
           icon="notifications-outline"
         />
-        <ActionTile title="Plans" detail="Coming later" icon="layers-outline" />
+        <ActionTile title="Plans" detail="Budget & recovery" icon="layers-outline" onPress={() => router.push("/plans")} />
         <ActionTile
           icon="pie-chart-outline"
           title="Overview"

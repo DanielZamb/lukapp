@@ -2,6 +2,7 @@ import { categoryFields } from "./categoryValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { mobilePlatform } from "./lib/securityValues";
+import { revisionFields } from "./budgetValues";
 import {
   accountNature,
   normalSide,
@@ -11,6 +12,9 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  budgetLimitRevisions: defineTable(revisionFields)
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"]),
   userCategories: defineTable({
     workspaceId: v.id("workspaces"),
     ...categoryFields,

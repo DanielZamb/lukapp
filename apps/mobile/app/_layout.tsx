@@ -149,6 +149,8 @@ function Admission() {
       <Stack.Screen name="post" />
       <Stack.Screen name="account" />
       <Stack.Screen name="overview" />
+      <Stack.Screen name="plans" />
+      <Stack.Screen name="budget" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="oauth-callback" />
     </Stack>
