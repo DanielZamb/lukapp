@@ -15,13 +15,13 @@ const modules = import.meta.glob([
 ]);
 
 test("concurrent setup and retries return one canonical Personal workspace and zero-balance cash profile", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   expect(await t.query(api.accounting.personalDefaults, {})).toBeNull();
   const args = { functionalCurrency: "COP", startingMinorUnits: 0 };
-  const first = await t.mutation(api.accounting.ensurePersonalDefaults, args);
+  const first = await t.action(api.accounting.ensurePersonalDefaults, args);
   const retries = await Promise.all(
     Array.from({ length: 5 }, () =>
-      t.mutation(api.accounting.ensurePersonalDefaults, args),
+      t.action(api.accounting.ensurePersonalDefaults, args),
     ),
   );
   expect(retries).toEqual(Array(5).fill(first));
@@ -49,10 +49,10 @@ test("concurrent setup and retries return one canonical Personal workspace and z
 });
 
 test("first concurrent setup converges, including its one opening entry", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const results = await Promise.all(
     Array.from({ length: 3 }, () =>
-      t.mutation(api.accounting.ensurePersonalDefaults, {
+      t.action(api.accounting.ensurePersonalDefaults, {
         functionalCurrency: "COP",
         startingMinorUnits: 1000000,
       }),
@@ -79,32 +79,32 @@ test("first concurrent setup converges, including its one opening entry", async 
 });
 
 test("invalid setup and conflicting retries cannot leave partial or duplicate records", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   for (const args of [
     { functionalCurrency: "XXX", startingMinorUnits: 0 },
     { functionalCurrency: "COP", startingMinorUnits: -1 },
     { functionalCurrency: "COP", startingMinorUnits: 1.5 },
   ]) {
     await expect(
-      t.mutation(api.accounting.ensurePersonalDefaults, args),
+      t.action(api.accounting.ensurePersonalDefaults, args),
     ).rejects.toThrow();
     expect(await t.query(api.accounting.personalDefaults, {})).toBeNull();
     expect(await t.run((ctx) => ctx.db.query("workspaces").collect())).toEqual(
       [],
     );
   }
-  await t.mutation(api.accounting.ensurePersonalDefaults, {
+  await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
   });
   await expect(
-    t.mutation(api.accounting.ensurePersonalDefaults, {
+    t.action(api.accounting.ensurePersonalDefaults, {
       functionalCurrency: "USD",
       startingMinorUnits: 0,
     }),
   ).rejects.toMatchObject({ data: { code: "setup_conflict" } });
   await expect(
-    t.mutation(api.accounting.ensurePersonalDefaults, {
+    t.action(api.accounting.ensurePersonalDefaults, {
       functionalCurrency: "COP",
       startingMinorUnits: 1,
     }),
@@ -112,20 +112,20 @@ test("invalid setup and conflicting retries cannot leave partial or duplicate re
 });
 
 test("first expense reloads from the ledger, replays once, rejects changed payloads and hides reversal rows", async () => {
-  const t = convexAccounting(modules);
-  const defaults = await t.mutation(api.accounting.ensurePersonalDefaults, {
+  const t = await convexAccounting(modules);
+  const defaults = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
   });
   const workspaceId = defaults.workspace.id;
   const payload = groceries(workspaceId, defaults.financialAccountProfile.id);
-  const first = await t.mutation(api.accounting.recordCashExpense, payload);
+  const first = await t.action(api.accounting.recordCashExpense, payload);
   expect(first.postedBy).toBe("owner-1");
   expect(
-    await t.mutation(api.accounting.recordCashExpense, payload),
+    await t.action(api.accounting.recordCashExpense, payload),
   ).toMatchObject({ id: first.id, replay: true });
   await expect(
-    t.mutation(api.accounting.recordCashExpense, {
+    t.action(api.accounting.recordCashExpense, {
       ...payload,
       description: "Changed",
     }),
@@ -146,7 +146,7 @@ test("first expense reloads from the ledger, replays once, rejects changed paylo
       reversed: false,
     },
   ]);
-  await t.mutation(api.accounting.reversePostedEntry, {
+  await t.action(api.accounting.reversePostedEntry, {
     workspaceId,
     journalEntryId: first.id,
     idempotencyKey: "reverse",
@@ -162,8 +162,8 @@ test("first expense reloads from the ledger, replays once, rejects changed paylo
 });
 
 test("ordinary expense rejects foreign IDs, invalid amounts, dates, currency and a locked period without posting", async () => {
-  const t = convexAccounting(modules);
-  const defaults = await t.mutation(api.accounting.ensurePersonalDefaults, {
+  const t = await convexAccounting(modules);
+  const defaults = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP",
     startingMinorUnits: 0,
   });
@@ -184,11 +184,11 @@ test("ordinary expense rejects foreign IDs, invalid amounts, dates, currency and
     { ...payload, accountingDate: "2026-02-30" },
   ])
     await expect(
-      t.mutation(api.accounting.recordCashExpense, bad),
+      t.action(api.accounting.recordCashExpense, bad),
     ).rejects.toThrow();
   await lock(t, defaults.workspace.id, { year: 2026, month: 9 });
   await expect(
-    t.mutation(api.accounting.recordCashExpense, payload),
+    t.action(api.accounting.recordCashExpense, payload),
   ).rejects.toMatchObject({ data: { code: "locked_period" } });
   expect(
     await t.query(api.accounting.listJournalEntries, {

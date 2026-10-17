@@ -6,7 +6,7 @@ import {
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
-import { useMutation } from "convex/react";
+import { useAction } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { api } from "./api";
@@ -17,7 +17,7 @@ import { spacing } from "../ui/tokens";
 export function Setup({ onComplete }: { onComplete: () => void }) {
   const recordInteraction = useLocalEntryInteraction();
   const sheet = useRef<BottomSheetModal>(null);
-  const ensure = useMutation(api.accounting.ensurePersonalDefaults);
+  const ensure = useAction(api.accounting.ensurePersonalDefaults);
   const [categories, setCategories] = useState<CategorySelection[]>([]);
   const [currency, setCurrency] = useState("COP");
   const [starting, setStarting] = useState("0");

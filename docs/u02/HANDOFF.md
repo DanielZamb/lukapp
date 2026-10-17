@@ -1,12 +1,12 @@
 # U02 category slice
 
-This local slice adds server categories to the expense editor from U01 correction `dc90360`. It implements the local SEN-71 path and part of SEN-60. It does not establish runtime acceptance or close either ticket.
+This local slice adds server categories to the expense editor from U01 correction `dc90360`, then migrates all accounting writes through tested G01 session/device guards. It implements the local SEN-71 path and part of SEN-60. It does not establish runtime acceptance or close either ticket.
 
 The source requirements are the current SEN-71, SEN-60, SEN-57, and SEN-58 descriptions, ADR-0086, the original prototype, and the reviewed frontend design-system HTML. SEN-27's August 28 comment requires up to three categories. No allocation or counting rule is recorded. The current form explicitly labels its one-category limit. The coordinator is awaiting the user's choice of primary category with labels, split amounts, or overlapping full amounts.
 
 ## Public API flow
 
-All calls retain the existing `ownerQuery` and `ownerMutation` adapters. Workspace operations also check membership. G01's provisional challenge/action contract has not been adopted.
+All protected writes now use G01's tested thin-sid boundary from `f4e66c5`. Public actions verify the live Clerk session, then call internal mutations that check current device, membership, and operation permission in the same transaction. Reads remain reactive queries with local current guards. [The write migration receipt](WRITE-MIGRATION.md) records all endpoints, permissions, and remaining cleanup gaps. No challenge or attestation API is used.
 
 The following calls use the app's normally authenticated Convex client. This sequence describes the public contract; it is not a real-provider execution receipt.
 
@@ -18,7 +18,7 @@ const presets = await client.query(api.accounting.listCategoryPresets, {
 });
 
 // Presets have a fixed nature and ask no nature question.
-const created = await client.mutation(api.accounting.createUserCategory, {
+const created = await client.action(api.accounting.createUserCategory, {
   workspaceId,
   selection: {
     kind: "preset",
@@ -37,7 +37,7 @@ if (created.kind === "category") {
     idempotencyKey: "one-stable-key-per-expense",
     userCategoryId: created.category.id,
   };
-  await client.mutation(api.accounting.recordCashExpense, payload);
+  await client.action(api.accounting.recordCashExpense, payload);
   const activity = await client.query(api.accounting.postedActivity, {
     workspaceId,
     month: "2026-10",
@@ -55,7 +55,7 @@ await client.query(api.accounting.suggestCategoryNature, {
 });
 // suggested: spend; allowed: spend, stillMine, payDebt
 
-await client.mutation(api.accounting.createUserCategory, {
+await client.action(api.accounting.createUserCategory, {
   workspaceId,
   selection: {
     kind: "custom",
@@ -76,7 +76,7 @@ The `stillMine` and `payDebt` answers return `{ kind: "accountSetupRequired", na
 
 `userCategories` is separate from `ledgerAccounts`. Journal lines store an optional `userCategoryId` on the classified counterpart, never on the money-holding side. Posted entry DTOs expose the category ID and name. The activity reader supplies the name in `detail`, so the mobile row renders the category without a ledger code or account name. Reversed rows retain that label alongside **Reversed**.
 
-The write path is `accounting.recordCashExpense`, `recordCashExpense`, `recordCashActivity`, `categoryPostingCode`, `requireTemplateAccount`, and `postJournalEntry`. All journal writes still reach the shared Posting entry point. The read path is `accounting.postedActivity`, `postedActivity`, `listJournalEntries`, and `journalContext`. The context resolves category names from server records. Money totals still come from posted lines.
+The write path is the public `accounting.recordCashExpense` action, the guarded `accountingWrites.recordCashExpense` internal mutation, `recordCashExpense`, `recordCashActivity`, `categoryPostingCode`, `requireTemplateAccount`, and `postJournalEntry`. All journal writes still reach the shared Posting entry point. The read path is `accounting.postedActivity`, `postedActivity`, `listJournalEntries`, and `journalContext`. The context resolves category names from server records. Money totals still come from posted lines.
 
 The versioned `category-es-en@1` policy normalizes accents, case, and repeated whitespace. Exact aliases win. Names and aliases of at least four characters tolerate one insertion, deletion, or substitution. Equal best concepts do not choose an arbitrary account. Resolution searches only the confirmed nature and otherwise uses its template default. Nature suggestions also cover the two account doors.
 
@@ -92,14 +92,16 @@ Category records preserve the nature source and account classification source. P
 
 Posting uses a searchable native sheet with existing categories, suggestions, **No category**, and **Add your own**. Starter suggestions appear in setup, not as chips on the posting form. Only expense categories are selectable in the expense editor.
 
+Deliberate setup, posting, category search, create, and restyle edits call U01's `useLocalEntryInteraction` from controller handlers. Restored storage values and provider updates do not count as user activity.
+
 The pending expense schema now preserves optional `userCategoryId` through SecureStore JSON. Existing saved expenses without categories remain valid. `useExpenseEditor` restores category identity, locks selection while a payload is pending, and retries that exact payload and key after an uncertain response. A confirmed post clears the category with the other entry fields. The page stays open with **Posted**, and **Done** dismisses only the banner.
 
 ## Local evidence and remaining gaps
 
-`node scripts/verify-u02.mjs` runs the full Vitest suite, backend and mobile typechecks, and `git diff --check`. The local receipt is 129 passing tests in 14 files, with both typechecks passing. The existing Vitest configuration and react-test-renderer emit deprecation notices.
+`node scripts/verify-u02.mjs` runs the full Vitest suite, backend and mobile typechecks, and `git diff --check`. The local receipt is 207 passing tests in 18 files, with both typechecks passing. The existing Vitest configuration and react-test-renderer emit deprecation notices.
 
 The public-handler tests cover both template mappings, name normalization and typo suggestions, nature-scoped rent, unknown and missing-account fallbacks, account-door refusal, setup atomicity and retries, category identity conflicts, advanced overrides, and reversal labels. Mobile hook and schema tests cover category persistence, restoration, exact-payload retry, locking, and clearing after acknowledgement.
 
-This evidence uses convex-test identities and local React tests. It does not establish actual Clerk admission or requests against `https://compassionate-opossum-63.convex.cloud`. No deployment, native build, device interaction, Linear mutation, or push was performed. The SEN-11/SEN-68 session/device gate and the unresolved security boundary remain open.
+This evidence uses signed-session fixtures, normal public registration/actions with a controlled Clerk HTTP transport, and local React tests. Kernel-only workspace provisioning fixtures are not public endpoints. The raw public workspace-creation action is denied. It does not establish actual Clerk admission or requests against `https://compassionate-opossum-63.convex.cloud`. No deployment, native build, device interaction, Linear mutation, or push was performed. The SEN-11/SEN-68 session/device gate and the unresolved security boundary remain open.
 
 The remaining product work includes SEN-27's up-to-three-category accounting decision, account-door handoff and account setup, SEN-58 reclassification and its impact preview, full **Edit category**, rename/archive/merge, income posting UI, Candidate review, and native keyboard, gesture, accessibility, and prototype-fidelity acceptance. Source contrast proposals remain unaccepted. No posted history mutation or reclassification acceptance is claimed.

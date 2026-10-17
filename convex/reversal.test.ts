@@ -19,10 +19,10 @@ const modules = import.meta.glob([
 ]);
 
 async function postedGroceries(extra?: Parameters<typeof groceries>[2]) {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  const posted = await t.mutation(
+  const posted = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id, extra),
   );
@@ -65,7 +65,7 @@ test("reverse then replace corrects an expense without touching the original", a
   const { t, workspace, daily, posted, read } = await postedGroceries();
 
   await reverse(t, workspace.id, posted.id);
-  await t.mutation(
+  await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id, { amount: 120000, idempotencyKey: "groceries-fixed" }),
   );
@@ -104,7 +104,7 @@ test("a reversal key replays even after the period locks", async () => {
 
 test("reusing a reversal key for a different entry conflicts", async () => {
   const { t, workspace, daily, posted } = await postedGroceries();
-  const other = await t.mutation(
+  const other = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id, { idempotencyKey: "coffee", description: "Coffee" }),
   );
@@ -181,7 +181,7 @@ test("replaying a reversed expense reports the reversal that offsets it", async 
   const { t, workspace, daily, posted } = await postedGroceries();
   const reversal = await reverse(t, workspace.id, posted.id);
 
-  const again = await t.mutation(
+  const again = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );

@@ -21,7 +21,7 @@ const modules = import.meta.glob([
 const postedAt = Date.UTC(2026, 8, 24, 18);
 
 async function kernel() {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const accounts = await reader(t, workspace.id).ledgerAccounts();
@@ -139,7 +139,7 @@ test("Posting requires Workspace Membership", async () => {
 
 test("Posting treats any changed fact under a used key as a conflict", async () => {
   const { t, workspace, daily, expenses, post, balanced } = await kernel();
-  const card = await t.mutation(api.accounting.createFinancialAccountProfile, {
+  const card = await t.action(api.accounting.createFinancialAccountProfile, {
     workspaceId: workspace.id,
     name: "Visa",
     productKind: "creditCard",
@@ -178,7 +178,7 @@ test("Posting refuses links to a profile or entry outside the Workspace", async 
   const { t, workspace, post, balanced } = await kernel();
   const other = await createOwnedWorkspace(t);
   const otherDaily = await createDaily(t, other.id);
-  const otherEntry = await t.mutation(api.accounting.recordCashExpense, {
+  const otherEntry = await t.action(api.accounting.recordCashExpense, {
     workspaceId: other.id,
     financialAccountProfileId: otherDaily.id,
     amount: { currency: "COP", minorUnits: 10 },
