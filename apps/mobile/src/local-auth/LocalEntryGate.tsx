@@ -1,0 +1,189 @@
+import { useAuth, useClerk } from "@clerk/expo";
+import { usePathname } from "expo-router";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import { ActivityIndicator, AppState, Text, View } from "react-native";
+import { LocalEntryInteraction } from "./interaction";
+import { EntryController } from "./entryController";
+import {
+  cancelBiometricPrompt,
+  enrollBiometry,
+  hideFinancialScreen,
+  initializeScreenPrivacy,
+  readInstallMarker,
+  revealFinancialScreen,
+  unlockBiometry,
+  writeInstallMarker,
+} from "./nativeEntry";
+import { Header, PrimaryButton, Screen, ui } from "../ui/core";
+
+export function LocalEntryGate({
+  children,
+  renderSignIn,
+}: {
+  children: ReactNode;
+  renderSignIn: (onSessionCreated: (sessionId: string) => void) => ReactNode;
+}) {
+  const { isLoaded, userId, sessionId } = useAuth();
+  const clerk = useClerk();
+  const clerkRef = useRef(clerk);
+  clerkRef.current = clerk;
+  const [controller] = useState(
+    () =>
+      new EntryController({
+        now: Date.now,
+        readMarker: readInstallMarker,
+        writeMarker: writeInstallMarker,
+        unlock: unlockBiometry,
+        enroll: enrollBiometry,
+        signOut: () => clerkRef.current.signOut(),
+        initializePrivacy: initializeScreenPrivacy,
+        hide: hideFinancialScreen,
+        reveal: revealFinancialScreen,
+        cancelPrompt: cancelBiometricPrompt,
+      }),
+  );
+  const snapshot = useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+  );
+  const path = usePathname();
+  useEffect(() => {
+    if (isLoaded)
+      void controller.setIdentity(
+        userId && sessionId ? { subject: userId, sessionId } : null,
+      );
+  }, [controller, isLoaded, userId, sessionId]);
+  useLayoutEffect(() => controller.setPath(path), [controller, path]);
+  useEffect(() => {
+    let state = AppState.currentState;
+    let focused = true;
+    const update = () =>
+      controller.setPresence(
+        state === "active",
+        focused,
+        state === "background",
+      );
+    update();
+    const changes = AppState.addEventListener("change", (next) => {
+      state = next;
+      update();
+    });
+    const blur = AppState.addEventListener("blur", () => {
+      focused = false;
+      update();
+    });
+    const focus = AppState.addEventListener("focus", () => {
+      focused = true;
+      update();
+    });
+    const timer = setInterval(controller.tick, 1000);
+    return () => {
+      clearInterval(timer);
+      changes.remove();
+      blur.remove();
+      focus.remove();
+      controller.dispose();
+    };
+  }, [controller]);
+  const { state, obscured } = snapshot;
+  if (state.kind === "sign-in")
+    return <>{renderSignIn(controller.approveSignIn)}</>;
+  if (
+    state.kind === "open" &&
+    (!controller.isOpenFor(
+      userId && sessionId ? { subject: userId, sessionId } : null,
+    ) ||
+      controller.needsPathUnlock(path))
+  )
+    return (
+      <Screen>
+        <ActivityIndicator />
+      </Screen>
+    );
+  if (state.kind === "open")
+    return (
+      <View
+        style={{ flex: 1 }}
+        onTouchStart={controller.interaction}
+        onTouchMove={controller.interaction}
+      >
+        <View
+          style={{ flex: 1, opacity: obscured ? 0 : 1 }}
+          pointerEvents={obscured ? "none" : "auto"}
+          importantForAccessibility={obscured ? "no-hide-descendants" : "auto"}
+          accessibilityElementsHidden={obscured}
+        >
+          <LocalEntryInteraction.Provider value={controller.interaction}>
+            {children}
+          </LocalEntryInteraction.Provider>
+        </View>
+        {obscured && (
+          <View
+            style={[
+              ui.screen,
+              { position: "absolute", top: 0, bottom: 0, left: 0, right: 0 },
+            ]}
+          />
+        )}
+      </View>
+    );
+  return (
+    <Screen>
+      <Header
+        title={
+          state.kind === "reauthentication"
+            ? "Sign in again"
+            : state.kind === "unavailable"
+              ? "Local protection unavailable"
+              : "Lukapp is locked"
+        }
+      />
+      {state.kind === "locked" && (
+        <>
+          <Text style={ui.body}>
+            Use strong biometrics to open your financial information.
+          </Text>
+          <PrimaryButton
+            label="Unlock Lukapp"
+            onPress={() => void controller.unlock()}
+          />
+        </>
+      )}
+      {state.kind === "reauthentication" && (
+        <>
+          <Text style={ui.body}>
+            Complete Clerk sign-in, then set up strong biometric re-entry.
+            Device PIN and weak biometrics cannot unlock Lukapp.
+          </Text>
+          <PrimaryButton
+            label="Sign in again"
+            onPress={() => void controller.reauthenticate()}
+          />
+        </>
+      )}
+      {state.kind === "unavailable" && (
+        <Text style={ui.body}>
+          Your information stays locked. Close and reopen the app after checking
+          device security and storage.
+        </Text>
+      )}
+      {(state.kind === "checking" || state.kind === "authenticating") && (
+        <>
+          <ActivityIndicator />
+          <Text style={ui.body}>
+            {state.kind === "authenticating"
+              ? "Confirming biometrics…"
+              : "Checking local protection…"}
+          </Text>
+        </>
+      )}
+    </Screen>
+  );
+}
