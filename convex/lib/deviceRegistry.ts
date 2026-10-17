@@ -65,19 +65,34 @@ export async function registerDevice(ctx: MutationCtx, session: LiveSession, inp
   });
 }
 
-export async function queueRevocation(ctx: MutationCtx, userId: string, sid: string) {
+async function denySession(ctx: MutationCtx, userId: string, sid: string) {
   const existing = await ctx.db.query("clerkRevocations")
     .withIndex("by_session", (q) => q.eq("clerkSessionId", sid)).unique();
-  if (existing) {
-    if (existing.clerkUserId !== userId) throw new ConvexError({ code: "session_owner_mismatch" });
-    return existing._id;
-  }
+  if (existing && existing.clerkUserId !== userId)
+    throw new ConvexError({ code: "session_owner_mismatch" });
   const device = await ctx.db.query("mobileDevices")
     .withIndex("by_session", (q) => q.eq("clerkSessionId", sid)).unique();
   if (device) {
     if (device.clerkUserId !== userId) throw new ConvexError({ code: "session_owner_mismatch" });
-    await ctx.db.patch(device._id, { revokedAt: device.revokedAt ?? Date.now() });
+    if (device.revokedAt === undefined) await ctx.db.patch(device._id, { revokedAt: Date.now() });
   }
+  return existing;
+}
+
+export async function recordClerkTerminalSession(ctx: MutationCtx, userId: string, sid: string) {
+  const existing = await denySession(ctx, userId, sid);
+  if (existing) {
+    if (existing.completedAt === undefined) await ctx.db.patch(existing._id, { completedAt: Date.now() });
+    return;
+  }
+  await ctx.db.insert("clerkRevocations", {
+    clerkUserId: userId, clerkSessionId: sid, requestedAt: Date.now(), attempts: 0, completedAt: Date.now(),
+  });
+}
+
+export async function queueRevocation(ctx: MutationCtx, userId: string, sid: string) {
+  const existing = await denySession(ctx, userId, sid);
+  if (existing) return existing._id;
   const id = await ctx.db.insert("clerkRevocations", {
     clerkUserId: userId, clerkSessionId: sid, requestedAt: Date.now(), attempts: 0,
   });

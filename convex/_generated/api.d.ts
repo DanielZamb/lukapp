@@ -11,8 +11,10 @@
 import type * as accounting from "../accounting.js";
 import type * as authConnection from "../authConnection.js";
 import type * as categoryValidators from "../categoryValidators.js";
+import type * as clerkWebhooks from "../clerkWebhooks.js";
 import type * as deviceAccess from "../deviceAccess.js";
 import type * as deviceAccessInternal from "../deviceAccessInternal.js";
+import type * as http from "../http.js";
 import type * as lib_admission from "../lib/admission.js";
 import type * as lib_clerkProvider from "../lib/clerkProvider.js";
 import type * as lib_deviceAuthorization from "../lib/deviceAuthorization.js";
@@ -34,8 +36,10 @@ declare const fullApi: ApiFromModules<{
   accounting: typeof accounting;
   authConnection: typeof authConnection;
   categoryValidators: typeof categoryValidators;
+  clerkWebhooks: typeof clerkWebhooks;
   deviceAccess: typeof deviceAccess;
   deviceAccessInternal: typeof deviceAccessInternal;
+  http: typeof http;
   "lib/admission": typeof lib_admission;
   "lib/clerkProvider": typeof lib_clerkProvider;
   "lib/deviceAuthorization": typeof lib_deviceAuthorization;
