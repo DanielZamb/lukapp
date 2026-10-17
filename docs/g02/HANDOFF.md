@@ -56,6 +56,15 @@ On the original G01 base `808865b` plus G02:
 - An esbuild browser-platform bundle of `convex/http.ts` passes without a Node runtime.
 - `git diff --check` passes.
 
+G02 implementation commit is `7d9557cdbf10d0938a0f6e69ace21d3aaa093e35`. After that commit, the parent's tested U02 integration `b40017f` was merged locally as `eff254c47669363d9a82e760551dca8acf991f1c`, without conflicts or adapter edits. On that combined source:
+
+- `pnpm exec vitest run convex/clerkWebhooks.test.ts convex/deviceBoundary.test.ts convex/accountingBoundary.test.ts`: 69 tests pass.
+- `pnpm test`: 241 tests pass in 19 files.
+- `pnpm typecheck`: root and mobile pass.
+- `git diff --check` passes.
+
+The final handoff commit changes this document only. Existing Vitest configuration and React test-renderer deprecation warnings remain non-failing.
+
 The first broad checks encountered missing mobile dependencies. `pnpm install --frozen-lockfile` installed the workspace dependencies, and the checks above then passed. API module entries were generated with offline `convex codegen --system-udfs --typecheck disable`; existing generated declarations and components exports were preserved to avoid unrelated generator-format changes. No deployment analysis or provider connection was used.
 
 These are local regression results only. No deployment, provider configuration or session write, data migration or reset, device use, push, root-checkout edit, or PR5 restoration occurred.
