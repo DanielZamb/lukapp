@@ -94,6 +94,9 @@ export const catalogAccount = v.object({
 export const journalLine = v.object({
   userCategoryId: v.optional(v.string()),
   userCategoryName: v.optional(v.string()),
+  userCategoryIds: v.optional(v.array(v.string())),
+  primaryUserCategoryId: v.optional(v.string()),
+  userCategories: v.array(v.object({ id: v.string(), name: v.string() })),
   ledgerAccountId: v.string(),
   code: v.string(),
   name: v.string(),

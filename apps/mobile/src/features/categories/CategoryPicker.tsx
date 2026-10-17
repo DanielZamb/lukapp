@@ -2,11 +2,12 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useEffect, useRef } from "react";
 import { CategorySheet } from "./CategorySheet";
 import { useCategoryPicker } from "./useCategoryPicker";
+import type { TransactionCategories } from "./transactionSelection";
 
 export type CategoryPickerProps = {
   workspaceId: string;
-  value: string | null;
-  onChange: (id: string | null) => void;
+  value: TransactionCategories;
+  onChange: (value: TransactionCategories) => void;
   visible: boolean;
   onClose: () => void;
 };

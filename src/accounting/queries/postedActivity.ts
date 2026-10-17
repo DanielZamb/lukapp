@@ -26,27 +26,35 @@ export async function postedActivity(
         b.postedAt - a.postedAt ||
         b.id.localeCompare(a.id),
     )
-    .map((entry) => ({
-      id: entry.id,
-      financialAccountProfileId: entry.financialAccountProfileId,
-      title: entry.description || "Expense",
-      date: entry.accountingDate,
-      detail:
-        entry.lines.find((line) => line.userCategoryName)?.userCategoryName ??
-        (entry.policy === "start-tracking@1"
-          ? "Starting amount"
-          : entry.policy === "cash-income@1"
-            ? "Income"
-            : "Expense"),
-      reversed: entry.reversedByEntryId !== undefined,
-      amount: {
-        ...entry.amount,
-        minorUnits:
-          entry.policy === "cash-expense@1"
-            ? -entry.amount.minorUnits
-            : entry.amount.minorUnits,
-      },
-    }));
+    .map((entry) => {
+      const userCategories = entry.lines.flatMap((line) => line.userCategories);
+      const primaryUserCategoryId = entry.lines.find(
+        (line) => line.primaryUserCategoryId,
+      )?.primaryUserCategoryId;
+      return {
+        id: entry.id,
+        financialAccountProfileId: entry.financialAccountProfileId,
+        title: entry.description || "Expense",
+        date: entry.accountingDate,
+        detail:
+          userCategories.map((category) => category.name).join(" · ") ||
+          (entry.policy === "start-tracking@1"
+            ? "Starting amount"
+            : entry.policy === "cash-income@1"
+              ? "Income"
+              : "Expense"),
+        userCategories,
+        ...(primaryUserCategoryId ? { primaryUserCategoryId } : {}),
+        reversed: entry.reversedByEntryId !== undefined,
+        amount: {
+          ...entry.amount,
+          minorUnits:
+            entry.policy === "cash-expense@1"
+              ? -entry.amount.minorUnits
+              : entry.amount.minorUnits,
+        },
+      };
+    });
   return {
     accounts: accounts.map((account) => ({
       financialAccountProfileId: account.financialAccountProfileId,

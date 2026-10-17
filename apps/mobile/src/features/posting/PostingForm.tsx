@@ -26,6 +26,7 @@ export type PostingFormProps = {
   date: string;
   place: string;
   category: string;
+  categoryNeedsPrimary?: boolean;
   editable: boolean;
   loading: boolean;
   busy: boolean;
@@ -162,7 +163,9 @@ export function PostingForm(props: PostingFormProps) {
         />
       </ListGroup>
       <Text style={styles.detail}>
-        One category per expense is available in this first version.
+        {props.categoryNeedsPrimary
+          ? "Open Category to choose which category is primary."
+          : "Choose up to three categories. Each counts the full amount; your spending total counts it once."}
       </Text>
       {props.loading && <ActivityIndicator color={theme.primary} />}
       {!!props.error && (

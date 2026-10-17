@@ -22,6 +22,8 @@ export const cashActivity = {
   idempotencyKey: v.string(),
   ledgerAccountCode: v.optional(v.string()),
   userCategoryId: v.optional(v.string()),
+  userCategoryIds: v.optional(v.array(v.string())),
+  primaryUserCategoryId: v.optional(v.string()),
 };
 export const profileCreation = {
   ...inWorkspace,

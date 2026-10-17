@@ -25,6 +25,7 @@ import {
   categoryNature,
   createCategoryResult,
   userCategory,
+  userCategoryView,
 } from "./categoryValidators";
 import {
   listCategoryPresets as categoryPresets,
@@ -32,6 +33,7 @@ import {
 } from "../src/accounting/categories/policy";
 import { listUserCategories as listCategories } from "../src/accounting/queries/listUserCategories";
 import { postedActivity as readPostedActivity } from "../src/accounting/queries/postedActivity";
+import { categoryTotals as readCategoryTotals } from "../src/accounting/queries/categoryTotals";
 import { createAccountingCore } from "../src/accounting";
 import { convexReadStore } from "./store";
 import { readPersonalDefaults } from "./personalDefaults";
@@ -265,6 +267,8 @@ export const postedActivity = query({
         title: v.string(),
         date: v.string(),
         detail: v.string(),
+        userCategories: v.array(v.object({ id: v.string(), name: v.string() })),
+        primaryUserCategoryId: v.optional(v.string()),
         reversed: v.boolean(),
         amount: money,
       }),
@@ -274,6 +278,33 @@ export const postedActivity = query({
   handler: async (ctx, args) =>
     run(async () =>
       readPostedActivity(convexReadStore(ctx.db), {
+        ...args,
+        actor: await requireWorkspacePermission(ctx, {
+          workspaceId: args.workspaceId,
+          permission: "workspace:read",
+        }),
+      }),
+    ),
+});
+
+export const categoryTotals = query({
+  args: { ...inWorkspace, month: v.string() },
+  returns: v.object({
+    totalsOverlap: v.literal(true),
+    month: v.string(),
+    currency: v.string(),
+    categories: v.array(
+      v.object({
+        categoryId: v.string(),
+        name: v.string(),
+        nature: v.optional(categoryNature),
+        minorUnits: v.number(),
+      }),
+    ),
+  }),
+  handler: async (ctx, args) =>
+    run(async () =>
+      readCategoryTotals(convexReadStore(ctx.db), {
         ...args,
         actor: await requireWorkspacePermission(ctx, {
           workspaceId: args.workspaceId,
@@ -316,7 +347,7 @@ export const createUserCategory = action({
 
 export const listUserCategories = query({
   args: inWorkspace,
-  returns: v.array(userCategory),
+  returns: v.array(userCategoryView),
   handler: async (ctx, args) =>
     run(async () =>
       listCategories(convexReadStore(ctx.db), {

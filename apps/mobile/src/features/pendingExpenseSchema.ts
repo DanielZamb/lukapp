@@ -13,5 +13,13 @@ export const pendingExpenseSchema = z.object({
   description: z.string(),
   idempotencyKey: z.string().min(1),
   userCategoryId: z.string().min(1).optional(),
+  userCategoryIds: z.array(z.string().min(1)).max(3).optional(),
+  primaryUserCategoryId: z.string().min(1).optional(),
+}).superRefine((value, ctx) => {
+  const ids = value.userCategoryIds ?? (value.userCategoryId ? [value.userCategoryId] : []);
+  if ((value.userCategoryId !== undefined && value.userCategoryIds !== undefined) ||
+    new Set(ids).size !== ids.length ||
+    (value.primaryUserCategoryId !== undefined && !ids.includes(value.primaryUserCategoryId)))
+    ctx.addIssue({ code: "custom", message: "Invalid category selection" });
 }) satisfies z.ZodType<FunctionArgs<typeof api.accounting.recordCashExpense>>;
 export type PendingExpense = z.infer<typeof pendingExpenseSchema>;

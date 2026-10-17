@@ -1,4 +1,5 @@
 import { AccountingError } from "./errors";
+import { assignedCategoryIds } from "./categories/assignments";
 import type {
   AccountingPeriod,
   AccountingStore,
@@ -89,6 +90,11 @@ export async function toPostedJournalEntry(
     lines: entry.lines.map((line) => {
       const account = requireAccount(context.accounts, line.ledgerAccountId);
       return {
+        userCategories: assignedCategoryIds(line).map((id) => ({
+          id, name: context.categories.get(id)?.name ?? "Saved category",
+        })),
+        ...(line.userCategoryIds ? { userCategoryIds: [...line.userCategoryIds] } : {}),
+        ...(line.primaryUserCategoryId ? { primaryUserCategoryId: line.primaryUserCategoryId } : {}),
         ...(line.userCategoryId
           ? {
               userCategoryId: line.userCategoryId,

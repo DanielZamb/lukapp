@@ -1,5 +1,6 @@
 /* The one entry point that writes to the General Ledger. Commands build drafts; this recognizes them. */
 import { AccountingError } from "./errors";
+import { requireCategoryAssignments, sameCategoryAssignments } from "./categories/assignments";
 import { requireWorkspace } from "./membership";
 import { periodFromAccountingDate } from "./period";
 import { requirePostablePeriod } from "./periodControl";
@@ -99,8 +100,8 @@ async function assertLinkedRecords(
   draft: JournalEntryDraft,
 ): Promise<void> {
   for (const line of draft.lines) {
-    if (line.userCategoryId !== undefined) {
-      const category = await store.getCategory(line.userCategoryId);
+    for (const id of requireCategoryAssignments(line)) {
+      const category = await store.getCategory(id);
       if (!category || category.workspaceId !== workspaceId) {
         throw new AccountingError("category_not_found");
       }
@@ -134,7 +135,7 @@ function sameDraft(entry: StoredJournalEntry, draft: JournalEntryDraft): boolean
       return (
         other !== undefined &&
         line.ledgerAccountId === other.ledgerAccountId &&
-        line.userCategoryId === other.userCategoryId &&
+        sameCategoryAssignments(line, other) &&
         line.debitMinorUnits === other.debitMinorUnits &&
         line.creditMinorUnits === other.creditMinorUnits
       );

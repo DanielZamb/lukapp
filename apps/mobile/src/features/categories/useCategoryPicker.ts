@@ -4,6 +4,7 @@ import { useAction, useQuery } from "convex/react";
 import { useRef, useState } from "react";
 import { api } from "../api";
 import { defaultCategoryStyle, selectionKey } from "./model";
+import { needsPrimary, toggleCategory, type TransactionCategories } from "./transactionSelection";
 import type {
   CategoryEditor,
   CategoryOption,
@@ -17,8 +18,8 @@ export type CategoryPickerMode =
   | {
       kind: "posting";
       workspaceId: string;
-      value: string | null;
-      onChange: (id: string | null) => void;
+      value: TransactionCategories;
+      onChange: (value: TransactionCategories) => void;
     }
   | {
       kind: "setup";
@@ -48,6 +49,8 @@ export function useCategoryPicker(
   const [editor, setEditor] = useState<CategoryEditor | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [limitReached, setLimitReached] = useState(false);
+  const [replaceSelection, setReplaceSelection] = useState(false);
   const saving = useRef(false);
   const suggestion = useQuery(
     api.accounting.suggestCategoryNature,
@@ -70,7 +73,7 @@ export function useCategoryPicker(
             key: c.id,
             name: c.name,
             style: c.style,
-            selected: c.id === mode.value,
+            selected: mode.value.ids.includes(c.id),
           }))
       : mode.selections.map((s) => ({
           key: selectionKey(s),
@@ -85,14 +88,17 @@ export function useCategoryPicker(
     if (!saving.current) {
       setEditor(null);
       setError("");
+      setReplaceSelection(false);
     }
   }
   function select(key: string) {
     if (saving.current) return;
     recordInteraction();
     if (mode.kind === "posting") {
-      mode.onChange(key);
-      onClose();
+      const next = toggleCategory(mode.value, key);
+      if (!next) { setLimitReached(true); return; }
+      mode.onChange({ ...next, primaryId: needsPrimary(next.ids, categories ?? []) ? next.primaryId : null });
+      setLimitReached(false);
     } else
       mode.onChange(mode.selections.filter((s) => selectionKey(s) !== key));
   }
@@ -108,6 +114,7 @@ export function useCategoryPicker(
     recordInteraction();
     setEditor({ kind: "preset", preset, style: defaultCategoryStyle });
     setError("");
+    setReplaceSelection(false);
   }
   async function confirm() {
     if (!editor || saving.current) return;
@@ -164,9 +171,17 @@ export function useCategoryPicker(
           selection,
         });
         if (result.kind === "category") {
-          mode.onChange(result.category.id);
+          const next = replaceSelection
+            ? { ids: [result.category.id], primaryId: null }
+            : mode.value.ids.includes(result.category.id)
+              ? mode.value
+              : toggleCategory(mode.value, result.category.id);
+          if (next) {
+            mode.onChange(next);
+            setLimitReached(false);
+          } else setLimitReached(true);
           setEditor(null);
-          onClose();
+          setReplaceSelection(false);
         }
       } else {
         const key = selectionKey(selection);
@@ -238,6 +253,7 @@ export function useCategoryPicker(
       onPreset: preset,
       onCreate: () => {
         recordInteraction();
+        setReplaceSelection(false);
         setEditor({
           kind: "custom",
           name: search,
@@ -251,10 +267,30 @@ export function useCategoryPicker(
       onStyle: style,
       onConfirm: () => void confirm(),
       onBack: back,
+      selectionCount: mode.kind === "posting" ? mode.value.ids.length : undefined,
+      limitReached,
+      replacingSelection: replaceSelection,
+      onCreateEncompassing: () => {
+        recordInteraction();
+        setReplaceSelection(true);
+        setEditor({ kind: "custom", name: search, answer: null, style: defaultCategoryStyle });
+        setError("");
+      },
+      primaryOptions: mode.kind === "posting" && categories && needsPrimary(mode.value.ids, categories)
+        ? options?.filter((option) => option.selected)
+        : undefined,
+      primaryId: mode.kind === "posting" ? mode.value.primaryId : null,
+      onPrimary: (id: string) => {
+        recordInteraction();
+        if (mode.kind === "posting" && mode.value.ids.includes(id))
+          mode.onChange({ ...mode.value, primaryId: id });
+      },
+      onDone: mode.kind === "posting" ? onClose : undefined,
       onNone:
         mode.kind === "posting"
           ? () => {
-              mode.onChange(null);
+              mode.onChange({ ids: [], primaryId: null });
+              setLimitReached(false);
               onClose();
             }
           : undefined,

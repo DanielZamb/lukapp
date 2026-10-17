@@ -151,26 +151,26 @@ test("an uncertain category expense locks selection and retries the exact catego
   await act(async () => {
     editor().setAmount("-1.500,00");
     editor().setDescription("Food");
-    editor().setUserCategoryId("food-category");
+    editor().setCategories({ ids: ["food-category"], primaryId: null });
   });
   await act(async () => {
     await editor().submit();
   });
   expect(api.post.mock.calls[0][0]).toMatchObject({
-    userCategoryId: "food-category",
+    userCategoryIds: ["food-category"],
     idempotencyKey: "expense-1",
   });
   await act(async () => {
-    editor().setUserCategoryId("other-category");
+    editor().setCategories({ ids: ["other-category"], primaryId: null });
   });
-  expect(editor().userCategoryId).toBe("food-category");
+  expect(editor().categories.ids).toEqual(["food-category"]);
   expect(editor().editable).toBe(false);
   await act(async () => {
     await editor().submit();
   });
   expect(api.post.mock.calls[1][0]).toEqual(api.post.mock.calls[0][0]);
   expect(editor().posted?.description).toBe("Food");
-  expect(editor().userCategoryId).toBeNull();
+  expect(editor().categories.ids).toEqual([]);
   await act(async () => {
     editor().dismissPosted();
   });
@@ -190,13 +190,53 @@ test("restoring a saved expense retains its category and sends it with the origi
   };
   api.load.mockResolvedValue(saved);
   const editor = await open(api);
-  expect(editor().userCategoryId).toBe("transport-category");
+  expect(editor().categories.ids).toEqual(["transport-category"]);
   expect(editor().editable).toBe(false);
   await act(async () => {
     await editor().submit();
   });
   expect(api.post).toHaveBeenCalledExactlyOnceWith(saved);
-  expect(editor().userCategoryId).toBeNull();
+  expect(editor().categories.ids).toEqual([]);
+});
+
+test("three categories and explicit primary remain fixed across timeout, restore and retry", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new Error("Response lost"));
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-15,00");
+    editor().setCategories({ ids: ["food", "family", "dining"], primaryId: "dining" });
+  });
+  await act(async () => { await editor().submit(); });
+  const expected: PendingExpense = {
+    workspaceId: "workspace", financialAccountProfileId: "cash", amount: { currency: "COP", minorUnits: 1500 },
+    accountingDate: editor().date, description: "", idempotencyKey: "expense-1",
+    userCategoryIds: ["food", "family", "dining"], primaryUserCategoryId: "dining",
+  };
+  expect(api.post.mock.calls[0][0]).toEqual(expected);
+  await act(async () => { editor().setCategories({ ids: ["other"], primaryId: null }); });
+  expect(editor().categories).toEqual({ ids: ["food", "family", "dining"], primaryId: "dining" });
+  await act(async () => root?.unmount());
+  api.load.mockResolvedValue(expected);
+  const restored = await open(api);
+  expect(restored().categories).toEqual({ ids: ["food", "family", "dining"], primaryId: "dining" });
+  await act(async () => { await restored().submit(); });
+  expect(api.post.mock.calls[1][0]).toEqual(expected);
+  expect(restored().posted?.amount.minorUnits).toBe(1500);
+  expect(restored().categories).toEqual({ ids: [], primaryId: null });
+});
+
+test("the editor refuses oversized, duplicate or foreign-primary local selections", async () => {
+  const editor = await open(transport());
+  await act(async () => { editor().setCategories({ ids: ["food", "family"], primaryId: "food" }); });
+  for (const selection of [
+    { ids: ["a", "b", "c", "d"], primaryId: null },
+    { ids: ["a", "a"], primaryId: null },
+    { ids: ["a"], primaryId: "outside" },
+  ]) {
+    await act(async () => { editor().setCategories(selection); });
+    expect(editor().categories).toEqual({ ids: ["food", "family"], primaryId: "food" });
+  }
 });
 
 for (const code of [
@@ -225,7 +265,7 @@ for (const code of [
     await act(async () => {
       editor().setAmount("-1.500,00");
       editor().setDescription("Food");
-      editor().setUserCategoryId("food-category");
+      editor().setCategories({ ids: ["food-category", "family", "dining"], primaryId: "dining" });
     });
     await act(async () => {
       await editor().submit();
@@ -236,7 +276,7 @@ for (const code of [
     });
     expect(editor().pending).toBe(true);
     expect(editor().editable).toBe(false);
-    expect(editor().userCategoryId).toBe("food-category");
+    expect(editor().categories).toEqual({ ids: ["food-category", "family", "dining"], primaryId: "dining" });
     expect(editor().posted).toBeNull();
     expect(api.clear).not.toHaveBeenCalled();
     expect(api.post.mock.calls[1][0]).toEqual(original);
@@ -262,14 +302,14 @@ test("only an explicitly classified accounting rejection unlocks an expense for 
   const editor = await open(api);
   await act(async () => {
     editor().setAmount("-1,00");
-    editor().setUserCategoryId("food-category");
+    editor().setCategories({ ids: ["food-category"], primaryId: null });
   });
   await act(async () => {
     await editor().submit();
   });
   expect(editor().pending).toBe(false);
   expect(editor().editable).toBe(true);
-  expect(editor().userCategoryId).toBe("food-category");
+  expect(editor().categories.ids).toEqual(["food-category"]);
   expect(api.clear).toHaveBeenCalledOnce();
   expect(editor().posted).toBeNull();
 });
@@ -302,7 +342,7 @@ for (const code of [
     const editor = await open(api);
     await act(async () => {
       editor().setAmount("-1,00");
-      editor().setUserCategoryId("food-category");
+      editor().setCategories({ ids: ["food-category"], primaryId: null });
     });
     await act(async () => {
       await editor().submit();
@@ -321,7 +361,7 @@ test("a failed acknowledgement delete keeps the same payload and key for safe re
   const editor = await open(api);
   await act(async () => {
     editor().setAmount("-1,00");
-    editor().setUserCategoryId("food-category");
+    editor().setCategories({ ids: ["food-category"], primaryId: null });
   });
   await act(async () => {
     await editor().submit();
@@ -473,14 +513,14 @@ for (const interruption of ["inactivity", "navigation"]) {
     expect(api.post.mock.calls[1][0]).toEqual(api.post.mock.calls[0][0]);
     await act(async () => {
       next().setAmount("-2,50"); next().setDescription("Expense B");
-      next().setDate("2026-10-16"); next().setUserCategoryId("coffee");
+      next().setDate("2026-10-16"); next().setCategories({ ids: ["coffee", "family", "weekend"], primaryId: "coffee" });
     });
     api.post.mockRejectedValueOnce(new Error("B response lost"));
     await act(async () => { await next().submit(); });
     const expected = {
       workspaceId: "workspace", financialAccountProfileId: "cash",
       amount: { currency: "COP", minorUnits: 250 }, accountingDate: "2026-10-16",
-      description: "Expense B", idempotencyKey: "expense-2", userCategoryId: "coffee",
+      description: "Expense B", idempotencyKey: "expense-2", userCategoryIds: ["coffee", "family", "weekend"], primaryUserCategoryId: "coffee",
     };
     expect(stored).toEqual(expected);
     await act(async () => { acknowledge(); await original; });

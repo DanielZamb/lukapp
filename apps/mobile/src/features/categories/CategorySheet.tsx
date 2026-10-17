@@ -51,6 +51,14 @@ export type CategorySheetProps = {
   onBack: () => void;
   onNone?: () => void;
   onDismiss: () => void;
+  selectionCount?: number;
+  limitReached?: boolean;
+  replacingSelection?: boolean;
+  primaryOptions?: CategoryOption[];
+  primaryId?: string | null;
+  onPrimary?: (id: string) => void;
+  onDone?: () => void;
+  onCreateEncompassing?: () => void;
 };
 
 export function CategorySheet(props: CategorySheetProps) {
@@ -212,7 +220,7 @@ export function CategorySheet(props: CategorySheetProps) {
                       ? "Saving…"
                       : editor.kind === "restyle"
                         ? "Save style"
-                        : "Add category"
+                        : props.replacingSelection ? "Use this category instead" : "Add category"
                   }
                   disabled={!props.canConfirm || props.busy}
                   onPress={props.onConfirm}
@@ -230,6 +238,32 @@ export function CategorySheet(props: CategorySheetProps) {
               onChangeText={props.onSearch}
               style={ui.input}
             />
+            {props.selectionCount !== undefined && (
+              <Text style={ui.muted}>
+                {props.selectionCount} of 3 selected. Each counts the full amount.
+              </Text>
+            )}
+            {props.primaryOptions && (
+              <View style={ui.section}>
+                <Text style={ui.title}>Which category is primary?</Text>
+                <Text style={ui.muted}>
+                  Choose which best describes this expense. Each selected category still counts the full amount.
+                </Text>
+                {props.primaryOptions.map((option) => (
+                  <Choice key={option.key} label={option.name}
+                    selected={props.primaryId === option.key}
+                    onPress={() => props.onPrimary?.(option.key)} />
+                ))}
+              </View>
+            )}
+            {props.limitReached && (
+              <View style={ui.section}>
+                <Text accessibilityRole="alert" style={ui.error}>
+                  Choose up to three categories. Remove one, or create a category that encompasses the concept.
+                </Text>
+                <SecondaryButton label="Create an encompassing category" onPress={() => props.onCreateEncompassing?.()} />
+              </View>
+            )}
             {props.onNone && (
               <SecondaryButton label="No category" onPress={props.onNone} />
             )}
@@ -278,6 +312,10 @@ export function CategorySheet(props: CategorySheetProps) {
               ))
             )}
             <PrimaryButton label="Add your own" onPress={props.onCreate} />
+            {props.onDone && (
+              <PrimaryButton label="Done" onPress={props.onDone}
+                disabled={!!props.primaryOptions && !props.primaryId} />
+            )}
           </>
         )}
         {!!props.error && (

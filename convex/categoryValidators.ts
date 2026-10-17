@@ -58,6 +58,10 @@ export const userCategory = v.object({
   workspaceId: v.string(),
   ...categoryFields,
 });
+export const userCategoryView = v.object({
+  ...userCategory.fields,
+  resolvedPostingAccountCode: v.optional(v.string()),
+});
 export const createCategoryResult = v.union(
   v.object({ kind: v.literal("category"), category: userCategory }),
   v.object({

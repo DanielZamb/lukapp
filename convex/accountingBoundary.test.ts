@@ -57,6 +57,7 @@ function readArgs(workspaceId: string) {
     trialBalance: { workspaceId },
     postedActivity: { workspaceId, month: "2026-09" },
     listUserCategories: { workspaceId },
+    categoryTotals: { workspaceId, month: "2026-09" },
     personalDefaults: {},
   };
 }

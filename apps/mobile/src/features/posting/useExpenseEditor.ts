@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
 import type { PendingExpense } from "../pendingExpense";
 import { formatMoney, localDate, parseMoney } from "../money";
+import type { TransactionCategories } from "../categories/transactionSelection";
 
 type Account = Pick<
   PendingExpense,
@@ -26,7 +27,7 @@ export function useExpenseEditor(
 ) {
   const [amount, setAmount] = useState("-");
   const [description, setDescription] = useState("");
-  const [userCategoryId, setUserCategoryId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<TransactionCategories>({ ids: [], primaryId: null });
   const [date, setDate] = useState(localDate());
   const [pending, setPending] = useState<PendingExpense | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,10 @@ export function useExpenseEditor(
           );
           setDescription(value.description);
           setDate(value.accountingDate);
-          setUserCategoryId(value.userCategoryId ?? null);
+          setCategories({
+            ids: value.userCategoryIds ?? (value.userCategoryId ? [value.userCategoryId] : []),
+            primaryId: value.primaryUserCategoryId ?? null,
+          });
         }
         setLoading(false);
       })
@@ -102,7 +106,8 @@ export function useExpenseEditor(
         accountingDate: date,
         description: description.trim(),
         idempotencyKey: transport.newKey(),
-        ...(userCategoryId ? { userCategoryId } : {}),
+        ...(categories.ids.length ? { userCategoryIds: [...categories.ids] } : {}),
+        ...(categories.primaryId ? { primaryUserCategoryId: categories.primaryId } : {}),
       };
       await transport.save(payload);
       if (!mounted.active) return;
@@ -114,7 +119,7 @@ export function useExpenseEditor(
       setPending(null);
       setAmount("-");
       setDescription("");
-      setUserCategoryId(null);
+      setCategories({ ids: [], primaryId: null });
       setPosted(receipt);
     } catch (error) {
       if (transport.reportFailure?.(error)) return;
@@ -152,9 +157,12 @@ export function useExpenseEditor(
   return {
     amount,
     setAmount,
-    userCategoryId,
-    setUserCategoryId: (id: string | null) => {
-      if (!submitting.current && !pending && !loading) setUserCategoryId(id);
+    categories,
+    setCategories: (value: TransactionCategories) => {
+      if (!submitting.current && !pending && !loading &&
+        value.ids.length <= 3 && new Set(value.ids).size === value.ids.length &&
+        value.ids.every(Boolean) && (!value.primaryId || value.ids.includes(value.primaryId)))
+        setCategories({ ids: [...value.ids], primaryId: value.primaryId });
     },
     description,
     setDescription,

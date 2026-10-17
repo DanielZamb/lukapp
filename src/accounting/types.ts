@@ -1,4 +1,5 @@
 import type { UserCategory } from "./categories/types";
+import type { CategoryAssignments } from "./categories/assignments";
 
 export type Actor = {
   userId: string;
@@ -111,9 +112,9 @@ export type Money = {
   minorUnits: number;
 };
 
-export type JournalLineView = {
-  userCategoryId?: string;
+export type JournalLineView = CategoryAssignments & {
   userCategoryName?: string;
+  userCategories: Array<{ id: string; name: string }>;
   ledgerAccountId: string;
   code: string;
   name: string;
@@ -188,8 +189,7 @@ export type LedgerAccount = {
   role: LedgerAccountRole;
 };
 
-export type DraftJournalLine = {
-  userCategoryId?: string;
+export type DraftJournalLine = CategoryAssignments & {
   ledgerAccountId: string;
   debitMinorUnits: number;
   creditMinorUnits: number;
@@ -340,7 +340,7 @@ export type AccountingCore = {
 };
 
 /** Familiar facts a basic user enters for money that moved in or out of an account. */
-export type CashActivityInput = {
+export type CashActivityInput = CategoryAssignments & {
   actor: Actor;
   workspaceId: string;
   financialAccountProfileId: string;
@@ -350,5 +350,4 @@ export type CashActivityInput = {
   idempotencyKey: string;
   /** Advanced override; otherwise use the category policy or the template default. */
   ledgerAccountCode?: string;
-  userCategoryId?: string;
 };

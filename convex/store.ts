@@ -112,6 +112,8 @@ function toEntry(
       .map((line) => ({
         ledgerAccountId: line.ledgerAccountId,
         ...(line.userCategoryId ? { userCategoryId: line.userCategoryId } : {}),
+        ...(line.userCategoryIds ? { userCategoryIds: line.userCategoryIds } : {}),
+        ...(line.primaryUserCategoryId ? { primaryUserCategoryId: line.primaryUserCategoryId } : {}),
         debitMinorUnits: line.debitMinorUnits,
         creditMinorUnits: line.creditMinorUnits,
       })),
@@ -361,6 +363,8 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
               }
             : {}),
           ledgerAccountId: storedId<"ledgerAccounts">(line.ledgerAccountId),
+          ...(line.userCategoryIds ? { userCategoryIds: line.userCategoryIds.map((id) => storedId<"userCategories">(id)) } : {}),
+          ...(line.primaryUserCategoryId ? { primaryUserCategoryId: storedId<"userCategories">(line.primaryUserCategoryId) } : {}),
           debitMinorUnits: line.debitMinorUnits,
           creditMinorUnits: line.creditMinorUnits,
         });

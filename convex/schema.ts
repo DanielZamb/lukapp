@@ -90,6 +90,8 @@ export default defineSchema({
     journalEntryId: v.id("journalEntries"),
     lineNumber: v.number(),
     userCategoryId: v.optional(v.id("userCategories")),
+    userCategoryIds: v.optional(v.array(v.id("userCategories"))),
+    primaryUserCategoryId: v.optional(v.id("userCategories")),
     ledgerAccountId: v.id("ledgerAccounts"),
     debitMinorUnits: v.number(),
     creditMinorUnits: v.number(),

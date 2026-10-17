@@ -59,6 +59,8 @@ export async function reversePostedEntry(
     reversesEntryId: original.id,
     lines: original.lines.map((line) => ({
       ...(line.userCategoryId ? { userCategoryId: line.userCategoryId } : {}),
+      ...(line.userCategoryIds ? { userCategoryIds: [...line.userCategoryIds] } : {}),
+      ...(line.primaryUserCategoryId ? { primaryUserCategoryId: line.primaryUserCategoryId } : {}),
       ledgerAccountId: line.ledgerAccountId,
       debitMinorUnits: line.creditMinorUnits,
       creditMinorUnits: line.debitMinorUnits,

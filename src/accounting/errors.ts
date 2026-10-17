@@ -1,4 +1,8 @@
 export const accountingErrorMessages = {
+  category_selection_invalid: "Choose each category once using one selection format",
+  category_limit_exceeded: "Choose up to three categories, or create one that encompasses the concept",
+  category_primary_invalid: "The primary category must belong to the selection",
+  category_primary_required: "Choose which category best describes this expense",
   category_not_found: "Category not found",
   category_nature_required: "Choose what happens to the money before posting",
   category_nature_mismatch: "Category does not match the money direction",

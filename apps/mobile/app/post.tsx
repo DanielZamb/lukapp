@@ -26,6 +26,7 @@ import { Choice, Header, Screen, SecondaryButton } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
 import { useExpenseEditor } from "../src/features/posting/useExpenseEditor";
+import { canPostCategories, needsPrimary } from "../src/features/categories/transactionSelection";
 
 type Defaults = NonNullable<ReturnType<typeof usePersonalDefaults>>;
 function PostMoney({
@@ -74,12 +75,13 @@ function PostMoney({
         currency={workspace.functionalCurrency}
         place={profile.name}
         category={
-          editor.userCategoryId
-            ? (categories?.find((c) => c.id === editor.userCategoryId)?.name ??
-              "Saved category")
+          editor.categories.ids.length
+            ? editor.categories.ids.map((id) => categories?.find((c) => c.id === id)?.name ?? "Saved category").join(" · ")
             : "No category"
         }
         {...editor}
+        categoryNeedsPrimary={!!categories && needsPrimary(editor.categories.ids, categories) && !editor.categories.primaryId}
+        canSubmit={editor.canSubmit && (editor.pending || canPostCategories(editor.categories, categories))}
         date={new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
           new Date(`${editor.date}T12:00:00`),
         )}
@@ -105,8 +107,8 @@ function PostMoney({
       />
       <CategoryPicker
         workspaceId={workspace.id}
-        value={editor.userCategoryId}
-        onChange={editor.setUserCategoryId}
+        value={editor.categories}
+        onChange={editor.setCategories}
         visible={categoryVisible && editor.editable}
         onClose={() => setCategoryVisible(false)}
       />

@@ -21,3 +21,16 @@ test("pending expenses saved before categories remain valid", () => {
     pendingExpenseSchema.safeParse({ ...payload, userCategoryId: "" }).success,
   ).toBe(false);
 });
+
+test("multi-category storage retains exact order and primary, and rejects invalid sets", () => {
+  const selected = { ...payload, userCategoryIds: ["food", "family", "dining"], primaryUserCategoryId: "dining" };
+  expect(pendingExpenseSchema.parse(JSON.parse(JSON.stringify(selected)))).toEqual(selected);
+  for (const selection of [
+    { userCategoryIds: ["a", "b", "c", "d"] },
+    { userCategoryIds: ["a", "a"] },
+    { userCategoryIds: ["a", ""] },
+    { userCategoryIds: ["a"], primaryUserCategoryId: "b" },
+    { userCategoryIds: ["a"], userCategoryId: "a" },
+    { primaryUserCategoryId: "a" },
+  ]) expect(pendingExpenseSchema.safeParse({ ...payload, ...selection }).success).toBe(false);
+});
