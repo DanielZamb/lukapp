@@ -1,5 +1,5 @@
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { useRef, useState } from "react";
 import { api } from "../api";
 import { defaultCategoryStyle, selectionKey } from "./model";
@@ -40,8 +40,8 @@ export function useCategoryPicker(
   const presets = useQuery(api.accounting.listCategoryPresets, {
     nature: "Expense",
   });
-  const create = useMutation(api.accounting.createUserCategory);
-  const restyle = useMutation(api.accounting.restyleUserCategory);
+  const create = useAction(api.accounting.createUserCategory);
+  const restyle = useAction(api.accounting.restyleUserCategory);
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<CategoryEditor | null>(null);
   const [busy, setBusy] = useState(false);

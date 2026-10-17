@@ -24,14 +24,14 @@ function testdb() {
 }
 
 test("a later month stays not opened until a cash expense posts into it", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t, septNow);
   vi.setSystemTime(octNow);
   const opened = await t.query(api.accounting.openWorkspace, {
     workspaceId: workspace.id,
   });
   const daily = await createDaily(t, workspace.id);
-  const posted = await t.mutation(
+  const posted = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id, {
       accountingDate: "2026-10-02",
@@ -60,10 +60,10 @@ test("a later month stays not opened until a cash expense posts into it", async 
 });
 
 test("a posted cash expense is recognized in the Accounting Period of its Accounting Date", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t, octNow);
   const daily = await createDaily(t, workspace.id);
-  const posted = await t.mutation(
+  const posted = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id, { idempotencyKey: "sept-groceries" }),
   );
@@ -81,14 +81,14 @@ test("a posted cash expense is recognized in the Accounting Period of its Accoun
 });
 
 test("a posted cash expense reports the live Accounting Period status", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  await t.mutation(
+  await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
-  await t.mutation(api.accounting.lockAccountingPeriod, {
+  await t.action(api.accounting.lockAccountingPeriod, {
     workspaceId: workspace.id,
     period: { year: 2026, month: 9 },
   });
@@ -104,15 +104,15 @@ test("a posted cash expense reports the live Accounting Period status", async ()
 });
 
 test("a cash expense cannot become Posted in a Locked Period", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  await t.mutation(api.accounting.lockAccountingPeriod, {
+  await t.action(api.accounting.lockAccountingPeriod, {
     workspaceId: workspace.id,
     period: { year: 2026, month: 9 },
   });
   const error = await t
-    .mutation(
+    .action(
       api.accounting.recordCashExpense,
       groceries(workspace.id, daily.id),
     )
@@ -139,10 +139,10 @@ test("a cash expense cannot become Posted in a Locked Period", async () => {
 });
 
 test("two cash expenses in one month share one Accounting Period", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  await t.mutation(
+  await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id, {
       amount: 100,
@@ -151,7 +151,7 @@ test("two cash expenses in one month share one Accounting Period", async () => {
       idempotencyKey: "coffee",
     }),
   );
-  await t.mutation(
+  await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id, {
       amount: 200,
@@ -160,12 +160,12 @@ test("two cash expenses in one month share one Accounting Period", async () => {
       idempotencyKey: "tea",
     }),
   );
-  await t.mutation(api.accounting.lockAccountingPeriod, {
+  await t.action(api.accounting.lockAccountingPeriod, {
     workspaceId: workspace.id,
     period: { year: 2026, month: 9 },
   });
   const error = await t
-    .mutation(
+    .action(
       api.accounting.recordCashExpense,
       groceries(workspace.id, daily.id, {
         amount: 300,
@@ -180,13 +180,13 @@ test("two cash expenses in one month share one Accounting Period", async () => {
 });
 
 test("a quiet month can be locked before anything posts into it", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
 
   const locked = await lock(t, workspace.id, { year: 2026, month: 10 });
   const error = await caught(
-    t.mutation(
+    t.action(
       api.accounting.recordCashExpense,
       groceries(workspace.id, daily.id, {
         accountingDate: "2026-10-01",
@@ -200,7 +200,7 @@ test("a quiet month can be locked before anything posts into it", async () => {
 });
 
 test("a lock appends one Period Control Decision with actor, time, and reason", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
 
   await lock(t, workspace.id, { year: 2026, month: 9 }, "  September reviewed ");
@@ -226,7 +226,7 @@ test("a lock appends one Period Control Decision with actor, time, and reason", 
 });
 
 test("a lock needs a real month", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
 
   const error = await caught(lock(t, workspace.id, { year: 2026, month: 13 }));
@@ -235,16 +235,16 @@ test("a lock needs a real month", async () => {
 });
 
 test("a posted expense replays under its key after its period locks", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  const first = await t.mutation(
+  const first = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
 
   await lock(t, workspace.id, { year: 2026, month: 9 });
-  const again = await t.mutation(
+  const again = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );

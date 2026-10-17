@@ -18,6 +18,9 @@ const queries = {
   balances: { workspaceId: "foreign" },
   trialBalance: { workspaceId: "foreign" },
   personalDefaults: {},
+  listUserCategories: { workspaceId: "foreign" },
+  listCategoryPresets: {},
+  suggestCategoryNature: { name: "mercado" },
   postedActivity: { workspaceId: "foreign", month: "2026-10" },
 };
 const cash = {
@@ -28,7 +31,7 @@ const cash = {
   description: "Expense",
   idempotencyKey: "x",
 };
-const mutations = {
+const actions = {
   createPersonalWorkspace: { functionalCurrency: "COP" },
   createFinancialAccountProfile: {
     workspaceId: "foreign",
@@ -47,6 +50,19 @@ const mutations = {
     idempotencyKey: "x",
   },
   ensurePersonalDefaults: { functionalCurrency: "COP", startingMinorUnits: 0 },
+  createUserCategory: {
+    workspaceId: "foreign",
+    selection: {
+      kind: "preset",
+      presetId: "groceries",
+      style: { emoji: "🛒", tone: "primary" },
+    },
+  },
+  restyleUserCategory: {
+    workspaceId: "foreign",
+    categoryId: "foreign",
+    style: { emoji: "🛒", tone: "primary" },
+  },
 };
 afterEach(() => vi.unstubAllEnvs());
 
@@ -73,10 +89,10 @@ for (const mode of ["anonymous", "other", "missing-config"] as const) {
         ),
       ).rejects.toMatchObject({ data: { code } });
     }
-    for (const [name, args] of Object.entries(mutations)) {
+    for (const [name, args] of Object.entries(actions)) {
       await expect(
-        client.mutation(
-          makeFunctionReference<"mutation">(`accounting:${name}`),
+        client.action(
+          makeFunctionReference<"action">(`accounting:${name}`),
           args,
         ),
       ).rejects.toMatchObject({ data: { code } });
@@ -102,16 +118,16 @@ test("all accounting validators reject caller-supplied actors, including for the
         userId: "owner-fixture",
       }),
     ).rejects.toThrow();
-  for (const [name, args] of Object.entries(mutations))
+  for (const [name, args] of Object.entries(actions))
     await expect(
-      t.mutation(makeFunctionReference<"mutation">(`accounting:${name}`), {
+      t.action(makeFunctionReference<"action">(`accounting:${name}`), {
         ...args,
         userId: "owner-fixture",
       }),
     ).rejects.toThrow();
   await expect(
-    t.mutation(
-      makeFunctionReference<"mutation">("accounting:createPersonalWorkspace"),
+    t.action(
+      makeFunctionReference<"action">("accounting:createPersonalWorkspace"),
       { functionalCurrency: "COP", now: 0 },
     ),
   ).rejects.toThrow();

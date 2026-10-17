@@ -21,8 +21,8 @@ function testdb() {
   return convexAccounting(modules);
 }
 
-test("owner can create a Personal Workspace and open it", async () => {
-  const t = testdb();
+test("a trusted provisioned Personal Workspace opens through the guarded query", async () => {
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const opened = await t.query(api.accounting.openWorkspace, {
     workspaceId: workspace.id,
@@ -34,7 +34,7 @@ test("owner can create a Personal Workspace and open it", async () => {
 });
 
 test("a Personal Workspace opens with the current Accounting Period", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const opened = await t.query(api.accounting.openWorkspace, {
     workspaceId: workspace.id,
@@ -53,7 +53,7 @@ test("a Personal Workspace opens with the current Accounting Period", async () =
 });
 
 test("a stranger cannot open another person's Workspace", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
 
   const error = await t
@@ -69,7 +69,7 @@ test("a stranger cannot open another person's Workspace", async () => {
 });
 
 test("owner can create and list a Financial Account Profile", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const profile = await createDaily(t, workspace.id);
   const profiles = await t.query(api.accounting.listFinancialAccountProfiles, {
@@ -82,7 +82,7 @@ test("owner can create and list a Financial Account Profile", async () => {
 });
 
 test("a membership left behind by a missing Workspace grants nothing", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   await t.run((ctx) => ctx.db.delete(workspace.id as Id<"workspaces">));
 

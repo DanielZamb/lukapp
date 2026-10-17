@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import { api } from "./_generated/api";
 import {
   convexAccounting,
+  provisionWorkspace,
   createDaily,
   createOwnedWorkspace,
   groceries,
@@ -34,13 +35,13 @@ for (const [template, code, profileCode] of [
   ["us-gaap-personal@1", "5310", "102001"],
 ]) {
   test(`public category expense routes through ${template}, reads its label, and replays once`, async () => {
-    const t = convexAccounting(modules);
-    const workspace = await t.mutation(api.accounting.createPersonalWorkspace, {
+    const t = await convexAccounting(modules);
+    const workspace = await provisionWorkspace(t, {
       functionalCurrency: "COP",
       chartOfAccountsTemplate: template,
     });
     const daily = await createDaily(t, workspace.id);
-    const result = await t.mutation(api.accounting.createUserCategory, {
+    const result = await t.action(api.accounting.createUserCategory, {
       workspaceId: workspace.id,
       selection: food,
     });
@@ -57,7 +58,7 @@ for (const [template, code, profileCode] of [
       ...groceries(workspace.id, daily.id),
       userCategoryId: result.category.id,
     };
-    const posted = await t.mutation(api.accounting.recordCashExpense, input);
+    const posted = await t.action(api.accounting.recordCashExpense, input);
     expect(
       posted.lines.map((l) => [
         l.code,
@@ -69,7 +70,7 @@ for (const [template, code, profileCode] of [
       [code, "Food", 150000, 0],
       [profileCode, null, 0, 150000],
     ]);
-    expect(await t.mutation(api.accounting.recordCashExpense, input)).toEqual({
+    expect(await t.action(api.accounting.recordCashExpense, input)).toEqual({
       ...posted,
       replay: true,
     });
@@ -86,9 +87,9 @@ for (const [template, code, profileCode] of [
 }
 
 test("custom nature confirmation selects only that nature's accounts and stores provenance", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
-  const expense = await t.mutation(api.accounting.createUserCategory, {
+  const expense = await t.action(api.accounting.createUserCategory, {
     workspaceId: w.id,
     selection: custom("ÁRRIENDO"),
   });
@@ -107,7 +108,7 @@ test("custom nature confirmation selects only that nature's accounts and stores 
   });
   const w2 = await createOwnedWorkspace(t);
   expect(
-    await t.mutation(api.accounting.createUserCategory, {
+    await t.action(api.accounting.createUserCategory, {
       workspaceId: w2.id,
       selection: custom("arriendo", "receive"),
     }),
@@ -145,10 +146,10 @@ test("custom nature confirmation selects only that nature's accounts and stores 
 });
 
 test("unknown custom names and a category with no final account post through the fallback", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
   const daily = await createDaily(t, w.id);
-  const result = await t.mutation(api.accounting.createUserCategory, {
+  const result = await t.action(api.accounting.createUserCategory, {
     workspaceId: w.id,
     selection: custom("Friday things"),
   });
@@ -163,7 +164,7 @@ test("unknown custom names and a category with no final account post through the
     if (!id) throw new Error("Missing id");
     await ctx.db.patch(id, { defaultPostingAccountCode: undefined });
   });
-  const posted = await t.mutation(api.accounting.recordCashExpense, {
+  const posted = await t.action(api.accounting.recordCashExpense, {
     ...groceries(w.id, daily.id),
     userCategoryId: result.category.id,
   });
@@ -174,11 +175,11 @@ test("unknown custom names and a category with no final account post through the
 });
 
 test("account-door answers create no category or ledger entry", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
   for (const answer of ["stillMine", "payDebt"] as const) {
     expect(
-      await t.mutation(api.accounting.createUserCategory, {
+      await t.action(api.accounting.createUserCategory, {
         workspaceId: w.id,
         selection: custom("Savings", answer),
       }),
@@ -193,12 +194,12 @@ test("account-door answers create no category or ledger entry", async () => {
 });
 
 test("category identity is part of expense retry conflicts, including same-account categories", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
   const daily = await createDaily(t, w.id);
   const ids: string[] = [];
   for (const name of ["One unknown", "Two unknown"]) {
-    const result = await t.mutation(api.accounting.createUserCategory, {
+    const result = await t.action(api.accounting.createUserCategory, {
       workspaceId: w.id,
       selection: custom(name),
     });
@@ -206,13 +207,13 @@ test("category identity is part of expense retry conflicts, including same-accou
     ids.push(result.category.id);
   }
   const input = groceries(w.id, daily.id);
-  await t.mutation(api.accounting.recordCashExpense, {
+  await t.action(api.accounting.recordCashExpense, {
     ...input,
     userCategoryId: ids[0],
   });
   for (const id of [ids[1], undefined]) {
     await expect(
-      t.mutation(api.accounting.recordCashExpense, {
+      t.action(api.accounting.recordCashExpense, {
         ...input,
         ...(id ? { userCategoryId: id } : {}),
       }),
@@ -224,15 +225,15 @@ test("category identity is part of expense retry conflicts, including same-accou
 });
 
 test("category scope, nature and unresolved legacy nature block invalid posts", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
   const other = await createOwnedWorkspace(t);
   const daily = await createDaily(t, w.id);
-  const foreign = await t.mutation(api.accounting.createUserCategory, {
+  const foreign = await t.action(api.accounting.createUserCategory, {
     workspaceId: other.id,
     selection: food,
   });
-  const income = await t.mutation(api.accounting.createUserCategory, {
+  const income = await t.action(api.accounting.createUserCategory, {
     workspaceId: w.id,
     selection: custom("Salary", "receive"),
   });
@@ -245,7 +246,7 @@ test("category scope, nature and unresolved legacy nature block invalid posts", 
     ["invalid", "category_not_found"],
   ]) {
     await expect(
-      t.mutation(api.accounting.recordCashExpense, {
+      t.action(api.accounting.recordCashExpense, {
         ...input,
         userCategoryId: id,
       }),
@@ -257,7 +258,7 @@ test("category scope, nature and unresolved legacy nature block invalid posts", 
     await ctx.db.patch(id, { nature: undefined, natureSource: "legacy" });
   });
   await expect(
-    t.mutation(api.accounting.recordCashExpense, {
+    t.action(api.accounting.recordCashExpense, {
       ...input,
       userCategoryId: income.category.id,
     }),
@@ -268,19 +269,19 @@ test("category scope, nature and unresolved legacy nature block invalid posts", 
 });
 
 test("reversals retain the category on the mirrored line and restyling changes no posted amount", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
   const daily = await createDaily(t, w.id);
-  const result = await t.mutation(api.accounting.createUserCategory, {
+  const result = await t.action(api.accounting.createUserCategory, {
     workspaceId: w.id,
     selection: food,
   });
   if (result.kind !== "category") throw new Error("Expected category");
-  const posted = await t.mutation(api.accounting.recordCashExpense, {
+  const posted = await t.action(api.accounting.recordCashExpense, {
     ...groceries(w.id, daily.id),
     userCategoryId: result.category.id,
   });
-  await t.mutation(api.accounting.restyleUserCategory, {
+  await t.action(api.accounting.restyleUserCategory, {
     workspaceId: w.id,
     categoryId: result.category.id,
     style: { emoji: "🍎", tone: "positive" },
@@ -308,15 +309,15 @@ test("reversals retain the category on the mirrored line and restyling changes n
 });
 
 test("setup persists server categories atomically, retries once and rejects changed category answers", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const input = {
     functionalCurrency: "COP",
     startingMinorUnits: 100000,
     categories: [food, custom("Friday things")],
   };
-  const first = await t.mutation(api.accounting.ensurePersonalDefaults, input);
+  const first = await t.action(api.accounting.ensurePersonalDefaults, input);
   expect(
-    await t.mutation(api.accounting.ensurePersonalDefaults, input),
+    await t.action(api.accounting.ensurePersonalDefaults, input),
   ).toEqual(first);
   expect(
     (
@@ -326,7 +327,7 @@ test("setup persists server categories atomically, retries once and rejects chan
     ).map((c) => c.name),
   ).toEqual(["Food", "Friday things"]);
   await expect(
-    t.mutation(api.accounting.ensurePersonalDefaults, {
+    t.action(api.accounting.ensurePersonalDefaults, {
       ...input,
       categories: [food],
     }),
@@ -334,9 +335,9 @@ test("setup persists server categories atomically, retries once and rejects chan
 });
 
 test("an account-door setup answer rolls back the entire setup", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   await expect(
-    t.mutation(api.accounting.ensurePersonalDefaults, {
+    t.action(api.accounting.ensurePersonalDefaults, {
       functionalCurrency: "COP",
       startingMinorUnits: 0,
       categories: [food, custom("Savings", "stillMine")],
@@ -349,10 +350,10 @@ test("an account-door setup answer rolls back the entire setup", async () => {
 });
 
 test("a preset without a final account uses Otros rather than blocking or rematching its name", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
   const daily = await createDaily(t, w.id);
-  const result = await t.mutation(api.accounting.createUserCategory, {
+  const result = await t.action(api.accounting.createUserCategory, {
     workspaceId: w.id,
     selection: food,
   });
@@ -362,7 +363,7 @@ test("a preset without a final account uses Otros rather than blocking or rematc
     if (!id) throw new Error("Missing id");
     await ctx.db.patch(id, { defaultPostingAccountCode: undefined });
   });
-  const posted = await t.mutation(api.accounting.recordCashExpense, {
+  const posted = await t.action(api.accounting.recordCashExpense, {
     ...groceries(w.id, daily.id),
     userCategoryId: result.category.id,
   });
@@ -373,14 +374,14 @@ test("a preset without a final account uses Otros rather than blocking or rematc
 });
 
 test("category creation is idempotent by normalized name without changing classification or style", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
-  const first = await t.mutation(api.accounting.createUserCategory, {
+  const first = await t.action(api.accounting.createUserCategory, {
     workspaceId: w.id,
     selection: custom("Café"),
   });
   expect(
-    await t.mutation(api.accounting.createUserCategory, {
+    await t.action(api.accounting.createUserCategory, {
       workspaceId: w.id,
       selection: custom(" CAFE "),
     }),
@@ -389,7 +390,7 @@ test("category creation is idempotent by normalized name without changing classi
     await t.query(api.accounting.listUserCategories, { workspaceId: w.id }),
   ).toHaveLength(1);
   await expect(
-    t.mutation(api.accounting.createUserCategory, {
+    t.action(api.accounting.createUserCategory, {
       workspaceId: w.id,
       selection: custom("cafe", "receive"),
     }),
@@ -397,12 +398,12 @@ test("category creation is idempotent by normalized name without changing classi
 });
 
 test("all category presets map to valid accounts in both supported templates", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const presets = await t.query(api.accounting.listCategoryPresets, {});
   expect(presets.map((p) => p.id)).not.toContain("transfer");
   expect(presets.filter((p) => p.nature === "Expense")).toHaveLength(11);
   for (const template of ["co-puc-personal@1", "us-gaap-personal@1"]) {
-    const w = await t.mutation(api.accounting.createPersonalWorkspace, {
+    const w = await provisionWorkspace(t, {
       functionalCurrency: "USD",
       chartOfAccountsTemplate: template,
     });
@@ -410,7 +411,7 @@ test("all category presets map to valid accounts in both supported templates", a
       workspaceId: w.id,
     });
     for (const preset of presets) {
-      const result = await t.mutation(api.accounting.createUserCategory, {
+      const result = await t.action(api.accounting.createUserCategory, {
         workspaceId: w.id,
         selection: { kind: "preset", presetId: preset.id, style },
       });
@@ -426,10 +427,10 @@ test("all category presets map to valid accounts in both supported templates", a
 });
 
 test("advanced override keeps the category but rejects an account from another recording flow", async () => {
-  const t = convexAccounting(modules);
+  const t = await convexAccounting(modules);
   const w = await createOwnedWorkspace(t);
   const daily = await createDaily(t, w.id);
-  const result = await t.mutation(api.accounting.createUserCategory, {
+  const result = await t.action(api.accounting.createUserCategory, {
     workspaceId: w.id,
     selection: food,
   });
@@ -438,7 +439,7 @@ test("advanced override keeps the category but rejects an account from another r
     ...groceries(w.id, daily.id),
     userCategoryId: result.category.id,
   };
-  const posted = await t.mutation(api.accounting.recordCashExpense, {
+  const posted = await t.action(api.accounting.recordCashExpense, {
     ...input,
     ledgerAccountCode: "512010",
   });
@@ -447,7 +448,7 @@ test("advanced override keeps the category but rejects an account from another r
     userCategoryName: "Food",
   });
   await expect(
-    t.mutation(api.accounting.recordCashExpense, {
+    t.action(api.accounting.recordCashExpense, {
       ...input,
       idempotencyKey: "wrong-flow",
       ledgerAccountCode: "42959501",
