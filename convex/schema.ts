@@ -1,6 +1,7 @@
 import { categoryFields } from "./categoryValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { mobilePlatform } from "./lib/securityValues";
 import {
   accountNature,
   normalSide,
@@ -14,6 +15,26 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     ...categoryFields,
   }).index("by_workspace", ["workspaceId"]),
+  mobileDevices: defineTable({
+    clerkUserId: v.string(),
+    clerkSessionId: v.string(),
+    clerkClientId: v.string(),
+    installId: v.string(),
+    label: v.string(),
+    platform: mobilePlatform,
+    appVersion: v.string(),
+    createdAt: v.number(),
+    lastSeenAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  }).index("by_session", ["clerkSessionId"])
+    .index("by_user", ["clerkUserId"]),
+  clerkRevocations: defineTable({
+    clerkUserId: v.string(),
+    clerkSessionId: v.string(),
+    requestedAt: v.number(),
+    attempts: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_session", ["clerkSessionId"]),
   personalDefaults: defineTable({
     ownerSubject: v.string(),
     workspaceId: v.id("workspaces"),
