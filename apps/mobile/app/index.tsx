@@ -8,6 +8,11 @@ import {
   usePostedActivity,
 } from "../src/features/activity";
 import { formatMoney } from "../src/features/money";
+import {
+  calendarMonthShape,
+  monthPaceProgress,
+  projectedMonthSpendMinorUnits,
+} from "../src/features/monthPace";
 import { Setup } from "../src/features/Setup";
 import { spentMonthEyebrow } from "../src/features/timeZones";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
@@ -17,6 +22,7 @@ import {
   ConfirmationScreen,
   Header,
   PrimaryButton,
+  ProgressBar,
   Screen,
   SecondaryButton,
   ui,
@@ -38,7 +44,22 @@ function Home({
   const activity = usePostedActivity(workspaceId, timeZone);
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
   const actions = useRef<BottomSheetModal>(null);
+  const [paceOpen, setPaceOpen] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
+  const { day, daysInMonth } = calendarMonthShape(calendar.date);
+  const paceProgress = monthPaceProgress(day, daysInMonth);
+  const projectedMinorUnits =
+    activity === undefined
+      ? 0
+      : projectedMonthSpendMinorUnits(
+          activity.monthSpendMinorUnits,
+          day,
+          daysInMonth,
+        );
+  const projectedLabel = formatMoney(
+    { currency, minorUnits: projectedMinorUnits },
+    { hideZeroDecimals: true },
+  );
   return (
     <Screen>
       <Header
@@ -51,23 +72,53 @@ function Home({
           ✓ Posted
         </Text>
       )}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Money actions"
-        onPress={() => actions.current?.present()}
-        style={{ minHeight: touchTarget, marginVertical: spacing.section }}
-      >
+      <View style={{ gap: spacing.lg, marginVertical: spacing.section }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Money actions"
+          onPress={() => actions.current?.present()}
+          style={{ minHeight: touchTarget, justifyContent: "center" }}
+        >
+          {activity ? (
+            <Text adjustsFontSizeToFit numberOfLines={1} style={ui.hero}>
+              {formatMoney(
+                {
+                  currency,
+                  minorUnits: activity.monthSpendMinorUnits,
+                },
+                { hideZeroDecimals: true },
+              )}
+            </Text>
+          ) : (
+            <ActivityIndicator />
+          )}
+        </Pressable>
         {activity ? (
-          <Text adjustsFontSizeToFit numberOfLines={1} style={ui.hero}>
-            {formatMoney({
-              currency,
-              minorUnits: activity.monthSpendMinorUnits,
-            })}
-          </Text>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Show month pace details"
+            accessibilityState={{ expanded: paceOpen }}
+            onPress={() => setPaceOpen((open) => !open)}
+            style={{ gap: spacing.md }}
+          >
+            <ProgressBar
+              value={paceProgress}
+              label={`Day ${day} of ${daysInMonth}`}
+            />
+            {paceOpen ? (
+              <View style={{ gap: spacing.xs }}>
+                <Text style={ui.body}>
+                  Day {day} of {daysInMonth}
+                </Text>
+                <Text style={ui.muted}>
+                  On pace for{"\n"}
+                  {projectedLabel}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
+        ) : null}
+      </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.lg }}>
         <ActionTile
           title="Drafts"

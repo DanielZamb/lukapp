@@ -5,7 +5,16 @@ import {
 } from "@gorhom/bottom-sheet";
 import type { RefObject } from "react";
 import { Text } from "react-native";
-import { Choice, Header, PrimaryButton, theme, ui } from "../../ui/core";
+import {
+  Choice,
+  Field,
+  Header,
+  ListGroup,
+  ListRow,
+  PrimaryButton,
+  theme,
+  ui,
+} from "../../ui/core";
 import { spacing } from "../../ui/tokens";
 import type { PlaceDraft } from "./usePostingEditor";
 import type { PlaceKind } from "./pendingPostingSchema";
@@ -69,32 +78,35 @@ export function AccountSetupForm(props: {
               }}
             />
           ))}
-          <Text style={ui.label}>
-            {owed ? "AMOUNT OWED" : "AMOUNT HELD"} · {props.currency}
-          </Text>
-          <Text style={ui.muted}>
-            {owed
-              ? "How much is outstanding on this date?"
-              : "How much do you hold on this date?"}{" "}
-            Enter zero or a positive amount. Earlier activity is outside Start
-            Tracking.
-          </Text>
-          <BottomSheetTextInput
+          <Field
+            label={`${owed ? "Amount owed" : "Amount held"} · ${props.currency}`}
+            helperText={
+              owed
+                ? "How much is outstanding on this date? Enter zero or a positive amount. Earlier activity is outside Start Tracking."
+                : "How much do you hold on this date? Enter zero or a positive amount. Earlier activity is outside Start Tracking."
+            }
             accessibilityLabel={owed ? "Amount owed" : "Amount held"}
             value={value.amount}
             editable={props.editable}
             keyboardType="numbers-and-punctuation"
             onChangeText={(amount) => props.onChange({ ...value, amount })}
-            style={ui.input}
+            InputComponent={BottomSheetTextInput}
           />
-          <Choice
-            label="Starting date"
-            detail={value.date}
-            selected={false}
-            onPress={() => {
-              if (props.editable) props.onDate();
-            }}
-          />
+          <ListGroup>
+            <ListRow
+              title="Starting date"
+              value={new Intl.DateTimeFormat("en-US", {
+                dateStyle: "long",
+              }).format(new Date(`${value.date}T12:00:00`))}
+              onPress={
+                props.editable
+                  ? () => {
+                      props.onDate();
+                    }
+                  : undefined
+              }
+            />
+          </ListGroup>
           {!!props.error && (
             <Text accessibilityRole="alert" style={ui.error}>
               {props.error}
