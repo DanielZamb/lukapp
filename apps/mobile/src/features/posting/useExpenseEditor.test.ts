@@ -9,7 +9,7 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
-import { usePostingEditor } from "./usePostingEditor";
+import { usePostingEditor, type LoadResult } from "./usePostingEditor";
 import type { PendingPosting } from "./pendingPostingSchema";
 type Receipt = { description: string; amount: { currency: string; minorUnits: number } };
 type ExpenseTransport = {
@@ -20,7 +20,7 @@ type ExpenseTransport = {
   newKey: () => string;
   reportFailure?: (error: unknown) => boolean;
 };
-import type { PendingExpense } from "../pendingExpense";
+import type { PendingExpense } from "../pendingExpenseSchema";
 
 const account = {
   workspaceId: "workspace",
@@ -38,19 +38,40 @@ async function open(transport: ExpenseTransport) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let editor: ReturnType<typeof usePostingEditor> | undefined;
   // Keep the literal expense assertions while driving the shared entry lifecycle.
+  let postingKey: string | undefined;
   const shared = {
     ...transport,
-    load: async (): Promise<PendingPosting | null> => {
+    load: async (): Promise<LoadResult> => {
       const payload = await transport.load();
-      return payload ? { kind: "expense", payload } : null;
+      if (!payload) return { kind: "none" };
+      postingKey = payload.idempotencyKey;
+      return {
+        kind: "pending",
+        id: payload.idempotencyKey,
+        command: { kind: "expense", payload },
+      };
     },
     save: async (entry: PendingPosting) => {
       if (entry.kind !== "expense") throw new Error("Expected expense");
+      postingKey = entry.payload.idempotencyKey;
       await transport.save(entry.payload);
+      return { id: postingKey, command: entry };
     },
     post: async (entry: PendingPosting) => {
       if (entry.kind !== "expense") throw new Error("Expected expense");
       return transport.post(entry.payload);
+    },
+    clear: async () => {
+      const key = postingKey;
+      postingKey = undefined;
+      if (!key) return;
+      const stored = await transport.load();
+      if (stored && stored.idempotencyKey !== key) return;
+      await transport.clear();
+    },
+    abort: async () => {
+      await transport.clear();
+      postingKey = undefined;
     },
   };
   function Harness() {

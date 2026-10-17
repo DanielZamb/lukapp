@@ -147,6 +147,7 @@ function Admission() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="post" />
+      <Stack.Screen name="drafts" />
       <Stack.Screen name="account" />
       <Stack.Screen name="overview" />
       <Stack.Screen name="plans" />

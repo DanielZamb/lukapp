@@ -44,6 +44,28 @@ test("Field renders label, input, and helper copy", async () => {
   expect(root?.root.findAllByType("input")).toHaveLength(1);
 });
 
+test("ActionTile with count 0 stays pressable and shows 0", async () => {
+  const onPress = vi.fn();
+  await act(async () => {
+    root = create(
+      createElement(ActionTile, {
+        title: "Drafts",
+        detail: "On this device",
+        icon: "document-text-outline",
+        count: 0,
+        onPress,
+      }),
+    );
+  });
+  const labels =
+    root?.root.findAllByType("text").map((node) => node.children.join("")) ?? [];
+  expect(labels).toContain("0");
+  const button = root?.root.findByType("button");
+  expect(button?.props.accessibilityLabel).toBe("Drafts, 0");
+  await act(async () => button?.props.onPress());
+  expect(onPress).toHaveBeenCalledOnce();
+});
+
 test("ListRow shows chevron only when actionable and marks the last grouped row", async () => {
   await act(async () => {
     root = create(

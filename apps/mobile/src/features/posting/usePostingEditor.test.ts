@@ -10,7 +10,11 @@ import {
   parsePendingPosting,
   type PendingPosting,
 } from "./pendingPostingSchema";
-import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
+import {
+  usePostingEditor,
+  type LoadResult,
+  type PostingTransport,
+} from "./usePostingEditor";
 
 const account = {
   workspaceId: "workspace",
@@ -28,8 +32,11 @@ afterEach(async () => {
 function transport() {
   let key = 0;
   return {
-    load: vi.fn(async (): Promise<PendingPosting | null> => null),
-    save: vi.fn(async (_entry: PendingPosting) => {}),
+    load: vi.fn(async (): Promise<LoadResult> => ({ kind: "none" })),
+    save: vi.fn(async (entry: PendingPosting, draftId?: string) => ({
+      id: draftId ?? `saved-${key || 1}`,
+      command: entry,
+    })),
     post: vi.fn(async (entry: PendingPosting) => ({
       description:
         "description" in entry.payload
@@ -41,6 +48,7 @@ function transport() {
         : {}),
     })),
     clear: vi.fn(async () => {}),
+    abort: vi.fn(async () => {}),
     newKey: () => `entry-${++key}`,
   } satisfies PostingTransport;
 }
@@ -107,7 +115,11 @@ const entries: PendingPosting[] = [
 for (const saved of entries) {
   test(`${saved.kind} restores and locks its exact command across a lost reply, guard error and retry`, async () => {
     const api = transport();
-    api.load.mockResolvedValue(saved);
+    api.load.mockResolvedValue({
+      kind: "pending",
+      id: saved.payload.idempotencyKey,
+      command: saved,
+    });
     api.post.mockRejectedValueOnce(new Error("Response lost"));
     api.post.mockRejectedValueOnce(
       new ConvexError({ code: "provider_unavailable" }),
@@ -305,11 +317,17 @@ test("a late setup acknowledgement cannot clear a new admission's saved transfer
   let acknowledge = () => {};
   const api = {
     ...transport(),
-    save: (entry: PendingPosting) =>
-      runLocalInputWrite(oldLease, async () => {
+    save: async (entry: PendingPosting) => {
+      await runLocalInputWrite(oldLease, async () => {
         stored = entry;
-      }),
+      });
+      return { id: "setup-row", command: entry };
+    },
     clear: () =>
+      runLocalInputWrite(oldLease, async () => {
+        stored = null;
+      }),
+    abort: () =>
       runLocalInputWrite(oldLease, async () => {
         stored = null;
       }),
@@ -387,15 +405,19 @@ test("a fresh editor defaults the accounting date to the Workspace calendar day"
 test("restored setup from To selects the new destination and keeps its original source", async () => {
   const api = transport();
   api.load.mockResolvedValue({
-    kind: "setup",
-    target: { kind: "destination", sourceProfileId: "original-bank" },
-    payload: {
-      workspaceId: "workspace",
-      amount: { currency: "COP", minorUnits: 0 },
-      accountingDate: "2026-10-17",
-      idempotencyKey: "destination-setup",
-      name: "Card",
-      productKind: "creditCard",
+    kind: "pending",
+    id: "destination-setup",
+    command: {
+      kind: "setup",
+      target: { kind: "destination", sourceProfileId: "original-bank" },
+      payload: {
+        workspaceId: "workspace",
+        amount: { currency: "COP", minorUnits: 0 },
+        accountingDate: "2026-10-17",
+        idempotencyKey: "destination-setup",
+        name: "Card",
+        productKind: "creditCard",
+      },
     },
   });
   const editor = await open(api);
@@ -405,4 +427,38 @@ test("restored setup from To selects the new destination and keeps its original 
   expect(editor().profileId).toBe("original-bank");
   expect(editor().destinationId).toBe("new-card");
   expect(editor().entryType).toBe("transfer");
+});
+
+test("an accounting rejection after leaving the screen still reopens the draft", async () => {
+  const api = transport();
+  let reject: (error: unknown) => void = () => {};
+  api.post.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-12,50");
+    editor().setDescription("Taxi");
+  });
+  let submitted: Promise<void> | undefined;
+  await act(async () => {
+    submitted = editor().submit();
+  });
+  await act(async () => root?.unmount());
+  root = undefined;
+  reject(new ConvexError({ kind: "accounting", code: "locked_period", message: "Locked Period" }));
+  await submitted;
+  expect(api.abort).toHaveBeenCalledTimes(1);
+  expect(api.clear).not.toHaveBeenCalled();
+});
+
+test("opening a posting row chosen from Drafts asks the transport for that row", async () => {
+  const api = transport();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  function Harness() {
+    usePostingEditor(account, api, { draftId: "row-b" });
+    return null;
+  }
+  await act(async () => {
+    root = create(createElement(Harness));
+  });
+  expect(api.load).toHaveBeenCalledWith("row-b");
 });

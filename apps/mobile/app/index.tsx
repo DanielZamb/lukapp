@@ -1,4 +1,5 @@
 import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
+import { useAuth } from "@clerk/expo";
 import { router, useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
@@ -10,6 +11,7 @@ import { formatMoney } from "../src/features/money";
 import { Setup } from "../src/features/Setup";
 import { spentMonthEyebrow } from "../src/features/timeZones";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
+import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import {
   ActionTile,
   ConfirmationScreen,
@@ -25,13 +27,16 @@ function Home({
   workspaceId,
   currency,
   timeZone,
+  subject,
 }: {
   workspaceId: string;
   currency: string;
   timeZone: string;
+  subject: string;
 }) {
   const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
+  const drafts = useLocalEntryDrafts({ subject, workspaceId });
   const actions = useRef<BottomSheetModal>(null);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   return (
@@ -66,9 +71,11 @@ function Home({
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.lg }}>
         <ActionTile
           title="Drafts"
-          detail="Coming later"
+          detail="On this device"
           icon="document-text-outline"
           primary
+          count={drafts.count ?? undefined}
+          onPress={() => router.push("/drafts")}
         />
         <ActionTile
           title="Alerts"
@@ -111,6 +118,7 @@ function Home({
 }
 export default function Index() {
   const defaults = usePersonalDefaults();
+  const { userId } = useAuth();
   const [confirmed, setConfirmed] = useState(false);
   if (confirmed)
     return (
@@ -120,16 +128,16 @@ export default function Index() {
         onContinue={() => setConfirmed(false)}
       />
     );
-  if (defaults === undefined)
-    return (
-      <Screen>
-        <ActivityIndicator />
-      </Screen>
-    );
   if (defaults === null)
     return (
       <Screen>
         <Setup onComplete={() => setConfirmed(true)} />
+      </Screen>
+    );
+  if (defaults === undefined || !userId)
+    return (
+      <Screen>
+        <ActivityIndicator />
       </Screen>
     );
   return (
@@ -137,6 +145,7 @@ export default function Index() {
       workspaceId={defaults.workspace.id}
       currency={defaults.workspace.functionalCurrency}
       timeZone={defaults.workspace.timeZone}
+      subject={userId}
     />
   );
 }

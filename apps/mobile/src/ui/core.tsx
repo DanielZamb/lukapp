@@ -331,17 +331,30 @@ export function ActionTile({
   primary,
   onPress,
   icon,
+  count,
 }: {
   title: string;
   detail: string;
   primary?: boolean;
   onPress?: () => void;
   icon: ComponentProps<typeof Ionicons>["name"];
+  count?: number;
 }) {
   const color = primary ? theme.primaryForeground : theme.foreground;
   const content = (
     <>
       <Ionicons name={icon} size={28} color={color} />
+      {count !== undefined ? (
+        <Text
+          style={{
+            fontSize: fontSize.title,
+            fontFamily: font.extrabold,
+            color,
+          }}
+        >
+          {count}
+        </Text>
+      ) : null}
       <View style={{ flex: 1 }} />
       <Text style={{ fontSize: fontSize.title, fontFamily: font.bold, color }}>
         {title}
@@ -361,8 +374,15 @@ export function ActionTile({
     styles.tile,
     { backgroundColor: primary ? theme.primary : theme.secondary },
   ];
+  const accessibilityLabel =
+    count === undefined ? title : `${title}, ${count}`;
   return onPress ? (
-    <Pressable accessibilityRole="button" onPress={onPress} style={style}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={style}
+    >
       {content}
     </Pressable>
   ) : (
