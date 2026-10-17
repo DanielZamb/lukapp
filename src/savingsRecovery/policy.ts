@@ -1,3 +1,4 @@
+import { calendarDate } from "../accounting/timeZone";
 import type { RecoverySuggestion } from "./types";
 
 export class RecoveryError extends Error {
@@ -14,8 +15,8 @@ export function requireMonth(month: string) {
     throw new RecoveryError("month_invalid");
 }
 
-export function currentRecoveryMonth(now: number) {
-  return new Date(now).toISOString().slice(0, 7);
+export function currentRecoveryMonth(now: number, timeZone: string) {
+  return calendarDate(new Date(now), timeZone).slice(0, 7);
 }
 
 export function requireIdempotencyKey(key: string) {

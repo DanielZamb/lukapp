@@ -1,3 +1,4 @@
+import { workspaceTimeZone } from "../src/accounting/timeZone";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type {
@@ -32,6 +33,11 @@ export function recoveryReadStore(ctx: Pick<QueryCtx, "db">, workspaceId: string
       const workspace = await ctx.db.get(id);
       if (!workspace) throw new RecoveryError("workspace_not_found");
       return workspace.functionalCurrency;
+    },
+    timeZone: async () => {
+      const workspace = await ctx.db.get(id);
+      if (!workspace) throw new RecoveryError("workspace_not_found");
+      return workspaceTimeZone(workspace);
     },
     listPlans: async () => (await ctx.db.query("savingsRecoveryPlans")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", id)).collect()).map(planView),

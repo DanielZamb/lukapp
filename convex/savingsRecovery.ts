@@ -10,7 +10,6 @@ import {
 import { recoveryReadStore } from "./savingsRecoveryStore";
 import { runRecovery } from "./savingsRecoveryErrors";
 import { evaluateWorkspace } from "../src/savingsRecovery/evaluate";
-import { currentRecoveryMonth } from "../src/savingsRecovery/policy";
 
 export const evaluate = ownerQuery({
   args: { workspaceId: v.string(), month: v.optional(v.string()), refreshKey: v.optional(v.string()) },
@@ -19,7 +18,7 @@ export const evaluate = ownerQuery({
     await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
     const now = Date.now();
     return runRecovery(() => evaluateWorkspace(recoveryReadStore(ctx, args.workspaceId), {
-      now, month: args.month ?? currentRecoveryMonth(now),
+      now, ...(args.month ? { month: args.month } : {}),
     }));
   },
 });

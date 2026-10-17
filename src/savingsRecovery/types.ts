@@ -75,6 +75,7 @@ export type RecordContribution = {
 
 export type RecoveryReadStore = {
   functionalCurrency: () => Promise<string>;
+  timeZone: () => Promise<string>;
   listPlans: () => Promise<RecoveryPlan[]>;
   listContributions: () => Promise<RecoveryContribution[]>;
   listProfiles: () => Promise<RecoveryProfile[]>;

@@ -8,7 +8,7 @@ async function setup() {
   const fixture = await accountingFixture(modules);
   const { t } = fixture;
   const { workspace, financialAccountProfile } = await t.action(api.accounting.ensurePersonalDefaults, {
-    functionalCurrency: "COP", startingMinorUnits: 0,
+    functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota",
   });
   const savings = await t.action(api.accounting.createFinancialAccountProfile, {
     workspaceId: workspace.id, name: "Savings", productKind: "savingsAccount",
@@ -165,4 +165,12 @@ test("progress for a month counts only contributions made by that month's end", 
   expect((await month("2026-10")).plans[0]).toMatchObject({
     recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, dueMinorUnits: 230_000,
   });
+});
+
+test("a plan activated late on the month's last evening belongs to that month in the workspace zone", async () => {
+  const s = await setup();
+  vi.setSystemTime(Date.parse("2026-10-31T23:30:00-05:00"));
+  const plan = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  expect(plan.plan.activationMonth).toBe("2026-10");
+  expect(await s.read()).toMatchObject({ currentMonth: "2026-10" });
 });

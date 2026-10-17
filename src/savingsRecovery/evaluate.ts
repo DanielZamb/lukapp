@@ -44,7 +44,8 @@ export async function evaluateWorkspace(
   store: RecoveryReadStore,
   input: { now: number; month?: string },
 ) {
-  const month = input.month ?? currentRecoveryMonth(input.now);
+  const timeZone = await store.timeZone();
+  const month = input.month ?? currentRecoveryMonth(input.now, timeZone);
   requireMonth(month);
   const [currency, plans, contributions, profiles, expenses] = await Promise.all([
     store.functionalCurrency(),
@@ -85,7 +86,7 @@ export async function evaluateWorkspace(
     }));
   return {
     month,
-    currentMonth: currentRecoveryMonth(input.now),
+    currentMonth: currentRecoveryMonth(input.now, timeZone),
     currency,
     plans: views,
     candidates: expenses

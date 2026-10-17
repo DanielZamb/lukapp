@@ -55,7 +55,7 @@ export async function activatePlan(
     installmentMinorUnits: suggestion.installmentMinorUnits,
     impliedAnnualRateBps: suggestion.impliedAnnualRateBps,
     currency,
-    activationMonth: currentRecoveryMonth(input.now),
+    activationMonth: currentRecoveryMonth(input.now, await store.timeZone()),
     idempotencyKey: input.idempotencyKey,
     createdBy: input.actorId,
     createdAt: input.now,

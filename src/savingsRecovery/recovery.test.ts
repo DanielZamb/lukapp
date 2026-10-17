@@ -24,6 +24,7 @@ function memory() {
   let next = 1;
   const store: RecoveryWriteStore = {
     functionalCurrency: async () => "COP",
+    timeZone: async () => "America/Bogota",
     listPlans: async () => plans,
     listContributions: async () => contributions,
     listProfiles: async () => profiles,
