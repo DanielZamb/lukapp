@@ -70,6 +70,7 @@ import {
   writeInstallMarker,
 } from "./nativeEntry";
 import type { InstallMarker } from "./installMarker";
+import { EntryController } from "./entryController";
 const marker: InstallMarker = {
   version: 1,
   installId: "497af871-e049-4102-b496-4cd529cf60b6",
@@ -189,3 +190,53 @@ test("revocation deletes only the app enrollment sentinel through its own servic
   });
   expect(os.authenticate).not.toHaveBeenCalled();
 });
+
+test.each(["biometric prompt", "sentinel write"])(
+  "identity loss during the %s drains native enrollment before deleting its sentinel",
+  async stage => {
+    let sentinel: string | null = null;
+    let release = () => {};
+    let started = () => {};
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const reached = new Promise<void>(resolve => { started = resolve; });
+    os.authenticate.mockImplementation(async () => {
+      if (stage === "biometric prompt") { started(); await blocked; }
+      return { success: true };
+    });
+    os.setSentinel.mockImplementation(async (_key: string, value: string) => {
+      if (stage === "sentinel write") { started(); await blocked; }
+      sentinel = value;
+    });
+    os.removeSentinel.mockImplementation(async () => { sentinel = null; });
+    await writeInstallMarker({ version: 1, installId: marker.installId, kind: "sign-in-required" });
+    const signOut = vi.fn(async () => {});
+    const gate = new EntryController({
+      now: () => 0, readMarker: readInstallMarker, writeMarker: writeInstallMarker,
+      unlock: unlockBiometry, enroll: enrollBiometry, clearEnrollment: clearBiometricEnrollment,
+      signOut, initializePrivacy: initializeScreenPrivacy,
+      hide: hideFinancialScreen, reveal: revealFinancialScreen,
+      cancelPrompt: async () => {}, clearInput: async () => {},
+    });
+    await gate.setIdentity(null);
+    gate.approveSignIn(marker.sessionId);
+    await gate.setIdentity({ subject: marker.subject, sessionId: marker.sessionId });
+    const enrollment = gate.unlock();
+    await reached;
+    const cleanup = gate.setIdentity(null);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(gate.getSnapshot()).toEqual({ state: { kind: "revocation", cleanup: "running" }, obscured: true });
+    expect((await readInstallMarker()).kind).toBe("wipe-required");
+    expect(signOut).not.toHaveBeenCalled();
+    release();
+    await Promise.all([enrollment, cleanup]);
+    expect({ sentinel, marker: (await readInstallMarker()).kind, state: gate.getSnapshot().state.kind }).toEqual({
+      sentinel: null, marker: "sign-in-required", state: "sign-in",
+    });
+    expect(os.setSentinel).toHaveBeenCalledExactlyOnceWith(
+      `enrollment.${marker.installId}`, `${marker.installId}:owner`,
+      expect.objectContaining({ requireAuthentication: true, keychainAccessible: 6 }),
+    );
+    expect(signOut).toHaveBeenCalledOnce();
+    gate.dispose();
+  },
+);

@@ -1,3 +1,4 @@
+import { EntryController, type EntryDependencies } from "../../local-auth/entryController";
 import { requiresLocalWipe } from "../../local-auth/accessFailure";
 import {
   LocalInputLease,
@@ -422,3 +423,75 @@ test("an old mounted transport cannot save or start another post after its lease
   expect(api.post).not.toHaveBeenCalled();
   expect(editor().posted).toBeNull();
 });
+
+for (const interruption of ["inactivity", "navigation"]) {
+  test(`a late acknowledgement after ${interruption} remount preserves the next expense's exact retry payload`, async () => {
+    let now = 0;
+    const identity = { subject: `remount-${interruption}`, sessionId: "session" };
+    const gate = new EntryController({
+      now: () => now,
+      readMarker: async () => ({
+        version: 1, installId: "497af871-e049-4102-b496-4cd529cf60b6",
+        kind: "enrolled", ...identity,
+      }),
+      writeMarker: async () => {}, unlock: async () => {}, enroll: async () => {},
+      signOut: async () => {}, initializePrivacy: async () => {},
+      hide: async () => {}, reveal: async () => {}, cancelPrompt: async () => {},
+      clearInput: async () => {}, clearEnrollment: async () => {},
+    } satisfies EntryDependencies);
+    await gate.setIdentity(identity);
+    await gate.unlock();
+    const lease = gate.unlockedInputLease();
+    if (!lease) throw new Error("Missing lease");
+    let stored: PendingExpense | null = null;
+    let acknowledge = () => {};
+    const api = {
+      ...transport(),
+      load: async () => stored,
+      save: (payload: PendingExpense) => runLocalInputWrite(lease, async () => { stored = payload; }),
+      clear: () => runLocalInputWrite(lease, async () => { stored = null; }),
+    };
+    api.post.mockImplementationOnce(payload => new Promise(resolve => {
+      acknowledge = () => resolve({ description: payload.description, amount: payload.amount });
+    }));
+    const old = await open(api);
+    await act(async () => { old().setAmount("-1,00"); old().setDescription("Expense A"); });
+    let original: Promise<void> | undefined;
+    await act(async () => { original = old().submit(); });
+    expect(api.post.mock.calls[0][0].idempotencyKey).toBe("expense-1");
+    if (interruption === "inactivity") {
+      now = 120_000;
+      gate.tick();
+      expect(gate.getSnapshot().state.kind).toBe("locked");
+    }
+    await act(async () => root?.unmount());
+    if (interruption === "inactivity") await gate.unlock();
+    expect(gate.isOpenFor(identity)).toBe(true);
+    const next = await open(api);
+    expect(next().description).toBe("Expense A");
+    await act(async () => { await next().submit(); });
+    expect(api.post.mock.calls[1][0]).toEqual(api.post.mock.calls[0][0]);
+    await act(async () => {
+      next().setAmount("-2,50"); next().setDescription("Expense B");
+      next().setDate("2026-10-16"); next().setUserCategoryId("coffee");
+    });
+    api.post.mockRejectedValueOnce(new Error("B response lost"));
+    await act(async () => { await next().submit(); });
+    const expected = {
+      workspaceId: "workspace", financialAccountProfileId: "cash",
+      amount: { currency: "COP", minorUnits: 250 }, accountingDate: "2026-10-16",
+      description: "Expense B", idempotencyKey: "expense-2", userCategoryId: "coffee",
+    };
+    expect(stored).toEqual(expected);
+    await act(async () => { acknowledge(); await original; });
+    expect(stored).toEqual(expected);
+    await act(async () => root?.unmount());
+    const reopened = await open(api);
+    expect(reopened().editable).toBe(false);
+    expect(reopened().description).toBe("Expense B");
+    await act(async () => { await reopened().submit(); });
+    expect(api.post.mock.calls[3][0]).toEqual(expected);
+    expect(reopened().posted).toEqual({ description: "Expense B", amount: { currency: "COP", minorUnits: 250 } });
+    gate.dispose();
+  });
+}

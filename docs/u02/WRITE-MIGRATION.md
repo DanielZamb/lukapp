@@ -74,3 +74,9 @@ These checks use real React hooks, the actual U01 lease implementation, controll
 No deployment, provider configuration, actual Clerk session write, device interaction, push, or root-checkout edit occurred. G01's tested dependency and U01's tested local-entry commits were merged locally. The adapter commit is separate from IME commit `d1b23f368f0819d3796ae31f69580e2caa68c7b1` and from this separate U01 privacy-hook caller commit.
 
 Current-source exports have no public mutation bypass. The coordinator still owns the separate inventory of previously deployed functions and compatibility review before deployment. Real Clerk signed `sid` exposure, normally authenticated APIs on the named development deployment, live negative/retry/revocation behavior, end-to-end cleanup on actual native storage, and physical local-entry acceptance remain open. Category reclassification, account setup, and SEN-27 multi-category policy remain the earlier explicit product gaps.
+
+## F01 same-admission remount correction
+
+The editor now invalidates pending callbacks synchronously on unmount and checks that lifetime before clearing saved input. The admission lease remains the save/delete fence for confirmed access loss. The additional editor fence covers inactivity lock/unlock and ordinary navigation remounts that reuse a lease. If A is still in flight, a reopened editor can retry A, submit B, lose B's response, and retain B's exact payload and key when A's original acknowledgement arrives. Reopening still restores B for an exact retry.
+
+The [F01 entry-race receipt](../u01/DEVICE_ADMISSION.md#f01-entry-race-corrections-on-ff059e5) records failing-before reproduction, 275 passing tests, both typechecks, and both native exports. Controller cleanup also covers cold identity mismatch and pending enrollment writes. Provider and physical acceptance remain open. The prototype UI, accounting payload, official Clerk cache, and strong biometric policy are unchanged.
