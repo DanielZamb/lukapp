@@ -2,6 +2,7 @@ import { useAuth, useClerk } from "@clerk/expo";
 import { usePathname } from "expo-router";
 import {
   useEffect,
+  useCallback,
   useLayoutEffect,
   useRef,
   useState,
@@ -9,10 +10,15 @@ import {
   type ReactNode,
 } from "react";
 import { ActivityIndicator, AppState, Text, View } from "react-native";
+import { LocalInstallation } from "./installation";
+import { DeviceAccessFailure, requiresLocalWipe } from "./accessFailure";
+import { LocalInput } from "./localInput";
+import { clearPendingExpense } from "../features/pendingExpense";
 import { LocalEntryInteraction } from "./interaction";
 import { EntryController } from "./entryController";
 import {
   cancelBiometricPrompt,
+  clearBiometricEnrollment,
   enrollBiometry,
   hideFinancialScreen,
   initializeScreenPrivacy,
@@ -47,6 +53,8 @@ export function LocalEntryGate({
         hide: hideFinancialScreen,
         reveal: revealFinancialScreen,
         cancelPrompt: cancelBiometricPrompt,
+        clearInput: clearPendingExpense,
+        clearEnrollment: clearBiometricEnrollment,
       }),
   );
   const snapshot = useSyncExternalStore(
@@ -93,6 +101,12 @@ export function LocalEntryGate({
     };
   }, [controller]);
   const { state, obscured } = snapshot;
+  const lease = controller.unlockedInputLease();
+  const report = useCallback((error: unknown) => {
+    if (!requiresLocalWipe(error)) return false;
+    if (lease) void controller.denyAccessFor(lease);
+    return true;
+  }, [controller, lease]);
   if (state.kind === "sign-in")
     return <>{renderSignIn(controller.approveSignIn)}</>;
   if (
@@ -121,7 +135,13 @@ export function LocalEntryGate({
           accessibilityElementsHidden={obscured}
         >
           <LocalEntryInteraction.Provider value={controller.interaction}>
-            {children}
+            <LocalInstallation.Provider value={controller.unlockedInstallId()}>
+              <LocalInput.Provider value={lease}>
+                <DeviceAccessFailure.Provider value={report}>
+              {children}
+                </DeviceAccessFailure.Provider>
+              </LocalInput.Provider>
+            </LocalInstallation.Provider>
           </LocalEntryInteraction.Provider>
         </View>
         {obscured && (
@@ -138,13 +158,27 @@ export function LocalEntryGate({
     <Screen>
       <Header
         title={
-          state.kind === "reauthentication"
+          state.kind === "revocation"
+            ? "Device access ended"
+            : state.kind === "reauthentication"
             ? "Sign in again"
             : state.kind === "unavailable"
               ? "Local protection unavailable"
               : "Lukapp is locked"
         }
       />
+      {state.kind === "revocation" && (
+        <>
+          <Text style={ui.body}>
+            {state.cleanup === "running"
+              ? "Removing local input and signing out…"
+              : "Local cleanup could not finish. Your information stays locked."}
+          </Text>
+          {state.cleanup === "running" ? <ActivityIndicator /> : (
+            <PrimaryButton label="Retry cleanup" onPress={() => void controller.retryCleanup()} />
+          )}
+        </>
+      )}
       {state.kind === "locked" && (
         <>
           <Text style={ui.body}>

@@ -61,6 +61,7 @@ vi.mock("expo-screen-capture", () => ({
 }));
 import {
   enrollBiometry,
+  clearBiometricEnrollment,
   hideFinancialScreen,
   initializeScreenPrivacy,
   readInstallMarker,
@@ -176,4 +177,15 @@ test("iOS uses native app-switcher protection without forbidding unlocked screen
   expect(os.switcher).toHaveBeenCalledExactlyOnceWith(1);
   expect(os.prevent).not.toHaveBeenCalled();
   expect(os.allow).not.toHaveBeenCalled();
+});
+
+test("revocation deletes only the app enrollment sentinel through its own service", async () => {
+  await clearBiometricEnrollment(marker);
+  expect(os.removeSentinel).toHaveBeenCalledExactlyOnceWith(`enrollment.${marker.installId}`, {
+    keychainService: "lukapp.local-entry.v1",
+    keychainAccessible: 6,
+    requireAuthentication: true,
+    authenticationPrompt: "Unlock Lukapp",
+  });
+  expect(os.authenticate).not.toHaveBeenCalled();
 });

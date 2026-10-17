@@ -1,5 +1,7 @@
 # U01 local entry protection
 
+The later [native admission and cleanup receipt](DEVICE_ADMISSION.md) adds server registration, confirmed-loss deletion, durable cleanup retry, and per-admission write fences. Its integration/acceptance list supersedes the earlier ownership gaps below.
+
 The original ADR-0080 and `docs/research/mobile-access-device-loss-controls.md` govern this change. Clerk remains the authentication, session, and recovery authority. The app keeps the official `@clerk/expo/token-cache` unchanged. Local biometric success opens the mobile UI; it does not grant server access or register a device.
 
 ## Implemented behavior
@@ -10,7 +12,7 @@ The root records touches and scrolling. `useLocalEntryInteraction()` returns a c
 
 A strong native biometric prompt precedes reading an app-only SecureStore enrollment sentinel. Android explicitly requests Class 3 biometry. Device passcode fallback is disabled; the iOS fallback button is hidden. The sentinel uses `requireAuthentication: true`, a dedicated keychain service, and `WHEN_UNLOCKED_THIS_DEVICE_ONLY`. Ordinary unlock only reads it. A missing or invalidated value, cancellation, lockout, unavailable hardware, or unavailable strong enrollment requires full Clerk sign-in. The gate stays closed if strong biometry remains unavailable after sign-in.
 
-A successful explicit Clerk sign-in flow identifies the newly created session before activation. The gate then requires a deliberate **Unlock Lukapp** action to provision a new biometric-bound sentinel. It never silently replaces an invalidated sentinel during ordinary unlock. Enrollment failure does not delete financial input.
+A successful explicit Clerk sign-in flow identifies the newly created session before activation. The gate then requires a deliberate **Unlock Lukapp** action to provision a new biometric-bound sentinel. It never silently replaces an invalidated sentinel during ordinary unlock. Fresh enrollment first deletes any prior owner input surviving reinstall; failure keeps entry closed.
 
 The nonsecret install marker lives in the app's cache container, which is excluded from backup. It contains a random install ID and either a sign-in-required state or the enrolled Clerk subject and session ID. A missing, malformed, or unsupported marker requires sign-in. If Clerk rehydrates a surviving Keychain session on such an install, the gate blocks access and calls the official Clerk sign-out method before accepting new sign-in. If that fails, the app remains locked. Cache eviction conservatively behaves like reinstall. The marker and sentinel contain no Clerk token, provider secret, or independent bearer credential.
 
