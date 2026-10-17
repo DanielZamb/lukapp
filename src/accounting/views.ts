@@ -39,12 +39,14 @@ export async function journalContext(
   store: AccountingStore,
   workspace: StoredWorkspace,
 ) {
-  const [accounts, profiles] = await Promise.all([
+  const [accounts, profiles, categories] = await Promise.all([
     store.listLedgerAccounts(workspace.id),
     store.listProfiles(workspace.id),
+    store.listCategories(workspace.id),
   ]);
   return {
     workspace,
+    categories: new Map(categories.map((c) => [c.id, c])),
     accounts: new Map(accounts.map((account) => [account.id, account])),
     profiles: new Map(profiles.map((profile) => [profile.id, profile])),
   };
@@ -58,7 +60,10 @@ export async function toPostedJournalEntry(
   entry: StoredJournalEntry,
   links: { replay: boolean; reversedByEntryId?: string },
 ): Promise<PostedJournalEntry> {
-  const period = await store.getAccountingPeriod(context.workspace.id, entry.period);
+  const period = await store.getAccountingPeriod(
+    context.workspace.id,
+    entry.period,
+  );
   if (!period) {
     throw new AccountingError("accounting_period_not_found");
   }
@@ -73,7 +78,10 @@ export async function toPostedJournalEntry(
     accountingPeriod: period,
     amount: {
       currency: context.workspace.functionalCurrency,
-      minorUnits: entry.lines.reduce((sum, line) => sum + line.debitMinorUnits, 0),
+      minorUnits: entry.lines.reduce(
+        (sum, line) => sum + line.debitMinorUnits,
+        0,
+      ),
     },
     postedBy: entry.postedBy,
     postedAt: entry.postedAt,
@@ -81,6 +89,13 @@ export async function toPostedJournalEntry(
     lines: entry.lines.map((line) => {
       const account = requireAccount(context.accounts, line.ledgerAccountId);
       return {
+        ...(line.userCategoryId
+          ? {
+              userCategoryId: line.userCategoryId,
+              userCategoryName: context.categories.get(line.userCategoryId)
+                ?.name,
+            }
+          : {}),
         ledgerAccountId: line.ledgerAccountId,
         code: account.code,
         name: account.name,

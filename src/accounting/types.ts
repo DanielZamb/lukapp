@@ -1,3 +1,5 @@
+import type { UserCategory } from "./categories/types";
+
 export type Actor = {
   userId: string;
 };
@@ -110,6 +112,8 @@ export type Money = {
 };
 
 export type JournalLineView = {
+  userCategoryId?: string;
+  userCategoryName?: string;
   ledgerAccountId: string;
   code: string;
   name: string;
@@ -185,6 +189,7 @@ export type LedgerAccount = {
 };
 
 export type DraftJournalLine = {
+  userCategoryId?: string;
   ledgerAccountId: string;
   debitMinorUnits: number;
   creditMinorUnits: number;
@@ -222,6 +227,13 @@ export type AccountingClock = {
 };
 
 export type AccountingStore = {
+  insertCategory(category: Omit<UserCategory, "id">): Promise<UserCategory>;
+  getCategory(categoryId: string): Promise<UserCategory | undefined>;
+  listCategories(workspaceId: string): Promise<UserCategory[]>;
+  restyleCategory(
+    categoryId: string,
+    style: UserCategory["style"],
+  ): Promise<UserCategory>;
   insertWorkspace(
     workspace: Omit<StoredWorkspace, "id">,
     ownerUserId: string,
@@ -336,6 +348,7 @@ export type CashActivityInput = {
   accountingDate: string;
   description: string;
   idempotencyKey: string;
-  /** Template account the money went to or came from; the template default when omitted. */
+  /** Advanced override; otherwise use the category policy or the template default. */
   ledgerAccountCode?: string;
+  userCategoryId?: string;
 };

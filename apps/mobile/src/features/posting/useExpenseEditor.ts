@@ -25,6 +25,7 @@ export function useExpenseEditor(
 ) {
   const [amount, setAmount] = useState("-");
   const [description, setDescription] = useState("");
+  const [userCategoryId, setUserCategoryId] = useState<string | null>(null);
   const [date, setDate] = useState(localDate());
   const [pending, setPending] = useState<PendingExpense | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,6 +57,7 @@ export function useExpenseEditor(
           );
           setDescription(value.description);
           setDate(value.accountingDate);
+          setUserCategoryId(value.userCategoryId ?? null);
         }
         setLoading(false);
       })
@@ -94,6 +96,7 @@ export function useExpenseEditor(
         accountingDate: date,
         description: description.trim(),
         idempotencyKey: transport.newKey(),
+        ...(userCategoryId ? { userCategoryId } : {}),
       };
       await transport.save(payload);
       setPending(payload);
@@ -102,6 +105,7 @@ export function useExpenseEditor(
       setPending(null);
       setAmount("-");
       setDescription("");
+      setUserCategoryId(null);
       setPosted(receipt);
     } catch (error) {
       if (error instanceof ConvexError) {
@@ -115,7 +119,7 @@ export function useExpenseEditor(
           return;
         }
         setError(
-          "Expense was rejected. Check the amount, date, and whether the month is open.",
+          "Expense was rejected. Check the category, amount, date, and whether the month is open.",
         );
       } else
         setError(
@@ -129,6 +133,10 @@ export function useExpenseEditor(
   return {
     amount,
     setAmount,
+    userCategoryId,
+    setUserCategoryId: (id: string | null) => {
+      if (!submitting.current && !pending && !loading) setUserCategoryId(id);
+    },
     description,
     setDescription,
     date,

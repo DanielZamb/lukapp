@@ -25,6 +25,7 @@ export type PostingFormProps = {
   description: string;
   date: string;
   place: string;
+  category: string;
   editable: boolean;
   loading: boolean;
   busy: boolean;
@@ -36,6 +37,7 @@ export type PostingFormProps = {
   onDescriptionChange: (value: string) => void;
   onBack: () => void;
   onPlace: () => void;
+  onCategory: () => void;
   onDate: () => void;
   onPost: () => void;
   onDone: () => void;
@@ -146,7 +148,8 @@ export function PostingForm(props: PostingFormProps) {
         />
         <ListRow
           title="Category"
-          value="No category"
+          value={props.category}
+          onPress={props.editable ? props.onCategory : undefined}
           titleStyle={styles.rowTitle}
           valueStyle={styles.rowValue}
         />
@@ -158,6 +161,9 @@ export function PostingForm(props: PostingFormProps) {
           onPress={props.editable ? props.onDate : undefined}
         />
       </ListGroup>
+      <Text style={styles.detail}>
+        One category per expense is available in this first version.
+      </Text>
       {props.loading && <ActivityIndicator color={theme.primary} />}
       {!!props.error && (
         <Text accessibilityRole="alert" style={ui.error}>
