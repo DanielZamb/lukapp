@@ -52,6 +52,38 @@ export default defineSchema({
   budgetLimitRevisions: defineTable(revisionFields)
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_request", ["workspaceId", "idempotencyKey"]),
+  savingsRecoveryPlans: defineTable({
+    workspaceId: v.id("workspaces"),
+    sourceJournalEntryId: v.id("journalEntries"),
+    destinationFinancialAccountProfileId: v.id("financialAccountProfiles"),
+    title: v.string(),
+    principalMinorUnits: v.number(),
+    installmentCount: v.number(),
+    installmentMinorUnits: v.number(),
+    impliedAnnualRateBps: v.number(),
+    currency: v.string(),
+    activationMonth: v.string(),
+    idempotencyKey: v.string(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_workspace_source", ["workspaceId", "sourceJournalEntryId"]),
+  savingsRecoveryContributions: defineTable({
+    workspaceId: v.id("workspaces"),
+    planId: v.id("savingsRecoveryPlans"),
+    transferJournalEntryId: v.id("journalEntries"),
+    amountMinorUnits: v.number(),
+    contributionDate: v.string(),
+    idempotencyKey: v.string(),
+    createdBy: v.string(),
+    recordedAt: v.number(),
+  })
+    .index("by_plan", ["planId"])
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_transfer", ["transferJournalEntryId"]),
   userCategories: defineTable({
     workspaceId: v.id("workspaces"),
     ...categoryFields,

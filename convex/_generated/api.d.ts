@@ -34,6 +34,11 @@ import type * as lib_functions from "../lib/functions.js";
 import type * as lib_securityValues from "../lib/securityValues.js";
 import type * as lib_session from "../lib/session.js";
 import type * as personalDefaults from "../personalDefaults.js";
+import type * as savingsRecovery from "../savingsRecovery.js";
+import type * as savingsRecoveryErrors from "../savingsRecoveryErrors.js";
+import type * as savingsRecoveryStore from "../savingsRecoveryStore.js";
+import type * as savingsRecoveryValues from "../savingsRecoveryValues.js";
+import type * as savingsRecoveryWrites from "../savingsRecoveryWrites.js";
 import type * as store from "../store.js";
 import type * as validators from "../validators.js";
 
@@ -70,6 +75,11 @@ declare const fullApi: ApiFromModules<{
   "lib/securityValues": typeof lib_securityValues;
   "lib/session": typeof lib_session;
   personalDefaults: typeof personalDefaults;
+  savingsRecovery: typeof savingsRecovery;
+  savingsRecoveryErrors: typeof savingsRecoveryErrors;
+  savingsRecoveryStore: typeof savingsRecoveryStore;
+  savingsRecoveryValues: typeof savingsRecoveryValues;
+  savingsRecoveryWrites: typeof savingsRecoveryWrites;
   store: typeof store;
   validators: typeof validators;
 }>;
