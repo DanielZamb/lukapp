@@ -16,12 +16,27 @@ export const register = action({
     const devices = await ctx.runQuery(internal.deviceAccessInternal.ownedDevices, {});
     const stored = devices.find((d) => d.revokedAt === undefined &&
       d.installId === args.installId && d.platform === args.platform);
-    const storedSessionTerminal = !!stored && stored.clerkSessionId !== session.clerkSessionId &&
-      stored.clerkClientId !== session.clerkClientId &&
-      isTerminalClerkSession(await getClerkSession(stored.clerkSessionId));
-    return ctx.runMutation(internal.deviceAccessInternal.register, { ...args, session, storedSessionTerminal });
+    const terminalSessionId = stored && stored.clerkSessionId !== session.clerkSessionId &&
+      stored.clerkClientId !== session.clerkClientId
+      ? await provenTerminalSession(stored.clerkSessionId, session.userId)
+      : undefined;
+    return ctx.runMutation(internal.deviceAccessInternal.register, { ...args, session, terminalSessionId });
   },
 });
+
+// A terminal proof names the exact stored SID. The mutation accepts it only while the slot
+// still holds that SID, so a stale proof cannot move a slot another session already reclaimed.
+// Lookup failures and responses for another session or owner give no proof, which refuses.
+async function provenTerminalSession(sid: string, userId: string): Promise<string | undefined> {
+  try {
+    const stored = await getClerkSession(sid);
+    if (stored === null) return sid;
+    if (stored.id !== sid || stored.user_id !== userId) return undefined;
+    return isTerminalClerkSession(stored) ? sid : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const deviceStatus = v.union(
   v.object({

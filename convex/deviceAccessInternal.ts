@@ -9,11 +9,11 @@ import { revokeClerkSession } from "./lib/clerkProvider";
 export const register = internalMutation({
   args: {
     session: liveSession, installId: v.string(), label: v.string(), platform: mobilePlatform, appVersion: v.string(),
-    storedSessionTerminal: v.optional(v.boolean()),
+    terminalSessionId: v.optional(v.string()),
   },
   returns: v.id("mobileDevices"),
-  handler: async (ctx, { session, storedSessionTerminal, ...metadata }) =>
-    registerDevice(ctx, session, metadata, storedSessionTerminal === true),
+  handler: async (ctx, { session, terminalSessionId, ...metadata }) =>
+    registerDevice(ctx, session, metadata, terminalSessionId),
 });
 
 export const ownedDevices = internalQuery({

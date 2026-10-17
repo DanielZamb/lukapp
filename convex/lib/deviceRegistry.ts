@@ -46,7 +46,7 @@ export async function findOwnedInstall(
 }
 
 export async function registerDevice(
-  ctx: MutationCtx, session: LiveSession, input: Registration, storedSessionTerminal = false,
+  ctx: MutationCtx, session: LiveSession, input: Registration, terminalSessionId?: string,
 ) {
   const actor = await requireLiveObservation(ctx.auth, session);
   await requireDeviceManagement(ctx);
@@ -73,7 +73,9 @@ export async function registerDevice(
   if (reclaimable) {
     const storedDenied = await ctx.db.query("clerkRevocations")
       .withIndex("by_session", (q) => q.eq("clerkSessionId", reclaimable.clerkSessionId)).unique();
-    if (reclaimable.clerkClientId !== session.clerkClientId && !storedDenied && !storedSessionTerminal)
+    // The terminal proof only counts for the SID this row holds inside this transaction.
+    const storedTerminal = terminalSessionId !== undefined && terminalSessionId === reclaimable.clerkSessionId;
+    if (reclaimable.clerkClientId !== session.clerkClientId && !storedDenied && !storedTerminal)
       throw new ConvexError({ code: "device_slot_occupied", occupiedLabel: reclaimable.label });
     const oldSid = reclaimable.clerkSessionId;
     // Patch before denial so denySession cannot mark the moved row revoked.
