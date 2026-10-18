@@ -71,6 +71,34 @@ test("description uses Field and Keep as Draft is optional", async () => {
   expect(onKeepDraft).toHaveBeenCalledOnce();
 });
 
+test("source note is optional and sits under the header", async () => {
+  await act(async () => {
+    root = create(createElement(PostingForm, { ...emptyPostingForm, ...handlers }));
+  });
+  expect(text()).not.toContain("From drafts");
+  expect(text()).not.toContain("Draft on this device");
+  await act(async () => {
+    root?.update(
+      createElement(PostingForm, {
+        ...emptyPostingForm,
+        ...handlers,
+        sourceNote: "From drafts",
+      }),
+    );
+  });
+  expect(text()).toContain("From drafts");
+  await act(async () => {
+    root?.update(
+      createElement(PostingForm, {
+        ...emptyPostingForm,
+        ...handlers,
+        sourceNote: "Draft on this device",
+      }),
+    );
+  });
+  expect(text()).toContain("Draft on this device");
+});
+
 test("a Candidate locks Transfer and Initial balance", async () => {
   const onEntryType = vi.fn();
   await act(async () => {

@@ -28,6 +28,7 @@ export type PostingFormProps = {
   onDestination?: () => void;
   categoryEnabled?: boolean;
   hint?: string;
+  sourceNote?: string;
   postedTitle?: string;
   currency: string;
   amount: string;
@@ -60,6 +61,9 @@ export function PostingForm(props: PostingFormProps) {
   return (
     <Screen contentStyle={{ gap: spacing.xl }}>
       <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
+      {props.sourceNote ? (
+        <Text style={styles.detail}>{props.sourceNote}</Text>
+      ) : null}
       {props.posted !== null && (
         <View accessibilityRole="alert" style={styles.banner}>
           <Ionicons name="checkmark-circle" size={24} color={theme.positive} />
