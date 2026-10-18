@@ -131,7 +131,10 @@ function text() {
 test("a cleared inbox hides segment controls and Month Close preview", async () => {
   route.segment = undefined;
   await act(async () => { root = create(createElement(DraftsRoute)); });
+  expect(text()).toContain("Review complete");
   expect(text()).toContain("Nothing waiting");
+  expect(text()).toContain("Continue to Month Close");
+  expect(text()).not.toContain("Nothing needs you now");
   expect(root.root.findAllByType("button").some((node) => node.props.accessibilityRole === "tab")).toBe(false);
   expect(root.root.findAllByType("button").some((node) => node.props.accessibilityLabel === "Preview Month Close warning")).toBe(false);
 });
@@ -160,6 +163,19 @@ test("a manual segment choice is kept when the inbox still has no priority rows"
   expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true });
   await act(async () => { root.update(createElement(DraftsRoute)); });
   expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true });
+});
+
+test("a manual Can wait choice survives when the priority count changes", async () => {
+  route.segment = undefined;
+  intakeState.now = [candidate("c1")];
+  await act(async () => { root = create(createElement(DraftsRoute)); });
+  expect(button("Needs you now, 1").props.accessibilityState).toEqual({ selected: true });
+  await act(async () => button("Can wait, 0").props.onPress());
+  expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true });
+  intakeState.now = [candidate("c1"), candidate("c2")];
+  await act(async () => { root.update(createElement(DraftsRoute)); });
+  expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Needs you now, 2").props.accessibilityState).toEqual({ selected: false });
 });
 
 test("Confirm all Ready retains the Convex payload and waits for local acknowledgement before success", async () => {
