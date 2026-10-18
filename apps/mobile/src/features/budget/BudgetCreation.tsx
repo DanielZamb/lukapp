@@ -1,25 +1,43 @@
 import * as Crypto from "expo-crypto";
 import { useAction, useQuery } from "convex/react";
+import { useRef } from "react";
 import { ActivityIndicator, Text } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Choice, Field, Header, Screen, theme, ui } from "../../ui/core";
 import { api } from "../api";
+import { useLevelNavigation } from "../levelDoor/navigation";
 import { BudgetComposer } from "./BudgetComposer";
 import type { BudgetCategory } from "./model";
 import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 
-export function BudgetCreation({ seed, categories, categoryColors, onClose, onSaved }: {
+export function BudgetCreation({ seed, categories, categoryColors, unlocking, onClose, onSaved }: {
   seed: BudgetEditorSeed;
   categories: BudgetCategory[];
   categoryColors: ReadonlyMap<string, string>;
+  unlocking: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const save = useAction(api.budget.setCategoryLimit);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
-  const editor = useBudgetEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved });
+  const navigation = useLevelNavigation();
+  const unlockingSave = useRef<boolean | null>(null);
+  const editor = useBudgetEditor(seed, {
+    save: (request) => { unlockingSave.current ??= unlocking; return save(request); },
+    reportFailure, newKey: Crypto.randomUUID,
+    onSaved: ({ revision }) => {
+      onSaved();
+      const category = categories.find((item) => item.id === revision.categoryId);
+      if (unlockingSave.current && category) navigation.showUnlocked({
+        door: "budget", category: category.name, emoji: category.emoji,
+        color: categoryColors.get(category.id) ?? theme.primary, currency: seed.currency,
+        limitMinorUnits: revision.limitMinorUnits,
+      });
+      else navigation.home();
+    },
+  });
   const totals = useQuery(api.accounting.categoryTotals, { workspaceId: seed.workspaceId, month: seed.month });
   const selected = categories.find((category) => category.id === editor.categoryId);
   const matches = categories.filter((category) => category.name.toLocaleLowerCase().includes(editor.search.trim().toLocaleLowerCase()));

@@ -13,10 +13,12 @@ let board: Evaluation | undefined;
 let categories: Pick<Category, "id" | "style">[] | undefined;
 let totals: FunctionReturnType<typeof api.accounting.categoryTotals> | undefined;
 let month = "2026-10";
+let accountCount = 1;
 const queries = vi.fn();
 const save = vi.fn<BudgetTransport["save"]>();
 const back = vi.fn();
-vi.mock("expo-router", () => ({ router: { back: () => back() }, Redirect: "Redirect" }));
+const reset = vi.fn();
+vi.mock("expo-router", () => ({ router: { back: () => back() }, useNavigation: () => ({ dispatch: reset }), Redirect: "Redirect" }));
 vi.mock("expo-crypto", () => {
   let sequence = 0;
   return { randomUUID: () => `key-${++sequence}` };
@@ -29,7 +31,10 @@ vi.mock("convex/react", () => ({
   },
   useAction: () => save,
 }));
-vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { id: "workspace", timeZone: "America/Bogota" } }) }));
+vi.mock("../activity", () => ({
+  usePersonalDefaults: () => ({ workspace: { id: "workspace", timeZone: "America/Bogota" } }),
+  usePostedActivity: () => ({ accounts: Array.from({ length: accountCount }, () => ({})) }),
+}));
 vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ month }) }));
 vi.mock("./BudgetEditorSheet", () => ({ BudgetEditorSheet: "EditorSheet" }));
 vi.mock("react-native", () => ({
@@ -43,7 +48,7 @@ let root: ReactTestRenderer | undefined;
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  queries.mockClear(); save.mockReset(); back.mockClear();
+  queries.mockClear(); save.mockReset(); back.mockClear(); reset.mockClear(); accountCount = 1;
   month = "2026-10";
   board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, jars: [],
     availableCategories: [{ id: "food", name: "Food", emoji: "🛒" }] };
@@ -98,6 +103,43 @@ test("creation chooses a category before the composer, then saves shared-parser 
   }]]);
   expect(texts(screen)).toContain("Budgets");
   expect(texts(screen)).toContain("Budget saved");
+  expect(reset.mock.calls).toEqual([[{ type: "RESET", payload: { index: 0, routes: [{ name: "level-unlocked", params: {
+    door: "budget", category: "Food", emoji: "🛒", color: "#047857", currency: "COP", limitMinorUnits: 150_000_025,
+  } }] } }]]);
+});
+
+test.each(["second place", "existing limit"])("a workspace with a %s returns home after saving a new limit", async (unlockedBy) => {
+  if (unlockedBy === "second place") accountCount = 2;
+  else if (board) board.jars.push({ category: { id: "travel", name: "Travel", emoji: "✈️" }, revisionId: "travel-limit", limitMinorUnits: 10_000_000, consumptionMinorUnits: 0 });
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: unlockedBy === "second place" ? "Set a October limit" : "Set another limit" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("50.000"));
+  await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
+  expect(save).toHaveBeenCalledOnce();
+  expect(reset.mock.calls).toEqual([[{ type: "RESET", payload: { index: 0, routes: [{ name: "index" }] } }]]);
+});
+
+test("the first limit still unlocks when live data updates before its receipt arrives", async () => {
+  let acknowledge: (() => void) | undefined;
+  const receipt = save.getMockImplementation();
+  if (!receipt) throw new Error("Missing save implementation");
+  save.mockImplementationOnce(async (request) => {
+    await new Promise<void>((resolve) => { acknowledge = resolve; });
+    return receipt(request);
+  });
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Set a October limit" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("50.000"));
+  await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
+  expect(reset).not.toHaveBeenCalled();
+  if (board) board.jars.push({ category: { id: "food", name: "Food", emoji: "🛒" }, revisionId: "revision", limitMinorUnits: 5_000_000, consumptionMinorUnits: 0 });
+  await act(async () => root?.update(createElement(BudgetRoute)));
+  await act(async () => acknowledge?.());
+  expect(reset.mock.calls).toEqual([[{ type: "RESET", payload: { index: 0, routes: [{ name: "level-unlocked", params: {
+    door: "budget", category: "Food", emoji: "🛒", color: "#047857", currency: "COP", limitMinorUnits: 5_000_000,
+  } }] } }]]);
 });
 
 test("the under-jars control offers only unlimited categories and both creation pages go back to the board", async () => {
@@ -134,12 +176,14 @@ test("composer waits for spending and preserves a failed save for a safe retry",
   save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
   expect(texts(screen)).toContain("Could not confirm saving. Retry to safely check the same Budget.");
+  expect(reset).not.toHaveBeenCalled();
   expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.editable).toBe(false);
   expect(screen.findAllByProps({ accessibilityLabel: "Back" })).toHaveLength(0);
   await act(async () => screen.findByProps({ accessibilityLabel: "Retry save" }).props.onPress());
   expect(save.mock.calls.map(([request]) => [request.limit.minorUnits, request.idempotencyKey]))
     .toEqual([[40_000_000, save.mock.calls[0][0].idempotencyKey], [40_000_000, save.mock.calls[0][0].idempotencyKey]]);
   expect(texts(screen)).toContain("Budget saved");
+  expect(reset).toHaveBeenCalledOnce();
 });
 
 test("the live next action opens the current jar revision and uses the category's saved color", async () => {
@@ -154,6 +198,7 @@ test("the live next action opens the current jar revision and uses the category'
   await act(async () => screen.find((node) => String(node.type) === "EditorSheet").props.onAmount("120.000"));
   await act(async () => screen.find((node) => String(node.type) === "EditorSheet").props.onSave());
   expect(save.mock.calls[0][0]).toMatchObject({ categoryId: "food", expectedRevisionId: "live-revision", limit: { currency: "COP", minorUnits: 12_000_000 } });
+  expect(reset.mock.calls).toEqual([[{ type: "RESET", payload: { index: 0, routes: [{ name: "index" }] } }]]);
   await act(async () => screen.findByProps({ accessibilityLabel: "Back" }).props.onPress());
   expect(back).toHaveBeenCalledOnce();
 });

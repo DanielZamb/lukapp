@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { usePersonalDefaults, usePostedActivity } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { HomePlaceSetup } from "../src/features/HomePlaceSetup";
+import { experienceLevel } from "../src/features/levelDoor/model";
 import { formatMoney } from "../src/features/money";
 import { accountEmoji, placesTotal } from "../src/features/places/model";
 import { styles } from "../src/features/places/styles";
@@ -24,7 +25,7 @@ function Places({ defaults, subject }: {
   const [placeOpen, setPlaceOpen] = useState(false);
   const many = (activity?.accounts.length ?? 0) > 1;
   const ready = activity !== undefined && budget !== undefined;
-  const unlocking = activity?.accounts.length === 1 && budget?.jars.length === 0;
+  const unlocking = ready && activity.accounts.length === 1 && experienceLevel(activity.accounts.length, budget.jars.length) === 0;
   return <Screen contentStyle={styles.page}>
     <Header titleStyle={styles.pageTitle} title={many ? "Places" : "My money"} eyebrow={many ? "YOUR PLACES" : "ONE POOL"} onBack={() => router.back()} />
     {activity ? <>

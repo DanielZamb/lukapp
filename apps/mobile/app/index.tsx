@@ -8,6 +8,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { usePersonalDefaults, usePostedActivity } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { HomePlaceSetup } from "../src/features/HomePlaceSetup";
+import { experienceLevel } from "../src/features/levelDoor/model";
 import { formatMoney } from "../src/features/money";
 import { Setup } from "../src/features/Setup";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
@@ -34,7 +35,7 @@ function Home({
   const [placeOpen, setPlaceOpen] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const accountCount = activity?.accounts.length ?? 0;
-  const level = accountCount >= 2 || (budget?.jars.length ?? 0) > 0 ? 1 : 0;
+  const level = experienceLevel(accountCount, budget?.jars.length ?? 0);
   const month = new Intl.DateTimeFormat("en", { month: "long", timeZone }).format(calendar.now);
   const totalMinorUnits = activity?.accounts.reduce((sum, account) => {
     const { minorUnits } = account.balance;

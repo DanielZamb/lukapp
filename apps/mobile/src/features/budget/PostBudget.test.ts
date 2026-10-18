@@ -11,6 +11,9 @@ import { PostingForm } from "../posting/PostingForm";
 import type { LoadResult, PostingTransport } from "../posting/usePostingEditor";
 import type { PendingPosting } from "../posting/pendingPostingSchema";
 import { PostingImpactSheet } from "./PostingImpactSheet";
+import { PlaceSheet } from "../posting/PlaceSheet";
+import { AccountSetupForm } from "../posting/AccountSetupForm";
+import { router } from "expo-router";
 import type { api } from "../api";
 import type { FunctionReturnType } from "convex/server";
 
@@ -19,7 +22,7 @@ vi.mock("@react-native-community/datetimepicker", () => ({ default: "DateTimePic
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "Sheet", BottomSheetView: "SheetView", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
 }));
-vi.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), router: { replace: vi.fn(), back: vi.fn() }, Redirect: "Redirect" }));
+vi.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), router: { replace: vi.fn(), back: vi.fn() }, useNavigation: vi.fn(), Redirect: "Redirect" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("react-native", () => ({
@@ -43,7 +46,7 @@ vi.mock("convex/react", () => ({
     if (args === "skip") return undefined;
     switch (getFunctionName(query)) {
       case "accounting:listUserCategories": return ["food", "home"].map((id) => ({ id, name: id, resolvedPostingAccountCode: "expense" }));
-      case "accounting:listFinancialAccountProfiles": return [{ id: "bank", name: "Bank" }, { id: "card", name: "Card" }];
+      case "accounting:listFinancialAccountProfiles": return profiles;
       case "budget:evaluate": budgetArgs = args; return budget;
     }
   },
@@ -52,6 +55,7 @@ vi.mock("convex/react", () => ({
 let root: ReactTestRenderer | undefined;
 let budget: FunctionReturnType<typeof api.budget.evaluate> | undefined;
 let budgetArgs: unknown;
+let profiles = [{ id: "bank", name: "Bank" }, { id: "card", name: "Card" }];
 let transport: ReturnType<typeof makeTransport>;
 function makeTransport() {
   return {
@@ -60,6 +64,7 @@ function makeTransport() {
     post: vi.fn(async (entry: PendingPosting) => ({
       description: "description" in entry.payload ? entry.payload.description : entry.payload.name,
       amount: { ...entry.payload.amount, minorUnits: -entry.payload.amount.minorUnits },
+      ...(entry.kind === "setup" ? { financialAccountProfileId: "new-place", title: "Place added" } : {}),
     })),
     clear: vi.fn(async () => {}), abort: vi.fn(async () => {}), newKey: () => "post-key",
   } satisfies PostingTransport;
@@ -69,6 +74,8 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   transport = makeTransport();
   budgetArgs = undefined;
+  profiles = [{ id: "bank", name: "Bank" }, { id: "card", name: "Card" }];
+  vi.mocked(router.replace).mockClear();
   budget = {
     month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true, availableCategories: [],
     jars: ["food", "home"].map((id) => ({
@@ -181,6 +188,23 @@ test("a backdated expense checks the accounting month", async () => {
   const picker = root?.root.findByType(DateTimePicker);
   await act(async () => picker?.props.onChange({}, new Date("2026-09-15T12:00:00")));
   expect(budgetArgs).toEqual({ workspaceId: "workspace", month: "2026-09" });
+});
+
+test("saving the second place inside a tx stays in the form without LevelUnlocked", async () => {
+  profiles = [{ id: "bank", name: "Bank" }];
+  if (budget) budget.jars = [];
+  await open();
+  await act(async () => root?.root.findByType(PlaceSheet).props.onAdd());
+  const setup = root?.root.findByType(AccountSetupForm);
+  await act(async () => setup?.props.onChange({ ...setup.props.value, name: "Travel" }));
+  await act(async () => root?.root.findByType(AccountSetupForm).props.onSubmit());
+  expect(transport.post.mock.calls.map(([command]) => command.kind)).toEqual(["setup"]);
+  expect(root?.root.findByType(AccountSetupForm).props.value).toBeNull();
+  expect(form().postedTitle).toBe("Place added");
+  expect(form().posted).toBe("Travel · COP 0,00");
+  expect(router.replace).not.toHaveBeenCalled();
+  const { useNavigation } = await import("expo-router");
+  expect(useNavigation).not.toHaveBeenCalled();
 });
 
 test("retrying a pending expense preserves its command and idempotency key", async () => {

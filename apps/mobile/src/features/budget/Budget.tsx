@@ -7,6 +7,9 @@ import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Screen, theme } from "../../ui/core";
 import { api } from "../api";
+import { usePostedActivity } from "../activity";
+import { experienceLevel } from "../levelDoor/model";
+import { useLevelNavigation } from "../levelDoor/navigation";
 import { BudgetBoard } from "./BudgetBoard";
 import { BudgetCreation } from "./BudgetCreation";
 import { BudgetEditorSheet } from "./BudgetEditorSheet";
@@ -22,9 +25,12 @@ export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string;
   useEffect(() => { refresh(Crypto.randomUUID()); }, [calendar.month]);
   const board = useQuery(api.budget.evaluate, { workspaceId, refreshKey, month: calendar.month });
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
+  const activity = usePostedActivity(workspaceId, timeZone);
+  const navigation = useLevelNavigation();
   const interact = useLocalEntryInteraction();
-  if (!board || !categories) return <Screen><ActivityIndicator accessibilityLabel="Loading Budget" /></Screen>;
+  if (!board || !categories || !activity) return <Screen><ActivityIndicator accessibilityLabel="Loading Budget" /></Screen>;
   if (creation) return <BudgetCreation key={creation.key} seed={creation.seed} categories={creation.categories}
+    unlocking={activity.accounts.length === 1 && experienceLevel(activity.accounts.length, board.jars.length) === 0}
     categoryColors={new Map(categories.map((category) => [category.id, theme[category.style.tone]]))}
     onClose={() => { setCreation(null); refresh(Crypto.randomUUID()); }}
     onSaved={() => { setCreation(null); refresh(Crypto.randomUUID()); setSaved(true); }} />;
@@ -47,7 +53,7 @@ export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string;
         }} />
       {editor && <Editor key={editor.key} seed={editor.seed} categories={editor.categories}
         onClose={() => { setEditor(null); refresh(Crypto.randomUUID()); }}
-        onSaved={() => { setEditor(null); refresh(Crypto.randomUUID()); setSaved(true); }} />}
+        onSaved={() => { setEditor(null); refresh(Crypto.randomUUID()); setSaved(true); navigation.home(); }} />}
     </>
   );
 }

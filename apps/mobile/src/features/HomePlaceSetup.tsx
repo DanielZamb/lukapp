@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { PrimaryButton, SecondaryButton, theme, ui } from "../ui/core";
 import type { usePersonalDefaults } from "./activity";
+import { useLevelNavigation } from "./levelDoor/navigation";
 import { EmojiSheet } from "./places/EmojiSheet";
 import { kindDetails, placeBalanceInput, placeKinds, type PlaceKind } from "./places/model";
 import { styles } from "./places/styles";
@@ -30,6 +31,8 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   const started = useRef(false);
   const presented = useRef(false);
   const finished = useRef(false);
+  const unlockingSave = useRef<boolean | null>(null);
+  const { showUnlocked } = useLevelNavigation();
   const [name, setName] = useState("");
   const [balance, setBalance] = useState("");
   const [kind, setKind] = useState<PlaceKind>("Savings");
@@ -41,7 +44,9 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
       finished.current = true; onClose(); router.push("/drafts"); return;
     }
     if (editor.posted) {
-      finished.current = true; sheet.current?.dismiss(); onClose(); return;
+      finished.current = true; sheet.current?.dismiss(); onClose();
+      if (unlockingSave.current) showUnlocked({ door: "account", accountName: editor.posted.description || "The new place" });
+      return;
     }
     if (editor.editable && !started.current) {
       started.current = true;
@@ -51,7 +56,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
     if (editor.setup && !presented.current) {
       presented.current = true; sheet.current?.present();
     }
-  }, [editor, onClose, workspace.timeZone]);
+  }, [editor, onClose, showUnlocked, workspace.timeZone]);
   const setup = editor.setup;
   function pickKind(next: PlaceKind) {
     if (!setup || !editor.editable) return;
@@ -108,7 +113,12 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
         {!!editor.error && <Text accessibilityRole="alert" style={ui.error}>{editor.error}</Text>}
         {editor.pending && <Text style={ui.muted}>This place is saved for retry. Its answers stay fixed until confirmed.</Text>}
         <PrimaryButton label={editor.pending ? "Retry setup" : "Add this place"} trailingIcon="checkmark"
-          pending={editor.busy} disabled={!editor.canSubmit} onPress={() => { interact(); void editor.submit(); }} />
+          pending={editor.busy} disabled={!editor.canSubmit} onPress={() => {
+            if (!editor.canSubmit) return;
+            interact();
+            if (!editor.pending) unlockingSave.current = unlocking;
+            void editor.submit();
+          }} />
       </BottomSheetScrollView>}
     </BottomSheetModal>
     {emojiOpen && setup && <EmojiSheet emoji={setup.emoji ?? kindDetails[kind].emoji}

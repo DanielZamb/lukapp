@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { HomePlaceSetup } from "./HomePlaceSetup";
@@ -9,10 +9,10 @@ import type { LoadResult, PostingTransport } from "./posting/usePostingEditor";
 const state = vi.hoisted(() => ({
   blocked: false,
   fail: false,
-  push: vi.fn(), close: vi.fn(), present: vi.fn(), dismiss: vi.fn(),
+  push: vi.fn(), reset: vi.fn(), close: vi.fn(), present: vi.fn(), dismiss: vi.fn(),
   load: vi.fn(), save: vi.fn(), post: vi.fn(), clear: vi.fn(),
 }));
-vi.mock("expo-router", () => ({ router: { push: state.push } }));
+vi.mock("expo-router", () => ({ router: { push: state.push }, useNavigation: () => ({ dispatch: state.reset }) }));
 vi.mock("../local-auth/interaction", () => ({ useLocalEntryInteraction: () => vi.fn() }));
 vi.mock("./posting/usePostingTransport", () => {
   const transport: PostingTransport = {
@@ -27,9 +27,9 @@ vi.mock("./posting/usePostingTransport", () => {
   post: async (command) => {
     state.post(command);
     if (state.fail) throw new Error("Offline");
-    return { description: "Savings", amount: command.payload.amount, financialAccountProfileId: "savings" };
+    return { description: command.kind === "setup" ? command.payload.name : "Entry", amount: command.payload.amount, financialAccountProfileId: "savings" };
   },
-  clear: async () => { state.clear(); },
+  clear: async () => { await state.clear(); },
   abort: async () => {},
   newKey: () => "setup-key",
   };
@@ -66,17 +66,18 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   vi.unstubAllGlobals();
 });
-async function render() {
-  await act(async () => {
-    root = create(createElement(HomePlaceSetup, {
+function props(unlocking = true): ComponentProps<typeof HomePlaceSetup> {
+  return {
       defaults: {
         workspace: { id: "workspace", functionalCurrency: "COP", timeZone: "America/Bogota",
           currentAccountingPeriod: { year: 2026, month: 10, status: "open" }, kind: "Personal", chartOfAccountsTemplate: "puc@1" },
         financialAccountProfile: { id: "daily", name: "Daily", productKind: "cash", ledgerAccountId: "ledger", workspaceId: "workspace" },
       },
-      subject: "owner", unlocking: true, onClose: state.close,
-    }));
-  });
+      subject: "owner", unlocking, onClose: state.close,
+  };
+}
+async function render(unlocking = true) {
+  await act(async () => { root = create(createElement(HomePlaceSetup, props(unlocking))); });
 }
 function input(label: string) {
   const found = root.root.findAllByType("input").find((node) => node.props.accessibilityLabel === label);
@@ -89,7 +90,7 @@ function button(label: string) {
   return found;
 }
 
-test("Home opens Add a place, creates a savings account and closes", async () => {
+test("the second place replaces the entire stack with its saved name after confirmation", async () => {
   await render();
   expect(state.load).toHaveBeenCalledWith(undefined, false);
   expect(state.present).toHaveBeenCalledOnce();
@@ -108,6 +109,9 @@ test("Home opens Add a place, creates a savings account and closes", async () =>
   expect(state.dismiss).toHaveBeenCalledOnce();
   expect(state.close).toHaveBeenCalled();
   expect(state.push).not.toHaveBeenCalled();
+  expect(state.reset.mock.calls).toEqual([[{ type: "RESET", payload: { index: 0, routes: [{ name: "level-unlocked", params: { door: "account", accountName: "Savings" } }] } }]]);
+  await act(async () => root.update(createElement(HomePlaceSetup, props(false))));
+  expect(state.reset).toHaveBeenCalledOnce();
 });
 
 test("an uncertain setup keeps its saved command for an identical retry", async () => {
@@ -116,12 +120,36 @@ test("an uncertain setup keeps its saved command for an identical retry", async 
   await act(async () => input("Account name").props.onChangeText("Savings"));
   await act(async () => button("Add this place").props.onPress());
   expect(state.close).not.toHaveBeenCalled();
+  expect(state.reset).not.toHaveBeenCalled();
   expect(input("Account name").props.editable).toBe(false);
   state.fail = false;
+  await act(async () => root.update(createElement(HomePlaceSetup, props(false))));
   await act(async () => button("Retry setup").props.onPress());
   expect(state.post.mock.calls[1]).toEqual(state.post.mock.calls[0]);
   expect(state.save.mock.calls[1]).toEqual(state.save.mock.calls[0]);
   expect(state.close).toHaveBeenCalled();
+  expect(state.reset).toHaveBeenCalledOnce();
+});
+
+test("a later place closes without another unlock", async () => {
+  await render(false);
+  expect(texts()).toContain("ANOTHER PLACE");
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post).toHaveBeenCalledOnce();
+  expect(state.close).toHaveBeenCalled();
+  expect(state.reset).not.toHaveBeenCalled();
+});
+
+test("a live account-count update before acknowledgement does not suppress the first unlock", async () => {
+  let acknowledge: (() => void) | undefined;
+  state.clear.mockImplementationOnce(() => new Promise<void>((resolve) => { acknowledge = resolve; }));
+  await render();
+  await act(async () => input("Account name").props.onChangeText("Travel"));
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.reset).not.toHaveBeenCalled();
+  await act(async () => root.update(createElement(HomePlaceSetup, props(false))));
+  await act(async () => acknowledge?.());
+  expect(state.reset.mock.calls).toEqual([[{ type: "RESET", payload: { index: 0, routes: [{ name: "level-unlocked", params: { door: "account", accountName: "Travel" } }] } }]]);
 });
 
 test("pending postings open Drafts instead of being resumed by the new-place action", async () => {

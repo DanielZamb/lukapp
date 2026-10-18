@@ -18,7 +18,7 @@ export type BudgetTransport = {
   save: (request: Request) => Promise<Receipt>;
   newKey: () => string;
   reportFailure: (error: unknown) => boolean;
-  onSaved: () => void;
+  onSaved: (receipt: Receipt) => void;
 };
 const rejection = z.object({ kind: z.literal("budget"), code: z.string() });
 
@@ -57,11 +57,11 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
       };
       request.current = payload;
       setPending(true);
-      await transport.save(payload);
+      const receipt = await transport.save(payload);
       if (!mounted.active) return;
       request.current = null;
       setPending(false);
-      transport.onSaved();
+      transport.onSaved(receipt);
     } catch (error) {
       if (transport.reportFailure(error) || !mounted.active) return;
       const parsed = rejection.safeParse(error instanceof ConvexError ? error.data : null);
