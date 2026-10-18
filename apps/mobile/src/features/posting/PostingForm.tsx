@@ -1,3 +1,4 @@
+import { formatCopInput } from "../money";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { ComposeModeToggle } from "./ComposeModeToggle";
 import {
@@ -107,8 +108,8 @@ export function PostingForm(props: PostingFormProps) {
         </Text>
         <TextInput
           accessibilityLabel="Signed amount"
-          value={props.amount === "-" ? "" : props.amount}
-          onChangeText={props.onAmountChange}
+          value={props.amount === "-" ? "-0" : props.amount}
+          onChangeText={(value) => props.onAmountChange(formatCopInput(value))}
           editable={props.editable}
           keyboardType="numbers-and-punctuation"
           placeholder="-0"

@@ -1,13 +1,11 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
-  BottomSheetBackdrop,
-  BottomSheetModal,
-  BottomSheetScrollView,
+  type BottomSheetModal,
   BottomSheetTextInput,
-  type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 import { useState, type RefObject } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { PickerSheet, pickerSheetStyles } from "../../ui/PickerSheet";
 import { Choice, PrimaryButton, SecondaryButton, theme, ui } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import { categoryColor, categoryPalette, emojiFrom, quickEmojis } from "./appearance";
@@ -38,10 +36,6 @@ export type CategorySheetProps = {
   onCreateEncompassing?: () => void;
 };
 
-function renderBackdrop(props: BottomSheetBackdropProps) {
-  return <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} />;
-}
-
 function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor: CategoryEditor }) {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const color = categoryColor(editor.style);
@@ -65,7 +59,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
           maxLength={80}
           placeholder="Name it your way"
           placeholderTextColor={theme.mutedForeground}
-          style={[ui.input, styles.input, { minHeight: 56 }]}
+          style={[ui.input, pickerSheetStyles.input, { minHeight: 56 }]}
           autoFocus
         />
       )}
@@ -143,111 +137,91 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
 
 export function CategorySheet(props: CategorySheetProps) {
   return (
-    <BottomSheetModal
-      ref={props.sheetRef}
-      snapPoints={["70%"]}
-      enableDynamicSizing={false}
-      enablePanDownToClose={!props.busy}
-      enableContentPanningGesture={!props.busy}
-      backgroundStyle={styles.surface}
-      handleIndicatorStyle={{ backgroundColor: theme.ring }}
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
-      backdropComponent={renderBackdrop}
+    <PickerSheet
+      sheetRef={props.sheetRef}
+      busy={props.busy}
+      stickyHeader={!props.editor}
       onDismiss={props.onDismiss}
     >
-      <BottomSheetScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.content}
-        stickyHeaderIndices={props.editor ? undefined : [0]}
-      >
-        {props.editor ? (
-          <CategoryAppearance {...props} editor={props.editor} />
-        ) : (
-          <View style={styles.search}>
-            <Text style={styles.title}>Category</Text>
-            <BottomSheetTextInput
-              accessibilityLabel="Search categories"
-              placeholder="Search"
-              placeholderTextColor={theme.mutedForeground}
-              value={props.search}
-              onChangeText={props.onSearch}
-              style={[ui.input, styles.input]}
-            />
-          </View>
-        )}
-        {!props.editor && (
-          <>
-            {props.options === undefined ? (
-              <Text style={ui.muted}>Loading categories…</Text>
-            ) : props.options.length ? props.options.map((option) => {
-              const color = categoryColor(option.style);
-              return (
-                <Pressable
-                  key={option.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={option.name}
-                  accessibilityState={{ selected: option.selected }}
-                  style={styles.row}
-                  onPress={() => props.onSelect(option.key)}
-                >
-                  <View style={[styles.disc, { backgroundColor: `${color}2e`, borderColor: color }]}>
-                    <Text style={styles.emoji}>{option.style.emoji}</Text>
-                  </View>
-                  <Text style={[ui.body, styles.rowName]}>{option.name}</Text>
-                  {option.selected && <Ionicons name="checkmark" size={20} color={theme.primary} />}
-                </Pressable>
-              );
-            }) : (
-              <Text style={ui.muted}>
-                {props.search.trim() ? `Nothing matches "${props.search.trim()}".` : "No categories yet."}
-              </Text>
-            )}
-            <Pressable accessibilityRole="button" accessibilityLabel="Add your own" onPress={props.onCreate} style={styles.row}>
-              <View style={[styles.disc, styles.addDisc, styles.dashed]}>
-                <Ionicons name="add" size={20} color={theme.foreground} />
-              </View>
-              <Text style={[ui.body, styles.rowName]}>Add your own</Text>
-            </Pressable>
-            {props.selectionCount !== undefined && (
-              <Text style={ui.muted}>{props.selectionCount} of 3 selected. Each counts the full amount.</Text>
-            )}
-            {props.primaryOptions && (
-              <View style={ui.section}>
-                <Text style={ui.title}>Which category is primary?</Text>
-                <Text style={ui.muted}>Choose which best describes this expense. Each selected category still counts the full amount.</Text>
-                {props.primaryOptions.map((option) => (
-                  <Choice key={option.key} label={option.name}
-                    selected={props.primaryId === option.key}
-                    onPress={() => props.onPrimary?.(option.key)} />
-                ))}
-              </View>
-            )}
-            {props.limitReached && (
-              <View style={ui.section}>
-                <Text accessibilityRole="alert" style={ui.error}>Choose up to three categories. Remove one, or create a category that encompasses the concept.</Text>
-                <SecondaryButton label="Create an encompassing category" onPress={() => props.onCreateEncompassing?.()} />
-              </View>
-            )}
-            {props.onDone && (
-              <PrimaryButton label="Done" onPress={props.onDone} disabled={!!props.primaryOptions && !props.primaryId} />
-            )}
-          </>
-        )}
-        {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+      {props.editor ? (
+        <CategoryAppearance {...props} editor={props.editor} />
+      ) : (
+        <View style={pickerSheetStyles.search}>
+          <Text style={pickerSheetStyles.title}>Category</Text>
+          <BottomSheetTextInput
+            accessibilityLabel="Search categories"
+            placeholder="Search"
+            placeholderTextColor={theme.mutedForeground}
+            value={props.search}
+            onChangeText={props.onSearch}
+            style={[ui.input, pickerSheetStyles.input]}
+          />
+        </View>
+      )}
+      {!props.editor && (
+        <>
+          {props.options === undefined ? (
+            <Text style={ui.muted}>Loading categories…</Text>
+          ) : props.options.length ? props.options.map((option) => {
+            const color = categoryColor(option.style);
+            return (
+              <Pressable
+                key={option.key}
+                accessibilityRole="button"
+                accessibilityLabel={option.name}
+                accessibilityState={{ selected: option.selected }}
+                style={pickerSheetStyles.row}
+                onPress={() => props.onSelect(option.key)}
+              >
+                <View style={[styles.disc, { backgroundColor: `${color}2e`, borderColor: color }]}>
+                  <Text style={styles.emoji}>{option.style.emoji}</Text>
+                </View>
+                <Text style={[ui.body, pickerSheetStyles.rowName]}>{option.name}</Text>
+                {option.selected && <Ionicons name="checkmark" size={20} color={theme.primary} />}
+              </Pressable>
+            );
+          }) : (
+            <Text style={ui.muted}>
+              {props.search.trim() ? `Nothing matches "${props.search.trim()}".` : "No categories yet."}
+            </Text>
+          )}
+          <Pressable accessibilityRole="button" accessibilityLabel="Add your own" onPress={props.onCreate} style={pickerSheetStyles.row}>
+            <View style={[styles.disc, styles.addDisc, styles.dashed]}>
+              <Ionicons name="add" size={20} color={theme.foreground} />
+            </View>
+            <Text style={[ui.body, pickerSheetStyles.rowName]}>Add your own</Text>
+          </Pressable>
+          {props.selectionCount !== undefined && (
+            <Text style={ui.muted}>{props.selectionCount} of 3 selected. Each counts the full amount.</Text>
+          )}
+          {props.primaryOptions && (
+            <View style={ui.section}>
+              <Text style={ui.title}>Which category is primary?</Text>
+              <Text style={ui.muted}>Choose which best describes this expense. Each selected category still counts the full amount.</Text>
+              {props.primaryOptions.map((option) => (
+                <Choice key={option.key} label={option.name}
+                  selected={props.primaryId === option.key}
+                  onPress={() => props.onPrimary?.(option.key)} />
+              ))}
+            </View>
+          )}
+          {props.limitReached && (
+            <View style={ui.section}>
+              <Text accessibilityRole="alert" style={ui.error}>Choose up to three categories. Remove one, or create a category that encompasses the concept.</Text>
+              <SecondaryButton label="Create an encompassing category" onPress={() => props.onCreateEncompassing?.()} />
+            </View>
+          )}
+          {props.onDone && (
+            <PrimaryButton label="Done" onPress={props.onDone} disabled={!!props.primaryOptions && !props.primaryId} />
+          )}
+        </>
+      )}
+      {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}
+    </PickerSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  surface: { backgroundColor: theme.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderWidth: 1, borderColor: theme.border },
-  content: { paddingHorizontal: spacing.xxl, paddingBottom: 44, gap: spacing.lg },
-  title: { color: theme.foreground, fontSize: 28, lineHeight: 34, fontFamily: font.extrabold, letterSpacing: -0.6 },
-  search: { backgroundColor: theme.background, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.md },
-  input: { paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: theme.ring, backgroundColor: theme.secondary },
-  row: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: spacing.lg, paddingVertical: spacing.sm },
-  rowName: { flex: 1, fontFamily: font.semibold },
   disc: { width: touchTarget, height: touchTarget, borderRadius: radius.full, borderWidth: 2, borderColor: theme.border, alignItems: "center", justifyContent: "center" },
   addDisc: { borderWidth: 1, backgroundColor: theme.secondary },
   dashed: { borderStyle: "dashed" },

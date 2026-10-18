@@ -1,3 +1,40 @@
+export function formatCopInput(raw: string): string {
+  const minus = raw.includes("-") || raw.includes("−");
+  const plus = raw.includes("+");
+  const sign = minus && !plus
+    ? "-"
+    : plus && !minus
+      ? "+"
+      : raw.startsWith("-") || raw.startsWith("−")
+        ? "-"
+        : raw.startsWith("+")
+          ? "+"
+          : "";
+
+  let rest = raw.replace(/[+\-−]/g, "");
+  if (!rest.includes(",")) {
+    const parts = rest.split(".");
+    const last = parts[parts.length - 1] ?? "";
+    if (parts.length === 2 && /^\d*$/.test(parts[0] ?? "") && /^\d{0,2}$/.test(last)) {
+      rest = `${parts[0]},${last}`;
+    } else if (rest.endsWith(".") && parts.length > 2) {
+      rest = `${rest.slice(0, -1)},`;
+    }
+  }
+
+  const commaAt = rest.indexOf(",");
+  const intRaw = (commaAt === -1 ? rest : rest.slice(0, commaAt)).replace(/\D/g, "");
+  const decRaw =
+    commaAt === -1 ? null : rest.slice(commaAt + 1).replace(/\D/g, "").slice(0, 2);
+
+  if (!intRaw && decRaw === null) {
+    return sign;
+  }
+
+  const grouped = intRaw.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return decRaw === null ? `${sign}${grouped}` : `${sign}${grouped},${decRaw}`;
+}
+
 // The pilot supports COP and USD, both with two minor-unit digits.
 function localeSeparators(locale: string): { group: string; decimal: string } {
   if (locale === "en-US") {

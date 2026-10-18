@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { ScrollView } from "react-native";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { BatchNativeStack } from "./BatchNativeStack";
+import { BatchNativeStack, batchRowFor } from "./BatchNativeStack";
 import { PostingForm } from "./PostingForm";
 import { emptyPostingForm } from "./PostingForm.fixtures";
 import type { usePostingBatch } from "./usePostingBatch";
@@ -179,6 +179,28 @@ test("rows edit, remove, and show both directions only for a mixed queue", async
   expect(copy()).toContain("NET\n−$10");
   expect(copy()).not.toContain("\nOut\n");
   expect(copy()).not.toContain("\nIn\n");
+});
+
+test("batch chips use the primary category palette colour and update after a restyle", async () => {
+  const item = { ...out, command: { ...out.command, payload: {
+    ...out.command.payload,
+    userCategoryIds: ["food", "travel"],
+    primaryUserCategoryId: "travel",
+  } } };
+  const categories = [
+    { id: "food", name: "Food", style: { emoji: "🍜", tone: "primary", color: "h0" } },
+    { id: "travel", name: "Travel", style: { emoji: "🚌", tone: "primary", color: "h120" } },
+  ] satisfies NonNullable<Parameters<typeof batchRowFor>[0]["categories"]>;
+  const rowFor = () => batchRowFor({ item, categories, profiles: [{ id: "wallet", name: "Wallet" }] });
+  await render({ ...batch(), queue: [item] }, { rowFor });
+  const chip = () => root!.root.findAllByType("text").find((node) => node.children.join("") === "🚌")!.parent!;
+  expect(chip().props.style).toContainEqual({ backgroundColor: "#218c2122" });
+  expect(copy()).toContain("Food · Travel · Wallet");
+  categories[1].style.color = "h240";
+  await act(async () => root!.update(createElement(BatchNativeStack, {
+    ...props, rowFor, batch: { ...batch(), queue: [item] },
+  })));
+  expect(chip().props.style).toContainEqual({ backgroundColor: "#21218c22" });
 });
 
 test("the header Post appears only after the full-width action scrolls out of view", async () => {

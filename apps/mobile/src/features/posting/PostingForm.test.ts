@@ -10,6 +10,7 @@ import { ListRow } from "../../ui/core";
 import { PlaceSheet } from "./PlaceSheet";
 import { AccountSetupForm } from "./AccountSetupForm";
 import type { PlaceDraft } from "./usePostingEditor";
+import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({
@@ -60,6 +61,60 @@ const handlers = {
   onPost: vi.fn(),
   onDone: vi.fn(),
 };
+
+test.each([false, true])("typing a new expense preserves its sign and grouping, batch=%s", async (saveToBatch) => {
+  const post = vi.fn<PostingTransport["post"]>(async () => ({
+    description: "",
+    amount: { currency: "COP", minorUnits: 1250000 },
+  }));
+  const transport: PostingTransport = {
+    load: async () => ({ kind: "none" }),
+    save: async (command) => ({ id: "saved", command }),
+    post,
+    clear: async () => {},
+    abort: async () => {},
+    newKey: () => "expense-key",
+  };
+  const queued: ReturnType<ReturnType<typeof usePostingEditor>["captureForBatch"]>[] = [];
+  function Composer() {
+    const editor = usePostingEditor({
+      workspaceId: "workspace",
+      financialAccountProfileId: "wallet",
+      currency: "COP",
+      timeZone: "America/Bogota",
+    }, transport);
+    return createElement(PostingForm, {
+      ...emptyPostingForm,
+      ...handlers,
+      amount: editor.amount,
+      onAmountChange: editor.setAmount,
+      canSubmit: editor.canSubmit,
+      saveToBatch,
+      onPost: () => {
+        if (saveToBatch) queued.push(editor.captureForBatch());
+        else void editor.submit();
+      },
+    });
+  }
+  await act(async () => { root = create(createElement(Composer)); });
+  const input = () => root!.root.findByProps({ accessibilityLabel: "Signed amount" });
+  expect(input().props.value).toBe("-0");
+  for (const digit of "12500") {
+    await act(async () => input().props.onChangeText(`${input().props.value}${digit}`));
+  }
+  expect(input().props.value).toBe("-12.500");
+  await act(async () => input().props.onChangeText("-12abc500"));
+  expect(input().props.value).toBe("-12.500");
+  await act(async () => root!.root.findByProps({
+    accessibilityLabel: saveToBatch ? "Add to batch" : "Post",
+    accessibilityRole: "button",
+  }).props.onPress());
+  const command = saveToBatch ? queued[0]?.command : post.mock.calls[0]?.[0];
+  expect(command).toMatchObject({
+    kind: "expense",
+    payload: { amount: { currency: "COP", minorUnits: 1250000 } },
+  });
+});
 
 test("one entry follows the prototype order with an open description and one Post action", async () => {
   await act(async () => {

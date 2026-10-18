@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { theme } from "../../ui/core";
-import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
+import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export function ComposeModeToggle({
   mode,
@@ -31,7 +31,7 @@ export function ComposeModeToggle({
           onPress={() => onMode(value)}
           style={[styles.segment, value === mode && styles.active]}
         >
-          <Text style={styles.label}>{value === "one" ? "One" : "Batch"}</Text>
+          <Text style={[styles.label, value === mode && styles.activeLabel]}>{value === "one" ? "One" : "Batch"}</Text>
           {value === "batch" && count > 0 && (
             <View style={styles.badge}>
               <Text style={styles.count}>{count}</Text>
@@ -62,10 +62,11 @@ const styles = StyleSheet.create({
   },
   active: { backgroundColor: theme.background },
   label: {
-    fontFamily: font.bold,
-    fontSize: fontSize.body,
-    color: theme.foreground,
+    fontFamily: font.medium,
+    fontSize: 13,
+    color: theme.mutedForeground,
   },
+  activeLabel: { color: theme.foreground, fontFamily: font.bold },
   badge: {
     minWidth: 20,
     height: 20,

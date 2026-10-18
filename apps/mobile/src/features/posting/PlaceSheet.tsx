@@ -1,13 +1,12 @@
 import {
-  BottomSheetModal,
-  BottomSheetScrollView,
+  type BottomSheetModal,
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import type { RefObject } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Pressable, Text } from "react-native";
-import { Header, theme, ui } from "../../ui/core";
-import { spacing, touchTarget } from "../../ui/tokens";
+import { Pressable, Text, View } from "react-native";
+import { theme, ui } from "../../ui/core";
+import { PickerSheet, pickerSheetStyles } from "../../ui/PickerSheet";
 
 export function PlaceSheet(props: {
   sheetRef: RefObject<BottomSheetModal | null>;
@@ -29,71 +28,58 @@ export function PlaceSheet(props: {
         .includes(props.search.trim().toLowerCase()),
   );
   return (
-    <BottomSheetModal
-      ref={props.sheetRef}
-      snapPoints={["65%"]}
-      enableDynamicSizing={false}
-      backgroundStyle={{ backgroundColor: theme.background }}
-    >
-      <BottomSheetScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: spacing.xxl, gap: spacing.lg }}
-      >
-        <Header title={props.title} />
+    <PickerSheet sheetRef={props.sheetRef} busy={props.disabled}>
+      <View style={pickerSheetStyles.search}>
+        <Text style={pickerSheetStyles.title}>{props.title}</Text>
         <BottomSheetTextInput
           accessibilityLabel="Search places"
-          placeholder="Search places"
+          placeholder="Search"
+          placeholderTextColor={theme.mutedForeground}
           value={props.search}
           onChangeText={props.onSearch}
           editable={!props.disabled}
-          style={ui.input}
+          style={[ui.input, pickerSheetStyles.input]}
         />
-        {visible?.map((place) => (
-          <Pressable
-            key={place.id}
-            accessibilityRole="button"
-            accessibilityLabel={`${place.emoji ?? "💰"} ${place.name}`}
-            accessibilityState={{
-              selected: place.id === props.selectedId,
-              disabled: props.disabled,
-            }}
-            disabled={props.disabled}
-            style={{
-              minHeight: 64,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: spacing.lg,
-            }}
-            onPress={() => {
-              if (!props.disabled) props.onSelect(place.id);
-            }}
-          >
-            <Text style={{ fontSize: 22 }}>{place.emoji ?? "💰"}</Text>
-            <Text style={[ui.body, { flex: 1 }]}>{place.name}</Text>
-            {place.id === props.selectedId && (
-              <Ionicons name="checkmark" size={20} color={theme.primary} />
-            )}
-          </Pressable>
-        ))}
-        {visible?.length === 0 && (
-          <Text style={ui.muted}>No places found.</Text>
-        )}
+      </View>
+      {visible?.map((place) => (
         <Pressable
+          key={place.id}
           accessibilityRole="button"
-          accessibilityLabel="Add a place"
+          accessibilityLabel={`${place.emoji ?? "💰"} ${place.name}`}
+          accessibilityState={{
+            selected: place.id === props.selectedId,
+            disabled: props.disabled,
+          }}
           disabled={props.disabled}
-          onPress={props.onAdd}
-          style={{
-            minHeight: touchTarget,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: spacing.lg,
+          style={pickerSheetStyles.row}
+          onPress={() => {
+            if (!props.disabled) props.onSelect(place.id);
           }}
         >
-          <Ionicons name="add" size={24} color={theme.foreground} />
-          <Text style={ui.body}>Add a place</Text>
+          <Text style={{ fontSize: 22 }}>{place.emoji ?? "💰"}</Text>
+          <Text style={[ui.body, pickerSheetStyles.rowName]}>{place.name}</Text>
+          {place.id === props.selectedId && (
+            <Ionicons name="checkmark" size={20} color={theme.primary} />
+          )}
         </Pressable>
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+      ))}
+      {visible?.length === 0 && (
+        <Text style={ui.muted}>
+          {props.search.trim() ? `Nothing matches "${props.search.trim()}".` : "No places yet."}
+        </Text>
+      )}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Add a place"
+        disabled={props.disabled}
+        onPress={props.onAdd}
+        style={pickerSheetStyles.row}
+      >
+        <View style={pickerSheetStyles.addDisc}>
+          <Ionicons name="add" size={20} color={theme.foreground} />
+        </View>
+        <Text style={[ui.body, pickerSheetStyles.rowName]}>Add a place</Text>
+      </Pressable>
+    </PickerSheet>
   );
 }

@@ -1,5 +1,31 @@
 import { expect, test, vi } from "vitest";
-import { formatMoney, parseMoney } from "./money";
+import { formatCopInput, formatMoney, parseMoney } from "./money";
+
+test.each([
+  ["-012500", "-12.500"],
+  ["-12abc500", "-12.500"],
+  ["+12500", "+12.500"],
+  ["−12500", "-12.500"],
+  ["12.5", "12,5"],
+  ["-1.234,567", "-1.234,56"],
+  ["-1.234.", "-1.234,"],
+  ["-", "-"],
+  ["letters", ""],
+  ["", ""],
+])("formats COP input %s as %s", (input, expected) => {
+  expect(formatCopInput(input)).toBe(expected);
+});
+
+test("input formatting and shared parsing work without Intl on Hermes", () => {
+  vi.stubGlobal("Intl", undefined);
+  try {
+    expect(formatCopInput("-012500")).toBe("-12.500");
+    expect(parseMoney(formatCopInput("-012500"))).toBe(-1250000);
+    expect(parseMoney("1,234.50", "en-US")).toBe(123450);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 
 test.each([
   ["-1.234,50", -123450],

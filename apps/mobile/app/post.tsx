@@ -24,11 +24,8 @@ import { defaultAccountingDate } from "../src/features/timeZones";
 import { Header, Screen, SecondaryButton, theme, ui } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
-import { BatchNativeStack } from "../src/features/posting/BatchNativeStack";
-import {
-  usePostingBatch,
-  type QueuedPosting,
-} from "../src/features/posting/usePostingBatch";
+import { BatchNativeStack, batchRowFor } from "../src/features/posting/BatchNativeStack";
+import { usePostingBatch } from "../src/features/posting/usePostingBatch";
 import { PlaceSheet } from "../src/features/posting/PlaceSheet";
 import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
 import {
@@ -484,40 +481,7 @@ function PostMoney({
           editor.resetComposer();
           setMode("one");
         }}
-        rowFor={(item: QueuedPosting) => {
-          const command = item.command;
-          const payload = command.payload;
-          const ids =
-            "userCategoryIds" in payload ? payload.userCategoryIds : undefined;
-          const primaryId =
-            "primaryUserCategoryId" in payload
-              ? payload.primaryUserCategoryId
-              : undefined;
-          const category = categories?.find(
-            (row) => row.id === (primaryId ?? ids?.[0]),
-          );
-          const profileId =
-            command.kind === "transfer"
-              ? command.payload.sourceFinancialAccountProfileId
-              : "financialAccountProfileId" in payload
-                ? payload.financialAccountProfileId
-                : undefined;
-          return {
-            category:
-              ids
-                ?.map(
-                  (id) =>
-                    categories?.find((row) => row.id === id)?.name ??
-                    "Saved category",
-                )
-                .join(" · ") || "No category",
-            place:
-              profiles?.find((row) => row.id === profileId)?.name ??
-              "No account",
-            emoji: category?.style.emoji ?? "💰",
-            color: category ? theme[category.style.tone] : theme.primary,
-          };
-        }}
+        rowFor={(item) => batchRowFor({ item, categories, profiles })}
       />
       {impactSheet}
     </>

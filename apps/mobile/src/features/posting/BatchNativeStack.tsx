@@ -26,8 +26,53 @@ import {
   type QueuedPosting,
   type usePostingBatch,
 } from "./usePostingBatch";
+import { categoryColor } from "../categories/appearance";
+import type { Category } from "../categories/model";
 
 type Row = { category: string; place: string; emoji: string; color: string };
+export function batchRowFor({
+  item,
+  categories,
+  profiles,
+}: {
+  item: QueuedPosting;
+  categories: Pick<Category, "id" | "name" | "style">[] | undefined;
+  profiles: { id: string; name: string }[] | undefined;
+}): Row {
+  const command = item.command;
+  const payload = command.payload;
+  const ids =
+    "userCategoryIds" in payload ? payload.userCategoryIds : undefined;
+  const primaryId =
+    "primaryUserCategoryId" in payload
+      ? payload.primaryUserCategoryId
+      : undefined;
+  const category = categories?.find(
+    (row) => row.id === (primaryId ?? ids?.[0]),
+  );
+  const profileId =
+    command.kind === "transfer"
+      ? command.payload.sourceFinancialAccountProfileId
+      : "financialAccountProfileId" in payload
+        ? payload.financialAccountProfileId
+        : undefined;
+  return {
+    category:
+      ids
+        ?.map(
+          (id) =>
+            categories?.find((row) => row.id === id)?.name ??
+            "Saved category",
+        )
+        .join(" · ") || "No category",
+    place:
+      profiles?.find((row) => row.id === profileId)?.name ??
+      "No account",
+    emoji: category?.style.emoji ?? "💰",
+    color: category ? categoryColor(category.style) : theme.primary,
+  };
+}
+
 export function signedBatchMoney(minorUnits: number, currency: string) {
   return `${minorUnits < 0 ? "−" : "+"}${currency === "COP" ? "$" : `${currency} `}${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 }).format(Math.abs(minorUnits) / 100)}`;
 }
