@@ -29,12 +29,15 @@ function Drafts({
   currency: "COP" | "USD";
   profileId: string;
 }) {
-  const { seed } = useLocalSearchParams<{ seed?: string }>();
+  const { seed, segment: requestedSegment } = useLocalSearchParams<{ seed?: string; segment?: string }>();
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
   const intake = useIntakeCandidates({ subject, workspaceId, currency });
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
   const reportFailure = useDeviceAccessFailure();
-  const [segment, setSegment] = useState<InboxSegment>("now");
+  const [segment, setSegment] = useState<InboxSegment>(requestedSegment === "wait" ? "wait" : "now");
+  useEffect(() => {
+    setSegment(requestedSegment === "wait" ? "wait" : "now");
+  }, [requestedSegment]);
   const [confirming, setConfirming] = useState(false);
   const seeded = useRef(false);
   const period = { year: currentPeriod.year, month: currentPeriod.month };

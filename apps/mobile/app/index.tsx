@@ -16,9 +16,8 @@ import {
 import { Setup } from "../src/features/Setup";
 import { spentMonthEyebrow } from "../src/features/timeZones";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
-import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
-import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
-import { inboxBadgeCount } from "../src/features/inboxCount";
+import { useAttention } from "../src/features/attention/useAttention";
+import { updatesDetail } from "../src/features/attention/model";
 import {
   ActionTile,
   ConfirmationScreen,
@@ -36,21 +35,23 @@ function Home({
   currency,
   timeZone,
   subject,
+  currentPeriod,
 }: {
   workspaceId: string;
   currency: string;
   timeZone: string;
   subject: string;
+  currentPeriod: Parameters<typeof useAttention>[0]["currentPeriod"];
 }) {
   const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
-  const drafts = useLocalEntryDrafts({ subject, workspaceId });
-  const intake = useIntakeCandidates({
+  const { inboxCount, alerts } = useAttention({
     subject,
     workspaceId,
-    currency: currency === "USD" ? "USD" : "COP",
+    currency,
+    timeZone,
+    currentPeriod,
   });
-  const inboxCount = inboxBadgeCount(drafts.count, intake.count);
   const actions = useRef<BottomSheetModal>(null);
   const [paceOpen, setPaceOpen] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
@@ -65,7 +66,12 @@ function Home({
           daysInMonth,
         );
   const projectedLabel = formatMoney(
-    { currency, minorUnits: projectedMinorUnits },
+    {
+      currency,
+      minorUnits: currency === "COP"
+        ? Math.round(projectedMinorUnits / 100) * 100
+        : projectedMinorUnits,
+    },
     { hideZeroDecimals: true },
   );
   return (
@@ -107,18 +113,18 @@ function Home({
             accessibilityLabel="Show month pace details"
             accessibilityState={{ expanded: paceOpen }}
             onPress={() => setPaceOpen((open) => !open)}
-            style={{ gap: spacing.md }}
+            style={{ minHeight: touchTarget, justifyContent: "center", gap: spacing.md }}
           >
             <ProgressBar
               value={paceProgress}
               label={`Day ${day} of ${daysInMonth}`}
             />
             {paceOpen ? (
-              <View style={{ gap: spacing.xs }}>
-                <Text style={ui.body}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.md }}>
+                <Text style={[ui.muted, { flex: 1 }]}>
                   Day {day} of {daysInMonth}
                 </Text>
-                <Text style={ui.muted}>
+                <Text style={[ui.muted, { flex: 1 }]}>
                   On pace for{"\n"}
                   {projectedLabel}
                 </Text>
@@ -138,8 +144,9 @@ function Home({
         />
         <ActionTile
           title="Alerts"
-          detail="Coming later"
+          detail={updatesDetail(alerts)}
           icon="notifications-outline"
+          onPress={() => router.push("/alerts")}
         />
         <ActionTile title="Plans" detail="Budget & recovery" icon="layers-outline" onPress={() => router.push("/plans")} />
         <ActionTile
@@ -201,10 +208,12 @@ export default function Index() {
     );
   return (
     <Home
+      key={`${userId}:${defaults.workspace.id}`}
       workspaceId={defaults.workspace.id}
       currency={defaults.workspace.functionalCurrency}
       timeZone={defaults.workspace.timeZone}
       subject={userId}
+      currentPeriod={defaults.workspace.currentAccountingPeriod}
     />
   );
 }

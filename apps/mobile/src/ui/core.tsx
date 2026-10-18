@@ -347,15 +347,22 @@ export function ActionTile({
     <>
       <Ionicons name={icon} size={28} color={color} />
       {count !== undefined ? (
-        <Text
-          style={{
-            fontSize: fontSize.title,
-            fontFamily: font.extrabold,
-            color,
-          }}
+        <View
+          style={[
+            styles.tileBadge,
+            { backgroundColor: primary ? theme.primaryForeground : theme.foreground },
+          ]}
         >
-          {count}
-        </Text>
+          <Text
+            style={{
+              fontSize: fontSize.label,
+              fontFamily: font.bold,
+              color: primary ? theme.primary : theme.background,
+            }}
+          >
+            {count}
+          </Text>
+        </View>
       ) : null}
       <View style={{ flex: 1 }} />
       <Text style={{ fontSize: fontSize.title, fontFamily: font.bold, color }}>
@@ -578,6 +585,17 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: radius.xl,
     gap: spacing.sm,
+  },
+  tileBadge: {
+    position: "absolute",
+    top: spacing.lg,
+    right: spacing.lg,
+    minWidth: 26,
+    minHeight: 26,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
   },
   track: {
     height: 6,
