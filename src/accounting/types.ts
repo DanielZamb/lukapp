@@ -87,6 +87,7 @@ export type FinancialAccountProfile = {
   workspaceId: string;
   name: string;
   productKind: FinancialAccountProductKind;
+  emoji?: string;
   /** The Posting Account behind the profile, for advanced views. */
   ledgerAccountId: string;
 };
@@ -178,10 +179,12 @@ export type StoredWorkspace = {
 };
 
 export type StoredProfile = {
+  createdAt?: number;
   id: string;
   workspaceId: string;
   name: string;
   productKind: FinancialAccountProductKind;
+  emoji?: string;
   classificationPolicy: string;
   postingAccountId: string;
 };
@@ -266,7 +269,8 @@ export type AccountingStore = {
     code: string,
   ): Promise<LedgerAccount | undefined>;
   listLedgerAccounts(workspaceId: string): Promise<LedgerAccount[]>;
-  insertProfile(profile: Omit<StoredProfile, "id">): Promise<StoredProfile>;
+  insertProfile(profile: Omit<StoredProfile, "id" | "createdAt">): Promise<StoredProfile>;
+  restyleProfile(profileId: string, emoji: string): Promise<StoredProfile>;
   getProfile(profileId: string): Promise<StoredProfile | undefined>;
   listProfiles(workspaceId: string): Promise<StoredProfile[]>;
   insertJournalEntry(
@@ -389,6 +393,7 @@ export type AccountTransferInput = Omit<OpeningPositionInput, "financialAccountP
   destinationFinancialAccountProfileId: string;
 };
 export type AccountSetupInput = Omit<OpeningPositionInput, "financialAccountProfileId" | "description"> & {
+  emoji?: string;
   name: string;
   productKind: FinancialAccountProductKind;
 };

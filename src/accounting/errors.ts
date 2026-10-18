@@ -1,4 +1,5 @@
 export const accountingErrorMessages = {
+  account_emoji_required: "Choose a look for this place",
   transfer_profiles_must_differ: "Choose two different places for an Account Transfer",
   opening_already_exists: "Reverse the active starting amount before replacing it",
   activity_before_opening: "Activity cannot be dated before this place's starting date",

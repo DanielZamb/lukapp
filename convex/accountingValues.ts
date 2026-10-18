@@ -77,7 +77,13 @@ export const accountTransfer = {
   description: v.string(),
   idempotencyKey: v.string(),
 };
+export const accountLook = {
+  ...inWorkspace,
+  financialAccountProfileId: v.string(),
+  emoji: v.string(),
+};
 export const accountSetup = {
+  emoji: v.optional(v.string()),
   ...profileCreation,
   amount: money,
   accountingDate: v.string(),

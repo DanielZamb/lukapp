@@ -25,6 +25,7 @@ type WriteMethod =
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
+  | "restyleProfile"
   | "insertJournalEntry"
   | "insertAccountingPeriod"
   | "setAccountingPeriodStatus"
@@ -82,11 +83,13 @@ function toLedgerAccount(doc: Doc<"ledgerAccounts">): LedgerAccount {
 
 function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
   return {
+    createdAt: doc._creationTime,
     id: doc._id,
     workspaceId: doc.workspaceId,
     name: doc.name,
     productKind: doc.productKind,
     classificationPolicy: doc.classificationPolicy,
+    ...(doc.emoji ? { emoji: doc.emoji } : {}),
     postingAccountId: doc.postingAccountId,
   };
 }
@@ -392,6 +395,14 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
       return { id, ...account };
     },
 
+    async restyleProfile(profileId, emoji) {
+      const id = storedId<"financialAccountProfiles">(profileId);
+      await db.patch(id, { emoji });
+      const doc = await db.get(id);
+      if (!doc) throw new AccountingError("financial_account_profile_not_found");
+      return toProfile(doc);
+    },
+
     async insertProfile(profile) {
       const id = await db.insert("financialAccountProfiles", {
         ...profile,
@@ -524,6 +535,7 @@ function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),
+    restyleProfile: async () => unavailable("restyleProfile"),
     insertJournalEntry: async () => unavailable("insertJournalEntry"),
     insertAccountingPeriod: async () => unavailable("insertAccountingPeriod"),
     setAccountingPeriodStatus: async () =>

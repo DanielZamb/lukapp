@@ -42,7 +42,7 @@ vi.mock("@gorhom/bottom-sheet", async () => {
       useImperativeHandle(ref, () => ({ present: state.present, dismiss: state.dismiss }));
       return createElement("sheet", props, children);
     },
-    BottomSheetScrollView: "sheet-content", BottomSheetView: "sheet-content", BottomSheetTextInput: "input",
+    BottomSheetBackdrop: "backdrop", BottomSheetScrollView: "sheet-content", BottomSheetView: "sheet-content", BottomSheetTextInput: "input",
   };
 });
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "date-picker" }));
@@ -74,7 +74,7 @@ async function render() {
           currentAccountingPeriod: { year: 2026, month: 10, status: "open" }, kind: "Personal", chartOfAccountsTemplate: "puc@1" },
         financialAccountProfile: { id: "daily", name: "Daily", productKind: "cash", ledgerAccountId: "ledger", workspaceId: "workspace" },
       },
-      subject: "owner", onClose: state.close,
+      subject: "owner", unlocking: true, onClose: state.close,
     }));
   });
 }
@@ -89,17 +89,17 @@ function button(label: string) {
   return found;
 }
 
-test("Home opens the existing place form, creates a place and returns home", async () => {
+test("Home opens Add a place, creates a savings account and closes", async () => {
   await render();
   expect(state.load).toHaveBeenCalledWith(undefined, false);
   expect(state.present).toHaveBeenCalledOnce();
-  await act(async () => input("Place name").props.onChangeText("Savings"));
-  await act(async () => input("Amount held").props.onChangeText("12.500"));
-  await act(async () => button("Start tracking").props.onPress());
+  await act(async () => input("Account name").props.onChangeText("Savings"));
+  await act(async () => input("Balance today").props.onChangeText("12.500"));
+  await act(async () => button("Add this place").props.onPress());
   expect(state.post).toHaveBeenCalledOnce();
   expect(state.post.mock.calls[0]).toEqual([{
     kind: "setup", target: { kind: "source" }, payload: {
-      workspaceId: "workspace", name: "Savings", productKind: "bankAccount",
+      workspaceId: "workspace", name: "Savings", productKind: "savingsAccount", emoji: "🏦",
       amount: { currency: "COP", minorUnits: 1250000 },
       accountingDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), idempotencyKey: "setup-key",
     },
@@ -113,10 +113,10 @@ test("Home opens the existing place form, creates a place and returns home", asy
 test("an uncertain setup keeps its saved command for an identical retry", async () => {
   state.fail = true;
   await render();
-  await act(async () => input("Place name").props.onChangeText("Savings"));
-  await act(async () => button("Start tracking").props.onPress());
+  await act(async () => input("Account name").props.onChangeText("Savings"));
+  await act(async () => button("Add this place").props.onPress());
   expect(state.close).not.toHaveBeenCalled();
-  expect(input("Place name").props.editable).toBe(false);
+  expect(input("Account name").props.editable).toBe(false);
   state.fail = false;
   await act(async () => button("Retry setup").props.onPress());
   expect(state.post.mock.calls[1]).toEqual(state.post.mock.calls[0]);
@@ -130,5 +130,62 @@ test("pending postings open Drafts instead of being resumed by the new-place act
   expect(state.push.mock.calls).toEqual([["/drafts"]]);
   expect(state.close).toHaveBeenCalledOnce();
   expect(state.present).not.toHaveBeenCalled();
+  expect(state.post).not.toHaveBeenCalled();
+});
+
+function texts() { return root.root.findAllByType("text").map((node) => node.children.join("")); }
+
+test("prototype defaults save a blank name and balance with today's hidden date", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-19T02:00:00Z"));
+  try {
+    await render();
+    expect(texts()).toContain("THIS OPENS LEVEL 1");
+    expect(texts()).toContain("Name you recognize");
+    expect(texts()).not.toContain("Starting date");
+    expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityRole === "radio")
+      .map((node) => [node.props.accessibilityLabel, node.props.accessibilityState.selected]))
+      .toEqual([["Checking", false], ["Savings", true], ["Wallet", false]]);
+    expect(root.root.find((node) => String(node.type) === "sheet").props).toMatchObject({ snapPoints: ["80%"], enablePanDownToClose: true,
+      enableDynamicSizing: false, keyboardBehavior: "interactive" });
+    await act(async () => input("Account name").props.onChangeText("   "));
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "New account", productKind: "savingsAccount",
+      emoji: "🏦", amount: { currency: "COP", minorUnits: 0 }, accountingDate: "2026-10-18" });
+  } finally { vi.useRealTimers(); }
+});
+
+test.each([
+  { label: "Checking", productKind: "bankAccount", emoji: "💰" },
+  { label: "Savings", productKind: "savingsAccount", emoji: "🏦" },
+  { label: "Wallet", productKind: "cash", emoji: "👛" },
+])("$label maps to the existing account command and a default look", async ({ label, productKind, emoji }) => {
+  await render();
+  await act(async () => button(label).props.onPress());
+  await act(async () => input("Balance today").props.onChangeText("abc"));
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ productKind, emoji, amount: { minorUnits: 0 } });
+});
+
+test("custom look uses the first character and survives changing the kind", async () => {
+  await render();
+  await act(async () => button("Checking").props.onPress());
+  expect(texts()).toContain("💰");
+  await act(async () => button("Choose emoji").props.onPress());
+  expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityRole === "radio")).toHaveLength(13);
+  await act(async () => input("Custom emoji").props.onChangeText("🦊extra"));
+  await act(async () => button("Use this").props.onPress());
+  await act(async () => root.root.findAll((node) => String(node.type) === "sheet")[1].props.onDismiss());
+  await act(async () => button("Wallet").props.onPress());
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ productKind: "cash", emoji: "🦊" });
+});
+
+test("pan dismissal drops an unsubmitted draft", async () => {
+  await render();
+  await act(async () => input("Account name").props.onChangeText("Discard me"));
+  await act(async () => root.root.find((node) => String(node.type) === "sheet").props.onDismiss());
+  expect(state.close).toHaveBeenCalledOnce();
+  expect(state.save).not.toHaveBeenCalled();
   expect(state.post).not.toHaveBeenCalled();
 });

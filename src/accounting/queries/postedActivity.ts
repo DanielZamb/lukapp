@@ -1,4 +1,6 @@
 import { balances } from "./balances";
+import { AccountingError } from "../errors";
+import { calendarDate } from "../timeZone";
 import { activityRow, profileNamesByPostingAccount } from "./activityRow";
 import { requireWorkspace } from "../membership";
 import { journalContext, toPostedJournalEntry } from "../views";
@@ -38,11 +40,21 @@ export async function postedActivity(
       );
     }));
   return {
-    accounts: accounts.map((account) => ({
-      financialAccountProfileId: account.financialAccountProfileId,
-      name: account.name,
-      nature: account.nature,
-      balance: account.balance,
+    accounts: await Promise.all(accounts.map(async (account) => {
+      const profile = context.profiles.get(account.financialAccountProfileId);
+      if (!profile) throw new AccountingError("financial_account_profile_not_found");
+      const openings = await store.listOpeningMarkersByProfile(workspace.id, profile.id);
+      const trackingFrom = openings.map((opening) => opening.accountingDate).sort()[0]
+        ?? (profile.createdAt === undefined ? null : calendarDate(new Date(profile.createdAt), workspace.timeZone));
+      return {
+        productKind: profile.productKind,
+        ...(profile.emoji ? { emoji: profile.emoji } : {}),
+        trackingFrom,
+        financialAccountProfileId: account.financialAccountProfileId,
+        name: account.name,
+        nature: account.nature,
+        balance: account.balance,
+      };
     })),
     rows,
     monthSpendMinorUnits,

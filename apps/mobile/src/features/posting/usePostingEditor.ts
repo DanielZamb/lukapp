@@ -53,6 +53,7 @@ type Account = {
   timeZone: string;
 };
 export type PlaceDraft = {
+  emoji?: string;
   name: string;
   productKind: PlaceKind;
   amount: string;
@@ -148,6 +149,7 @@ export function usePostingEditor(
       setSetup({
         name: value.payload.name,
         productKind: value.payload.productKind,
+        ...(value.payload.emoji ? { emoji: value.payload.emoji } : {}),
         amount: formatMoney(value.payload.amount).replace(
           `${payload.amount.currency} `,
           "",
@@ -329,6 +331,7 @@ export function usePostingEditor(
           workspaceId: account.workspaceId,
           name: setup.name.trim(),
           productKind: setup.productKind,
+          ...(setup.emoji ? { emoji: setup.emoji } : {}),
           amount: {
             currency: account.currency,
             minorUnits: parseMoney(setup.amount),
