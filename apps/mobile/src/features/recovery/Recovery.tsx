@@ -5,7 +5,7 @@ import { useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
-import { ConfirmationScreen, Screen } from "../../ui/core";
+import { Screen } from "../../ui/core";
 import { api } from "../api";
 import { movedCopy, recoveryMoney, type RecoveryCandidate } from "./model";
 import {
@@ -13,6 +13,7 @@ import {
   RecoveryCandidates,
   RecoveryDraft,
   RecoveryMoveScreen,
+  RecoveryMoved,
   RecoveryPlanList,
   RecoveryPlanScreen,
 } from "./RecoveryScreens";
@@ -94,7 +95,7 @@ export function Recovery({ workspaceId, onBack, onViewPlans, onHome }: {
     const live = board.plans.find((item) => item.id === view.planId);
     if (!live) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
     return (
-      <ConfirmationScreen
+      <RecoveryMoved
         title={`${recoveryMoney({ currency: view.currency, minorUnits: view.movedMinorUnits })} moved`}
         detail={movedCopy({
           currency: view.currency,
@@ -104,8 +105,8 @@ export function Recovery({ workspaceId, onBack, onViewPlans, onHome }: {
           recoveredMinorUnits: live.recoveredMinorUnits,
           targetMinorUnits: live.targetMinorUnits,
         })}
-        buttonLabel="View recovery plan"
-        onContinue={() => setView({ name: "plan", id: view.planId })}
+        onViewPlan={() => setView({ name: "plan", id: view.planId })}
+        onHome={onHome}
       />
     );
   }

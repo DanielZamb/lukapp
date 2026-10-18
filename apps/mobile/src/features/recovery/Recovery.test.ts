@@ -1,7 +1,8 @@
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import type { FunctionReturnType } from "convex/server";
+import { Text } from "react-native";
+import { getFunctionName, type FunctionReturnType } from "convex/server";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   BaseNavigationContainer, createNavigationContainerRef, createNavigatorFactory,
@@ -12,6 +13,8 @@ import type { api } from "../api";
 import { Recovery } from "./Recovery";
 import { RecoveryCandidates, RecoveryDraft, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
 import type { RecoveryEditorTransport } from "./useRecoveryEditor";
+import type { RecoveryMoveTransport } from "./useRecoveryMove";
+import { RecoveryMoveScreen } from "./RecoveryScreens";
 import RecoveryRoute from "../../../app/recovery";
 
 vi.mock("react-native", () => ({
@@ -29,8 +32,12 @@ vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "activation-key" }));
 vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => () => false }));
 vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () => () => {} }));
-const remote = vi.hoisted(() => ({ query: vi.fn(), activate: vi.fn<RecoveryEditorTransport["save"]>() }));
-vi.mock("convex/react", () => ({ useQuery: remote.query, useAction: () => remote.activate }));
+const remote = vi.hoisted(() => ({ query: vi.fn(), activate: vi.fn<RecoveryEditorTransport["save"]>(), move: vi.fn<RecoveryMoveTransport["move"]>() }));
+vi.mock("convex/react", () => ({
+  useQuery: remote.query,
+  useAction: (action: typeof api.savingsRecovery.activatePlan | typeof api.savingsRecovery.recordContribution) =>
+    getFunctionName(action) === "savingsRecovery:recordContribution" ? remote.move : remote.activate,
+}));
 const navigation = vi.hoisted(() => ({ back: vi.fn(), dismissTo: vi.fn() }));
 vi.mock("expo-router", async () => {
   const { useNavigation } = await import("@react-navigation/native");
@@ -280,4 +287,90 @@ test.each([
   });
   expect(stack.getRootState()?.routes.map((route) => route.name))
     .toEqual(destination === "plans" ? ["index", "plans"] : ["index"]);
+});
+
+function moveReceipt(request: Parameters<RecoveryMoveTransport["move"]>[0], countedMinorUnits = request.amount.minorUnits) {
+  return {
+    replay: false,
+    transfer: { id: "transfer", amount: request.amount },
+    contribution: {
+      id: "contribution", workspaceId: request.workspaceId, planId: request.planId,
+      transferJournalEntryId: "transfer", amountMinorUnits: countedMinorUnits,
+      contributionDate: "2026-10-18", idempotencyKey: request.idempotencyKey,
+      createdBy: "owner", recordedAt: 1,
+    },
+  };
+}
+
+test.each(["header", "android", "ios"])("move is pushed from the plan and %s back pops to that plan", async (method) => {
+  const { screen, onBack } = await open([plan], true);
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  expect(screen.findByType(Header).props).toMatchObject({ title: "Move money", eyebrow: "RECOVERY CONTRIBUTION" });
+  expect(screen.findByType(RecoveryMoveScreen).props.amount).toBe("300.000");
+  await act(async () => {
+    if (method === "header") screen.findByType(Header).props.onBack();
+    else if (method === "android") stack.goBack();
+    else stack.dispatch(StackActions.pop(1));
+  });
+  expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+  expect(onBack).not.toHaveBeenCalled();
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans", "recovery"]);
+});
+
+test.each([false, true])("posting replaces the form and View recovery plan shows refreshed progress, capped=%s", async (capped) => {
+  let finish: ((receipt: Awaited<ReturnType<RecoveryMoveTransport["move"]>>) => void) | undefined;
+  remote.move.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  const { screen } = await open([plan], true);
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  if (capped) await act(async () => { screen.findByType(RecoveryMoveScreen).props.onAmount("1.500.000"); });
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  expect(screen.findByType(Header).props.onBack).toBeUndefined();
+  expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ busy: true, editable: false, canDismiss: false });
+  await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
+  expect(screen.findByType(RecoveryMoveScreen).props.busy).toBe(true);
+  const request = remote.move.mock.calls[0][0];
+  expect(request.amount).toEqual({ currency: "COP", minorUnits: capped ? 150_000_000 : 30_000_000 });
+  const refreshed = {
+    ...plan, recoveredMinorUnits: capped ? 300_000_000 : 210_000_000,
+    remainingMinorUnits: capped ? 0 : 90_000_000, dueMinorUnits: 0,
+  };
+  await act(async () => {
+    remote.query.mockReturnValue({ ...evaluation, plans: [refreshed] });
+    finish?.(moveReceipt(request, capped ? 120_000_000 : 30_000_000));
+  });
+  expect(screen.findAllByType(RecoveryMoveScreen)).toHaveLength(0);
+  expect(screen.findAllByType(Header)).toHaveLength(0);
+  expect(JSON.stringify(root?.toJSON())).toContain(capped ? "COP 1.500.000 moved" : "COP 300.000 moved");
+  expect(JSON.stringify(root?.toJSON())).toContain(capped
+    ? "COP 1.200.000 counted toward Emergency repair. Your Emergency repair plan is now 100% complete. The Savings account balance remains separate from plan progress."
+    : "Your Emergency repair plan is now 70% complete. The Savings account balance remains separate from plan progress.");
+  expect(screen.findByType(PrimaryButton).props).toMatchObject({ label: "View recovery plan", trailingIcon: "trending-up-outline" });
+  expect(screen.findByType(SecondaryButton).props.label).toBe("Back home");
+  await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
+  expect(screen.findAllByType(RecoveryMoveScreen)).toHaveLength(0);
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  expect(screen.findByType(RecoveryPlanScreen).props.plan).toEqual(refreshed);
+  expect(JSON.stringify(root?.toJSON())).toContain(capped ? "COP 3.000.000" : "COP 2.100.000");
+  expect(screen.findAll((node) => node.type === Text && node.children.join("") === (capped ? "100% complete" : "70% complete"))).toHaveLength(1);
+  expect(screen.findAll((node) => node.type === Text && node.children.join("") === (capped ? "COP 0 left" : "COP 900.000 left"))).toHaveLength(1);
+  expect(screen.findAllByType(PrimaryButton)).toHaveLength(capped ? 0 : 1);
+});
+
+test("an uncertain transfer keeps back hidden, retries the same movement, then Back home resets to /", async () => {
+  remote.move.mockRejectedValueOnce(new Error("offline"));
+  const { screen } = await open([plan], true, "alerts");
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  expect(screen.findByType(Header).props.onBack).toBeUndefined();
+  expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({
+    pending: true, editable: false, canDismiss: false,
+    error: "Could not confirm the transfer. Retry to safely check the same movement.",
+  });
+  await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
+  expect(screen.findByType(PrimaryButton).props.label).toBe("Retry transfer");
+  remote.move.mockImplementationOnce(async (request) => moveReceipt(request));
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  expect(remote.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["activation-key", "activation-key"]);
+  await act(async () => { screen.findByType(SecondaryButton).props.onPress(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index"]);
 });

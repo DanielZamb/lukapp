@@ -1,7 +1,8 @@
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { Text } from "react-native";
+import { Text, TextInput } from "react-native";
+import { Choice, Header, ListGroup, ListRow, PrimaryButton, Screen } from "../../ui/core";
 import { afterEach, expect, test, vi } from "vitest";
 import type { RecoveryCandidate, RecoveryPlace, RecoveryPlanView } from "./model";
 import { RecoveryCandidates, RecoveryDraft, RecoveryMoveScreen, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
@@ -121,15 +122,56 @@ test("a completed plan has a neutral zero due and no movement button", async () 
   expect(screen.findAll((node) => node.props.label === "Move money for October")).toHaveLength(0);
 });
 
-test("moving money names the destination and posts a transfer", async () => {
+test("the editable hero precedes one static source, destination and plan, then posts before the footnote", async () => {
   const submit = vi.fn(async () => {});
+  const onAmount = vi.fn();
   const screen = await render(createElement(RecoveryMoveScreen, {
     plan, sources: destinations, sourceId: "daily", amount: "2.300,00",
     editable: true, busy: false, pending: false, canSubmit: true, canDismiss: true, error: "",
-    onSource: () => {}, onAmount: () => {}, submit, onBack: () => {},
+    onSource: () => {}, onAmount, submit, onBack: () => {},
   }));
-  expect(screen.findAll((node) => node.props.title === "To" && node.props.value === "Savings")).toHaveLength(1);
-  expect(screen.findAll((node) => node.props.label === "Daily" && node.props.selected)).toHaveLength(1);
+  expect(screen.findByType(Header).props).toMatchObject({ title: "Move money", eyebrow: "RECOVERY CONTRIBUTION" });
+  const input = screen.findByType(TextInput);
+  expect(input.props).toMatchObject({ accessibilityLabel: "Amount in COP", value: "2.300,00", keyboardType: "decimal-pad", editable: true });
+  expect(screen.findAllByType(Choice)).toHaveLength(0);
+  expect(screen.findByType(ListGroup).findAllByType(ListRow).map((row) => ({ title: row.props.title, value: row.props.value, icon: row.props.icon }))).toEqual([
+    { title: "From", value: "Daily", icon: "arrow-up-circle-outline" },
+    { title: "To", value: "Savings", icon: "arrow-down-circle-outline" },
+    { title: "Counts toward", value: "Laptop repair", icon: "trending-up-outline" },
+  ]);
+  const children = screen.findByType(Screen).props.children;
+  expect(children[1].props.children[0].props.children).toBe("Amount");
+  expect(children[2].type).toBe(ListGroup);
+  expect(children[3].type).toBe(PrimaryButton);
+  expect(children[4].props.children).toBe("Progress changes only after this real account-to-account transfer posts.");
+  expect(screen.findByType(PrimaryButton).props.trailingIcon).toBe("checkmark");
+  await act(async () => { input.props.onChangeText("3.000,25"); });
+  expect(onAmount).toHaveBeenCalledExactlyOnceWith("3.000,25");
   await act(async () => { screen.findAll((node) => node.props.label === "Post transfer")[0].props.onPress(); });
   expect(submit).toHaveBeenCalledOnce();
+});
+
+test("several sources are radios inside the transfer group, excluding the plan destination", async () => {
+  const onSource = vi.fn();
+  const screen = await render(createElement(RecoveryMoveScreen, {
+    plan, sources: [...destinations, { id: "cash", name: "Cash", productKind: "cash" }],
+    sourceId: "daily", amount: "2.300", editable: true, busy: false, pending: false,
+    canSubmit: true, canDismiss: true, error: "", onSource, onAmount: () => {},
+    submit: async () => {}, onBack: () => {},
+  }));
+  const choices = screen.findByType(ListGroup).findAllByType(Choice);
+  expect(choices.map((choice) => [choice.props.label, choice.props.selected])).toEqual([["Daily", true], ["Cash", false]]);
+  await act(async () => { choices[1].props.onPress(); });
+  expect(onSource).toHaveBeenCalledExactlyOnceWith("cash");
+});
+
+test("no eligible source explains why posting is unavailable", async () => {
+  const screen = await render(createElement(RecoveryMoveScreen, {
+    plan, sources: destinations.slice(0, 1), sourceId: null, amount: "2.300",
+    editable: true, busy: false, pending: false, canSubmit: false, canDismiss: true,
+    error: "", onSource: () => {}, onAmount: () => {}, submit: async () => {}, onBack: () => {},
+  }));
+  expect(screen.findAllByType(Choice)).toHaveLength(0);
+  expect(screen.findByType(PrimaryButton).props.disabled).toBe(true);
+  expect(JSON.stringify(root?.toJSON())).toContain("Add another place before you can move money into this destination.");
 });

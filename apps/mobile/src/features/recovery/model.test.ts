@@ -57,10 +57,10 @@ test("a replayed move uses server progress, and a larger transfer shows moved ve
     currency: "COP", title: "Laptop repair",
     movedMinorUnits: 230_000, countedMinorUnits: 230_000,
     recoveredMinorUnits: 230_000, targetMinorUnits: 1_380_000,
-  })).toBe("Laptop repair is now 17% recovered. The savings balance stays separate from plan progress.");
+  })).toBe("Your Laptop repair plan is now 17% complete. The Savings account balance remains separate from plan progress.");
   expect(movedCopy({
     currency: "COP", title: "Laptop repair",
     movedMinorUnits: 500_000, countedMinorUnits: 230_000,
     recoveredMinorUnits: 230_000, targetMinorUnits: 1_380_000,
-  })).toBe("COP 2.300 counted toward Laptop repair. Laptop repair is now 17% recovered. The savings balance stays separate from plan progress.");
+  })).toBe("COP 2.300 counted toward Laptop repair. Your Laptop repair plan is now 17% complete. The Savings account balance remains separate from plan progress.");
 });
