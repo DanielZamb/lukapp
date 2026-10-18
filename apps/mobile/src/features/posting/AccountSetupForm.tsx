@@ -1,5 +1,6 @@
 import type { Theme } from "../../ui/tokens";
 import {
+  BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetTextInput,
@@ -174,6 +175,14 @@ export function AccountSetupForm(props: {
             setLookEmoji(value.emoji ?? "💰");
           }}
           backgroundStyle={{ backgroundColor: theme.background }}
+          backdropComponent={(propsBackdrop) => (
+            <BottomSheetBackdrop
+              {...propsBackdrop}
+              appearsOnIndex={0}
+              disappearsOnIndex={-1}
+              pressBehavior={props.editable ? "close" : "none"}
+            />
+          )}
           keyboardBehavior="interactive"
           keyboardBlurBehavior="restore"
         >

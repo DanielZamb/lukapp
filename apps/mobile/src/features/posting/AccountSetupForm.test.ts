@@ -2,7 +2,7 @@ import * as React from "react";
 import { createElement, useEffect, useRef, useState } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { BottomSheetBackdrop, BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import type { PlaceDraft } from "./usePostingEditor";
 import { AccountSetupForm } from "./AccountSetupForm";
 import { themes } from "../../ui/tokens";
@@ -19,6 +19,7 @@ vi.mock("@gorhom/bottom-sheet", async () => ({
   )).default,
   BottomSheetScrollView: "scroll",
   BottomSheetTextInput: "input",
+  BottomSheetBackdrop: "backdrop",
 }));
 vi.mock("@gorhom/bottom-sheet/src/hooks", async () =>
   vi.importActual("@gorhom/bottom-sheet/src/hooks/useBottomSheetModalInternal"));
@@ -120,6 +121,20 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button ${label}`);
   return found;
 }
+
+test("Look renders the standard dimming backdrop with tap-to-close", async () => {
+  await mount();
+  await act(async () => button("Choose emoji").props.onPress());
+  await settle();
+  const look = screen().findAllByType(BottomSheetModal).at(-1);
+  expect(look?.props.backdropComponent).toBeTypeOf("function");
+  const animation = { animatedIndex: { value: 0 }, animatedPosition: { value: 0 } };
+  const backdrop = look?.props.backdropComponent(animation);
+  expect(backdrop.type).toBe(BottomSheetBackdrop);
+  expect(backdrop.props).toMatchObject({
+    ...animation, appearsOnIndex: 0, disappearsOnIndex: -1, pressBehavior: "close",
+  });
+});
 
 test("Look keeps its controls and place answers after sheet animations settle", async () => {
   await mount();
