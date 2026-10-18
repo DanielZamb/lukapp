@@ -61,7 +61,7 @@ test("ActionTile with count 0 stays pressable and shows 0", async () => {
     root?.root.findAllByType("text").map((node) => node.children.join("")) ?? [];
   expect(labels).toContain("0");
   const button = root?.root.findByType("button");
-  expect(button?.props.accessibilityLabel).toBe("Drafts, 0");
+  expect(button?.props.accessibilityLabel).toBe("Drafts, 0, On this device");
   await act(async () => button?.props.onPress());
   expect(onPress).toHaveBeenCalledOnce();
 });

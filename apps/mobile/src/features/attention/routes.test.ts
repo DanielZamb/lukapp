@@ -83,9 +83,26 @@ test("Home retains USD cents and opens the live Drafts and Alerts destinations",
   const badge = root.root.findAllByType("text").find((node) => node.children.join("") === "7");
   const badgeStyle = Object.assign({}, ...badge?.parent?.props.style);
   expect(badgeStyle).toMatchObject({ position: "absolute", top: 16, right: 16 });
-  await act(async () => button("Drafts, 7").props.onPress());
-  await act(async () => button("Alerts").props.onPress());
+  await act(async () => button("Drafts, 7, On this device").props.onPress());
+  await act(async () => button("Alerts, Loading updates").props.onPress());
   expect(state.push.mock.calls).toEqual([["/drafts"], ["/alerts"]]);
+});
+
+test("Home announces the visible live Alerts detail and updates it when attention changes", async () => {
+  const rows = attentionRows({
+    draftCount: 2, draftSegment: "wait", candidateNowCount: 1, candidateWaitCount: 0,
+    plans: [], currency: "COP",
+    readiness: evaluateMonthClose({ period: { year: 2026, month: 10 }, periodStatus: "open", draftCount: 1, candidateCount: 1 }),
+  });
+  state.attention = { inboxCount: 3, alerts: { kind: "ready", rows } };
+  await act(async () => { root = create(createElement(HomeRoute)); });
+  expect(text()).toContain("3 updates");
+  expect(button("Alerts, 3 updates").props.accessibilityRole).toBe("button");
+  state.attention = { inboxCount: 0, alerts: { kind: "ready", rows: rows.slice(-1) } };
+  await act(async () => { root.update(createElement(HomeRoute)); });
+  expect(text()).toContain("1 update");
+  await act(async () => button("Alerts, 1 update").props.onPress());
+  expect(state.push.mock.calls).toEqual([["/alerts"]]);
 });
 
 test("Alerts routes every derived row to an existing workflow and uses the actual update total", async () => {

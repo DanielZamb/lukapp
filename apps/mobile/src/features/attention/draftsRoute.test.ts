@@ -4,7 +4,10 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import DraftsRoute from "../../../app/drafts";
 
-const route = vi.hoisted(() => ({ segment: "wait", push: vi.fn() }));
+const route = vi.hoisted((): {
+  segment: string | string[] | undefined;
+  push: ReturnType<typeof vi.fn>;
+} => ({ segment: "wait", push: vi.fn() }));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
 vi.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ segment: route.segment }),
@@ -45,6 +48,7 @@ function button(label: string) {
   return found;
 }
 test("an alert can open Can wait, then Needs you now, while Month Close remains in the footer", async () => {
+  route.segment = ["wait"];
   await act(async () => { root = create(createElement(DraftsRoute)); });
   expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true });
   expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: false });

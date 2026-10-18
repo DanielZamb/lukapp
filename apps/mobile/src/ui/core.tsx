@@ -384,7 +384,7 @@ export function ActionTile({
     { backgroundColor: primary ? theme.primary : theme.secondary },
   ];
   const accessibilityLabel =
-    count === undefined ? title : `${title}, ${count}`;
+    count === undefined ? `${title}, ${detail}` : `${title}, ${count}, ${detail}`;
   return onPress ? (
     <Pressable
       accessibilityRole="button"

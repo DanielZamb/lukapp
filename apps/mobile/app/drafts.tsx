@@ -29,7 +29,11 @@ function Drafts({
   currency: "COP" | "USD";
   profileId: string;
 }) {
-  const { seed, segment: requestedSegment } = useLocalSearchParams<{ seed?: string; segment?: string }>();
+  const { seed, segment: segmentParam } = useLocalSearchParams<{
+    seed?: string;
+    segment?: string | string[];
+  }>();
+  const requestedSegment = Array.isArray(segmentParam) ? segmentParam[0] : segmentParam;
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
   const intake = useIntakeCandidates({ subject, workspaceId, currency });
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
