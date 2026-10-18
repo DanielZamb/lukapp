@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createElement } from "react";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { getFunctionName, type FunctionReference, type FunctionReturnType } from "convex/server";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import BudgetRoute from "../../../app/budget";
@@ -11,6 +11,7 @@ import type { BudgetTransport } from "./useBudgetEditor";
 type Evaluation = FunctionReturnType<typeof api.budget.evaluate>;
 let board: Evaluation | undefined;
 let categories: Pick<Category, "id" | "style">[] | undefined;
+let totals: FunctionReturnType<typeof api.accounting.categoryTotals> | undefined;
 let month = "2026-10";
 const queries = vi.fn();
 const save = vi.fn<BudgetTransport["save"]>();
@@ -24,7 +25,7 @@ vi.mock("convex/react", () => ({
   useQuery: (reference: FunctionReference<"query">, args: unknown) => {
     const name = getFunctionName(reference);
     queries(name, args);
-    return name === "budget:evaluate" ? board : categories;
+    return name === "budget:evaluate" ? board : name === "accounting:categoryTotals" ? totals : categories;
   },
   useAction: () => save,
 }));
@@ -32,7 +33,7 @@ vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { id: "
 vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ month }) }));
 vi.mock("./BudgetEditorSheet", () => ({ BudgetEditorSheet: "EditorSheet" }));
 vi.mock("react-native", () => ({
-  ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", View: "View", ScrollView: "ScrollView",
+  ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput", View: "View", ScrollView: "ScrollView",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
 }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
@@ -46,6 +47,7 @@ beforeEach(() => {
   month = "2026-10";
   board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, jars: [],
     availableCategories: [{ id: "food", name: "Food", emoji: "🛒" }] };
+  totals = { month, currency: "COP", totalsOverlap: true, categories: [{ categoryId: "food", name: "Food", nature: "Expense", minorUnits: 86_000_000 }] };
   categories = [{ id: "food", style: { emoji: "🛒", tone: "positive" } }];
   save.mockImplementation(async (request) => ({ replay: false, revision: {
     id: "revision", workspaceId: request.workspaceId, categoryId: request.categoryId, effectiveMonth: request.effectiveMonth,
@@ -60,27 +62,84 @@ async function render() {
   return root.root;
 }
 
-test("the empty action opens the existing add sheet and saves a current-workspace-month limit", async () => {
+function texts(screen: ReactTestInstance) {
+  return screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join(""));
+}
+
+test("creation chooses a category before the composer, then saves shared-parser minor units for the current month", async () => {
   const screen = await render();
   expect(queries.mock.calls).toContainEqual(["budget:evaluate", { workspaceId: "workspace", month: "2026-10", refreshKey: expect.any(String) }]);
-  expect(queries.mock.calls).toContainEqual(["accounting:listUserCategories", { workspaceId: "workspace" }]);
   await act(async () => screen.findByProps({ accessibilityLabel: "Set a October limit" }).props.onPress());
-  expect(screen.find((node) => String(node.type) === "EditorSheet").props).toMatchObject({
-    title: "Add Budget", monthLabel: "October 2026", categoryFixed: false,
-    categories: [{ id: "food", name: "Food", emoji: "🛒" }],
-  });
-  await act(async () => {
-    const editor = screen.find((node) => String(node.type) === "EditorSheet");
-    editor.props.onCategory("food");
-    editor.props.onAmount("100.000");
-  });
-  await act(async () => screen.find((node) => String(node.type) === "EditorSheet").props.onSave());
+  expect(texts(screen)).toContain("Choose a category");
+  expect(screen.findAllByProps({ accessibilityLabel: "Monthly limit" })).toHaveLength(0);
+  await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
+  expect(texts(screen)).toContain("Limit for Food");
+  expect(texts(screen)).toContain("BUDGET");
+  expect(texts(screen)).toContain("COP 860.000 out this month");
+  expect(texts(screen)).toContain("Stay under");
+  expect(screen.findAll((node) => String(node.type) === "EditorSheet")).toHaveLength(0);
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props).toMatchObject({ keyboardType: "decimal-pad", placeholder: "0" });
+  expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(true);
+  expect(screen.findByProps({ accessibilityLabel: "Remaining jar" }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 0, text: "−COP 860.000 remaining" });
+  expect(texts(screen)).toContain("This jar is already empty.");
+  expect(["COP 600.000", "COP 800.000", "COP 1.000.000", "COP 1.200.000"].map((label) => screen.findByProps({ accessibilityLabel: label }).props.accessibilityLabel))
+    .toEqual(["COP 600.000", "COP 800.000", "COP 1.000.000", "COP 1.200.000"]);
+  await act(async () => screen.findByProps({ accessibilityLabel: "COP 1.000.000" }).props.onPress());
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("1.000.000");
+  expect(screen.findByProps({ accessibilityLabel: "Remaining jar" }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 14, text: "COP 140.000 remaining" });
+  expect(texts(screen)).toContain("What is still in the jar. Spent eats it.");
+  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("0"));
+  expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(true);
+  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("1.500.000,25"));
+  await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
   expect(save.mock.calls).toEqual([[{
-    workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10", limit: { currency: "COP", minorUnits: 10_000_000 },
+    workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10", limit: { currency: "COP", minorUnits: 150_000_025 },
     expectedRevisionId: null, idempotencyKey: expect.any(String),
   }]]);
-  expect(screen.findAll((node) => String(node.type) === "EditorSheet")).toHaveLength(0);
-  expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join(""))).toContain("Budget saved");
+  expect(texts(screen)).toContain("Budgets");
+  expect(texts(screen)).toContain("Budget saved");
+});
+
+test("the under-jars control offers only unlimited categories and both creation pages go back to the board", async () => {
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true,
+    availableCategories: [{ id: "food", name: "Food", emoji: "🛒" }],
+    jars: [{ category: { id: "travel", name: "Travel", emoji: "✈️" }, revisionId: "travel-revision", limitMinorUnits: 20_000_000, consumptionMinorUnits: 0 }] };
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Set another limit" }).props.onPress());
+  expect(texts(screen)).toContain("Choose a category");
+  expect(screen.findAllByProps({ accessibilityRole: "radio" }).map((node) => texts(node))).toEqual([["🛒 Food"]]);
+  await act(async () => screen.findByProps({ accessibilityLabel: "Back" }).props.onPress());
+  expect(texts(screen)).toContain("Budgets");
+  await act(async () => screen.findByProps({ accessibilityLabel: "Set another limit" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
+  expect(texts(screen)).toContain("Limit for Food");
+  await act(async () => screen.findByProps({ accessibilityLabel: "Back" }).props.onPress());
+  expect(texts(screen)).toContain("Budgets");
+  expect(back).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+});
+
+test("composer waits for spending and preserves a failed save for a safe retry", async () => {
+  totals = undefined;
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Set a October limit" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
+  expect(screen.findByProps({ accessibilityLabel: "Loading category spending" }).type).toBe("ActivityIndicator");
+  totals = { month, currency: "COP", totalsOverlap: true, categories: [] };
+  await act(async () => root?.update(createElement(BudgetRoute)));
+  expect(texts(screen)).toContain("COP 0 out this month");
+  expect(texts(screen)).toContain("COP 200.000");
+  expect(screen.findAllByProps({ accessibilityLabel: "COP 0" })).toHaveLength(0);
+  await act(async () => screen.findByProps({ accessibilityLabel: "COP 400.000" }).props.onPress());
+  save.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
+  expect(texts(screen)).toContain("Could not confirm saving. Retry to safely check the same Budget.");
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.editable).toBe(false);
+  expect(screen.findAllByProps({ accessibilityLabel: "Back" })).toHaveLength(0);
+  await act(async () => screen.findByProps({ accessibilityLabel: "Retry save" }).props.onPress());
+  expect(save.mock.calls.map(([request]) => [request.limit.minorUnits, request.idempotencyKey]))
+    .toEqual([[40_000_000, save.mock.calls[0][0].idempotencyKey], [40_000_000, save.mock.calls[0][0].idempotencyKey]]);
+  expect(texts(screen)).toContain("Budget saved");
 });
 
 test("the live next action opens the current jar revision and uses the category's saved color", async () => {
