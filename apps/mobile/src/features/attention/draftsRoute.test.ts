@@ -47,7 +47,7 @@ function button(label: string) {
   if (!found) throw new Error(`Missing ${label}`);
   return found;
 }
-test("an alert can open Can wait, then Needs you now, while Month Close remains in the footer", async () => {
+test("Drafts can open Can wait, then Needs you now, while Month Close remains in the footer", async () => {
   route.segment = ["wait"];
   await act(async () => { root = create(createElement(DraftsRoute)); });
   expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true });

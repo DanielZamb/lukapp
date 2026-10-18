@@ -11,8 +11,9 @@ import { HomePlaceSetup } from "../src/features/HomePlaceSetup";
 import { formatMoney } from "../src/features/money";
 import { Setup } from "../src/features/Setup";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
-import { useAttention } from "../src/features/attention/useAttention";
-import { ConfirmationScreen, Header, Screen, theme, ui } from "../src/ui/core";
+import { budgetAttention } from "../src/features/attention/model";
+import { useInboxCount } from "../src/features/useInboxCount";
+import { ConfirmationScreen, Screen, theme, ui } from "../src/ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../src/ui/tokens";
 
 function Home({
@@ -27,13 +28,8 @@ function Home({
   const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
   const budget = useQuery(api.budget.evaluate, { workspaceId, month: calendar.month });
-  const { inboxCount } = useAttention({
-    subject,
-    workspaceId,
-    currency,
-    timeZone,
-    currentPeriod: workspace.currentAccountingPeriod,
-  });
+  const attention = budget && budgetAttention(budget);
+  const inboxCount = useInboxCount({ subject, workspaceId, currency });
   const actions = useRef<BottomSheetModal>(null);
   const [placeOpen, setPlaceOpen] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
@@ -53,11 +49,16 @@ function Home({
         {level === 1 && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Alerts, nothing needs attention"
+            accessibilityLabel={attention?.bellLabel ?? "Alerts, loading"}
             onPress={() => router.push("/alerts")}
             style={styles.iconButton}
           >
             <Ionicons name="notifications-outline" size={22} color={theme.foreground} />
+            {attention && attention.rows.length > 0 && (
+              <View style={styles.bellBadge} pointerEvents="none">
+                <Text style={styles.bellBadgeText}>{attention.rows.length}</Text>
+              </View>
+            )}
           </Pressable>
         )}
         <Pressable
@@ -92,6 +93,20 @@ function Home({
           ) : null}
         </Pressable>
       </View>
+      {attention?.home && (
+        <Pressable accessibilityRole="button"
+          accessibilityLabel={`${attention.home.title}, ${attention.home.detail}`}
+          onPress={() => router.push("/alerts")} style={styles.alertRow}>
+          <View style={styles.alertIcon}>
+            <Ionicons name="alert-circle" size={20} color={theme.background} />
+          </View>
+          <View style={{ flex: 1, gap: spacing.xs }}>
+            <Text style={styles.alertTitle}>{attention.home.title}</Text>
+            <Text style={styles.alertDetail}>{attention.home.detail}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={theme.warning} />
+        </Pressable>
+      )}
       <Pressable accessibilityRole="button"
         accessibilityLabel={`Drafts, ${inboxCount ? `${inboxCount} to review` : "Nothing waiting"}`}
         onPress={() => router.push("/drafts")} style={[styles.tile, styles.primaryTile]}>
@@ -173,6 +188,17 @@ const styles = StyleSheet.create({
   badge: { minWidth: 26, height: 26, borderRadius: radius.full, backgroundColor: theme.primaryForeground,
     alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.sm },
   badgeText: { color: theme.primary, fontFamily: font.bold, fontSize: fontSize.label },
+  bellBadge: { position: "absolute", top: -2, right: -2, minWidth: 20, height: 20,
+    paddingHorizontal: 5, borderRadius: radius.full, backgroundColor: theme.warning,
+    borderWidth: 2, borderColor: theme.background, alignItems: "center", justifyContent: "center" },
+  bellBadgeText: { color: theme.background, fontSize: 11, fontFamily: font.bold },
+  alertRow: { minHeight: 72, flexDirection: "row", alignItems: "center", gap: spacing.md,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.lg,
+    backgroundColor: `${theme.warning}1f`, borderWidth: 1, borderColor: `${theme.warning}4d` },
+  alertIcon: { width: 36, height: 36, borderRadius: radius.full, backgroundColor: theme.warning,
+    alignItems: "center", justifyContent: "center" },
+  alertTitle: { color: theme.foreground, fontSize: fontSize.body, fontFamily: font.bold },
+  alertDetail: { color: theme.warning, fontSize: 14, fontFamily: font.semibold },
   plansRow: { minHeight: 70, flexDirection: "row", alignItems: "center", gap: spacing.md,
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.border },

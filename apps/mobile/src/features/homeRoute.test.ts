@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import Index from "../../app/index";
+import type { BudgetJar } from "./budget/model";
 
 type MockPlace = { minorUnits: number; nature?: "Asset" | "Liability" };
 const state = vi.hoisted(() => ({
@@ -17,11 +18,18 @@ const state = vi.hoisted(() => ({
   dismiss: vi.fn(),
   query: vi.fn(),
 }));
+let alertJars: BudgetJar[] = [];
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
 vi.mock("expo-router", () => ({ router: { push: state.push }, useLocalSearchParams: () => ({}) }));
 vi.mock("convex/react", () => ({ useQuery: (...args: unknown[]) => {
   state.query(...args);
-  return state.budgetLoading ? undefined : { jars: state.hasLimit ? [{ limitMinorUnits: 0 }] : [] };
+  return state.budgetLoading ? undefined : {
+    currency: state.currency,
+    jars: alertJars.length ? alertJars : state.hasLimit ? [{
+      category: { id: "food", name: "Food", emoji: "🍋" },
+      limitMinorUnits: 100_00, consumptionMinorUnits: 0,
+    }] : [],
+  };
 } }));
 vi.mock("./activity", () => ({
   usePersonalDefaults: () => ({
@@ -41,7 +49,7 @@ vi.mock("./activity", () => ({
 vi.mock("./useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({
   month: "2026-10", date: "2026-10-31", now: new Date("2026-11-01T00:30:00Z"),
 }) }));
-vi.mock("./attention/useAttention", () => ({ useAttention: () => ({ inboxCount: state.inboxCount }) }));
+vi.mock("./useInboxCount", () => ({ useInboxCount: () => state.inboxCount }));
 vi.mock("./Setup", () => ({ Setup: "setup" }));
 vi.mock("./HomePlaceSetup", () => ({ HomePlaceSetup: "place-setup" }));
 vi.mock("@gorhom/bottom-sheet", async () => {
@@ -73,6 +81,7 @@ beforeEach(() => {
   state.balancesLoading = false;
   state.budgetLoading = false;
   state.inboxCount = 0;
+  alertJars = [];
   vi.clearAllMocks();
 });
 afterEach(async () => {
@@ -191,4 +200,29 @@ test("a liability balance reduces what you have instead of increasing it", async
   await render();
   expect(texts()).toContain("COP 250");
   expect(texts()).not.toContain("COP 750");
+});
+
+test.each([
+  { count: 1, title: "Food is over its limit", detail: "COP 50 over" },
+  { count: 2, title: "2 categories are over their limits", detail: "COP 125 over in total" },
+])("Home summarizes $count categories and the bell carries the same count", async ({ count, title, detail }) => {
+  alertJars = [{ category: { id: "food", name: "Food", emoji: "🍋" },
+    limitMinorUnits: 100_00, consumptionMinorUnits: 150_00 }];
+  if (count === 2) alertJars.push({ category: { id: "travel", name: "Travel", emoji: "🚕" },
+    limitMinorUnits: 100_00, consumptionMinorUnits: 175_00 });
+  await render();
+  expect(texts()).toContain(title);
+  expect(texts()).toContain(detail);
+  const bell = button(`Alerts, ${count} over the limit`);
+  expect(bell.findAllByType("text").map((node) => node.children.join(""))).toEqual([String(count)]);
+  const summary = button(`${title}, ${detail}`);
+  expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityLabel === `${title}, ${detail}`)).toHaveLength(1);
+  await act(async () => bell.props.onPress());
+  await act(async () => summary.props.onPress());
+  expect(state.push.mock.calls).toEqual([["/alerts"], ["/alerts"]]);
+
+  alertJars = alertJars.map((jar) => ({ ...jar, consumptionMinorUnits: jar.limitMinorUnits }));
+  await act(async () => root.update(createElement(Index)));
+  expect(texts()).not.toContain(title);
+  expect(button("Alerts, nothing needs attention").findAllByType("text")).toHaveLength(0);
 });

@@ -1,93 +1,31 @@
-import type { InboxSegment } from "../DraftsScreen";
+import type { FunctionReturnType } from "convex/server";
+import type { api } from "../api";
 import { formatMoney } from "../money";
-import {
-  footerLabel,
-  mismatchDetail,
-  monthKey,
-  type MonthCloseReadiness,
-} from "../monthClose/model";
-import type { RecoveryPlanView } from "../recovery/model";
 
-export type AlertDestination =
-  | { pathname: "/drafts"; params: { segment: InboxSegment } }
-  | { pathname: "/recovery" }
-  | { pathname: "/month-close"; params: { month: string } };
+type BudgetEvaluation = FunctionReturnType<typeof api.budget.evaluate>;
+export type AlertDestination = { pathname: "/category-look"; params: { categoryId: string } };
 
-export type AttentionRow = {
-  id: string;
-  title: string;
-  detail: string;
-  destination: AlertDestination;
-};
-
-export type AttentionState =
-  | { kind: "loading" }
-  | { kind: "error"; message: string }
-  | { kind: "ready"; rows: AttentionRow[] };
-
-export function attentionRows(input: {
-  draftCount: number;
-  draftSegment: InboxSegment;
-  candidateNowCount: number;
-  candidateWaitCount: number;
-  plans: Pick<RecoveryPlanView, "dueMinorUnits">[];
-  currency: string;
-  readiness: MonthCloseReadiness;
-}): AttentionRow[] {
-  const rows: AttentionRow[] = [];
-  if (input.draftCount > 0)
-    rows.push({
-      id: "drafts",
-      title: "Review Drafts",
-      detail: `${input.draftCount} on this device`,
-      destination: { pathname: "/drafts", params: { segment: input.draftSegment } },
-    });
-  if (input.candidateNowCount > 0)
-    rows.push({
-      id: "candidates-now",
-      title: "Candidates need you",
-      detail: `${input.candidateNowCount} to review now`,
-      destination: { pathname: "/drafts", params: { segment: "now" } },
-    });
-  if (input.candidateWaitCount > 0)
-    rows.push({
-      id: "candidates-wait",
-      title: "Candidates can wait",
-      detail: `${input.candidateWaitCount} for later review`,
-      destination: { pathname: "/drafts", params: { segment: "wait" } },
-    });
-  const due = input.plans.filter((plan) => plan.dueMinorUnits > 0);
-  if (due.length > 0)
-    rows.push({
-      id: "recovery",
-      title: "Recovery due",
-      detail: `${formatMoney({
-        currency: input.currency,
-        minorUnits: due.reduce((sum, plan) => sum + plan.dueMinorUnits, 0),
-      })} across ${due.length} ${due.length === 1 ? "plan" : "plans"}`,
-      destination: { pathname: "/recovery" },
-    });
-  const { readiness } = input;
-  if (!readiness.alreadyLocked)
-    rows.push({
-      id: "month-close",
-      title: footerLabel(readiness.period),
-      detail: readiness.periodStatus === "mismatch"
-        ? mismatchDetail()
-        : readiness.blocked
-          ? `${readiness.draftCount} dated Drafts need review first`
-          : readiness.candidateCount > 0
-            ? `Ready to review. ${readiness.candidateCount} Candidates can stay for later.`
-            : "Ready to review and lock",
-      destination: { pathname: "/month-close", params: { month: monthKey(readiness.period) } },
-    });
-  return rows;
+export function budgetAttention({ currency, jars }: Pick<BudgetEvaluation, "currency" | "jars">) {
+  const over = jars
+    .map((jar) => ({ ...jar, overMinorUnits: jar.consumptionMinorUnits - jar.limitMinorUnits }))
+    .filter((jar) => jar.overMinorUnits > 0)
+    .sort((a, b) => b.overMinorUnits - a.overMinorUnits || a.category.id.localeCompare(b.category.id));
+  const money = (minorUnits: number) => formatMoney({ currency, minorUnits }, { hideZeroDecimals: true });
+  const first = over[0];
+  return {
+    rows: over.map(({ category, consumptionMinorUnits, limitMinorUnits }) => ({
+      id: category.id,
+      title: `${category.emoji}  ${category.name} is over`,
+      detail: `${money(consumptionMinorUnits)} of ${money(limitMinorUnits)}`,
+      destination: { pathname: "/category-look", params: { categoryId: category.id } } satisfies AlertDestination,
+    })),
+    home: first ? {
+      title: over.length === 1 ? `${first.category.name} is over its limit`
+        : `${over.length} categories are over their limits`,
+      detail: `${money(over.reduce((sum, jar) => sum + jar.overMinorUnits, 0))} ${over.length === 1 ? "over" : "over in total"}`,
+    } : null,
+    bellLabel: over.length > 0 ? `Alerts, ${over.length} over the limit` : "Alerts, nothing needs attention",
+  };
 }
 
-export function updatesDetail(state: AttentionState) {
-  if (state.kind === "loading") return "Loading updates";
-  if (state.kind === "error") return "Review updates";
-  return state.rows.length === 0
-    ? "All caught up"
-    : `${state.rows.length} ${state.rows.length === 1 ? "update" : "updates"}`;
-}
+export type AttentionState = { kind: "loading" } | { kind: "ready"; data: ReturnType<typeof budgetAttention> };

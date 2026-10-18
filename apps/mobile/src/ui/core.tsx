@@ -257,6 +257,8 @@ type ListRowProps = {
   onPress?: () => void;
   titleStyle?: StyleProp<TextStyle>;
   valueStyle?: StyleProp<TextStyle>;
+  icon?: ComponentProps<typeof Ionicons>["name"];
+  tone?: "positive" | "warning";
   isLast?: boolean;
 };
 
@@ -267,16 +269,23 @@ export function ListRow({
   onPress,
   titleStyle,
   valueStyle,
+  icon,
+  tone,
   isLast,
 }: ListRowProps) {
   const content = (
     <>
+      {icon && (
+        <View style={styles.rowIcon}>
+          <Ionicons name={icon} size={20} color={tone ? theme[tone] : theme.foreground} />
+        </View>
+      )}
       <View style={styles.rowCopy}>
         <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
         {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
       </View>
       {value ? (
-        <Text style={[styles.rowValue, valueStyle]}>{value}</Text>
+        <Text style={[styles.rowValue, tone && { color: theme[tone] }, valueStyle]}>{value}</Text>
       ) : null}
       {onPress ? (
         <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
@@ -545,6 +554,8 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
   },
   rowLast: { borderBottomWidth: 0 },
+  rowIcon: { width: 36, height: 36, borderRadius: radius.sm, backgroundColor: theme.background,
+    alignItems: "center", justifyContent: "center" },
   rowCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
   rowTitle: {
     fontFamily: font.semibold,

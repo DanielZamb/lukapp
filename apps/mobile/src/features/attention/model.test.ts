@@ -1,58 +1,50 @@
 import { expect, test } from "vitest";
-import { evaluateMonthClose } from "../monthClose/model";
-import { attentionRows, updatesDetail } from "./model";
+import { budgetAttention } from "./model";
 
-const period = { year: 2026, month: 10 };
-const base = {
-  draftCount: 0,
-  draftSegment: "wait" as const,
-  candidateNowCount: 0,
-  candidateWaitCount: 0,
-  plans: [],
-  currency: "COP",
-  readiness: evaluateMonthClose({ period, periodStatus: "open", draftCount: 0, candidateCount: 0 }),
-};
+type Evaluation = Parameters<typeof budgetAttention>[0];
+const food = { category: { id: "food", name: "Food", emoji: "🍋" }, revisionId: "food-limit",
+  limitMinorUnits: 100_00, consumptionMinorUnits: 150_00 };
 
-test("alerts order live workflow summaries and preserve their exact destinations", () => {
-  const rows = attentionRows({
-    ...base,
-    draftCount: 2,
-    candidateNowCount: 1,
-    candidateWaitCount: 4,
-    plans: [{ dueMinorUnits: 150_000 }, { dueMinorUnits: 0 }, { dueMinorUnits: 200_000 }],
-    readiness: evaluateMonthClose({ period, periodStatus: "open", draftCount: 1, candidateCount: 3 }),
-  });
-  expect(rows.map((row) => [row.title, row.detail, row.destination])).toEqual([
-    ["Review Drafts", "2 on this device", { pathname: "/drafts", params: { segment: "wait" } }],
-    ["Candidates need you", "1 to review now", { pathname: "/drafts", params: { segment: "now" } }],
-    ["Candidates can wait", "4 for later review", { pathname: "/drafts", params: { segment: "wait" } }],
-    ["Recovery due", "COP 3.500,00 across 2 plans", { pathname: "/recovery" }],
-    ["Complete October", "1 dated Drafts need review first", { pathname: "/month-close", params: { month: "2026-10" } }],
-  ]);
-  expect(updatesDetail({ kind: "ready", rows })).toBe("5 updates");
+test("no limits, spend below a limit, and spend exactly on the line have no alerts", () => {
+  for (const jars of [[], [{ ...food, consumptionMinorUnits: 0 }], [{ ...food, consumptionMinorUnits: 100_00 }]]) {
+    expect(budgetAttention({ currency: "COP", jars })).toEqual({
+      rows: [], home: null, bellLabel: "Alerts, nothing needs attention",
+    });
+  }
 });
 
-test("Candidates warn without blocking a clear month, and locked months leave no close alert", () => {
-  const rows = attentionRows({
-    ...base,
-    candidateWaitCount: 3,
-    readiness: evaluateMonthClose({ period, periodStatus: "not_opened", draftCount: 0, candidateCount: 3 }),
+test("one category carries its look destination, spend and limit, and exact amount over", () => {
+  expect(budgetAttention({ currency: "COP", jars: [food] })).toEqual({
+    rows: [{ id: "food", title: "🍋  Food is over", detail: "COP 150 of COP 100",
+      destination: { pathname: "/category-look", params: { categoryId: "food" } } }],
+    home: { title: "Food is over its limit", detail: "COP 50 over" },
+    bellLabel: "Alerts, 1 over the limit",
   });
-  expect(rows.map((row) => row.detail)).toEqual([
-    "3 for later review",
-    "Ready to review. 3 Candidates can stay for later.",
-  ]);
-  const cleared = attentionRows({
-    ...base,
-    plans: [{ dueMinorUnits: 0 }],
-    readiness: evaluateMonthClose({ period, periodStatus: "locked", draftCount: 0, candidateCount: 0 }),
-  });
-  expect(cleared).toEqual([]);
-  expect(updatesDetail({ kind: "ready", rows: cleared })).toBe("All caught up");
 });
 
-test("loading and errors never claim an empty alert count", () => {
-  expect(updatesDetail({ kind: "loading" })).toBe("Loading updates");
-  expect(updatesDetail({ kind: "error", message: "Cannot read Drafts" })).toBe("Review updates");
-  expect(updatesDetail({ kind: "ready", rows: attentionRows(base) })).toBe("1 update");
+test("many categories sort by amount over, exclude holding limits, and sum only the excess", () => {
+  const input: Evaluation = { currency: "COP", jars: [
+    food,
+    { ...food, category: { id: "clothes", name: "Clothes", emoji: "👕" }, consumptionMinorUnits: 90_00 },
+    { ...food, category: { id: "travel", name: "Travel", emoji: "🚕" }, consumptionMinorUnits: 175_00 },
+  ] };
+  expect(budgetAttention(input)).toEqual({
+    rows: [
+      { id: "travel", title: "🚕  Travel is over", detail: "COP 175 of COP 100",
+        destination: { pathname: "/category-look", params: { categoryId: "travel" } } },
+      { id: "food", title: "🍋  Food is over", detail: "COP 150 of COP 100",
+        destination: { pathname: "/category-look", params: { categoryId: "food" } } },
+    ],
+    home: { title: "2 categories are over their limits", detail: "COP 125 over in total" },
+    bellLabel: "Alerts, 2 over the limit",
+  });
+  expect(input.jars.map((jar) => jar.category.id)).toEqual(["food", "clothes", "travel"]);
+});
+
+test("currency-code formatting retains cents and groups thousands", () => {
+  expect(budgetAttention({ currency: "USD", jars: [{ ...food,
+    limitMinorUnits: 1_000_25, consumptionMinorUnits: 1_100_75 }] })).toMatchObject({
+    rows: [{ detail: "USD 1.100,75 of USD 1.000,25" }],
+    home: { detail: "USD 100,50 over" },
+  });
 });

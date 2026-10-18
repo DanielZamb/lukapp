@@ -1,41 +1,31 @@
 import * as React from "react";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { createElement } from "react";
+import { ActivityIndicator } from "react-native";
+import { Redirect } from "expo-router";
+import { getFunctionName, type FunctionReturnType } from "convex/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import AlertsRoute from "../../../app/alerts";
-import { AlertsScreen } from "./AlertsScreen";
-import { attentionRows, type AttentionState } from "./model";
-import { evaluateMonthClose } from "../monthClose/model";
+import type { api } from "../api";
+import { theme } from "../../ui/core";
 
-const state = vi.hoisted(() => ({
-  push: vi.fn(),
-  back: vi.fn(),
-  attention: { inboxCount: 7 as number | undefined, alerts: { kind: "loading" } as AttentionState },
-  currency: "COP",
-}));
-vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
-vi.mock("expo-router", () => ({
-  router: { push: state.push, back: state.back },
-  useLocalSearchParams: () => ({}),
-  Redirect: "redirect",
-}));
-vi.mock("@gorhom/bottom-sheet", () => ({ BottomSheetModal: "sheet", BottomSheetView: "sheet-view" }));
-vi.mock("../activity", () => ({
-  usePersonalDefaults: () => ({ workspace: {
-    id: "workspace", functionalCurrency: state.currency, timeZone: "America/Bogota",
-    currentAccountingPeriod: { year: 2026, month: 10, status: "open" },
-  } }),
-  usePostedActivity: () => ({ monthSpendMinorUnits: 100_001 }),
-}));
-vi.mock("./useAttention", () => ({ useAttention: () => state.attention }));
-vi.mock("../Setup", () => ({ Setup: "setup" }));
-vi.mock("../useWorkspaceCalendar", () => ({
-  useWorkspaceCalendar: () => ({ date: "2026-10-17", month: "2026-10", now: Date.UTC(2026, 9, 17, 12) }),
-}));
+const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), query: vi.fn(),
+  calendar: vi.fn(), month: "2026-10" }));
+let evaluation: FunctionReturnType<typeof api.budget.evaluate> | undefined;
+let defaults: "ready" | "loading" | "missing" = "ready";
+vi.mock("convex/react", () => ({ useQuery: state.query }));
+vi.mock("expo-router", () => ({ router: { push: state.push, back: state.back }, Redirect: "redirect" }));
+vi.mock("../activity", () => ({ usePersonalDefaults: () => defaults === "loading" ? undefined : defaults === "missing" ? null : {
+  workspace: { id: "workspace", timeZone: "America/Bogota" },
+} }));
+vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: (timeZone: string) => {
+  state.calendar(timeZone); return { month: state.month };
+} }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("react-native", () => ({
-  Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
+  Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
 }));
 
@@ -43,53 +33,88 @@ let root: ReactTestRenderer;
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  state.currency = "COP";
-  state.attention = { inboxCount: 7, alerts: { kind: "loading" } };
-  state.push.mockClear();
+  vi.clearAllMocks();
+  defaults = "ready";
+  state.month = "2026-10";
+  evaluation = { currency: "COP", month: "2026-10", currentMonth: "2026-10", totalsOverlap: true,
+    jars: [], availableCategories: [{ id: "unlimited", name: "Unlimited", emoji: "🏷️" }] };
+  state.query.mockImplementation((reference) => {
+    if (getFunctionName(reference) !== "budget:evaluate") throw new Error(`Unexpected query ${getFunctionName(reference)}`);
+    return evaluation;
+  });
 });
 afterEach(async () => {
   await act(async () => root?.unmount());
   vi.unstubAllGlobals();
 });
-function text() {
-  return root.root.findAllByType("text").map((node) => node.children.join("")).join("\n");
-}
-function button(label: string) {
-  const found = root.root.findAllByType("button").find((node) => node.props.accessibilityLabel === label);
-  if (!found) throw new Error(`Missing button ${label}`);
-  return found;
-}
+function texts() { return root.root.findAllByType("text").map((node) => node.children.join("")); }
+async function render() { await act(async () => { root = create(createElement(AlertsRoute)); }); }
+async function update() { await act(async () => root.update(createElement(AlertsRoute))); }
 
-test("Alerts routes every derived row to an existing workflow and uses the actual update total", async () => {
-  const rows = attentionRows({
-    draftCount: 2, draftSegment: "wait", candidateNowCount: 1, candidateWaitCount: 3,
-    plans: [{ dueMinorUnits: 50_000 }], currency: "COP",
-    readiness: evaluateMonthClose({ period: { year: 2026, month: 10 }, periodStatus: "open", draftCount: 1, candidateCount: 2 }),
-  });
-  state.attention = { inboxCount: 6, alerts: { kind: "ready", rows } };
-  await act(async () => { root = create(createElement(AlertsRoute)); });
-  expect(text()).toContain("5 UPDATES");
-  for (const row of root.root.findAllByType("button").filter((node) => !node.props.accessibilityLabel))
-    await act(async () => row.props.onPress());
-  expect(state.push.mock.calls).toEqual([
-    [{ pathname: "/drafts", params: { segment: "wait" } }],
-    [{ pathname: "/drafts", params: { segment: "now" } }],
-    [{ pathname: "/drafts", params: { segment: "wait" } }],
-    [{ pathname: "/recovery" }],
-    [{ pathname: "/month-close", params: { month: "2026-10" } }],
-  ]);
+test("empty Alerts has the fixed header, positive check row, and only Back is a button", async () => {
+  await render();
+  expect(texts()).toEqual(["WHAT NEEDS ATTENTION", "Alerts", "Nothing crossed a line", "Limits are still holding"]);
+  const buttons = root.root.findAllByType("button");
+  expect(buttons).toHaveLength(1);
+  expect(buttons[0].props.accessibilityLabel).toBe("Back");
+  const check = root.root.findAllByType(Ionicons).find((node) => node.props.name === "checkmark-circle-outline");
+  expect(check?.props.color).toBe(theme.positive);
+  await act(async () => buttons[0].props.onPress());
+  expect(state.back.mock.calls).toEqual([[]]);
+  expect(state.push.mock.calls).toEqual([]);
 });
 
-test("Alerts distinguishes loading, errors with retry, and a confirmed empty result", async () => {
-  const props = { onBack: vi.fn(), onOpen: vi.fn(), onRetry: vi.fn() };
-  await act(async () => { root = create(createElement(AlertsScreen, { ...props, state: { kind: "loading" } })); });
-  expect(root.root.find((node) => String(node.type) === "spinner").props.accessibilityLabel).toBe("Loading alerts");
-  expect(text()).not.toContain("Nothing needs attention");
-  await act(async () => { root.update(createElement(AlertsScreen, { ...props, state: { kind: "error", message: "Could not load Drafts on this device." } })); });
-  expect(text()).toContain("Could not load Drafts on this device.");
-  await act(async () => button("Try again").props.onPress());
-  expect(props.onRetry.mock.calls).toEqual([[]]);
-  await act(async () => { root.update(createElement(AlertsScreen, { ...props, state: { kind: "ready", rows: [] } })); });
-  expect(text()).toContain("Nothing needs attention");
-  expect(text()).toContain("ALL CAUGHT UP");
+test.each([1, 2])("%i category alerts use warning rows and open their own category looks", async (count) => {
+  if (!evaluation) throw new Error("Expected evaluation");
+  evaluation.jars = [{ category: { id: "food", name: "Food", emoji: "🍋" }, revisionId: "food-limit",
+    consumptionMinorUnits: 150_00, limitMinorUnits: 100_00 }];
+  if (count === 2) evaluation.jars.push({ category: { id: "travel", name: "Travel", emoji: "🚕" }, revisionId: "travel-limit",
+    consumptionMinorUnits: 175_00, limitMinorUnits: 100_00 });
+  await render();
+  expect(texts()).toEqual([
+    "WHAT NEEDS ATTENTION", "Alerts",
+    ...(count === 2 ? ["🚕  Travel is over", "COP 175 of COP 100", "Now"] : []),
+    "🍋  Food is over", "COP 150 of COP 100", "Now",
+  ]);
+  expect(root.root.findAllByType(Ionicons).filter((node) => node.props.name === "flag-outline").map((node) => node.props.color))
+    .toEqual(Array(count).fill(theme.warning));
+  for (const value of root.root.findAllByType("text").filter((node) => node.children.join("") === "Now"))
+    expect(value.props.style).toContainEqual({ color: theme.warning });
+  for (const row of root.root.findAllByType("button").filter((node) => node.props.accessibilityLabel !== "Back"))
+    await act(async () => row.props.onPress());
+  expect(state.push.mock.calls).toEqual([
+    ...(count === 2 ? [[{ pathname: "/category-look", params: { categoryId: "travel" } }]] : []),
+    [{ pathname: "/category-look", params: { categoryId: "food" } }],
+  ]);
+  evaluation.jars = [];
+  await update();
+  expect(texts()).toContain("Nothing crossed a line");
+  expect(texts()).not.toContain("Now");
+});
+
+test("loading waits for Convex and queries the workspace's calendar month as it changes", async () => {
+  const ready = evaluation;
+  evaluation = undefined;
+  await render();
+  expect(root.root.findByType(ActivityIndicator).props.accessibilityLabel).toBe("Loading alerts");
+  expect(texts()).toEqual(["WHAT NEEDS ATTENTION", "Alerts"]);
+  evaluation = ready;
+  state.month = "2026-11";
+  await update();
+  expect(texts()).toContain("Nothing crossed a line");
+  expect(state.query.mock.calls.map(([reference, args]) => [getFunctionName(reference), args])).toEqual([
+    ["budget:evaluate", { workspaceId: "workspace", month: "2026-10" }],
+    ["budget:evaluate", { workspaceId: "workspace", month: "2026-11" }],
+  ]);
+  expect(state.calendar.mock.calls).toEqual([["America/Bogota"], ["America/Bogota"]]);
+});
+
+test("unknown defaults wait and absent defaults redirect home", async () => {
+  defaults = "loading";
+  await render();
+  expect(root.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+  expect(state.query).not.toHaveBeenCalled();
+  defaults = "missing";
+  await update();
+  expect(root.root.findByType(Redirect).props.href).toBe("/");
 });
