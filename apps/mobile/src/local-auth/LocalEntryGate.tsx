@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { ActivityIndicator, AppState, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Platform, Text, View } from "react-native";
 import { LocalInstallation } from "./installation";
 import { DeviceAccessFailure, requiresLocalWipe } from "./accessFailure";
 import { LocalInput } from "./localInput";
@@ -27,7 +27,7 @@ import {
   unlockBiometry,
   writeInstallMarker,
 } from "./nativeEntry";
-import { Header, PrimaryButton, Screen, ui } from "../ui/core";
+import { Header, PrimaryButton, SecondaryButton, Screen, ui } from "../ui/core";
 
 export function LocalEntryGate({
   children,
@@ -83,20 +83,20 @@ export function LocalEntryGate({
       state = next;
       update();
     });
-    const blur = AppState.addEventListener("blur", () => {
+    const blur = Platform.OS === "android" ? AppState.addEventListener("blur", () => {
       focused = false;
       update();
-    });
-    const focus = AppState.addEventListener("focus", () => {
+    }) : null;
+    const focus = Platform.OS === "android" ? AppState.addEventListener("focus", () => {
       focused = true;
       update();
-    });
+    }) : null;
     const timer = setInterval(controller.tick, 1000);
     return () => {
       clearInterval(timer);
       changes.remove();
-      blur.remove();
-      focus.remove();
+      blur?.remove();
+      focus?.remove();
       controller.dispose();
     };
   }, [controller]);
@@ -187,6 +187,10 @@ export function LocalEntryGate({
           <PrimaryButton
             label="Unlock Lukapp"
             onPress={() => void controller.unlock()}
+          />
+          <SecondaryButton
+            label="Sign in instead"
+            onPress={() => void controller.reauthenticate()}
           />
         </>
       )}
