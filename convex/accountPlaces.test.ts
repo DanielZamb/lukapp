@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
-import { convexAccounting, createDaily, createOwnedWorkspace } from "../src/accounting/convexHarness";
+import { convexAccounting, createDaily, createOwnedWorkspace, reverse } from "../src/accounting/convexHarness";
 
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
 test.each([
@@ -59,6 +59,24 @@ test("a legacy account without an opening uses its real creation date in the wor
   const activity = await t.query(api.accounting.postedActivity, { workspaceId: workspace.id, month: "2026-09" });
   const expected = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Bogota" }).format(new Date(createdAt ?? 0));
   expect(activity.accounts[0]?.trackingFrom).toBe(expected);
+});
+
+test("tracking starts at the active opening after correcting its date", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const daily = await createDaily(t, workspace.id);
+  const input = { workspaceId: workspace.id, financialAccountProfileId: daily.id, description: "Opening balance",
+    amount: { currency: "COP", minorUnits: 10000 }, accountingDate: "2026-09-01", idempotencyKey: "original-opening" };
+  const original = await t.action(api.accounting.recordOpeningPosition, input);
+  if (!original) throw new Error("Missing opening");
+  const before = await t.query(api.accounting.postedActivity, { workspaceId: workspace.id, month: "2026-09" });
+  expect(before.accounts[0]?.trackingFrom).toBe("2026-09-01");
+  await reverse(t, workspace.id, original.id);
+  await t.action(api.accounting.recordOpeningPosition, {
+    ...input, accountingDate: "2026-09-10", idempotencyKey: "corrected-opening",
+  });
+  const after = await t.query(api.accounting.postedActivity, { workspaceId: workspace.id, month: "2026-09" });
+  expect(after.accounts[0]?.trackingFrom).toBe("2026-09-10");
 });
 
 

@@ -46,7 +46,8 @@ function Account({ workspaceId, profileId, timeZone }: {
       {recent ? <ListGroup>
         {recent.page.length === 0 ? <ListRow title="No activity yet" detail="New entries will appear here" />
           : recent.page.slice(0, 3).map((row) => <ListRow key={row.id} title={row.title} detail={row.date}
-            value={formatActivityAmount(row.amount)} valueStyle={{ color: row.amount.minorUnits > 0 ? theme.primary : theme.foreground }} />)}
+            value={row.reversed ? "Reversed" : formatActivityAmount(row.amount)}
+            valueStyle={{ color: row.reversed ? theme.mutedForeground : row.amount.minorUnits > 0 ? theme.primary : theme.foreground }} />)}
       </ListGroup> : <ActivityIndicator accessibilityLabel="Loading recent activity" />}
       {emoji !== null && <EmojiSheet emoji={emoji} onPick={setEmoji} onDismiss={() => setEmoji(null)}
         onUse={async () => { await changeLook({ workspaceId, financialAccountProfileId: profileId, emoji }); }} />}

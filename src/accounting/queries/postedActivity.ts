@@ -3,6 +3,7 @@ import { AccountingError } from "../errors";
 import { calendarDate } from "../timeZone";
 import { activityRow, profileNamesByPostingAccount } from "./activityRow";
 import { requireWorkspace } from "../membership";
+import { findActiveOpening } from "../openingControl";
 import { journalContext, toPostedJournalEntry } from "../views";
 import type { AccountingStore, Actor } from "../types";
 
@@ -43,8 +44,8 @@ export async function postedActivity(
     accounts: await Promise.all(accounts.map(async (account) => {
       const profile = context.profiles.get(account.financialAccountProfileId);
       if (!profile) throw new AccountingError("financial_account_profile_not_found");
-      const openings = await store.listOpeningMarkersByProfile(workspace.id, profile.id);
-      const trackingFrom = openings.map((opening) => opening.accountingDate).sort()[0]
+      const opening = await findActiveOpening(store, workspace.id, profile.id);
+      const trackingFrom = opening?.accountingDate
         ?? (profile.createdAt === undefined ? null : calendarDate(new Date(profile.createdAt), workspace.timeZone));
       return {
         productKind: profile.productKind,

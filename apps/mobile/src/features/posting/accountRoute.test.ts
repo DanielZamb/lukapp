@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), changeLook: vi.fn(), recent: vi.fn(), rows: [] as {
-  id: string; title: string; date: string; amount: { currency: string; minorUnits: number };
+  id: string; title: string; date: string; reversed?: boolean; amount: { currency: string; minorUnits: number };
 }[] }));
 vi.mock("expo-router", () => ({
   router: { push: state.push, back: state.back }, Redirect: "redirect",
@@ -70,4 +70,15 @@ test("Change look opens the emoji sheet and saves to the selected Convex profile
   sheet = root.root.find((node) => String(node.type) === "emoji-sheet");
   await act(async () => sheet.props.onUse());
   expect(state.changeLook).toHaveBeenCalledWith({ workspaceId: "ws", financialAccountProfileId: "card-profile", emoji: "🐷" });
+});
+
+test.each([12000, -2000])("reversed activity is labeled instead of showing signed money (%i)", async (minorUnits) => {
+  state.rows = [{ id: "reversed", title: "Old entry", date: "2026-10-01", reversed: true,
+    amount: { currency: "COP", minorUnits } }];
+  await render();
+  expect(texts()).toContain("Old entry");
+  expect(texts()).toContain("2026-10-01");
+  expect(texts()).toContain("Reversed");
+  expect(texts()).not.toContain("+COP 120,00");
+  expect(texts()).not.toContain("−COP 20,00");
 });
