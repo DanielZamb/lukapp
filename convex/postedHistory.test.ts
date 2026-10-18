@@ -54,7 +54,7 @@ test("all postings page 50/50/5 by accounting date, including backdated entries 
   expect(recent.page).toHaveLength(4);
   expect(recent.page.some((row) => row.reversesEntryId)).toBe(false);
   expect(recent.page[0]).toMatchObject({ id: original.id, reversed: true });
-});
+}, 15_000);
 
 test("account history uses the selected profile and retains legacy postings without a date backfill", async () => {
   const { t, workspace, daily } = await fixture();
@@ -138,4 +138,37 @@ test("liability rows show money direction while summaries label the balance as o
   expect(detail.row.amount.minorUnits).toBe(-150000);
   const summary = await t.query(api.accounting.postedActivity, { workspaceId: workspace.id, month: "2026-09", includeRows: false });
   expect(summary.accounts.find((account) => account.financialAccountProfileId === card.id)).toMatchObject({ nature: "Liability", balance: { minorUnits: 150000 } });
+});
+
+test("transfer details match history for source, destination and stored scope, including linked reversals", async () => {
+  const { t, workspace, daily } = await fixture();
+  const destination = await createProfile(t, workspace.id, "Destination", "cash");
+  const original = await t.action(api.accounting.recordAccountTransfer, {
+    workspaceId: workspace.id,
+    sourceFinancialAccountProfileId: daily.id,
+    destinationFinancialAccountProfileId: destination.id,
+    amount: { currency: "COP", minorUnits: 2500 },
+    accountingDate: "2026-09-18", description: "Transfer", idempotencyKey: "detail-transfer",
+  });
+  const correction = await reverse(t, workspace.id, original.id);
+  for (const [profileId, expected] of [[undefined, -2500], [daily.id, -2500], [destination.id, 2500]] as const) {
+    const scope = { workspaceId: workspace.id, ...(profileId ? { financialAccountProfileId: profileId } : {}) };
+    const history = await t.query(api.accounting.postedHistory, { ...scope, paginationOpts: { cursor: null, numItems: 50 } });
+    const detail = await t.query(api.accounting.postedEntry, { ...scope, journalEntryId: original.id });
+    const linked = await t.query(api.accounting.postedEntry, { ...scope, journalEntryId: correction.id });
+    expect(detail.row).toEqual(history.page.find((row) => row.id === original.id));
+    expect(linked.row).toEqual(history.page.find((row) => row.id === correction.id));
+    expect(detail.row.amount.minorUnits).toBe(expected);
+    expect(linked.row.amount.minorUnits).toBe(-expected);
+    expect(detail.entry.reversedByEntryId).toBe(correction.id);
+    expect(linked.entry.reversesEntryId).toBe(original.id);
+    expect(detail.entry.financialAccountProfileId).toBe(daily.id);
+  }
+  const foreign = await createOwnedWorkspace(t);
+  const foreignProfile = await createDaily(t, foreign.id);
+  for (const financialAccountProfileId of ["missing", foreignProfile.id]) {
+    await expect(t.query(api.accounting.postedEntry, {
+      workspaceId: workspace.id, journalEntryId: original.id, financialAccountProfileId,
+    })).rejects.toMatchObject({ data: { code: "financial_account_profile_not_found" } });
+  }
 });

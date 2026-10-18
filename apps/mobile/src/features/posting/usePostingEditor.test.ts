@@ -150,7 +150,8 @@ for (const saved of entries) {
     }
     expect(api.post).toHaveBeenCalledTimes(3);
     expect(editor().pending).toBe(false);
-    expect(editor().posted?.amount).toEqual(saved.payload.amount);
+    if (saved.kind === "setup") expect(editor().posted).toBeNull();
+    else expect(editor().posted?.amount).toEqual(saved.payload.amount);
     expect(editor().setup).toBeNull();
     if (saved.kind === "setup") expect(editor().profileId).toBe("new-card");
   });
@@ -198,7 +199,7 @@ test("signed Normal uses income/expense and clears categories when direction cha
   });
 });
 
-test("transfer requires different places, strips categories and preserves source/destination and magnitude", async () => {
+test("transfer requires different places, clears prior Normal categories and preserves source/destination and magnitude", async () => {
   const api = transport();
   const editor = await open(api);
   await act(async () => {
@@ -461,4 +462,74 @@ test("opening a posting row chosen from Drafts asks the transport for that row",
     root = create(createElement(Harness));
   });
   expect(api.load).toHaveBeenCalledWith("row-b", true);
+});
+
+test("adding a zero-balance place carries its emoji and preserves the entry being composed", async () => {
+  const api = transport();
+  const editor = await open(api);
+  expect(editor().categories).toEqual({ ids: [], primaryId: null });
+  await act(async () => {
+    editor().setAmount("-12,50");
+    editor().setDescription("Taxi");
+    editor().setDate("2026-10-16");
+    editor().setSetup({
+      name: "Travel",
+      productKind: "cash",
+      emoji: "👛",
+      amount: "0",
+      date: "2026-10-18",
+      target: { kind: "source" },
+    });
+  });
+  expect(editor().canSubmit).toBe(true);
+  await act(async () => {
+    await editor().submit();
+  });
+  expect(api.post).toHaveBeenCalledWith({
+    kind: "setup",
+    target: { kind: "source" },
+    payload: {
+      workspaceId: "workspace",
+      name: "Travel",
+      productKind: "cash",
+      emoji: "👛",
+      amount: { currency: "COP", minorUnits: 0 },
+      accountingDate: "2026-10-18",
+      idempotencyKey: "entry-1",
+    },
+  });
+  expect(editor().amount).toBe("-12,50");
+  expect(editor().description).toBe("Taxi");
+  expect(editor().date).toBe("2026-10-16");
+  expect(editor().profileId).toBe("new-card");
+  expect(editor().setup).toBeNull();
+  expect(editor().posted).toBeNull();
+});
+
+test("Transfer persists its selected categories through retry hydration", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setEntryType("transfer");
+    editor().setAmount("-25");
+    editor().setDestinationId("wallet");
+    editor().setCategories({ ids: ["travel"], primaryId: "travel" });
+  });
+  api.post.mockRejectedValueOnce(new Error("Reply lost"));
+  await act(async () => {
+    await editor().submit();
+  });
+  const command = api.save.mock.calls[0][0];
+  expect(command).toMatchObject({
+    kind: "transfer",
+    payload: { userCategoryIds: ["travel"], primaryUserCategoryId: "travel" },
+  });
+  expect(parsePendingPosting(command)).toEqual(command);
+  await act(async () => root?.unmount());
+  api.load.mockResolvedValue({ kind: "pending", id: "transfer", command });
+  const resumed = await open(api);
+  expect(resumed().categories).toEqual({
+    ids: ["travel"],
+    primaryId: "travel",
+  });
 });

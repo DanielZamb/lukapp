@@ -85,6 +85,7 @@ function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
     id: doc._id,
     workspaceId: doc.workspaceId,
     name: doc.name,
+    ...(doc.emoji ? { emoji: doc.emoji } : {}),
     productKind: doc.productKind,
     classificationPolicy: doc.classificationPolicy,
     postingAccountId: doc.postingAccountId,

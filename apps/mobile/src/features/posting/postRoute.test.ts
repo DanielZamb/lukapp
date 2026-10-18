@@ -36,6 +36,7 @@ vi.mock("expo-router", () => ({
 }));
 vi.mock("convex/react", () => ({
   useAction: () => confirmOne,
+  useConvex: () => ({ query: vi.fn() }),
   useQuery: () => [],
 }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "picker" }));
@@ -62,16 +63,24 @@ vi.mock("../useLocalEntryDrafts", () => ({
 vi.mock("../useIntakeCandidates", () => ({
   useIntakeCandidates: () => intakeActions,
 }));
-vi.mock("./usePostingTransport", () => ({
-  usePostingTransport: () => ({
+vi.mock("./usePostingTransport", () => {
+  const transport = {
     load: vi.fn(async () => ({ kind: "none" })),
     save: vi.fn(),
     post: vi.fn(),
     clear: vi.fn(),
     abort: vi.fn(),
     newKey: () => "key",
-  }),
-}));
+  };
+  return { usePostingTransport: () => transport };
+});
+vi.mock("./postingBatchStorage", () => {
+  const storage = {
+    load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }),
+    update: vi.fn(),
+  };
+  return { usePostingBatchStorage: () => storage };
+});
 vi.mock("./usePostingEditor", () => ({
   usePostingEditor: () => ({
     amount: "-",
@@ -125,6 +134,12 @@ vi.mock("./PlaceSheet", () => ({ PlaceSheet: "place-sheet" }));
 vi.mock("./AccountSetupForm", () => ({ AccountSetupForm: "setup" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+vi.mock("react-native-screens", () => ({
+  ScreenStack: "stack",
+  ScreenStackItem: "screen",
+  ScreenStackHeaderLeftView: "header-left",
+  ScreenStackHeaderRightView: "header-right",
+}));
 vi.mock("react-native", () => ({
   Text: "text",
   View: "view",

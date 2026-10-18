@@ -6,7 +6,7 @@ import { activityRow, profileNamesByPostingAccount } from "./activityRow";
 
 export async function postedEntry(
   store: AccountingStore,
-  input: { actor: Actor; workspaceId: string; journalEntryId: string },
+  input: { actor: Actor; workspaceId: string; journalEntryId: string; financialAccountProfileId?: string },
 ) {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
   const stored = await store.getJournalEntry(input.journalEntryId);
@@ -20,9 +20,10 @@ export async function postedEntry(
     replay: false,
     ...(reversal ? { reversedByEntryId: reversal.id } : {}),
   });
-  const profile = entry.financialAccountProfileId
-    ? context.profiles.get(entry.financialAccountProfileId)
-    : undefined;
+  const viewingId = input.financialAccountProfileId ?? entry.financialAccountProfileId;
+  const profile = viewingId ? context.profiles.get(viewingId) : undefined;
+  if (input.financialAccountProfileId && !profile)
+    throw new AccountingError("financial_account_profile_not_found");
   return {
     entry,
     row: activityRow(

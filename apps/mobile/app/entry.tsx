@@ -1,20 +1,12 @@
-import { useAction, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { useMemo } from "react";
 import { ActivityIndicator, Text } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
-import { api } from "../src/features/api";
 import { EntryDetailScreen } from "../src/features/history/EntryDetailScreen";
-import { useReversal } from "../src/features/history/useReversal";
-import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
+import { useEntryDetail } from "../src/features/history/useEntryDetail";
 import { Header, Screen } from "../src/ui/core";
 
 function Entry({ workspaceId, entryId }: { workspaceId: string; entryId: string }) {
-  const detail = useQuery(api.accounting.postedEntry, { workspaceId, journalEntryId: entryId });
-  const post = useAction(api.accounting.reversePostedEntry);
-  const reportFailure = useDeviceAccessFailure();
-  const transport = useMemo(() => ({ post, reportFailure }), [post, reportFailure]);
-  const reversal = useReversal(workspaceId, entryId, transport);
+  const { detail, reversal } = useEntryDetail(workspaceId, entryId);
   return <EntryDetailScreen detail={detail} reversal={reversal.state}
     onBack={() => router.back()}
     onEntry={(next) => router.push({ pathname: "/entry", params: { entryId: next } })}
