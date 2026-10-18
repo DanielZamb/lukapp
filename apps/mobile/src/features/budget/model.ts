@@ -14,6 +14,12 @@ export function jarPresentation(jar: BudgetJar) {
   };
 }
 
+export function recoveryPlansRowDetail(plans: readonly { title: string }[]) {
+  if (plans.length === 0) return "Start from an expense";
+  if (plans.length === 1) return plans[0].title;
+  return `${plans.length} plans`;
+}
+
 export function monthLabel(month: string, format: "month" | "monthYear" = "monthYear") {
   const [year, number] = month.split("-").map(Number);
   return new Intl.DateTimeFormat("en", { month: "long", year: format === "monthYear" ? "numeric" : undefined })
