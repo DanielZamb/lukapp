@@ -12,6 +12,7 @@ import {
   type PendingPosting,
 } from "./posting/pendingPostingSchema";
 import { LocalEntryDraftGoneError } from "./localEntryDraftErrors";
+import { postingBatchSchema, type StoredPostingBatch } from "./posting/postingBatchSchema";
 export { LocalEntryDraftGoneError };
 
 export const LOCAL_ENTRY_DRAFT_TTL_MS = 15 * 24 * 60 * 60 * 1000;
@@ -46,6 +47,7 @@ export type LocalEntryDraft = OpenDraft | PostingDraft;
 export type LocalEntryDocument = {
   v: 1;
   drafts: LocalEntryDraft[];
+  postingBatches?: Record<string, StoredPostingBatch>;
 };
 export type DraftListItem = {
   id: LocalEntryDraftId;
@@ -113,6 +115,7 @@ const metaSchema = {
 };
 const localEntryDocumentSchema = z.object({
   v: z.literal(1),
+  postingBatches: z.record(z.string(), postingBatchSchema).optional(),
   drafts: z.array(
     z.discriminatedUnion("status", [
       z.object({
@@ -162,7 +165,7 @@ export function parseLocalEntryDocument(
     const document = localEntryDocumentSchema.parse(raw);
     const drafts = document.drafts.filter((draft) => draft.expiresAt > now);
     return {
-      document: { v: 1, drafts },
+      document: { ...document, drafts },
       dirty: drafts.length !== document.drafts.length,
     };
   }
@@ -221,6 +224,16 @@ export function isListedDraft(draft: LocalEntryDraft) {
   return !isRetryOnlyCommand(draft.command);
 }
 
+export function isBatchDraft(document: LocalEntryDocument, draft: LocalEntryDraft) {
+  return Object.values(document.postingBatches ?? {}).some((batch) =>
+    batch.queue.some((row) =>
+      row.draftId === draft.id ||
+      (draft.status === "posting" &&
+        row.command.payload.idempotencyKey === draft.command.payload.idempotencyKey),
+    ),
+  );
+}
+
 export function accountingDateOf(draft: LocalEntryDraft) {
   if (draft.status === "open") return draft.facts.accountingDate;
   return "accountingDate" in draft.command.payload
@@ -236,7 +249,11 @@ export function countDraftsInMonth(
 ) {
   const prefix = `${String(period.year).padStart(4, "0")}-${String(period.month).padStart(2, "0")}`;
   return liveDrafts(document, now).filter((draft) => {
-    if (workspaceOf(draft) !== workspaceId || !isListedDraft(draft))
+    if (
+      workspaceOf(draft) !== workspaceId ||
+      !isListedDraft(draft) ||
+      isBatchDraft(document, draft)
+    )
       return false;
     const date = accountingDateOf(draft);
     return date !== undefined && date.startsWith(`${prefix}-`);
@@ -265,7 +282,9 @@ export function viewDocument(
   const items = liveDrafts(document, now)
     .filter(
       (draft) =>
-        workspaceOf(draft) === workspaceId && isListedDraft(draft),
+        workspaceOf(draft) === workspaceId &&
+        isListedDraft(draft) &&
+        !isBatchDraft(document, draft),
     )
     .sort((left, right) => right.createdAt - left.createdAt)
     .map((draft) => ({
@@ -300,6 +319,7 @@ export function restoreFromDocument(
   const postings = live.filter(
     (draft): draft is PostingDraft =>
       draft.status === "posting" &&
+      !isBatchDraft(document, draft) &&
       workspaceOf(draft) === query.workspaceId &&
       currencyOf(draft) === query.currency,
   );
@@ -325,7 +345,7 @@ export function keepIn(
     return {
       id: existing.id,
       document: {
-        v: 1,
+        ...document,
         drafts: drafts.map((draft) =>
           draft.id === existing.id ? next : draft,
         ),
@@ -340,7 +360,7 @@ export function keepIn(
     status: "open",
     facts: input.facts,
   };
-  return { id, document: { v: 1, drafts: [...drafts, next] } };
+  return { id, document: { ...document, drafts: [...drafts, next] } };
 }
 
 export function beginPostIn(
@@ -358,7 +378,7 @@ export function beginPostIn(
   if (input.draftId && !existing) throw new LocalEntryDraftGoneError(input.draftId);
   if (existing?.status === "posting")
     return {
-      document: { v: 1, drafts },
+      document: { ...document, drafts },
       draft: existing,
       usedStoredCommand: true,
     };
@@ -376,7 +396,7 @@ export function beginPostIn(
   };
   return {
     document: {
-      v: 1,
+      ...document,
       drafts:
         replaceOpen && existing
           ? drafts.map((row) => (row.id === existing.id ? draft : row))
@@ -453,7 +473,7 @@ export function rejectPostIn(
     facts: factsFromCommand(existing.command),
   };
   return {
-    v: 1,
+    ...document,
     drafts: document.drafts.map((draft) =>
       draft.id === id ? next : draft,
     ),
@@ -503,7 +523,7 @@ export function removeIn(
   id: LocalEntryDraftId,
 ): LocalEntryDocument {
   return {
-    v: 1,
+    ...document,
     drafts: document.drafts.filter((draft) => draft.id !== id),
   };
 }

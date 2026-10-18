@@ -1,4 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { ComposeModeToggle } from "./ComposeModeToggle";
 import {
   ActivityIndicator,
   Pressable,
@@ -48,6 +49,9 @@ export type PostingFormProps = {
   onPost: () => void;
   onDone: () => void;
   lockEntryType?: boolean;
+  batchCount?: number;
+  onBatch?: () => void;
+  saveToBatch?: boolean;
 };
 
 export function PostingForm(props: PostingFormProps) {
@@ -55,7 +59,7 @@ export function PostingForm(props: PostingFormProps) {
     <Screen
       contentStyle={{ gap: spacing.xl }}
       footer={
-        props.posted !== null ? (
+        !props.saveToBatch && props.posted !== null ? (
           <View
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
@@ -87,23 +91,16 @@ export function PostingForm(props: PostingFormProps) {
       }
     >
       <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
-      <View accessibilityRole="tablist" style={styles.track}>
-        <View
-          accessibilityRole="tab"
-          accessibilityState={{ selected: true }}
-          style={styles.activeSegment}
-        >
-          <Text style={styles.segmentText}>One</Text>
-        </View>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: false, disabled: true }}
-          disabled
-          style={styles.segment}
-        >
-          <Text style={styles.disabledText}>Batch</Text>
-        </Pressable>
-      </View>
+      {!props.saveToBatch && (
+        <ComposeModeToggle
+          mode="one"
+          count={props.batchCount}
+          disabled={!props.onBatch || !props.editable}
+          onMode={(mode) => {
+            if (mode === "batch") props.onBatch?.();
+          }}
+        />
+      )}
       <View style={styles.amountRow}>
         <Text style={styles.currency}>
           {props.currency === "COP" ? "$" : props.currency}
@@ -238,7 +235,13 @@ export function PostingForm(props: PostingFormProps) {
       {props.posted === null && (
         <PrimaryButton
           label={
-            props.busy ? "Posting…" : props.pending ? "Retry posting" : "Post"
+            props.saveToBatch
+              ? "Add to batch"
+              : props.busy
+                ? "Posting…"
+                : props.pending
+                  ? "Retry posting"
+                  : "Post"
           }
           trailingIcon="checkmark"
           disabled={!props.canSubmit}
@@ -303,37 +306,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.label,
     color: theme.mutedForeground,
   },
-  track: {
-    flexDirection: "row",
-    padding: spacing.xs,
-    borderRadius: radius.full,
-    backgroundColor: theme.secondary,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  activeSegment: {
-    flex: 1,
-    minHeight: touchTarget,
-    borderRadius: radius.full,
-    backgroundColor: theme.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  segment: {
-    flex: 1,
-    minHeight: touchTarget,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   segmentText: {
     fontFamily: font.bold,
     fontSize: fontSize.body,
     color: theme.foreground,
-  },
-  disabledText: {
-    fontFamily: font.semibold,
-    fontSize: fontSize.body,
-    color: theme.mutedForeground,
   },
   amountRow: {
     flexDirection: "row",

@@ -2,10 +2,14 @@ import { useLocalEntryInteraction } from "../src/local-auth/interaction";
 import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
-import { useAction, useQuery } from "convex/react";
+import {
+  BottomSheetModal,
+  BottomSheetView,
+  BottomSheetModalProvider,
+} from "@gorhom/bottom-sheet";
+import { useAction, useConvex, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Keyboard, Platform, Text } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
@@ -13,18 +17,25 @@ import { formatMoney, localDate, parseMoney } from "../src/features/money";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
+  batchPostingBudgetImpact,
   type PostingBudgetImpact,
 } from "../src/features/budget/postingImpact";
 import { defaultAccountingDate } from "../src/features/timeZones";
-import { Header, Screen, SecondaryButton, ui } from "../src/ui/core";
+import { Header, Screen, SecondaryButton, theme, ui } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
+import { BatchNativeStack } from "../src/features/posting/BatchNativeStack";
+import {
+  usePostingBatch,
+  type QueuedPosting,
+} from "../src/features/posting/usePostingBatch";
 import { PlaceSheet } from "../src/features/posting/PlaceSheet";
 import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
 import {
   usePostingEditor,
   type IntakeBinding,
 } from "../src/features/posting/usePostingEditor";
+import { usePostingBatchStorage } from "../src/features/posting/postingBatchStorage";
 import { usePostingTransport } from "../src/features/posting/usePostingTransport";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
@@ -111,6 +122,42 @@ function PostMoney({
       active = false;
     };
   }, [candidateId, confirmOne, intake.consume, intake.fail, intake.read]);
+  const transport = usePostingTransport(subject);
+  const batchStorage = usePostingBatchStorage(subject, workspace.id);
+  const convex = useConvex();
+  const active = useRef(true);
+  const batchDecision = useRef<((allow: boolean) => void) | null>(null);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+      batchDecision.current?.(false);
+    };
+  }, []);
+  const batch = usePostingBatch(transport, batchStorage, async (queue) => {
+    const hits = await batchPostingBudgetImpact(
+      queue.map((row) => row.command),
+      (input) => convex.query(api.budget.evaluate, input),
+    );
+    if (!active.current) return false;
+    if (!hits.length) return true;
+    Keyboard.dismiss();
+    return new Promise<boolean>((resolve) => {
+      batchDecision.current = resolve;
+      setImpact({ description: "Batch", hits });
+    });
+  });
+  const [mode, setMode] = useState<"one" | "batch">("one");
+  const [composing, setComposing] = useState(false);
+  const [editingId, setEditingId] = useState<string | undefined>();
+  const closeCompose = useCallback(() => {
+    setComposing(false);
+    setEditingId(undefined);
+    setCategoryVisible(false);
+    dateSheet.current?.dismiss();
+    placeSheet.current?.dismiss();
+    setupSheet.current?.dismiss();
+  }, []);
   const editor = usePostingEditor(
     {
       workspaceId: workspace.id,
@@ -118,7 +165,7 @@ function PostMoney({
       currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
       timeZone: workspace.timeZone,
     },
-    usePostingTransport(subject),
+    transport,
     {
       drafts: candidateId ? null : drafts.port,
       draftId: candidateId ? undefined : draftId,
@@ -131,7 +178,9 @@ function PostMoney({
     (place) => place.id === editor.destinationId,
   );
   const needsBudgetCheck =
-    editor.entryType === "normal" && editor.direction === "out" && !editor.pending;
+    editor.entryType === "normal" &&
+    editor.direction === "out" &&
+    !editor.pending;
   const budget = useQuery(
     api.budget.evaluate,
     needsBudgetCheck
@@ -180,10 +229,36 @@ function PostMoney({
         <ActivityIndicator />
       </Screen>
     );
-  return (
+  const canQueue =
+    editor.canSubmit &&
+    !setup &&
+    !impact &&
+    categoryValid &&
+    placesValid &&
+    !editor.pending &&
+    !candidateId;
+  async function saveToBatch() {
+    if (!canQueue) return false;
+    const draft = editor.captureForBatch();
+    if (!draft || !(await batch.keep(draft, editingId))) return false;
+    editor.resetComposer();
+    closeCompose();
+    return true;
+  }
+  const form = (
     <>
       <PostingForm
         {...editor}
+        batchCount={batch.queue.length}
+        onBatch={
+          !candidateId && !editor.pending && !setup
+            ? () => {
+                if (canQueue) void saveToBatch();
+                setMode("batch");
+              }
+            : undefined
+        }
+        saveToBatch={mode === "batch"}
         lockEntryType={editor.lockEntryType}
         currency={workspace.functionalCurrency}
         place={profile ? `${profile.emoji ?? "💰"} ${profile.name}` : "Pick"}
@@ -212,17 +287,19 @@ function PostMoney({
           !editor.categories.primaryId
         }
         canSubmit={
-          !setup &&
-          !impact &&
-          (!needsBudgetCheck || budget !== undefined) &&
-          editor.canSubmit &&
-          (editor.pending || (categoryValid && placesValid))
+          mode === "batch"
+            ? canQueue
+            : !setup &&
+              !impact &&
+              (!needsBudgetCheck || budget !== undefined) &&
+              editor.canSubmit &&
+              (editor.pending || (categoryValid && placesValid))
         }
         date={new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
           new Date(`${editor.date}T12:00:00`),
         )}
         posted={
-          editor.posted
+          mode !== "batch" && editor.posted
             ? `${editor.posted.description || "Entry"} · ${editor.posted.amount.minorUnits > 0 ? "+" : ""}${formatMoney(editor.posted.amount)}`
             : null
         }
@@ -231,7 +308,7 @@ function PostMoney({
           interaction(() => editor.setDescription(value))
         }
         onEntryType={(value) => interaction(() => editor.setEntryType(value))}
-        onBack={() => router.back()}
+        onBack={mode === "batch" ? closeCompose : () => router.back()}
         onPlace={() => {
           setPlaceTarget("source");
           setSearch("");
@@ -247,6 +324,10 @@ function PostMoney({
           if (!setup) dateSheet.current?.present();
         }}
         onPost={() => {
+          if (mode === "batch") {
+            void saveToBatch();
+            return;
+          }
           if (impact || !editor.canSubmit || setup) return;
           if (needsBudgetCheck) {
             if (!budget) return;
@@ -265,16 +346,6 @@ function PostMoney({
         }}
         onDone={() => router.back()}
       />
-      {impact && (
-        <PostingImpactSheet
-          {...impact}
-          onReconsider={() => setImpact(null)}
-          onContinue={() => {
-            setImpact(null);
-            void editor.submit();
-          }}
-        />
-      )}
       {categoryEnabled && (
         <CategoryPicker
           key={editor.direction}
@@ -363,6 +434,92 @@ function PostMoney({
           />
         </BottomSheetView>
       </BottomSheetModal>
+    </>
+  );
+  const impactSheet = impact && (
+    <PostingImpactSheet
+      {...impact}
+      onReconsider={() => {
+        setImpact(null);
+        batchDecision.current?.(false);
+        batchDecision.current = null;
+      }}
+      onContinue={() => {
+        setImpact(null);
+        if (batchDecision.current) {
+          batchDecision.current(true);
+          batchDecision.current = null;
+        } else void editor.submit();
+      }}
+    />
+  );
+  if (mode === "one")
+    return (
+      <>
+        {form}
+        {impactSheet}
+      </>
+    );
+  return (
+    <>
+      <BatchNativeStack
+        batch={batch}
+        currency={workspace.functionalCurrency}
+        composing={composing}
+        compose={<BottomSheetModalProvider>{form}</BottomSheetModalProvider>}
+        onCancel={closeCompose}
+        onAdd={() => {
+          editor.resetComposer();
+          setEditingId(undefined);
+          setComposing(true);
+        }}
+        onEdit={(item) => {
+          if (editor.editBatchDraft(item)) {
+            setEditingId(item.id);
+            setComposing(true);
+          }
+        }}
+        onBack={() => router.back()}
+        onOne={() => {
+          editor.resetComposer();
+          setMode("one");
+        }}
+        rowFor={(item: QueuedPosting) => {
+          const command = item.command;
+          const payload = command.payload;
+          const ids =
+            "userCategoryIds" in payload ? payload.userCategoryIds : undefined;
+          const primaryId =
+            "primaryUserCategoryId" in payload
+              ? payload.primaryUserCategoryId
+              : undefined;
+          const category = categories?.find(
+            (row) => row.id === (primaryId ?? ids?.[0]),
+          );
+          const profileId =
+            command.kind === "transfer"
+              ? command.payload.sourceFinancialAccountProfileId
+              : "financialAccountProfileId" in payload
+                ? payload.financialAccountProfileId
+                : undefined;
+          return {
+            category:
+              ids
+                ?.map(
+                  (id) =>
+                    categories?.find((row) => row.id === id)?.name ??
+                    "Saved category",
+                )
+                .join(" · ") || "No category",
+            place:
+              profiles?.find((row) => row.id === profileId)?.name ??
+              "No account",
+            emoji: category?.style.emoji ?? "💰",
+            color: category ? theme[category.style.tone] : theme.primary,
+          };
+        }}
+      />
+      {impactSheet}
     </>
   );
 }

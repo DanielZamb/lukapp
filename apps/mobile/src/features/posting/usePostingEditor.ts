@@ -169,9 +169,7 @@ export function usePostingEditor(
       setCategories({
         ids:
           value.payload.userCategoryIds ??
-          (value.payload.userCategoryId
-            ? [value.payload.userCategoryId]
-            : []),
+          (value.payload.userCategoryId ? [value.payload.userCategoryId] : []),
         primaryId: value.payload.primaryUserCategoryId ?? null,
       });
   }
@@ -210,6 +208,19 @@ export function usePostingEditor(
     setDraftId(draft.id);
     appliedDraft.current = draft.id;
     return "applied";
+  }
+  function resetComposer() {
+    setAmount("-");
+    setDescription("");
+    setCategories({ ids: [], primaryId: null });
+    setDate(defaultAccountingDate(account.timeZone));
+    setEntryType("normal");
+    setProfileId(account.financialAccountProfileId);
+    setDestinationId(null);
+    setDraftId(undefined);
+    appliedDraft.current = undefined;
+    setPosted(null);
+    setError("");
   }
   function snapshotConfirmed(): IntakeSuggestion {
     return {
@@ -355,7 +366,9 @@ export function usePostingEditor(
       idempotencyKey: transport.newKey(),
     };
     const categoryAssignments = {
-      ...(categories.ids.length ? { userCategoryIds: [...categories.ids] } : {}),
+      ...(categories.ids.length
+        ? { userCategoryIds: [...categories.ids] }
+        : {}),
       ...(categories.primaryId
         ? { primaryUserCategoryId: categories.primaryId }
         : {}),
@@ -430,7 +443,9 @@ export function usePostingEditor(
       if (error instanceof LocalEntryDraftGoneError) {
         setDraftId(undefined);
         appliedDraft.current = undefined;
-        setError("This draft was already posted or removed. Keep again to save it as a new draft.");
+        setError(
+          "This draft was already posted or removed. Keep again to save it as a new draft.",
+        );
         return;
       }
       setError("Could not keep this draft on this device.");
@@ -526,8 +541,7 @@ export function usePostingEditor(
             amount: {
               currency: account.currency,
               minorUnits:
-                (direction === "out" ? -1 : 1) *
-                Math.abs(minorUnits ?? 0),
+                (direction === "out" ? -1 : 1) * Math.abs(minorUnits ?? 0),
             },
           });
           return;
@@ -552,7 +566,9 @@ export function usePostingEditor(
         setPending(null);
         setDraftId(undefined);
         appliedDraft.current = undefined;
-        setError("This draft was already posted or removed. Nothing was posted again.");
+        setError(
+          "This draft was already posted or removed. Nothing was posted again.",
+        );
         return;
       }
       const data: unknown = error instanceof ConvexError ? error.data : null;
@@ -656,6 +672,22 @@ export function usePostingEditor(
     draftId,
     blockedByPendingPostings: blocked,
     keepDraft,
+    captureForBatch: () => {
+      if (!canEdit() || !canSubmit || setup || intake) return null;
+      return { command: buildEntry(), draftId };
+    },
+    resetComposer: () => {
+      if (canEdit() && !setup) resetComposer();
+    },
+    editBatchDraft: (value: { command: PendingPosting; draftId?: string }) => {
+      if (!canEdit() || setup || intake) return false;
+      hydrateFromCommand(value.command);
+      setDraftId(value.draftId);
+      appliedDraft.current = value.draftId;
+      setPosted(null);
+      setError("");
+      return true;
+    },
     resume,
     submit,
     dismissPosted: () => setPosted(null),
