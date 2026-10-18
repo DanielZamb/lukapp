@@ -312,7 +312,10 @@ function PostMoney({
               !impact &&
               (!needsBudgetCheck || budget !== undefined) &&
               editor.canSubmit &&
-              (editor.pending || (categoryValid && placesValid))
+              (editor.pending ||
+                (editor.description.trim().length > 0 &&
+                  categoryValid &&
+                  placesValid))
         }
         date={new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
           new Date(`${editor.date}T12:00:00`),
