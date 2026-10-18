@@ -107,6 +107,31 @@ test("Plans summarizes several recovery plans", async () => {
   root.root.findByProps({ accessibilityLabel: "Savings recovery, 2 plans" });
 });
 
+test.each([
+  { activeCount: 0, detail: "Start from an expense" },
+  { activeCount: 1, detail: "Emergency repair" },
+  { activeCount: 2, detail: "2 plans" },
+])("Plans excludes completed plans when $activeCount active plans remain", async ({ activeCount, detail }) => {
+  const plan = {
+    id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
+    destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
+    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+    currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
+  };
+  state.recovery = {
+    ...state.recovery!,
+    plans: [
+      { ...plan, id: "completed", title: "Completed repair", recoveredMinorUnits: 120_00, remainingMinorUnits: 0, dueMinorUnits: 0 },
+      ...Array.from({ length: activeCount }, (_, index) => ({ ...plan, id: `active-${index}` })),
+    ],
+  };
+  await act(async () => { root = create(createElement(PlansRoute)); });
+  if (!root) throw new Error("Plans not mounted");
+  expect(textCopy(root.root)).toContain(detail);
+  expect(textCopy(root.root)).not.toContain("Completed repair");
+  root.root.findByProps({ accessibilityLabel: `Savings recovery, ${detail}` });
+});
+
 test("Plans keeps the recovery row visible while evaluate is loading", async () => {
   state.recovery = undefined;
   await act(async () => { root = create(createElement(PlansRoute)); });
