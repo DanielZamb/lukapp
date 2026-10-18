@@ -81,6 +81,11 @@ export const accountTransfer = {
   userCategoryIds: v.optional(v.array(v.string())),
   primaryUserCategoryId: v.optional(v.string()),
 };
+export const accountLook = {
+  ...inWorkspace,
+  financialAccountProfileId: v.string(),
+  emoji: v.string(),
+};
 export const accountSetup = {
   ...profileCreation,
   amount: money,

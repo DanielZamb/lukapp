@@ -5,6 +5,7 @@ import { ActivityIndicator } from "react-native";
 import { createElement, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { getFunctionName, type FunctionReference } from "convex/server";
 import type { EntryDetail, HistoryRow } from "./types";
 import type { ReversalTransport } from "./useReversal";
 
@@ -47,15 +48,22 @@ vi.mock("react-native", () => ({
 }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => ({ workspace: { id: "ws", timeZone: "America/Bogota", functionalCurrency: "COP" } }),
-  usePostedActivity: () => ({ accounts: [] }), useRecentActivity: () => ({ page: [] }),
+  usePostedActivity: () => ({ accounts: [{
+    financialAccountProfileId: "daily", name: "Daily", productKind: "cash", nature: "Asset",
+    balance: { currency: "COP", minorUnits: 0 }, trackingFrom: "2026-10-01",
+  }] }), useRecentActivity: () => ({ page: [] }),
 }));
-vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: "2026-10-18" }) }));
+vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: "2026-10-18", month: "2026-10" }) }));
 vi.mock("convex/react", () => ({
   usePaginatedQuery: (_query: unknown, args: "skip" | { financialAccountProfileId?: string }) => {
     if (args === "skip") return { results: [], status: "LoadingFirstPage", loadMore: provider.loadPlace };
     return args.financialAccountProfileId ? { ...provider.place, loadMore: provider.loadPlace } : { ...provider.all, loadMore: provider.loadAll };
   },
-  useQuery: (_query: unknown, args: { journalEntryId?: string; financialAccountProfileId?: string }) => {
+  useQuery: (query: FunctionReference<"query">, args: { journalEntryId?: string; financialAccountProfileId?: string }) => {
+    if (getFunctionName(query) === "accounting:listJournalEntries") return [];
+    if (getFunctionName(query) === "budget:evaluate") return {
+      month: "2026-10", currentMonth: "2026-10", currency: "COP", jars: [], availableCategories: [], totalsOverlap: true,
+    };
     if (args.journalEntryId) {
       provider.detailQuery(args);
       return provider.details.get(`${args.journalEntryId}:${args.financialAccountProfileId ?? "all"}`) ?? provider.details.get(args.journalEntryId);

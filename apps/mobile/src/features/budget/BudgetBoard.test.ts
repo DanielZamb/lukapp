@@ -19,7 +19,7 @@ async function render(props: Partial<BudgetBoardProps> = {}) {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const defaults: BudgetBoardProps = {
-    month: "2026-10", currency: "COP", canAdd: true, jars: [], categoryColors: new Map(),
+    month: "2026-10", currency: "COP", saved: false, canAdd: true, jars: [], categoryColors: new Map(),
     onBack: () => {}, onAdd: () => {}, onEdit: () => {},
   };
   await act(async () => { root = create(createElement(BudgetBoard, { ...defaults, ...props })); });

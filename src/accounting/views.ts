@@ -32,9 +32,9 @@ export function toProfile(profile: StoredProfile): FinancialAccountProfile {
     id: profile.id,
     workspaceId: profile.workspaceId,
     name: profile.name,
-    ...(profile.emoji ? { emoji: profile.emoji } : {}),
     productKind: profile.productKind,
     ledgerAccountId: profile.postingAccountId,
+    ...(profile.emoji ? { emoji: profile.emoji } : {}),
   };
 }
 
