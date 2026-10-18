@@ -6,7 +6,10 @@ import {
   periodFromMonthKey,
   periodStatusOf,
 } from "./model";
-import { noPendingCandidates } from "./pendingCandidates";
+import {
+  countCandidatesInMonth,
+  noPendingCandidates,
+} from "./pendingCandidates";
 
 const october = { year: 2026, month: 10 };
 
@@ -90,11 +93,20 @@ test("a device month that is not the workspace month cannot lock", () => {
   });
 });
 
-test("the inbox footer names the workspace month and Candidates stay at zero until U08", () => {
+test("the inbox footer names the workspace month and counts Candidates dated in it", () => {
   expect(periodFromMonthKey("2026-10")).toEqual(october);
   expect(monthLabel(october)).toBe("October");
   expect(footerLabel(october)).toBe("Complete October");
   expect(noPendingCandidates().countForMonth(october)).toBe(0);
+  expect(
+    countCandidatesInMonth(
+      [
+        { suggestion: { accountingDate: "2026-10-17" } },
+        { suggestion: { accountingDate: "2026-11-01" } },
+      ],
+      october,
+    ),
+  ).toBe(1);
   expect(
     periodStatusOf(october, { year: 2026, month: 10, status: "open" }),
   ).toBe("open");

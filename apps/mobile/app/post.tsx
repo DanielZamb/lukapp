@@ -3,22 +3,27 @@ import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
-import { useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform } from "react-native";
+import { ActivityIndicator, Platform, Text } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate } from "../src/features/money";
 import { defaultAccountingDate } from "../src/features/timeZones";
-import { Header, Screen, SecondaryButton } from "../src/ui/core";
+import { Header, Screen, SecondaryButton, ui } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
 import { PlaceSheet } from "../src/features/posting/PlaceSheet";
 import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
-import { usePostingEditor } from "../src/features/posting/usePostingEditor";
+import {
+  usePostingEditor,
+  type IntakeBinding,
+} from "../src/features/posting/usePostingEditor";
 import { usePostingTransport } from "../src/features/posting/usePostingTransport";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
+import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
+import { factsFromCandidate, suggestionOf } from "../src/features/intake/facts";
 import {
   canPostCategories,
   needsPrimary,
@@ -30,11 +35,13 @@ function PostMoney({
   subject,
   initialProfileId,
   draftId,
+  candidateId,
 }: {
   defaults: Defaults;
   subject: string;
   initialProfileId?: string;
   draftId?: string;
+  candidateId?: string;
 }) {
   const recordInteraction = useLocalEntryInteraction();
   const [categoryVisible, setCategoryVisible] = useState(false);
@@ -57,6 +64,48 @@ function PostMoney({
     subject,
     workspaceId: workspace.id,
   });
+  const intake = useIntakeCandidates({
+    subject,
+    workspaceId: workspace.id,
+    currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
+  });
+  const confirmOne = useAction(api.notificationIntake.confirmOne);
+  const [binding, setBinding] = useState<IntakeBinding | null>(null);
+  const [missingCandidate, setMissingCandidate] = useState(false);
+  useEffect(() => {
+    if (!candidateId) return;
+    let active = true;
+    void intake.read(candidateId).then((row) => {
+      if (!active) return;
+      if (!row) {
+        setMissingCandidate(true);
+        return;
+      }
+      setBinding({
+        id: row.id,
+        facts: factsFromCandidate(row),
+        suggestion: suggestionOf(row),
+        parserVersion: row.parserVersion,
+        consentVersion: row.consentVersion,
+        confirm: async (input) => {
+          const result = await confirmOne(input);
+          const sign = input.confirmed.direction === "out" ? -1 : 1;
+          return {
+            description: result.posted.description,
+            amount: {
+              currency: result.posted.amount.currency,
+              minorUnits: sign * Math.abs(result.posted.amount.minorUnits),
+            },
+          };
+        },
+        consume: () => intake.consume(row.id),
+        fail: (error) => intake.fail(row.id, error),
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [candidateId, confirmOne, intake.consume, intake.fail, intake.read]);
   const editor = usePostingEditor(
     {
       workspaceId: workspace.id,
@@ -65,7 +114,12 @@ function PostMoney({
       timeZone: workspace.timeZone,
     },
     usePostingTransport(subject),
-    { drafts: drafts.port, draftId },
+    {
+      drafts: candidateId ? null : drafts.port,
+      draftId: candidateId ? undefined : draftId,
+      intake: binding,
+      intakeRoute: !!candidateId,
+    },
   );
   const profile = profiles?.find((place) => place.id === editor.profileId);
   const categoryEnabled = editor.entryType === "normal";
@@ -80,12 +134,13 @@ function PostMoney({
     if (editor.blockedByPendingPostings) router.replace("/drafts");
   }, [editor.blockedByPendingPostings]);
   useEffect(() => {
+    if (candidateId) return;
     if (setup !== null && !setupPresented.current)
       setupSheet.current?.present();
     else if (setup === null && setupPresented.current)
       setupSheet.current?.dismiss();
     setupPresented.current = setup !== null;
-  }, [setup]);
+  }, [setup, candidateId]);
   function interaction(action: () => void) {
     recordInteraction();
     action();
@@ -97,10 +152,26 @@ function PostMoney({
         ? `${profile?.productKind === "creditCard" || profile?.productKind === "loan" ? "Enter the amount owed" : "Enter the amount held"} on the starting date. Use zero or a positive amount. Earlier activity is outside Start Tracking.`
         : "Use a positive amount for income and a negative amount for spending. Choose up to three categories; each counts the full amount.";
   const selectedDate = setup?.date ?? editor.date;
+  if (candidateId && missingCandidate)
+    return (
+      <Screen>
+        <Header title="Post money" onBack={() => router.back()} />
+        <Text accessibilityRole="alert" style={ui.error}>
+          This Candidate is no longer on this device.
+        </Text>
+      </Screen>
+    );
+  if (candidateId && !binding)
+    return (
+      <Screen>
+        <ActivityIndicator />
+      </Screen>
+    );
   return (
     <>
       <PostingForm
         {...editor}
+        lockEntryType={editor.lockEntryType}
         currency={workspace.functionalCurrency}
         place={profile?.name ?? "Choose a place"}
         destination={
@@ -260,9 +331,10 @@ function PostMoney({
 export default function PostRoute() {
   const defaults = usePersonalDefaults();
   const { userId } = useAuth();
-  const { profileId, draftId } = useLocalSearchParams<{
+  const { profileId, draftId, candidateId } = useLocalSearchParams<{
     profileId?: string;
     draftId?: string;
+    candidateId?: string;
   }>();
   return defaults && userId ? (
     <PostMoney
@@ -270,6 +342,7 @@ export default function PostRoute() {
       subject={userId}
       initialProfileId={profileId}
       draftId={typeof draftId === "string" ? draftId : undefined}
+      candidateId={typeof candidateId === "string" ? candidateId : undefined}
     />
   ) : defaults === null ? (
     <Redirect href="/" />

@@ -190,4 +190,25 @@ export default defineSchema({
     decidedAt: v.number(),
     reason: v.optional(v.string()),
   }).index("by_workspace_year_month", ["workspaceId", "year", "month"]),
+  notificationIntakeReceipts: defineTable({
+    workspaceId: v.id("workspaces"),
+    journalEntryId: v.id("journalEntries"),
+    idempotencyKey: v.string(),
+    suggestion: v.object({
+      direction: v.union(v.literal("in"), v.literal("out")),
+      description: v.string(),
+      amount: v.object({ currency: v.string(), minorUnits: v.number() }),
+      accountingDate: v.string(),
+      financialAccountProfileId: v.string(),
+      userCategoryIds: v.array(v.string()),
+      primaryUserCategoryId: v.union(v.string(), v.null()),
+    }),
+    changedFields: v.array(v.string()),
+    parserVersion: v.string(),
+    consentVersion: v.string(),
+    actorId: v.string(),
+    confirmedAt: v.number(),
+  })
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_entry", ["journalEntryId"]),
 });

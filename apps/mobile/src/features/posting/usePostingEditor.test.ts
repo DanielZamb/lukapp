@@ -460,5 +460,5 @@ test("opening a posting row chosen from Drafts asks the transport for that row",
   await act(async () => {
     root = create(createElement(Harness));
   });
-  expect(api.load).toHaveBeenCalledWith("row-b");
+  expect(api.load).toHaveBeenCalledWith("row-b", true);
 });

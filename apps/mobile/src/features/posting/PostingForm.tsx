@@ -53,6 +53,7 @@ export type PostingFormProps = {
   onDone: () => void;
   canKeepDraft?: boolean;
   onKeepDraft?: () => void;
+  lockEntryType?: boolean;
 };
 
 export function PostingForm(props: PostingFormProps) {
@@ -126,10 +127,16 @@ export function PostingForm(props: PostingFormProps) {
             accessibilityRole="radio"
             accessibilityState={{
               checked: (props.entryType ?? "normal") === value,
-              disabled: !props.editable,
+              disabled: !props.editable || props.lockEntryType === true,
             }}
-            disabled={!props.editable || !props.onEntryType}
-            onPress={() => props.onEntryType?.(value)}
+            disabled={
+              !props.editable || !props.onEntryType || props.lockEntryType === true
+            }
+            onPress={
+              props.lockEntryType === true
+                ? undefined
+                : () => props.onEntryType?.(value)
+            }
             style={[
               styles.chip,
               (props.entryType ?? "normal") === value && {

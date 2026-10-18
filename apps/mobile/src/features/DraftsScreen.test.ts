@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { DraftsScreen } from "./DraftsScreen";
 import type { DraftListItem } from "./localEntryDrafts";
+import type { IntakeCandidate } from "./intake/candidates";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
@@ -37,7 +38,7 @@ function text() {
 }
 
 const expiresAt = Date.UTC(2026, 9, 17, 12);
-const items: DraftListItem[] = [
+const drafts: DraftListItem[] = [
   {
     id: "open-1",
     status: "open",
@@ -55,75 +56,155 @@ const items: DraftListItem[] = [
     workspaceId: "workspace",
   },
 ];
+const candidate: IntakeCandidate = {
+  id: "candidate-groceries",
+  createdAt: expiresAt,
+  expiresAt: expiresAt + 2 * 24 * 60 * 60 * 1000,
+  workspaceId: "workspace",
+  currency: "COP",
+  suggestion: {
+    direction: "out",
+    description: "Groceries",
+    amountMinorUnits: 126400,
+    accountingDate: "2026-10-17",
+    financialAccountProfileId: "daily",
+    userCategoryIds: ["food"],
+    primaryUserCategoryId: null,
+  },
+  parserVersion: "parser@1",
+  consentVersion: "consent@1",
+};
 
-test("empty Drafts copy stays available and resume opens a row", async () => {
-  const onResume = vi.fn();
-  const onBack = vi.fn();
+function render(
+  props: Partial<React.ComponentProps<typeof DraftsScreen>> = {},
+) {
+  const defaults = {
+    drafts: [],
+    now: [] as IntakeCandidate[],
+    wait: [] as IntakeCandidate[],
+    ready: [] as IntakeCandidate[],
+    readyTotal: 0,
+    currency: "COP" as const,
+    segment: "now" as const,
+    readyToShow: true,
+    error: "",
+    confirming: false,
+    completeLabel: "Complete October",
+    onSegment: vi.fn(),
+    onBack: vi.fn(),
+    onResumeDraft: vi.fn(),
+    onOpenCandidate: vi.fn(),
+    onConfirmReady: vi.fn(),
+    onCompleteMonth: vi.fn(),
+  };
+  return { ...defaults, ...props };
+}
+
+test("empty Drafts copy stays available and Complete October stays a footer", async () => {
   const onCompleteMonth = vi.fn();
   await act(async () => {
     root = create(
-      createElement(DraftsScreen, {
-        items: [],
-        ready: false,
-        error: "",
-        completeLabel: "Complete October",
-        onBack,
-        onResume,
-        onCompleteMonth,
-      }),
+      createElement(DraftsScreen, render({ readyToShow: false, onCompleteMonth })),
     );
   });
   expect(root?.root.findAllByType(ActivityIndicator)).toHaveLength(1);
-  expect(text()).not.toContain("No Drafts to review");
   await act(async () => {
-    root?.update(
-      createElement(DraftsScreen, {
-        items: [],
-        ready: true,
-        error: "",
-        completeLabel: "Complete October",
-        onBack,
-        onResume,
-        onCompleteMonth,
-      }),
-    );
+    root?.update(createElement(DraftsScreen, render({ onCompleteMonth })));
   });
   expect(text()).toContain("No Drafts to review");
   expect(text()).toContain("The Drafts destination remains available.");
   expect(text()).toContain("Complete October");
-  const expires = new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
-    new Date(expiresAt),
-  );
+  expect(text()).toContain("Needs you now");
+  expect(text()).toContain("Can wait");
+  const footer = root?.root
+    .findAllByType("button")
+    .find((node) => node.props.accessibilityLabel === "Complete October");
+  await act(async () => footer?.props.onPress());
+  expect(onCompleteMonth).toHaveBeenCalledOnce();
+});
+
+test("a Candidate row opens the shared form and Confirm all Ready posts the ready set", async () => {
+  const onOpenCandidate = vi.fn();
+  const onConfirmReady = vi.fn();
+  const onResumeDraft = vi.fn();
+  await act(async () => {
+    root = create(
+      createElement(
+        DraftsScreen,
+        render({
+          drafts,
+          now: [candidate],
+          wait: [],
+          ready: [candidate],
+          readyTotal: 126400,
+          onOpenCandidate,
+          onConfirmReady,
+          onResumeDraft,
+        }),
+      ),
+    );
+  });
+  expect(text()).toContain("Groceries");
+  expect(text()).toContain("Confirm all Ready");
+  expect(text()).toContain("Needs you now · 2");
+  const groceries = root?.root
+    .findAllByType("button")
+    .find((node) =>
+      node.findAllByType("text").some((child) => child.children.includes("Groceries")),
+    );
+  await act(async () => groceries?.props.onPress());
+  expect(onOpenCandidate).toHaveBeenCalledWith("candidate-groceries");
+  const confirm = root?.root
+    .findAllByType("button")
+    .find((node) => node.props.accessibilityLabel === "Confirm all Ready");
+  await act(async () => confirm?.props.onPress());
+  expect(onConfirmReady).toHaveBeenCalledOnce();
   await act(async () => {
     root?.update(
-      createElement(DraftsScreen, {
-        items,
-        ready: true,
-        error: "",
-        completeLabel: "Complete October",
-        onBack,
-        onResume,
-        onCompleteMonth,
-      }),
+      createElement(
+        DraftsScreen,
+        render({
+          drafts,
+          now: [candidate],
+          segment: "wait",
+          onResumeDraft,
+        }),
+      ),
     );
   });
   expect(text()).toContain("Incomplete draft");
-  expect(text()).toContain("Food");
-  expect(text()).toContain(`Retry posting · Expires ${expires}`);
-  const resumeRow = root?.root
-    .findAllByType("button")
-    .filter(
-      (node) =>
-        node.props.accessibilityLabel !== "Back" &&
-        node.props.accessibilityLabel !== "Complete October",
-    )[1];
-  await act(async () => resumeRow?.props.onPress());
-  expect(onResume).toHaveBeenCalledWith("post-1");
+});
+
+test("a foreign-currency Candidate shows why it is not Ready", async () => {
   await act(async () => {
-    root?.root
-      .findAllByType("button")
-      .find((node) => node.props.accessibilityLabel === "Complete October")
-      ?.props.onPress();
+    root = create(
+      createElement(
+        DraftsScreen,
+        render({
+          now: [{ ...candidate, currency: "USD" }],
+          currency: "COP",
+        }),
+      ),
+    );
   });
-  expect(onCompleteMonth).toHaveBeenCalledOnce();
+  expect(text()).toContain("Uses USD. This workspace uses COP.");
+  expect(text()).toContain("0 ready to add");
+});
+
+test("Drafts still render when Candidates fail to load", async () => {
+  await act(async () => {
+    root = create(
+      createElement(
+        DraftsScreen,
+        render({
+          drafts,
+          readyToShow: true,
+          error: "Could not load Candidates on this device.",
+        }),
+      ),
+    );
+  });
+  expect(root?.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+  expect(text()).toContain("Could not load Candidates on this device.");
+  expect(text()).toContain("Food");
 });

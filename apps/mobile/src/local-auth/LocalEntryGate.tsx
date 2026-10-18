@@ -13,7 +13,7 @@ import { ActivityIndicator, AppState, Text, View } from "react-native";
 import { LocalInstallation } from "./installation";
 import { DeviceAccessFailure, requiresLocalWipe } from "./accessFailure";
 import { LocalInput } from "./localInput";
-import { clearPendingExpense } from "../features/localEntryDrafts";
+import { clearLocalInput } from "../features/clearLocalInput";
 import { LocalEntryInteraction } from "./interaction";
 import { EntryController } from "./entryController";
 import {
@@ -53,7 +53,7 @@ export function LocalEntryGate({
         hide: hideFinancialScreen,
         reveal: revealFinancialScreen,
         cancelPrompt: cancelBiometricPrompt,
-        clearInput: clearPendingExpense,
+        clearInput: clearLocalInput,
         clearEnrollment: clearBiometricEnrollment,
       }),
   );

@@ -24,7 +24,7 @@ export function usePostingTransport(subject: string): PostingTransport {
   const setup = useAction(api.accounting.setupFinancialAccountProfile);
   return useMemo(
     () => ({
-      load: (draftId?: string) =>
+      load: (draftId?: string, resume = true) =>
         mutateLocalEntryDocument<LoadResult>(
           lease,
           subject,
@@ -32,6 +32,17 @@ export function usePostingTransport(subject: string): PostingTransport {
             const postings = document.drafts.filter(
               (draft) => draft.status === "posting",
             );
+            if (resume === false) {
+              postingId.current = undefined;
+              return {
+                document,
+                write: dirty,
+                result:
+                  postings.length === 0
+                    ? { kind: "none" }
+                    : { kind: "blocked" },
+              };
+            }
             const chosen = postings.find((draft) => draft.id === draftId);
             let result: LoadResult;
             if (chosen) {
