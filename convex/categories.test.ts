@@ -457,3 +457,21 @@ test("advanced override keeps the category but rejects an account from another r
     }),
   ).rejects.toMatchObject({ data: { code: "cash_expense_account_invalid" } });
 });
+
+test("custom category colors survive creation, restyling and category reads", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const result = await t.action(api.accounting.createUserCategory, {
+    workspaceId: workspace.id,
+    selection: { kind: "custom", name: "Weekend", answer: "spend", style: { emoji: "🎮", tone: "primary", color: "h270" } },
+  });
+  if (result.kind !== "category") throw new Error("Expected category");
+  expect((await t.query(api.accounting.listUserCategories, { workspaceId: workspace.id }))[0].style)
+    .toEqual({ emoji: "🎮", tone: "primary", color: "h270" });
+  await t.action(api.accounting.restyleUserCategory, {
+    workspaceId: workspace.id, categoryId: result.category.id,
+    style: { emoji: "👩🏽‍💻", tone: "primary", color: "olive" },
+  });
+  expect((await t.query(api.accounting.listUserCategories, { workspaceId: workspace.id }))[0].style)
+    .toEqual({ emoji: "👩🏽‍💻", tone: "primary", color: "olive" });
+});
