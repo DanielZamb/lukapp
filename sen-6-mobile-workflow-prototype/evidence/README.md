@@ -6,6 +6,9 @@ principles.
 
 ## SEN-7 — Notification Intake (Variant D)
 
+These shots were taken when D lived on `/notification-intake/D`. D now opens
+from the home Drafts tile. Recapture from `/` if you need fresh evidence.
+
 Captured 2026-08-20 at 390×844 (web build, iPhone-scale viewport).
 
 | File | Screen |

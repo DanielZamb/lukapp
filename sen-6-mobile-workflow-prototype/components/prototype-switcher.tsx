@@ -1,102 +1,119 @@
-import { useRouter } from "expo-router"
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native"
-import Ionicons from "@expo/vector-icons/Ionicons"
+// Floating evaluation bar for throwaway UI variants. Not part of the design.
 
-const variants = ["A", "B", "C", "D", "E"] as const;
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useRouter } from "expo-router";
+import { useEffect } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
-export type PrototypeVariant = (typeof variants)[number];
-const names: Record<PrototypeVariant, string> = {
-  A: "Action-first",
-  B: "Balance-first",
-  C: "Plan-first",
-  D: "Attention-first",
-  E: "Essential-first",
-}
-
-export function normalizePrototypeVariant(
-  value?: string,
-): PrototypeVariant {
-  return variants.find((candidate) => candidate === value) ?? "E";
-}
-
-export function PrototypeSwitcher({ current }: { current: PrototypeVariant; }) {
+export function PrototypeSwitcher<T extends string>({
+  variants,
+  names,
+  current,
+  param = "variant",
+}: {
+  variants: readonly T[];
+  names: Record<T, string>;
+  current: T;
+  param?: string;
+}) {
   const router = useRouter();
-  const currentIndex = variants.indexOf(current);
+  const index = Math.max(0, variants.indexOf(current));
 
-  function move(direction: number) {
-    const nextIndex = (currentIndex + direction + variants.length) % variants.length;
-    router.setParams({ variant: variants[nextIndex] });
+  function go(next: T) {
+    router.setParams({ [param]: next });
   }
 
-  return (
-    <View style={styles.switcher}>
-      <Pressable
-        style={({ pressed }) => [styles.arrowButton, pressed && styles.arrowButtonPressed]}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel="Previous Prototype variant"
-        onPress={() => move(-1)}
-      >
-        <Ionicons name="chevron-back" size={30} color="#ffffff" />
-      </Pressable>
-      <Text style={styles.switcherText}>
-        PROTOTYPE: {current} - { names[current] }
-      </Text>
-      <Pressable
-        style={({ pressed }) => [styles.arrowButton, pressed && styles.arrowButtonPressed]}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel="Next Prototype variant"
-        onPress={() => move(1)}
-      >
-        <Ionicons name="chevron-forward" size={30} color="#ffffff" />
+  function step(delta: number) {
+    const next = variants[(index + delta + variants.length) % variants.length];
+    if (next) {
+      go(next);
+    }
+  }
 
-      </Pressable>
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        step(-1);
+      }
+      if (event.key === "ArrowRight") {
+        step(1);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  return (
+    <View style={styles.wrap} pointerEvents="box-none">
+      <View style={styles.bar}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Previous variant"
+          onPress={() => step(-1)}
+          style={styles.arrow}
+        >
+          <Ionicons name="chevron-back" size={18} color="#f5f3ff" />
+        </Pressable>
+        <Text style={styles.label}>
+          {current} — {names[current]}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Next variant"
+          onPress={() => step(1)}
+          style={styles.arrow}
+        >
+          <Ionicons name="chevron-forward" size={18} color="#f5f3ff" />
+        </Pressable>
+      </View>
     </View>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
-  switcher: {
+  wrap: {
     position: "absolute",
-    bottom: Platform.OS === "web" ? 16 : 56,
-    left: 24,
-    right: 24,
-    flexDirection: "row",
-    justifyContent: "space-between",
+    left: 0,
+    right: 0,
+    bottom: 18,
     alignItems: "center",
-    padding: 8,
-    backgroundColor: "#1c1c1e",
+  },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 999,
-    elevation: 6,
-    shadowColor: "#000000",
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    zIndex: 100,
+    backgroundColor: "#111113",
+    shadowColor: "#000",
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
-  switcherText: {
-    flex: 1,
-    color: "#ffffff",
-    fontSize: 12,
-    textAlign: "center",
-  },
-  arrowButton: {
-    width: 44,
-    height: 44,
+  arrow: {
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 22,
-    backgroundColor: "#343438",
   },
-  arrowButtonPressed: {
-    backgroundColor: "#52525b",
-    transform: [{ scale: 0.96 }],
+  label: {
+    minWidth: 168,
+    color: "#f5f3ff",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
   },
-
-
-
 });

@@ -73,23 +73,45 @@ end on a calm confirmation surface that says what changed and what happens
 next. This applies the [Peak-End Rule](https://lawsofux.com/peak-end-rule/)
 without celebratory clutter.
 
+## 8. Walk the real surfaces when more than one is involved
+
+If the thing under test touches posting, a plan, and an edit, do not build a
+lab page for each rule. Name the flow. Walk the screens a person would open,
+in order, and return to the view that should change.
+
+Ask, before drawing a new screen:
+
+1. Does this touch more than one surface?
+2. If yes, what is the walk?
+3. How does a reviewer step that walk without a narrator?
+
+A layout switcher compares one surface. A flow starts from that surface and
+opens the next job as a sheet or a page, then comes back.
+
 ## Navigation decision
 
 Variant E, **Essential-first**, is the selected home model:
 
-- The primary tile is **Drafts** while review work remains, then becomes
+- The primary tile is **Drafts** while Candidates remain, then becomes
   **Complete month** when the queue reaches zero.
+- Drafts opens Variant D, **Priority, simplified**. There is no intake router
+  and no A–C comparison.
 - **Alerts** is the attention queue.
-- **Plans** contains Budgets and Savings Recovery.
+- **Plans** contains two destinations: August budget and Savings Recovery.
+  Recovery is not a budget row.
 - **Overview** contains balances, activity, and Financial Account Profiles.
-- The user icon opens the user/workspace page, where appearance settings and
-  first-time setup preview live.
+- Launch opens level 0 first-time setup. The user icon later opens the
+  user/workspace page, where appearance settings and a way to run setup again
+  live. The level 0 home is Drafts, the month story, and the transaction list.
 
 ## Notification Intake decision
 
-Variant D, **Priority, simplified**, is the selected review model:
+Variant D, **Priority, simplified**, is the Drafts inbox:
 
 - Priority Candidates sit above the ones that can wait.
 - Ready Candidates can be confirmed in one action.
 - Candidate lists use the same grey grouped cards as the rest of the prototype.
-- The reconciliation warning is a centered control, not a banner.
+- The reconciliation warning is a control, not a banner. It sits on the
+  line it qualifies—the Ready count on Candidates, the source line on a
+  Candidate—rather than floating between the header and the hero.
+- Remaining Candidates warn on Month Close. They do not block it.

@@ -1,12 +1,11 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,17 +19,76 @@ import {
   type Theme,
   type ThemeMode,
 } from "../theme/tokens";
+import {
+  DraftsInbox,
+  initialCandidates,
+  type Candidate,
+} from "./drafts-inbox";
+import {
+  FirstTimeSetup,
+  currencySymbol,
+  paletteColor,
+  starterLooks,
+  type CategoryLook,
+  type Currency,
+  type SetupDraft,
+  type WorkspaceKind,
+} from "./first-time-setup";
+import {
+  BudgetComposer,
+  CategoryCoin,
+  CategoryLookPage,
+  DoorAskSheet,
+  LevelUnlocked,
+  PlacesLookPage,
+  compactAmount,
+  lookFor,
+  type BudgetMap,
+  type DoorAsk,
+  type DoorVariant,
+} from "./level-1-door";
+import { BudgetsView } from "./budgets-view";
+import { CapitalFlow } from "./capital-flow";
+import {
+  AddPlaceSheet,
+  ChooseActionSheet,
+  EmojiSheet,
+  kindEmoji,
+} from "./home-sheets";
+import { BatchNativeStack } from "./batch-native-stack";
+import {
+  canPostDraft,
+  candidateFromDraft,
+  CreateTxPrototype,
+  draftFromCandidate,
+  emptyTxDraft,
+  formatOccurred,
+  parseCopAmount,
+  toDateKey,
+  type ComposeMode,
+  type QueuedTx,
+  type TxDraft,
+  type TxPlace,
+} from "./create-tx-prototype";
+import { TxHistory } from "./tx-history";
+import {
+  generatedHistory,
+  inInMonth,
+  spentInMonth,
+  type Activity,
+  type TxKind,
+} from "./tx-history-data";
 
 type Screen =
   | "home"
   | "user"
-  | "onboarding-kind"
-  | "onboarding-currency"
-  | "account-setup"
-  | "onboarding-complete"
+  | "onboarding"
+  | "budget-setup"
+  | "category-look"
+  | "pool-look"
+  | "budgets"
+  | "level-unlocked"
   | "drafts"
-  | "draft-review"
-  | "draft-posted"
   | "alerts"
   | "plans"
   | "recovery"
@@ -40,13 +98,11 @@ type Screen =
   | "recovery-plan-draft"
   | "recovery-plan-active"
   | "overview"
+  | "tx-history"
+  | "create-tx"
   | "account-detail"
   | "month-close"
   | "month-complete";
-
-type SetupMode = "onboarding" | "add-account";
-type WorkspaceKind = "Personal" | "Household";
-type Currency = "COP" | "USD";
 
 type Account = {
   id: string;
@@ -54,110 +110,30 @@ type Account = {
   kind: string;
   balance: number;
   currency: Currency;
+  emoji: string;
 };
 
-type Draft = {
-  id: string;
-  description: string;
-  amount: number;
-  accountId: string;
-  category: string;
-  date: string;
+const level0Account: Account = {
+  id: "pool",
+  name: "My money",
+  kind: "Checking",
+  balance: 8500000,
+  currency: "COP",
+  emoji: "💰",
 };
 
-type Activity = {
-  id: string;
-  description: string;
-  amount: number;
-  accountId: string;
-  direction: "in" | "out";
-  date: string;
-};
-
-const initialAccounts: Account[] = [
-  {
-    id: "daily",
-    name: "Daily account",
-    kind: "Checking",
-    balance: 2450000,
-    currency: "COP",
-  },
-  {
-    id: "savings",
-    name: "Savings",
-    kind: "Savings",
-    balance: 8920000,
-    currency: "COP",
-  },
-  {
-    id: "wallet",
-    name: "Digital wallet",
-    kind: "Wallet",
-    balance: 340000,
-    currency: "COP",
-  },
-];
-
-const initialDrafts: Draft[] = [
-  {
-    id: "draft-groceries",
-    description: "Groceries",
-    amount: 126400,
-    accountId: "daily",
-    category: "Food",
-    date: "August 19",
-  },
-  {
-    id: "draft-electricity",
-    description: "Electricity",
-    amount: 184700,
-    accountId: "daily",
-    category: "Home",
-    date: "August 18",
-  },
-  {
-    id: "draft-transport",
-    description: "Transport",
-    amount: 38500,
-    accountId: "wallet",
-    category: "Transport",
-    date: "August 18",
-  },
-];
-
-const initialActivity: Activity[] = [
-  {
-    id: "activity-salary",
-    description: "Salary deposit",
-    amount: 4200000,
-    accountId: "daily",
-    direction: "in",
-    date: "August 15",
-  },
-  {
-    id: "activity-saving",
-    description: "Transfer to savings",
-    amount: 500000,
-    accountId: "daily",
-    direction: "out",
-    date: "August 14",
-  },
-  {
-    id: "activity-interest",
-    description: "Interest earned",
-    amount: 48500,
-    accountId: "savings",
-    direction: "in",
-    date: "August 12",
-  },
-  {
-    id: "activity-bus",
-    description: "Bus fare",
-    amount: 7200,
-    accountId: "wallet",
-    direction: "out",
-    date: "August 11",
-  },
+// All ten starters so the bar chart can be judged crowded.
+const level0Categories = [
+  "Food",
+  "Transport",
+  "Dining",
+  "Home",
+  "Health",
+  "Fun",
+  "Shopping",
+  "Bills",
+  "Family",
+  "Other",
 ];
 
 const recoveryPrincipal = 3000000;
@@ -324,7 +300,7 @@ function ListRow({
   theme: Theme;
   onPress?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
-  tone?: "positive" | "warning";
+  tone?: "positive" | "warning" | "in" | "out";
 }) {
   const content = (
     <>
@@ -339,10 +315,13 @@ function ListRow({
       </View>
       {value && (
         <Text
+          numberOfLines={1}
           style={[
             styles.rowValue,
             tone === "positive" && { color: theme.positive },
             tone === "warning" && { color: theme.warning },
+            tone === "in" && { color: theme.primary },
+            tone === "out" && { color: theme.foreground },
           ]}
         >
           {value}
@@ -396,6 +375,7 @@ function ActionTile({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       onPressIn={lightTap}
       onPress={onPress}
       style={({ pressed }) => [
@@ -446,46 +426,87 @@ function ProgressBar({
   );
 }
 
-export function VariantEWorkflow() {
+export function VariantEWorkflow({
+  doorVariant,
+  openPlans = false,
+}: {
+  doorVariant: DoorVariant;
+  openPlans?: boolean;
+}) {
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const theme = themes[themeMode];
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [stack, setStack] = useState<Screen[]>(["home"]);
+  const [stack, setStack] = useState<Screen[]>(
+    openPlans ? ["home", "plans", "budgets"] : ["home"],
+  );
   const screen = stack[stack.length - 1] ?? "home";
+  const [setupSession, setSetupSession] = useState(0);
 
   const [workspaceKind, setWorkspaceKind] =
     useState<WorkspaceKind>("Personal");
   const [workspaceCurrency, setWorkspaceCurrency] = useState<Currency>("COP");
-  const [setupKind, setSetupKind] = useState<WorkspaceKind>("Personal");
-  const [setupCurrency, setSetupCurrency] = useState<Currency>("COP");
-  const [setupMode, setSetupMode] = useState<SetupMode>("onboarding");
-  const [accountName, setAccountName] = useState("Daily account");
-  const [accountKind, setAccountKind] = useState("Checking");
-  const [openingBalance, setOpeningBalance] = useState("2450000");
+  const [accountName, setAccountName] = useState("Savings");
+  const [accountKind, setAccountKind] = useState("Savings");
+  const [accountEmoji, setAccountEmoji] = useState("🏦");
+  const [openingBalance, setOpeningBalance] = useState("2000000");
+  const [historyPlaceId, setHistoryPlaceId] = useState<string | null>(null);
+  const [homeSheet, setHomeSheet] = useState<"choose" | "place" | "emoji" | null>(
+    null,
+  );
+  const [addPlaceFor, setAddPlaceFor] = useState<"place" | "destination" | null>(
+    null,
+  );
+  const [emojiFrom, setEmojiFrom] = useState<"place" | "detail">("place");
+  const [batchQueue, setBatchQueue] = useState<QueuedTx[]>([]);
+  const [composeMode, setComposeMode] = useState<ComposeMode>("single");
+  const [editingCandidateId, setEditingCandidateId] = useState<string | null>(
+    null,
+  );
+  const [composeSession, setComposeSession] = useState(0);
+  const [txDraft, setTxDraft] = useState<TxDraft>({
+    amount: "",
+    kind: "normal",
+    category: "Food",
+    placeId: "pool",
+    toPlaceId: "",
+    description: "",
+    occurred: new Date(2026, 7, 23),
+  });
 
-  const [accounts, setAccounts] = useState(initialAccounts);
-  const [selectedAccountId, setSelectedAccountId] = useState("daily");
-  const [drafts, setDrafts] = useState(initialDrafts);
-  const [selectedDraftId, setSelectedDraftId] = useState(initialDrafts[0].id);
-  const [lastPosted, setLastPosted] = useState<Draft | null>(null);
-  const [activity, setActivity] = useState(initialActivity);
-  const [paceOpen, setPaceOpen] = useState(false);
+  const [accounts, setAccounts] = useState<Account[]>([level0Account]);
+  const [selectedAccountId, setSelectedAccountId] = useState("pool");
+  const [candidates, setCandidates] = useState(initialCandidates);
+  const [activity, setActivity] = useState(generatedHistory);
+  const [userCategories, setUserCategories] = useState(level0Categories);
+  const [categoryLooks, setCategoryLooks] = useState<Record<string, CategoryLook>>(
+    { ...starterLooks },
+  );
+  const [notificationsAllowed, setNotificationsAllowed] = useState(false);
+  const [wantsBudgets, setWantsBudgets] = useState(false);
+  const [experienceLevel, setExperienceLevel] = useState<0 | 1>(
+    openPlans ? 1 : 0,
+  );
+  const [budgets, setBudgets] = useState<BudgetMap>({});
+  const [doorAsk, setDoorAsk] = useState<DoorAsk | null>(null);
+  const [doorCategory, setDoorCategory] = useState("Food");
+  const [unlockDoor, setUnlockDoor] = useState<"budget" | "account">("budget");
+  const [unlockLimit, setUnlockLimit] = useState(0);
+  const [overviewMode, setOverviewMode] = useState<"list" | "bars">("list");
+  const [barsAsBudget, setBarsAsBudget] = useState(false);
   const [monthComplete, setMonthComplete] = useState(false);
   const [recoveryContributed, setRecoveryContributed] = useState(1800000);
   const [newPlanActive, setNewPlanActive] = useState(false);
   const [planMonths, setPlanMonths] = useState<4 | 6>(4);
 
-  const selectedDraft =
-    drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0];
   const selectedAccount =
     accounts.find((account) => account.id === selectedAccountId) ?? accounts[0];
-  const spentThisMonth = 2310000;
-  const daysElapsed = 20;
-  const daysInMonth = 31;
-  const projectedSpend = Math.round(
-    (spentThisMonth / daysElapsed) * daysInMonth,
-  );
+  const spentThisMonth = spentInMonth(activity);
+  const moneyInThisMonth = inInMonth(activity);
   const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+
+  function categorySpent(category: string) {
+    return spentInMonth(activity, category);
+  }
 
   function money(amount: number, currency = workspaceCurrency) {
     return `${currency} ${amount.toLocaleString("es-CO")}`;
@@ -509,82 +530,427 @@ export function VariantEWorkflow() {
     setStack(["home"]);
   }
 
-  function openDraft(draft: Draft) {
-    setSelectedDraftId(draft.id);
-    go("draft-review");
+  function accountIdFromName(name: string) {
+    return accounts.find((account) => account.name === name)?.id ?? accounts[0]?.id ?? "pool";
   }
 
-  function postSelectedDraft() {
-    if (!selectedDraft) return;
-    setLastPosted(selectedDraft);
-    setDrafts((current) =>
-      current.filter((draft) => draft.id !== selectedDraft.id),
-    );
+  function postCandidates(posted: Candidate[]) {
     setActivity((current) => [
-      {
-        id: `posted-${selectedDraft.id}`,
-        description: selectedDraft.description,
-        amount: selectedDraft.amount,
-        accountId: selectedDraft.accountId,
-        direction: "out",
-        date: "Today",
-      },
+      ...posted.map((candidate) => ({
+        id: `posted-${candidate.id}`,
+        description: candidate.description,
+        amount: candidate.amount,
+        accountId: accountIdFromName(candidate.account),
+        category: candidate.category,
+        direction: "out" as const,
+        date: "August 23",
+        dateKey: "2026-08-23",
+      })),
       ...current,
     ]);
-    replace("draft-posted");
   }
 
-  function reviewNextDraft() {
-    const nextDraft = drafts[0];
-    if (!nextDraft) {
-      setStack(["home", "month-close"]);
-      return;
-    }
-    setSelectedDraftId(nextDraft.id);
-    setStack(["home", "drafts", "draft-review"]);
-  }
+  useEffect(() => {
+    setDoorAsk(null);
+    setStack((current) => {
+      const top = current[current.length - 1];
+      if (
+        top === "budget-setup" ||
+        top === "category-look" ||
+        top === "pool-look" ||
+        top === "level-unlocked"
+      ) {
+        return ["home"];
+      }
+      return current;
+    });
+  }, [doorVariant]);
 
   function startOnboarding() {
-    setSetupMode("onboarding");
-    setSetupKind(workspaceKind);
-    setSetupCurrency(workspaceCurrency);
-    setAccountName("Daily account");
-    setAccountKind("Checking");
-    setOpeningBalance("2450000");
-    setStack(["onboarding-kind"]);
+    setSetupSession((current) => current + 1);
+    setStack(["onboarding"]);
   }
 
   function startAddAccount() {
-    setSetupMode("add-account");
-    setAccountName("New account");
+    setAccountName("Savings");
     setAccountKind("Savings");
-    setOpeningBalance("0");
-    go("account-setup");
+    setAccountEmoji("🏦");
+    setOpeningBalance("2000000");
+    setHomeSheet("place");
+  }
+
+  function startAddPlaceFromTx(field: "place" | "destination") {
+    setAddPlaceFor(field);
+    startAddAccount();
+  }
+
+  function seedPlaces(): Account[] {
+    const extras: Account[] = [
+      {
+        id: "savings",
+        name: "Savings",
+        kind: "Savings",
+        balance: 4200000,
+        currency: workspaceCurrency,
+        emoji: "🏦",
+      },
+      {
+        id: "wallet",
+        name: "Wallet",
+        kind: "Wallet",
+        balance: 180000,
+        currency: workspaceCurrency,
+        emoji: "👛",
+      },
+      {
+        id: "nequi",
+        name: "Nequi",
+        kind: "Checking",
+        balance: 950000,
+        currency: workspaceCurrency,
+        emoji: "💳",
+      },
+    ];
+    const ids = new Set(accounts.map((account) => account.id));
+    const next = [...accounts, ...extras.filter((entry) => !ids.has(entry.id))];
+    setAccounts(next);
+    return next;
+  }
+
+  function placesOf(list: Account[] = accounts): TxPlace[] {
+    return list.map((account) => ({
+      id: account.id,
+      name: account.name,
+      emoji: account.emoji,
+    }));
+  }
+
+  function resetComposer(placeId = selectedAccountId) {
+    setTxDraft({
+      ...emptyTxDraft(placeId),
+      category: userCategories[0] ?? "Food",
+    });
+    setEditingCandidateId(null);
+    setComposeSession((current) => current + 1);
+  }
+
+  function consumePosted(ids: string[]) {
+    const gone = new Set(ids);
+    setCandidates((current) => current.filter((item) => !gone.has(item.id)));
+    setBatchQueue((current) => current.filter((item) => !gone.has(item.id)));
+  }
+
+  function startTxDraft() {
+    seedPlaces();
+    resetComposer();
+    setComposeMode("single");
+    setHomeSheet(null);
+    go("create-tx");
+  }
+
+  function openDraftForPosting(candidate: Candidate) {
+    const nextAccounts = seedPlaces();
+    setTxDraft(draftFromCandidate(candidate, placesOf(nextAccounts)));
+    setEditingCandidateId(candidate.id);
+    setComposeSession((current) => current + 1);
+    setComposeMode("single");
+    setHomeSheet(null);
+    go("create-tx");
+  }
+
+  function switchComposeMode(next: ComposeMode) {
+    if (next === "batch" && composeMode === "single" && canPostDraft(txDraft)) {
+      keepCurrent();
+    }
+    setComposeMode(next);
+  }
+
+  function collectPost(draft: TxDraft): {
+    rows: Activity[];
+    deltas: Record<string, number>;
+  } | null {
+    const signed = parseCopAmount(draft.amount);
+    if (!canPostDraft(draft) || signed === 0) {
+      return null;
+    }
+    const amount = Math.abs(signed);
+    const date = formatOccurred(draft.occurred);
+    const dateKey = toDateKey(draft.occurred);
+    const kind: TxKind = draft.kind;
+    const stamp = `${dateKey}-${draft.description}-${Math.random().toString(36).slice(2, 7)}`;
+
+    if (kind === "transfer") {
+      return {
+        rows: [
+          {
+            id: `manual-out-${stamp}`,
+            description: draft.description.trim(),
+            amount,
+            accountId: draft.placeId,
+            category: draft.category,
+            direction: "out",
+            date,
+            dateKey,
+            kind,
+          },
+          {
+            id: `manual-in-${stamp}`,
+            description: draft.description.trim(),
+            amount,
+            accountId: draft.toPlaceId,
+            category: draft.category,
+            direction: "in",
+            date,
+            dateKey,
+            kind,
+          },
+        ],
+        deltas: {
+          [draft.placeId]: -amount,
+          [draft.toPlaceId]: amount,
+        },
+      };
+    }
+
+    const direction = signed < 0 ? "out" : "in";
+    return {
+      rows: [
+        {
+          id: `manual-${stamp}`,
+          description: draft.description.trim(),
+          amount,
+          accountId: draft.placeId,
+          category: kind === "opening" ? "Opening" : draft.category,
+          direction,
+          date,
+          dateKey,
+          kind,
+        },
+      ],
+      deltas: {
+        [draft.placeId]: direction === "in" ? amount : -amount,
+      },
+    };
+  }
+
+  function commitPosts(drafts: TxDraft[], ids: string[] = []) {
+    const collected = drafts.map((draft) => collectPost(draft));
+    if (collected.some((entry) => entry == null)) {
+      return false;
+    }
+    const rows = collected.flatMap((entry) => entry?.rows ?? []);
+    const deltas: Record<string, number> = {};
+    for (const entry of collected) {
+      if (!entry) {
+        continue;
+      }
+      for (const [id, delta] of Object.entries(entry.deltas)) {
+        deltas[id] = (deltas[id] ?? 0) + delta;
+      }
+    }
+    setActivity((current) => [...rows, ...current]);
+    setAccounts((current) =>
+      current.map((account) =>
+        deltas[account.id] != null
+          ? { ...account, balance: account.balance + (deltas[account.id] ?? 0) }
+          : account,
+      ),
+    );
+    consumePosted(ids);
+    return true;
+  }
+
+  function postTx() {
+    const id = editingCandidateId ?? `live-${Date.now()}`;
+    return commitPosts([txDraft], [id]);
+  }
+
+  function keepCurrent() {
+    if (!canPostDraft(txDraft)) {
+      return false;
+    }
+    const id = editingCandidateId ?? `manual-${Date.now()}`;
+    const places = placesOf();
+    const candidate = candidateFromDraft(txDraft, places, id);
+    setCandidates((current) => {
+      const without = current.filter((item) => item.id !== id);
+      return [candidate, ...without];
+    });
+    setBatchQueue((current) => {
+      const without = current.filter((item) => item.id !== id);
+      return [...without, { id, draft: txDraft }];
+    });
+    resetComposer();
+    return true;
+  }
+
+  function postAllQueued() {
+    const items = [...batchQueue];
+    if (canPostDraft(txDraft)) {
+      const id = editingCandidateId ?? `live-${Date.now()}`;
+      items.push({ id, draft: txDraft });
+    }
+    if (items.length === 0) {
+      return false;
+    }
+    const ok = commitPosts(
+      items.map((item) => item.draft),
+      items.map((item) => item.id),
+    );
+    if (ok) {
+      setBatchQueue([]);
+      resetComposer();
+    }
+    return ok;
+  }
+
+  function openQueued(id: string) {
+    const item = batchQueue.find((entry) => entry.id === id);
+    if (!item) {
+      return;
+    }
+    if (canPostDraft(txDraft) || txDraft.description.trim()) {
+      const currentId = editingCandidateId ?? `live-${Date.now()}`;
+      setBatchQueue((current) => [
+        ...current.filter((entry) => entry.id !== id && entry.id !== currentId),
+        { id: currentId, draft: txDraft },
+      ]);
+    } else {
+      setBatchQueue((current) => current.filter((entry) => entry.id !== id));
+    }
+    setEditingCandidateId(id);
+    setTxDraft(item.draft);
+    setComposeSession((current) => current + 1);
+  }
+
+  function removeQueued(id: string) {
+    setBatchQueue((current) => current.filter((entry) => entry.id !== id));
+  }
+
+  function openPlaceHistory(id: string) {
+    setHistoryPlaceId(id);
+    go("tx-history");
+  }
+
+  function openAllHistory() {
+    setHistoryPlaceId(null);
+    go("tx-history");
+  }
+
+  function openBudgetDoor(category: string) {
+    setDoorCategory(category);
+    setDoorAsk(null);
+    if (doorVariant === "A" && experienceLevel === 0) {
+      setDoorAsk({ kind: "budget", category });
+      return;
+    }
+    if (doorVariant === "C") {
+      go("category-look");
+      return;
+    }
+    go("budget-setup");
+  }
+
+  function openAccountDoor() {
+    setDoorAsk(null);
+    go("pool-look");
+  }
+
+  function acceptDoorAsk() {
+    if (!doorAsk) {
+      return;
+    }
+    if (doorAsk.kind === "budget") {
+      setDoorCategory(doorAsk.category);
+      setDoorAsk(null);
+      go("budget-setup");
+      return;
+    }
+    setDoorAsk(null);
+    startAddAccount();
+  }
+
+  function saveBudget(limit: number) {
+    const wasLocked = experienceLevel === 0;
+    setBudgets((current) => ({ ...current, [doorCategory]: limit }));
+    setUnlockDoor("budget");
+    setUnlockLimit(limit);
+    if (wasLocked) {
+      setExperienceLevel(1);
+      replace("level-unlocked");
+      return;
+    }
+    home();
+  }
+
+  function commitOnboarding(setup: SetupDraft) {
+    const parsedBalance = Number(setup.startingAmount.replace(/[^0-9.-]/g, "")) || 0;
+    const nextAccount: Account = {
+      id: "pool",
+      name: "My money",
+      kind: "Checking",
+      balance: parsedBalance,
+      currency: setup.currency,
+      emoji: "💰",
+    };
+    setWorkspaceKind("Personal");
+    setWorkspaceCurrency(setup.currency);
+    setAccounts([nextAccount]);
+    setSelectedAccountId(nextAccount.id);
+    setUserCategories(setup.categories);
+    setCategoryLooks(setup.categoryLooks);
+    setNotificationsAllowed(setup.notifications === true);
+    setWantsBudgets(setup.wantsBudgets);
+    setExperienceLevel(0);
+    setBudgets({});
+    setDoorAsk(null);
+    setCandidates(initialCandidates);
+    setActivity(generatedHistory);
+    setMonthComplete(false);
+    setRecoveryContributed(1800000);
+    setNewPlanActive(false);
+  }
+
+  function arriveHomeFromSetup() {
+    home();
+    if (wantsBudgets && experienceLevel === 0) {
+      const category = userCategories[0];
+      if (category) {
+        openBudgetDoor(category);
+      }
+    }
   }
 
   function finishAccountSetup() {
     const parsedBalance = Number(openingBalance.replace(/[^0-9.-]/g, "")) || 0;
     const nextAccount: Account = {
-      id: setupMode === "onboarding" ? "daily" : `account-${accounts.length + 1}`,
+      id: `account-${accounts.length + 1}`,
       name: accountName.trim() || "New account",
       kind: accountKind,
       balance: parsedBalance,
-      currency: setupMode === "onboarding" ? setupCurrency : workspaceCurrency,
+      currency: workspaceCurrency,
+      emoji: accountEmoji || kindEmoji[accountKind] || "💳",
     };
-
-    if (setupMode === "onboarding") {
-      setWorkspaceKind(setupKind);
-      setWorkspaceCurrency(setupCurrency);
-      setAccounts([nextAccount]);
-      setDrafts(
-        initialDrafts.map((draft) => ({ ...draft, accountId: "daily" })),
-      );
-      setActivity([]);
-      replace("onboarding-complete");
-    } else {
-      setAccounts((current) => [...current, nextAccount]);
-      setSelectedAccountId(nextAccount.id);
-      replace("account-detail");
+    const wasLocked = experienceLevel === 0;
+    const fromTx = addPlaceFor;
+    setAccounts((current) => [...current, nextAccount]);
+    setSelectedAccountId(nextAccount.id);
+    setUnlockDoor("account");
+    setHomeSheet(null);
+    setAddPlaceFor(null);
+    if (fromTx) {
+      setTxDraft((current) => ({
+        ...current,
+        ...(fromTx === "destination"
+          ? { toPlaceId: nextAccount.id }
+          : { placeId: nextAccount.id }),
+      }));
+      return;
+    }
+    if (wasLocked) {
+      setExperienceLevel(1);
+      replace("level-unlocked");
+      return;
     }
   }
 
@@ -597,7 +963,9 @@ export function VariantEWorkflow() {
         amount: recoveryDue,
         accountId: "daily",
         direction: "out",
-        date: "Today",
+        date: "August 23",
+        category: "Other",
+        dateKey: "2026-08-23",
       },
       {
         id: `recovery-in-${current.length}`,
@@ -605,7 +973,9 @@ export function VariantEWorkflow() {
         amount: recoveryDue,
         accountId: "savings",
         direction: "in",
-        date: "Today",
+        date: "August 23",
+        category: "Income",
+        dateKey: "2026-08-23",
       },
       ...current,
     ]);
@@ -613,17 +983,110 @@ export function VariantEWorkflow() {
   }
 
   function resetPrototype() {
-    setAccounts(initialAccounts);
-    setDrafts(initialDrafts);
-    setActivity(initialActivity);
+    setAccounts([level0Account]);
+    setSelectedAccountId("pool");
+    setCandidates(initialCandidates);
+    setActivity(generatedHistory);
     setMonthComplete(false);
     setRecoveryContributed(1800000);
     setNewPlanActive(false);
-    setPaceOpen(false);
+    setUserCategories(level0Categories);
+    setCategoryLooks({ ...starterLooks });
+    setNotificationsAllowed(false);
+    setWantsBudgets(false);
+    setExperienceLevel(0);
+    setBudgets({});
+    setDoorAsk(null);
+    setOverviewMode("list");
+    setBarsAsBudget(false);
+    setHistoryPlaceId(null);
+    setWorkspaceCurrency("COP");
+    setBatchQueue([]);
+    setEditingCandidateId(null);
+    setComposeMode("single");
     home();
   }
 
-  const shell = (content: React.ReactNode) => (
+  function closeEmojiSheet() {
+    setHomeSheet(emojiFrom === "place" ? "place" : null);
+  }
+
+  function pickEmoji(next: string) {
+    setAccountEmoji(next);
+    if (emojiFrom === "detail") {
+      setAccounts((current) =>
+        current.map((account) =>
+          account.id === selectedAccountId
+            ? { ...account, emoji: next }
+            : account,
+        ),
+      );
+    }
+  }
+
+  const actionSheets = (
+    <>
+      {homeSheet === "choose" && (
+        <ChooseActionSheet
+          theme={theme}
+          onPlace={startAddAccount}
+          onTx={startTxDraft}
+          onDismiss={() =>
+            setHomeSheet((current) => (current === "choose" ? null : current))
+          }
+        />
+      )}
+      {homeSheet === "place" && (
+        <AddPlaceSheet
+          theme={theme}
+          unlocking={experienceLevel === 0}
+          name={accountName}
+          kind={accountKind}
+          emoji={accountEmoji}
+          balance={openingBalance}
+          onName={setAccountName}
+          onKind={(kind) => {
+            setAccountKind(kind);
+            if (accountEmoji === kindEmoji[accountKind]) {
+              setAccountEmoji(kindEmoji[kind] ?? "💳");
+            }
+          }}
+          onOpenEmoji={() => {
+            setEmojiFrom("place");
+            setHomeSheet("emoji");
+          }}
+          onBalance={setOpeningBalance}
+          onSave={finishAccountSetup}
+          onDismiss={() => {
+            setHomeSheet((current) => (current === "place" ? null : current));
+            setAddPlaceFor(null);
+          }}
+        />
+      )}
+      {homeSheet === "emoji" && (
+        <EmojiSheet
+          theme={theme}
+          emoji={
+            emojiFrom === "detail"
+              ? (selectedAccount?.emoji ?? accountEmoji)
+              : accountEmoji
+          }
+          onPick={pickEmoji}
+          onDismiss={closeEmojiSheet}
+        />
+      )}
+    </>
+  );
+
+  // Categories past their limit, worst first. Drives both the header bell and
+  // whether the home screen surfaces an alert at all.
+  const overBudget = Object.entries(budgets)
+    .filter(([name]) => userCategories.includes(name))
+    .map(([name, limit]) => ({ name, over: categorySpent(name) - limit }))
+    .filter((entry) => entry.over > 0)
+    .sort((a, b) => b.over - a.over);
+
+  const shell = (content: React.ReactNode, overlay?: React.ReactNode) => (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScrollView
         contentContainerStyle={styles.page}
@@ -631,117 +1094,174 @@ export function VariantEWorkflow() {
       >
         {content}
       </ScrollView>
+      {overlay}
+      {actionSheets}
     </SafeAreaView>
   );
 
   if (screen === "home") {
-    const primaryLabel =
-      drafts.length > 0
-        ? "Drafts"
-        : monthComplete
-          ? "August complete"
-          : "Complete month";
-    const primaryDetail =
-      drafts.length > 0
-        ? `${drafts.length} to review`
-        : monthComplete
-          ? "Locked"
-          : "Ready now";
-    const primaryIcon =
-      drafts.length > 0
-        ? "document-text-outline"
-        : monthComplete
-          ? "checkmark-circle-outline"
-          : "calendar-outline";
-
     return shell(
       <View style={styles.home}>
         <View style={styles.homeHeader}>
-          <Text style={styles.eyebrow}>SPENT IN AUGUST</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open user and workspace"
-            onPressIn={lightTap}
-            onPress={() => go("user")}
-            style={({ pressed }) => [
-              styles.iconButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons name="person-outline" size={22} color={theme.foreground} />
-          </Pressable>
-        </View>
-
-        <View style={styles.spendingHero}>
-          <Text style={styles.heroAmount}>{money(spentThisMonth)}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Show month pace details"
-            accessibilityState={{ expanded: paceOpen }}
-            onPressIn={lightTap}
-            onPress={() => setPaceOpen((current) => !current)}
-            style={({ pressed }) => [
-              styles.progressDisclosure,
-              pressed && styles.pressed,
-            ]}
-          >
-            <ProgressBar progress={daysElapsed / daysInMonth} styles={styles} />
-            {paceOpen && (
-              <View style={styles.legendRow}>
-                <Text style={styles.muted}>Day {daysElapsed} of {daysInMonth}</Text>
-                <Text style={styles.muted}>On pace for {money(projectedSpend)}</Text>
+          <Text style={styles.eyebrow}>THIS MONTH</Text>
+          <View style={styles.headerActions}>
+            {experienceLevel >= 1 && (
+              <View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    overBudget.length > 0
+                      ? `Alerts, ${overBudget.length} over the limit`
+                      : "Alerts, nothing needs attention"
+                  }
+                  onPressIn={lightTap}
+                  onPress={() => go("alerts")}
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Ionicons
+                    name="notifications-outline"
+                    size={22}
+                    color={theme.foreground}
+                  />
+                </Pressable>
+                {overBudget.length > 0 && (
+                  <View style={styles.bellBadge} pointerEvents="none">
+                    <Text style={styles.bellBadgeText}>
+                      {overBudget.length}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open user and workspace"
+              onPressIn={lightTap}
+              onPress={() => go("user")}
+              style={({ pressed }) => [
+                styles.iconButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="person-outline"
+                size={22}
+                color={theme.foreground}
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.homeHero}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="See places"
+            onPressIn={lightTap}
+            onPress={openAccountDoor}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Text style={styles.muted}>What you have now</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="What do you want to do?"
+            onPressIn={lightTap}
+            onPress={() => setHomeSheet("choose")}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Text style={styles.heroAmount}>{money(totalBalance)}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="See places"
+            onPressIn={lightTap}
+            onPress={openAccountDoor}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Text style={styles.muted}>
+              {accounts.length === 1
+                ? "One pool · See this place"
+                : `Across ${accounts.length} places`}
+            </Text>
           </Pressable>
         </View>
 
-        <View style={styles.tileGrid}>
-          <View style={styles.tileRow}>
-            <ActionTile
-              label={primaryLabel}
-              detail={primaryDetail}
-              badge={drafts.length || undefined}
-              icon={primaryIcon}
-              primary
-              styles={styles}
-              theme={theme}
-              onPress={() =>
-                drafts.length > 0
-                  ? go("drafts")
-                  : monthComplete
-                    ? go("month-complete")
-                    : go("month-close")
-              }
-            />
-            <ActionTile
-              label="Alerts"
-              detail="3 updates"
-              icon="notifications-outline"
-              styles={styles}
-              theme={theme}
-              onPress={() => go("alerts")}
-            />
-          </View>
-          <View style={styles.tileRow}>
-            <ActionTile
-              label="Plans"
-              detail="Budget & recovery"
-              icon="layers-outline"
-              styles={styles}
-              theme={theme}
-              onPress={() => go("plans")}
-            />
-            <ActionTile
-              label="Overview"
-              detail="Accounts & activity"
-              icon="pie-chart-outline"
-              styles={styles}
-              theme={theme}
-              onPress={() => go("overview")}
-            />
-          </View>
-        </View>
+        {overBudget.length > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            onPressIn={lightTap}
+            onPress={() => go("alerts")}
+            style={({ pressed }) => [styles.alertRow, pressed && styles.pressed]}
+          >
+            <View style={styles.alertIcon}>
+              <Ionicons name="alert-circle" size={20} color={theme.background} />
+            </View>
+            <View style={styles.rowCopy}>
+              <Text style={styles.alertTitle}>
+                {overBudget.length === 1
+                  ? `${overBudget[0]?.name} is over its limit`
+                  : `${overBudget.length} categories are over their limits`}
+              </Text>
+              <Text style={styles.alertDetail}>
+                {money(overBudget.reduce((sum, item) => sum + item.over, 0))}{" "}
+                {overBudget.length === 1 ? "over" : "over in total"}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.warning} />
+          </Pressable>
+        )}
+
+        <ActionTile
+          label="Drafts"
+          detail={
+            candidates.length > 0
+              ? `${candidates.length} to review`
+              : "Nothing waiting"
+          }
+          badge={candidates.length || undefined}
+          icon="document-text-outline"
+          primary
+          styles={styles}
+          theme={theme}
+          onPress={() => go("drafts")}
+        />
+
+        <ActionTile
+          label="Overview"
+          detail="This month, by category"
+          icon="pie-chart-outline"
+          styles={styles}
+          theme={theme}
+          onPress={() => go("overview")}
+        />
+
+        {experienceLevel >= 1 && (
+          <ListRow
+            title="Plans"
+            detail="August budget and recovery"
+            icon="layers-outline"
+            onPress={() => go("plans")}
+            styles={styles}
+            theme={theme}
+          />
+        )}
       </View>,
+      doorAsk && (
+        <DoorAskSheet
+          ask={doorAsk}
+          look={lookFor(
+            doorAsk.kind === "budget" ? doorAsk.category : "Other",
+            categoryLooks,
+          )}
+          theme={theme}
+          themeMode={themeMode}
+          onAccept={acceptDoorAsk}
+          onDismiss={() => setDoorAsk(null)}
+        />
+      ),
     );
   }
 
@@ -775,165 +1295,227 @@ export function VariantEWorkflow() {
           </View>
         </View>
         <View style={styles.listGroup}>
-          <ListRow title="My finances" detail={`${workspaceKind} · ${workspaceCurrency}`} icon="home-outline" styles={styles} theme={theme} />
-          <ListRow title="Financial accounts" detail={`${accounts.length} connected profiles`} icon="wallet-outline" onPress={() => go("overview")} styles={styles} theme={theme} />
+          <ListRow
+            title="My finances"
+            detail={
+              accounts.length === 1
+                ? `${workspaceKind} · ${workspaceCurrency} · My money`
+                : `${workspaceKind} · ${workspaceCurrency} · ${accounts.length} places`
+            }
+            icon="home-outline"
+            onPress={openAccountDoor}
+            styles={styles}
+            theme={theme}
+          />
+          <ListRow
+            title={notificationsAllowed ? "Drafts from purchase alerts" : "Manual drafts"}
+            detail={userCategories.slice(0, 3).join(" · ") || "No categories yet"}
+            icon="pricetag-outline"
+            styles={styles}
+            theme={theme}
+          />
+          {experienceLevel >= 1 && (
+            <ListRow
+              title="Plans"
+              detail="August budget and recovery"
+              icon="layers-outline"
+              onPress={() => go("plans")}
+              styles={styles}
+              theme={theme}
+            />
+          )}
         </View>
-        <SecondaryButton label="Preview first-time setup" icon="play-outline" onPress={startOnboarding} styles={styles} theme={theme} />
+        <SecondaryButton label="Start first-time setup again" icon="play-outline" onPress={startOnboarding} styles={styles} theme={theme} />
         <SecondaryButton label="Reset prototype state" icon="refresh-outline" onPress={resetPrototype} styles={styles} theme={theme} />
         <View style={styles.prototypeState}>
           <Text style={styles.eyebrow}>PROTOTYPE STATE</Text>
-          <Text style={styles.muted}>{drafts.length} Drafts · {monthComplete ? "August closed" : "August open"} · {money(recoveryContributed)} recovered</Text>
+          <Text style={styles.muted}>
+            level {experienceLevel} · door {doorVariant} · {candidates.length} drafts ·{" "}
+            {Object.keys(budgets).length} limits · {accounts.length}{" "}
+            {accounts.length === 1 ? "pool" : "places"} ·{" "}
+            {monthComplete ? "August closed" : "August open"}
+          </Text>
         </View>
       </>,
     );
   }
 
-  if (screen === "onboarding-kind") {
-    return shell(
-      <>
-        <Header title="Who are these finances for?" eyebrow="SETUP · 1 OF 3" styles={styles} theme={theme} />
-        <Text style={styles.lede}>Choose the boundary you want to understand. You can invite people later.</Text>
-        <View style={styles.choiceGroup}>
-          <Choice label="Just me" detail="A Personal Workspace" selected={setupKind === "Personal"} onPress={() => setSetupKind("Personal")} styles={styles} theme={theme} />
-          <Choice label="My household" detail="Shared household finances" selected={setupKind === "Household"} onPress={() => setSetupKind("Household")} styles={styles} theme={theme} />
-        </View>
-        <PrimaryButton label="Continue" onPress={() => go("onboarding-currency")} styles={styles} />
-        <SecondaryButton label="Cancel preview" onPress={home} styles={styles} theme={theme} />
-      </>,
-    );
-  }
-
-  if (screen === "onboarding-currency") {
-    return shell(
-      <>
-        <Header title="Choose your main currency" eyebrow="SETUP · 2 OF 3" onBack={back} styles={styles} theme={theme} />
-        <Text style={styles.lede}>Balances and plans use this currency by default. Activity can still preserve another transaction currency.</Text>
-        <View style={styles.choiceGroup}>
-          <Choice label="Colombian peso" detail="COP · Recommended for your location" selected={setupCurrency === "COP"} onPress={() => setSetupCurrency("COP")} styles={styles} theme={theme} />
-          <Choice label="US dollar" detail="USD" selected={setupCurrency === "USD"} onPress={() => setSetupCurrency("USD")} styles={styles} theme={theme} />
-        </View>
-        <PrimaryButton label="Continue" onPress={() => { setSetupMode("onboarding"); go("account-setup"); }} styles={styles} />
-      </>,
-    );
-  }
-
-  if (screen === "account-setup") {
-    return shell(
-      <>
-        <Header
-          title={setupMode === "onboarding" ? "Add your first account" : "Add financial account"}
-          eyebrow={setupMode === "onboarding" ? "SETUP · 3 OF 3" : "FINANCIAL ACCOUNT"}
-          onBack={back}
-          styles={styles}
-          theme={theme}
+  if (screen === "onboarding") {
+    return (
+      <View style={{ flex: 1 }}>
+        <FirstTimeSetup
+          key={`D-${setupSession}`}
+          variant="D"
+          themeMode={themeMode}
+          onCancel={home}
+          onCommit={commitOnboarding}
+          onHome={arriveHomeFromSetup}
         />
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Name you recognize</Text>
-          <TextInput accessibilityLabel="Account name" value={accountName} onChangeText={setAccountName} placeholder="Daily account" placeholderTextColor={theme.mutedForeground} style={styles.input} />
-        </View>
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Account type</Text>
-          <View style={styles.chipRow}>
-            {["Checking", "Savings", "Wallet"].map((kind) => (
-              <Pressable
-                key={kind}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: accountKind === kind }}
-                onPressIn={lightTap}
-                onPress={() => setAccountKind(kind)}
-                style={[styles.chip, accountKind === kind && styles.chipSelected]}
-              >
-                <Text style={styles.chipText}>{kind}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Balance today</Text>
-          <TextInput accessibilityLabel="Balance today" value={openingBalance} onChangeText={setOpeningBalance} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.mutedForeground} style={styles.input} />
-          <Text style={styles.muted}>We will start tracking from this amount; it is not editable history.</Text>
-        </View>
-        <PrimaryButton label={setupMode === "onboarding" ? "Finish setup" : "Add account"} icon="checkmark" onPress={finishAccountSetup} styles={styles} />
-      </>,
+      </View>
     );
   }
 
-  if (screen === "onboarding-complete") {
-    return shell(
-      <View style={styles.completion}>
-        <View style={styles.completionIcon}><Ionicons name="checkmark" size={32} color={theme.primaryForeground} /></View>
-        <Text style={styles.completionTitle}>Your workspace is ready</Text>
-        <Text style={styles.completionCopy}>{workspaceKind} finances in {workspaceCurrency}, starting with {accountName}.</Text>
-        <PrimaryButton label="Go to home" icon="home-outline" onPress={home} styles={styles} />
-        <Text style={styles.prototypeNote}>Prototype only · changes live in memory</Text>
-      </View>,
+  if (screen === "budget-setup") {
+    return (
+      <View style={{ flex: 1 }}>
+        <BudgetComposer
+          category={doorCategory}
+          look={lookFor(doorCategory, categoryLooks)}
+          spent={categorySpent(doorCategory)}
+          currency={workspaceCurrency}
+          theme={theme}
+          themeMode={themeMode}
+          unlocking={experienceLevel === 0}
+          onBack={back}
+          onSave={saveBudget}
+        />
+      </View>
+    );
+  }
+
+  if (screen === "category-look") {
+    return (
+      <View style={{ flex: 1 }}>
+        <CategoryLookPage
+          category={doorCategory}
+          look={lookFor(doorCategory, categoryLooks)}
+          spent={categorySpent(doorCategory)}
+          limit={budgets[doorCategory]}
+          currency={workspaceCurrency}
+          recent={activity
+            .filter(
+              (item) =>
+                item.direction === "out" && item.category === doorCategory,
+            )
+            .slice(0, 3)
+            .map((item) => ({
+              id: item.id,
+              description: item.description,
+              amount: item.amount,
+              date: item.date,
+            }))}
+          theme={theme}
+          themeMode={themeMode}
+          onBack={back}
+          onSetLimit={() => replace("budget-setup")}
+        />
+      </View>
+    );
+  }
+
+  if (screen === "pool-look") {
+    return (
+      <View style={{ flex: 1 }}>
+        <PlacesLookPage
+          accounts={accounts}
+          currency={workspaceCurrency}
+          theme={theme}
+          onBack={back}
+          onAddPlace={startAddAccount}
+          onOpenPlace={(id) => {
+            setSelectedAccountId(id);
+            go("account-detail");
+          }}
+          onOpenHistory={openPlaceHistory}
+        />
+        {actionSheets}
+      </View>
+    );
+  }
+
+  if (screen === "budgets") {
+    return (
+      <View style={{ flex: 1 }}>
+        <BudgetsView
+          currency={workspaceCurrency}
+          theme={theme}
+          themeMode={themeMode}
+          onBack={back}
+        />
+      </View>
+    );
+  }
+
+  if (screen === "level-unlocked") {
+    return (
+      <View style={{ flex: 1 }}>
+        <LevelUnlocked
+          door={unlockDoor}
+          category={doorCategory}
+          look={lookFor(doorCategory, categoryLooks)}
+          limit={unlockLimit}
+          accountName={accountName}
+          currency={workspaceCurrency}
+          theme={theme}
+          themeMode={themeMode}
+          onHome={home}
+        />
+      </View>
     );
   }
 
   if (screen === "drafts") {
-    return shell(
-      <>
-        <Header title="Drafts" eyebrow={`${drafts.length} NEED REVIEW`} onBack={back} styles={styles} theme={theme} />
-        <Text style={styles.lede}>Check what happened, then post it. Nothing here changes your balances until you confirm.</Text>
-        <View style={styles.listGroup}>
-          {drafts.length === 0 ? (
-            <ListRow title="Review complete" detail="August is ready to close" icon="checkmark-circle-outline" value="Done" tone="positive" styles={styles} theme={theme} />
-          ) : drafts.map((draft) => (
-            <ListRow key={draft.id} title={draft.description} detail={`${draft.date} · ${draft.category}`} value={money(draft.amount)} onPress={() => openDraft(draft)} styles={styles} theme={theme} />
-          ))}
-        </View>
-        {drafts.length > 0 ? (
-          <PrimaryButton label="Review next Draft" onPress={() => openDraft(drafts[0])} styles={styles} />
-        ) : (
-          <PrimaryButton label="Continue to Month Close" icon="calendar-outline" onPress={() => go("month-close")} styles={styles} />
-        )}
-      </>,
-    );
-  }
-
-  if (screen === "draft-review" && selectedDraft) {
-    const account = accounts.find((item) => item.id === selectedDraft.accountId);
-    return shell(
-      <>
-        <Header title="Review Draft" eyebrow="NOT POSTED YET" onBack={back} styles={styles} theme={theme} />
-        <View style={styles.amountCard}>
-          <Text style={styles.muted}>Money out</Text>
-          <Text style={styles.detailAmount}>{money(selectedDraft.amount)}</Text>
-          <Text style={styles.rowTitle}>{selectedDraft.description}</Text>
-        </View>
-        <View style={styles.listGroup}>
-          <ListRow title="Account" value={account?.name ?? "Account"} styles={styles} theme={theme} />
-          <ListRow title="Category" value={selectedDraft.category} styles={styles} theme={theme} />
-          <ListRow title="Date" value={selectedDraft.date} styles={styles} theme={theme} />
-        </View>
-        <PrimaryButton label="Post entry" icon="checkmark" onPress={postSelectedDraft} styles={styles} />
-        <SecondaryButton label="Keep as Draft" onPress={back} styles={styles} theme={theme} />
-      </>,
-    );
-  }
-
-  if (screen === "draft-posted") {
-    return shell(
-      <View style={styles.completion}>
-        <View style={styles.completionIcon}><Ionicons name="checkmark" size={32} color={theme.primaryForeground} /></View>
-        <Text style={styles.completionTitle}>{lastPosted?.description} posted</Text>
-        <Text style={styles.completionCopy}>{drafts.length > 0 ? `${drafts.length} Draft${drafts.length === 1 ? "" : "s"} still need review.` : "All Drafts are reviewed. August is ready to close."}</Text>
-        <PrimaryButton label={drafts.length > 0 ? "Review next Draft" : "Complete August"} icon={drafts.length > 0 ? "arrow-forward" : "calendar-outline"} onPress={reviewNextDraft} styles={styles} />
-        <SecondaryButton label="Back home" onPress={home} styles={styles} theme={theme} />
-      </View>,
+    return (
+      <View style={{ flex: 1 }}>
+      <DraftsInbox
+        candidates={candidates}
+        onChangeCandidates={setCandidates}
+        onPosted={postCandidates}
+        onReview={openDraftForPosting}
+        onBack={back}
+        onMonthClose={() => replace("month-close")}
+        accountNames={accounts.map((account) => account.name)}
+        currency={workspaceCurrency}
+        theme={theme}
+        themeMode={themeMode}
+      />
+      </View>
     );
   }
 
   if (screen === "alerts") {
+    const budgetAlerts = userCategories
+      .map((category) => ({
+        category,
+        spent: categorySpent(category),
+        limit: budgets[category],
+      }))
+      .filter((item) => item.limit != null && item.spent > item.limit);
     return shell(
       <>
         <Header title="Alerts" eyebrow="WHAT NEEDS ATTENTION" onBack={back} styles={styles} theme={theme} />
         <View style={styles.listGroup}>
-          <ListRow title={`${drafts.length} activities need review`} detail="Finish before completing August" icon="document-text-outline" value={drafts.length ? "Now" : "Done"} tone={drafts.length ? "warning" : "positive"} onPress={() => go(drafts.length ? "drafts" : "month-close")} styles={styles} theme={theme} />
-          <ListRow title="Savings recovery due" detail={`${money(recoveryDue)} for August`} icon="trending-up-outline" value="This week" onPress={() => go("recovery")} styles={styles} theme={theme} />
-          <ListRow title="Dining is moving faster" detail="COP 186,000 remains for 11 days" icon="restaurant-outline" value="Soon" onPress={() => go("plans")} styles={styles} theme={theme} />
+          {budgetAlerts.length === 0 ? (
+            <ListRow
+              title="Nothing crossed a line"
+              detail="Limits are still holding"
+              icon="checkmark-circle-outline"
+              tone="positive"
+              styles={styles}
+              theme={theme}
+            />
+          ) : (
+            budgetAlerts.map((item) => {
+              const look = lookFor(item.category, categoryLooks);
+              return (
+                <ListRow
+                  key={item.category}
+                  title={`${look.emoji}  ${item.category} is over`}
+                  detail={`${money(item.spent)} of ${money(item.limit ?? 0)}`}
+                  icon="flag-outline"
+                  value="Now"
+                  tone="warning"
+                  onPress={() => openBudgetDoor(item.category)}
+                  styles={styles}
+                  theme={theme}
+                />
+              );
+            })
+          )}
         </View>
-        <Text style={styles.prototypeNote}>Alerts point to an existing workflow; they do not invent a second place to act.</Text>
+        <Text style={styles.prototypeNote}>
+          Level 1 alerts watch budget lines. Pace and recovery wait for level 2.
+        </Text>
       </>,
     );
   }
@@ -942,20 +1524,28 @@ export function VariantEWorkflow() {
     return shell(
       <>
         <Header title="Plans" eyebrow="LOOKING AHEAD" onBack={back} styles={styles} theme={theme} />
-        <View style={styles.planCard}>
-          <View style={styles.planHeader}><Text style={styles.sectionTitle}>August budget</Text><Text style={styles.statusPill}>On track</Text></View>
-          <Text style={styles.detailAmount}>{money(2310000)}</Text>
-          <Text style={styles.muted}>of {money(3400000)} planned</Text>
-          <ProgressBar progress={2310000 / 3400000} styles={styles} />
+        <View style={styles.listGroup}>
+          <ListRow
+            title="August budget"
+            detail="This month's limits"
+            icon="flag-outline"
+            onPress={() => go("budgets")}
+            styles={styles}
+            theme={theme}
+          />
+          <ListRow
+            title="Savings recovery"
+            detail="Emergency repair"
+            icon="trending-up-outline"
+            onPress={() => go("recovery")}
+            styles={styles}
+            theme={theme}
+          />
         </View>
-        <Pressable accessibilityRole="button" onPress={() => go("recovery")} style={({ pressed }) => [styles.planCard, pressed && styles.pressed]}>
-          <View style={styles.planHeader}><Text style={styles.sectionTitle}>Savings recovery</Text><Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /></View>
-          <Text style={styles.detailAmount}>{money(recoveryContributed)}</Text>
-          <Text style={styles.muted}>of {money(recoveryPrincipal)} moved back to savings</Text>
-          <ProgressBar progress={recoveryContributed / recoveryPrincipal} styles={styles} />
-        </Pressable>
-        {newPlanActive && <ListRow title="Laptop repair recovery" detail={`${planMonths} monthly contributions`} icon="checkmark-circle-outline" value="Active" tone="positive" onPress={() => go("recovery")} styles={styles} theme={theme} />}
-        <SecondaryButton label="Find expenses to recover" icon="search-outline" onPress={() => go("recovery-candidates")} styles={styles} theme={theme} />
+        <Text style={styles.prototypeNote}>
+          Budget is the August plan. Recovery is a sibling destination. It is
+          not a budget row.
+        </Text>
       </>,
     );
   }
@@ -1055,23 +1645,298 @@ export function VariantEWorkflow() {
   }
 
   if (screen === "overview") {
+    const categorySpend = userCategories
+      .map((category) => ({
+        category,
+        amount: categorySpent(category),
+        remaining:
+          budgets[category] != null
+            ? budgets[category] - categorySpent(category)
+            : null,
+      }))
+      .sort((left, right) => right.amount - left.amount);
+    const hasALimit = categorySpend.some((item) => item.remaining != null);
+    const barRows = barsAsBudget
+      ? [...categorySpend]
+          .filter((item) => item.remaining != null)
+          .sort((left, right) => {
+            const leftRem = left.remaining ?? 0;
+            const rightRem = right.remaining ?? 0;
+            if (leftRem === rightRem) {
+              return right.amount - left.amount;
+            }
+            return leftRem - rightRem;
+          })
+      : categorySpend;
+    const maxSpend = Math.max(...categorySpend.map((item) => item.amount), 1);
+    const symbol = currencySymbol(workspaceCurrency);
+
     return shell(
       <>
-        <Header title="Overview" eyebrow="BALANCES & ACTIVITY" onBack={back} styles={styles} theme={theme} />
-        <View style={styles.openAmount}><Text style={styles.muted}>Across your accounts</Text><Text style={styles.detailAmount}>{money(totalBalance)}</Text></View>
-        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Financial accounts</Text><Pressable accessibilityRole="button" onPressIn={lightTap} onPress={startAddAccount} style={styles.textActionButton}><Text style={styles.textAction}>+ Add</Text></Pressable></View>
-        <View style={styles.listGroup}>
-          {accounts.map((account) => (
-            <ListRow key={account.id} title={account.name} detail={account.kind} value={money(account.balance, account.currency)} onPress={() => { setSelectedAccountId(account.id); go("account-detail"); }} styles={styles} theme={theme} />
-          ))}
+        <Header title="Overview" eyebrow="THIS MONTH" onBack={back} styles={styles} theme={theme} />
+        <CapitalFlow
+          out={spentThisMonth}
+          inn={moneyInThisMonth}
+          symbol={symbol}
+          theme={theme}
+        />
+
+        <Pressable
+          accessibilityRole="button"
+          onPressIn={lightTap}
+          onPress={openAllHistory}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.primaryButtonText}>Go to tx history</Text>
+          <Ionicons name="receipt-outline" size={20} color={theme.primaryForeground} />
+        </Pressable>
+
+        <View style={styles.viewToggle}>
+          {(
+            [
+              { mode: "list", label: "List", icon: "list-outline" },
+              { mode: "bars", label: "Bars", icon: "bar-chart-outline" },
+            ] as const
+          ).map((entry) => {
+            const selected = overviewMode === entry.mode;
+            return (
+              <Pressable
+                key={entry.mode}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                onPressIn={lightTap}
+                onPress={() => {
+                  setOverviewMode(entry.mode);
+                  if (entry.mode !== "bars") {
+                    setBarsAsBudget(false);
+                  }
+                }}
+                style={[
+                  styles.viewToggleSegment,
+                  selected && styles.viewToggleSelected,
+                ]}
+              >
+                <Ionicons
+                  name={entry.icon}
+                  size={17}
+                  color={selected ? theme.foreground : theme.mutedForeground}
+                />
+                <Text
+                  style={[
+                    styles.viewToggleText,
+                    selected && styles.viewToggleTextSelected,
+                  ]}
+                >
+                  {entry.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Recent activity</Text><Text style={styles.muted}>{activity.length} entries</Text></View>
-        <View style={styles.listGroup}>
-          {activity.slice(0, 4).map((item) => (
-            <ListRow key={item.id} title={item.description} detail={item.date} value={`${item.direction === "in" ? "+" : "−"}${money(item.amount)}`} tone={item.direction === "in" ? "positive" : undefined} styles={styles} theme={theme} />
-          ))}
-        </View>
+
+        {overviewMode === "list" ? (
+          <View style={styles.listGroup}>
+            {categorySpend.map((item) => {
+              const look = lookFor(item.category, categoryLooks);
+              const limit = budgets[item.category];
+              const color = paletteColor(look.color, themeMode);
+              const remaining = limit != null ? limit - item.amount : undefined;
+              const over = remaining != null && remaining < 0;
+              return (
+                <Pressable
+                  key={item.category}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.category}
+                  onPressIn={lightTap}
+                  onPress={() => openBudgetDoor(item.category)}
+                  style={({ pressed }) => [
+                    styles.listRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <CategoryCoin
+                    emoji={look.emoji}
+                    color={color}
+                    emptyColor={theme.danger}
+                    remaining={remaining}
+                    limit={limit}
+                  />
+                  <View style={styles.rowCopy}>
+                    <Text style={styles.rowTitle}>{item.category}</Text>
+                  </View>
+                  <View style={styles.rowTrail}>
+                    <Text style={styles.trailValue} numberOfLines={1}>
+                      {symbol}
+                      {item.amount.toLocaleString("es-CO")}
+                    </Text>
+                    {remaining != null && (
+                      <Text
+                        style={[
+                          styles.leftText,
+                          { color: over ? theme.danger : color },
+                        ]}
+                      >
+                        {over
+                          ? `${compactAmount(-remaining)} over`
+                          : `${compactAmount(remaining)} left`}
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={theme.mutedForeground}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.barChart}>
+            {barsAsBudget && (
+              <Text style={styles.muted}>{"What's left"}</Text>
+            )}
+            {barRows.map((item) => {
+              const look = lookFor(item.category, categoryLooks);
+              const color = paletteColor(look.color, themeMode);
+              const limit = budgets[item.category];
+              const over = item.remaining != null && item.remaining < 0;
+              const fill = barsAsBudget
+                ? over || item.remaining == null || limit == null
+                  ? 0
+                  : (item.remaining / limit) * 100
+                : (item.amount / maxSpend) * 100;
+              const value = barsAsBudget
+                ? item.remaining == null
+                  ? "—"
+                  : over
+                    ? `${compactAmount(-item.remaining)} over`
+                    : compactAmount(item.remaining)
+                : compactAmount(item.amount);
+              return (
+                <Pressable
+                  key={item.category}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    barsAsBudget
+                      ? `${item.category}, what's left`
+                      : item.category
+                  }
+                  onPressIn={lightTap}
+                  onPress={() => {
+                    if (!hasALimit) {
+                      return;
+                    }
+                    setBarsAsBudget((current) => !current);
+                  }}
+                  style={({ pressed }) => [
+                    styles.barBlock,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.barRow}>
+                    <Text style={styles.barEmoji}>{look.emoji}</Text>
+                    <View style={styles.barTrack}>
+                      <View
+                        style={[
+                          styles.barFill,
+                          {
+                            width: `${Math.max(0, Math.min(fill, 100))}%`,
+                            backgroundColor: barsAsBudget && over ? theme.danger : color,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.barValue,
+                        barsAsBudget && over && { color: theme.danger },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {value}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </>,
+    );
+  }
+
+  if (screen === "create-tx") {
+    const reviewing = candidates.find((item) => item.id === editingCandidateId);
+    const sourceNote = reviewing
+      ? `From drafts · ${reviewing.source}`
+      : undefined;
+    const shared = {
+      theme,
+      themeMode,
+      currency: workspaceCurrency,
+      draft: txDraft,
+      categories: userCategories,
+      categoryLooks,
+      places: placesOf(),
+      sourceNote,
+      onDraft: setTxDraft,
+      onCategories: setUserCategories,
+      onLooks: setCategoryLooks,
+      onAddPlace: startAddPlaceFromTx,
+      onBack: back,
+    };
+    return (
+      <View style={{ flex: 1 }}>
+        {composeMode === "batch" ? (
+          <BatchNativeStack
+            formKey={composeSession}
+            queue={batchQueue}
+            onKeep={keepCurrent}
+            onPostAll={postAllQueued}
+            onSelectQueued={openQueued}
+            onRemoveQueued={removeQueued}
+            composeMode={composeMode}
+            onComposeMode={switchComposeMode}
+            {...shared}
+          />
+        ) : (
+          <CreateTxPrototype
+            key={composeSession}
+            composeMode={composeMode}
+            onComposeMode={switchComposeMode}
+            batchCount={batchQueue.length}
+            onSave={postTx}
+            {...shared}
+          />
+        )}
+        {actionSheets}
+      </View>
+    );
+  }
+
+  if (screen === "tx-history") {
+    return (
+      <View style={{ flex: 1 }}>
+        <TxHistory
+          key={historyPlaceId ?? "all"}
+          activity={activity}
+          currency={workspaceCurrency}
+          theme={theme}
+          themeMode={themeMode}
+          categoryLooks={categoryLooks}
+          places={accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            emoji: account.emoji,
+          }))}
+          initialAccountIds={historyPlaceId ? [historyPlaceId] : []}
+          onBack={back}
+        />
+      </View>
     );
   }
 
@@ -1079,8 +1944,36 @@ export function VariantEWorkflow() {
     const accountActivity = activity.filter((item) => item.accountId === selectedAccount.id);
     return shell(
       <>
-        <Header title={selectedAccount.name} eyebrow="FINANCIAL ACCOUNT" onBack={back} styles={styles} theme={theme} />
-        <View style={styles.openAmount}><Text style={styles.muted}>Current balance</Text><Text style={styles.detailAmount}>{money(selectedAccount.balance, selectedAccount.currency)}</Text></View>
+        <Header title={selectedAccount.name} eyebrow="PLACE" onBack={back} styles={styles} theme={theme} />
+        <View style={styles.openAmount}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Change look"
+            onPressIn={lightTap}
+            onPress={() => {
+              setAccountEmoji(selectedAccount.emoji);
+              setEmojiFrom("detail");
+              setHomeSheet("emoji");
+            }}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Text style={styles.placeHeroEmoji}>{selectedAccount.emoji}</Text>
+          </Pressable>
+          <Text style={styles.muted}>Current balance</Text>
+          <Text style={styles.detailAmount}>{money(selectedAccount.balance, selectedAccount.currency)}</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPressIn={lightTap}
+          onPress={() => openPlaceHistory(selectedAccount.id)}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.primaryButtonText}>See in tx history</Text>
+          <Ionicons name="receipt-outline" size={20} color={theme.primaryForeground} />
+        </Pressable>
         <View style={styles.listGroup}>
           <ListRow title="Type" value={selectedAccount.kind} styles={styles} theme={theme} />
           <ListRow title="Currency" value={selectedAccount.currency} styles={styles} theme={theme} />
@@ -1091,7 +1984,7 @@ export function VariantEWorkflow() {
           {accountActivity.length === 0 ? (
             <ListRow title="No activity yet" detail="New entries will appear here" icon="receipt-outline" styles={styles} theme={theme} />
           ) : accountActivity.slice(0, 3).map((item) => (
-              <ListRow key={item.id} title={item.description} detail={item.date} value={`${item.direction === "in" ? "+" : "−"}${money(item.amount)}`} tone={item.direction === "in" ? "positive" : undefined} styles={styles} theme={theme} />
+              <ListRow key={item.id} title={item.description} detail={item.date} value={`${item.direction === "in" ? "+" : "−"}${money(item.amount)}`} tone={item.direction === "in" ? "in" : "out"} styles={styles} theme={theme} />
             ))}
         </View>
       </>,
@@ -1099,18 +1992,17 @@ export function VariantEWorkflow() {
   }
 
   if (screen === "month-close") {
-    const ready = drafts.length === 0;
     return shell(
       <>
-        <Header title="Complete August" eyebrow={ready ? "READY TO REVIEW" : "1 STEP NEEDS ATTENTION"} onBack={back} styles={styles} theme={theme} />
+        <Header title="Complete August" eyebrow={candidates.length ? "CANDIDATES STILL LOCAL" : "READY TO REVIEW"} onBack={back} styles={styles} theme={theme} />
         <View style={styles.amountCard}><Text style={styles.muted}>August spending</Text><Text style={styles.detailAmount}>{money(spentThisMonth)}</Text><Text style={styles.muted}>This review locks the month; it does not move money or change balances.</Text></View>
         <View style={styles.listGroup}>
-          <ListRow title="Draft review" detail={drafts.length ? `${drafts.length} still need review` : "All reviewed"} icon={drafts.length ? "alert-circle-outline" : "checkmark-circle-outline"} value={drafts.length ? "Required" : "Done"} tone={drafts.length ? "warning" : "positive"} onPress={drafts.length ? () => go("drafts") : undefined} styles={styles} theme={theme} />
+          <ListRow title="Notification Candidates" detail={candidates.length ? `${candidates.length} still local. Intake is not a statement.` : "None waiting"} icon={candidates.length ? "alert-circle-outline" : "checkmark-circle-outline"} value={candidates.length ? "Warns" : "Done"} tone={candidates.length ? "warning" : "positive"} onPress={candidates.length ? () => go("drafts") : undefined} styles={styles} theme={theme} />
           <ListRow title="Account balances" detail={`${accounts.length} Financial Accounts checked`} icon="wallet-outline" value="Reviewed" tone="positive" onPress={() => go("overview")} styles={styles} theme={theme} />
           <ListRow title="Savings recovery" detail={`${money(recoveryDue)} due this month`} icon="trending-up-outline" value="Review" onPress={() => go("recovery")} styles={styles} theme={theme} />
         </View>
-        <PrimaryButton label={ready ? "Complete and lock August" : "Review Drafts first"} icon={ready ? "lock-closed-outline" : "document-text-outline"} onPress={() => { if (ready) { setMonthComplete(true); replace("month-complete"); } else { go("drafts"); } }} styles={styles} />
-        <Text style={styles.prototypeNote}>If recovery is not funded, Month Close records a planning shortfall; it never fabricates a transfer.</Text>
+        <PrimaryButton label="Complete and lock August" icon="lock-closed-outline" onPress={() => { setMonthComplete(true); replace("month-complete"); }} styles={styles} />
+        <Text style={styles.prototypeNote}>Remaining Candidates warn. They do not block Month Close. If recovery is not funded, the close records a planning shortfall; it never fabricates a transfer.</Text>
       </>,
     );
   }
@@ -1141,8 +2033,90 @@ const createStyles = (theme: Theme) =>
       paddingBottom: 132,
       backgroundColor: theme.background,
     },
-    home: { flex: 1, gap: spacing.section },
+    home: { flex: 1, gap: spacing.xl },
     homeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    bellBadge: {
+      position: "absolute",
+      top: -2,
+      right: -2,
+      minWidth: 20,
+      height: 20,
+      paddingHorizontal: 5,
+      borderRadius: radius.full,
+      backgroundColor: theme.warning,
+      borderWidth: 2,
+      borderColor: theme.background,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    bellBadgeText: {
+      color: theme.background,
+      fontSize: 11,
+      fontFamily: font.bold,
+    },
+    alertRow: {
+      minHeight: 72,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderRadius: radius.lg,
+      backgroundColor: `${theme.warning}1f`,
+      borderWidth: 1,
+      borderColor: `${theme.warning}4d`,
+    },
+    alertIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.full,
+      backgroundColor: theme.warning,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    alertTitle: {
+      color: theme.foreground,
+      fontSize: fontSize.body,
+      fontFamily: font.bold,
+    },
+    alertDetail: {
+      color: theme.warning,
+      fontSize: 14,
+      fontFamily: font.semibold,
+    },
+    homeHero: { gap: spacing.xs },
+    monthStory: { flexDirection: "row", gap: spacing.xs },
+    storyPair: { flex: 1, gap: spacing.xs },
+    barChart: { gap: spacing.xs },
+    barBlock: { gap: 2 },
+    barRow: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    barEmoji: {
+      width: 32,
+      fontSize: 21,
+      textAlign: "center",
+    },
+    barTrack: {
+      flex: 1,
+      height: 20,
+      borderRadius: radius.full,
+      backgroundColor: theme.secondary,
+      overflow: "hidden",
+    },
+    barFill: { height: "100%", borderRadius: radius.full },
+    barValue: {
+      minWidth: 56,
+      maxWidth: 80,
+      color: theme.foreground,
+      fontSize: 12,
+      fontFamily: font.bold,
+      textAlign: "right",
+    },
     pageHeader: { minHeight: touchTarget, flexDirection: "row", alignItems: "center", gap: spacing.md },
     headerCopy: { flex: 1, gap: spacing.xs },
     eyebrow: { color: theme.mutedForeground, fontSize: fontSize.label, fontFamily: font.bold, letterSpacing: 1 },
@@ -1171,6 +2145,43 @@ const createStyles = (theme: Theme) =>
     segmentSelected: { backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.ring },
     segmentText: { color: theme.foreground, fontSize: fontSize.body, fontFamily: font.medium },
     prototypeState: { gap: spacing.sm, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: theme.border },
+    viewToggle: {
+      flexDirection: "row",
+      gap: spacing.xs,
+      padding: spacing.xs,
+      borderRadius: radius.full,
+      backgroundColor: theme.secondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    viewToggleSegment: {
+      flex: 1,
+      minHeight: touchTarget - 8,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.sm,
+      borderRadius: radius.full,
+    },
+    viewToggleSelected: {
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    viewToggleText: {
+      color: theme.mutedForeground,
+      fontSize: fontSize.body,
+      fontFamily: font.medium,
+    },
+    viewToggleTextSelected: { color: theme.foreground, fontFamily: font.bold },
+    rowTrail: { alignItems: "flex-end", gap: 2 },
+    trailValue: {
+      color: theme.foreground,
+      fontSize: 14,
+      fontFamily: font.semibold,
+      textAlign: "right",
+    },
+    leftText: { fontSize: fontSize.label, fontFamily: font.bold },
     prototypeNote: { color: theme.mutedForeground, fontSize: 13, lineHeight: 19, fontFamily: font.regular, textAlign: "center" },
     choiceGroup: { gap: spacing.md },
     choice: { minHeight: 76, flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.md, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border },
@@ -1181,6 +2192,7 @@ const createStyles = (theme: Theme) =>
     secondaryButtonText: { color: theme.foreground, fontSize: fontSize.body, fontFamily: font.semibold },
     disabled: { opacity: 0.45 },
     pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
+    categoryProgress: { gap: spacing.sm, paddingTop: spacing.xs },
     listGroup: { borderRadius: radius.lg, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border, overflow: "hidden" },
     listRow: { minHeight: 70, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
     rowIcon: { width: 36, height: 36, borderRadius: radius.full, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
@@ -1195,6 +2207,18 @@ const createStyles = (theme: Theme) =>
     chip: { minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.lg, borderRadius: radius.full, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary },
     chipSelected: { borderColor: theme.primary, borderWidth: 2 },
     chipText: { color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
+    emojiChip: {
+      width: touchTarget,
+      height: touchTarget,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.secondary,
+    },
+    emojiChipText: { fontSize: 22 },
+    placeHeroEmoji: { fontSize: 40, lineHeight: 48 },
     completion: { flex: 1, minHeight: 560, justifyContent: "center", alignItems: "center", gap: spacing.xl },
     completionIcon: { width: 68, height: 68, borderRadius: radius.full, alignItems: "center", justifyContent: "center", backgroundColor: theme.primary },
     completionTitle: { color: theme.foreground, fontSize: 30, lineHeight: 36, fontFamily: font.extrabold, textAlign: "center" },

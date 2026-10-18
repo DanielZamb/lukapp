@@ -11,7 +11,8 @@ const baseUrl = process.env.EXPO_WEB_URL ?? "http://127.0.0.1:8082";
 const viewport = { width: 390, height: 844 };
 
 async function waitForApp(page) {
-  await page.goto(`${baseUrl}/notification-intake/D`, { waitUntil: "networkidle" });
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Drafts" }).click();
   await page.getByText("ready to add").first().waitFor({ timeout: 30000 });
   await page.waitForTimeout(600);
 }

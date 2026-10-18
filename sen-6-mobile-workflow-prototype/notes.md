@@ -1,5 +1,9 @@
 # Expo and React Native Learning Notes
 
+The A–E switcher and the Notification Intake router are gone. Home is
+Essential-first. Drafts is the D inbox. The notes below still describe the
+ideas learned while those comparison tools existed.
+
 > These notes belong to the throwaway SEN-6 UI prototype. They record reusable
 > concepts learned while building it; the prototype code itself is not
 > production code.

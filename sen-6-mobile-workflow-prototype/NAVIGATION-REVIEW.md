@@ -30,9 +30,11 @@ contain no more than three information elements before it opens a detail view.
 
 ## Follow-up decisions
 
-- Drafts is out of scope for this review because its UX is being decided in a
-  separate thread.
-- Plans routing needs a focused prototype pass.
+- Drafts is locked as the D inbox. Confirming a Candidate posts it. Remaining
+  Candidates warn on Month Close and do not block it.
+- Plans routing: hub with August budget and Savings recovery as sibling
+  destinations. A and B on `?plans=` compare the month view. C walks posting
+  and editing from those jars.
 - Overview needs deeper drill-down paths.
 - Alerts needs refinement after its routing responsibilities settle.
 
