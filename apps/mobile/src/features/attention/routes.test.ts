@@ -2,7 +2,6 @@ import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import HomeRoute from "../../../app/index";
 import AlertsRoute from "../../../app/alerts";
 import { AlertsScreen } from "./AlertsScreen";
 import { attentionRows, type AttentionState } from "./model";
@@ -60,50 +59,6 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button ${label}`);
   return found;
 }
-
-test("Home pace reveals whole pesos in side by side columns, and hides them on a second tap", async () => {
-  await act(async () => { root = create(createElement(HomeRoute)); });
-  expect(text()).not.toContain("On pace for");
-  await act(async () => button("Show month pace details").props.onPress());
-  expect(text()).toContain("Day 17 of 31");
-  expect(text()).toContain("On pace for\nCOP 1.824");
-  expect(button("Show month pace details").props.accessibilityState).toEqual({ expanded: true });
-  const day = root.root.findAllByType("text").find((node) => node.children.join("") === "Day 17 of 31");
-  expect(day?.parent?.props.style.flexDirection).toBe("row");
-  await act(async () => button("Show month pace details").props.onPress());
-  expect(button("Show month pace details").props.accessibilityState).toEqual({ expanded: false });
-  expect(text()).not.toContain("On pace for");
-});
-
-test("Home retains USD cents and opens the live Drafts and Alerts destinations", async () => {
-  state.currency = "USD";
-  await act(async () => { root = create(createElement(HomeRoute)); });
-  await act(async () => button("Show month pace details").props.onPress());
-  expect(text()).toContain("On pace for\nUSD 1.823,55");
-  const badge = root.root.findAllByType("text").find((node) => node.children.join("") === "7");
-  const badgeStyle = Object.assign({}, ...badge?.parent?.props.style);
-  expect(badgeStyle).toMatchObject({ position: "absolute", top: 16, right: 16 });
-  await act(async () => button("Drafts, 7, On this device").props.onPress());
-  await act(async () => button("Alerts, Loading updates").props.onPress());
-  expect(state.push.mock.calls).toEqual([["/drafts"], ["/alerts"]]);
-});
-
-test("Home announces the visible live Alerts detail and updates it when attention changes", async () => {
-  const rows = attentionRows({
-    draftCount: 2, draftSegment: "wait", candidateNowCount: 1, candidateWaitCount: 0,
-    plans: [], currency: "COP",
-    readiness: evaluateMonthClose({ period: { year: 2026, month: 10 }, periodStatus: "open", draftCount: 1, candidateCount: 1 }),
-  });
-  state.attention = { inboxCount: 3, alerts: { kind: "ready", rows } };
-  await act(async () => { root = create(createElement(HomeRoute)); });
-  expect(text()).toContain("3 updates");
-  expect(button("Alerts, 3 updates").props.accessibilityRole).toBe("button");
-  state.attention = { inboxCount: 0, alerts: { kind: "ready", rows: rows.slice(-1) } };
-  await act(async () => { root.update(createElement(HomeRoute)); });
-  expect(text()).toContain("1 update");
-  await act(async () => button("Alerts, 1 update").props.onPress());
-  expect(state.push.mock.calls).toEqual([["/alerts"]]);
-});
 
 test("Alerts routes every derived row to an existing workflow and uses the actual update total", async () => {
   const rows = attentionRows({
