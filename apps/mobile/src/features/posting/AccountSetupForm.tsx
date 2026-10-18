@@ -136,13 +136,14 @@ export function AccountSetupForm(props: {
           </BottomSheetScrollView>
         )}
       </BottomSheetModal>
-      <BottomSheetModal
-        ref={lookSheet}
-        snapPoints={["55%"]}
-        enableDynamicSizing={false}
-        backgroundStyle={{ backgroundColor: theme.background }}
-      >
-        {value && (
+      {value && (
+        <BottomSheetModal
+          ref={lookSheet}
+          stackBehavior="push"
+          snapPoints={["55%"]}
+          enableDynamicSizing={false}
+          backgroundStyle={{ backgroundColor: theme.background }}
+        >
           <BottomSheetScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.content}
@@ -174,8 +175,8 @@ export function AccountSetupForm(props: {
               onPress={() => lookSheet.current?.dismiss()}
             />
           </BottomSheetScrollView>
-        )}
-      </BottomSheetModal>
+        </BottomSheetModal>
+      )}
     </>
   );
 }
