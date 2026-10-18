@@ -94,13 +94,21 @@ test("creation chooses a category before the composer, then saves shared-parser 
   expect(texts(screen)).toContain("Stay under");
   expect(screen.findAll((node) => String(node.type) === "EditorSheet")).toHaveLength(0);
   expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props).toMatchObject({ keyboardType: "decimal-pad", placeholder: "0" });
-  expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(true);
-  expect(screen.findByProps({ accessibilityLabel: "Remaining jar" }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 0, text: "−COP 860.000 remaining" });
+  expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(false);
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("800000");
+  expect(screen.findByProps({ accessibilityLabel: "COP 800.000" }).props.accessibilityState.selected).toBe(true);
+  expect(texts(screen).some((text) => text.startsWith("Repeats each month"))).toBe(false);
+  expect(screen.findByProps({ accessibilityLabel: "Remaining jar" }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 0, text: "−COP 60.000 remaining" });
   expect(texts(screen)).toContain("This jar is already empty.");
   expect(["COP 600.000", "COP 800.000", "COP 1.000.000", "COP 1.200.000"].map((label) => screen.findByProps({ accessibilityLabel: label }).props.accessibilityLabel))
     .toEqual(["COP 600.000", "COP 800.000", "COP 1.000.000", "COP 1.200.000"]);
   await act(async () => screen.findByProps({ accessibilityLabel: "COP 1.000.000" }).props.onPress());
   expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("1.000.000");
+  totals = { month, currency: "COP", totalsOverlap: true, categories: [] };
+  await act(async () => root?.update(createElement(BudgetRoute)));
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("1.000.000");
+  totals = { month, currency: "COP", totalsOverlap: true, categories: [{ categoryId: "food", name: "Food", nature: "Expense", minorUnits: 86_000_000 }] };
+  await act(async () => root?.update(createElement(BudgetRoute)));
   expect(screen.findByProps({ accessibilityLabel: "Remaining jar" }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 14, text: "COP 140.000 remaining" });
   expect(texts(screen)).toContain("What is still in the jar. Spent eats it.");
   await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("0"));
@@ -112,7 +120,7 @@ test("creation chooses a category before the composer, then saves shared-parser 
     expectedRevisionId: null, idempotencyKey: expect.any(String),
   }]]);
   expect(texts(screen)).toContain("Budgets");
-  expect(texts(screen)).toContain("Budget saved");
+  expect(texts(screen)).not.toContain("Budget saved");
 });
 
 test("the under-jars control offers only unlimited categories and both creation pages go back to the board", async () => {
@@ -145,7 +153,8 @@ test("composer waits for spending and preserves a failed save for a safe retry",
   expect(texts(screen)).toContain("COP 0 out this month");
   expect(texts(screen)).toContain("COP 200.000");
   expect(screen.findAllByProps({ accessibilityLabel: "COP 0" })).toHaveLength(0);
-  await act(async () => screen.findByProps({ accessibilityLabel: "COP 400.000" }).props.onPress());
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("400000");
+  expect(screen.findByProps({ accessibilityLabel: "COP 400.000" }).props.accessibilityState.selected).toBe(true);
   save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
   expect(texts(screen)).toContain("Could not confirm saving. Retry to safely check the same Budget.");
@@ -154,7 +163,8 @@ test("composer waits for spending and preserves a failed save for a safe retry",
   await act(async () => screen.findByProps({ accessibilityLabel: "Retry save" }).props.onPress());
   expect(save.mock.calls.map(([request]) => [request.limit.minorUnits, request.idempotencyKey]))
     .toEqual([[40_000_000, save.mock.calls[0][0].idempotencyKey], [40_000_000, save.mock.calls[0][0].idempotencyKey]]);
-  expect(texts(screen)).toContain("Budget saved");
+  expect(texts(screen)).toContain("Budgets");
+  expect(texts(screen)).not.toContain("Budget saved");
 });
 
 test("the live next action opens the current jar revision and uses the category's saved color", async () => {
@@ -169,13 +179,15 @@ test("the live next action opens the current jar revision and uses the category'
     .toEqual(expect.arrayContaining(["OCTOBER", "Food", "$20K", "Stay under this month", "$100K", "$120K", "$300K"]));
   expect(queries.mock.calls).toContainEqual(["accounting:categoryTotals", { workspaceId: "workspace", month: "2026-09" }]);
   expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join("")))
-    .not.toContain("September Food spent COP 73.123,45. Saving applies to October and future months.");
+    .not.toContain("September Food spent $73K. Saving applies to October and future months.");
   await act(async () => screen.findByProps({ accessibilityLabel: "Limit $120K" }).props.onPress());
   expect(screen.findByProps({ accessibilityLabel: "Limit $120K" }).props.accessibilityState).toMatchObject({ selected: true });
   expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join("")))
-    .toContain("September Food spent COP 73.123,45. Saving applies to October and future months.");
+    .toContain("September Food spent $73K. Saving applies to October and future months.");
   await act(async () => screen.findByProps({ accessibilityLabel: "Save October" }).props.onPress());
   expect(save.mock.calls[0][0]).toMatchObject({ categoryId: "food", expectedRevisionId: "live-revision", limit: { currency: "COP", minorUnits: 12_000_000 } });
+  expect(texts(screen)).toContain("Budgets");
+  expect(texts(screen)).not.toContain("Budget saved");
   await act(async () => screen.findByProps({ accessibilityLabel: "Back" }).props.onPress());
   expect(back).toHaveBeenCalledOnce();
 });
@@ -216,7 +228,7 @@ test.each([20_000_000, -20_000_000, -30_000_000])("duplicate or non-positive spe
   expect(queries.mock.calls).toContainEqual(["accounting:categoryTotals", { workspaceId: "workspace", month: "2026-12" }]);
   await act(async () => screen.findByProps({ accessibilityLabel: "Limit $480K" }).props.onPress());
   expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join("")))
-    .toContain("December Food spent COP 0,00. Saving applies to January and future months.");
+    .toContain("December Food spent $0. Saving applies to January and future months.");
   await act(async () => screen.findByType(BottomSheetModal).props.onDismiss());
   expect(screen.findAllByType(BottomSheetModal)).toHaveLength(0);
 });
@@ -234,7 +246,7 @@ test("prior spend loads without a fabricated zero, and uncertain saves freeze ch
   priorTotals = { month: "2026-09", currency: "COP", totalsOverlap: true,
     categories: [{ categoryId: "food", name: "Food", nature: "Expense", minorUnits: 65_000_000 }] };
   await act(async () => root?.update(createElement(BudgetRoute)));
-  expect(text()).toContain("September Food spent COP 650.000,00. Saving applies to October and future months.");
+  expect(text()).toContain("September Food spent $650K. Saving applies to October and future months.");
   save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   await act(async () => screen.findByProps({ accessibilityLabel: "Save October" }).props.onPress());
   expect(screen.findByProps({ accessibilityLabel: "Limit $400K" }).props.disabled).toBe(true);

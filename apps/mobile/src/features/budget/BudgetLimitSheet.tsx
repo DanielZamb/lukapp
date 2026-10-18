@@ -68,7 +68,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
         </View>
         {props.minorUnits !== props.jar.limitMinorUnits && <Text style={styles.note}>
           {props.previousSpendMinorUnits === undefined ? `Loading ${previousMonth} spending.`
-            : `${previousMonth} ${props.jar.category.name} spent ${formatMoney({ currency: props.currency, minorUnits: props.previousSpendMinorUnits })}.`}
+            : `${previousMonth} ${props.jar.category.name} spent ${symbol}${compactAmount(props.previousSpendMinorUnits)}.`}
           {` Saving applies to ${month} and future months.`}
         </Text>}
         {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}

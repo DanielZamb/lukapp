@@ -19,7 +19,7 @@ async function render(props: Partial<BudgetBoardProps> = {}) {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const defaults: BudgetBoardProps = {
-    month: "2026-10", currency: "COP", canAdd: true, saved: false, jars: [], categoryColors: new Map(),
+    month: "2026-10", currency: "COP", canAdd: true, jars: [], categoryColors: new Map(),
     onBack: () => {}, onAdd: () => {}, onEdit: () => {},
   };
   await act(async () => { root = create(createElement(BudgetBoard, { ...defaults, ...props })); });
@@ -90,8 +90,9 @@ test("the empty workspace-month action opens creation", async () => {
   expect(text(screen)).toBe("JANUARY\nBudgets\nSet a January limit");
 });
 
-test("a board with every category limited omits extra creation and retains the saved confirmation", async () => {
-  const screen = await render({ jars: [jar("Food", 0)], canAdd: false, saved: true });
-  expect(text(screen)).toContain("Change October's limit\nBudget saved");
+test("a board with every category limited omits extra creation", async () => {
+  const screen = await render({ jars: [jar("Food", 0)], canAdd: false });
+  expect(text(screen)).toContain("Change October's limit");
+  expect(text(screen)).not.toContain("Budget saved");
   expect(screen.findAllByProps({ accessibilityLabel: "Set another limit" })).toHaveLength(0);
 });

@@ -112,6 +112,8 @@ test("crossing sheet shows all impacts; Reconsider leaves the draft, Continue po
   await act(async () => form().onPost());
   expect(text()).toContain("BUDGET WOULD CROSS");
   expect(text()).toContain("Food 110K over");
+  const dangerHeading = root?.root.findAllByType(Text).find((node) => node.children.join("") === "Food 110K over");
+  expect(Object.assign({}, ...dangerHeading?.props.style)).toMatchObject({ fontSize: 36, fontFamily: "Geist_800ExtraBold", color: "#b91c1c" });
   expect(text()).toContain("Home 110K over");
   expect(transport.post).not.toHaveBeenCalled();
   await press("Reconsider");

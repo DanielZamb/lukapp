@@ -33,7 +33,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function renderSheet(currency: string) {
+async function renderSheet(currency: string, previousSpendMinorUnits = 7_312_345, minorUnits = jar.limitMinorUnits) {
   await act(async () => {
     root = create(createElement(BudgetLimitSheet, {
       month: "2026-10",
@@ -41,8 +41,8 @@ async function renderSheet(currency: string) {
       jar,
       color: "#047857",
       previousMonth: "2026-09",
-      previousSpendMinorUnits: 7_312_345,
-      minorUnits: jar.limitMinorUnits,
+      previousSpendMinorUnits,
+      minorUnits,
       busy: false,
       pending: false,
       editable: true,
@@ -84,4 +84,12 @@ test.each(["COP", "USD"])("shows the narrow $ symbol for %s when formatToParts i
   } finally {
     Intl.NumberFormat.prototype.formatToParts = formatToParts;
   }
+});
+
+test.each([
+  { previousSpendMinorUnits: 282_000_000, money: "$2.82M" },
+  { previousSpendMinorUnits: 0, money: "$0" },
+])("prior spend $previousSpendMinorUnits uses compact chip money", async ({ previousSpendMinorUnits, money }) => {
+  const screen = await renderSheet("COP", previousSpendMinorUnits, 48_000_000);
+  expect(textContent(screen)).toContain(`September Food spent ${money}. Saving applies to October and future months.`);
 });
