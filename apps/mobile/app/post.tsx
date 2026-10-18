@@ -213,6 +213,11 @@ function PostMoney({
     recordInteraction();
     action();
   }
+  const sourceNote = candidateId
+    ? "From drafts"
+    : draftId
+      ? "Draft on this device"
+      : undefined;
   if (candidateId && missingCandidate)
     return (
       <Screen>
@@ -248,6 +253,7 @@ function PostMoney({
     <>
       <PostingForm
         {...editor}
+        sourceNote={sourceNote}
         batchCount={batch.queue.length}
         onBatch={
           !candidateId && !editor.pending && !setup

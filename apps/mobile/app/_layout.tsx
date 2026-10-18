@@ -171,6 +171,7 @@ function Admission() {
     <DeviceAdmissionGate>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="level-unlocked" options={{ gestureEnabled: false }} />
       <Stack.Screen name="post" />
       <Stack.Screen name="drafts" />
       <Stack.Screen name="alerts" />

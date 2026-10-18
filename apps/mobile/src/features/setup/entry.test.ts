@@ -24,9 +24,11 @@ vi.mock("react-native", () => ({
   Pressable: "pressable",
   Text: "text",
   View: "view",
+  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
 }));
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "modal",
+  BottomSheetBackdrop: "backdrop",
   BottomSheetView: "view",
 }));
 vi.mock("../../ui/core", () => ({
@@ -41,17 +43,19 @@ vi.mock("../../ui/core", () => ({
 }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => state.defaults,
-  usePostedActivity: () => ({ monthSpendMinorUnits: 0 }),
+  usePostedActivity: () => ({ monthSpendMinorUnits: 0, accounts: [] }),
 }));
 vi.mock("../useWorkspaceCalendar", () => ({
   useWorkspaceCalendar: () => ({
+    month: "2026-10",
     date: "2026-10-18",
     now: new Date("2026-10-18T12:00:00Z"),
   }),
 }));
-vi.mock("../attention/useAttention", () => ({
-  useAttention: () => ({ inboxCount: 0, alerts: { kind: "ready", rows: [] } }),
-}));
+vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
+vi.mock("convex/react", () => ({ useQuery: () => ({ currency: "COP", jars: [] }) }));
+vi.mock("../useInboxCount", () => ({ useInboxCount: () => 0 }));
+vi.mock("../HomePlaceSetup", () => ({ HomePlaceSetup: "place-setup" }));
 vi.mock("../Setup", () => ({ Setup: "setup" }));
 vi.mock("./Completion", () => ({ SetupCompletion: "complete" }));
 let root: ReactTestRenderer | undefined;

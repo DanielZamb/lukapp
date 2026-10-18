@@ -107,6 +107,7 @@ export function usePostingEditor(
   const [blocked, setBlocked] = useState(false);
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<PostingReceipt | null>(null);
+  const [setupPosted, setSetupPosted] = useState<PostingReceipt | null>(null);
   const opLock = useRef(false);
   const submitting = useRef(false);
   const appliedDraft = useRef<LocalEntryDraftId | undefined>(undefined);
@@ -512,6 +513,7 @@ export function usePostingEditor(
           setDestinationId(receipt.financialAccountProfileId);
           setEntryType("transfer");
         } else setProfileId(receipt.financialAccountProfileId);
+        setSetupPosted(receipt);
         return;
       }
       setAmount(entryType === "initial" ? "0" : "-");
@@ -646,7 +648,7 @@ export function usePostingEditor(
     },
     setup,
     setSetup: (value: PlaceDraft | null) => {
-      if (canEdit() && !intake) setSetup(value);
+      if (canEdit() && !intake) { setSetupPosted(null); setSetup(value); }
     },
     direction,
     categories,
@@ -664,6 +666,7 @@ export function usePostingEditor(
     loading,
     busy,
     error,
+    setupPosted,
     posted,
     editable,
     canSubmit,

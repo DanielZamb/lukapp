@@ -244,6 +244,7 @@ type ListRowProps = {
   icon?: ComponentProps<typeof Ionicons>["name"];
   titleStyle?: StyleProp<TextStyle>;
   valueStyle?: StyleProp<TextStyle>;
+  tone?: "positive" | "warning";
   isLast?: boolean;
 };
 
@@ -255,22 +256,23 @@ export function ListRow({
   icon,
   titleStyle,
   valueStyle,
+  tone,
   isLast,
 }: ListRowProps) {
   const { theme, styles } = useCore();
   const content = (
     <>
-      {icon ? (
+      {icon && (
         <View style={styles.rowIcon}>
-          <Ionicons name={icon} size={20} color={theme.foreground} />
+          <Ionicons name={icon} size={20} color={tone ? theme[tone] : theme.foreground} />
         </View>
-      ) : null}
+      )}
       <View style={styles.rowCopy}>
         <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
         {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
       </View>
       {value ? (
-        <Text style={[styles.rowValue, valueStyle]}>{value}</Text>
+        <Text style={[styles.rowValue, tone && { color: theme[tone] }, valueStyle]}>{value}</Text>
       ) : null}
       {onPress ? (
         <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />

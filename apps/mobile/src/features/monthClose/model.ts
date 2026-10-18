@@ -65,8 +65,12 @@ export function footerLabel(period: ClosePeriod) {
   return `Complete ${monthLabel(period)}`;
 }
 
-export function reviewEyebrow(blocked: boolean) {
-  return blocked ? "1 STEP NEEDS ATTENTION" : "READY TO REVIEW";
+export function reviewEyebrow(readiness: MonthCloseReadiness) {
+  return readiness.blocked
+    ? "1 STEP NEEDS ATTENTION"
+    : readiness.candidateCount > 0
+      ? "CANDIDATES STILL LOCAL"
+      : "READY TO REVIEW";
 }
 
 export function draftsDetail(count: number) {
@@ -74,7 +78,9 @@ export function draftsDetail(count: number) {
 }
 
 export function candidatesDetail(count: number) {
-  return count === 0 ? "None pending" : `${count} still pending`;
+  return count === 0
+    ? "None waiting"
+    : `${count} still local. Intake is not a statement.`;
 }
 
 export function lockActionLabel(period: ClosePeriod) {

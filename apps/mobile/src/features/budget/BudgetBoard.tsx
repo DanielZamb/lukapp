@@ -11,6 +11,7 @@ export type BudgetBoardProps = {
   currency: string;
   jars: BudgetJar[];
   categoryColors: ReadonlyMap<string, string>;
+  saved: boolean;
   canAdd: boolean;
   onBack: () => void;
   onAdd: () => void;
@@ -42,6 +43,7 @@ export function BudgetBoard(props: BudgetBoardProps) {
     <Screen contentStyle={styles.page}>
       <Header title="Budgets" eyebrow={monthLabel(props.month, "month").toUpperCase()} onBack={props.onBack} />
       <PrimaryButton label={action.label} onPress={() => action.kind === "edit" ? props.onEdit(action.jar) : props.onAdd()} />
+      {props.saved && <Text accessibilityRole="alert" style={ui.body}>Budget saved</Text>}
       <View style={styles.grid}>
         {props.jars.map((jar) => (
           <Jar key={jar.category.id} jar={jar} currency={props.currency}

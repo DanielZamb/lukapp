@@ -31,6 +31,8 @@ export async function createFinancialAccountProfile(
   if (!name) {
     throw new AccountingError("name_required");
   }
+  if (input.emoji && !input.emoji.trim())
+    throw new AccountingError("account_emoji_required");
   const classified = classifyFinancialAccountProfile(
     chartTemplate(workspace.chartOfAccountsTemplate),
     input.productKind,

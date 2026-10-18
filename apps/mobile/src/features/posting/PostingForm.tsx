@@ -21,6 +21,7 @@ export type PostingFormProps = {
   destination?: string;
   onDestination?: () => void;
   categoryEnabled?: boolean;
+  sourceNote?: string;
   currency: string;
   amount: string;
   description: string;
@@ -185,6 +186,9 @@ export function PostingForm(props: PostingFormProps) {
       }
     >
       <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
+      {props.sourceNote ? (
+        <Text style={styles.detail}>{props.sourceNote}</Text>
+      ) : null}
       {!props.saveToBatch && (
         <ComposeModeToggle
           mode="one"
