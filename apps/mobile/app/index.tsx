@@ -40,7 +40,12 @@ function Home({
   const accountCount = activity?.accounts.length ?? 0;
   const level = accountCount >= 2 || (budget?.jars.length ?? 0) > 0 ? 1 : 0;
   const month = new Intl.DateTimeFormat("en", { month: "long", timeZone }).format(calendar.now);
-  const totalMinorUnits = activity?.accounts.reduce((sum, account) => sum + account.balance.minorUnits, 0);
+  const totalMinorUnits = activity?.accounts.reduce((sum, account) => {
+    const { minorUnits } = account.balance;
+    if (account.nature === "Liability") return sum - minorUnits;
+    if (account.nature === "Asset") return sum + minorUnits;
+    return sum;
+  }, 0);
   return (
     <Screen contentStyle={{ gap: spacing.xl, paddingTop: spacing.md }}>
       <View style={styles.header}>

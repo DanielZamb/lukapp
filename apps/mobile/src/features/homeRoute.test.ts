@@ -4,8 +4,9 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import Index from "../../app/index";
 
+type MockPlace = { minorUnits: number; nature?: "Asset" | "Liability" };
 const state = vi.hoisted(() => ({
-  accounts: [8_500_000_00],
+  accounts: [{ minorUnits: 8_500_000_00 }] as MockPlace[],
   currency: "COP",
   hasLimit: false,
   balancesLoading: false,
@@ -29,8 +30,11 @@ vi.mock("./activity", () => ({
     financialAccountProfile: { id: "daily" },
   }),
   usePostedActivity: () => state.balancesLoading ? undefined : {
-    accounts: state.accounts.map((minorUnits, index) => ({ financialAccountProfileId: `place-${index}`,
-      balance: { currency: state.currency, minorUnits } })),
+    accounts: state.accounts.map(({ minorUnits, nature = "Asset" }, index) => ({
+      financialAccountProfileId: `place-${index}`,
+      nature,
+      balance: { currency: state.currency, minorUnits },
+    })),
     monthSpendMinorUnits: 123_00,
   },
 }));
@@ -63,7 +67,7 @@ let root: ReactTestRenderer;
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  state.accounts = [8_500_000_00];
+  state.accounts = [{ minorUnits: 8_500_000_00 }];
   state.currency = "COP";
   state.hasLimit = false;
   state.balancesLoading = false;
@@ -88,10 +92,10 @@ function button(label: string) {
 }
 
 test.each([
-  { accounts: [100], hasLimit: false, level: 0 },
-  { accounts: [100, 0], hasLimit: false, level: 1 },
-  { accounts: [100, 0, -100], hasLimit: false, level: 1 },
-  { accounts: [100], hasLimit: true, level: 1 },
+  { accounts: [{ minorUnits: 100 }], hasLimit: false, level: 0 },
+  { accounts: [{ minorUnits: 100 }, { minorUnits: 0 }], hasLimit: false, level: 1 },
+  { accounts: [{ minorUnits: 100 }, { minorUnits: 0 }, { minorUnits: -100 }], hasLimit: false, level: 1 },
+  { accounts: [{ minorUnits: 100 }], hasLimit: true, level: 1 },
   { accounts: [], hasLimit: false, level: 0 },
 ])("Home level $level with $accounts and category limit $hasLimit", async ({ accounts, hasLimit, level }) => {
   state.accounts = accounts;
@@ -115,8 +119,8 @@ test("level 0 renders balance and prototype copy, with only the user header acti
   expect(state.push.mock.calls).toEqual([["/settings"]]);
 });
 
-test("balances sum across places and captions, tiles, bell and Plans open their destinations", async () => {
-  state.accounts = [500_00, 250_00, -100_00];
+test("balances net across places and captions, tiles, bell and Plans open their destinations", async () => {
+  state.accounts = [{ minorUnits: 500_00 }, { minorUnits: 250_00 }, { minorUnits: -100_00 }];
   state.inboxCount = 3;
   await render();
   expect(texts()).toContain("COP 650");
@@ -166,7 +170,7 @@ test("balance loading does not show a fake zero, while two places unlock before 
   expect(texts()).not.toContain("COP 0");
   expect(root.root.findAll((node) => String(node.type) === "spinner")).toHaveLength(1);
   state.balancesLoading = false;
-  state.accounts = [100, 200];
+  state.accounts = [{ minorUnits: 100 }, { minorUnits: 200 }];
   await act(async () => root.update(createElement(Index)));
   expect(texts()).toContain("Plans");
 });
@@ -174,7 +178,17 @@ test("balance loading does not show a fake zero, while two places unlock before 
 
 test("Home retains USD cents in the real balance total", async () => {
   state.currency = "USD";
-  state.accounts = [100_25, -20_10];
+  state.accounts = [{ minorUnits: 100_25 }, { minorUnits: 20_10, nature: "Liability" }];
   await render();
   expect(texts()).toContain("USD 80,15");
+});
+
+test("a liability balance reduces what you have instead of increasing it", async () => {
+  state.accounts = [
+    { minorUnits: 500_00, nature: "Asset" },
+    { minorUnits: 250_00, nature: "Liability" },
+  ];
+  await render();
+  expect(texts()).toContain("COP 250");
+  expect(texts()).not.toContain("COP 750");
 });
