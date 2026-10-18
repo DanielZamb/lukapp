@@ -114,7 +114,7 @@ export function DraftsScreen({
           <PrimaryButton label="Confirm all Ready" disabled={ready.length === 0 || confirming} pending={confirming} onPress={onConfirmReady} />
         </>
       )}
-      {readyToShow && (
+      {readyToShow && !empty && (
         <>
           <View style={styles.track} accessibilityRole="tablist">
             {([
@@ -165,10 +165,12 @@ export function DraftsScreen({
           </ListGroup>
         </>
       )}
-      <Pressable accessibilityRole="button" accessibilityLabel="Preview Month Close warning" onPress={() => setScreen("month-close")} style={styles.footer}>
-        <Text style={styles.linkText}>Preview Month Close warning</Text>
-        <Ionicons name="arrow-forward" size={16} color={theme.primary} />
-      </Pressable>
+      {readyToShow && !empty ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Preview Month Close warning" onPress={() => setScreen("month-close")} style={styles.footer}>
+          <Text style={styles.linkText}>Preview Month Close warning</Text>
+          <Ionicons name="arrow-forward" size={16} color={theme.primary} />
+        </Pressable>
+      ) : null}
     </Screen>
   );
 }

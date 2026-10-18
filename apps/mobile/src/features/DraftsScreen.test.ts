@@ -132,7 +132,8 @@ test("the inbox names the month when empty and waits for loading to finish", asy
   expect(text()).toContain("NOTIFICATION INTAKE");
   expect(text()).toContain("Nothing waiting");
   expect(text()).toContain("October is ready to close. Remaining local Candidates never block Month Close.");
-  expect(text()).toContain("Nothing needs you now.");
+  expect(text()).not.toContain("Preview Month Close warning");
+  expect(root?.root.findAllByType("button").some((node) => node.props.accessibilityRole === "tab")).toBe(false);
 });
 
 test("a Candidate row opens the shared form and Confirm all Ready posts the ready set", async () => {
