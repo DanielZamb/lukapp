@@ -1,4 +1,4 @@
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { useMemo } from "react";
 import { ActivityIndicator, Text } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
@@ -11,12 +11,12 @@ import { useLocalEntryDrafts } from "../useLocalEntryDrafts";
 import { MonthCloseScreen } from "./MonthCloseScreen";
 import {
   evaluateMonthClose,
+  monthKey,
   monthLabel,
   periodStatusOf,
   type ClosePeriod,
   type PeriodStatus,
 } from "./model";
-import { countCandidatesInMonth } from "./pendingCandidates";
 import { useIntakeCandidates } from "../useIntakeCandidates";
 import { useMonthClose, type MonthCloseTransport } from "./useMonthClose";
 
@@ -28,6 +28,9 @@ export function MonthClose({
   currency,
   onBack,
   onReviewDrafts,
+  onOverview,
+  onRecovery,
+  onHome,
 }: {
   workspaceId: string;
   requestedPeriod: ClosePeriod;
@@ -36,7 +39,17 @@ export function MonthClose({
   currency: "COP" | "USD";
   onBack: () => void;
   onReviewDrafts: () => void;
+  onOverview: () => void;
+  onRecovery: () => void;
+  onHome: () => void;
 }) {
+  const month = monthKey(requestedPeriod);
+  const activity = useQuery(api.accounting.postedActivity, {
+    workspaceId,
+    month,
+    includeRows: false,
+  });
+  const recovery = useQuery(api.savingsRecovery.evaluate, { workspaceId, month });
   const intake = useIntakeCandidates({ subject, workspaceId, currency });
   const drafts = useLocalEntryDrafts({
     subject,
@@ -59,29 +72,27 @@ export function MonthClose({
     [lease, subject, lock, drafts.countMonth, reportFailure],
   );
   const readiness =
-    drafts.monthCount === null
+    drafts.monthCount === null || intake.count === null
       ? null
       : evaluateMonthClose({
           period: requestedPeriod,
           periodStatus: periodStatusOf(requestedPeriod, currentPeriod),
           draftCount: drafts.monthCount,
-          candidateCount: countCandidatesInMonth(
-            [...intake.now, ...intake.wait],
-            requestedPeriod,
-          ),
+          candidateCount: intake.count,
         });
   const close = useMonthClose(workspaceId, readiness, transport);
   const title = `Complete ${monthLabel(requestedPeriod)}`;
-  if (drafts.error)
+  const error = drafts.error || intake.error;
+  if (error)
     return (
       <Screen>
         <Header title={title} onBack={onBack} />
         <Text accessibilityRole="alert" style={ui.error}>
-          {drafts.error}
+          {error}
         </Text>
       </Screen>
     );
-  if (!readiness)
+  if (!readiness || !activity || !recovery)
     return (
       <Screen>
         <Header title={title} onBack={onBack} />
@@ -91,9 +102,21 @@ export function MonthClose({
   return (
     <MonthCloseScreen
       readiness={readiness}
+      summary={{
+        currency,
+        spendMinorUnits: activity.monthSpendMinorUnits,
+        accountCount: activity.accounts.length,
+        recoveryDueMinorUnits: recovery.plans.reduce(
+          (sum, plan) => sum + plan.dueMinorUnits,
+          0,
+        ),
+      }}
       phase={close.phase}
       onBack={onBack}
       onReviewDrafts={onReviewDrafts}
+      onOverview={onOverview}
+      onRecovery={onRecovery}
+      onHome={onHome}
       onRequest={() => {
         interact();
         close.request();
