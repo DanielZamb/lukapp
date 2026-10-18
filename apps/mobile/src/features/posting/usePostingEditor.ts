@@ -54,6 +54,7 @@ type Account = {
 };
 export type PlaceDraft = {
   name: string;
+  emoji?: string;
   productKind: PlaceKind;
   amount: string;
   date: string;
@@ -147,6 +148,7 @@ export function usePostingEditor(
     if (value.kind === "setup")
       setSetup({
         name: value.payload.name,
+        ...(value.payload.emoji ? { emoji: value.payload.emoji } : {}),
         productKind: value.payload.productKind,
         amount: formatMoney(value.payload.amount).replace(
           `${payload.amount.currency} `,
@@ -159,13 +161,15 @@ export function usePostingEditor(
       setProfileId(value.payload.sourceFinancialAccountProfileId);
       setDestinationId(value.payload.destinationFinancialAccountProfileId);
     } else setProfileId(value.payload.financialAccountProfileId);
-    if (value.kind === "expense" || value.kind === "income")
+    if (
+      value.kind === "expense" ||
+      value.kind === "income" ||
+      value.kind === "transfer"
+    )
       setCategories({
         ids:
           value.payload.userCategoryIds ??
-          (value.payload.userCategoryId
-            ? [value.payload.userCategoryId]
-            : []),
+          (value.payload.userCategoryId ? [value.payload.userCategoryId] : []),
         primaryId: value.payload.primaryUserCategoryId ?? null,
       });
   }
@@ -204,6 +208,19 @@ export function usePostingEditor(
     setDraftId(draft.id);
     appliedDraft.current = draft.id;
     return "applied";
+  }
+  function resetComposer() {
+    setAmount("-");
+    setDescription("");
+    setCategories({ ids: [], primaryId: null });
+    setDate(defaultAccountingDate(account.timeZone));
+    setEntryType("normal");
+    setProfileId(account.financialAccountProfileId);
+    setDestinationId(null);
+    setDraftId(undefined);
+    appliedDraft.current = undefined;
+    setPosted(null);
+    setError("");
   }
   function snapshotConfirmed(): IntakeSuggestion {
     return {
@@ -328,6 +345,7 @@ export function usePostingEditor(
         payload: {
           workspaceId: account.workspaceId,
           name: setup.name.trim(),
+          ...(setup.emoji?.trim() ? { emoji: setup.emoji.trim() } : {}),
           productKind: setup.productKind,
           amount: {
             currency: account.currency,
@@ -347,12 +365,21 @@ export function usePostingEditor(
       description: description.trim(),
       idempotencyKey: transport.newKey(),
     };
+    const categoryAssignments = {
+      ...(categories.ids.length
+        ? { userCategoryIds: [...categories.ids] }
+        : {}),
+      ...(categories.primaryId
+        ? { primaryUserCategoryId: categories.primaryId }
+        : {}),
+    };
     if (entryType === "transfer") {
       if (!destinationId) throw new Error("Choose where the money goes");
       return {
         kind: "transfer",
         payload: {
           ...payload,
+          ...categoryAssignments,
           sourceFinancialAccountProfileId: profileId,
           destinationFinancialAccountProfileId: destinationId,
         },
@@ -368,12 +395,7 @@ export function usePostingEditor(
       payload: {
         ...payload,
         financialAccountProfileId: profileId,
-        ...(categories.ids.length
-          ? { userCategoryIds: [...categories.ids] }
-          : {}),
-        ...(categories.primaryId
-          ? { primaryUserCategoryId: categories.primaryId }
-          : {}),
+        ...categoryAssignments,
       },
     };
   }
@@ -421,7 +443,9 @@ export function usePostingEditor(
       if (error instanceof LocalEntryDraftGoneError) {
         setDraftId(undefined);
         appliedDraft.current = undefined;
-        setError("This draft was already posted or removed. Keep again to save it as a new draft.");
+        setError(
+          "This draft was already posted or removed. Keep again to save it as a new draft.",
+        );
         return;
       }
       setError("Could not keep this draft on this device.");
@@ -481,9 +505,6 @@ export function usePostingEditor(
       setPending(null);
       setDraftId(undefined);
       appliedDraft.current = undefined;
-      setAmount(entryType === "initial" ? "0" : "-");
-      setDescription("");
-      setCategories({ ids: [], primaryId: null });
       setSetup(null);
       if (saved.command.kind === "setup" && receipt.financialAccountProfileId) {
         if (saved.command.target?.kind === "destination") {
@@ -491,7 +512,11 @@ export function usePostingEditor(
           setDestinationId(receipt.financialAccountProfileId);
           setEntryType("transfer");
         } else setProfileId(receipt.financialAccountProfileId);
+        return;
       }
+      setAmount(entryType === "initial" ? "0" : "-");
+      setDescription("");
+      setCategories({ ids: [], primaryId: null });
       setPosted(receipt);
     } catch (error) {
       if (transport.reportFailure?.(error)) return;
@@ -516,8 +541,7 @@ export function usePostingEditor(
             amount: {
               currency: account.currency,
               minorUnits:
-                (direction === "out" ? -1 : 1) *
-                Math.abs(minorUnits ?? 0),
+                (direction === "out" ? -1 : 1) * Math.abs(minorUnits ?? 0),
             },
           });
           return;
@@ -542,7 +566,9 @@ export function usePostingEditor(
         setPending(null);
         setDraftId(undefined);
         appliedDraft.current = undefined;
-        setError("This draft was already posted or removed. Nothing was posted again.");
+        setError(
+          "This draft was already posted or removed. Nothing was posted again.",
+        );
         return;
       }
       const data: unknown = error instanceof ConvexError ? error.data : null;
@@ -646,6 +672,22 @@ export function usePostingEditor(
     draftId,
     blockedByPendingPostings: blocked,
     keepDraft,
+    captureForBatch: () => {
+      if (!canEdit() || !canSubmit || setup || intake) return null;
+      return { command: buildEntry(), draftId };
+    },
+    resetComposer: () => {
+      if (canEdit() && !setup) resetComposer();
+    },
+    editBatchDraft: (value: { command: PendingPosting; draftId?: string }) => {
+      if (!canEdit() || setup || intake) return false;
+      hydrateFromCommand(value.command);
+      setDraftId(value.draftId);
+      appliedDraft.current = value.draftId;
+      setPosted(null);
+      setError("");
+      return true;
+    },
     resume,
     submit,
     dismissPosted: () => setPosted(null),

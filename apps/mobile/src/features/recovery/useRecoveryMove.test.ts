@@ -36,10 +36,10 @@ function transport() {
     onMoved: vi.fn(), newKey: () => `move-${++sequence}`, reportFailure: vi.fn(() => false),
   } satisfies RecoveryMoveTransport;
 }
-async function open(api: RecoveryMoveTransport) {
+async function open(api: RecoveryMoveTransport, seed = { workspaceId: "workspace", plan, sources }) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let hook: ReturnType<typeof useRecoveryMove> | undefined;
-  function Harness() { hook = useRecoveryMove({ workspaceId: "workspace", plan, sources }, api); return null; }
+  function Harness() { hook = useRecoveryMove(seed, api); return null; }
   await act(async () => { root = create(createElement(Harness)); });
   return () => { if (!hook) throw new Error("Move hook not mounted"); return hook; };
 }
@@ -47,7 +47,7 @@ async function open(api: RecoveryMoveTransport) {
 test("the due amount posts one guarded movement under one key", async () => {
   const api = transport();
   const move = await open(api);
-  expect(move()).toMatchObject({ sourceId: "daily", amount: "2.300,00", canSubmit: true });
+  expect(move()).toMatchObject({ sourceId: "daily", amount: "2.300", canSubmit: true });
   await act(async () => { await Promise.all([move().submit(), move().submit()]); });
   expect(api.move.mock.calls.map(([request]) => request)).toEqual([{
     workspaceId: "workspace", planId: "plan-1", sourceFinancialAccountProfileId: "daily",
@@ -62,7 +62,7 @@ test("an uncertain movement freezes edits and retry reuses the same key", async 
   api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const move = await open(api);
   await act(async () => { await move().submit(); move().onSource("savings"); move().onAmount("3.000"); });
-  expect(move()).toMatchObject({ sourceId: "daily", amount: "2.300,00", pending: true, editable: false, canDismiss: false });
+  expect(move()).toMatchObject({ sourceId: "daily", amount: "2.300", pending: true, editable: false, canDismiss: false });
   await act(async () => { await move().submit(); });
   expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
 });
@@ -72,7 +72,9 @@ test("a typed rejection leaves the draft editable for a new key", async () => {
   api.move.mockRejectedValueOnce(new ConvexError({ kind: "recovery", code: "source_must_be_asset" }));
   const move = await open(api);
   await act(async () => { await move().submit(); });
-  expect(move()).toMatchObject({ pending: false, editable: true, canDismiss: true });
+  expect(move()).toMatchObject({ pending: false, editable: true, canDismiss: true,
+    error: "The movement was rejected. Check the source and amount, then try again.",
+  });
   await act(async () => { await move().submit(); });
   expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-2"]);
 });
@@ -110,4 +112,40 @@ test("unmounted acknowledgements cannot finish a newer movement", async () => {
   expect(api.onMoved).not.toHaveBeenCalled();
   await act(async () => { await current().submit(); });
   expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-2"]);
+});
+
+test.each(["", "0", "-1", "1.23", "2.300,123", "abc"])("invalid hero amount %s blocks posting", async (amount) => {
+  const api = transport();
+  const move = await open(api);
+  await act(async () => { move().onAmount(amount); });
+  expect(move().canSubmit).toBe(false);
+  await act(async () => { await move().submit(); });
+  expect(api.move).not.toHaveBeenCalled();
+});
+
+test("the edited hero uses the shared parser and the chosen source", async () => {
+  const api = transport();
+  const move = await open(api, { workspaceId: "workspace", plan, sources: [...sources, { id: "cash", name: "Cash", productKind: "cash" }] });
+  await act(async () => { move().onAmount("3.000,25"); move().onSource("cash"); });
+  expect(move().canSubmit).toBe(true);
+  await act(async () => { await move().submit(); });
+  expect(api.move.mock.calls[0][0]).toMatchObject({
+    sourceFinancialAccountProfileId: "cash", amount: { currency: "COP", minorUnits: 300_025 },
+  });
+});
+
+test("a destination without another source cannot be selected or posted", async () => {
+  const api = transport();
+  const move = await open(api, { workspaceId: "workspace", plan, sources: sources.slice(1) });
+  expect(move()).toMatchObject({ sourceId: null, canSubmit: false });
+  await act(async () => { await move().submit(); });
+  expect(api.move).not.toHaveBeenCalled();
+});
+
+test("zero due blocks posting until a positive amount is entered", async () => {
+  const api = transport();
+  const move = await open(api, { workspaceId: "workspace", plan: { ...plan, dueMinorUnits: 0 }, sources });
+  expect(move()).toMatchObject({ amount: "0", canSubmit: false });
+  await act(async () => { move().onAmount("100"); });
+  expect(move().canSubmit).toBe(true);
 });

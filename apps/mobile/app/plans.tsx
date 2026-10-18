@@ -1,18 +1,20 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useQuery } from "convex/react";
 import { Redirect, router } from "expo-router";
 import type { ComponentProps } from "react";
 import { useMemo } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Theme } from "../src/ui/tokens";
 import { usePersonalDefaults } from "../src/features/activity";
-import { monthLabel } from "../src/features/budget/model";
+import { api } from "../src/features/api";
+import { monthLabel, recoveryPlansRowDetail } from "../src/features/budget/model";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { Header, ListGroup, Screen, useUi, useTheme } from "../src/ui/core";
 import { font, fontSize, radius, spacing } from "../src/ui/tokens";
 
 export default function PlansRoute() {
   const defaults = usePersonalDefaults();
-  return defaults ? <Plans timeZone={defaults.workspace.timeZone} />
+  return defaults ? <Plans workspaceId={defaults.workspace.id} timeZone={defaults.workspace.timeZone} />
     : defaults === null ? <Redirect href="/" /> : <Screen><ActivityIndicator accessibilityLabel="Loading Plans" /></Screen>;
 }
 
@@ -32,17 +34,19 @@ function planStyles(theme: Theme) {
   });
 }
 
-function Plans({ timeZone }: { timeZone: string }) {
+function Plans({ workspaceId, timeZone }: { workspaceId: string; timeZone: string }) {
   const calendar = useWorkspaceCalendar(timeZone);
   const theme = useTheme();
   const styles = useMemo(() => planStyles(theme), [theme]);
   const month = monthLabel(calendar.month, "month");
+  const recovery = useQuery(api.savingsRecovery.evaluate, { workspaceId, month: calendar.month });
+  const recoveryDetail = recovery === undefined ? "" : recoveryPlansRowDetail(recovery.plans);
   return (
     <Screen contentStyle={styles.page}>
       <Header title="Plans" eyebrow="LOOKING AHEAD" onBack={() => router.back()} />
       <ListGroup>
         <PlanRow title={`${month} budget`} detail="This month's limits" icon="flag-outline" onPress={() => router.push("/budget")} />
-        <PlanRow title="Savings recovery" detail="Emergency repair" icon="trending-up-outline" onPress={() => router.push("/recovery")} />
+        <PlanRow title="Savings recovery" detail={recoveryDetail} icon="trending-up-outline" onPress={() => router.push("/recovery")} />
       </ListGroup>
       <Text style={styles.note}>Budget is the {month} plan. Recovery is a sibling destination. It is not a budget row.</Text>
     </Screen>

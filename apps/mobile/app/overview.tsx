@@ -7,7 +7,7 @@ import {
 } from "../src/features/activity";
 import { ActivityRows } from "../src/features/ActivityRows";
 import { formatMoney } from "../src/features/money";
-import { Header, ListGroup, ListRow, Screen, SecondaryButton, useUi } from "../src/ui/core";
+import { Header, ListGroup, ListRow, PrimaryButton, Screen, useUi } from "../src/ui/core";
 
 function Overview({ workspaceId, timeZone }: { workspaceId: string; timeZone: string }) {
   const ui = useUi();
@@ -32,7 +32,7 @@ function Overview({ workspaceId, timeZone }: { workspaceId: string; timeZone: st
           </ListGroup>
           <Text style={ui.title}>Recent activity</Text>
           {recent ? <ActivityRows rows={recent.page} onEntry={(entryId) => router.push({ pathname: "/entry", params: { entryId } })} /> : <ActivityIndicator />}
-          <SecondaryButton label="View all activity" onPress={() => router.push("/history")} />
+          <PrimaryButton label="Go to tx history" trailingIcon="receipt-outline" onPress={() => router.push("/history")} />
         </>
       ) : (
         <ActivityIndicator />

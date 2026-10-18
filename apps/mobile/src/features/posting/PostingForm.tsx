@@ -1,5 +1,7 @@
+import { formatCopInput } from "../money";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo } from "react";
+import { ComposeModeToggle } from "./ComposeModeToggle";
 import {
   ActivityIndicator,
   Pressable,
@@ -9,7 +11,7 @@ import {
   View,
 } from "react-native";
 import type { Theme } from "../../ui/tokens";
-import { Field, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useUi, useTheme } from "../../ui/core";
+import { Header, ListGroup, ListRow, PrimaryButton, Screen, useUi, useTheme } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export type EntryType = "normal" | "initial" | "transfer";
@@ -19,8 +21,6 @@ export type PostingFormProps = {
   destination?: string;
   onDestination?: () => void;
   categoryEnabled?: boolean;
-  hint?: string;
-  postedTitle?: string;
   currency: string;
   amount: string;
   description: string;
@@ -43,9 +43,10 @@ export type PostingFormProps = {
   onDate: () => void;
   onPost: () => void;
   onDone: () => void;
-  canKeepDraft?: boolean;
-  onKeepDraft?: () => void;
   lockEntryType?: boolean;
+  batchCount?: number;
+  onBatch?: () => void;
+  saveToBatch?: boolean;
 };
 
 function postingFormStyles(theme: Theme) {
@@ -53,15 +54,45 @@ function postingFormStyles(theme: Theme) {
     rowTitle: { fontFamily: font.bold },
     rowValue: { fontFamily: font.semibold },
     banner: {
+      margin: spacing.xxl,
+      marginTop: spacing.md,
+      minHeight: 64,
       flexDirection: "row",
       alignItems: "center",
       gap: spacing.md,
-      padding: spacing.sm,
-      paddingLeft: spacing.lg,
-      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: theme.border,
       backgroundColor: theme.secondary,
+    },
+    postedIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.full,
+      backgroundColor: theme.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    done: {
+      minHeight: touchTarget,
+      minWidth: touchTarget,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    openField: { gap: spacing.xs },
+    fieldLabel: {
+      fontFamily: font.semibold,
+      fontSize: 14,
+      color: theme.mutedForeground,
+    },
+    description: {
+      minHeight: 44,
+      padding: 0,
+      fontFamily: font.regular,
+      fontSize: fontSize.body,
+      lineHeight: 24,
+      color: theme.foreground,
     },
     bannerTitle: {
       fontFamily: font.bold,
@@ -73,48 +104,20 @@ function postingFormStyles(theme: Theme) {
       fontSize: fontSize.label,
       color: theme.mutedForeground,
     },
-    track: {
-      flexDirection: "row",
-      padding: spacing.xs,
-      borderRadius: radius.full,
-      backgroundColor: theme.secondary,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    activeSegment: {
-      flex: 1,
-      minHeight: touchTarget,
-      borderRadius: radius.full,
-      backgroundColor: theme.background,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    segment: {
-      flex: 1,
-      minHeight: touchTarget,
-      alignItems: "center",
-      justifyContent: "center",
-    },
     segmentText: {
       fontFamily: font.bold,
       fontSize: fontSize.body,
       color: theme.foreground,
     },
-    disabledText: {
-      fontFamily: font.semibold,
-      fontSize: fontSize.body,
-      color: theme.mutedForeground,
-    },
     amountRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: spacing.sm,
-      marginVertical: spacing.xxl,
       minHeight: 72,
     },
     currency: {
-      fontFamily: font.extrabold,
-      fontSize: spacing.section,
+      fontFamily: font.semibold,
+      fontSize: 28,
       color: theme.mutedForeground,
     },
     amount: {
@@ -129,13 +132,13 @@ function postingFormStyles(theme: Theme) {
       minHeight: touchTarget,
       justifyContent: "center",
       paddingHorizontal: spacing.lg,
-      borderWidth: 2,
+      borderWidth: 1,
       borderColor: theme.border,
       borderRadius: radius.full,
       backgroundColor: theme.secondary,
     },
     chipText: {
-      fontFamily: font.bold,
+      fontFamily: font.semibold,
       fontSize: (fontSize.label + fontSize.body) / 2,
       color: theme.foreground,
     },
@@ -147,45 +150,59 @@ export function PostingForm(props: PostingFormProps) {
   const theme = useTheme();
   const styles = useMemo(() => postingFormStyles(theme), [theme]);
   return (
-    <Screen contentStyle={{ gap: spacing.xl }}>
-      <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
-      {props.posted !== null && (
-        <View accessibilityRole="alert" style={styles.banner}>
-          <Ionicons name="checkmark-circle" size={24} color={theme.positive} />
-          <View style={{ flex: 1, gap: spacing.xs }}>
-            <Text style={styles.bannerTitle}>
-              {props.postedTitle ?? "Posted"}
-            </Text>
-            <Text style={styles.detail}>{props.posted}</Text>
+    <Screen
+      contentStyle={{ gap: spacing.xl }}
+      footer={
+        !props.saveToBatch && props.posted !== null ? (
+          <View
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={styles.banner}
+          >
+            <View style={styles.postedIcon}>
+              <Ionicons
+                name="checkmark"
+                size={18}
+                color={theme.primaryForeground}
+              />
+            </View>
+            <View style={{ flex: 1, gap: spacing.xs }}>
+              <Text style={styles.bannerTitle}>Posted</Text>
+              <Text style={styles.detail} numberOfLines={1}>
+                {props.posted}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+              onPress={props.onDone}
+              style={styles.done}
+            >
+              <Text style={styles.segmentText}>Done</Text>
+            </Pressable>
           </View>
-          <SecondaryButton label="Done" onPress={props.onDone} />
-        </View>
+        ) : null
+      }
+    >
+      <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
+      {!props.saveToBatch && (
+        <ComposeModeToggle
+          mode="one"
+          count={props.batchCount}
+          disabled={!props.onBatch || !props.editable}
+          onMode={(mode) => {
+            if (mode === "batch") props.onBatch?.();
+          }}
+        />
       )}
-      <View accessibilityRole="tablist" style={styles.track}>
-        <View
-          accessibilityRole="tab"
-          accessibilityState={{ selected: true }}
-          style={styles.activeSegment}
-        >
-          <Text style={styles.segmentText}>One</Text>
-        </View>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: false, disabled: true }}
-          disabled
-          style={styles.segment}
-        >
-          <Text style={styles.disabledText}>Batch</Text>
-        </Pressable>
-      </View>
       <View style={styles.amountRow}>
         <Text style={styles.currency}>
           {props.currency === "COP" ? "$" : props.currency}
         </Text>
         <TextInput
           accessibilityLabel="Signed amount"
-          value={props.amount === "-" ? "" : props.amount}
-          onChangeText={props.onAmountChange}
+          value={props.amount === "-" ? "-0" : props.amount}
+          onChangeText={(value) => props.onAmountChange(formatCopInput(value))}
           editable={props.editable}
           keyboardType="numbers-and-punctuation"
           placeholder="-0"
@@ -219,7 +236,9 @@ export function PostingForm(props: PostingFormProps) {
               disabled: !props.editable || props.lockEntryType === true,
             }}
             disabled={
-              !props.editable || !props.onEntryType || props.lockEntryType === true
+              !props.editable ||
+              !props.onEntryType ||
+              props.lockEntryType === true
             }
             onPress={
               props.lockEntryType === true
@@ -230,6 +249,7 @@ export function PostingForm(props: PostingFormProps) {
               styles.chip,
               (props.entryType ?? "normal") === value && {
                 borderColor: theme.primary,
+                borderWidth: 2,
               },
             ]}
           >
@@ -237,21 +257,26 @@ export function PostingForm(props: PostingFormProps) {
           </Pressable>
         ))}
       </View>
-      <Field
-        label="Description"
-        accessibilityLabel="Description"
-        value={props.description}
-        onChangeText={props.onDescriptionChange}
-        editable={props.editable}
-        placeholder="What was it"
-        maxLength={500}
-      />
+      <View style={styles.openField}>
+        <Text style={styles.fieldLabel}>Description</Text>
+        <TextInput
+          accessibilityLabel="Description"
+          value={props.description}
+          onChangeText={props.onDescriptionChange}
+          editable={props.editable}
+          placeholder="What was it"
+          maxLength={500}
+          multiline
+          placeholderTextColor={theme.mutedForeground}
+          style={styles.description}
+        />
+      </View>
       <ListGroup>
         <ListRow
           title="Place"
           titleStyle={styles.rowTitle}
           valueStyle={styles.rowValue}
-          value={`💰 ${props.place}`}
+          value={props.place}
           onPress={props.editable ? props.onPlace : undefined}
         />
         {props.entryType === "transfer" && (
@@ -263,17 +288,19 @@ export function PostingForm(props: PostingFormProps) {
             valueStyle={styles.rowValue}
           />
         )}
-        <ListRow
-          title="Category"
-          value={props.categoryEnabled === false ? "Not used" : props.category}
-          onPress={
-            props.editable && props.categoryEnabled !== false
-              ? props.onCategory
-              : undefined
-          }
-          titleStyle={styles.rowTitle}
-          valueStyle={styles.rowValue}
-        />
+        {props.entryType !== "initial" && (
+          <ListRow
+            title="Category"
+            value={props.category}
+            onPress={
+              props.editable && props.categoryEnabled !== false
+                ? props.onCategory
+                : undefined
+            }
+            titleStyle={styles.rowTitle}
+            valueStyle={styles.rowValue}
+          />
+        )}
         <ListRow
           title="Date occurred"
           titleStyle={styles.rowTitle}
@@ -282,12 +309,11 @@ export function PostingForm(props: PostingFormProps) {
           onPress={props.editable ? props.onDate : undefined}
         />
       </ListGroup>
-      <Text style={styles.detail}>
-        {props.categoryNeedsPrimary
-          ? "Open Category to choose which category is primary."
-          : (props.hint ??
-            "Choose up to three categories. Each counts the full amount; your spending total counts it once.")}
-      </Text>
+      {props.categoryNeedsPrimary && (
+        <Text style={styles.detail}>
+          Open Category to choose which category is primary.
+        </Text>
+      )}
       {props.loading && <ActivityIndicator color={theme.primary} />}
       {!!props.error && (
         <Text accessibilityRole="alert" style={ui.error}>
@@ -300,21 +326,22 @@ export function PostingForm(props: PostingFormProps) {
           confirmed.
         </Text>
       )}
-      <PrimaryButton
-        label={
-          props.busy ? "Posting…" : props.pending ? "Retry posting" : "Post"
-        }
-        trailingIcon="checkmark"
-        disabled={!props.canSubmit}
-        onPress={props.onPost}
-      />
-      {props.onKeepDraft ? (
-        <SecondaryButton
-          label="Keep as Draft"
-          onPress={props.onKeepDraft}
-          disabled={!props.canKeepDraft}
+      {props.posted === null && (
+        <PrimaryButton
+          label={
+            props.saveToBatch
+              ? "Add to batch"
+              : props.busy
+                ? "Posting…"
+                : props.pending
+                  ? "Retry posting"
+                  : "Post"
+          }
+          trailingIcon="checkmark"
+          disabled={!props.canSubmit}
+          onPress={props.onPost}
         />
-      ) : null}
+      )}
     </Screen>
   );
 }

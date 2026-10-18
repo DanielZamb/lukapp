@@ -5,10 +5,6 @@ export type CategorySelection = FunctionArgs<
   typeof api.accounting.createUserCategory
 >["selection"];
 export type CategoryStyle = CategorySelection["style"];
-export type NatureAnswer = Extract<
-  CategorySelection,
-  { kind: "custom" }
->["answer"];
 export type Category = FunctionReturnType<
   typeof api.accounting.listUserCategories
 >[number];
@@ -26,13 +22,13 @@ export type CategoryEditor =
   | {
       kind: "custom";
       name: string;
-      answer: NatureAnswer | null;
       style: CategoryStyle;
     }
   | { kind: "restyle"; option: CategoryOption; style: CategoryStyle };
 export const defaultCategoryStyle: CategoryStyle = {
-  emoji: "🏷️",
+  emoji: "✨",
   tone: "primary",
+  color: "h270",
 };
 export function categoryNameKey(name: string) {
   return name

@@ -8,6 +8,7 @@ import type {
   AccountTransferInput,
 } from "../types";
 import { journalContext, toPostedJournalEntry } from "../views";
+import { requireCategoryAssignments } from "../categories/assignments";
 
 export async function recordAccountTransfer(
   store: AccountingStore,
@@ -25,6 +26,7 @@ export async function recordAccountTransfer(
   )
     throw new AccountingError("transfer_profiles_must_differ");
   const amount = requireFunctionalAmount(workspace, input.amount);
+  const categoryIds = requireCategoryAssignments(input);
   const source = await store.getProfile(input.sourceFinancialAccountProfileId);
   const destination = await store.getProfile(
     input.destinationFinancialAccountProfileId,
@@ -53,6 +55,10 @@ export async function recordAccountTransfer(
         },
         {
           ledgerAccountId: source.postingAccountId,
+          ...(categoryIds.length ? { userCategoryIds: categoryIds } : {}),
+          ...(input.primaryUserCategoryId
+            ? { primaryUserCategoryId: input.primaryUserCategoryId }
+            : {}),
           debitMinorUnits: 0,
           creditMinorUnits: amount,
         },

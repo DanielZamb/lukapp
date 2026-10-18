@@ -69,6 +69,7 @@ export const financialAccountProfile = v.object({
   id: v.string(),
   workspaceId: v.string(),
   name: v.string(),
+  emoji: v.optional(v.string()),
   productKind,
   ledgerAccountId: v.string(),
 });

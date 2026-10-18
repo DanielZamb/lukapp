@@ -1,22 +1,23 @@
+import type { Theme } from "../../ui/tokens";
 import {
   BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
-import type { RefObject } from "react";
-import { Text } from "react-native";
-import { Choice, Field, Header, ListGroup, ListRow, PrimaryButton, useUi, useTheme } from "../../ui/core";
-import { spacing } from "../../ui/tokens";
+import { useMemo, useRef, type RefObject } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Field, Header, PrimaryButton, useTheme, useUi } from "../../ui/core";
+import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import type { PlaceDraft } from "./usePostingEditor";
 import type { PlaceKind } from "./pendingPostingSchema";
 
 const kinds: Array<[PlaceKind, string]> = [
-  ["cash", "Cash or wallet"],
-  ["bankAccount", "Bank account"],
-  ["savingsAccount", "Savings account"],
-  ["creditCard", "Credit card"],
-  ["loan", "Loan"],
+  ["bankAccount", "Checking"],
+  ["savingsAccount", "Savings"],
+  ["cash", "Wallet"],
 ];
+const emojis = ["💰", "🏦", "👛", "💳", "🏠", "💼", "🪙", "🐷", "✨", "🚗"];
+
 export function AccountSetupForm(props: {
   sheetRef: RefObject<BottomSheetModal | null>;
   value: PlaceDraft | null;
@@ -27,103 +28,193 @@ export function AccountSetupForm(props: {
   error: string;
   canSubmit: boolean;
   onChange: (value: PlaceDraft) => void;
-  onDate: () => void;
   onSubmit: () => void;
   onDismiss: () => void;
 }) {
   const ui = useUi();
   const theme = useTheme();
+  const styles = useMemo(() => accountSetupStyles(theme), [theme]);
+  const lookSheet = useRef<BottomSheetModal>(null);
   const value = props.value;
-  const owed =
-    value?.productKind === "creditCard" || value?.productKind === "loan";
   return (
-    <BottomSheetModal
-      ref={props.sheetRef}
-      snapPoints={["92%"]}
-      enableDynamicSizing={false}
-      enablePanDownToClose={props.editable}
-      enableContentPanningGesture={props.editable}
-      onDismiss={props.onDismiss}
-      backgroundStyle={{ backgroundColor: theme.background }}
-    >
-      {value && (
-        <BottomSheetScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ padding: spacing.xxl, gap: spacing.lg }}
-        >
-          <Header title="Add place" eyebrow="START TRACKING" />
-          <Text style={ui.label}>NAME</Text>
-          <BottomSheetTextInput
-            accessibilityLabel="Place name"
-            placeholder="Name of this place"
-            value={value.name}
-            editable={props.editable}
-            onChangeText={(name) => props.onChange({ ...value, name })}
-            style={ui.input}
-          />
-          {kinds.map(([productKind, label]) => (
-            <Choice
-              key={productKind}
-              label={label}
-              selected={value.productKind === productKind}
-              onPress={() => {
-                if (props.editable) props.onChange({ ...value, productKind });
-              }}
+    <>
+      <BottomSheetModal
+        ref={props.sheetRef}
+        snapPoints={["80%"]}
+        enableDynamicSizing={false}
+        enablePanDownToClose={props.editable}
+        enableContentPanningGesture={props.editable}
+        onDismiss={props.onDismiss}
+        backgroundStyle={{ backgroundColor: theme.background }}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+      >
+        {value && (
+          <BottomSheetScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.content}
+          >
+            <Header title="Add a place" eyebrow="ANOTHER PLACE" />
+            <Field
+              label="Name you recognize"
+              accessibilityLabel="Account name"
+              placeholder="Savings"
+              value={value.name}
+              editable={props.editable}
+              onChangeText={(name) => props.onChange({ ...value, name })}
+              InputComponent={BottomSheetTextInput}
             />
-          ))}
-          <Field
-            label={`${owed ? "Amount owed" : "Amount held"} · ${props.currency}`}
-            helperText={
-              owed
-                ? "How much is outstanding on this date? Enter zero or a positive amount. Earlier activity is outside Start Tracking."
-                : "How much do you hold on this date? Enter zero or a positive amount. Earlier activity is outside Start Tracking."
-            }
-            accessibilityLabel={owed ? "Amount owed" : "Amount held"}
-            value={value.amount}
-            editable={props.editable}
-            keyboardType="numbers-and-punctuation"
-            onChangeText={(amount) => props.onChange({ ...value, amount })}
-            InputComponent={BottomSheetTextInput}
-          />
-          <ListGroup>
-            <ListRow
-              title="Starting date"
-              value={new Intl.DateTimeFormat("en-US", {
-                dateStyle: "long",
-              }).format(new Date(`${value.date}T12:00:00`))}
-              onPress={
-                props.editable
-                  ? () => {
-                      props.onDate();
-                    }
-                  : undefined
+            <View style={styles.field}>
+              <Text style={styles.label}>Type</Text>
+              <View
+                style={styles.chips}
+                accessibilityRole="radiogroup"
+                accessibilityLabel="Place type"
+              >
+                {kinds.map(([productKind, label]) => (
+                  <Pressable
+                    key={productKind}
+                    accessibilityRole="radio"
+                    accessibilityState={{
+                      checked: value.productKind === productKind,
+                      disabled: !props.editable,
+                    }}
+                    disabled={!props.editable}
+                    onPress={() => props.onChange({ ...value, productKind })}
+                    style={[
+                      styles.chip,
+                      value.productKind === productKind && styles.selected,
+                    ]}
+                  >
+                    <Text style={ui.body}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Look</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Choose emoji"
+                disabled={!props.editable}
+                onPress={() => lookSheet.current?.present()}
+                style={styles.look}
+              >
+                <Text style={styles.emoji}>{value.emoji ?? "💰"}</Text>
+                <Text style={ui.muted}>Change</Text>
+              </Pressable>
+            </View>
+            <Field
+              label="Balance today"
+              accessibilityLabel="Balance today"
+              value={value.amount}
+              editable={props.editable}
+              keyboardType="numbers-and-punctuation"
+              placeholder="0"
+              onChangeText={(amount) => props.onChange({ ...value, amount })}
+              InputComponent={BottomSheetTextInput}
+            />
+            {!!props.error && (
+              <Text accessibilityRole="alert" style={ui.error}>
+                {props.error}
+              </Text>
+            )}
+            {props.pending && (
+              <Text style={ui.muted}>
+                This setup is saved for retry. Its answers stay fixed until
+                confirmed.
+              </Text>
+            )}
+            <PrimaryButton
+              label={
+                props.busy
+                  ? "Adding…"
+                  : props.pending
+                    ? "Retry setup"
+                    : "Add this place"
               }
+              trailingIcon="checkmark"
+              disabled={!props.canSubmit}
+              onPress={props.onSubmit}
             />
-          </ListGroup>
-          {!!props.error && (
-            <Text accessibilityRole="alert" style={ui.error}>
-              {props.error}
-            </Text>
-          )}
-          {props.pending && (
-            <Text style={ui.muted}>
-              This setup is saved for retry. Its answers stay fixed until
-              confirmed.
-            </Text>
-          )}
-          <PrimaryButton
-            label={
-              props.busy
-                ? "Setting up…"
-                : props.pending
-                  ? "Retry setup"
-                  : "Start tracking"
-            }
-            disabled={!props.canSubmit}
-            onPress={props.onSubmit}
-          />
-        </BottomSheetScrollView>
-      )}
-    </BottomSheetModal>
+          </BottomSheetScrollView>
+        )}
+      </BottomSheetModal>
+      <BottomSheetModal
+        ref={lookSheet}
+        snapPoints={["55%"]}
+        enableDynamicSizing={false}
+        backgroundStyle={{ backgroundColor: theme.background }}
+      >
+        {value && (
+          <BottomSheetScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.content}
+          >
+            <Header title="Look" />
+            <View style={styles.chips}>
+              {emojis.map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`Emoji ${emoji}`}
+                  accessibilityState={{
+                    checked: (value.emoji ?? "💰") === emoji,
+                  }}
+                  disabled={!props.editable}
+                  onPress={() => props.onChange({ ...value, emoji })}
+                  style={[
+                    styles.emojiChip,
+                    (value.emoji ?? "💰") === emoji && styles.selected,
+                  ]}
+                >
+                  <Text style={styles.emoji}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <PrimaryButton
+              label="Use this"
+              trailingIcon="checkmark"
+              onPress={() => lookSheet.current?.dismiss()}
+            />
+          </BottomSheetScrollView>
+        )}
+      </BottomSheetModal>
+    </>
   );
+}
+
+function accountSetupStyles(theme: Theme) {
+  return StyleSheet.create({
+    content: { padding: spacing.xxl, gap: spacing.xl },
+    field: { gap: spacing.sm },
+    label: { fontFamily: font.semibold, fontSize: 14, color: theme.foreground },
+    chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+    chip: {
+      minHeight: touchTarget,
+      justifyContent: "center",
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.full,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.secondary,
+    },
+    selected: { borderColor: theme.primary, borderWidth: 2 },
+    look: {
+      minHeight: touchTarget,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+    },
+    emoji: { fontSize: 26 },
+    emojiChip: {
+      minHeight: touchTarget,
+      minWidth: touchTarget,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+  });
 }
