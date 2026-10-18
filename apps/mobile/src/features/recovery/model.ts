@@ -7,7 +7,22 @@ export type RecoveryPlanView = Evaluation["plans"][number];
 export type RecoveryCandidate = Evaluation["candidates"][number];
 export type RecoveryPlace = Evaluation["destinations"][number];
 export const INSTALLMENT_COUNTS = [4, 6, 8, 12] as const;
-export const DEFAULT_INSTALLMENT_COUNT = 6;
+export const DEFAULT_INSTALLMENT_COUNT = 4;
+
+export function recoveryMoney(amount: Parameters<typeof formatMoney>[0]) {
+  return formatMoney(amount, { hideZeroDecimals: true });
+}
+
+export function recoveryMonthName(month: string) {
+  return new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" })
+    .format(new Date(`${month}-01T12:00:00Z`));
+}
+
+export function candidateDetail(candidate: Pick<RecoveryCandidate, "accountingDate" | "placeName">) {
+  const date = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", timeZone: "UTC" })
+    .format(new Date(`${candidate.accountingDate}T12:00:00Z`));
+  return candidate.placeName ? `${date} · ${candidate.placeName}` : date;
+}
 
 export function minInstallment(principalMinorUnits: number, installmentCount: number) {
   return Math.floor(principalMinorUnits / installmentCount);
@@ -43,9 +58,9 @@ export function limitsCopy(
   currency: string,
   suggestion: ReturnType<typeof suggestionFor>,
 ) {
-  const min = formatMoney({ currency, minorUnits: suggestion.minInstallmentMinorUnits });
-  const max = formatMoney({ currency, minorUnits: suggestion.maxInstallmentMinorUnits });
-  const extra = formatMoney({ currency, minorUnits: suggestion.premiumMinorUnits });
+  const min = recoveryMoney({ currency, minorUnits: suggestion.minInstallmentMinorUnits });
+  const max = recoveryMoney({ currency, minorUnits: suggestion.maxInstallmentMinorUnits });
+  const extra = recoveryMoney({ currency, minorUnits: suggestion.premiumMinorUnits });
   return {
     range: `Each month must be at least ${min} and at most ${max}.`,
     extra: suggestion.premiumMinorUnits > 0
@@ -56,8 +71,8 @@ export function limitsCopy(
 }
 
 export function progressCopy(plan: RecoveryPlanView) {
-  const recovered = formatMoney({ currency: plan.currency, minorUnits: plan.recoveredMinorUnits });
-  const target = formatMoney({ currency: plan.currency, minorUnits: plan.targetMinorUnits });
+  const recovered = recoveryMoney({ currency: plan.currency, minorUnits: plan.recoveredMinorUnits });
+  const target = recoveryMoney({ currency: plan.currency, minorUnits: plan.targetMinorUnits });
   return `${recovered} of ${target} moved back to savings`;
 }
 
@@ -73,8 +88,8 @@ export function movedCopy(input: {
     recoveredMinorUnits: input.recoveredMinorUnits,
     targetMinorUnits: input.targetMinorUnits,
   }) * 100);
-  const recovered = `${input.title} is now ${percent}% recovered. The savings balance stays separate from plan progress.`;
+  const recovered = `Your ${input.title} plan is now ${percent}% complete. The Savings account balance remains separate from plan progress.`;
   if (input.movedMinorUnits === input.countedMinorUnits) return recovered;
-  const counted = formatMoney({ currency: input.currency, minorUnits: input.countedMinorUnits });
+  const counted = recoveryMoney({ currency: input.currency, minorUnits: input.countedMinorUnits });
   return `${counted} counted toward ${input.title}. ${recovered}`;
 }

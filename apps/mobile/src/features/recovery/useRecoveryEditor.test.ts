@@ -47,7 +47,7 @@ test("the default suggestion is the even split, and an edit posts that exact mon
   const api = transport();
   const editor = await open(api);
   expect(editor()).toMatchObject({
-    installmentCount: 6, destinationId: "savings", suggestion: { installmentMinorUnits: 200_000, valid: true },
+    installmentCount: 4, destinationId: "savings", suggestion: { installmentMinorUnits: 300_000, valid: true },
   });
   await act(async () => { editor().onMonths(4); editor().onAmount("3.300"); });
   expect(editor().suggestion).toMatchObject({ installmentMinorUnits: 330_000, premiumMinorUnits: 120_000, valid: true });
@@ -63,11 +63,12 @@ test("an uncertain activation freezes edits and retry reuses the same key", asyn
   const api = transport();
   api.save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const editor = await open(api);
-  await act(async () => { editor().onAmount("2.000"); await editor().submit(); editor().onMonths(8); });
-  expect(editor()).toMatchObject({ installmentCount: 6, amount: "2.000", pending: true, editable: false });
+  await act(async () => { editor().onAmount("3.000"); });
+  await act(async () => { await editor().submit(); editor().onMonths(8); });
+  expect(editor()).toMatchObject({ installmentCount: 4, amount: "3.000", pending: true, editable: false, canDismiss: false });
   await act(async () => { await editor().submit(); });
   expect(api.save.mock.calls.map(([request]) => [request.installmentCount, request.installmentMinorUnits, request.idempotencyKey]))
-    .toEqual([[6, 200_000, "activate-1"], [6, 200_000, "activate-1"]]);
+    .toEqual([[4, 300_000, "activate-1"], [4, 300_000, "activate-1"]]);
 });
 
 test("a recovery rejection keeps the draft editable", async () => {
@@ -80,7 +81,7 @@ test("a recovery rejection keeps the draft editable", async () => {
   });
 });
 
-test.each(["", "0", "1.999", "12.001"])("invalid monthly amount %s stays editable without activating", async (amount) => {
+test.each(["", "0", "2.999", "12.001"])("invalid monthly amount %s stays editable without activating", async (amount) => {
   const api = transport();
   const editor = await open(api);
   await act(async () => { editor().onAmount(amount); });
