@@ -5,6 +5,8 @@ import type { CategorySheetProps } from "../categories/CategorySheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { seedCandidate } from "../intake/devSeed";
+import { getFunctionName } from "convex/server";
+import type { Category } from "../categories/model";
 
 vi.hoisted(() => {
   (globalThis as { __DEV__?: boolean }).__DEV__ = false;
@@ -24,6 +26,10 @@ const back = vi.hoisted(() => ({ handler: undefined as (() => boolean) | undefin
 const routeBack = vi.hoisted(() => vi.fn());
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
+const queryData = vi.hoisted(() => {
+  const state: { categories: Category[] } = { categories: [] };
+  return state;
+});
 const intakeActions = vi.hoisted(() => ({
   read: vi.fn(async (id: string) =>
     id === "candidate-1"
@@ -47,7 +53,16 @@ vi.mock("expo-router", () => ({
 vi.mock("convex/react", () => ({
   useAction: () => confirmOne,
   useConvex: () => ({ query: vi.fn() }),
-  useQuery: () => [],
+  useQuery: (reference: Parameters<typeof getFunctionName>[0]) => {
+    const name = getFunctionName(reference);
+    if (name.endsWith(":listUserCategories")) return queryData.categories;
+    if (name.endsWith(":listFinancialAccountProfiles")) return [
+      { id: "daily", name: "My money" },
+      { id: "wallet", name: "Wallet" },
+    ];
+    if (name.endsWith(":evaluate")) return { jars: [] };
+    return [];
+  },
 }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "picker" }));
 vi.mock("@gorhom/bottom-sheet", () => ({
@@ -110,10 +125,6 @@ vi.mock("../categories/CategorySheet", () => ({
     return visible ? createElement("category-sheet", props) : null;
   },
 }));
-vi.mock("../categories/transactionSelection", () => ({
-  canPostCategories: () => true,
-  needsPrimary: () => false,
-}));
 vi.mock("./PlaceSheet", () => ({
   PlaceSheet: ({ sheetRef, ...props }: ComponentProps<typeof import("./PlaceSheet").PlaceSheet>) => {
     useImperativeHandle(sheetRef, () => ({
@@ -157,6 +168,7 @@ beforeEach(() => {
   route.candidateId = undefined;
   form.sourceNote = undefined;
   form.props = undefined;
+  queryData.categories = [];
   back.handler = undefined;
   vi.clearAllMocks();
   platform.os = "ios";
@@ -184,6 +196,57 @@ function formProps() {
   if (!form.props) throw new Error("Post form is not mounted");
   return form.props;
 }
+
+test.each(["normal", "transfer"] satisfies Array<NonNullable<PostingFormProps["entryType"]>>)(
+  "%s requires a selected category before enabling Post, without saving or posting",
+  async (entryType) => {
+    queryData.categories = [{
+      id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food",
+      nature: "Expense", natureSource: "answered",
+      classification: { kind: "fallback", version: "test" },
+      style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
+    }];
+    await mount();
+    await act(async () => {
+      formProps().onAmountChange("-7");
+      formProps().onDescriptionChange("PostingPalette-2134");
+      formProps().onEntryType?.(entryType);
+    });
+    if (entryType === "transfer") {
+      await act(async () => formProps().onDestination?.());
+      const place = root?.root.find((node) => String(node.type) === "place-sheet");
+      await act(async () => place?.props.onSelect("wallet"));
+    }
+    expect(formProps()).toMatchObject({ category: "Pick", canSubmit: false });
+    await act(async () => formProps().onCategory());
+    const sheet = () => {
+      if (!root) throw new Error("Post route is not mounted");
+      return root.root.find((node) => String(node.type) === "category-sheet");
+    };
+    await act(async () => sheet().props.onSelect("food"));
+    await act(async () => sheet().props.onDone());
+    expect(formProps()).toMatchObject({ category: "F Food", canSubmit: true });
+    await act(async () => formProps().onCategory());
+    await act(async () => sheet().props.onSelect("food"));
+    await act(async () => sheet().props.onDone());
+    expect(formProps()).toMatchObject({ category: "Pick", canSubmit: false });
+    expect(writes.save).not.toHaveBeenCalled();
+    expect(writes.post).not.toHaveBeenCalled();
+    expect(confirmOne).not.toHaveBeenCalled();
+  },
+);
+
+test("Initial balance can enable Post without a category", async () => {
+  await mount();
+  await act(async () => {
+    formProps().onEntryType?.("initial");
+    formProps().onAmountChange("7");
+    formProps().onDescriptionChange("Opening");
+  });
+  expect(formProps()).toMatchObject({ categoryEnabled: false, canSubmit: true });
+  expect(writes.save).not.toHaveBeenCalled();
+  expect(writes.post).not.toHaveBeenCalled();
+});
 
 test.each(["source", "destination"])("Android Back from %s preserves unsaved Post fields", async (target) => {
   platform.os = "android";
@@ -246,7 +309,7 @@ test("Android Back dismisses the unsaved category editor and preserves the Post 
   await act(async () => { handled = back.handler?.() ?? false; });
   expect(handled).toBe(true);
   expect(root?.root.findAll((node) => String(node.type) === "category-sheet")).toHaveLength(0);
-  expect(formProps()).toMatchObject({ amount: "-7", description: "PostingCheck-2122", category: "Pick" });
+  expect(formProps()).toMatchObject({ amount: "-7", description: "PostingCheck-2122", category: "Pick", canSubmit: false });
   expect(routeBack).not.toHaveBeenCalled();
   expect(back.handler).toBeUndefined();
   await act(async () => formProps().onCategory());

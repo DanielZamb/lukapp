@@ -204,7 +204,9 @@ function PostMoney({
   } | null>(null);
   const categoryEnabled = editor.entryType !== "initial";
   const categoryValid =
-    !categoryEnabled || canPostCategories(editor.categories, categories);
+    !categoryEnabled ||
+    (editor.categories.ids.length > 0 &&
+      canPostCategories(editor.categories, categories));
   const placesValid =
     !!profile &&
     (editor.entryType !== "transfer" ||

@@ -184,10 +184,13 @@ test("unselected, under-limit and already-over jars do not interrupt posting", a
 test("budget loading waits for an expense but does not change income, transfers or opening balances", async () => {
   budget = undefined;
   await open();
+  const { CategoryPicker } = await import("../categories/CategoryPicker");
+  await act(async () => root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null }));
   expect(form().canSubmit).toBe(false);
   await act(async () => form().onPost());
   expect(transport.post).not.toHaveBeenCalled();
   await act(async () => form().onAmountChange("120.000,00"));
+  await act(async () => root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null }));
   expect(form().canSubmit).toBe(true);
   await act(async () => form().onPost());
   expect(transport.post.mock.calls[0][0].kind).toBe("income");
@@ -195,6 +198,7 @@ test("budget loading waits for an expense but does not change income, transfers 
   const { PlaceSheet } = await import("../posting/PlaceSheet");
   await act(async () => form().onDestination());
   await act(async () => root?.root.findByType(PlaceSheet).props.onSelect("card"));
+  await act(async () => root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null }));
   await act(async () => form().onPost());
   expect(transport.post.mock.calls[1][0].kind).toBe("transfer");
   await act(async () => { form().onEntryType("initial"); form().onAmountChange("120.000,00"); });
@@ -246,7 +250,10 @@ test("retrying a pending expense preserves its command and idempotency key", asy
 
 
 test("batch route queues One, cancels modal edits, adds another, and posts through the existing transport", async () => {
+  if (budget) budget.jars = [];
   await open();
+  const { CategoryPicker } = await import("../categories/CategoryPicker");
+  await act(async () => root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null }));
   await act(async () => form().onBatch());
   const tape = () => {
     if (!root) throw new Error("Post not mounted");
@@ -267,6 +274,7 @@ test("batch route queues One, cancels modal edits, adds another, and posts throu
     form().onAmountChange("+30.000");
     form().onDescriptionChange("Refund");
   });
+  await act(async () => root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null }));
   await act(async () => form().onPost());
   expect(tape().batch.queue).toHaveLength(2);
   expect(transport.post).not.toHaveBeenCalled();
@@ -276,8 +284,8 @@ test("batch route queues One, cancels modal edits, adds another, and posts throu
   await act(async () => form().onBatch());
   await act(async () => { await tape().batch.postAll(); });
   expect(transport.post.mock.calls.map(([entry]) => entry)).toEqual([
-    { kind: "expense", payload: { workspaceId: "workspace", financialAccountProfileId: "bank", accountingDate: "2026-10-18", amount: { currency: "COP", minorUnits: 12000000 }, description: "Groceries", idempotencyKey: "post-key" } },
-    { kind: "income", payload: { workspaceId: "workspace", financialAccountProfileId: "bank", accountingDate: expect.any(String), amount: { currency: "COP", minorUnits: 3000000 }, description: "Refund", idempotencyKey: "post-key-2" } },
+    { kind: "expense", payload: { workspaceId: "workspace", financialAccountProfileId: "bank", accountingDate: "2026-10-18", amount: { currency: "COP", minorUnits: 12000000 }, description: "Groceries", idempotencyKey: "post-key", userCategoryIds: ["food"] } },
+    { kind: "income", payload: { workspaceId: "workspace", financialAccountProfileId: "bank", accountingDate: expect.any(String), amount: { currency: "COP", minorUnits: 3000000 }, description: "Refund", idempotencyKey: "post-key-2", userCategoryIds: ["food"] } },
   ]);
   expect(tape().batch.queue).toEqual([]);
   expect(tape().batch.posted).toEqual({ count: 2, net: -9000000 });
