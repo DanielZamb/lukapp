@@ -232,6 +232,59 @@ test("an unlock completing after backgrounding or sign-out cannot reopen the app
   }
 });
 
+test.each(["unlock", "enrollment"])("background during the %s prompt cancels it and late success cannot reopen the app", async operation => {
+  const { gate, deps } = fixture(operation === "unlock" ? enrolled : {
+    version: 1, installId, kind: "sign-in-required",
+  });
+  if (operation === "enrollment") gate.approveSignIn(identity.sessionId);
+  await gate.setIdentity(identity);
+  const started = deferred();
+  const finish = deferred();
+  const prompt = operation === "unlock" ? deps.unlock : deps.enroll;
+  prompt.mockImplementation(async () => { started.resolve(); await finish.promise; });
+  const attempt = gate.unlock();
+  await started.promise;
+  expect(gate.getSnapshot().state.kind).toBe("authenticating");
+  // OS prompt focus loss is not app backgrounding.
+  gate.setPresence(false, false, false);
+  expect(deps.cancelPrompt).not.toHaveBeenCalled();
+  gate.setPresence(false, false, true);
+  expect(deps.cancelPrompt).toHaveBeenCalledOnce();
+  expect(gate.getSnapshot().obscured).toBe(true);
+  finish.resolve();
+  await attempt;
+  await new Promise<void>(resolve => setImmediate(resolve));
+  gate.setPresence(true, true, false);
+  expect(gate.isOpenFor(identity)).toBe(false);
+  expect(gate.getSnapshot().state.kind).toBe("reauthentication");
+  expect(prompt).toHaveBeenCalledOnce();
+  expect(deps.reveal).not.toHaveBeenCalled();
+});
+
+test("Sign in instead from the locked screen requires a new Clerk sign-in without starting biometrics", async () => {
+  const { gate, deps, stored } = fixture();
+  await gate.setIdentity(identity);
+  await gate.reauthenticate();
+  expect(stored()).toEqual({ version: 1, installId, kind: "sign-in-required" });
+  expect(deps.signOut).toHaveBeenCalledOnce();
+  expect(deps.unlock).not.toHaveBeenCalled();
+  expect(deps.enroll).not.toHaveBeenCalled();
+  expect(gate.isOpenFor(identity)).toBe(false);
+  await gate.setIdentity(null);
+  expect(gate.getSnapshot().state.kind).toBe("sign-in");
+});
+
+test("failed Clerk sign-out from the locked screen retains the reauthentication path", async () => {
+  const { gate, deps } = fixture();
+  await gate.setIdentity(identity);
+  deps.signOut.mockRejectedValueOnce(new Error("Offline"));
+  await gate.reauthenticate();
+  expect(gate.getSnapshot().state.kind).toBe("reauthentication");
+  await gate.reauthenticate();
+  expect(deps.signOut).toHaveBeenCalledTimes(2);
+  expect(deps.unlock).not.toHaveBeenCalled();
+});
+
 test("inactivity clock rollback fails closed and identity changes never reuse an unlock", async () => {
   const { gate, time } = await opened();
   time(0);
