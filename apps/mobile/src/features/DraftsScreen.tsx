@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { ConfirmationScreen, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, theme, ui } from "../ui/core";
-import { font, radius, spacing, touchTarget } from "../ui/tokens";
+import { font, fontSize, radius, spacing, touchTarget } from "../ui/tokens";
 import { formatMoney } from "./money";
 import type { DraftListItem, LocalEntryDraftId } from "./localEntryDrafts";
 import type { IntakeCandidate, IntakeCandidateId } from "./intake/candidates";
@@ -23,6 +23,30 @@ function candidateDetail(
   if (candidate.error) return candidate.error;
   if (!isReadyCandidate(candidate, workspaceCurrency)) return "Needs review";
   return places.find((place) => place.id === candidate.suggestion.financialAccountProfileId)?.name ?? "Saved place";
+}
+
+function CandidateRow({ title, detail, value, onPress, isLast }: {
+  title: string;
+  detail: string;
+  value: string;
+  onPress: () => void;
+  isLast?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Review ${title}`}
+      onPress={onPress}
+      style={[styles.candidateRow, isLast && styles.lastCandidateRow]}
+    >
+      <View style={styles.candidateCopy}>
+        <Text style={styles.candidateTitle}>{title}</Text>
+        <Text style={styles.candidateDetail}>{detail}</Text>
+      </View>
+      <Text style={styles.candidateValue}>{value}</Text>
+      <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
+    </Pressable>
+  );
 }
 
 export function DraftsScreen({
@@ -156,14 +180,14 @@ export function DraftsScreen({
       )}
       {readyToShow && !empty && (
         <>
-          <View style={styles.track} accessibilityRole="tablist">
+          <View style={styles.track} accessibilityRole="radiogroup">
             {([
               { id: "now", label: "Needs you now", count: now.length + postingDrafts.length },
               { id: "wait", label: "Can wait", count: wait.length + otherDrafts.length },
             ] satisfies { id: InboxSegment; label: string; count: number }[]).map((item) => (
               <Pressable
                 key={item.id}
-                accessibilityRole="tab"
+                accessibilityRole="radio"
                 accessibilityState={{ selected: segment === item.id }}
                 accessibilityLabel={`${item.label}, ${item.count}`}
                 onPress={() => onSegment(item.id)}
@@ -176,15 +200,13 @@ export function DraftsScreen({
           </View>
           <ListGroup>
             {candidateRows.map((candidate) => (
-              <ListRow
+              <CandidateRow
                 key={candidate.id}
                 title={candidate.suggestion.description.trim() || "Needs review"}
                 detail={candidateDetail(candidate, currency, places)}
                 value={formatMoney({
                   currency: candidate.currency,
-                  minorUnits: candidate.suggestion.direction === "out"
-                    ? -Math.abs(candidate.suggestion.amountMinorUnits)
-                    : Math.abs(candidate.suggestion.amountMinorUnits),
+                  minorUnits: Math.abs(candidate.suggestion.amountMinorUnits),
                 })}
                 onPress={() => onOpenCandidate(candidate.id)}
               />
@@ -221,6 +243,21 @@ export function DraftsScreen({
 }
 
 const styles = StyleSheet.create({
+  candidateRow: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
+  },
+  lastCandidateRow: { borderBottomWidth: 0 },
+  candidateCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
+  candidateTitle: { fontFamily: font.semibold, fontSize: fontSize.body, lineHeight: 22, color: theme.foreground },
+  candidateDetail: { fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: theme.mutedForeground },
+  candidateValue: { maxWidth: "42%", fontFamily: font.semibold, fontSize: 14, lineHeight: 20, color: theme.foreground, textAlign: "right" },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   headerCopy: { flex: 1 },
   sources: { minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.xs },

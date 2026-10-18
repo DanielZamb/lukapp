@@ -133,7 +133,7 @@ test("the inbox names the month when empty and waits for loading to finish", asy
   expect(text()).toContain("Nothing waiting");
   expect(text()).toContain("October is ready to close. Remaining local Candidates never block Month Close.");
   expect(text()).not.toContain("Preview Month Close warning");
-  expect(root?.root.findAllByType("button").some((node) => node.props.accessibilityRole === "tab")).toBe(false);
+  expect(root?.root.findAllByType("button").some((node) => node.props.accessibilityRole === "radio")).toBe(false);
 });
 
 test("a Candidate row opens the shared form and Confirm all Ready posts the ready set", async () => {
@@ -165,12 +165,7 @@ test("a Candidate row opens the shared form and Confirm all Ready posts the read
   expect(text()).not.toContain("Expires");
   expect(text()).toContain("Retry posting");
   expect(text()).not.toContain("Draft on this device");
-  const groceries = root?.root
-    .findAllByType("button")
-    .find((node) =>
-      node.findAllByType("text").some((child) => child.children.includes("Groceries")),
-    );
-  await act(async () => groceries?.props.onPress());
+  await act(async () => button("Review Groceries").props.onPress());
   expect(onOpenCandidate).toHaveBeenCalledWith("candidate-groceries");
   const confirm = root?.root
     .findAllByType("button")
@@ -198,6 +193,58 @@ test("a Candidate row opens the shared form and Confirm all Ready posts the read
   );
   await act(async () => draft?.props.onPress());
   expect(onResumeDraft).toHaveBeenCalledWith("open-1");
+});
+
+test.each(["now", "wait"] as const)("priority segments are radios with %s selected", async (segment) => {
+  const onSegment = vi.fn();
+  await act(async () => {
+    root = create(createElement(DraftsScreen, render({ now: [candidate], segment, onSegment })));
+  });
+  const groups = root?.root.findAllByType("view").filter((node) => node.props.accessibilityRole === "radiogroup");
+  expect(groups).toHaveLength(1);
+  expect(groups?.[0]?.findAllByType("button").map((node) => ({
+    role: node.props.accessibilityRole,
+    state: node.props.accessibilityState,
+  }))).toEqual([
+    { role: "radio", state: { selected: segment === "now" } },
+    { role: "radio", state: { selected: segment === "wait" } },
+  ]);
+  await act(async () => button("Needs you now, 1").props.onPress());
+  await act(async () => button("Can wait, 0").props.onPress());
+  expect(onSegment.mock.calls).toEqual([["now"], ["wait"]]);
+});
+
+test.each([
+  { direction: "out", amountMinorUnits: 126400, currency: "COP", expected: "COP 1.264,00" },
+  { direction: "in", amountMinorUnits: 126400, currency: "USD", expected: "USD 1.264,00" },
+  { direction: "out", amountMinorUnits: -126400, currency: "COP", expected: "COP 1.264,00" },
+  { direction: "in", amountMinorUnits: -126400, currency: "USD", expected: "USD 1.264,00" },
+] as const)("a $direction Candidate with $amountMinorUnits $currency has an unsigned amount and review label", async ({ direction, amountMinorUnits, currency, expected }) => {
+  const onOpenCandidate = vi.fn();
+  await act(async () => {
+    root = create(createElement(DraftsScreen, render({
+      now: [{ ...candidate, currency, suggestion: { ...candidate.suggestion, direction, amountMinorUnits } }],
+      onOpenCandidate,
+    })));
+  });
+  const row = button("Review Groceries");
+  expect(row.props.accessibilityRole).toBe("button");
+  expect(row.findAllByType("text").map((node) => node.children.join(""))).toContain(expected);
+  await act(async () => row.props.onPress());
+  expect(onOpenCandidate).toHaveBeenCalledExactlyOnceWith(candidate.id);
+});
+
+test.each([
+  { description: "  Groceries  ", title: "Groceries" },
+  { description: "  ", title: "Needs review" },
+])("Candidate review labels match the displayed description '$title'", async ({ description, title }) => {
+  await act(async () => {
+    root = create(createElement(DraftsScreen, render({
+      wait: [{ ...candidate, suggestion: { ...candidate.suggestion, description } }],
+      segment: "wait",
+    })));
+  });
+  expect(button(`Review ${title}`).findAllByType("text").map((node) => node.children.join(""))).toContain(title);
 });
 
 test("a foreign-currency Candidate shows why it is not Ready", async () => {
