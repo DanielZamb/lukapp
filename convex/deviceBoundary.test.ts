@@ -98,6 +98,7 @@ async function fixture() {
 }
 
 test("normal registered action bootstraps once, posts an expense once on retry, and keeps reads reactive", async () => {
+  vi.setSystemTime(Date.UTC(2026, 9, 17, 15));
   const { client, root } = await fixture();
   const first = await client.action(setup, {});
   expect(await client.action(setup, {})).toEqual(first);
