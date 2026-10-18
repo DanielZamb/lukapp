@@ -4,16 +4,17 @@ import {
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import type { RefObject } from "react";
-import { Text } from "react-native";
-import { Choice, Header, SecondaryButton, theme, ui } from "../../ui/core";
-import { spacing } from "../../ui/tokens";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { Pressable, Text } from "react-native";
+import { Header, theme, ui } from "../../ui/core";
+import { spacing, touchTarget } from "../../ui/tokens";
 
 export function PlaceSheet(props: {
   sheetRef: RefObject<BottomSheetModal | null>;
   title: string;
   search: string;
   onSearch: (value: string) => void;
-  places: Array<{ id: string; name: string }> | undefined;
+  places: Array<{ id: string; name: string; emoji?: string }> | undefined;
   selectedId: string | null;
   excludedId?: string;
   disabled: boolean;
@@ -23,7 +24,9 @@ export function PlaceSheet(props: {
   const visible = props.places?.filter(
     (place) =>
       place.id !== props.excludedId &&
-      place.name.toLocaleLowerCase().includes(props.search.toLocaleLowerCase()),
+      `${place.emoji ?? "💰"} ${place.name}`
+        .toLowerCase()
+        .includes(props.search.trim().toLowerCase()),
   );
   return (
     <BottomSheetModal
@@ -46,23 +49,50 @@ export function PlaceSheet(props: {
           style={ui.input}
         />
         {visible?.map((place) => (
-          <Choice
+          <Pressable
             key={place.id}
-            label={place.name}
-            selected={place.id === props.selectedId}
+            accessibilityRole="button"
+            accessibilityLabel={`${place.emoji ?? "💰"} ${place.name}`}
+            accessibilityState={{
+              selected: place.id === props.selectedId,
+              disabled: props.disabled,
+            }}
+            disabled={props.disabled}
+            style={{
+              minHeight: 64,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.lg,
+            }}
             onPress={() => {
               if (!props.disabled) props.onSelect(place.id);
             }}
-          />
+          >
+            <Text style={{ fontSize: 22 }}>{place.emoji ?? "💰"}</Text>
+            <Text style={[ui.body, { flex: 1 }]}>{place.name}</Text>
+            {place.id === props.selectedId && (
+              <Ionicons name="checkmark" size={20} color={theme.primary} />
+            )}
+          </Pressable>
         ))}
         {visible?.length === 0 && (
           <Text style={ui.muted}>No places found.</Text>
         )}
-        <SecondaryButton
-          label="Add place"
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add a place"
           disabled={props.disabled}
           onPress={props.onAdd}
-        />
+          style={{
+            minHeight: touchTarget,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.lg,
+          }}
+        >
+          <Ionicons name="add" size={24} color={theme.foreground} />
+          <Text style={ui.body}>Add a place</Text>
+        </Pressable>
       </BottomSheetScrollView>
     </BottomSheetModal>
   );

@@ -29,6 +29,7 @@ export async function setupFinancialAccountProfile(
   if (previous) {
     if (
       previous.name !== input.name.trim() ||
+      previous.emoji !== input.emoji ||
       previous.productKind !== input.productKind ||
       previous.accountingDate !== input.accountingDate ||
       previous.amount.currency !== input.amount.currency ||
@@ -77,6 +78,7 @@ export async function setupFinancialAccountProfile(
   await store.insertAccountSetup({
     workspaceId: workspace.id,
     name: input.name.trim(),
+    ...(input.emoji ? { emoji: input.emoji } : {}),
     productKind: input.productKind,
     amount: input.amount,
     accountingDate: input.accountingDate,

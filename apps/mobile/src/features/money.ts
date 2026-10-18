@@ -24,10 +24,15 @@ export function parseMoney(text: string, locale = "es-CO"): number {
     throw new Error("Check the thousands separators.");
   const digits = groups.join("");
   if (!/^\d+$/.test(digits)) throw new Error("Enter a valid amount.");
-  const minor = BigInt(digits) * 100n + BigInt(fraction.padEnd(2, "0"));
-  if (minor > BigInt(Number.MAX_SAFE_INTEGER))
+  const minorDigits =
+    `${digits}${fraction.padEnd(2, "0")}`.replace(/^0+/, "") || "0";
+  const max = String(Number.MAX_SAFE_INTEGER);
+  if (
+    minorDigits.length > max.length ||
+    (minorDigits.length === max.length && minorDigits > max)
+  )
     throw new Error("Amount is too large.");
-  return sign * Number(minor);
+  return sign * Number(minorDigits);
 }
 
 export type FormatMoneyOptions = {
