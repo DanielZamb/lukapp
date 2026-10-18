@@ -1,6 +1,6 @@
 import React from "react";
 import { Text, TextInput, View } from "react-native";
-import { Header, PrimaryButton, Screen, SecondaryButton, theme, ui } from "../ui/core";
+import { Header, PrimaryButton, Screen, SecondaryButton, useUi, useTheme } from "../ui/core";
 
 export function NamedDeviceStep({
   name,
@@ -19,6 +19,8 @@ export function NamedDeviceStep({
   onSubmit: () => void;
   onSignOut: () => void;
 }) {
+  const ui = useUi();
+  const theme = useTheme();
   return (
     <Screen>
       <Header title="Name this device" eyebrow="YOUR DEVICES" />

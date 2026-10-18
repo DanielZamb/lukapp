@@ -6,12 +6,12 @@ import {
 } from "@gorhom/bottom-sheet";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { PrimaryButton, theme, ui } from "../../ui/core";
+import { PrimaryButton, useTheme, useUi } from "../../ui/core";
 import { spacing, touchTarget } from "../../ui/tokens";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import type { SetupCategory } from "../setup/model";
 import { SetupBackdrop } from "../setup/SearchSheet";
-import { setupStyles as styles } from "../setup/styles";
+import { useSetupStyles } from "../setup/styles";
 import {
   categoryColor,
   categoryPalette,
@@ -38,6 +38,9 @@ export function RestyleSheet({
   onCommit: (category: SetupCategory) => void;
   onClose: () => void;
 }) {
+  const theme = useTheme();
+  const ui = useUi();
+  const styles = useSetupStyles();
   const sheet = useRef<BottomSheetModal>(null);
   const [name, setName] = useState("");
   const [style, setStyle] = useState(

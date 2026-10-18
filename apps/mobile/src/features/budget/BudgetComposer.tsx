@@ -1,5 +1,7 @@
+import { useMemo } from "react";
+import type { Theme } from "../../ui/tokens";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Header, PrimaryButton, Screen, theme, ui } from "../../ui/core";
+import { Header, PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { formatMoney, parseMoney } from "../money";
 import { jarPresentation, type BudgetCategory } from "./model";
@@ -22,6 +24,9 @@ export function limitSuggestions(spentMinorUnits: number) {
 }
 
 export function BudgetComposer(props: Props) {
+  const theme = useTheme();
+  const ui = useUi();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   let limit = 0;
   try { limit = parseMoney(props.amount); } catch { /* Incomplete input stays editable. */ }
   const { over, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
@@ -63,27 +68,29 @@ export function BudgetComposer(props: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  page: { gap: spacing.xl, paddingTop: spacing.md },
-  board: { gap: spacing.md },
-  label: { color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
-  amount: {
-    minHeight: 88, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1,
-    borderColor: theme.ring, color: theme.foreground, backgroundColor: theme.secondary,
-    fontSize: fontSize.hero, fontFamily: font.extrabold, letterSpacing: -1.2,
-  },
-  jar: { height: 22, borderRadius: radius.full, overflow: "hidden" },
-  hint: { color: theme.mutedForeground, fontSize: fontSize.label, lineHeight: 16, fontFamily: font.regular },
-  suggestions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: {
-    minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.lg,
-    borderRadius: radius.full, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary,
-  },
-  selected: { borderColor: theme.primary, borderWidth: 2 },
-  chipText: { color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
-  spentChip: {
-    alignSelf: "flex-start", minHeight: touchTarget, flexDirection: "row", alignItems: "center",
-    gap: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.full, borderWidth: 2,
-  },
-  emoji: { fontSize: 18 },
-});
+function createStyles(theme: Theme) {
+  return StyleSheet.create({
+    page: { gap: spacing.xl, paddingTop: spacing.md },
+    board: { gap: spacing.md },
+    label: { color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
+    amount: {
+      minHeight: 88, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1,
+      borderColor: theme.ring, color: theme.foreground, backgroundColor: theme.secondary,
+      fontSize: fontSize.hero, fontFamily: font.extrabold, letterSpacing: -1.2,
+    },
+    jar: { height: 22, borderRadius: radius.full, overflow: "hidden" },
+    hint: { color: theme.mutedForeground, fontSize: fontSize.label, lineHeight: 16, fontFamily: font.regular },
+    suggestions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+    chip: {
+      minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.lg,
+      borderRadius: radius.full, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary,
+    },
+    selected: { borderColor: theme.primary, borderWidth: 2 },
+    chipText: { color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
+    spentChip: {
+      alignSelf: "flex-start", minHeight: touchTarget, flexDirection: "row", alignItems: "center",
+      gap: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.full, borderWidth: 2,
+    },
+    emoji: { fontSize: 18 },
+  });
+}

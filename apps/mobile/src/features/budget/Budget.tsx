@@ -5,7 +5,7 @@ import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
-import { Screen, theme } from "../../ui/core";
+import { Screen, useTheme } from "../../ui/core";
 import { api } from "../api";
 import { BudgetBoard } from "./BudgetBoard";
 import { BudgetCreation } from "./BudgetCreation";
@@ -14,6 +14,7 @@ import { monthLabel, type BudgetCategory } from "./model";
 import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 
 export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { workspaceId: string; timeZone: string; initialCategoryId?: string; onBack: () => void }) {
+  const theme = useTheme();
   const calendar = useWorkspaceCalendar(timeZone);
   const [editor, setEditor] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
   const [creation, setCreation] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);

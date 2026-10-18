@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
 import { theme } from "../../ui/core";
+import { withThemeProvider } from "../../ui/testTheme";
 import { BudgetBoard, type BudgetBoardProps } from "./BudgetBoard";
 import type { BudgetJar } from "./model";
 
@@ -22,7 +23,9 @@ async function render(props: Partial<BudgetBoardProps> = {}) {
     month: "2026-10", currency: "COP", canAdd: true, saved: false, jars: [], categoryColors: new Map(),
     onBack: () => {}, onAdd: () => {}, onEdit: () => {},
   };
-  await act(async () => { root = create(createElement(BudgetBoard, { ...defaults, ...props })); });
+  await act(async () => {
+    root = create(withThemeProvider(createElement(BudgetBoard, { ...defaults, ...props })));
+  });
   if (!root) throw new Error("Board not mounted");
   return root.root;
 }

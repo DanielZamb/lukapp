@@ -1,7 +1,7 @@
 import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivityRow } from "../ActivityRows";
-import { Header, SecondaryButton, ui } from "../../ui/core";
+import { Header, SecondaryButton, useUi } from "../../ui/core";
 import { spacing } from "../../ui/tokens";
 import type { HistoryRow } from "./types";
 
@@ -13,6 +13,7 @@ export function HistoryScreen({ rows, status, accountName, onMore, onEntry, onBa
   onEntry: (id: string) => void;
   onBack: () => void;
 }) {
+  const ui = useUi();
   return <SafeAreaView style={ui.screen}>
     <FlatList
       data={rows}

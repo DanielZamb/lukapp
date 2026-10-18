@@ -45,7 +45,7 @@ vi.mock("./nativeEntry", () => ({
 }));
 vi.mock("../features/clearLocalInput", () => ({ clearLocalInput: async () => {} }));
 vi.mock("../ui/core", () => ({
-  Header: "header", Screen: "screen", PrimaryButton: "button", SecondaryButton: "button", ui: {},
+  Header: "header", Screen: "screen", PrimaryButton: "button", SecondaryButton: "button", useUi: () => ({}),
 }));
 import { LocalEntryGate } from "./LocalEntryGate";
 

@@ -13,7 +13,7 @@ import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
-import { Header, PrimaryButton, theme, ui } from "../ui/core";
+import { Header, PrimaryButton, useTheme, useUi } from "../ui/core";
 import { font, radius, spacing } from "../ui/tokens";
 import { api } from "./api";
 import { SetupCategories } from "./categories/SetupCategories";
@@ -32,7 +32,7 @@ import {
   type SetupSummary,
 } from "./setup/model";
 import { SearchSheet, SetupBackdrop } from "./setup/SearchSheet";
-import { setupStyles as styles } from "./setup/styles";
+import { useSetupStyles } from "./setup/styles";
 
 type SetupRequest = FunctionArgs<typeof api.accounting.ensurePersonalDefaults>;
 const setupConflict = z.object({ code: z.literal("setup_conflict") });
@@ -43,6 +43,9 @@ export function Setup({
   onComplete: (summary: SetupSummary) => void;
   onCancel: () => void;
 }) {
+  const theme = useTheme();
+  const ui = useUi();
+  const styles = useSetupStyles();
   const interact = useLocalEntryInteraction();
   const reportFailure = useDeviceAccessFailure();
   const sheet = useRef<BottomSheetModal>(null);

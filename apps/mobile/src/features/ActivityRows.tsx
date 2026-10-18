@@ -2,7 +2,7 @@ import type { FunctionReturnType } from "convex/server";
 import { Text } from "react-native";
 import { api } from "./api";
 import { formatActivityAmount } from "./history/format";
-import { ListGroup, ListRow, ui } from "../ui/core";
+import { ListGroup, ListRow, useUi } from "../ui/core";
 
 type Row = FunctionReturnType<
   typeof api.accounting.postedHistory
@@ -16,6 +16,7 @@ export function ActivityRow({ row, onEntry }: { row: Row; onEntry?: (id: string)
   />;
 }
 export function ActivityRows({ rows, onEntry }: { rows: Row[]; onEntry?: (id: string) => void }) {
+  const ui = useUi();
   if (!rows.length)
     return <Text style={ui.muted}>No posted activity yet.</Text>;
   return (

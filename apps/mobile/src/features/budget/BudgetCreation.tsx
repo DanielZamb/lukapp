@@ -3,7 +3,7 @@ import { useAction, useQuery } from "convex/react";
 import { ActivityIndicator, Text } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
-import { Choice, Field, Header, Screen, theme, ui } from "../../ui/core";
+import { Choice, Field, Header, Screen, useTheme, useUi } from "../../ui/core";
 import { api } from "../api";
 import { BudgetComposer } from "./BudgetComposer";
 import type { BudgetCategory } from "./model";
@@ -16,6 +16,8 @@ export function BudgetCreation({ seed, categories, categoryColors, onClose, onSa
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const theme = useTheme();
+  const ui = useUi();
   const save = useAction(api.budget.setCategoryLimit);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();

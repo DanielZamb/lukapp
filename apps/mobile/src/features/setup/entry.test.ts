@@ -1,3 +1,4 @@
+import { themes } from "../../ui/tokens";
 import * as React from "react";
 import { createElement, type ComponentProps } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -35,7 +36,8 @@ vi.mock("../../ui/core", () => ({
   SecondaryButton: "button",
   ActionTile: "tile",
   ProgressBar: "progress",
-  ui: {},
+  useUi: () => ({}),
+  useTheme: () => themes.light,
 }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => state.defaults,

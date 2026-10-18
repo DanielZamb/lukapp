@@ -2,8 +2,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
-import { theme, ui } from "../../ui/core";
-import { setupStyles as styles } from "../setup/styles";
+import { useTheme, useUi } from "../../ui/core";
+import { useSetupStyles } from "../setup/styles";
 import type { SetupCategory } from "../setup/model";
 import type { CategoryStyle } from "./model";
 import { categoryColor, starterCategories } from "./looks";
@@ -18,6 +18,9 @@ export function SetupCategories({
   onChange: (selections: SetupCategory[]) => void;
   disabled: boolean;
 }) {
+  const theme = useTheme();
+  const ui = useUi();
+  const styles = useSetupStyles();
   const recordInteraction = useLocalEntryInteraction();
   const [target, setTarget] = useState<RestyleTarget | null>(null);
   const [looks, setLooks] = useState<Record<string, CategoryStyle>>({});

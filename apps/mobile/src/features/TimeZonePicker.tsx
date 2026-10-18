@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Pressable, Text } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { theme, ui } from "../ui/core";
+import { useTheme, useUi } from "../ui/core";
 import { SearchSheet } from "./setup/SearchSheet";
-import { setupStyles as styles } from "./setup/styles";
+import { useSetupStyles } from "./setup/styles";
 import { deviceTimeZone, orderedTimeZones, timeZoneLabel } from "./timeZones";
 
 export function TimeZonePicker({
@@ -15,6 +15,9 @@ export function TimeZonePicker({
   onChange: (timeZone: string) => void;
   disabled?: boolean;
 }) {
+  const theme = useTheme();
+  const ui = useUi();
+  const styles = useSetupStyles();
   const [open, setOpen] = useState(false);
   return (
     <>

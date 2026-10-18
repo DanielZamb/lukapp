@@ -8,8 +8,8 @@ import {
 } from "@gorhom/bottom-sheet";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { theme, ui } from "../../ui/core";
-import { setupStyles as styles } from "./styles";
+import { useTheme, useUi } from "../../ui/core";
+import { useSetupStyles } from "./styles";
 
 export function SetupBackdrop(props: BottomSheetBackdropProps) {
   return (
@@ -37,6 +37,9 @@ export function SearchSheet({
   onSelect: (code: string) => void;
   onClose: () => void;
 }) {
+  const theme = useTheme();
+  const ui = useUi();
+  const styles = useSetupStyles();
   const sheet = useRef<BottomSheetModal>(null);
   const [query, setQuery] = useState("");
   useEffect(() => {

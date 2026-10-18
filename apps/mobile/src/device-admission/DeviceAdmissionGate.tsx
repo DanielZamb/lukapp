@@ -8,7 +8,7 @@ import { api } from "../features/api";
 import { useLocalInstallId } from "../local-auth/installation";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
-import { Header, PrimaryButton, Screen, SecondaryButton, ui } from "../ui/core";
+import { Header, PrimaryButton, Screen, SecondaryButton, useUi } from "../ui/core";
 import { admissionFailure, type AdmissionFailure } from "./failure";
 import { NamedDeviceStep } from "./NamedDeviceStep";
 import { ProtectedReadBoundary } from "./ProtectedReadBoundary";
@@ -23,6 +23,7 @@ export function DeviceAdmissionGate({ children }: { children: ReactNode }) {
 }
 
 function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () => void }) {
+  const ui = useUi();
   const installId = useLocalInstallId();
   const interaction = useLocalEntryInteraction();
   const report = useDeviceAccessFailure();

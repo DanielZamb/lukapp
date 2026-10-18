@@ -16,7 +16,7 @@ import {
   type PostingBudgetImpact,
 } from "../src/features/budget/postingImpact";
 import { defaultAccountingDate } from "../src/features/timeZones";
-import { Header, Screen, SecondaryButton, ui } from "../src/ui/core";
+import { Header, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
 import { PlaceSheet } from "../src/features/posting/PlaceSheet";
@@ -48,6 +48,8 @@ function PostMoney({
   draftId?: string;
   candidateId?: string;
 }) {
+  const ui = useUi();
+  const theme = useTheme();
   const recordInteraction = useLocalEntryInteraction();
   const [categoryVisible, setCategoryVisible] = useState(false);
   const [placeTarget, setPlaceTarget] = useState<"source" | "destination">(
@@ -345,6 +347,7 @@ function PostMoney({
       />
       <BottomSheetModal
         ref={dateSheet}
+        backgroundStyle={{ backgroundColor: theme.background }}
         snapPoints={["55%"]}
         enableDynamicSizing={false}
       >

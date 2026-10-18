@@ -1,7 +1,7 @@
 import React, { Component, useLayoutEffect, type ReactNode } from "react";
 import { Text } from "react-native";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
-import { Header, PrimaryButton, Screen, ui } from "../ui/core";
+import { Header, PrimaryButton, Screen, useUi } from "../ui/core";
 
 type ReadState = { kind: "clear" } | { kind: "error"; error: unknown };
 
@@ -16,6 +16,7 @@ export class ProtectedReadBoundary extends Component<{ children: ReactNode }, Re
   }
 }
 function ReadFailure({ error, retry }: { error: unknown; retry: () => void }) {
+  const ui = useUi();
   const report = useDeviceAccessFailure();
   useLayoutEffect(() => { report(error); }, [error, report]);
   return (

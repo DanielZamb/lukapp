@@ -1,3 +1,4 @@
+import { themes } from "../../ui/tokens";
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -25,7 +26,7 @@ vi.mock("convex/react", () => ({
 }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "test-key" }));
 vi.mock("react-native", () => ({ ActivityIndicator: "spinner" }));
-vi.mock("../../ui/core", () => ({ Screen: "screen" }));
+vi.mock("../../ui/core", () => ({ Screen: "screen", useTheme: () => themes.light }));
 vi.mock("../useWorkspaceCalendar", () => ({
   useWorkspaceCalendar: () => ({ month: "2026-10" }),
 }));

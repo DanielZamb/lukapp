@@ -5,7 +5,7 @@ import {
 } from "@gorhom/bottom-sheet";
 import { useEffect, useRef } from "react";
 import { Text } from "react-native";
-import { Header, PrimaryButton, SecondaryButton, theme, ui } from "../../ui/core";
+import { Header, PrimaryButton, SecondaryButton, useUi, useTheme } from "../../ui/core";
 import { spacing } from "../../ui/tokens";
 import type { PostingBudgetImpact } from "./postingImpact";
 
@@ -20,6 +20,8 @@ export function PostingImpactSheet({
   onContinue: () => void;
   onReconsider: () => void;
 }) {
+  const ui = useUi();
+  const theme = useTheme();
   const sheet = useRef<BottomSheetModal>(null);
   const decided = useRef(false);
   useEffect(() => { sheet.current?.present(); }, []);

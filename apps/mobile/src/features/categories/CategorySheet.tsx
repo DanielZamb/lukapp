@@ -5,15 +5,10 @@ import {
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import type { RefObject } from "react";
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import {
-  Choice,
-  Header,
-  PrimaryButton,
-  SecondaryButton,
-  theme,
-  ui,
-} from "../../ui/core";
+import type { Theme } from "../../ui/tokens";
+import { Choice, Header, PrimaryButton, SecondaryButton, useUi, useTheme } from "../../ui/core";
 import { radius, spacing, touchTarget } from "../../ui/tokens";
 import type {
   CategoryEditor,
@@ -62,7 +57,29 @@ export type CategorySheetProps = {
   onCreateEncompassing?: () => void;
 };
 
+function categorySheetStyles(theme: Theme) {
+  return StyleSheet.create({
+    chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+    chip: {
+      minWidth: touchTarget,
+      minHeight: touchTarget,
+      padding: spacing.md,
+      borderRadius: radius.full,
+      borderWidth: 2,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    dot: { width: spacing.xl, height: spacing.xl, borderRadius: radius.full },
+    option: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    select: { flex: 1, minHeight: touchTarget, justifyContent: "center" },
+  });
+}
+
 export function CategorySheet(props: CategorySheetProps) {
+  const ui = useUi();
+  const theme = useTheme();
+  const styles = useMemo(() => categorySheetStyles(theme), [theme]);
   const editor = props.editor;
   const door =
     editor?.kind === "custom" &&
@@ -328,19 +345,3 @@ export function CategorySheet(props: CategorySheetProps) {
     </BottomSheetModal>
   );
 }
-const styles = StyleSheet.create({
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: {
-    minWidth: touchTarget,
-    minHeight: touchTarget,
-    padding: spacing.md,
-    borderRadius: radius.full,
-    borderWidth: 2,
-    borderColor: theme.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dot: { width: spacing.xl, height: spacing.xl, borderRadius: radius.full },
-  option: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  select: { flex: 1, minHeight: touchTarget, justifyContent: "center" },
-});

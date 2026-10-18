@@ -1,14 +1,5 @@
 import { Text } from "react-native";
-import {
-  ConfirmationScreen,
-  Header,
-  ListGroup,
-  ListRow,
-  PrimaryButton,
-  Screen,
-  SecondaryButton,
-  ui,
-} from "../../ui/core";
+import { ConfirmationScreen, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useUi } from "../../ui/core";
 import {
   candidatesDetail,
   closedDetail,
@@ -40,6 +31,7 @@ export function MonthCloseScreen({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const ui = useUi();
   if (phase.kind === "closed")
     return (
       <ConfirmationScreen

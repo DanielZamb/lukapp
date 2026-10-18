@@ -1,12 +1,12 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text, View } from "react-native";
-import { PrimaryButton, Screen, theme, ui } from "../../ui/core";
+import { PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
 import { font, spacing } from "../../ui/tokens";
 import { LookChip } from "../categories/LookChip";
 import { formatMoney } from "../money";
 import { currencyName } from "./currencies";
 import type { SetupSummary } from "./model";
-import { setupStyles as styles } from "./styles";
+import { useSetupStyles } from "./styles";
 
 export function SetupCompletion({
   summary,
@@ -15,6 +15,9 @@ export function SetupCompletion({
   summary: SetupSummary;
   onHome: () => void;
 }) {
+  const theme = useTheme();
+  const ui = useUi();
+  const styles = useSetupStyles();
   return (
     <Screen contentStyle={{ flexGrow: 1, justifyContent: "center" }}>
       <View style={{ gap: spacing.xl }}>

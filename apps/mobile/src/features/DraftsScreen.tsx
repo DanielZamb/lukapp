@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, ui } from "../ui/core";
+import { Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useUi } from "../ui/core";
 import { spacing } from "../ui/tokens";
 import { formatMoney } from "./money";
 import type { DraftListItem, LocalEntryDraftId } from "./localEntryDrafts";
@@ -63,6 +63,7 @@ export function DraftsScreen({
   onConfirmReady: () => void;
   onCompleteMonth: () => void;
 }) {
+  const ui = useUi();
   const empty = drafts.length === 0 && now.length === 0 && wait.length === 0;
   const candidateRows = segment === "now" ? now : wait;
   const draftRows =

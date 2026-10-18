@@ -27,7 +27,7 @@ import {
   unlockBiometry,
   writeInstallMarker,
 } from "./nativeEntry";
-import { Header, PrimaryButton, SecondaryButton, Screen, ui } from "../ui/core";
+import { Header, PrimaryButton, SecondaryButton, Screen, useUi } from "../ui/core";
 
 export function LocalEntryGate({
   children,
@@ -36,6 +36,7 @@ export function LocalEntryGate({
   children: ReactNode;
   renderSignIn: (onSessionCreated: (sessionId: string) => void) => ReactNode;
 }) {
+  const ui = useUi();
   const { isLoaded, userId, sessionId } = useAuth();
   const clerk = useClerk();
   const clerkRef = useRef(clerk);

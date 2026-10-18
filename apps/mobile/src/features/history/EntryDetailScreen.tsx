@@ -1,5 +1,5 @@
 import { ActivityIndicator, Text, View } from "react-native";
-import { Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, ui } from "../../ui/core";
+import { Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useUi } from "../../ui/core";
 import { formatActivityAmount } from "./format";
 import type { EntryDetail } from "./types";
 import type { ReversalState } from "./useReversal";
@@ -13,6 +13,7 @@ export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const ui = useUi();
   const entry = detail?.entry;
   const canReverse = !!entry && !entry.reversesEntryId && !entry.reversedByEntryId;
   const originalId = entry?.reversesEntryId;

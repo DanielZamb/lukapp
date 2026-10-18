@@ -1,5 +1,5 @@
 import { ActivityIndicator, Text } from "react-native";
-import { Header, ListGroup, ListRow, Screen, SecondaryButton, ui } from "../../ui/core";
+import { Header, ListGroup, ListRow, Screen, SecondaryButton, useUi } from "../../ui/core";
 import { updatesDetail, type AlertDestination, type AttentionState } from "./model";
 
 export function AlertsScreen({ state, onBack, onOpen, onRetry }: {
@@ -8,6 +8,7 @@ export function AlertsScreen({ state, onBack, onOpen, onRetry }: {
   onOpen: (destination: AlertDestination) => void;
   onRetry: () => void;
 }) {
+  const ui = useUi();
   return (
     <Screen>
       <Header title="Alerts" eyebrow={updatesDetail(state).toUpperCase()} onBack={onBack} />

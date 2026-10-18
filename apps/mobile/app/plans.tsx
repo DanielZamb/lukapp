@@ -1,11 +1,13 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router } from "expo-router";
 import type { ComponentProps } from "react";
+import { useMemo } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import type { Theme } from "../src/ui/tokens";
 import { usePersonalDefaults } from "../src/features/activity";
 import { monthLabel } from "../src/features/budget/model";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
-import { Header, ListGroup, Screen, theme, ui } from "../src/ui/core";
+import { Header, ListGroup, Screen, useUi, useTheme } from "../src/ui/core";
 import { font, fontSize, radius, spacing } from "../src/ui/tokens";
 
 export default function PlansRoute() {
@@ -14,8 +16,26 @@ export default function PlansRoute() {
     : defaults === null ? <Redirect href="/" /> : <Screen><ActivityIndicator accessibilityLabel="Loading Plans" /></Screen>;
 }
 
+function planStyles(theme: Theme) {
+  return StyleSheet.create({
+    page: { gap: spacing.xl, paddingTop: spacing.md },
+    row: {
+      minHeight: 70, flexDirection: "row", alignItems: "center", gap: spacing.md,
+      paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border,
+    },
+    lastRow: { borderBottomWidth: 0 },
+    icon: { width: 36, height: 36, borderRadius: radius.full, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
+    copy: { flex: 1, gap: spacing.xs },
+    title: { fontFamily: font.semibold, fontSize: fontSize.body, lineHeight: 22, color: theme.foreground },
+    note: { fontFamily: font.regular, fontSize: 13, lineHeight: 19, color: theme.mutedForeground, textAlign: "center" },
+  });
+}
+
 function Plans({ timeZone }: { timeZone: string }) {
   const calendar = useWorkspaceCalendar(timeZone);
+  const theme = useTheme();
+  const styles = useMemo(() => planStyles(theme), [theme]);
   const month = monthLabel(calendar.month, "month");
   return (
     <Screen contentStyle={styles.page}>
@@ -32,6 +52,9 @@ function Plans({ timeZone }: { timeZone: string }) {
 function PlanRow({ title, detail, icon, onPress, isLast }: {
   title: string; detail: string; icon: ComponentProps<typeof Ionicons>["name"]; onPress: () => void; isLast?: boolean;
 }) {
+  const ui = useUi();
+  const theme = useTheme();
+  const styles = useMemo(() => planStyles(theme), [theme]);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${detail}`} onPress={onPress}
       style={[styles.row, isLast && styles.lastRow]}>
@@ -44,17 +67,3 @@ function PlanRow({ title, detail, icon, onPress, isLast }: {
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  page: { gap: spacing.xl, paddingTop: spacing.md },
-  row: {
-    minHeight: 70, flexDirection: "row", alignItems: "center", gap: spacing.md,
-    paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border,
-  },
-  lastRow: { borderBottomWidth: 0 },
-  icon: { width: 36, height: 36, borderRadius: radius.full, alignItems: "center", justifyContent: "center", backgroundColor: theme.background },
-  copy: { flex: 1, gap: spacing.xs },
-  title: { fontFamily: font.semibold, fontSize: fontSize.body, lineHeight: 22, color: theme.foreground },
-  note: { fontFamily: font.regular, fontSize: 13, lineHeight: 19, color: theme.mutedForeground, textAlign: "center" },
-});

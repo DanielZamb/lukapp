@@ -7,9 +7,10 @@ import {
 } from "../src/features/activity";
 import { ActivityRows } from "../src/features/ActivityRows";
 import { formatMoney } from "../src/features/money";
-import { Header, ListGroup, ListRow, Screen, SecondaryButton, ui } from "../src/ui/core";
+import { Header, ListGroup, ListRow, Screen, SecondaryButton, useUi } from "../src/ui/core";
 
 function Overview({ workspaceId, timeZone }: { workspaceId: string; timeZone: string }) {
+  const ui = useUi();
   const activity = usePostedActivity(workspaceId, timeZone);
   const recent = useRecentActivity(workspaceId, 4);
   return (
