@@ -1,8 +1,14 @@
 // The pilot supports COP and USD, both with two minor-unit digits.
+function localeSeparators(locale: string): { group: string; decimal: string } {
+  if (locale === "en-US") {
+    return { group: ",", decimal: "." };
+  }
+  // es-CO and the mobile default: dots group thousands, comma is decimal.
+  return { group: ".", decimal: "," };
+}
+
 export function parseMoney(text: string, locale = "es-CO"): number {
-  const parts = new Intl.NumberFormat(locale).formatToParts(12345.6);
-  const group = parts.find((p) => p.type === "group")?.value ?? ".";
-  const decimal = parts.find((p) => p.type === "decimal")?.value ?? ",";
+  const { group, decimal } = localeSeparators(locale);
   const normalized = text.trim().replace(/^−/, "-");
   const sign = normalized.startsWith("-") ? -1 : 1;
   const unsigned = normalized.replace(/^[+-]/, "");
