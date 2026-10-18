@@ -67,6 +67,8 @@ function session(id: string, userId = owner): ClerkSession {
   return { id, user_id: userId, client_id: `client_${id}`, status: "active", created_at: Date.now() - 1000, expire_at: Date.now() + 90_000, abandon_at: Date.now() + 90_000 };
 }
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
   vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", owner);
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", issuer);
   vi.stubEnv("CLERK_SECRET_KEY", "fixture-only-not-a-credential");
@@ -99,18 +101,16 @@ async function fixture() {
 }
 
 test.each([
-  { clock: "real clock", now: undefined, expectedDate: undefined },
+  { clock: "Bogota daytime", now: "2026-10-17T12:00:00Z", expectedDate: "2026-10-17" },
   { clock: "UTC ahead of Bogota", now: "2026-10-19T02:00:00Z", expectedDate: "2026-10-18" },
 ])("normal registered action bootstraps once, posts an expense once on retry, and keeps reads reactive ($clock)", async ({ now, expectedDate }) => {
-  if (now) {
-    vi.useFakeTimers({ toFake: ["Date"], now: new Date(now) });
-    sessions.set("sess_ios", session("sess_ios"));
-  }
+  vi.setSystemTime(new Date(now));
+  sessions.set("sess_ios", session("sess_ios"));
   const { client, root } = await fixture();
   const first = await client.action(setup, {});
   expect(await client.action(setup, {})).toEqual(first);
   const accountingDate = calendarDate(new Date(), "America/Bogota");
-  if (expectedDate) expect(accountingDate).toBe(expectedDate);
+  expect(accountingDate).toBe(expectedDate);
   const args = { workspaceId: first.workspace.id, financialAccountProfileId: first.financialAccountProfile.id,
     amount: { currency: "COP", minorUnits: 250 }, accountingDate, description: "Food", idempotencyKey: "uncertain-expense" };
   const posted = await client.action(expense, args);

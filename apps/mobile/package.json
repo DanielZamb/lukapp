@@ -10,6 +10,13 @@
     "typecheck": "tsc --noEmit",
     "export": "expo export --platform all"
   },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": ["expo-secure-store"]
+      }
+    }
+  },
   "dependencies": {
     "@clerk/expo": "4.11.0",
     "@expo-google-fonts/geist": "0.4.2",
