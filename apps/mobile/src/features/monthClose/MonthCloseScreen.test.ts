@@ -59,6 +59,7 @@ async function show(
   handlers = {
     onBack: vi.fn(),
     onReviewDrafts: vi.fn(),
+    onAccountBalances: vi.fn(),
     onOverview: vi.fn(),
     onRecovery: vi.fn(),
     onHome: vi.fn(),
@@ -179,7 +180,7 @@ test("the review shows spending, checked accounts, recovery due and the exact fo
   expect(rows).toHaveLength(2);
   await act(async () => rows[0].props.onPress());
   await act(async () => rows[1].props.onPress());
-  expect(handlers.onOverview).toHaveBeenCalledOnce();
+  expect(handlers.onAccountBalances).toHaveBeenCalledOnce();
   expect(handlers.onRecovery).toHaveBeenCalledOnce();
   expect(handlers.onReviewDrafts).not.toHaveBeenCalled();
 });

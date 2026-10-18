@@ -107,8 +107,8 @@ test("the route displays Convex query results and sends each review row to its d
   await act(async () => row("Notification Candidates").props.onPress());
   await act(async () => row("Account balances").props.onPress());
   await act(async () => row("Savings recovery").props.onPress());
-  expect(source.replace.mock.calls).toEqual([["/drafts"], ["/overview"]]);
-  expect(source.push.mock.calls).toEqual([["/recovery"]]);
+  expect(source.replace.mock.calls).toEqual([["/drafts"]]);
+  expect(source.push.mock.calls).toEqual([["/overview"], ["/recovery"]]);
   await act(async () => row("Complete and lock October").props.onPress());
   expect(text()).toContain("Keep reviewing");
   expect(source.lock).not.toHaveBeenCalled();

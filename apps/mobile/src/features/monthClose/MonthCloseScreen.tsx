@@ -32,6 +32,7 @@ export function MonthCloseScreen({
   phase,
   onBack,
   onReviewDrafts,
+  onAccountBalances,
   onOverview,
   onRecovery,
   onHome,
@@ -49,6 +50,7 @@ export function MonthCloseScreen({
   phase: MonthClosePhase;
   onBack: () => void;
   onReviewDrafts: () => void;
+  onAccountBalances: () => void;
   onOverview: () => void;
   onRecovery: () => void;
   onHome: () => void;
@@ -172,7 +174,7 @@ export function MonthCloseScreen({
           detail={`${summary.accountCount} Financial Accounts checked`}
           value="Reviewed"
           valueStyle={{ color: theme.positive }}
-          onPress={onOverview}
+          onPress={onAccountBalances}
         />
         <ListRow
           title="Savings recovery"
