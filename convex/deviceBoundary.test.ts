@@ -66,6 +66,8 @@ function session(id: string, userId = owner): ClerkSession {
   return { id, user_id: userId, client_id: `client_${id}`, status: "active", created_at: Date.now() - 1000, expire_at: Date.now() + 90_000, abandon_at: Date.now() + 90_000 };
 }
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
   vi.stubEnv("LUKAPP_OWNER_CLERK_SUBJECT", owner);
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", issuer);
   vi.stubEnv("CLERK_SECRET_KEY", "fixture-only-not-a-credential");
