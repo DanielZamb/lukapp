@@ -28,6 +28,7 @@ export function MonthClose({
   currency,
   onBack,
   onReviewDrafts,
+  onAccountBalances,
   onOverview,
   onRecovery,
   onHome,
@@ -39,6 +40,7 @@ export function MonthClose({
   currency: "COP" | "USD";
   onBack: () => void;
   onReviewDrafts: () => void;
+  onAccountBalances: () => void;
   onOverview: () => void;
   onRecovery: () => void;
   onHome: () => void;
@@ -114,6 +116,7 @@ export function MonthClose({
       phase={close.phase}
       onBack={onBack}
       onReviewDrafts={onReviewDrafts}
+      onAccountBalances={onAccountBalances}
       onOverview={onOverview}
       onRecovery={onRecovery}
       onHome={onHome}
