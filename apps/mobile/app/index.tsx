@@ -18,7 +18,7 @@ import { spentMonthEyebrow } from "../src/features/timeZones";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { useAttention } from "../src/features/attention/useAttention";
 import { updatesDetail } from "../src/features/attention/model";
-import { ActionTile, ConfirmationScreen, Header, PrimaryButton, ProgressBar, Screen, SecondaryButton, useUi } from "../src/ui/core";
+import { ActionTile, ConfirmationScreen, Header, PrimaryButton, ProgressBar, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
 import { spacing, touchTarget } from "../src/ui/tokens";
 
 function Home({
@@ -35,6 +35,7 @@ function Home({
   currentPeriod: Parameters<typeof useAttention>[0]["currentPeriod"];
 }) {
   const ui = useUi();
+  const theme = useTheme();
   const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
   const { inboxCount, alerts } = useAttention({
@@ -150,6 +151,7 @@ function Home({
       </View>
       <BottomSheetModal
         ref={actions}
+        backgroundStyle={{ backgroundColor: theme.background }}
         snapPoints={["35%"]}
         enableDynamicSizing={false}
       >

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
@@ -32,10 +33,14 @@ const fallbackBundle: ThemeContextValue = {
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const [mode, setModeState] = useState<ThemeMode>("light");
+  const userChoseMode = useRef(false);
   useEffect(() => {
-    void readThemeMode().then(setModeState);
+    void readThemeMode().then((storedMode) => {
+      if (!userChoseMode.current) setModeState(storedMode);
+    });
   }, []);
   const setMode = useCallback((next: ThemeMode) => {
+    userChoseMode.current = true;
     setModeState(next);
     void writeThemeMode(next);
   }, []);
