@@ -7,6 +7,7 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { getFunctionName, type FunctionReference } from "convex/server";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import PostRoute from "../../../app/post";
+import { BatchNativeStack } from "../posting/BatchNativeStack";
 import { PostingForm } from "../posting/PostingForm";
 import type { LoadResult, PostingTransport } from "../posting/usePostingEditor";
 import type { PendingPosting } from "../posting/pendingPostingSchema";
@@ -17,8 +18,9 @@ import type { FunctionReturnType } from "convex/server";
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "DateTimePicker" }));
 vi.mock("@gorhom/bottom-sheet", () => ({
-  BottomSheetModal: "Sheet", BottomSheetView: "SheetView", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
+  BottomSheetModalProvider: "SheetProvider", BottomSheetModal: "Sheet", BottomSheetView: "SheetView", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
 }));
+vi.mock("react-native-screens", () => ({ ScreenStack: "Stack", ScreenStackItem: "StackItem", ScreenStackHeaderLeftView: "HeaderLeft", ScreenStackHeaderRightView: "HeaderRight" }));
 vi.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), router: { replace: vi.fn(), back: vi.fn() }, Redirect: "Redirect" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
@@ -54,14 +56,15 @@ let budget: FunctionReturnType<typeof api.budget.evaluate> | undefined;
 let budgetArgs: unknown;
 let transport: ReturnType<typeof makeTransport>;
 function makeTransport() {
+  let nextKey = 0;
   return {
     load: vi.fn(async (): Promise<LoadResult> => ({ kind: "none" })),
     save: vi.fn(async (command: PendingPosting) => ({ id: "draft", command })),
     post: vi.fn(async (entry: PendingPosting) => ({
       description: "description" in entry.payload ? entry.payload.description : entry.payload.name,
-      amount: { ...entry.payload.amount, minorUnits: -entry.payload.amount.minorUnits },
+      amount: { ...entry.payload.amount, minorUnits: (entry.kind === "expense" || entry.kind === "transfer" ? -1 : 1) * entry.payload.amount.minorUnits },
     })),
-    clear: vi.fn(async () => {}), abort: vi.fn(async () => {}), newKey: () => "post-key",
+    clear: vi.fn(async () => {}), abort: vi.fn(async () => {}), newKey: () => nextKey++ === 0 ? "post-key" : `post-key-${nextKey}`,
   } satisfies PostingTransport;
 }
 beforeEach(() => {
@@ -198,4 +201,44 @@ test("retrying a pending expense preserves its command and idempotency key", asy
   expect(transport.post.mock.calls.map(([entry]) => entry)).toEqual([command]);
   expect(form().posted).toBe("Saved groceries · −COP 120.000,00");
   expect(root?.root.findAllByType(PostingImpactSheet)).toHaveLength(0);
+});
+
+
+test("batch route queues One, cancels modal edits, adds another, and posts through the existing transport", async () => {
+  await open();
+  await act(async () => form().onBatch());
+  const tape = () => {
+    if (!root) throw new Error("Post not mounted");
+    return root.root.findByType(BatchNativeStack).props;
+  };
+  expect(tape().batch.queue).toHaveLength(1);
+  expect(transport.post).not.toHaveBeenCalled();
+  const first = tape().batch.queue[0];
+  await act(async () => tape().onEdit(first));
+  await act(async () => form().onDescriptionChange("Cancelled edit"));
+  await act(async () => tape().onCancel());
+  expect(tape().batch.queue[0]).toEqual(first);
+  await act(async () => tape().onAdd());
+  expect(form().amount).toBe("-");
+  expect(form().saveToBatch).toBe(true);
+  expect(form().posted).toBeNull();
+  await act(async () => {
+    form().onAmountChange("+30.000");
+    form().onDescriptionChange("Refund");
+  });
+  await act(async () => form().onPost());
+  expect(tape().batch.queue).toHaveLength(2);
+  expect(transport.post).not.toHaveBeenCalled();
+  await act(async () => tape().onOne());
+  expect(form().batchCount).toBe(2);
+  expect(form().amount).toBe("-");
+  await act(async () => form().onBatch());
+  await act(async () => { await tape().batch.postAll(); });
+  expect(transport.post.mock.calls.map(([entry]) => entry)).toEqual([
+    { kind: "expense", payload: { workspaceId: "workspace", financialAccountProfileId: "bank", accountingDate: "2026-10-18", amount: { currency: "COP", minorUnits: 12000000 }, description: "Groceries", idempotencyKey: "post-key" } },
+    { kind: "income", payload: { workspaceId: "workspace", financialAccountProfileId: "bank", accountingDate: expect.any(String), amount: { currency: "COP", minorUnits: 3000000 }, description: "Refund", idempotencyKey: "post-key-2" } },
+  ]);
+  expect(tape().batch.queue).toEqual([]);
+  expect(tape().batch.posted).toEqual({ count: 2, net: -9000000 });
+  expect(transport.clear).toHaveBeenCalledTimes(2);
 });
