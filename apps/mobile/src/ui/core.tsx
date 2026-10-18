@@ -1,5 +1,10 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { ComponentProps, ComponentType, PropsWithChildren } from "react";
+import type {
+  ComponentProps,
+  ComponentType,
+  PropsWithChildren,
+  ReactNode,
+} from "react";
 import {
   Children,
   cloneElement,
@@ -68,7 +73,11 @@ export const ui = StyleSheet.create({
 export function Screen({
   children,
   contentStyle,
-}: PropsWithChildren<{ contentStyle?: StyleProp<ViewStyle> }>) {
+  footer,
+}: PropsWithChildren<{
+  contentStyle?: StyleProp<ViewStyle>;
+  footer?: ReactNode;
+}>) {
   return (
     <SafeAreaView style={ui.screen}>
       <ScrollView
@@ -77,6 +86,7 @@ export function Screen({
       >
         {children}
       </ScrollView>
+      {footer}
     </SafeAreaView>
   );
 }

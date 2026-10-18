@@ -6,9 +6,11 @@ import { useLocalInputLease } from "../../local-auth/localInput";
 import { api } from "../api";
 import {
   beginPostIn,
+  isBatchDraft,
   mutateLocalEntryDocument,
   rejectPostIn,
   removeIn,
+  type PostingDraft,
 } from "../localEntryDrafts";
 import type { PendingPosting } from "./pendingPostingSchema";
 import type { LoadResult, PostingTransport } from "./usePostingEditor";
@@ -30,7 +32,8 @@ export function usePostingTransport(subject: string): PostingTransport {
           subject,
           (document, _now, dirty) => {
             const postings = document.drafts.filter(
-              (draft) => draft.status === "posting",
+              (draft): draft is PostingDraft =>
+                draft.status === "posting" && !isBatchDraft(document, draft),
             );
             if (resume === false) {
               postingId.current = undefined;

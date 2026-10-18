@@ -184,3 +184,29 @@ test("concurrent exact retries produce one revision while competing edits cannot
   expect((await s.read()).jars).toMatchObject([{ revisionId: success[0].revision.id, limitMinorUnits: success[0].revision.limitMinorUnits }]);
   expect(await s.t.run((ctx) => ctx.db.query("budgetLimitRevisions").collect())).toHaveLength(2);
 });
+
+test("batch preflight uses posted consumption per month and accumulates every queued expense before posting", async () => {
+  const { batchPostingBudgetImpact } = await import("../apps/mobile/src/features/budget/postingImpact");
+  const s = await setup();
+  await s.t.action(api.budget.setCategoryLimit, s.request);
+  const expense = (date: string, minorUnits: number, key: string) => ({
+    ...s.expense, accountingDate: date,
+    amount: { currency: "COP" as const, minorUnits }, idempotencyKey: key,
+  });
+  await s.t.action(api.accounting.recordCashExpense, expense("2026-09-17", 80000, "posted-september"));
+  await s.t.action(api.accounting.recordCashExpense, expense("2026-10-17", 70000, "posted-october"));
+  const commands = [
+    expense("2026-09-18", 15000, "queued-first"),
+    expense("2026-10-18", 30000, "queued-october"),
+    expense("2026-09-19", 10000, "queued-second"),
+    expense("2026-09-20", 5000, "queued-third"),
+  ].map((payload) => ({ kind: "expense" as const, payload }));
+  const before = await s.ledger();
+  expect(await batchPostingBudgetImpact(commands, (input) => s.t.query(api.budget.evaluate, input))).toEqual([
+    { category: (await s.read("2026-09")).jars[0].category, overMinorUnits: 10000 },
+  ]);
+  expect(await s.ledger()).toEqual(before);
+  for (const command of commands) await s.t.action(api.accounting.recordCashExpense, command.payload);
+  expect((await s.read("2026-09")).jars[0].consumptionMinorUnits).toBe(110000);
+  expect((await s.read("2026-10")).jars[0].consumptionMinorUnits).toBe(100000);
+});

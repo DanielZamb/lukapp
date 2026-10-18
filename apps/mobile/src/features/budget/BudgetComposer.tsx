@@ -55,7 +55,6 @@ export function BudgetComposer(props: Props) {
           </Pressable>
         ))}
       </View>
-      <Text style={ui.muted}>Repeats each month. Changes apply to this month and future months. Unspent money does not roll over.</Text>
       {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}
       <PrimaryButton label={props.busy ? "Saving…" : props.pending ? "Retry save" : "Save this limit"}
         trailingIcon="checkmark" disabled={!props.canSubmit} pending={props.busy} onPress={props.onSave} />

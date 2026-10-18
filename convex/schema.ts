@@ -16,6 +16,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     idempotencyKey: v.string(),
     name: v.string(),
+    emoji: v.optional(v.string()),
     productKind,
     amount: v.object({ currency: v.string(), minorUnits: v.number() }),
     accountingDate: v.string(),
@@ -140,6 +141,7 @@ export default defineSchema({
   financialAccountProfiles: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
+    emoji: v.optional(v.string()),
     productKind,
     classificationPolicy: v.string(),
     postingAccountId: v.id("ledgerAccounts"),
