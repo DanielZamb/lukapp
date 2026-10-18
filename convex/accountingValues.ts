@@ -48,6 +48,8 @@ export const personalSetup = {
   startingMinorUnits: v.number(),
   categories: v.optional(v.array(categorySelection)),
   timeZone: v.string(),
+  purchaseAlertsConsent: v.optional(v.boolean()),
+  wantsBudgets: v.optional(v.boolean()),
 };
 export const categoryCreation = {
   ...inWorkspace,
@@ -58,7 +60,13 @@ export const categoryRestyle = {
   categoryId: v.string(),
   style: categoryStyle,
 };
-export const defaults = v.object({ workspace, financialAccountProfile });
+export const defaults = v.object({
+  workspace,
+  financialAccountProfile,
+  purchaseAlertsConsent: v.optional(v.boolean()),
+  wantsBudgets: v.optional(v.boolean()),
+  firstCategoryId: v.optional(v.string()),
+});
 
 export const openingPosition = {
   ...inWorkspace,

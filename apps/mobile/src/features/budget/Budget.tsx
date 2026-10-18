@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { useAction, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
@@ -12,7 +12,7 @@ import { BudgetEditorSheet } from "./BudgetEditorSheet";
 import { monthLabel, type BudgetCategory } from "./model";
 import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 
-export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string; timeZone: string; onBack: () => void }) {
+export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { workspaceId: string; timeZone: string; initialCategoryId?: string; onBack: () => void }) {
   const calendar = useWorkspaceCalendar(timeZone);
   const [editor, setEditor] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
   const [saved, setSaved] = useState(false);
@@ -20,6 +20,26 @@ export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string;
   useEffect(() => { refresh(Crypto.randomUUID()); }, [calendar.month]);
   const board = useQuery(api.budget.evaluate, { workspaceId, refreshKey, month: calendar.month });
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
+  const shortcutOpened = useRef(false);
+  useEffect(() => {
+    if (!board || !initialCategoryId || shortcutOpened.current) return;
+    shortcutOpened.current = true;
+    const category = board.availableCategories.find(
+      (item) => item.id === initialCategoryId,
+    );
+    if (category)
+      setEditor({
+        key: Crypto.randomUUID(),
+        seed: {
+          workspaceId,
+          currency: board.currency,
+          month: board.currentMonth,
+          jar: null,
+          initialCategoryId,
+        },
+        categories: board.availableCategories,
+      });
+  }, [board, initialCategoryId, workspaceId]);
   const interact = useLocalEntryInteraction();
   if (!board || !categories) return <Screen><ActivityIndicator accessibilityLabel="Loading Budget" /></Screen>;
   return (

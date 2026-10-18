@@ -1,3 +1,4 @@
+import type { FunctionArgs } from "convex/server";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
 import {
@@ -223,4 +224,126 @@ test("ordinary expense rejects foreign IDs, invalid amounts, dates, currency and
       workspaceId: defaults.workspace.id,
     }),
   ).toEqual([]);
+});
+
+test("first-run persists consent, budget shortcut, first chosen category and all look colors across retries", async () => {
+  const t = await convexAccounting(modules);
+  const args = {
+    functionalCurrency: "EUR",
+    startingMinorUnits: 150025,
+    timeZone: "Europe/Madrid",
+    purchaseAlertsConsent: true,
+    wantsBudgets: true,
+    categories: [
+      {
+        kind: "custom",
+        name: "Weekend",
+        answer: "spend",
+        style: { emoji: "🎉", tone: "primary", color: "h30" },
+      },
+      {
+        kind: "preset",
+        presetId: "groceries",
+        style: { emoji: "🛒", tone: "primary", color: "h150" },
+      },
+    ],
+  } satisfies FunctionArgs<typeof api.accounting.ensurePersonalDefaults>;
+  const first = await t.action(api.accounting.ensurePersonalDefaults, args);
+  expect(first).toMatchObject({
+    purchaseAlertsConsent: true,
+    wantsBudgets: true,
+  });
+  const categories = await t.query(api.accounting.listUserCategories, {
+    workspaceId: first.workspace.id,
+  });
+  expect(
+    categories.find((category) => category.name === "Weekend"),
+  ).toMatchObject({
+    id: first.firstCategoryId,
+    nature: "Expense",
+    style: { emoji: "🎉", tone: "primary", color: "h30" },
+  });
+  expect(await t.action(api.accounting.ensurePersonalDefaults, args)).toEqual(
+    first,
+  );
+  expect(await t.query(api.accounting.personalDefaults, {})).toEqual(first);
+  for (const changed of [
+    { purchaseAlertsConsent: false },
+    { wantsBudgets: false },
+    {
+      categories: [
+        {
+          ...args.categories[0],
+          style: { ...args.categories[0].style, color: "h45" },
+        },
+        args.categories[1],
+      ],
+    },
+  ]) {
+    await expect(
+      t.action(api.accounting.ensurePersonalDefaults, { ...args, ...changed }),
+    ).rejects.toMatchObject({ data: { code: "setup_conflict" } });
+  }
+  expect(
+    await t.run((ctx) => ctx.db.query("journalEntries").collect()),
+  ).toHaveLength(1);
+  expect(
+    await t.run((ctx) => ctx.db.query("financialAccountProfiles").collect()),
+  ).toHaveLength(1);
+});
+
+test("legacy setup stays readable and retryable without the additive preferences or colors", async () => {
+  const t = await convexAccounting(modules);
+  const args = {
+    functionalCurrency: "COP",
+    startingMinorUnits: 0,
+    timeZone: "America/Bogota",
+  };
+  const first = await t.action(api.accounting.ensurePersonalDefaults, args);
+  await t.run(async (ctx) => {
+    const defaults = await ctx.db.query("personalDefaults").unique();
+    if (!defaults) throw new Error("Missing defaults");
+    await ctx.db.patch(defaults._id, {
+      purchaseAlertsConsent: undefined,
+      wantsBudgets: undefined,
+    });
+  });
+  expect(await t.action(api.accounting.ensurePersonalDefaults, args)).toEqual(
+    first,
+  );
+  expect(await t.query(api.accounting.personalDefaults, {})).toMatchObject({
+    purchaseAlertsConsent: false,
+    wantsBudgets: false,
+  });
+});
+
+test("more than twelve setup categories fails atomically", async () => {
+  const t = await convexAccounting(modules);
+  await expect(
+    t.action(api.accounting.ensurePersonalDefaults, {
+      functionalCurrency: "COP",
+      startingMinorUnits: 0,
+      timeZone: "America/Bogota",
+      categories: Array.from(
+        { length: 13 },
+        (
+          _,
+          index,
+        ): NonNullable<
+          FunctionArgs<
+            typeof api.accounting.ensurePersonalDefaults
+          >["categories"]
+        >[number] => ({
+          kind: "custom",
+          name: `Category ${index}`,
+          answer: "spend",
+          style: { emoji: "✨", tone: "primary" },
+        }),
+      ),
+    }),
+  ).rejects.toMatchObject({ data: { code: "setup_category_limit" } });
+  expect(await t.query(api.accounting.personalDefaults, {})).toBeNull();
+  expect(await t.run((ctx) => ctx.db.query("workspaces").collect())).toEqual(
+    [],
+  );
 });

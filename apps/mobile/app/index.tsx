@@ -14,13 +14,14 @@ import {
   projectedMonthSpendMinorUnits,
 } from "../src/features/monthPace";
 import { Setup } from "../src/features/Setup";
+import { SetupCompletion } from "../src/features/setup/Completion";
+import type { SetupSummary } from "../src/features/setup/model";
 import { spentMonthEyebrow } from "../src/features/timeZones";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { useAttention } from "../src/features/attention/useAttention";
 import { updatesDetail } from "../src/features/attention/model";
 import {
   ActionTile,
-  ConfirmationScreen,
   Header,
   PrimaryButton,
   ProgressBar,
@@ -182,28 +183,63 @@ function Home({
     </Screen>
   );
 }
+type EntryView =
+  | { kind: "setup" }
+  | { kind: "home" }
+  | { kind: "complete"; summary: SetupSummary };
 export default function Index() {
   const defaults = usePersonalDefaults();
   const { userId } = useAuth();
-  const [confirmed, setConfirmed] = useState(false);
-  if (confirmed)
-    return (
-      <ConfirmationScreen
-        title="You’re ready"
-        detail="Your money is ready to track."
-        onContinue={() => setConfirmed(false)}
-      />
-    );
-  if (defaults === null)
-    return (
-      <Screen>
-        <Setup onComplete={() => setConfirmed(true)} />
-      </Screen>
-    );
   if (defaults === undefined || !userId)
     return (
       <Screen>
         <ActivityIndicator />
+      </Screen>
+    );
+  return <ReadyIndex key={userId} defaults={defaults} userId={userId} />;
+}
+
+function ReadyIndex({
+  defaults,
+  userId,
+}: {
+  defaults: Exclude<ReturnType<typeof usePersonalDefaults>, undefined>;
+  userId: string;
+}) {
+  const [view, setView] = useState<EntryView>(() =>
+    defaults ? { kind: "home" } : { kind: "setup" },
+  );
+  if (view.kind === "complete")
+    return (
+      <SetupCompletion
+        summary={view.summary}
+        onHome={() => {
+          setView({ kind: "home" });
+          if (view.summary.wantsBudgets && view.summary.firstCategoryId)
+            router.push({
+              pathname: "/budget",
+              params: { categoryId: view.summary.firstCategoryId },
+            });
+        }}
+      />
+    );
+  if (view.kind === "setup")
+    return (
+      <Screen>
+        <Setup
+          onComplete={(summary) => setView({ kind: "complete", summary })}
+          onCancel={() => setView({ kind: "home" })}
+        />
+      </Screen>
+    );
+  if (!defaults)
+    return (
+      <Screen>
+        <Header title="Home" />
+        <PrimaryButton
+          label="Start setup"
+          onPress={() => setView({ kind: "setup" })}
+        />
       </Screen>
     );
   return (

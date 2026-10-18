@@ -1,3 +1,4 @@
+import { categoryColor } from "./looks";
 import {
   BottomSheetModal,
   BottomSheetScrollView,
@@ -280,7 +281,7 @@ export function CategorySheet(props: CategorySheetProps) {
                     onPress={() => props.onSelect(option.key)}
                   >
                     <Text
-                      style={[ui.body, { color: theme[option.style.tone] }]}
+                      style={[ui.body, { color: categoryColor(option.style) ?? theme[option.style.tone] }]}
                     >
                       {option.style.emoji} {option.name}
                       {option.selected ? " ✓" : ""}
