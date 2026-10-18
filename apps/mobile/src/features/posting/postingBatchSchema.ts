@@ -18,5 +18,7 @@ export type QueuedPosting = z.infer<typeof queuedPostingSchema>;
 export type StoredPostingBatch = z.infer<typeof postingBatchSchema>;
 export type PostingBatchStorage = {
   load(): Promise<StoredPostingBatch>;
-  save(batch: StoredPostingBatch): Promise<void>;
+  update(
+    change: (batch: StoredPostingBatch) => StoredPostingBatch,
+  ): Promise<StoredPostingBatch>;
 };

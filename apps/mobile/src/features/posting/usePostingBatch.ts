@@ -33,32 +33,42 @@ export function usePostingBatch(
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<BatchReceipt | null>(null);
   const lock = useRef(false);
+  const lifetime = useRef({ active: false });
   const editable = loaded && !busy && !state.pendingItemId;
 
   useEffect(() => {
-    let active = true;
+    const owner = { active: true };
+    lifetime.current = owner;
+    lock.current = false;
+    setBusy(false);
     setLoaded(false);
     void storage
       .load()
       .then((restored) => {
-        if (!active) return;
+        if (!owner.active) return;
         current.current = restored;
         setState(restored);
         setLoaded(true);
       })
       .catch((failure: unknown) => {
-        if (active && !transport.reportFailure?.(failure))
+        if (owner.active && !transport.reportFailure?.(failure))
           setError(
             "Could not restore the batch on this device. Reopen this page to try again.",
           );
       });
     return () => {
-      active = false;
+      owner.active = false;
     };
   }, [storage, transport]);
 
-  async function persist(next: StoredPostingBatch) {
-    await storage.save(next);
+  async function persist(
+    owner: { active: boolean },
+    change: (batch: StoredPostingBatch) => StoredPostingBatch,
+  ) {
+    const next = await storage.update((batch) =>
+      owner.active ? change(batch) : batch,
+    );
+    if (!owner.active) return;
     current.current = next;
     setState(next);
   }
@@ -66,65 +76,88 @@ export function usePostingBatch(
   async function edit(
     change: (queue: StoredPostingBatch["queue"]) => StoredPostingBatch["queue"],
   ) {
-    if (!editable || lock.current) return false;
+    const owner = lifetime.current;
+    if (!owner.active || !editable || lock.current) return false;
     lock.current = true;
     setBusy(true);
     try {
-      await persist({
-        ...current.current,
-        queue: change(current.current.queue),
-      });
+      await persist(owner, (batch) => ({ ...batch, queue: change(batch.queue) }));
+      if (!owner.active) return false;
       setPosted(null);
       setError("");
       return true;
     } catch (failure) {
+      if (!owner.active) return false;
       if (!transport.reportFailure?.(failure))
         setError("Could not save the batch on this device. Try again.");
       return false;
     } finally {
-      lock.current = false;
-      setBusy(false);
+      if (owner.active) {
+        lock.current = false;
+        setBusy(false);
+      }
     }
   }
 
   async function postAll() {
-    if (!loaded || lock.current || current.current.queue.length === 0) return;
+    const owner = lifetime.current;
+    if (
+      !owner.active || !loaded || lock.current || current.current.queue.length === 0
+    ) return;
     lock.current = true;
     setBusy(true);
     setError("");
     setPosted(null);
     try {
       const restored = await storage.load();
+      if (!owner.active) return;
       current.current = restored;
       setState(restored);
       const queue = restored.queue;
       if (beforePost && !(await beforePost(queue))) return;
+      if (!owner.active) return;
       for (const item of queue) {
         // Persist retry-only status before any transport operation can outlive this route.
-        await persist({ ...current.current, pendingItemId: item.id });
+        await persist(owner, (batch) => ({ ...batch, pendingItemId: item.id }));
+        if (!owner.active) return;
         const saved = await transport.save(item.command, item.draftId);
-        await persist({
-          ...current.current,
-          queue: current.current.queue.map((row) =>
+        if (!owner.active) return;
+        await persist(owner, (batch) => ({
+          ...batch,
+          queue: batch.queue.map((row) =>
             row.id === item.id
               ? { ...row, draftId: saved.id, command: saved.command }
               : row,
           ),
-        });
+        }));
+        if (!owner.active) return;
         const receipt = await transport.post(saved.command);
+        if (!owner.active) return;
         await transport.clear();
-        await persist({
-          queue: current.current.queue.filter((row) => row.id !== item.id),
-          receipts: {
-            count: current.current.receipts.count + 1,
-            net: current.current.receipts.net + receipt.amount.minorUnits,
-          },
+        if (!owner.active) return;
+        await persist(owner, (batch) => {
+          if (!batch.queue.some((row) => row.id === item.id)) return batch;
+          return {
+            ...batch,
+            pendingItemId:
+              batch.pendingItemId === item.id ? undefined : batch.pendingItemId,
+            queue: batch.queue.filter((row) => row.id !== item.id),
+            receipts: {
+              count: batch.receipts.count + 1,
+              net: batch.receipts.net + receipt.amount.minorUnits,
+            },
+          };
         });
+        if (!owner.active) return;
       }
       const receipt = current.current.receipts;
-      await persist({ ...current.current, receipts: { count: 0, net: 0 } });
-      setPosted(receipt);
+      await persist(owner, (batch) => ({
+        ...batch,
+        receipts: { count: 0, net: 0 },
+      }));
+      if (owner.active) setPosted(receipt);
     } catch (failure) {
+      if (!owner.active) return;
       if (transport.reportFailure?.(failure)) return;
       const data: unknown =
         failure instanceof ConvexError ? failure.data : null;
@@ -136,22 +169,25 @@ export function usePostingBatch(
       ) {
         try {
           await transport.abort();
-          await persist({
-            ...current.current,
+          if (!owner.active) return;
+          await persist(owner, (batch) => ({
+            ...batch,
             pendingItemId: undefined,
-            queue: current.current.queue.map((row) =>
-              row.id === current.current.pendingItemId &&
+            queue: batch.queue.map((row) =>
+              row.id === batch.pendingItemId &&
               (row.command.kind === "opening" || row.command.kind === "setup")
                 ? { ...row, draftId: undefined }
                 : row,
             ),
-          });
+          }));
+          if (!owner.active) return;
           setError(
             "message" in data && typeof data.message === "string"
               ? data.message
               : "Entry was rejected. Edit the draft and try again.",
           );
         } catch {
+          if (!owner.active) return;
           setError(
             "Could not clear the saved entry. Post again to check its status.",
           );
@@ -162,8 +198,10 @@ export function usePostingBatch(
         );
       }
     } finally {
-      lock.current = false;
-      setBusy(false);
+      if (owner.active) {
+        lock.current = false;
+        setBusy(false);
+      }
     }
   }
 

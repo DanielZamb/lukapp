@@ -98,10 +98,10 @@ async function open(
       }
     | undefined;
   const batchStorage = storage();
-  function Harness() {
+  function Harness({ activeApi = api }: { activeApi?: PostingTransport }) {
     current = {
-      editor: usePostingEditor(account, api),
-      batch: usePostingBatch(api, batchStorage, beforePost),
+      editor: usePostingEditor(account, activeApi),
+      batch: usePostingBatch(activeApi, batchStorage, beforePost),
     };
     return null;
   }
@@ -110,6 +110,9 @@ async function open(
   });
   return {
     api,
+    replaceTransport: async (activeApi: PostingTransport) => {
+      await act(async () => root?.update(createElement(Harness, { activeApi })));
+    },
     get: () => {
       if (!current) throw new Error("Not mounted");
       return current;
@@ -307,6 +310,106 @@ test("a restarted partial batch keeps only unconfirmed rows and retries the same
   session = await open();
   expect(session.get().batch.queue).toEqual([]);
 });
+
+test("a late Post all response cannot erase drafts added after reopening and retrying", async () => {
+  const api = transport();
+  const realPost = api.post.getMockImplementation()!;
+  let respond: (() => void) | undefined;
+  api.post.mockImplementationOnce(async (command) => {
+    await new Promise<void>((resolve) => { respond = resolve; });
+    return realPost(command);
+  });
+  let session = await open(api);
+  await queueEntry(session, "-10", "Taxi");
+  await queueEntry(session, "+20", "Refund");
+  let original: Promise<void> | undefined;
+  await act(async () => { original = session.get().batch.postAll(); });
+  expect(api.post).toHaveBeenCalledTimes(1);
+  await act(async () => root?.unmount());
+  const retry = transport();
+  retry.newKey = () => "new-draft";
+  session = await open(retry);
+  await act(async () => { await session.get().batch.postAll(); });
+  expect(retry.post.mock.calls[0][0]).toEqual(api.post.mock.calls[0][0]);
+  await queueEntry(session, "+30", "new-draft");
+  const expected = session.get().batch.queue;
+  expect(expected).toHaveLength(1);
+  await act(async () => { respond?.(); await original; });
+  expect((await storage().load()).queue).toEqual(expected);
+  expect(session.get().batch.queue).toEqual(expected);
+  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(api.clear).not.toHaveBeenCalled();
+  await act(async () => root?.unmount());
+  session = await open();
+  expect(session.get().batch.queue).toEqual(expected);
+});
+
+test("posting completion removes only confirmed rows from the latest stored batch", async () => {
+  const api = transport();
+  const realPost = api.post.getMockImplementation()!;
+  let respond: (() => void) | undefined;
+  api.post.mockImplementationOnce(async (command) => {
+    await new Promise<void>((resolve) => { respond = resolve; });
+    return realPost(command);
+  });
+  const session = await open(api);
+  await queueEntry(session, "-10", "Taxi");
+  const originalRow = session.get().batch.queue[0];
+  if (originalRow.command.kind !== "expense") throw new Error("Expected expense");
+  const newerRow = {
+    id: "new-draft",
+    command: {
+      ...originalRow.command,
+      payload: { ...originalRow.command.payload, idempotencyKey: "new-draft" },
+    },
+  };
+  let posting: Promise<void> | undefined;
+  await act(async () => { posting = session.get().batch.postAll(); });
+  await storage().update((batch) => ({
+    ...batch,
+    queue: [...batch.queue, newerRow],
+  }));
+  await act(async () => { respond?.(); await posting; });
+  expect((await storage().load()).queue).toEqual([newerRow]);
+  expect(session.get().batch.queue).toEqual([newerRow]);
+  expect(session.get().batch.posted).toEqual({ count: 1, net: -1000 });
+  expect(api.post).toHaveBeenCalledTimes(1);
+});
+
+test.each(["confirmed", "rejected"])(
+  "a superseded transport ignores its late %s response",
+  async (outcome) => {
+    const api = transport();
+    const realPost = api.post.getMockImplementation()!;
+    let respond: (() => void) | undefined;
+    api.post.mockImplementationOnce(async (command) => {
+      await new Promise<void>((resolve) => { respond = resolve; });
+      if (outcome === "rejected") {
+        throw new ConvexError({ kind: "accounting", message: "Period is locked" });
+      }
+      return realPost(command);
+    });
+    const session = await open(api);
+    await queueEntry(session, "-10", "Taxi");
+    await queueEntry(session, "+20", "Refund");
+    let original: Promise<void> | undefined;
+    await act(async () => { original = session.get().batch.postAll(); });
+    const retry = transport();
+    retry.newKey = () => "new-draft";
+    await session.replaceTransport(retry);
+    await act(async () => { await session.get().batch.postAll(); });
+    expect(retry.post.mock.calls[0][0]).toEqual(api.post.mock.calls[0][0]);
+    await queueEntry(session, "+30", "new-draft");
+    const expected = await storage().load();
+    await act(async () => { respond?.(); await original; });
+    expect(await storage().load()).toEqual(expected);
+    expect(session.get().batch.queue).toEqual(expected.queue);
+    expect(session.get().batch.error).toBe("");
+    expect(api.clear).not.toHaveBeenCalled();
+    expect(api.abort).not.toHaveBeenCalled();
+    expect(api.post).toHaveBeenCalledTimes(1);
+  },
+);
 
 test("an Initial balance rejected by accounting can be edited and posted through the real draft lifecycle", async () => {
   const api = transport();

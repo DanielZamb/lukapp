@@ -41,15 +41,21 @@ export function createPostingBatchStorage(
           result: { ...batch, queue, pendingItemId },
         };
       }),
-    save: (batch) =>
-      mutateLocalEntryDocument(lease, subject, (document) => ({
-        document: {
-          ...document,
-          postingBatches: { ...document.postingBatches, [workspaceId]: batch },
-        },
-        write: true,
-        result: undefined,
-      })),
+    update: (change) =>
+      mutateLocalEntryDocument(lease, subject, (document) => {
+        const batch = change(document.postingBatches?.[workspaceId] ?? {
+          queue: [],
+          receipts: { count: 0, net: 0 },
+        });
+        return {
+          document: {
+            ...document,
+            postingBatches: { ...document.postingBatches, [workspaceId]: batch },
+          },
+          write: true,
+          result: batch,
+        };
+      }),
   };
 }
 
