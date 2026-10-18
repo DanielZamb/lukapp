@@ -1,5 +1,6 @@
 import * as React from "react";
-import { createElement } from "react";
+import { createElement, useImperativeHandle, type ComponentProps } from "react";
+import type { PostingFormProps } from "./PostingForm";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { seedCandidate } from "../intake/devSeed";
@@ -12,7 +13,15 @@ const route = vi.hoisted(() => ({
   draftId: undefined as string | undefined,
   candidateId: undefined as string | undefined,
 }));
-const form = vi.hoisted(() => ({ sourceNote: undefined as string | undefined }));
+const form = vi.hoisted(() => {
+  const state: { sourceNote?: string; props?: PostingFormProps } = {};
+  return state;
+});
+const picker = vi.hoisted(() => ({ present: vi.fn(), dismiss: vi.fn() }));
+const writes = vi.hoisted(() => ({ save: vi.fn(), post: vi.fn() }));
+const back = vi.hoisted(() => ({ handler: undefined as (() => boolean) | undefined }));
+const routeBack = vi.hoisted(() => vi.fn());
+const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
 const intakeActions = vi.hoisted(() => ({
   read: vi.fn(async (id: string) =>
@@ -26,7 +35,7 @@ const intakeActions = vi.hoisted(() => ({
 
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
 vi.mock("expo-router", () => ({
-  router: { back: vi.fn(), replace: vi.fn(), setParams: vi.fn() },
+  router: { back: routeBack, replace: vi.fn(), setParams: vi.fn() },
   Redirect: "redirect",
   useLocalSearchParams: () => ({
     profileId: route.profileId,
@@ -66,8 +75,8 @@ vi.mock("../useIntakeCandidates", () => ({
 vi.mock("./usePostingTransport", () => {
   const transport = {
     load: vi.fn(async () => ({ kind: "none" })),
-    save: vi.fn(),
-    post: vi.fn(),
+    save: writes.save,
+    post: writes.post,
     clear: vi.fn(),
     abort: vi.fn(),
     newKey: () => "key",
@@ -81,43 +90,10 @@ vi.mock("./postingBatchStorage", () => {
   };
   return { usePostingBatchStorage: () => storage };
 });
-vi.mock("./usePostingEditor", () => ({
-  usePostingEditor: () => ({
-    amount: "-",
-    description: "",
-    date: "2026-10-17",
-    entryType: "normal",
-    profileId: "daily",
-    destinationId: null,
-    categories: { ids: [], primaryId: null },
-    direction: "out",
-    editable: true,
-    loading: false,
-    busy: false,
-    pending: false,
-    canSubmit: false,
-    canKeepDraft: false,
-    error: "",
-    posted: null,
-    setup: null,
-    lockEntryType: false,
-    blockedByPendingPostings: false,
-    setAmount: vi.fn(),
-    setDescription: vi.fn(),
-    setEntryType: vi.fn(),
-    setProfileId: vi.fn(),
-    setDestinationId: vi.fn(),
-    setSetup: vi.fn(),
-    setCategories: vi.fn(),
-    setDate: vi.fn(),
-    submit: vi.fn(),
-    keepDraft: vi.fn(),
-    dismissPosted: vi.fn(),
-  }),
-}));
 vi.mock("./PostingForm", () => ({
-  PostingForm: (props: { sourceNote?: string }) => {
+  PostingForm: (props: PostingFormProps) => {
     form.sourceNote = props.sourceNote;
+    form.props = props;
     return createElement("view");
   },
 }));
@@ -126,11 +102,15 @@ vi.mock("../categories/transactionSelection", () => ({
   canPostCategories: () => true,
   needsPrimary: () => false,
 }));
-vi.mock("../intake/facts", () => ({
-  factsFromCandidate: () => ({}),
-  suggestionOf: () => ({}),
+vi.mock("./PlaceSheet", () => ({
+  PlaceSheet: ({ sheetRef, ...props }: ComponentProps<typeof import("./PlaceSheet").PlaceSheet>) => {
+    useImperativeHandle(sheetRef, () => ({
+      ...picker, snapToIndex: vi.fn(), snapToPosition: vi.fn(), expand: vi.fn(),
+      collapse: vi.fn(), close: vi.fn(), forceClose: vi.fn(),
+    }));
+    return createElement("place-sheet", props);
+  },
 }));
-vi.mock("./PlaceSheet", () => ({ PlaceSheet: "place-sheet" }));
 vi.mock("./AccountSetupForm", () => ({ AccountSetupForm: "setup" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
@@ -146,7 +126,11 @@ vi.mock("react-native", () => ({
   Pressable: "button",
   ScrollView: "scroll",
   ActivityIndicator: "spinner",
-  Platform: { OS: "ios" },
+  BackHandler: { addEventListener: (_event: string, handler: () => boolean) => {
+    back.handler = handler;
+    return { remove: () => { back.handler = undefined; } };
+  } },
+  Platform: { get OS() { return platform.os; } },
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
 }));
 
@@ -160,6 +144,10 @@ beforeEach(() => {
   route.draftId = undefined;
   route.candidateId = undefined;
   form.sourceNote = undefined;
+  form.props = undefined;
+  back.handler = undefined;
+  vi.clearAllMocks();
+  platform.os = "ios";
   intakeActions.read.mockClear();
 });
 afterEach(async () => {
@@ -178,6 +166,53 @@ async function mount() {
 test("a new entry passes no source note", async () => {
   await mount();
   expect(form.sourceNote).toBeUndefined();
+});
+
+function formProps() {
+  if (!form.props) throw new Error("Post form is not mounted");
+  return form.props;
+}
+
+test.each(["source", "destination"])("Android Back from %s preserves unsaved Post fields", async (target) => {
+  platform.os = "android";
+  await mount();
+  expect(back.handler).toBeUndefined();
+  await act(async () => formProps().onAmountChange("-7"));
+  await act(async () => formProps().onDescriptionChange("PostingBack-1946"));
+  if (target === "destination") await act(async () => formProps().onEntryType?.("transfer"));
+  await act(async () => target === "source" ? formProps().onPlace() : formProps().onDestination?.());
+  expect(picker.present).toHaveBeenCalledOnce();
+  expect(back.handler).toBeTypeOf("function");
+  let handled = false;
+  await act(async () => { handled = back.handler?.() ?? false; });
+  expect(handled).toBe(true);
+  expect(picker.dismiss).toHaveBeenCalledOnce();
+  expect(routeBack).not.toHaveBeenCalled();
+  expect(formProps()).toMatchObject({ amount: "-7", description: "PostingBack-1946" });
+  const placeSheet = root?.root.find((node) => String(node.type) === "place-sheet");
+  await act(async () => placeSheet?.props.onDismiss());
+  expect(back.handler).toBeUndefined();
+  expect(writes.save).not.toHaveBeenCalled();
+  expect(writes.post).not.toHaveBeenCalled();
+});
+
+test("canceling Add a place preserves the unsaved Post without saving", async () => {
+  platform.os = "android";
+  await mount();
+  await act(async () => formProps().onAmountChange("-7"));
+  await act(async () => formProps().onDescriptionChange("PostingBack-1946"));
+  await act(async () => formProps().onPlace());
+  const placeSheet = root?.root.find((node) => String(node.type) === "place-sheet");
+  await act(async () => placeSheet?.props.onAdd());
+  expect(back.handler).toBeUndefined();
+  const setup = () => root?.root.find((node) => String(node.type) === "setup");
+  expect(setup()?.props.value).toMatchObject({ name: "", amount: "0", target: { kind: "source" } });
+  await act(async () => setup()?.props.onDismiss());
+  expect(setup()?.props.value).toBeNull();
+  expect(formProps()).toMatchObject({ amount: "-7", description: "PostingBack-1946" });
+  expect(routeBack).not.toHaveBeenCalled();
+  expect(writes.save).not.toHaveBeenCalled();
+  expect(writes.post).not.toHaveBeenCalled();
 });
 
 test("a local entry draft passes Draft on this device", async () => {

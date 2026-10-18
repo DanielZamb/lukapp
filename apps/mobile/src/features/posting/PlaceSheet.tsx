@@ -17,6 +17,7 @@ export function PlaceSheet(props: {
   selectedId: string | null;
   excludedId?: string;
   disabled: boolean;
+  onDismiss: () => void;
   onSelect: (id: string) => void;
   onAdd: () => void;
 }) {
@@ -31,7 +32,7 @@ export function PlaceSheet(props: {
         .includes(props.search.trim().toLowerCase()),
   );
   return (
-    <PickerSheet sheetRef={props.sheetRef} busy={props.disabled}>
+    <PickerSheet sheetRef={props.sheetRef} busy={props.disabled} onDismiss={props.onDismiss}>
       <View style={pickerSheetStyles.search}>
         <Text style={pickerSheetStyles.title}>{props.title}</Text>
         <BottomSheetTextInput

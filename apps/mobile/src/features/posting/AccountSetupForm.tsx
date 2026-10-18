@@ -4,8 +4,8 @@ import {
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
-import { useMemo, useRef, type RefObject } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { BackHandler, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Field, Header, PrimaryButton, useTheme, useUi } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import type { PlaceDraft } from "./usePostingEditor";
@@ -35,7 +35,21 @@ export function AccountSetupForm(props: {
   const theme = useTheme();
   const styles = useMemo(() => accountSetupStyles(theme), [theme]);
   const lookSheet = useRef<BottomSheetModal>(null);
+  const [lookEmoji, setLookEmoji] = useState("💰");
+  const [lookOpen, setLookOpen] = useState(false);
   const value = props.value;
+  const hasValue = value !== null;
+  useEffect(() => {
+    if (Platform.OS !== "android" || !hasValue) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (props.editable) {
+        if (lookOpen) lookSheet.current?.dismiss();
+        else props.sheetRef.current?.dismiss();
+      }
+      return true;
+    });
+    return () => subscription.remove();
+  }, [hasValue, lookOpen, props.editable, props.sheetRef]);
   return (
     <>
       <BottomSheetModal
@@ -44,7 +58,10 @@ export function AccountSetupForm(props: {
         enableDynamicSizing={false}
         enablePanDownToClose={props.editable}
         enableContentPanningGesture={props.editable}
-        onDismiss={props.onDismiss}
+        onDismiss={() => {
+          setLookOpen(false);
+          props.onDismiss();
+        }}
         backgroundStyle={{ backgroundColor: theme.background }}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
@@ -97,7 +114,11 @@ export function AccountSetupForm(props: {
                 accessibilityRole="button"
                 accessibilityLabel="Choose emoji"
                 disabled={!props.editable}
-                onPress={() => lookSheet.current?.present()}
+                onPress={() => {
+                  setLookEmoji(value.emoji ?? "💰");
+                  setLookOpen(true);
+                  lookSheet.current?.present();
+                }}
                 style={styles.look}
               >
                 <Text style={styles.emoji}>{value.emoji ?? "💰"}</Text>
@@ -146,7 +167,15 @@ export function AccountSetupForm(props: {
           stackBehavior="push"
           snapPoints={["55%"]}
           enableDynamicSizing={false}
+          enablePanDownToClose={props.editable}
+          enableContentPanningGesture={props.editable}
+          onDismiss={() => {
+            setLookOpen(false);
+            setLookEmoji(value.emoji ?? "💰");
+          }}
           backgroundStyle={{ backgroundColor: theme.background }}
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="restore"
         >
           <BottomSheetScrollView
             keyboardShouldPersistTaps="handled"
@@ -160,23 +189,39 @@ export function AccountSetupForm(props: {
                   accessibilityRole="radio"
                   accessibilityLabel={`Emoji ${emoji}`}
                   accessibilityState={{
-                    checked: (value.emoji ?? "💰") === emoji,
+                    checked: lookEmoji === emoji,
                   }}
                   disabled={!props.editable}
-                  onPress={() => props.onChange({ ...value, emoji })}
+                  onPress={() => setLookEmoji(emoji)}
                   style={[
                     styles.emojiChip,
-                    (value.emoji ?? "💰") === emoji && styles.selected,
+                    lookEmoji === emoji && styles.selected,
                   ]}
                 >
                   <Text style={styles.emoji}>{emoji}</Text>
                 </Pressable>
               ))}
             </View>
+            <BottomSheetTextInput
+              accessibilityLabel="Custom emoji"
+              editable={props.editable}
+              value={emojis.includes(lookEmoji) ? "" : lookEmoji}
+              onChangeText={(input) => {
+                const emoji = [...input][0];
+                if (emoji) setLookEmoji(emoji);
+              }}
+              placeholder="Or type your own"
+              placeholderTextColor={theme.mutedForeground}
+              style={styles.customEmojiInput}
+            />
             <PrimaryButton
               label="Use this"
               trailingIcon="checkmark"
-              onPress={() => lookSheet.current?.dismiss()}
+              disabled={!props.editable}
+              onPress={() => {
+                props.onChange({ ...value, emoji: lookEmoji });
+                lookSheet.current?.dismiss();
+              }}
             />
           </BottomSheetScrollView>
         </BottomSheetModal>
@@ -209,13 +254,23 @@ function accountSetupStyles(theme: Theme) {
     },
     emoji: { fontSize: 26 },
     emojiChip: {
-      minHeight: touchTarget,
-      minWidth: touchTarget,
+      height: touchTarget,
+      width: touchTarget,
       alignItems: "center",
       justifyContent: "center",
-      borderRadius: radius.md,
+      borderRadius: radius.full,
       borderWidth: 1,
       borderColor: theme.border,
+      backgroundColor: theme.secondary,
+    },
+    customEmojiInput: {
+      minHeight: touchTarget,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.ring,
+      backgroundColor: theme.secondary,
+      color: theme.foreground,
     },
   });
 }

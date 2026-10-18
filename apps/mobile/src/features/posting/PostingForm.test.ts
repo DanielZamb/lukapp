@@ -28,6 +28,7 @@ vi.mock("react-native", () => ({
   ScrollView: "scroll",
   TextInput: "input",
   ActivityIndicator: "spinner",
+  Platform: { OS: "ios" },
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
 }));
 
@@ -224,6 +225,7 @@ test("From searches trimmed names and emoji, excludes To, and adds a place", asy
     selectedId: "bank",
     excludedId: "to",
     disabled: false,
+    onDismiss: vi.fn(),
     onSelect,
     onAdd,
   };
@@ -294,6 +296,7 @@ test("Add a place offers the three mapped types, emoji look, and balance today",
   await act(async () =>
     root!.root.findByProps({ accessibilityLabel: "Emoji 🏦" }).props.onPress(),
   );
+  await act(async () => root!.root.findByProps({ accessibilityLabel: "Use this", accessibilityRole: "button" }).props.onPress());
   expect(onChange).toHaveBeenLastCalledWith({ ...value, emoji: "🏦" });
   expect(
     root!.root

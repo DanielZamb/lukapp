@@ -10,7 +10,7 @@ import {
 import { useAction, useConvex, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Keyboard, Platform, Text } from "react-native";
+import { ActivityIndicator, BackHandler, Keyboard, Platform, Text } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate, parseMoney } from "../src/features/money";
@@ -63,6 +63,7 @@ function PostMoney({
   const [placeTarget, setPlaceTarget] = useState<"source" | "destination">(
     "source",
   );
+  const [placePickerOpen, setPlacePickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const categories = useQuery(api.accounting.listUserCategories, {
     workspaceId: defaults.workspace.id,
@@ -149,6 +150,17 @@ function PostMoney({
   const [mode, setMode] = useState<"one" | "batch">("one");
   const [composing, setComposing] = useState(false);
   const [editingId, setEditingId] = useState<string | undefined>();
+  useEffect(() => {
+    if (Platform.OS !== "android" || !placePickerOpen) return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        placeSheet.current?.dismiss();
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [placePickerOpen]);
   const closeCompose = useCallback(() => {
     setComposing(false);
     setEditingId(undefined);
@@ -317,11 +329,13 @@ function PostMoney({
         onPlace={() => {
           setPlaceTarget("source");
           setSearch("");
+          setPlacePickerOpen(true);
           placeSheet.current?.present();
         }}
         onDestination={() => {
           setPlaceTarget("destination");
           setSearch("");
+          setPlacePickerOpen(true);
           placeSheet.current?.present();
         }}
         onCategory={() => setCategoryVisible(true)}
@@ -379,15 +393,18 @@ function PostMoney({
               : undefined
         }
         disabled={!editor.editable}
+        onDismiss={() => setPlacePickerOpen(false)}
         onSelect={(id) =>
           interaction(() => {
             if (placeTarget === "source") editor.setProfileId(id);
             else editor.setDestinationId(id);
+            setPlacePickerOpen(false);
             placeSheet.current?.dismiss();
           })
         }
         onAdd={() =>
           interaction(() => {
+            setPlacePickerOpen(false);
             placeSheet.current?.dismiss();
             editor.setSetup({
               name: "",
