@@ -1,4 +1,9 @@
 // The pilot supports COP and USD, both with two minor-unit digits.
+export function narrowCurrencySymbol(currency: string) {
+  if (currency === "COP" || currency === "USD") return "$";
+  return currency;
+}
+
 function localeSeparators(locale: string): { group: string; decimal: string } {
   if (locale === "en-US") {
     return { group: ",", decimal: "." };

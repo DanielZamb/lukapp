@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Header, PrimaryButton, SecondaryButton, theme, ui } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
-import { formatMoney } from "../money";
+import { formatMoney, narrowCurrencySymbol } from "../money";
 import { compactAmount, jarPresentation, monthLabel, type BudgetJar } from "./model";
 import type { useBudgetEditor } from "./useBudgetEditor";
 
@@ -36,8 +36,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
     Math.round(props.jar.limitMinorUnits * 1.2),
     Math.round(props.jar.consumptionMinorUnits / stepMinorUnits) * stepMinorUnits + 2 * stepMinorUnits,
   ].filter((value, index, all) => value > 0 && all.indexOf(value) === index);
-  const symbol = new Intl.NumberFormat("en", { style: "currency", currency: props.currency, currencyDisplay: "narrowSymbol" })
-    .formatToParts(0).find((part) => part.type === "currency")?.value ?? props.currency;
+  const symbol = narrowCurrencySymbol(props.currency);
   const month = monthLabel(props.month, "month");
   const previousMonth = monthLabel(props.previousMonth, "month");
   return (

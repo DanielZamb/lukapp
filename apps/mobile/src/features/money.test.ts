@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatMoney, parseMoney } from "./money";
+import { formatMoney, narrowCurrencySymbol, parseMoney } from "./money";
 
 test.each([
   ["-1.234,50", -123450],
@@ -31,6 +31,10 @@ test.each([
 ])("rejects malformed or unsafe input %s", (input) => {
   expect(() => parseMoney(input)).toThrow();
 });
+test.each(["COP", "USD"])("narrowCurrencySymbol uses $ for %s", (currency) => {
+  expect(narrowCurrencySymbol(currency)).toBe("$");
+});
+
 test("formats the ledger balance with its currency and two decimal digits", () => {
   expect(formatMoney({ currency: "COP", minorUnits: -150000 })).toBe(
     "−COP 1.500,00",
