@@ -17,12 +17,14 @@ export function admissionFailure(error: unknown): AdmissionFailure {
   const code = parsed.success ? parsed.data.code : undefined;
   const occupiedLabel = parsed.success ? parsed.data.occupiedLabel : undefined;
   switch (code) {
+    case "device_occupier_changed":
+      return { kind: "retry", message: "The active phone changed. Check the device shown here and try again." };
     case "device_slot_occupied":
       return {
         kind: "retry",
         message: occupiedLabel
-          ? `“${occupiedLabel}” already occupies this slot. Explicitly revoke that device before trying again. No device was replaced.`
-          : "A device already occupies this slot. Explicitly revoke that device before trying again. No device was replaced.",
+          ? `${occupiedLabel} already uses this slot. Check the active device and try again.`
+          : "Another device uses this slot. Check the active device and try again.",
       };
     case "device_revoked":
       return { kind: "denied", message: "This device’s access was revoked." };

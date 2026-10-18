@@ -8,6 +8,8 @@ import { DeviceAdmissionGate } from "./DeviceAdmissionGate";
 
 type Status = Pick<FunctionReturnType<typeof api.deviceAccess.status>, "status" | "wipeLocalInput"> & {
   existingLabel?: string;
+  occupier?: { deviceId: string; sessionId: string; label: string; lastSeenAt: number };
+  movedTo?: string;
 };
 type QueryState =
   | { status: "pending" }
@@ -17,6 +19,9 @@ const sdk = vi.hoisted(() => ({
   status: ((): QueryState => ({ status: "pending" }))(),
   register: vi.fn(async (_args: unknown) => "device-id"),
   signOut: vi.fn(async () => {}),
+  replace: vi.fn(async (_args: unknown) => "replacement-id"),
+  ensure: vi.fn(async () => true),
+  ready: true,
   interaction: vi.fn(),
   report: vi.fn((_error: unknown) => false),
   queryNames: new Array<string>(),
@@ -31,9 +36,10 @@ vi.mock("convex/react", () => ({
   },
   useAction: (action: typeof api.deviceAccess.register) => {
     sdk.actionNames.push(getFunctionName(action));
-    return sdk.register;
+    return getFunctionName(action) === "deviceAccess:replace" ? sdk.replace : sdk.register;
   },
 }));
+vi.mock("../local-auth/enrollment", () => ({ useLocalEnrollment: () => ({ ready: sdk.ready, ensure: sdk.ensure }) }));
 vi.mock("@clerk/expo", () => ({ useClerk: () => ({ signOut: sdk.signOut }) }));
 vi.mock("expo-constants", () => ({ default: { nativeAppVersion: "0.1.0" } }));
 vi.mock("react-native", () => ({
@@ -79,6 +85,9 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   sdk.register.mockResolvedValue("device-id");
+  sdk.replace.mockResolvedValue("replacement-id");
+  sdk.ready = true;
+  sdk.ensure.mockResolvedValue(true);
   sdk.signOut.mockResolvedValue(undefined);
   sdk.report.mockReturnValue(false);
   sdk.queryNames.length = 0;
@@ -106,7 +115,7 @@ test("financial screens mount only on reactive registration and unmount immediat
   expect(sdk.report).toHaveBeenCalledWith(new ConvexError({ code: "device_revoked", wipeLocalInput: true }));
   expect(sdk.register).not.toHaveBeenCalled();
   expect(new Set(sdk.queryNames)).toEqual(new Set(["deviceAccess:status"]));
-  expect(new Set(sdk.actionNames)).toEqual(new Set(["deviceAccess:register"]));
+  expect(new Set(sdk.actionNames)).toEqual(new Set(["deviceAccess:register", "deviceAccess:replace"]));
 });
 
 test("registration sends only allowed metadata and waits for the query acknowledgement", async () => {
@@ -133,7 +142,7 @@ test("occupied slots deny access without invoking any revocation and allow an ex
   await act(async () => button("Register device").props.onPress());
   expect(mounts).toBe(0);
   expect(JSON.stringify(root?.toJSON())).toContain("U01 Android");
-  expect(JSON.stringify(root?.toJSON())).toContain("No device was replaced");
+  expect(JSON.stringify(root?.toJSON())).toContain("Check the active device");
   expect(sdk.report).toHaveBeenCalledExactlyOnceWith(new ConvexError({
     code: "device_slot_occupied", occupiedLabel: "U01 Android",
   }));
@@ -227,4 +236,83 @@ test("a protected read throwing inside the financial tree reaches the cleanup ho
     expect(JSON.stringify(root?.toJSON())).toContain("Access could not be confirmed");
     expect(mounts).toBe(0);
   } finally { consoleError.mockRestore(); }
+});
+
+const occupied = {
+  status: "unregistered", wipeLocalInput: false,
+  occupier: { deviceId: "old-device", sessionId: "old-session", label: "Old Android", lastSeenAt: 1_792_238_400_000 },
+} satisfies Status;
+
+test("the occupied screen names the phone and Keep signs out without enrollment or registration", async () => {
+  sdk.ready = false;
+  await open({ status: "success", data: occupied });
+  expect(JSON.stringify(root?.toJSON())).toContain("one Android phone and one iPhone");
+  expect(JSON.stringify(root?.toJSON())).toContain("Last seen");
+  expect(root?.root.findByType("header").props.title).toBe("You already use Lukapp on another Android phone");
+  expect(sdk.ensure).not.toHaveBeenCalled();
+  await act(async () => button("Keep using Old Android").props.onPress());
+  expect(sdk.signOut).toHaveBeenCalledOnce();
+  expect(sdk.ensure).not.toHaveBeenCalled();
+  expect(sdk.register).not.toHaveBeenCalled();
+  expect(sdk.replace).not.toHaveBeenCalled();
+  expect(mounts).toBe(0);
+});
+
+test("Use waits for enrollment and sends the displayed occupier to one replacement, then waits for acknowledgement", async () => {
+  sdk.ready = false;
+  let finish: ((value: boolean) => void) | undefined;
+  sdk.ensure.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+  await open({ status: "success", data: occupied });
+  const submit = button("Use this phone instead").props.onPress;
+  await act(async () => { submit(); submit(); });
+  expect(sdk.ensure).toHaveBeenCalledOnce();
+  expect(sdk.replace).not.toHaveBeenCalled();
+  expect(sdk.register).not.toHaveBeenCalled();
+  expect(mounts).toBe(0);
+  await act(async () => { sdk.ready = true; finish?.(true); });
+  expect(sdk.replace).toHaveBeenCalledExactlyOnceWith({
+    installId: "existing-install-marker", label: "My Android phone", platform: "android", appVersion: "0.1.0",
+    expectedOccupierId: "old-device", expectedSessionId: "old-session",
+  });
+  expect(mounts).toBe(0);
+  await update({ status: "registered", wipeLocalInput: false });
+  expect(mounts).toBe(1);
+  expect(sdk.ensure).toHaveBeenCalledOnce();
+});
+
+test("cancelled enrollment and late success after unmount cannot replace a device", async () => {
+  sdk.ready = false;
+  sdk.ensure.mockResolvedValueOnce(false);
+  await open({ status: "success", data: occupied });
+  await act(async () => button("Use this phone instead").props.onPress());
+  expect(sdk.replace).not.toHaveBeenCalled();
+  expect(mounts).toBe(0);
+  let finish: ((value: boolean) => void) | undefined;
+  sdk.ensure.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+  await act(async () => button("Use this phone instead").props.onPress());
+  await act(async () => root?.unmount());
+  root = undefined;
+  await act(async () => finish?.(true));
+  expect(sdk.replace).not.toHaveBeenCalled();
+});
+
+test("a raced occupier is shown for an explicit retry and never admits early", async () => {
+  sdk.replace.mockRejectedValueOnce(new ConvexError({ code: "device_occupier_changed" }));
+  await open({ status: "success", data: occupied });
+  await act(async () => button("Use this phone instead").props.onPress());
+  expect(JSON.stringify(root?.toJSON())).toContain("The active phone changed");
+  expect(mounts).toBe(0);
+  await update({ ...occupied, occupier: { ...occupied.occupier, deviceId: "newer-device", sessionId: "newer-session", label: "Newer Android" } });
+  expect(button("Keep using Newer Android")).toBeDefined();
+  expect(sdk.replace).toHaveBeenCalledOnce();
+  await act(async () => button("Use this phone instead").props.onPress());
+  expect(sdk.replace.mock.calls[1]?.[0]).toMatchObject({ expectedOccupierId: "newer-device", expectedSessionId: "newer-session" });
+  expect(mounts).toBe(0);
+});
+
+test("moved access forwards the replacement label to the local cleanup owner", async () => {
+  await open({ status: "success", data: { status: "revoked", wipeLocalInput: true, movedTo: "New Android" } });
+  expect(JSON.stringify(root?.toJSON())).toContain("Access moved to New Android");
+  expect(sdk.report).toHaveBeenCalledWith(new ConvexError({ code: "device_revoked", wipeLocalInput: true, movedTo: "New Android" }));
+  expect(mounts).toBe(0);
 });

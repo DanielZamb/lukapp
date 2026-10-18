@@ -23,7 +23,7 @@ export async function requireDeviceManagement(ctx: Pick<QueryCtx, "db" | "auth">
   const current = await ctx.db.query("mobileDevices")
     .withIndex("by_session", (q) => q.eq("clerkSessionId", actor.clerkSessionId)).unique();
   if (revoked || current?.revokedAt !== undefined)
-    throw new ConvexError({ code: "device_revoked", wipeLocalInput: true });
+    throw new ConvexError({ code: "device_revoked", wipeLocalInput: true, ...(current?.replacedByLabel ? { movedTo: current.replacedByLabel } : {}) });
   const defaults = await ctx.db.query("personalDefaults")
     .withIndex("by_owner", (q) => q.eq("ownerSubject", actor.userId)).unique();
   if (defaults) {
@@ -124,7 +124,7 @@ export async function recordClerkTerminalSession(ctx: MutationCtx, userId: strin
 }
 
 export async function queueRevocation(
-  ctx: MutationCtx, userId: string, sid: string, reason?: "superseded",
+  ctx: MutationCtx, userId: string, sid: string, reason?: "superseded" | "replaced",
 ) {
   const existing = await denySession(ctx, userId, sid);
   if (existing) return existing._id;
@@ -143,4 +143,33 @@ export async function revokeDevice(ctx: MutationCtx, session: LiveSession, devic
   if (!device || device.clerkUserId !== actor.userId)
     throw new ConvexError({ code: "device_not_found" });
   await queueRevocation(ctx, actor.userId, device.clerkSessionId);
+}
+
+export async function replaceDevice(
+  ctx: MutationCtx, session: LiveSession, input: Registration,
+  expectedOccupierId: Id<"mobileDevices">, expectedSessionId: string,
+) {
+  const actor = await requireLiveObservation(ctx.auth, session);
+  await requireDeviceManagement(ctx);
+  const parsed = registration.safeParse(input);
+  if (!parsed.success) throw new ConvexError({ code: "device_metadata_invalid" });
+  const metadata = parsed.data;
+  const target = await ctx.db.get(expectedOccupierId);
+  if (!target || target.clerkUserId !== actor.userId || target.platform !== metadata.platform)
+    throw new ConvexError({ code: "device_not_found" });
+  const current = await ctx.db.query("mobileDevices")
+    .withIndex("by_session", (q) => q.eq("clerkSessionId", actor.clerkSessionId)).unique();
+  if (current && current.revokedAt === undefined && target.revokedAt !== undefined &&
+      current.installId === metadata.installId && current.platform === metadata.platform &&
+      current.clerkClientId === session.clerkClientId && target.replacedByDeviceId === current._id &&
+      target.clerkSessionId === expectedSessionId)
+    return current._id;
+  if (target.revokedAt !== undefined || target.clerkSessionId !== expectedSessionId)
+    throw new ConvexError({ code: "device_occupier_changed" });
+  if (target.clerkSessionId === actor.clerkSessionId)
+    throw new ConvexError({ code: "device_conflict" });
+  await queueRevocation(ctx, actor.userId, target.clerkSessionId, "replaced");
+  const deviceId = await registerDevice(ctx, session, metadata);
+  await ctx.db.patch(target._id, { replacedByLabel: metadata.label, replacedByDeviceId: deviceId });
+  return deviceId;
 }

@@ -153,7 +153,7 @@ test("unsigned copied identifiers, wrong owner/issuer, and legacy token without 
   ]) await expect(root.withIdentity(invalid).action(api.deviceAccess.register, registration)).rejects.toThrow();
   await expect(client.action(makeFunctionReference<"action">("deviceAccess:register"), { ...registration, userId: owner, sid: "sess_ios", deviceId })).rejects.toThrow();
   const copied = root.withIdentity({ ...identity, sid: "sess_unregistered" });
-  expect(await copied.query(api.deviceAccess.status, {})).toEqual({ status: "unregistered", wipeLocalInput: false });
+  expect(await copied.query(api.deviceAccess.status, {})).toMatchObject({ status: "unregistered", wipeLocalInput: false });
   await expect(copied.query(read, { workspaceId: "copied-workspace" })).rejects.toMatchObject({ data: { code: "device_registration_required" } });
 });
 
@@ -308,7 +308,7 @@ test("a matching Clerk client reclaims its install and the old session cannot re
   const next = root.withIdentity({ ...identity, sid: "sess_android_next" });
   expect(await next.query(api.deviceAccess.status, {
     installId: androidRegistration.installId, platform: "android",
-  })).toEqual({ status: "unregistered", wipeLocalInput: false });
+  })).toMatchObject({ status: "unregistered", wipeLocalInput: false });
   expect(await next.action(api.deviceAccess.register, androidRegistration)).toBe(androidId);
   expect(await next.query(api.deviceAccess.status, {
     installId: androidRegistration.installId, platform: "android",
@@ -350,7 +350,7 @@ test("a mismatched Clerk client cannot reclaim a live install", async () => {
   const emulator = root.withIdentity({ ...identity, sid: "sess_emulator" });
   expect(await emulator.query(api.deviceAccess.status, {
     installId: androidRegistration.installId, platform: "android",
-  })).toEqual({ status: "unregistered", wipeLocalInput: false });
+  })).toMatchObject({ status: "unregistered", wipeLocalInput: false });
   await expect(emulator.action(api.deviceAccess.register, androidRegistration))
     .rejects.toMatchObject({ data: { code: "device_slot_occupied", occupiedLabel: "U01 Android" } });
   expect(await android.query(api.deviceAccess.status, {})).toEqual({
@@ -400,7 +400,7 @@ test("a foreign install cannot take an occupied platform slot and names the exis
   })).rejects.toMatchObject({ data: { code: "device_slot_occupied", occupiedLabel: "U01 Android" } });
   expect(await other.query(api.deviceAccess.status, {
     installId: "install-foreign-android", platform: "android",
-  })).toEqual({ status: "unregistered", wipeLocalInput: false });
+  })).toMatchObject({ status: "unregistered", wipeLocalInput: false });
   expect(await client.query(api.deviceAccess.status, {})).toMatchObject({ status: "registered" });
 });
 
@@ -418,7 +418,7 @@ test("a revoked device is not resurrected by the same install on a new session",
   const next = root.withIdentity({ ...identity, sid: "sess_android_next" });
   expect(await next.query(api.deviceAccess.status, {
     installId: androidRegistration.installId, platform: "android",
-  })).toEqual({ status: "unregistered", wipeLocalInput: false });
+  })).toMatchObject({ status: "unregistered", wipeLocalInput: false });
   await expect(android.action(api.deviceAccess.register, androidRegistration))
     .rejects.toMatchObject({ data: { code: "device_revoked", wipeLocalInput: true } });
   const replacement = await next.action(api.deviceAccess.register, androidRegistration);
@@ -522,4 +522,138 @@ test("a failed lookup of the stored session refuses instead of reclaiming", asyn
   }
   expect(await root.run((ctx) => ctx.db.get(androidId))).toMatchObject({ clerkSessionId: "sess_android" });
   expect(await root.run((ctx) => ctx.db.query("clerkRevocations").collect())).toEqual([]);
+});
+
+async function occupiedAndroid() {
+  const f = await fixture();
+  sessions.set("sess_old_android", session("sess_old_android"));
+  const old = f.root.withIdentity({ ...identity, sid: "sess_old_android" });
+  const oldId = await old.action(api.deviceAccess.register, androidRegistration);
+  sessions.set("sess_new_android", session("sess_new_android"));
+  const next = f.root.withIdentity({ ...identity, sid: "sess_new_android" });
+  const args = {
+    ...androidRegistration, installId: "new-android-install-id", label: "New Android",
+    expectedOccupierId: oldId, expectedSessionId: "sess_old_android",
+  };
+  return { ...f, old, oldId, next, args };
+}
+
+test("public replacement atomically moves only Android, queues replaced, denies old reads and retries idempotently", async () => {
+  vi.useFakeTimers();
+  const { root, client, deviceId, old, oldId, next, args } = await occupiedAndroid();
+  const setupResult = await client.action(setup, {});
+  expect(await next.query(api.deviceAccess.status, { installId: args.installId, platform: "android" })).toEqual({
+    status: "unregistered", wipeLocalInput: false,
+    occupier: { deviceId: oldId, sessionId: "sess_old_android", label: "U01 Android", lastSeenAt: Date.now() },
+  });
+  await expect(next.query(read, { workspaceId: setupResult.workspace.id })).rejects.toMatchObject({ data: { code: "device_registration_required" } });
+  const replacementId = await next.action(api.deviceAccess.replace, args);
+  expect(replacementId).not.toBe(oldId);
+  expect(await next.action(api.deviceAccess.replace, args)).toBe(replacementId);
+  expect(await root.run(ctx => ctx.db.get(oldId))).toMatchObject({
+    revokedAt: Date.now(), replacedByLabel: "New Android", replacedByDeviceId: replacementId,
+  });
+  expect(await old.query(api.deviceAccess.status, {})).toEqual({
+    status: "revoked", wipeLocalInput: true, movedTo: "New Android",
+  });
+  await expect(old.query(read, { workspaceId: setupResult.workspace.id })).rejects.toMatchObject({
+    data: { code: "device_revoked", wipeLocalInput: true, movedTo: "New Android" },
+  });
+  expect(await root.run(ctx => ctx.db.query("clerkRevocations").collect())).toMatchObject([
+    { clerkUserId: owner, clerkSessionId: "sess_old_android", reason: "replaced", attempts: 0 },
+  ]);
+  expect(await client.query(api.deviceAccess.status, {})).toEqual({ status: "registered", deviceId, wipeLocalInput: false });
+  expect(await next.query(read, { workspaceId: setupResult.workspace.id })).toMatchObject([{ balance: { minorUnits: 1000 } }]);
+  expect(await root.run(ctx => ctx.db.query("journalEntries").collect())).toHaveLength(1);
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+  expect(sessions.get("sess_old_android")?.status).toBe("revoked");
+  expect(sessions.get("sess_new_android")?.status).toBe("active");
+  expect(sessions.get("sess_ios")?.status).toBe("active");
+});
+
+test("a stale expected occupier cannot evict a new replacement", async () => {
+  vi.useFakeTimers();
+  const { root, oldId, next, args } = await occupiedAndroid();
+  const replacementId = await next.action(api.deviceAccess.replace, args);
+  sessions.set("sess_racer", session("sess_racer"));
+  const racer = root.withIdentity({ ...identity, sid: "sess_racer" });
+  await expect(racer.action(api.deviceAccess.replace, { ...args, installId: "racer-android-install" }))
+    .rejects.toMatchObject({ data: { code: "device_occupier_changed" } });
+  expect(await root.run(ctx => ctx.db.get(replacementId))).not.toHaveProperty("revokedAt");
+  expect(await root.run(ctx => ctx.db.query("clerkRevocations").collect())).toHaveLength(1);
+  expect(await root.run(ctx => ctx.db.get(oldId))).toHaveProperty("replacedByDeviceId", replacementId);
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});
+
+test("an in-place reclaim changes the session and invalidates the expected occupier", async () => {
+  vi.useFakeTimers();
+  const { root, oldId, next, args } = await occupiedAndroid();
+  sessions.set("sess_reclaim", { ...session("sess_reclaim"), client_id: "client_sess_old_android" });
+  const reclaim = root.withIdentity({ ...identity, sid: "sess_reclaim" });
+  expect(await reclaim.action(api.deviceAccess.register, androidRegistration)).toBe(oldId);
+  await expect(next.action(api.deviceAccess.replace, args)).rejects.toMatchObject({ data: { code: "device_occupier_changed" } });
+  expect(await root.run(ctx => ctx.db.get(oldId))).toMatchObject({ clerkSessionId: "sess_reclaim" });
+  expect(await root.run(ctx => ctx.db.get(oldId))).not.toHaveProperty("revokedAt");
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});
+
+test("simultaneous replacements converge to one new device and one revocation", async () => {
+  vi.useFakeTimers();
+  const { root, next, args } = await occupiedAndroid();
+  sessions.set("sess_racer", session("sess_racer"));
+  const racer = root.withIdentity({ ...identity, sid: "sess_racer" });
+  const results = await Promise.allSettled([
+    next.action(api.deviceAccess.replace, args),
+    racer.action(api.deviceAccess.replace, { ...args, installId: "racer-android-install" }),
+  ]);
+  expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+  const live = await root.run(ctx => ctx.db.query("mobileDevices").collect());
+  expect(live.filter(device => device.platform === "android" && device.revokedAt === undefined)).toHaveLength(1);
+  expect(await root.run(ctx => ctx.db.query("clerkRevocations").collect())).toHaveLength(1);
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});
+
+test("replacement validates ownership, platform, metadata, live Clerk admission and local denial before writes", async () => {
+  const { root, deviceId, oldId, next, args } = await occupiedAndroid();
+  const foreignId = await root.run(ctx => ctx.db.insert("mobileDevices", {
+    ...androidRegistration, clerkUserId: "foreign", clerkSessionId: "sess_foreign", clerkClientId: "client_foreign",
+    createdAt: Date.now(), lastSeenAt: Date.now(),
+  }));
+  for (const invalid of [
+    { ...args, expectedOccupierId: foreignId }, { ...args, expectedOccupierId: deviceId },
+    { ...args, platform: "ios" as const }, { ...args, label: "" },
+  ]) await expect(next.action(api.deviceAccess.replace, invalid)).rejects.toThrow();
+  for (const invalid of [{ ...identity, subject: "foreign", sid: "sess_new_android" }, { ...identity, issuer: "https://foreign.example", sid: "sess_new_android" }])
+    await expect(root.withIdentity(invalid).action(api.deviceAccess.replace, args)).rejects.toThrow();
+  sessions.set("sess_new_android", { ...session("sess_new_android"), status: "ended" });
+  await expect(next.action(api.deviceAccess.replace, args)).rejects.toMatchObject({ data: { code: "session_inactive" } });
+  sessions.set("sess_new_android", session("sess_new_android"));
+  await root.run(ctx => ctx.db.insert("clerkRevocations", {
+    clerkUserId: owner, clerkSessionId: "sess_new_android", requestedAt: Date.now(), attempts: 0, completedAt: Date.now(),
+  }));
+  await expect(next.action(api.deviceAccess.replace, args)).rejects.toMatchObject({ data: { code: "device_revoked" } });
+  expect(await root.run(ctx => ctx.db.get(oldId))).not.toHaveProperty("revokedAt");
+  expect(await root.run(ctx => ctx.db.query("clerkRevocations").collect())).toHaveLength(1);
+  expect(await root.run(ctx => ctx.db.query("mobileDevices").collect())).toHaveLength(3);
+});
+
+test("membership loss rejects replacement and a conflicting other platform rolls back every replacement write", async () => {
+  const { root, client, oldId, next, args } = await occupiedAndroid();
+  const setupResult = await client.action(setup, {});
+  const member = await root.run(ctx => {
+    const workspaceId = ctx.db.normalizeId("workspaces", setupResult.workspace.id);
+    if (!workspaceId) throw new Error("Invalid workspace ID");
+    return ctx.db.query("workspaceMemberships")
+      .withIndex("by_workspace_user", q => q.eq("workspaceId", workspaceId).eq("userId", owner)).unique();
+  });
+  if (!member) throw new Error("Missing membership");
+  await root.run(ctx => ctx.db.delete(member._id));
+  await expect(next.action(api.deviceAccess.replace, args)).rejects.toMatchObject({ data: { code: "membership_required" } });
+  await root.run(ctx => ctx.db.insert("workspaceMemberships", { workspaceId: member.workspaceId, userId: member.userId, role: "Owner" }));
+  sessions.set("sess_new_android", { ...session("sess_new_android"), client_id: "client_sess_ios" });
+  await expect(next.action(api.deviceAccess.replace, args)).rejects.toMatchObject({ data: { code: "device_slot_occupied" } });
+  expect(await root.run(ctx => ctx.db.get(oldId))).not.toHaveProperty("revokedAt");
+  expect(await root.run(ctx => ctx.db.query("clerkRevocations").collect())).toEqual([]);
+  expect(await root.run(ctx => ctx.db.query("mobileDevices").collect())).toHaveLength(2);
+  expect(await root.run(ctx => ctx.db.query("journalEntries").collect())).toHaveLength(1);
 });

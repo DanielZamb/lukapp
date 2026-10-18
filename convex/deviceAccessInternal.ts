@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { liveSession, mobilePlatform } from "./lib/securityValues";
-import { registerDevice, revokeDevice, queueRevocation, requireDeviceManagement } from "./lib/deviceRegistry";
+import { registerDevice, replaceDevice, revokeDevice, queueRevocation, requireDeviceManagement } from "./lib/deviceRegistry";
 import { requireLiveObservation } from "./lib/session";
 import { revokeClerkSession } from "./lib/clerkProvider";
 
@@ -14,6 +14,16 @@ export const register = internalMutation({
   returns: v.id("mobileDevices"),
   handler: async (ctx, { session, terminalSessionId, ...metadata }) =>
     registerDevice(ctx, session, metadata, terminalSessionId),
+});
+
+export const replace = internalMutation({
+  args: {
+    session: liveSession, installId: v.string(), label: v.string(), platform: mobilePlatform, appVersion: v.string(),
+    expectedOccupierId: v.id("mobileDevices"), expectedSessionId: v.string(),
+  },
+  returns: v.id("mobileDevices"),
+  handler: (ctx, { session, expectedOccupierId, expectedSessionId, ...metadata }) =>
+    replaceDevice(ctx, session, metadata, expectedOccupierId, expectedSessionId),
 });
 
 export const ownedDevices = internalQuery({

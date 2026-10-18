@@ -24,6 +24,17 @@ export const register = action({
   },
 });
 
+export const replace = action({
+  args: {
+    installId: v.string(), label: v.string(), platform: mobilePlatform, appVersion: v.string(),
+    expectedOccupierId: v.id("mobileDevices"), expectedSessionId: v.string(),
+  },
+  returns: v.id("mobileDevices"),
+  handler: async (ctx, args): Promise<Id<"mobileDevices">> => ctx.runMutation(
+    internal.deviceAccessInternal.replace, { ...args, session: await verifyCurrentSession(ctx.auth) },
+  ),
+});
+
 // A terminal proof names the exact stored SID. The mutation accepts it only while the slot
 // still holds that SID, so a stale proof cannot move a slot another session already reclaimed.
 // Lookup failures and responses for another session or owner give no proof, which refuses.
@@ -43,8 +54,11 @@ const deviceStatus = v.union(
     status: v.literal("unregistered"),
     wipeLocalInput: v.literal(false),
     existingLabel: v.optional(v.string()),
+    occupier: v.optional(v.object({
+      deviceId: v.id("mobileDevices"), sessionId: v.string(), label: v.string(), lastSeenAt: v.number(),
+    })),
   }),
-  v.object({ status: v.literal("revoked"), wipeLocalInput: v.literal(true) }),
+  v.object({ status: v.literal("revoked"), wipeLocalInput: v.literal(true), movedTo: v.optional(v.string()) }),
   v.object({ status: v.literal("registered"), deviceId: v.id("mobileDevices"), wipeLocalInput: v.literal(false) }),
 );
 export const status = query({
@@ -57,7 +71,7 @@ export const status = query({
     const device = await ctx.db.query("mobileDevices")
       .withIndex("by_session", (q) => q.eq("clerkSessionId", actor.clerkSessionId)).unique();
     if (revoked || (device?.clerkUserId === actor.userId && device.revokedAt !== undefined))
-      return { status: "revoked", wipeLocalInput: true };
+      return { status: "revoked", wipeLocalInput: true, ...(device?.replacedByLabel ? { movedTo: device.replacedByLabel } : {}) };
     await requireDeviceManagement(ctx);
     if (device && device.clerkUserId === actor.userId)
       return { status: "registered", deviceId: device._id, wipeLocalInput: false };
@@ -70,7 +84,16 @@ export const status = query({
       if (known && storedDenied)
         return { status: "unregistered", wipeLocalInput: false, existingLabel: known.label };
     }
-    return { status: "unregistered", wipeLocalInput: false };
+    const devices = args.platform ? await ctx.db.query("mobileDevices")
+      .withIndex("by_user", (q) => q.eq("clerkUserId", actor.userId)).collect() : [];
+    const occupier = devices.find((d) => d.platform === args.platform && d.revokedAt === undefined);
+    return {
+      status: "unregistered", wipeLocalInput: false,
+      ...(occupier ? { occupier: {
+        deviceId: occupier._id, sessionId: occupier.clerkSessionId,
+        label: occupier.label, lastSeenAt: occupier.lastSeenAt,
+      } } : {}),
+    };
   },
 });
 

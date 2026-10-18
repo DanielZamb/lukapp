@@ -256,7 +256,7 @@ test.each(["unlock", "enrollment"])("background during the %s prompt cancels it 
   prompt.mockImplementation(async () => { started.resolve(); await finish.promise; });
   const attempt = gate.unlock();
   await started.promise;
-  expect(gate.getSnapshot().state.kind).toBe("authenticating");
+  expect(gate.getSnapshot().state.kind).toBe(operation === "enrollment" ? "enrolling" : "authenticating");
   // OS prompt focus loss is not app backgrounding.
   gate.setPresence(false, false, false);
   expect(deps.cancelPrompt).not.toHaveBeenCalled();

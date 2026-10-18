@@ -5,8 +5,19 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { InstallMarker } from "./installMarker";
 import type { AppStateStatus } from "react-native";
 
+type DeviceStatus = Pick<import("convex/server").FunctionReturnType<typeof import("../features/api").api.deviceAccess.status>, "status" | "wipeLocalInput"> & {
+  deviceId?: string;
+  movedTo?: string;
+  occupier?: { deviceId: string; sessionId: string; label: string; lastSeenAt: number };
+};
+
 const sdk = vi.hoisted(() => ({
-  identity: { userId: "owner", sessionId: "session", isLoaded: true },
+  identity: ((): { userId: string | null; sessionId: string | null; isLoaded: boolean } => ({ userId: "owner", sessionId: "session", isLoaded: true }))(),
+  marker: ((): InstallMarker => ({ version: 1, installId: "497af871-e049-4102-b496-4cd529cf60b6", kind: "enrolled", subject: "owner", sessionId: "session" }))(),
+  status: ((): DeviceStatus => ({ status: "unregistered", wipeLocalInput: false }))(),
+  register: vi.fn(async (_args: unknown) => "registered-id"),
+  replace: vi.fn(async (_args: unknown) => "replacement-id"),
+  clearInput: vi.fn(async (_subject: string) => {}),
   signOut: vi.fn(async () => {}),
   unlock: vi.fn(async () => {}),
   enroll: vi.fn(async () => {}),
@@ -24,18 +35,21 @@ vi.mock("@clerk/expo", () => ({
   useAuth: () => sdk.identity,
   useClerk: () => ({ signOut: sdk.signOut }),
 }));
+vi.mock("convex/react", () => ({
+  useQuery_experimental: () => ({ status: "success", data: sdk.status }),
+  useAction: (action: typeof api.deviceAccess.register | typeof api.deviceAccess.replace) =>
+    getFunctionName(action) === "deviceAccess:replace" ? sdk.replace : sdk.register,
+}));
+vi.mock("expo-constants", () => ({ default: { nativeAppVersion: "0.1.0" } }));
 vi.mock("expo-router", () => ({ usePathname: () => sdk.path }));
 vi.mock("react-native", () => ({
-  ActivityIndicator: "spinner", Text: "text", View: "view",
+  ActivityIndicator: "spinner", Text: "text", View: "view", TextInput: "input",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   Platform: { get OS() { return sdk.platform; } },
   AppState: { currentState: "active", addEventListener: sdk.addEventListener },
 }));
 vi.mock("./nativeEntry", () => ({
-  readInstallMarker: async () => ({
-    version: 1, installId: "497af871-e049-4102-b496-4cd529cf60b6",
-    kind: "enrolled", subject: "owner", sessionId: "session",
-  }),
+  readInstallMarker: async () => sdk.marker,
   writeInstallMarker: sdk.writeMarker,
   unlockBiometry: sdk.unlock,
   enrollBiometry: sdk.enroll,
@@ -45,11 +59,15 @@ vi.mock("./nativeEntry", () => ({
   hideFinancialScreen: async () => {},
   revealFinancialScreen: async () => {},
 }));
-vi.mock("../features/clearLocalInput", () => ({ clearLocalInput: async () => {} }));
+vi.mock("../features/clearLocalInput", () => ({ clearLocalInput: sdk.clearInput }));
 vi.mock("../ui/core", async () => ({
   Header: "header", Screen: "screen", PrimaryButton: "button", SecondaryButton: "button",
   useUi: (await import("../ui/themeContext")).useUi,
+  useTheme: () => ({ mutedForeground: "#666" }),
 }));
+import { DeviceAdmissionGate } from "../device-admission/DeviceAdmissionGate";
+import { getFunctionName } from "convex/server";
+import { api } from "../features/api";
 import { LocalEntryGate } from "./LocalEntryGate";
 import { ThemeProvider, useThemeContext } from "../ui/themeContext";
 
@@ -60,6 +78,9 @@ beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.clearAllMocks();
   sdk.platform = "ios";
+  sdk.identity = { userId: "owner", sessionId: "session", isLoaded: true };
+  sdk.marker = { version: 1, installId: "497af871-e049-4102-b496-4cd529cf60b6", kind: "enrolled", subject: "owner", sessionId: "session" };
+  sdk.status = { status: "unregistered", wipeLocalInput: false };
   sdk.path = "/";
   sdk.listeners.clear();
 });
@@ -176,4 +197,108 @@ test("the locked screen offers Sign in instead beside Unlock Lukapp and invokes 
   });
   expect(sdk.unlock).not.toHaveBeenCalled();
   expect(sdk.enroll).not.toHaveBeenCalled();
+});
+
+function SignInStub({ onApprove }: { onApprove: (id: string) => void }) {
+  return createElement("div", { onClick: () => onApprove("fresh-session") });
+}
+
+function AdmittedApp() {
+  return createElement(LocalEntryGate, {
+    children: createElement(DeviceAdmissionGate, { children: createElement(FinancialScreen) }),
+    renderSignIn: (onApprove: (id: string) => void) => createElement(SignInStub, { onApprove }),
+  });
+}
+async function freshOccupiedSignIn() {
+  sdk.platform = "android";
+  sdk.marker = { version: 1, installId: "497af871-e049-4102-b496-4cd529cf60b6", kind: "sign-in-required" };
+  sdk.identity = { userId: null, sessionId: null, isLoaded: true };
+  sdk.status = { status: "unregistered", wipeLocalInput: false, occupier: {
+    deviceId: "old-phone",
+    sessionId: "old-session", label: "Old Android", lastSeenAt: 1_792_238_400_000,
+  } };
+  await act(async () => { root = create(createElement(AdmittedApp)); });
+  await act(async () => {
+    root?.root.findByType(SignInStub).props.onApprove("fresh-session");
+    sdk.identity = { userId: "owner", sessionId: "fresh-session", isLoaded: true };
+    root?.update(createElement(AdmittedApp));
+  });
+}
+
+test("fresh Clerk sign-in shows the occupied screen before any enrollment; Keep only signs this phone out", async () => {
+  await freshOccupiedSignIn();
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
+  expect(sdk.enroll).not.toHaveBeenCalled();
+  expect(sdk.unlock).not.toHaveBeenCalled();
+  await act(async () => root?.root.findByProps({ label: "Keep using Old Android" }).props.onPress());
+  expect(sdk.signOut).toHaveBeenCalledOnce();
+  expect(sdk.enroll).not.toHaveBeenCalled();
+  expect(sdk.replace).not.toHaveBeenCalled();
+  expect(sdk.register).not.toHaveBeenCalled();
+});
+
+test("Use enrolls once, replaces after success and mounts Home without a second enrollment or unlock", async () => {
+  await freshOccupiedSignIn();
+  let finish = () => {};
+  sdk.enroll.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  await act(async () => { void root?.root.findByProps({ label: "Use this phone instead" }).props.onPress(); });
+  expect(sdk.enroll).toHaveBeenCalledOnce();
+  expect(sdk.replace).not.toHaveBeenCalled();
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
+  await act(async () => finish());
+  expect(sdk.replace).toHaveBeenCalledOnce();
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
+  sdk.status = { status: "registered", deviceId: "replacement", wipeLocalInput: false };
+  await act(async () => root?.update(createElement(AdmittedApp)));
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(1);
+  expect(sdk.enroll).toHaveBeenCalledOnce();
+  expect(sdk.unlock).not.toHaveBeenCalled();
+});
+
+test.each(["cancel", "background"])("%s during replacement enrollment cannot register or revoke", async interruption => {
+  await freshOccupiedSignIn();
+  let finish = () => {};
+  sdk.enroll.mockImplementationOnce(() => interruption === "cancel"
+    ? Promise.reject(new Error("Cancelled")) : new Promise<void>(resolve => { finish = resolve; }));
+  await act(async () => { void root?.root.findByProps({ label: "Use this phone instead" }).props.onPress(); });
+  if (interruption === "background") {
+    await act(async () => sdk.listeners.get("change")?.("background"));
+    await act(async () => finish());
+    expect(sdk.cancelPrompt).toHaveBeenCalledOnce();
+  }
+  expect(sdk.replace).not.toHaveBeenCalled();
+  expect(sdk.register).not.toHaveBeenCalled();
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
+});
+
+test("device_revoked with a replacement label clears local drafts and retains the moved-access notice at sign-in", async () => {
+  sdk.status = { status: "revoked", wipeLocalInput: true, movedTo: "New Android" };
+  await act(async () => { root = create(createElement(AdmittedApp)); });
+  await act(async () => root?.root.findByProps({ label: "Unlock Lukapp" }).props.onPress());
+  expect(sdk.clearInput).toHaveBeenCalledExactlyOnceWith("owner");
+  expect(sdk.signOut).toHaveBeenCalledOnce();
+  sdk.identity = { userId: null, sessionId: null, isLoaded: true };
+  await act(async () => root?.update(createElement(AdmittedApp)));
+  expect(JSON.stringify(root?.toJSON())).toContain("Access moved to");
+  expect(JSON.stringify(root?.toJSON())).toContain("New Android");
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
+});
+
+test("an unoccupied fresh sign-in still enrolls once before ordinary registration", async () => {
+  await freshOccupiedSignIn();
+  sdk.status = { status: "unregistered", wipeLocalInput: false };
+  await act(async () => root?.update(createElement(AdmittedApp)));
+  expect(sdk.enroll).not.toHaveBeenCalled();
+  await act(async () => root?.root.findByProps({ accessibilityLabel: "Device name" }).props.onChangeText("New phone"));
+  await act(async () => root?.root.findByProps({ label: "Register device" }).props.onPress());
+  expect(sdk.enroll).toHaveBeenCalledOnce();
+  expect(sdk.register).toHaveBeenCalledExactlyOnceWith({
+    installId: "497af871-e049-4102-b496-4cd529cf60b6", label: "New phone", platform: "android", appVersion: "0.1.0",
+  });
+  expect(sdk.replace).not.toHaveBeenCalled();
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
+  sdk.status = { status: "registered", deviceId: "registered-id", wipeLocalInput: false };
+  await act(async () => root?.update(createElement(AdmittedApp)));
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(1);
+  expect(sdk.enroll).toHaveBeenCalledOnce();
 });

@@ -100,6 +100,8 @@ export default defineSchema({
     createdAt: v.number(),
     lastSeenAt: v.number(),
     revokedAt: v.optional(v.number()),
+    replacedByLabel: v.optional(v.string()),
+    replacedByDeviceId: v.optional(v.id("mobileDevices")),
   }).index("by_session", ["clerkSessionId"])
     .index("by_user", ["clerkUserId"]),
   clerkRevocations: defineTable({
@@ -108,7 +110,7 @@ export default defineSchema({
     requestedAt: v.number(),
     attempts: v.number(),
     completedAt: v.optional(v.number()),
-    reason: v.optional(v.literal("superseded")),
+    reason: v.optional(v.union(v.literal("superseded"), v.literal("replaced"))),
   }).index("by_session", ["clerkSessionId"]),
   personalDefaults: defineTable({
     ownerSubject: v.string(),

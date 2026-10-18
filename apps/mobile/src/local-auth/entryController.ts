@@ -6,12 +6,14 @@ export const monthCloseInactivityMs = 10 * 60_000;
 export type EntryIdentity = { subject: string; sessionId: string } | null;
 export type EntryState =
   | { kind: "checking" }
-  | { kind: "sign-in" }
+  | { kind: "sign-in"; movedTo?: string }
   | { kind: "locked" }
+  | { kind: "admission" }
+  | { kind: "enrolling" }
   | { kind: "authenticating" }
   | { kind: "open" }
   | { kind: "reauthentication" }
-  | { kind: "revocation"; cleanup: "running" | "failed" }
+  | { kind: "revocation"; cleanup: "running" | "failed"; movedTo?: string }
   | { kind: "unavailable" };
 export type EntrySnapshot = { state: EntryState; obscured: boolean };
 export type EntryDependencies = {
@@ -56,6 +58,7 @@ export class EntryController {
   private enrollmentWork: Promise<void> | null = null;
   private markerWork: Promise<void> = Promise.resolve();
   private clearedIdentity: EntryIdentity = null;
+  private movedTo: string | undefined;
   constructor(private readonly deps: EntryDependencies) {}
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => {
@@ -68,12 +71,13 @@ export class EntryController {
     if (this.disposed) return;
     this.snapshot = {
       state,
-      obscured: !this.active || !this.focused || state.kind !== "open",
+      obscured: !this.active || !this.focused ||
+        (state.kind !== "open" && state.kind !== "admission" && state.kind !== "enrolling"),
     };
     for (const listener of this.listeners) listener();
     this.privacyWork = this.privacyWork
       .then(async () => {
-        if (this.snapshot.obscured) await this.deps.hide();
+        if (this.snapshot.obscured || this.snapshot.state.kind !== "open") await this.deps.hide();
         else await this.deps.reveal();
       })
       .catch(() => {
@@ -118,11 +122,11 @@ export class EntryController {
       }
       if (!identity) {
         this.approvedSession = null;
-        this.publish({ kind: "sign-in" });
+        this.publish({ kind: "sign-in", ...(this.movedTo ? { movedTo: this.movedTo } : {}) });
         return;
       }
       if (this.approvedSession === identity.sessionId) {
-        this.publish({ kind: "locked" });
+        this.publish({ kind: "admission" });
         return;
       }
       if (
@@ -152,7 +156,7 @@ export class EntryController {
     identity: NonNullable<EntryIdentity>,
   ) {
     if (!this.marker) return;
-    this.publish({ kind: "authenticating" });
+    this.publish({ kind: "enrolling" });
     try {
       const pending = requireNewSignIn(this.marker);
       await this.writeMarker(pending);
@@ -181,7 +185,7 @@ export class EntryController {
   }
   async unlock() {
     if (
-      this.snapshot.state.kind !== "locked" ||
+      (this.snapshot.state.kind !== "locked" && this.snapshot.state.kind !== "admission") ||
       !this.marker ||
       !this.identity ||
       !this.active ||
@@ -256,6 +260,15 @@ export class EntryController {
       identity.sessionId === this.identity.sessionId
     );
   }
+  admissionInstallId() {
+    const state = this.snapshot.state;
+    return state.kind === "open" || state.kind === "admission" ||
+      state.kind === "enrolling" ? this.marker?.installId ?? null : null;
+  }
+  ensureEnrollment = async () => {
+    if (this.snapshot.state.kind === "admission") await this.unlock();
+    return this.isOpenFor(this.identity);
+  };
   unlockedInstallId() {
     return this.snapshot.state.kind === "open" &&
       this.marker?.kind === "enrolled"
@@ -265,21 +278,29 @@ export class EntryController {
   unlockedInputLease() {
     return this.snapshot.state.kind === "open" ? this.inputLease : null;
   }
-  denyAccessFor(lease: LocalInputLease) {
+  denyAdmissionFor(identity: NonNullable<EntryIdentity>, movedTo?: string) {
+    const state = this.snapshot.state;
+    if (identity.subject !== this.identity?.subject || identity.sessionId !== this.identity.sessionId ||
+        !(state.kind === "admission" || state.kind === "enrolling"))
+      return Promise.resolve();
+    return this.denyAccess(identity, movedTo);
+  }
+  denyAccessFor(lease: LocalInputLease, movedTo?: string) {
     if (lease !== this.inputLease || !this.identity ||
       lease.subject !== this.identity.subject || lease.sessionId !== this.identity.sessionId)
       return Promise.resolve();
-    return this.denyAccess();
+    return this.denyAccess(this.identity, movedTo);
   }
-  denyAccess = (identity = this.identity) => {
+  denyAccess = (identity = this.identity, movedTo?: string) => {
     if (!this.marker || !identity) return Promise.resolve();
     this.generation++;
+    this.movedTo = movedTo;
     this.approvedSession = null;
     this.inputLease?.deny();
     this.marker = {
       version: 1, installId: this.marker.installId, kind: "wipe-required", ...identity,
     };
-    this.publish({ kind: "revocation", cleanup: "running" });
+    this.publish({ kind: "revocation", cleanup: "running", ...(this.movedTo ? { movedTo: this.movedTo } : {}) });
     return this.retryCleanup();
   };
   retryCleanup = (): Promise<void> => {
@@ -287,7 +308,7 @@ export class EntryController {
     const marker = this.marker;
     if (marker?.kind !== "wipe-required") return Promise.resolve();
     this.inputLease?.deny();
-    this.publish({ kind: "revocation", cleanup: "running" });
+    this.publish({ kind: "revocation", cleanup: "running", ...(this.movedTo ? { movedTo: this.movedTo } : {}) });
     this.cleanupWork = (async () => {
       try {
         // Persist denial before touching storage or signing out, including across a crash.
@@ -303,9 +324,9 @@ export class EntryController {
         this.inputLease = null;
         this.clearedIdentity = { subject: marker.subject, sessionId: marker.sessionId };
         this.approvedSession = null;
-        this.publish(this.identity ? { kind: "reauthentication" } : { kind: "sign-in" });
+        this.publish(this.identity ? { kind: "reauthentication" } : { kind: "sign-in", ...(this.movedTo ? { movedTo: this.movedTo } : {}) });
       } catch {
-        this.publish({ kind: "revocation", cleanup: "failed" });
+        this.publish({ kind: "revocation", cleanup: "failed", ...(this.movedTo ? { movedTo: this.movedTo } : {}) });
       } finally {
         this.cleanupWork = null;
       }
@@ -335,7 +356,7 @@ export class EntryController {
     this.active = active;
     this.focused = focused;
     if (!active || !focused) this.awaySince ??= this.deps.now();
-    if (background && this.snapshot.state.kind === "authenticating") {
+    if (background && (this.snapshot.state.kind === "authenticating" || this.snapshot.state.kind === "enrolling")) {
       this.lock();
       void this.requireReauthentication(this.generation);
       void this.deps.cancelPrompt().catch(() => {});
@@ -352,7 +373,8 @@ export class EntryController {
   tick = () => {
     if (
       this.snapshot.state.kind !== "open" &&
-      this.snapshot.state.kind !== "authenticating"
+      this.snapshot.state.kind !== "authenticating" &&
+      this.snapshot.state.kind !== "enrolling"
     )
       return;
     const now = this.deps.now();

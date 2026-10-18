@@ -10,8 +10,9 @@ import {
   type ReactNode,
 } from "react";
 import { ActivityIndicator, AppState, Platform, Text, View } from "react-native";
+import { LocalEnrollment } from "./enrollment";
 import { LocalInstallation } from "./installation";
-import { DeviceAccessFailure, requiresLocalWipe } from "./accessFailure";
+import { DeviceAccessFailure, requiresLocalWipe, movedAccessLabel } from "./accessFailure";
 import { LocalInput } from "./localInput";
 import { clearLocalInput } from "../features/clearLocalInput";
 import { LocalEntryInteraction } from "./interaction";
@@ -105,11 +106,12 @@ export function LocalEntryGate({
   const lease = controller.unlockedInputLease();
   const report = useCallback((error: unknown) => {
     if (!requiresLocalWipe(error)) return false;
-    if (lease) void controller.denyAccessFor(lease);
+    if (lease) void controller.denyAccessFor(lease, movedAccessLabel(error));
+    else if (userId && sessionId) void controller.denyAdmissionFor({ subject: userId, sessionId }, movedAccessLabel(error));
     return true;
-  }, [controller, lease]);
+  }, [controller, lease, userId, sessionId]);
   if (state.kind === "sign-in")
-    return <>{renderSignIn(controller.approveSignIn)}</>;
+    return <>{state.movedTo && <Text style={ui.body}>Access moved to {state.movedTo}</Text>}{renderSignIn(controller.approveSignIn)}</>;
   if (
     state.kind === "open" &&
     (!controller.isOpenFor(
@@ -122,7 +124,7 @@ export function LocalEntryGate({
         <ActivityIndicator />
       </Screen>
     );
-  if (state.kind === "open")
+  if (state.kind === "open" || state.kind === "admission" || state.kind === "enrolling")
     return (
       <View
         style={{ flex: 1 }}
@@ -136,10 +138,12 @@ export function LocalEntryGate({
           accessibilityElementsHidden={obscured}
         >
           <LocalEntryInteraction.Provider value={controller.interaction}>
-            <LocalInstallation.Provider value={controller.unlockedInstallId()}>
+            <LocalInstallation.Provider value={controller.admissionInstallId()}>
               <LocalInput.Provider value={lease}>
                 <DeviceAccessFailure.Provider value={report}>
-              {children}
+                  <LocalEnrollment.Provider value={{ ready: state.kind === "open", ensure: controller.ensureEnrollment }}>
+                    {children}
+                  </LocalEnrollment.Provider>
                 </DeviceAccessFailure.Provider>
               </LocalInput.Provider>
             </LocalInstallation.Provider>
@@ -160,7 +164,7 @@ export function LocalEntryGate({
       <Header
         title={
           state.kind === "revocation"
-            ? "Device access ended"
+            ? state.movedTo ? `Access moved to ${state.movedTo}` : "Device access ended"
             : state.kind === "reauthentication"
             ? "Sign in again"
             : state.kind === "unavailable"

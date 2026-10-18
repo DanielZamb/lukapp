@@ -24,7 +24,7 @@ export async function requireDevice(ctx: ReadCtx) {
   const device = await ctx.db.query("mobileDevices")
     .withIndex("by_session", (q) => q.eq("clerkSessionId", actor.clerkSessionId)).unique();
   if (revoked || device?.revokedAt !== undefined)
-    throw new ConvexError({ code: "device_revoked", wipeLocalInput: true });
+    throw new ConvexError({ code: "device_revoked", wipeLocalInput: true, ...(device?.replacedByLabel ? { movedTo: device.replacedByLabel } : {}) });
   if (!device || device.clerkUserId !== actor.userId)
     throw new ConvexError({ code: "device_registration_required" });
   return { actor: { userId: actor.userId }, device };
