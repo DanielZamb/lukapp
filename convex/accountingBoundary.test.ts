@@ -19,6 +19,7 @@ const modules = import.meta.glob([
 const style = { emoji: "🛒", tone: "primary" } as const;
 function writeArgs(workspaceId = "foreign", profileId = "foreign") {
   return {
+    changeAccountLook: { workspaceId, financialAccountProfileId: profileId, emoji: "🐷" },
     createFinancialAccountProfile: {
       workspaceId,
       name: "Bank",
@@ -386,6 +387,9 @@ test("real action handlers request the exact operation permissions; setup keeps 
       name: "Bank",
       productKind: "bankAccount",
     });
+    await t.action(api.accounting.changeAccountLook, {
+      workspaceId, financialAccountProfileId: profileId, emoji: "🐷",
+    });
     const category = await t.action(api.accounting.createUserCategory, {
       workspaceId,
       selection: { kind: "preset", presetId: "groceries", style },
@@ -416,6 +420,7 @@ test("real action handlers request the exact operation permissions; setup keeps 
       period: { year: 2026, month: 9 },
     });
     expect(submission.mock.calls.map(([, args]) => args.permission)).toEqual([
+      "workspace:admin",
       "workspace:admin",
       "category:manage",
       "category:manage",

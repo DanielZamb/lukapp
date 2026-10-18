@@ -18,6 +18,7 @@ export async function createFinancialAccountProfile(
     workspaceId: string;
     name: string;
     productKind: FinancialAccountProductKind;
+    emoji?: string;
   },
 ): Promise<FinancialAccountProfile> {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
@@ -25,6 +26,8 @@ export async function createFinancialAccountProfile(
   if (!name) {
     throw new AccountingError("name_required");
   }
+  if (input.emoji !== undefined && !input.emoji.trim())
+    throw new AccountingError("account_emoji_required");
   const classified = classifyFinancialAccountProfile(
     chartTemplate(workspace.chartOfAccountsTemplate),
     input.productKind,
@@ -42,6 +45,7 @@ export async function createFinancialAccountProfile(
     name,
     productKind: classified.productKind,
     classificationPolicy: classified.policy,
+    ...(input.emoji ? { emoji: input.emoji } : {}),
     postingAccountId: postingAccount.id,
   });
   return toProfile(profile);

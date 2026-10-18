@@ -30,6 +30,7 @@ export async function setupFinancialAccountProfile(
     if (
       previous.name !== input.name.trim() ||
       previous.productKind !== input.productKind ||
+      previous.emoji !== input.emoji ||
       previous.accountingDate !== input.accountingDate ||
       previous.amount.currency !== input.amount.currency ||
       previous.amount.minorUnits !== input.amount.minorUnits
@@ -78,6 +79,7 @@ export async function setupFinancialAccountProfile(
     workspaceId: workspace.id,
     name: input.name.trim(),
     productKind: input.productKind,
+    ...(input.emoji ? { emoji: input.emoji } : {}),
     amount: input.amount,
     accountingDate: input.accountingDate,
     idempotencyKey: input.idempotencyKey,

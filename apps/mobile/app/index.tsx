@@ -73,7 +73,7 @@ function Home({
       {posted && <Text accessibilityRole="alert" style={ui.body}>✓ Posted</Text>}
       <View style={{ gap: spacing.xs }}>
         <Pressable accessibilityRole="button" accessibilityLabel="See places"
-          onPress={() => router.push("/account")} hitSlop={spacing.md}>
+          onPress={() => router.push("/places")} hitSlop={spacing.md}>
           <Text style={styles.muted}>What you have now</Text>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="What do you want to do?"
@@ -85,7 +85,7 @@ function Home({
           ) : <ActivityIndicator accessibilityLabel="Loading balances" />}
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="See places"
-          onPress={() => router.push("/account")} hitSlop={spacing.md}>
+          onPress={() => router.push("/places")} hitSlop={spacing.md}>
           {activity ? (
             <Text style={styles.muted}>
               {accountCount === 1 ? "One pool · See this place" : `Across ${accountCount} places`}
@@ -149,6 +149,7 @@ function Home({
         <BottomSheetView style={styles.sheetBody}>
           <Text accessibilityRole="header" style={styles.sheetTitle}>What do you want to do?</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Create a place, Another pocket for money"
+            disabled={activity === undefined || budget === undefined}
             onPress={() => { actions.current?.dismiss(); setPlaceOpen(true); }} style={styles.choice}>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.choiceTitle}>Create a place</Text>
@@ -166,7 +167,7 @@ function Home({
           </Pressable>
         </BottomSheetView>
       </BottomSheetModal>
-      {placeOpen && <HomePlaceSetup defaults={defaults} subject={subject} onClose={() => setPlaceOpen(false)} />}
+      {placeOpen && <HomePlaceSetup defaults={defaults} subject={subject} unlocking={accountCount === 1 && level === 0} onClose={() => setPlaceOpen(false)} />}
     </Screen>
   );
 }

@@ -25,6 +25,7 @@ const setup = opening
   .omit({ financialAccountProfileId: true, description: true })
   .extend({
     name: z.string().trim().min(1),
+    emoji: z.string().min(1).optional(),
     productKind: z.enum([
       "cash",
       "bankAccount",

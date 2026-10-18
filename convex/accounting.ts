@@ -15,6 +15,7 @@ import {
 import { run } from "./accountingErrors";
 import {
   accountSetup,
+  accountLook,
   accountTransfer,
   openingPosition,
   categoryCreation,
@@ -47,6 +48,7 @@ import { convexReadStore } from "./store";
 import { readPersonalDefaults } from "./personalDefaults";
 import {
   accountBalance,
+  productKind,
   accountNature,
   accountSetupResult,
   accountingPeriod,
@@ -98,6 +100,15 @@ export const createFinancialAccountProfile = action({
       internal.accountingWrites.createFinancialAccountProfile,
       { ...args, session },
     );
+  },
+});
+
+export const changeAccountLook = action({
+  args: accountLook,
+  returns: financialAccountProfile,
+  handler: async (ctx, args): Promise<Infer<typeof financialAccountProfile>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.changeAccountLook, { ...args, session });
   },
 });
 
@@ -291,6 +302,9 @@ export const postedActivity = query({
         financialAccountProfileId: v.string(),
         name: v.string(),
         nature: accountNature,
+        productKind: productKind,
+        emoji: v.optional(v.string()),
+        trackingFrom: v.union(v.string(), v.null()),
         balance: money,
       }),
     ),

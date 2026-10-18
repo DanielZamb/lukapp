@@ -141,7 +141,7 @@ test("balances net across places and captions, tiles, bell and Plans open their 
   for (const caption of captions) await act(async () => caption.props.onPress());
   for (const label of ["Drafts, 3 to review", "Overview, This month, by category", "Alerts, nothing needs attention", "Plans, October budget and recovery"])
     await act(async () => button(label).props.onPress());
-  expect(state.push.mock.calls).toEqual([["/account"], ["/account"], ["/drafts"], ["/overview"], ["/alerts"], ["/plans"]]);
+  expect(state.push.mock.calls).toEqual([["/places"], ["/places"], ["/drafts"], ["/overview"], ["/alerts"], ["/plans"]]);
   expect(state.query.mock.calls[0]?.[1]).toEqual({ workspaceId: "workspace", month: "2026-10" });
 });
 
