@@ -6,10 +6,15 @@ import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { useAction, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Text } from "react-native";
+import { ActivityIndicator, Keyboard, Platform, Text } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
-import { formatMoney, localDate } from "../src/features/money";
+import { formatMoney, localDate, parseMoney } from "../src/features/money";
+import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
+import {
+  postingBudgetImpact,
+  type PostingBudgetImpact,
+} from "../src/features/budget/postingImpact";
 import { defaultAccountingDate } from "../src/features/timeZones";
 import { Header, Screen, SecondaryButton, ui } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
@@ -122,6 +127,18 @@ function PostMoney({
     },
   );
   const profile = profiles?.find((place) => place.id === editor.profileId);
+  const needsBudgetCheck =
+    editor.entryType === "normal" && editor.direction === "out" && !editor.pending;
+  const budget = useQuery(
+    api.budget.evaluate,
+    needsBudgetCheck
+      ? { workspaceId: workspace.id, month: editor.date.slice(0, 7) }
+      : "skip",
+  );
+  const [impact, setImpact] = useState<{
+    description: string;
+    hits: PostingBudgetImpact;
+  } | null>(null);
   const categoryEnabled = editor.entryType === "normal";
   const categoryValid =
     !categoryEnabled || canPostCategories(editor.categories, categories);
@@ -196,6 +213,8 @@ function PostMoney({
         }
         canSubmit={
           !setup &&
+          !impact &&
+          (!needsBudgetCheck || budget !== undefined) &&
           editor.canSubmit &&
           (editor.pending || (categoryValid && placesValid))
         }
@@ -226,7 +245,23 @@ function PostMoney({
         }}
         onCategory={() => setCategoryVisible(true)}
         onDate={() => dateSheet.current?.present()}
-        onPost={() => void editor.submit()}
+        onPost={() => {
+          if (impact || !editor.canSubmit || setup) return;
+          if (needsBudgetCheck) {
+            if (!budget) return;
+            const hits = postingBudgetImpact({
+              jars: budget.jars,
+              categoryIds: editor.categories.ids,
+              expenseMinorUnits: -parseMoney(editor.amount),
+            });
+            if (hits.length) {
+              Keyboard.dismiss();
+              setImpact({ description: editor.description.trim(), hits });
+              return;
+            }
+          }
+          void editor.submit();
+        }}
         onKeepDraft={() => {
           void editor.keepDraft().then((id) => {
             if (id) router.setParams({ draftId: id });
@@ -235,6 +270,16 @@ function PostMoney({
         canKeepDraft={editor.canKeepDraft}
         onDone={editor.dismissPosted}
       />
+      {impact && (
+        <PostingImpactSheet
+          {...impact}
+          onReconsider={() => setImpact(null)}
+          onContinue={() => {
+            setImpact(null);
+            void editor.submit();
+          }}
+        />
+      )}
       {categoryEnabled && (
         <CategoryPicker
           key={editor.direction}
