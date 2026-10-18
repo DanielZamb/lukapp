@@ -10,6 +10,7 @@ import { requirePersonalSetup, requireSubmission, requireWorkspacePermission, re
 import { liveSession } from "./lib/securityValues";
 import { ensurePersonalDefaults } from "./personalDefaults";
 import { createAccountingCore } from "../src/accounting";
+import { calendarDate } from "../src/accounting/timeZone";
 import { convexReadStore, convexStore } from "./store";
 import { money } from "./validators";
 import type { ClerkSession } from "./lib/clerkProvider";
@@ -97,20 +98,29 @@ async function fixture() {
   return { root, client, deviceId };
 }
 
-test("normal registered action bootstraps once, posts an expense once on retry, and keeps reads reactive", async () => {
-  vi.setSystemTime(new Date("2026-10-17T15:00:00Z"));
-  sessions.set("sess_ios", session("sess_ios"));
+test.each([
+  { clock: "real clock", now: undefined, expectedDate: undefined },
+  { clock: "UTC ahead of Bogota", now: "2026-10-19T02:00:00Z", expectedDate: "2026-10-18" },
+])("normal registered action bootstraps once, posts an expense once on retry, and keeps reads reactive ($clock)", async ({ now, expectedDate }) => {
+  if (now) {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(now) });
+    sessions.set("sess_ios", session("sess_ios"));
+  }
   const { client, root } = await fixture();
   const first = await client.action(setup, {});
   expect(await client.action(setup, {})).toEqual(first);
+  const accountingDate = calendarDate(new Date(), "America/Bogota");
+  if (expectedDate) expect(accountingDate).toBe(expectedDate);
   const args = { workspaceId: first.workspace.id, financialAccountProfileId: first.financialAccountProfile.id,
-    amount: { currency: "COP", minorUnits: 250 }, accountingDate: "2026-10-17", description: "Food", idempotencyKey: "uncertain-expense" };
+    amount: { currency: "COP", minorUnits: 250 }, accountingDate, description: "Food", idempotencyKey: "uncertain-expense" };
   const posted = await client.action(expense, args);
   expect(await client.action(expense, args)).toEqual({ ...posted, replay: true });
   transport.mockClear();
   expect(await client.query(read, { workspaceId: first.workspace.id })).toMatchObject([{ balance: { minorUnits: 750 } }]);
   expect(transport).not.toHaveBeenCalled();
-  expect(await root.run((ctx) => ctx.db.query("journalEntries").collect())).toHaveLength(2);
+  const entries = await root.run((ctx) => ctx.db.query("journalEntries").collect());
+  expect(entries).toHaveLength(2);
+  expect(entries.map((entry) => entry.accountingDate)).toEqual([accountingDate, accountingDate]);
   expect(await root.run((ctx) => ctx.db.query("workspaceMemberships").collect())).toMatchObject([{ userId: owner, role: "Owner" }]);
 });
 
@@ -175,7 +185,7 @@ test("membership removal denies setup retry, registered reads, and posting befor
   await expect(client.action(setup, {})).rejects.toMatchObject({ data: { code: "membership_required" } });
   await expect(client.query(read, { workspaceId: first.workspace.id })).rejects.toMatchObject({ data: { code: "membership_required" } });
   await expect(client.action(expense, { workspaceId: first.workspace.id, financialAccountProfileId: first.financialAccountProfile.id,
-    amount: { currency: "COP", minorUnits: 1 }, accountingDate: "2026-10-17", description: "Food", idempotencyKey: "x" })).rejects.toMatchObject({ data: { code: "membership_required" } });
+    amount: { currency: "COP", minorUnits: 1 }, accountingDate: calendarDate(new Date(), "America/Bogota"), description: "Food", idempotencyKey: "x" })).rejects.toMatchObject({ data: { code: "membership_required" } });
 });
 
 test("Owner permissions are explicit and every other role has no grants in this cutover", () => {
