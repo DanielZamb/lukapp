@@ -3,6 +3,8 @@ const os = vi.hoisted(() => ({
   platform: { OS: "android" },
   files: new Map<string, string>(),
   authenticate: vi.fn(),
+  cancelStore: vi.fn(),
+  cancelLocal: vi.fn(),
   getSentinel: vi.fn(),
   setSentinel: vi.fn(),
   removeSentinel: vi.fn(),
@@ -10,6 +12,7 @@ const os = vi.hoisted(() => ({
   enrolled: vi.fn(),
   level: vi.fn(),
   usable: vi.fn(),
+  cancellable: vi.fn(),
   prevent: vi.fn(),
   allow: vi.fn(),
   switcher: vi.fn(),
@@ -44,12 +47,14 @@ vi.mock("expo-local-authentication", () => ({
   isEnrolledAsync: os.enrolled,
   getEnrolledLevelAsync: os.level,
   authenticateAsync: os.authenticate,
-  cancelAuthenticate: vi.fn(),
+  cancelAuthenticate: os.cancelLocal,
   SecurityLevel: { BIOMETRIC_STRONG: 3 },
 }));
 vi.mock("expo-secure-store", () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 6,
+  cancelAuthentication: os.cancelStore,
   canUseBiometricAuthentication: os.usable,
+  isCancellableAuthenticationAvailable: os.cancellable,
   getItemAsync: os.getSentinel,
   setItemAsync: os.setSentinel,
   deleteItemAsync: os.removeSentinel,
@@ -61,6 +66,7 @@ vi.mock("expo-screen-capture", () => ({
 }));
 import {
   enrollBiometry,
+  cancelBiometricPrompt,
   clearBiometricEnrollment,
   hideFinancialScreen,
   initializeScreenPrivacy,
@@ -86,37 +92,35 @@ beforeEach(() => {
   os.enrolled.mockResolvedValue(true);
   os.level.mockResolvedValue(3);
   os.usable.mockReturnValue(true);
+  os.cancellable.mockReturnValue(true);
   os.authenticate.mockResolvedValue({ success: true });
   os.getSentinel.mockResolvedValue(`${marker.installId}:owner`);
 });
 
-test("the OS challenge explicitly requires Class 3, no device PIN and no fallback button", async () => {
+test.each(["android", "ios"])("%s unlock prompts only through one SecureStore read and never calls authenticateAsync", async platform => {
+  os.platform.OS = platform;
   await unlockBiometry(marker, "owner");
-  expect(os.authenticate).toHaveBeenCalledExactlyOnceWith({
-    promptMessage: "Unlock Lukapp",
-    biometricsSecurityLevel: "strong",
-    disableDeviceFallback: true,
-    fallbackLabel: "",
-    cancelLabel: "Sign in instead",
-    requireConfirmation: true,
-  });
-  expect(os.getSentinel).toHaveBeenCalledWith(
+  expect(os.authenticate).not.toHaveBeenCalled();
+  expect(os.getSentinel).toHaveBeenCalledExactlyOnceWith(
     `enrollment.${marker.installId}`,
     {
       keychainService: "lukapp.local-entry.v1",
       keychainAccessible: 6,
       requireAuthentication: true,
       authenticationPrompt: "Unlock Lukapp",
+      cancellableAuthentication: true,
     },
   );
+  expect(os.setSentinel).not.toHaveBeenCalled();
 });
-test.each(["weak", "no-hardware", "not-enrolled", "unusable"])(
+test.each(["weak", "no-hardware", "not-enrolled", "unusable", "old-native-client"])(
   "%s cannot enable local entry",
   async (failure) => {
     if (failure === "weak") os.level.mockResolvedValue(2);
     if (failure === "no-hardware") os.hardware.mockResolvedValue(false);
     if (failure === "not-enrolled") os.enrolled.mockResolvedValue(false);
     if (failure === "unusable") os.usable.mockReturnValue(false);
+    if (failure === "old-native-client") os.cancellable.mockReturnValue(false);
     await expect(enrollBiometry(marker, "owner")).rejects.toThrow();
     expect(os.authenticate).not.toHaveBeenCalled();
     expect(os.setSentinel).not.toHaveBeenCalled();
@@ -130,10 +134,13 @@ test("a missing, invalidated or inaccessible sentinel cannot be replaced during 
   await expect(unlockBiometry(marker, "owner")).rejects.toThrow();
   expect(os.setSentinel).not.toHaveBeenCalled();
 });
-test("only enrollment provisions the authentication-bound device-only sentinel after strong authentication", async () => {
+test.each(["android", "ios"])("%s enrollment prompts only through one SecureStore write and never calls authenticateAsync", async platform => {
+  os.platform.OS = platform;
   await enrollBiometry(marker, "owner");
   expect(os.removeSentinel).toHaveBeenCalledOnce();
-  expect(os.setSentinel).toHaveBeenCalledWith(
+  expect(os.authenticate).not.toHaveBeenCalled();
+  expect(os.getSentinel).not.toHaveBeenCalled();
+  expect(os.setSentinel).toHaveBeenCalledExactlyOnceWith(
     `enrollment.${marker.installId}`,
     `${marker.installId}:owner`,
     {
@@ -141,15 +148,39 @@ test("only enrollment provisions the authentication-bound device-only sentinel a
       keychainAccessible: 6,
       requireAuthentication: true,
       authenticationPrompt: "Unlock Lukapp",
+      cancellableAuthentication: true,
     },
   );
 });
-test("cancelled biometrics never read or provision the sentinel", async () => {
-  os.authenticate.mockResolvedValue({ success: false, error: "user_cancel" });
-  await expect(unlockBiometry(marker, "owner")).rejects.toThrow();
+test.each(["unlock", "enroll"])("a cancelled SecureStore %s fails without a second prompt", async operation => {
+  const error = new Error("user_cancel");
+  if (operation === "unlock") os.getSentinel.mockRejectedValueOnce(error);
+  else os.setSentinel.mockRejectedValueOnce(error);
+  await expect(operation === "unlock" ? unlockBiometry(marker, "owner") : enrollBiometry(marker, "owner")).rejects.toThrow("user_cancel");
+  expect(os.authenticate).not.toHaveBeenCalled();
+  expect(os.getSentinel).toHaveBeenCalledTimes(operation === "unlock" ? 1 : 0);
+  expect(os.setSentinel).toHaveBeenCalledTimes(operation === "enroll" ? 1 : 0);
+});
+
+test.each(["android", "ios"])("%s cancellation targets SecureStore instead of LocalAuthentication", async platform => {
+  os.platform.OS = platform;
+  await cancelBiometricPrompt();
+  expect(os.cancelStore).toHaveBeenCalledOnce();
+  expect(os.cancelLocal).not.toHaveBeenCalled();
+});
+
+test.each(["unlock", "enroll"])("cancelling during the silent %s checks prevents a later SecureStore prompt", async operation => {
+  let finish = (_hardware: boolean) => {};
+  os.hardware.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+  const attempt = operation === "unlock" ? unlockBiometry(marker, "owner") : enrollBiometry(marker, "owner");
+  const rejected = expect(attempt).rejects.toThrow("Biometrics cancelled");
+  await cancelBiometricPrompt();
+  finish(true);
+  await rejected;
   expect(os.getSentinel).not.toHaveBeenCalled();
   expect(os.setSentinel).not.toHaveBeenCalled();
 });
+
 test("a missing install marker is untrusted; only an explicitly saved enrollment survives a normal restart", async () => {
   expect(await readInstallMarker()).toEqual({
     version: 1,
@@ -187,24 +218,22 @@ test("revocation deletes only the app enrollment sentinel through its own servic
     keychainAccessible: 6,
     requireAuthentication: true,
     authenticationPrompt: "Unlock Lukapp",
+    cancellableAuthentication: true,
   });
   expect(os.authenticate).not.toHaveBeenCalled();
 });
 
-test.each(["biometric prompt", "sentinel write"])(
-  "identity loss during the %s drains native enrollment before deleting its sentinel",
-  async stage => {
+test(
+  "identity loss during the SecureStore enrollment prompt drains its write before deleting the sentinel",
+  async () => {
     let sentinel: string | null = null;
     let release = () => {};
     let started = () => {};
     const blocked = new Promise<void>(resolve => { release = resolve; });
     const reached = new Promise<void>(resolve => { started = resolve; });
-    os.authenticate.mockImplementation(async () => {
-      if (stage === "biometric prompt") { started(); await blocked; }
-      return { success: true };
-    });
     os.setSentinel.mockImplementation(async (_key: string, value: string) => {
-      if (stage === "sentinel write") { started(); await blocked; }
+      started();
+      await blocked;
       sentinel = value;
     });
     os.removeSentinel.mockImplementation(async () => { sentinel = null; });

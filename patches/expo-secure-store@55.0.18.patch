@@ -1,0 +1,420 @@
+diff --git a/android/src/main/java/expo/modules/securestore/AuthenticationHelper.kt b/android/src/main/java/expo/modules/securestore/AuthenticationHelper.kt
+index a281b88ec7d9d19870c8707347251cac2137b4c5..9c0f64df77abb4f58202cf7d99bf862af87c7233 100644
+--- a/android/src/main/java/expo/modules/securestore/AuthenticationHelper.kt
++++ b/android/src/main/java/expo/modules/securestore/AuthenticationHelper.kt
+@@ -18,6 +18,19 @@ class AuthenticationHelper(
+   private val moduleRegistry: ModuleRegistry
+ ) {
+   private var isAuthenticating = false
++  private var foreground = true
++  private var cancellationGeneration = 0
++  private var activePrompt: AuthenticationPrompt? = null
++
++  fun cancelAuthentication() {
++    cancellationGeneration++
++    activePrompt?.cancel()
++  }
++
++  fun setForeground(value: Boolean) {
++    foreground = value
++    if (!value) cancelAuthentication()
++  }
+ 
+   suspend fun authenticateCipher(cipher: Cipher, requiresAuthentication: Boolean, title: String): Cipher {
+     if (requiresAuthentication) {
+@@ -45,11 +58,19 @@ class AuthenticationHelper(
+       val fragmentActivity = getCurrentActivity() as? FragmentActivity
+         ?: throw AuthenticationException("Cannot display biometric prompt when the app is not in the foreground")
+ 
+-      val authenticationPrompt = AuthenticationPrompt(fragmentActivity, context, title)
+-
++      val generation = cancellationGeneration
+       return withContext(Dispatchers.Main.immediate) {
+-        return@withContext authenticationPrompt.authenticate(cipher)
+-          ?: throw AuthenticationException("Couldn't get the authentication result")
++        if (!foreground || generation != cancellationGeneration) {
++          throw AuthenticationException("Authentication canceled in background")
++        }
++        val prompt = AuthenticationPrompt(fragmentActivity, context, title)
++        activePrompt = prompt
++        try {
++          prompt.authenticate(cipher)
++            ?: throw AuthenticationException("Couldn't get the authentication result")
++        } finally {
++          activePrompt = null
++        }
+       }
+     } finally {
+       isAuthenticating = false
+diff --git a/android/src/main/java/expo/modules/securestore/AuthenticationPrompt.kt b/android/src/main/java/expo/modules/securestore/AuthenticationPrompt.kt
+index 7437374f164c7c7a47b7cb78fffb374cf52b6905..5e7cc66bf707bc1e8abe9c454a4390f8088405da 100644
+--- a/android/src/main/java/expo/modules/securestore/AuthenticationPrompt.kt
++++ b/android/src/main/java/expo/modules/securestore/AuthenticationPrompt.kt
+@@ -12,6 +12,10 @@ import kotlin.coroutines.resumeWithException
+ import kotlin.coroutines.suspendCoroutine
+ 
+ class AuthenticationPrompt(private val currentActivity: FragmentActivity, context: Context, title: String) {
++  private var biometricPrompt: BiometricPrompt? = null
++
++  fun cancel() { biometricPrompt?.cancelAuthentication() }
++
+   private var executor: Executor = ContextCompat.getMainExecutor(context)
+   private var promptInfo = PromptInfo.Builder()
+     .setTitle(title)
+@@ -20,7 +24,7 @@ class AuthenticationPrompt(private val currentActivity: FragmentActivity, contex
+ 
+   suspend fun authenticate(cipher: Cipher): BiometricPrompt.AuthenticationResult? =
+     suspendCoroutine { continuation ->
+-      BiometricPrompt(
++      val prompt = BiometricPrompt(
+         currentActivity,
+         executor,
+         object : BiometricPrompt.AuthenticationCallback() {
+@@ -37,7 +41,9 @@ class AuthenticationPrompt(private val currentActivity: FragmentActivity, contex
+             continuation.resume(result)
+           }
+         }
+-      ).authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
++      )
++      biometricPrompt = prompt
++      prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
+     }
+ 
+   private fun convertErrorCode(code: Int): String {
+diff --git a/android/src/main/java/expo/modules/securestore/SecureStoreModule.kt b/android/src/main/java/expo/modules/securestore/SecureStoreModule.kt
+index 0fef884af8f4c8a201d4a9c9e7e6ecd6bfe45bfb..ea8e543b9bccd770cc58d2eb7e8e21dd50dc2fe2 100644
+--- a/android/src/main/java/expo/modules/securestore/SecureStoreModule.kt
++++ b/android/src/main/java/expo/modules/securestore/SecureStoreModule.kt
+@@ -8,6 +8,7 @@ import android.util.Log
+ import expo.modules.kotlin.exception.CodedException
+ import expo.modules.kotlin.exception.Exceptions
+ import expo.modules.kotlin.functions.Coroutine
++import expo.modules.kotlin.functions.Queues
+ import expo.modules.kotlin.modules.Module
+ import expo.modules.kotlin.modules.ModuleDefinition
+ import expo.modules.securestore.encryptors.AESEncryptor
+@@ -75,6 +76,13 @@ open class SecureStoreModule : Module() {
+       }
+     }
+ 
++    AsyncFunction("cancelAuthentication") {
++      authenticationHelper.cancelAuthentication()
++    }.runOnQueue(Queues.MAIN)
++
++    OnActivityEntersBackground { authenticationHelper.setForeground(false) }
++    OnActivityEntersForeground { authenticationHelper.setForeground(true) }
++
+     OnCreate {
+       authenticationHelper = AuthenticationHelper(reactContext, appContext.legacyModuleRegistry)
+       hybridAESEncryptor = HybridAESEncryptor(reactContext, mAESEncryptor)
+diff --git a/build/SecureStore.d.ts b/build/SecureStore.d.ts
+index 1dc7828ff5a877361ae94383ece61b133a66913f..ad49190ba3c18efccf7c59cdefc9da1b88bf5c7b 100644
+--- a/build/SecureStore.d.ts
++++ b/build/SecureStore.d.ts
+@@ -38,6 +38,8 @@ export declare const WHEN_UNLOCKED: KeychainAccessibilityConstant;
+  */
+ export declare const WHEN_UNLOCKED_THIS_DEVICE_ONLY: KeychainAccessibilityConstant;
+ export type SecureStoreOptions = {
++  /** Opt in to cancellable biometric reads and biometric enrollment writes on iOS. */
++  cancellableAuthentication?: boolean;
+     /**
+      * - Android: Equivalent of the public/private key pair `Alias`.
+      * - iOS: The item's service, equivalent to [`kSecAttrService`](https://developer.apple.com/documentation/security/ksecattrservice/).
+@@ -149,4 +151,6 @@ export declare function getItem(key: string, options?: SecureStoreOptions): stri
+  * @platform ios
+  */
+ export declare function canUseBiometricAuthentication(): boolean;
++export declare function isCancellableAuthenticationAvailable(): boolean;
++export declare function cancelAuthentication(): Promise<void>;
+ //# sourceMappingURL=SecureStore.d.ts.map
+\ No newline at end of file
+diff --git a/build/SecureStore.js b/build/SecureStore.js
+index 25e2646f8707a36cd038708d526c50fdc96af9cd..8a1536edf9565ad813f9b8d2530f27d4b1a73b99 100644
+--- a/build/SecureStore.js
++++ b/build/SecureStore.js
+@@ -142,6 +142,13 @@ export function getItem(key, options = {}) {
+ export function canUseBiometricAuthentication() {
+     return ExpoSecureStore.canUseBiometricAuthentication();
+ }
++export function isCancellableAuthenticationAvailable() {
++  return typeof ExpoSecureStore.cancelAuthentication === 'function';
++}
++
++export async function cancelAuthentication() {
++    await ExpoSecureStore.cancelAuthentication();
++}
+ function ensureValidKey(key) {
+     if (!isValidKey(key)) {
+         throw new Error(`Invalid key provided to SecureStore. Keys must not be empty and contain only alphanumeric characters, ".", "-", and "_".`);
+diff --git a/ios/SecureStoreModule.swift b/ios/SecureStoreModule.swift
+index 584df218365e2ebf176f6d332970a3ba64d7a12e..1e0fdf28a8fcc34bb7f0c76031d6b74d0e675eeb 100644
+--- a/ios/SecureStoreModule.swift
++++ b/ios/SecureStoreModule.swift
+@@ -3,8 +3,14 @@ import ExpoModulesCore
+ import LocalAuthentication
+ #endif
+ import Security
++import UIKit
+ 
+ public final class SecureStoreModule: Module {
++  #if !os(tvOS)
++  // Accessed only on the main queue. Each entry attempt gets a fresh context.
++  private var entryContext: LAContext?
++  #endif
++
+   public func definition() -> ModuleDefinition {
+     Name("ExpoSecureStore")
+ 
+@@ -16,21 +22,45 @@ public final class SecureStoreModule: Module {
+     Constant("WHEN_UNLOCKED") { SecureStoreAccessible.whenUnlocked.rawValue }
+     Constant("WHEN_UNLOCKED_THIS_DEVICE_ONLY") { SecureStoreAccessible.whenUnlockedThisDeviceOnly.rawValue }
+ 
+-    AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions) -> String? in
+-      return try get(with: key, options: options)
++    AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions, promise: Promise) in
++      #if !os(tvOS)
++      performEntryOperation(options: options, writing: false, promise: promise) { context in
++        try self.get(with: key, options: options, authenticationContext: context)
++      }
++      #else
++      promise.resolve(try get(with: key, options: options))
++      #endif
++    }.runOnQueue(.main)
++
++    AsyncFunction("cancelAuthentication") {
++      #if !os(tvOS)
++      cancelEntryAuthentication()
++      #endif
++    }.runOnQueue(.main)
++
++    OnAppEntersBackground {
++      #if !os(tvOS)
++      cancelEntryAuthentication()
++      #endif
+     }
+ 
+     Function("getValueWithKeySync") { (key: String, options: SecureStoreOptions) -> String? in
+       return try get(with: key, options: options)
+     }
+ 
+-    AsyncFunction("setValueWithKeyAsync") { (value: String, key: String, options: SecureStoreOptions) -> Bool in
++    AsyncFunction("setValueWithKeyAsync") { (value: String, key: String, options: SecureStoreOptions, promise: Promise) in
+       guard let key = validate(for: key) else {
+         throw InvalidKeyException()
+       }
+ 
+-      return try set(value: value, with: key, options: options)
+-    }
++      #if !os(tvOS)
++      performEntryOperation(options: options, writing: true, promise: promise) { context in
++        try self.set(value: value, with: key, options: options, authenticationContext: context)
++      }
++      #else
++      promise.resolve(try set(value: value, with: key, options: options))
++      #endif
++    }.runOnQueue(.main)
+ 
+     Function("setValueWithKeySync") {(value: String, key: String, options: SecureStoreOptions) -> Bool in
+       guard let key = validate(for: key) else {
+@@ -66,27 +96,97 @@ public final class SecureStoreModule: Module {
+     }
+   }
+ 
+-  private func get(with key: String, options: SecureStoreOptions) throws -> String? {
++  #if !os(tvOS)
++  private func cancelEntryAuthentication() {
++    entryContext?.invalidate()
++    entryContext = nil
++  }
++
++  private func performEntryOperation(
++    options: SecureStoreOptions,
++    writing: Bool,
++    promise: Promise,
++    operation: @escaping (LAContext?) throws -> Any?
++  ) {
++    guard options.cancellableAuthentication else {
++      DispatchQueue.global().async {
++        do { promise.resolve(try operation(nil)) }
++        catch { promise.reject(error) }
++      }
++      return
++    }
++    guard options.requireAuthentication,
++      UIApplication.shared.applicationState != .background,
++      entryContext == nil else {
++      promise.reject(KeyChainException(errSecUserCanceled))
++      return
++    }
++    let context = LAContext()
++    context.localizedReason = options.authenticationPrompt ?? "Authenticate"
++    context.localizedFallbackTitle = ""
++    context.touchIDAuthenticationAllowableReuseDuration = 0
++    entryContext = context
++    let perform = {
++      DispatchQueue.global().async {
++        let result = Result { try operation(context) }
++        DispatchQueue.main.async {
++          guard self.entryContext === context else {
++            promise.reject(KeyChainException(errSecUserCanceled))
++            return
++          }
++          self.entryContext = nil
++          context.invalidate()
++          switch result {
++          case .success(let value): promise.resolve(value)
++          case .failure(let error): promise.reject(error)
++          }
++        }
++      }
++    }
++    if writing {
++      // SecItemAdd does not prompt. Authenticate inside this write, then use the
++      // same context if Keychain must update an existing biometric item.
++      context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics,
++        localizedReason: options.authenticationPrompt ?? "Authenticate") { success, error in
++        DispatchQueue.main.async {
++          guard self.entryContext === context else {
++            promise.reject(KeyChainException(errSecUserCanceled))
++            return
++          }
++          if success { perform() }
++          else {
++            self.cancelEntryAuthentication()
++            promise.reject(error ?? KeyChainException(errSecAuthFailed))
++          }
++        }
++      }
++    } else {
++      perform()
++    }
++  }
++  #endif
++
++  private func get(with key: String, options: SecureStoreOptions, authenticationContext: AnyObject? = nil) throws -> String? {
+     guard let key = validate(for: key) else {
+       throw InvalidKeyException()
+     }
+ 
+-    if let unauthenticatedItem = try searchKeyChain(with: key, options: options, requireAuthentication: false) {
++    if let unauthenticatedItem = try searchKeyChain(with: key, options: options, requireAuthentication: false, authenticationContext: authenticationContext) {
+       return String(data: unauthenticatedItem, encoding: .utf8)
+     }
+ 
+-    if let authenticatedItem = try searchKeyChain(with: key, options: options, requireAuthentication: true) {
++    if let authenticatedItem = try searchKeyChain(with: key, options: options, requireAuthentication: true, authenticationContext: authenticationContext) {
+       return String(data: authenticatedItem, encoding: .utf8)
+     }
+ 
+-    if let legacyItem = try searchKeyChain(with: key, options: options) {
++    if let legacyItem = try searchKeyChain(with: key, options: options, authenticationContext: authenticationContext) {
+       return String(data: legacyItem, encoding: .utf8)
+     }
+ 
+     return nil
+   }
+ 
+-  private func set(value: String, with key: String, options: SecureStoreOptions) throws -> Bool {
++  private func set(value: String, with key: String, options: SecureStoreOptions, authenticationContext: AnyObject? = nil) throws -> Bool {
+     var setItemQuery = query(with: key, options: options, requireAuthentication: options.requireAuthentication)
+ 
+     let valueData = value.data(using: .utf8)
+@@ -109,6 +209,9 @@ public final class SecureStoreModule: Module {
+       setItemQuery[kSecAttrAccessControl as String] = accessOptions
+     }
+ 
++    if let authenticationContext {
++      setItemQuery[kSecUseAuthenticationContext as String] = authenticationContext
++    }
+     let status = SecItemAdd(setItemQuery as CFDictionary, nil)
+ 
+     switch status {
+@@ -118,13 +221,13 @@ public final class SecureStoreModule: Module {
+       SecItemDelete(query(with: key, options: options, requireAuthentication: !options.requireAuthentication) as CFDictionary)
+       return true
+     case errSecDuplicateItem:
+-      return try update(value: value, with: key, options: options)
++      return try update(value: value, with: key, options: options, authenticationContext: authenticationContext)
+     default:
+       throw KeyChainException(status)
+     }
+   }
+ 
+-  private func update(value: String, with key: String, options: SecureStoreOptions) throws -> Bool {
++  private func update(value: String, with key: String, options: SecureStoreOptions, authenticationContext: AnyObject? = nil) throws -> Bool {
+     var query = query(with: key, options: options, requireAuthentication: options.requireAuthentication)
+ 
+     let valueData = value.data(using: .utf8)
+@@ -134,6 +237,9 @@ public final class SecureStoreModule: Module {
+       query[kSecUseOperationPrompt as String] = authPrompt
+     }
+ 
++    if let authenticationContext {
++      query[kSecUseAuthenticationContext as String] = authenticationContext
++    }
+     let status = SecItemUpdate(query as CFDictionary, updateDictionary as CFDictionary)
+ 
+     if status == errSecSuccess {
+@@ -143,7 +249,7 @@ public final class SecureStoreModule: Module {
+     }
+   }
+ 
+-  private func searchKeyChain(with key: String, options: SecureStoreOptions, requireAuthentication: Bool? = nil) throws -> Data? {
++  private func searchKeyChain(with key: String, options: SecureStoreOptions, requireAuthentication: Bool? = nil, authenticationContext: AnyObject? = nil) throws -> Data? {
+     var query = query(with: key, options: options, requireAuthentication: requireAuthentication)
+ 
+     query[kSecMatchLimit as String] = kSecMatchLimitOne
+@@ -153,6 +259,9 @@ public final class SecureStoreModule: Module {
+       query[kSecUseOperationPrompt as String] = authPrompt
+     }
+ 
++    if let authenticationContext {
++      query[kSecUseAuthenticationContext as String] = authenticationContext
++    }
+     var item: CFTypeRef?
+     let status = SecItemCopyMatching(query as CFDictionary, &item)
+ 
+diff --git a/ios/SecureStoreOptions.swift b/ios/SecureStoreOptions.swift
+index 7e3fa4dfca55cdb9fada4b7fb794b8d91ef0e15c..1598e3aa14537a8f5ebbe7dd09c8d989e7e9a66e 100644
+--- a/ios/SecureStoreOptions.swift
++++ b/ios/SecureStoreOptions.swift
+@@ -1,6 +1,9 @@
+ import ExpoModulesCore
+ 
+ internal struct SecureStoreOptions: Record {
++  @Field
++  var cancellableAuthentication: Bool = false
++
+   @Field
+   var authenticationPrompt: String?
+ 
+diff --git a/src/SecureStore.ts b/src/SecureStore.ts
+index 68458b8e044eaab3c054cc7bfb6b9bad0707031f..35f7ea3a0b3ff5e00a2c83cda6bbb0d488b4a359 100644
+--- a/src/SecureStore.ts
++++ b/src/SecureStore.ts
+@@ -60,6 +60,8 @@ export const WHEN_UNLOCKED_THIS_DEVICE_ONLY: KeychainAccessibilityConstant =
+ 
+ // @needsAudit
+ export type SecureStoreOptions = {
++  /** Opt in to cancellable biometric reads and biometric enrollment writes on iOS. */
++  cancellableAuthentication?: boolean;
+   /**
+    * - Android: Equivalent of the public/private key pair `Alias`.
+    * - iOS: The item's service, equivalent to [`kSecAttrService`](https://developer.apple.com/documentation/security/ksecattrservice/).
+@@ -226,6 +228,16 @@ export function canUseBiometricAuthentication(): boolean {
+   return ExpoSecureStore.canUseBiometricAuthentication();
+ }
+ 
++/** Whether the installed native binary supports cancellable authentication. */
++export function isCancellableAuthenticationAvailable(): boolean {
++  return typeof ExpoSecureStore.cancelAuthentication === 'function';
++}
++
++/** Cancel the active SecureStore biometric operation on either platform. */
++export async function cancelAuthentication(): Promise<void> {
++  await ExpoSecureStore.cancelAuthentication();
++}
++
+ function ensureValidKey(key: string) {
+   if (!isValidKey(key)) {
+     throw new Error(
