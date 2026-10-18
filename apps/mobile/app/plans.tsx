@@ -5,8 +5,8 @@ import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { Header, ListGroup, ListRow, Screen } from "../src/ui/core";
 
-function savingsRecoveryDetail(plans: { title: string }[]): string | undefined {
-  if (plans.length === 0) return undefined;
+function savingsRecoveryDetail(plans: { title: string }[]): string {
+  if (plans.length === 0) return "Start from an expense";
   if (plans.length === 1) return plans[0].title;
   return `${plans.length} plans`;
 }
@@ -20,7 +20,7 @@ export default function PlansRoute() {
   );
 
   if (defaults === null) return <Redirect href="/" />;
-  if (!defaults || board === undefined) {
+  if (!defaults) {
     return (
       <Screen>
         <ActivityIndicator />
@@ -28,7 +28,7 @@ export default function PlansRoute() {
     );
   }
 
-  const detail = savingsRecoveryDetail(board.plans);
+  const detail = board === undefined ? undefined : savingsRecoveryDetail(board.plans);
 
   return (
     <Screen>
