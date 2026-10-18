@@ -86,8 +86,8 @@ export type FinancialAccountProfile = {
   id: string;
   workspaceId: string;
   name: string;
-  productKind: FinancialAccountProductKind;
   emoji?: string;
+  productKind: FinancialAccountProductKind;
   /** The Posting Account behind the profile, for advanced views. */
   ledgerAccountId: string;
 };
@@ -183,8 +183,8 @@ export type StoredProfile = {
   id: string;
   workspaceId: string;
   name: string;
-  productKind: FinancialAccountProductKind;
   emoji?: string;
+  productKind: FinancialAccountProductKind;
   classificationPolicy: string;
   postingAccountId: string;
 };
@@ -319,6 +319,7 @@ export type AccountingCore = {
     actor: Actor;
     workspaceId: string;
     name: string;
+    emoji?: string;
     productKind: FinancialAccountProductKind;
   }): Promise<FinancialAccountProfile>;
   listFinancialAccountProfiles(input: {
@@ -388,13 +389,14 @@ export type OpeningPositionInput = {
   description: string;
   idempotencyKey: string;
 };
-export type AccountTransferInput = Omit<OpeningPositionInput, "financialAccountProfileId"> & {
-  sourceFinancialAccountProfileId: string;
-  destinationFinancialAccountProfileId: string;
-};
+export type AccountTransferInput = CategoryAssignments &
+  Omit<OpeningPositionInput, "financialAccountProfileId"> & {
+    sourceFinancialAccountProfileId: string;
+    destinationFinancialAccountProfileId: string;
+  };
 export type AccountSetupInput = Omit<OpeningPositionInput, "financialAccountProfileId" | "description"> & {
-  emoji?: string;
   name: string;
+  emoji?: string;
   productKind: FinancialAccountProductKind;
 };
 export type StoredAccountSetup = Omit<AccountSetupInput, "actor"> & {

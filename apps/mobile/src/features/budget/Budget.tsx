@@ -9,9 +9,11 @@ import { Screen, theme } from "../../ui/core";
 import { api } from "../api";
 import { usePostedActivity } from "../activity";
 import { experienceLevel } from "../levelDoor/model";
+import { formatMoney } from "../money";
 import { BudgetBoard } from "./BudgetBoard";
 import { BudgetCreation } from "./BudgetCreation";
 import { BudgetEditorSheet } from "./BudgetEditorSheet";
+import { BudgetLimitSheet } from "./BudgetLimitSheet";
 import { monthLabel, type BudgetCategory } from "./model";
 import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 
@@ -50,22 +52,32 @@ export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string;
           setEditor({ key: Crypto.randomUUID(), seed: { workspaceId, currency: board.currency, month: board.currentMonth, jar: current }, categories: [current.category] });
         }} />
       {editor && <Editor key={editor.key} seed={editor.seed} categories={editor.categories}
+        color={theme[categories.find((category) => category.id === editor.seed.jar?.category.id)?.style.tone ?? "primary"]}
         onClose={() => { setEditor(null); refresh(Crypto.randomUUID()); }}
         onSaved={() => { setEditor(null); refresh(Crypto.randomUUID()); setSaved(true); }} />}
     </>
   );
 }
 
-function Editor({ seed, categories, onClose, onSaved }: {
-  seed: BudgetEditorSeed; categories: BudgetCategory[]; onClose: () => void; onSaved: () => void;
+function Editor({ seed, categories, color, onClose, onSaved }: {
+  seed: BudgetEditorSeed; categories: BudgetCategory[]; color: string; onClose: () => void; onSaved: () => void;
 }) {
   const save = useAction(api.budget.setCategoryLimit);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
   const editor = useBudgetEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved });
-  return <BudgetEditorSheet title={seed.jar ? "Edit Budget" : "Add Budget"}
+  const [year, month] = seed.month.split("-").map(Number);
+  const previousMonth = `${month === 1 ? year - 1 : year}-${String(month === 1 ? 12 : month - 1).padStart(2, "0")}`;
+  const previous = useQuery(api.accounting.categoryTotals, seed.jar ? { workspaceId: seed.workspaceId, month: previousMonth } : "skip");
+  if (seed.jar) return <BudgetLimitSheet month={seed.month} currency={seed.currency} jar={seed.jar} color={color}
+    previousMonth={previousMonth}
+    previousSpendMinorUnits={previous ? previous.categories.find((category) => category.categoryId === editor.categoryId)?.minorUnits ?? 0 : undefined}
+    {...editor}
+    onLimit={(minorUnits) => { interact(); editor.onAmount(formatMoney({ currency: seed.currency, minorUnits }).replace(`${seed.currency} `, "")); }}
+    onSave={() => { interact(); void editor.submit(); }} onDismiss={onClose} />;
+  return <BudgetEditorSheet title="Add Budget"
     monthLabel={monthLabel(seed.month)} currency={seed.currency} categories={categories}
-    categoryFixed={!!seed.jar}
+    categoryFixed={false}
     policyCopy="Repeats each month. Changes apply to this month and future months. Past months keep their limits. Unspent money does not roll over."
     {...editor}
     onCategory={(id) => { interact(); editor.onCategory(id); }}

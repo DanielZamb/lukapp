@@ -7,7 +7,10 @@ import type {
   AccountSetupResult,
 } from "../types";
 import { journalContext, toPostedJournalEntry, toProfile } from "../views";
-import { createFinancialAccountProfile } from "./createFinancialAccountProfile";
+import {
+  createFinancialAccountProfile,
+  optionalProfileEmoji,
+} from "./createFinancialAccountProfile";
 import { recordOpeningPosition } from "./recordOpeningPosition";
 
 export async function setupFinancialAccountProfile(
@@ -26,11 +29,12 @@ export async function setupFinancialAccountProfile(
     workspace.id,
     input.idempotencyKey,
   );
+  const emoji = optionalProfileEmoji(input.emoji);
   if (previous) {
     if (
       previous.name !== input.name.trim() ||
+      optionalProfileEmoji(previous.emoji) !== emoji ||
       previous.productKind !== input.productKind ||
-      previous.emoji !== input.emoji ||
       previous.accountingDate !== input.accountingDate ||
       previous.amount.currency !== input.amount.currency ||
       previous.amount.minorUnits !== input.amount.minorUnits
@@ -78,8 +82,8 @@ export async function setupFinancialAccountProfile(
   await store.insertAccountSetup({
     workspaceId: workspace.id,
     name: input.name.trim(),
+    ...(emoji ? { emoji } : {}),
     productKind: input.productKind,
-    ...(input.emoji ? { emoji: input.emoji } : {}),
     amount: input.amount,
     accountingDate: input.accountingDate,
     idempotencyKey: input.idempotencyKey,

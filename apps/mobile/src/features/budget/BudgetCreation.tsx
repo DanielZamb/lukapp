@@ -1,13 +1,13 @@
 import * as Crypto from "expo-crypto";
 import { useAction, useQuery } from "convex/react";
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { ActivityIndicator, Text } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Choice, Field, Header, Screen, theme, ui } from "../../ui/core";
 import { api } from "../api";
 import { useLevelNavigation } from "../levelDoor/navigation";
-import { BudgetComposer } from "./BudgetComposer";
+import { BudgetComposer, limitSuggestions } from "./BudgetComposer";
 import type { BudgetCategory } from "./model";
 import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 
@@ -40,6 +40,13 @@ export function BudgetCreation({ seed, categories, categoryColors, unlocking, on
   });
   const totals = useQuery(api.accounting.categoryTotals, { workspaceId: seed.workspaceId, month: seed.month });
   const selected = categories.find((category) => category.id === editor.categoryId);
+  const initializedCategory = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (!selected || !totals || initializedCategory.current === selected.id) return;
+    const spent = totals.categories.find((category) => category.categoryId === selected.id)?.minorUnits ?? 0;
+    editor.onAmount(String((limitSuggestions(spent)[1] ?? 40_000_000) / 100));
+    initializedCategory.current = selected.id;
+  }, [selected, totals, editor.onAmount]);
   const matches = categories.filter((category) => category.name.toLocaleLowerCase().includes(editor.search.trim().toLocaleLowerCase()));
   if (!selected) return (
     <Screen>

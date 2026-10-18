@@ -80,7 +80,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
   }
   const canEdit = () => lifetime.current.active && !submitting.current && !request.current && !blocked;
   return {
-    categoryId, amount, search, busy, pending, error, editable,
+    categoryId, amount, minorUnits, search, busy, pending, error, editable,
     canSubmit: !busy && !blocked && (pending || (!!categoryId && minorUnits > 0)),
     canDismiss: !busy && !pending,
     onCategory: (id: string) => { if (canEdit() && !seed.jar) setCategoryId(id); },

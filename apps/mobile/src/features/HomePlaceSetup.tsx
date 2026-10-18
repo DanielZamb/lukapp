@@ -43,9 +43,9 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
     if (editor.blockedByPendingPostings) {
       finished.current = true; onClose(); router.push("/drafts"); return;
     }
-    if (editor.posted) {
+    if (editor.setupPosted) {
       finished.current = true; sheet.current?.dismiss(); onClose();
-      if (unlockingSave.current) showUnlocked({ door: "account", accountName: editor.posted.description || "The new place" });
+      if (unlockingSave.current) showUnlocked({ door: "account", accountName: editor.setupPosted.description || "The new place" });
       return;
     }
     if (editor.editable && !started.current) {

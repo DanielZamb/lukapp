@@ -10,6 +10,11 @@ import type {
 } from "../types";
 import { toProfile } from "../views";
 
+export function optionalProfileEmoji(emoji?: string) {
+  const value = emoji?.trim();
+  return value ? value : undefined;
+}
+
 /** Each profile gets its own auxiliary Posting Account, as a bookkeeper opens one per bank account. */
 export async function createFinancialAccountProfile(
   store: AccountingStore,
@@ -17,8 +22,8 @@ export async function createFinancialAccountProfile(
     actor: Actor;
     workspaceId: string;
     name: string;
-    productKind: FinancialAccountProductKind;
     emoji?: string;
+    productKind: FinancialAccountProductKind;
   },
 ): Promise<FinancialAccountProfile> {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
@@ -26,7 +31,7 @@ export async function createFinancialAccountProfile(
   if (!name) {
     throw new AccountingError("name_required");
   }
-  if (input.emoji !== undefined && !input.emoji.trim())
+  if (input.emoji && !input.emoji.trim())
     throw new AccountingError("account_emoji_required");
   const classified = classifyFinancialAccountProfile(
     chartTemplate(workspace.chartOfAccountsTemplate),
@@ -40,12 +45,13 @@ export async function createFinancialAccountProfile(
     normalSide: normalSideOf(classified.nature),
     role: "Posting",
   });
+  const emoji = optionalProfileEmoji(input.emoji);
   const profile = await store.insertProfile({
     workspaceId: input.workspaceId,
     name,
     productKind: classified.productKind,
+    ...(emoji ? { emoji } : {}),
     classificationPolicy: classified.policy,
-    ...(input.emoji ? { emoji: input.emoji } : {}),
     postingAccountId: postingAccount.id,
   });
   return toProfile(profile);

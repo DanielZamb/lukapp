@@ -18,8 +18,8 @@ export const emptyPostingForm = {
   amount: "-",
   description: "",
   date: "August 23, 2026",
-  place: "My money",
-  category: "No category",
+  place: "💰 My money",
+  category: "Pick",
   editable: true,
   loading: false,
   busy: false,
@@ -46,7 +46,7 @@ export const transferPostingForm = {
   amount: "-500.000,00",
   description: "Card payment",
   destination: "Credit card",
-  categoryEnabled: false,
+  categoryEnabled: true,
   canSubmit: true,
 } satisfies Fixture;
 export const openingPostingForm = {

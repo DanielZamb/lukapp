@@ -15,17 +15,19 @@ const opening = base.extend({
 }) satisfies z.ZodType<
   FunctionArgs<typeof api.accounting.recordOpeningPosition>
 >;
-const transfer = base.omit({ financialAccountProfileId: true }).extend({
-  sourceFinancialAccountProfileId: z.string().min(1),
-  destinationFinancialAccountProfileId: z.string().min(1),
-}) satisfies z.ZodType<
+const transfer = pendingExpenseSchema
+  .omit({ financialAccountProfileId: true })
+  .extend({
+    sourceFinancialAccountProfileId: z.string().min(1),
+    destinationFinancialAccountProfileId: z.string().min(1),
+  }) satisfies z.ZodType<
   FunctionArgs<typeof api.accounting.recordAccountTransfer>
 >;
 const setup = opening
   .omit({ financialAccountProfileId: true, description: true })
   .extend({
     name: z.string().trim().min(1),
-    emoji: z.string().min(1).optional(),
+    emoji: z.string().trim().min(1).max(32).optional(),
     productKind: z.enum([
       "cash",
       "bankAccount",
