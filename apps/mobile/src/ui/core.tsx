@@ -252,6 +252,7 @@ export function ListGroup({ children }: PropsWithChildren) {
 
 type ListRowProps = {
   title: string;
+  icon?: ComponentProps<typeof Ionicons>["name"];
   detail?: string;
   value?: string;
   onPress?: () => void;
@@ -262,6 +263,7 @@ type ListRowProps = {
 
 export function ListRow({
   title,
+  icon,
   detail,
   value,
   onPress,
@@ -271,6 +273,7 @@ export function ListRow({
 }: ListRowProps) {
   const content = (
     <>
+      {icon ? <Ionicons name={icon} size={22} color={theme.mutedForeground} /> : null}
       <View style={styles.rowCopy}>
         <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
         {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
