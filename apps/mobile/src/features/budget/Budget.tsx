@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { useAction, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
@@ -8,21 +8,47 @@ import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Screen, useTheme } from "../../ui/core";
 import { api } from "../api";
 import { BudgetBoard } from "./BudgetBoard";
+import { BudgetCreation } from "./BudgetCreation";
 import { BudgetEditorSheet } from "./BudgetEditorSheet";
 import { monthLabel, type BudgetCategory } from "./model";
 import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 
-export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string; timeZone: string; onBack: () => void }) {
+export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { workspaceId: string; timeZone: string; initialCategoryId?: string; onBack: () => void }) {
   const theme = useTheme();
   const calendar = useWorkspaceCalendar(timeZone);
   const [editor, setEditor] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
+  const [creation, setCreation] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
   const [saved, setSaved] = useState(false);
   const [refreshKey, refresh] = useState(Crypto.randomUUID);
   useEffect(() => { refresh(Crypto.randomUUID()); }, [calendar.month]);
   const board = useQuery(api.budget.evaluate, { workspaceId, refreshKey, month: calendar.month });
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
+  const shortcutOpened = useRef(false);
+  useEffect(() => {
+    if (!board || !initialCategoryId || shortcutOpened.current) return;
+    shortcutOpened.current = true;
+    const category = board.availableCategories.find(
+      (item) => item.id === initialCategoryId,
+    );
+    if (category)
+      setEditor({
+        key: Crypto.randomUUID(),
+        seed: {
+          workspaceId,
+          currency: board.currency,
+          month: board.currentMonth,
+          jar: null,
+          initialCategoryId,
+        },
+        categories: board.availableCategories,
+      });
+  }, [board, initialCategoryId, workspaceId]);
   const interact = useLocalEntryInteraction();
   if (!board || !categories) return <Screen><ActivityIndicator accessibilityLabel="Loading Budget" /></Screen>;
+  if (creation) return <BudgetCreation key={creation.key} seed={creation.seed} categories={creation.categories}
+    categoryColors={new Map(categories.map((category) => [category.id, theme[category.style.tone]]))}
+    onClose={() => { setCreation(null); refresh(Crypto.randomUUID()); }}
+    onSaved={() => { setCreation(null); refresh(Crypto.randomUUID()); setSaved(true); }} />;
   return (
     <>
       <BudgetBoard month={board.month} currency={board.currency} jars={board.jars} saved={saved}
@@ -31,7 +57,7 @@ export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string;
         onAdd={() => {
           if (board.month !== board.currentMonth) return;
           interact(); setSaved(false);
-          setEditor({ key: Crypto.randomUUID(), seed: { workspaceId, currency: board.currency, month: board.currentMonth, jar: null }, categories: board.availableCategories });
+          setCreation({ key: Crypto.randomUUID(), seed: { workspaceId, currency: board.currency, month: board.currentMonth, jar: null }, categories: board.availableCategories });
         }}
         onEdit={(jar) => {
           if (board.month !== board.currentMonth) return;

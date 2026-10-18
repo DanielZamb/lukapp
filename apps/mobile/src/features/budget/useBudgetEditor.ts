@@ -12,6 +12,7 @@ export type BudgetEditorSeed = {
   workspaceId: string;
   month: string;
   currency: string;
+  initialCategoryId?: string;
   jar: (BudgetJar & { revisionId: string }) | null;
 };
 export type BudgetTransport = {
@@ -23,7 +24,7 @@ export type BudgetTransport = {
 const rejection = z.object({ kind: z.literal("budget"), code: z.string() });
 
 export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTransport) {
-  const [categoryId, setCategoryId] = useState<string | null>(seed.jar?.category.id ?? null);
+  const [categoryId, setCategoryId] = useState<string | null>(seed.jar?.category.id ?? seed.initialCategoryId ?? null);
   const [amount, setAmount] = useState(seed.jar ? formatMoney({ currency: seed.currency, minorUnits: seed.jar.limitMinorUnits })
     .replace(`${seed.currency} `, "") : "");
   const [search, setSearch] = useState("");

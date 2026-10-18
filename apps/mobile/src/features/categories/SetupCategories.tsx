@@ -1,114 +1,121 @@
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { useRef } from "react";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { SecondaryButton, useUi, useTheme } from "../../ui/core";
-import { radius, spacing, touchTarget } from "../../ui/tokens";
-import { CategorySheet } from "./CategorySheet";
-import type { CategorySelection } from "./model";
-import { useCategoryPicker } from "./useCategoryPicker";
+import { useLocalEntryInteraction } from "../../local-auth/interaction";
+import { useTheme, useUi } from "../../ui/core";
+import { useSetupStyles } from "../setup/styles";
+import type { SetupCategory } from "../setup/model";
+import type { CategoryStyle } from "./model";
+import { categoryColor, starterCategories } from "./looks";
+import { RestyleSheet, type RestyleTarget } from "./SetupRestyleSheet";
 
 export function SetupCategories({
   selections,
   onChange,
   disabled,
 }: {
-  selections: CategorySelection[];
-  onChange: (selections: CategorySelection[]) => void;
+  selections: SetupCategory[];
+  onChange: (selections: SetupCategory[]) => void;
   disabled: boolean;
 }) {
-  const ui = useUi();
   const theme = useTheme();
-  const sheet = useRef<BottomSheetModal>(null);
-  const picker = useCategoryPicker(
-    { kind: "setup", selections, onChange },
-    () => sheet.current?.dismiss(),
-  );
+  const ui = useUi();
+  const styles = useSetupStyles();
+  const recordInteraction = useLocalEntryInteraction();
+  const [target, setTarget] = useState<RestyleTarget | null>(null);
+  const [looks, setLooks] = useState<Record<string, CategoryStyle>>({});
+  const names: SetupCategory[] = [
+    ...starterCategories.map(
+      (category): SetupCategory => ({ ...category, source: "starter" }),
+    ),
+    ...selections.filter((category) => category.source === "custom"),
+  ];
+  function commit(category: SetupCategory) {
+    recordInteraction();
+    setLooks((current) => ({ ...current, [category.name]: category.style }));
+    if (target?.kind === "create") onChange([...selections, category]);
+    else
+      onChange(
+        selections.map((item) =>
+          item.name === category.name ? category : item,
+        ),
+      );
+  }
   return (
-    <View style={ui.section}>
-      <Text style={ui.label}>1 · CATEGORIES</Text>
-      <Text style={ui.body}>Which categories do you spend on?</Text>
-      <Text style={ui.muted}>
-        Pick suggestions or add your own. They'll be saved when you start
-        tracking.
-      </Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-        {picker.allPresets?.map((preset) => {
+    <View style={styles.board}>
+      <View style={styles.row}>
+        <Text style={styles.label}>Your categories</Text>
+        <Text style={ui.muted}>{selections.length} of 12</Text>
+      </View>
+      <View style={styles.wrap}>
+        {names.map((original) => {
+          const category = {
+            ...original,
+            style: looks[original.name] ?? original.style,
+          };
           const selected = selections.some(
-            (s) => s.kind === "preset" && s.presetId === preset.id,
+            (item) => item.name === category.name,
           );
+          const color = categoryColor(category.style) ?? theme.primary;
           return (
             <Pressable
-              key={preset.id}
+              key={category.name}
               accessibilityRole="checkbox"
+              accessibilityLabel={category.name}
+              accessibilityHint="Long press to restyle"
               accessibilityState={{ checked: selected, disabled }}
               disabled={disabled}
               onPress={() => {
-                if (selected) picker.sheet.onSelect(`preset:${preset.id}`);
-                else {
-                  picker.sheet.onPreset(preset);
-                  sheet.current?.present();
-                }
+                recordInteraction();
+                if (selected)
+                  onChange(
+                    selections.filter((item) => item.name !== category.name),
+                  );
+                else if (selections.length < 12)
+                  onChange([...selections, category]);
               }}
-              style={{
-                minHeight: touchTarget,
-                padding: spacing.md,
-                borderWidth: 2,
-                borderColor: selected ? theme.primary : theme.border,
-                borderRadius: radius.full,
-                justifyContent: "center",
+              onLongPress={() => {
+                recordInteraction();
+                setTarget({ kind: "edit", category });
               }}
+              style={[
+                styles.chip,
+                selected && {
+                  borderWidth: 2,
+                  borderColor: color,
+                  backgroundColor: `${color}24`,
+                },
+              ]}
             >
-              <Text style={ui.body}>
-                {preset.name}
-                {selected ? " ✓" : ""}
-              </Text>
+              <Text style={{ fontSize: 17 }}>{category.style.emoji}</Text>
+              <Text style={styles.chipText}>{category.name}</Text>
             </Pressable>
           );
         })}
-      </View>
-      {picker.options?.map((option) => (
-        <View
-          key={option.key}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: spacing.sm,
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add your own category"
+          disabled={disabled}
+          onPress={() => {
+            recordInteraction();
+            setTarget({ kind: "create" });
           }}
+          style={[styles.chip, styles.own]}
         >
-          <Text style={[ui.body, { flex: 1, color: theme[option.style.tone] }]}>
-            {option.style.emoji} {option.name}
-          </Text>
-          <SecondaryButton
-            label="Restyle"
-            disabled={disabled}
-            accessibilityLabel={`Restyle ${option.name}`}
-            onPress={() => {
-              picker.sheet.onRestyle(option.key);
-              sheet.current?.present();
-            }}
-          />
-          <SecondaryButton
-            label="Remove"
-            disabled={disabled}
-            accessibilityLabel={`Remove ${option.name}`}
-            onPress={() => picker.sheet.onSelect(option.key)}
-          />
-        </View>
-      ))}
-      <SecondaryButton
-        label="Add your own"
-        disabled={disabled}
-        onPress={() => {
-          picker.sheet.onCreate();
-          sheet.current?.present();
-        }}
-      />
-      <Text style={ui.muted}>
-        {selections.length
-          ? `${selections.length} selected`
-          : "You can add categories later, too."}
-      </Text>
-      <CategorySheet {...picker.sheet} sheetRef={sheet} />
+          <Ionicons name="add" size={18} color={theme.foreground} />
+          <Text style={styles.chipText}>Your own</Text>
+        </Pressable>
+      </View>
+      <Text style={ui.muted}>Tap to pick. Hold one to restyle it.</Text>
+      {target && (
+        <RestyleSheet
+          target={target}
+          names={names.map(({ name }) => name)}
+          full={selections.length >= 12}
+          onCommit={commit}
+          onClose={() => setTarget(null)}
+        />
+      )}
     </View>
   );
 }

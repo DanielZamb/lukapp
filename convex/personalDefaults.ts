@@ -29,7 +29,15 @@ export async function readPersonalDefaults(ctx: QueryCtx, actor: Actor) {
   );
   if (!financialAccountProfile)
     throw new ConvexError({ code: "defaults_unavailable" });
-  return { workspace, financialAccountProfile };
+  return {
+    workspace,
+    financialAccountProfile,
+    purchaseAlertsConsent: defaults.purchaseAlertsConsent ?? false,
+    wantsBudgets: defaults.wantsBudgets ?? false,
+    ...(defaults.firstCategoryId
+      ? { firstCategoryId: defaults.firstCategoryId }
+      : {}),
+  };
 }
 
 export async function ensurePersonalDefaults(
@@ -40,6 +48,8 @@ export async function ensurePersonalDefaults(
     startingMinorUnits: number;
     categories?: CategorySelection[];
     timeZone: string;
+    purchaseAlertsConsent?: boolean;
+    wantsBudgets?: boolean;
   },
 ) {
   requireFunctionalCurrencyCode(args.functionalCurrency);
@@ -49,6 +59,10 @@ export async function ensurePersonalDefaults(
   ) {
     throw new ConvexError({ code: "starting_amount_invalid" });
   }
+  if ((args.categories?.length ?? 0) > 12)
+    throw new ConvexError({ code: "setup_category_limit" });
+  const purchaseAlertsConsent = args.purchaseAlertsConsent ?? false;
+  const wantsBudgets = args.wantsBudgets ?? false;
   const categorySetupSignature = JSON.stringify(
     (args.categories ?? [])
       .map((selection) => [
@@ -57,6 +71,7 @@ export async function ensurePersonalDefaults(
         selection.kind === "custom" ? selection.answer : null,
         selection.style.emoji,
         selection.style.tone,
+        ...(selection.style.color ? [selection.style.color] : []),
       ])
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   );
@@ -71,6 +86,8 @@ export async function ensurePersonalDefaults(
       existing.workspace.functionalCurrency !== args.functionalCurrency ||
       existing.workspace.timeZone !== timeZone ||
       defaults?.startingMinorUnits !== args.startingMinorUnits ||
+      existing.purchaseAlertsConsent !== purchaseAlertsConsent ||
+      existing.wantsBudgets !== wantsBudgets ||
       (defaults?.categorySetupSignature ?? "[]") !== categorySetupSignature
     ) {
       throw new ConvexError({
@@ -88,6 +105,7 @@ export async function ensurePersonalDefaults(
     functionalCurrency: args.functionalCurrency,
     timeZone,
   });
+  let firstCategoryId: string | undefined;
   for (const selection of args.categories ?? []) {
     const result = await createUserCategory(store, {
       actor,
@@ -100,6 +118,7 @@ export async function ensurePersonalDefaults(
         message: "Add a place for this money before continuing",
       });
     }
+    firstCategoryId ??= result.category.id;
   }
   const financialAccountProfile = await core.createFinancialAccountProfile({
     actor,
@@ -132,12 +151,26 @@ export async function ensurePersonalDefaults(
     financialAccountProfile.id,
   );
   if (!workspaceId || !profileId) throw new Error("Core returned invalid IDs");
+  const firstCategory = firstCategoryId
+    ? ctx.db.normalizeId("userCategories", firstCategoryId)
+    : null;
+  if (firstCategoryId && !firstCategory)
+    throw new Error("Core returned invalid category ID");
   await ctx.db.insert("personalDefaults", {
     ownerSubject: actor.userId,
     workspaceId,
     financialAccountProfileId: profileId,
     startingMinorUnits: args.startingMinorUnits,
     categorySetupSignature,
+    purchaseAlertsConsent,
+    wantsBudgets,
+    ...(firstCategory ? { firstCategoryId: firstCategory } : {}),
   });
-  return { workspace, financialAccountProfile };
+  return {
+    workspace,
+    financialAccountProfile,
+    purchaseAlertsConsent,
+    wantsBudgets,
+    ...(firstCategoryId ? { firstCategoryId } : {}),
+  };
 }
