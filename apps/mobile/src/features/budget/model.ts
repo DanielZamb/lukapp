@@ -14,10 +14,11 @@ export function jarPresentation(jar: BudgetJar) {
   };
 }
 
-export function recoveryPlansRowDetail(plans: readonly { title: string }[]) {
-  if (plans.length === 0) return "Start from an expense";
-  if (plans.length === 1) return plans[0].title;
-  return `${plans.length} plans`;
+export function recoveryPlansRowDetail(plans: readonly { title: string; remainingMinorUnits: number }[]) {
+  const activePlans = plans.filter((plan) => plan.remainingMinorUnits > 0);
+  if (activePlans.length === 0) return "Start from an expense";
+  if (activePlans.length === 1) return activePlans[0].title;
+  return `${activePlans.length} plans`;
 }
 
 export function monthLabel(month: string, format: "month" | "monthYear" = "monthYear") {
