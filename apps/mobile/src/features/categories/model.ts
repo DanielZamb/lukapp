@@ -34,8 +34,16 @@ export const defaultCategoryStyle: CategoryStyle = {
   emoji: "🏷️",
   tone: "primary",
 };
+export function categoryNameKey(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/\s+/g, " ");
+}
 export function selectionKey(selection: CategorySelection) {
   return selection.kind === "preset"
     ? `preset:${selection.presetId}`
-    : `custom:${selection.name.normalize("NFD").replace(/\p{M}/gu, "").trim().toLocaleLowerCase().replace(/\s+/g, " ")}`;
+    : `custom:${categoryNameKey(selection.name)}`;
 }

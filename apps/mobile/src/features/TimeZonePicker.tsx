@@ -1,14 +1,10 @@
-import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
-import { useMemo, useState } from "react";
-import { Text, View } from "react-native";
-import { Choice, Field, ui } from "../ui/core";
-import { spacing } from "../ui/tokens";
-import {
-  deviceTimeZone,
-  filterTimeZones,
-  orderedTimeZones,
-  timeZoneLabel,
-} from "./timeZones";
+import { useState } from "react";
+import { Pressable, Text } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { theme, ui } from "../ui/core";
+import { SearchSheet } from "./setup/SearchSheet";
+import { setupStyles as styles } from "./setup/styles";
+import { deviceTimeZone, orderedTimeZones, timeZoneLabel } from "./timeZones";
 
 export function TimeZonePicker({
   value,
@@ -19,36 +15,39 @@ export function TimeZonePicker({
   onChange: (timeZone: string) => void;
   disabled?: boolean;
 }) {
-  const [query, setQuery] = useState("");
-  const zones = useMemo(
-    () => filterTimeZones(orderedTimeZones(deviceTimeZone()), query),
-    [query],
-  );
+  const [open, setOpen] = useState(false);
   return (
-    <View style={ui.section}>
-      <Text style={ui.label}>3 · TIMEZONE</Text>
-      <Field
-        label="Search timezones"
-        helperText="Dates and months use this timezone."
-        accessibilityLabel="Search timezones"
-        value={query}
-        onChangeText={setQuery}
-        editable={!disabled}
-        InputComponent={BottomSheetTextInput}
-      />
-      <View style={{ gap: spacing.sm }}>
-        {zones.map((zone) => (
-          <Choice
-            key={zone}
-            label={timeZoneLabel(zone)}
-            detail={zone}
-            selected={value === zone}
-            onPress={() => {
-              if (!disabled) onChange(zone);
-            }}
-          />
-        ))}
-      </View>
-    </View>
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Timezone, ${value}`}
+        disabled={disabled}
+        onPress={() => setOpen(true)}
+        style={[styles.row, { minHeight: 48 }]}
+      >
+        <Text style={styles.label}>Timezone</Text>
+        <Text style={[ui.muted, { flex: 1, textAlign: "right" }]}>
+          {timeZoneLabel(value)}
+        </Text>
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={theme.mutedForeground}
+        />
+      </Pressable>
+      {open && (
+        <SearchSheet
+          label="Search timezones"
+          placeholder="Search timezones"
+          selected={value}
+          options={orderedTimeZones(deviceTimeZone()).map((code) => ({
+            code,
+            name: timeZoneLabel(code),
+          }))}
+          onSelect={onChange}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }

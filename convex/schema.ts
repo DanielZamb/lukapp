@@ -115,6 +115,9 @@ export default defineSchema({
     financialAccountProfileId: v.id("financialAccountProfiles"),
     startingMinorUnits: v.number(),
     categorySetupSignature: v.optional(v.string()),
+    purchaseAlertsConsent: v.optional(v.boolean()),
+    wantsBudgets: v.optional(v.boolean()),
+    firstCategoryId: v.optional(v.id("userCategories")),
   }).index("by_owner", ["ownerSubject"]),
   workspaces: defineTable({
     kind: v.literal("Personal"),

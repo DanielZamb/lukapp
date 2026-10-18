@@ -4,6 +4,7 @@ export type CategoryNature = "Expense" | "Income";
 export type NatureAnswer = "spend" | "receive" | "stillMine" | "payDebt";
 export type CategoryStyle = {
   emoji: string;
+  color?: string;
   tone: "primary" | "positive" | "warning";
 };
 export type CategorySelection =
