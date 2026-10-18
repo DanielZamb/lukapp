@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { useAction, useQuery } from "convex/react";
+import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
@@ -44,6 +45,21 @@ export function Recovery({ workspaceId, onBack, onViewPlans, onHome }: {
   const [view, setView] = useState<View>({ name: "entry" });
   const board = useQuery(api.savingsRecovery.evaluate, { workspaceId, refreshKey });
   const interact = useLocalEntryInteraction();
+  const back = () => {
+    if (view.name === "candidates" && view.parentPlanId) {
+      setView({ name: "plan", id: view.parentPlanId });
+    } else if (view.name === "plan" && board && board.plans.length > 1) {
+      setView({ name: "entry" });
+    } else if (view.name !== "activated" && view.name !== "moved") {
+      onBack();
+    }
+  };
+  useRecoveryBack(
+    view.name === "activated" || view.name === "moved"
+      || (view.name === "candidates" && view.parentPlanId !== null)
+      || (view.name === "plan" && !!board && board.plans.length > 1)
+      ? back : null,
+  );
   if (!board) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
   if (view.name === "draft") {
     return (
@@ -124,14 +140,14 @@ export function Recovery({ workspaceId, onBack, onViewPlans, onHome }: {
       <RecoveryPlanScreen
         plan={plan}
         month={board.currentMonth}
-        onBack={() => { if (board.plans.length > 1) setView({ name: "entry" }); else onBack(); }}
+        onBack={back}
         onMove={() => { interact(); setView({ name: "move", key: Crypto.randomUUID(), id: plan.id }); }}
         onFind={() => setView({ name: "candidates", parentPlanId: plan.id })}
       />
     );
   }
   if (view.name === "entry" && board.plans.length > 1) {
-    return <RecoveryPlanList plans={board.plans} onBack={onBack} onPlan={(id) => {
+    return <RecoveryPlanList plans={board.plans} onBack={back} onPlan={(id) => {
       interact();
       setView({ name: "plan", id });
     }} />;
@@ -142,7 +158,7 @@ export function Recovery({ workspaceId, onBack, onViewPlans, onHome }: {
       currency={board.currency}
       month={board.currentMonth}
       candidates={board.candidates}
-      onBack={() => { if (parentPlanId) setView({ name: "plan", id: parentPlanId }); else onBack(); }}
+      onBack={back}
       onStart={(candidate) => {
         interact();
         setView({ name: "draft", key: Crypto.randomUUID(), candidate, parentPlanId });
@@ -162,6 +178,8 @@ function Draft({
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
   const editor = useRecoveryEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved });
+  const back = () => { if (editor.canDismiss) onClose(); };
+  useRecoveryBack(back);
   return (
     <RecoveryDraft
       candidate={seed.candidate}
@@ -172,7 +190,7 @@ function Draft({
       onAmount={(value) => { interact(); editor.onAmount(value); }}
       onDestination={(id) => { interact(); editor.onDestination(id); }}
       onSave={() => { interact(); void editor.submit(); }}
-      onBack={onClose}
+      onBack={back}
     />
   );
 }
@@ -192,6 +210,8 @@ function Move({
   const move = useRecoveryMove({ workspaceId, plan, sources }, {
     move: contribute, reportFailure, newKey: Crypto.randomUUID, onMoved,
   });
+  const back = () => { if (move.canDismiss) onClose(); };
+  useRecoveryBack(back);
   return (
     <RecoveryMoveScreen
       plan={plan}
@@ -200,7 +220,15 @@ function Move({
       onSource={(id) => { interact(); move.onSource(id); }}
       onAmount={(value) => { interact(); move.onAmount(value); }}
       submit={async () => { interact(); await move.submit(); }}
-      onBack={onClose}
+      onBack={back}
     />
   );
+}
+
+function useRecoveryBack(onBack: (() => void) | null) {
+  const navigation = useNavigation();
+  usePreventRemove(onBack !== null, ({ data }) => {
+    if (data.action.type === "GO_BACK" || data.action.type === "POP") onBack?.();
+    else navigation.dispatch(data.action);
+  });
 }

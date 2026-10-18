@@ -3,6 +3,10 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import type { FunctionReturnType } from "convex/server";
 import { afterEach, expect, test, vi } from "vitest";
+import {
+  BaseNavigationContainer, createNavigationContainerRef, createNavigatorFactory,
+  StackActions, StackRouter, useNavigationBuilder,
+} from "@react-navigation/native";
 import { Header, ListRow, PrimaryButton, SecondaryButton } from "../../ui/core";
 import type { api } from "../api";
 import { Recovery } from "./Recovery";
@@ -16,6 +20,11 @@ vi.mock("react-native", () => ({
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
 }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
+vi.mock("@react-navigation/native", async () => {
+  const { createRequire } = await import("node:module");
+  const require = createRequire(import.meta.url);
+  return import(require.resolve("@react-navigation/core", { paths: [require.resolve("@react-navigation/native")] }));
+});
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "activation-key" }));
 vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => () => false }));
@@ -23,8 +32,19 @@ vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () =>
 const remote = vi.hoisted(() => ({ query: vi.fn(), activate: vi.fn<RecoveryEditorTransport["save"]>() }));
 vi.mock("convex/react", () => ({ useQuery: remote.query, useAction: () => remote.activate }));
 const navigation = vi.hoisted(() => ({ back: vi.fn(), dismissTo: vi.fn() }));
-vi.mock("expo-router", () => ({ router: navigation, Redirect: "Redirect" }));
+vi.mock("expo-router", async () => {
+  const { useNavigation } = await import("@react-navigation/native");
+  return { router: navigation, useNavigation, Redirect: "Redirect" };
+});
 vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { id: "workspace" } }) }));
+
+function TestNavigator({ children }: { children: React.ReactNode }) {
+  const { state, descriptors, NavigationContent } = useNavigationBuilder(StackRouter, { children });
+  return createElement(NavigationContent, null, state.routes.map((route) => descriptors[route.key].render()));
+}
+const Stack = createNavigatorFactory(TestNavigator)();
+const stack = createNavigationContainerRef();
+const Empty = () => null;
 
 const candidate = {
   journalEntryId: "dental", title: "Dental care", accountingDate: "2026-08-04",
@@ -51,14 +71,29 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
-async function open(plans: typeof plan[] = []) {
+async function open(plans: typeof plan[] = [], route = false, origin = "plans") {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   remote.query.mockReturnValue({ ...evaluation, plans });
   const onBack = vi.fn();
   const onViewPlans = vi.fn();
   const onHome = vi.fn();
-  await act(async () => { root = create(createElement(Recovery, { workspaceId: "workspace", onBack, onViewPlans, onHome })); });
+  navigation.back.mockImplementation(() => stack.goBack());
+  navigation.dismissTo.mockImplementation((path: string) => stack.dispatch(StackActions.popTo(path === "/" ? "index" : "plans")));
+  await act(async () => {
+    root = create(createElement(BaseNavigationContainer, {
+      ref: stack,
+      initialState: { index: 2, routes: [{ name: "index" }, { name: origin }, { name: "recovery" }] },
+      children: createElement(Stack.Navigator, null,
+        createElement(Stack.Screen, { name: "index", component: Empty }),
+        createElement(Stack.Screen, { name: "alerts", component: Empty }),
+        createElement(Stack.Screen, { name: "plans", component: Empty }),
+        createElement(Stack.Screen, { name: "recovery", children: () => route
+          ? createElement(RecoveryRoute)
+          : createElement(Recovery, { workspaceId: "workspace", onBack, onViewPlans, onHome }) }),
+      ),
+    }));
+  });
   if (!root) throw new Error("Recovery not mounted");
   return { screen: root.root, onBack, onViewPlans, onHome };
 }
@@ -112,6 +147,8 @@ test("activation keeps the draft locked and hides back until completion replaces
   await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
   expect(screen.findByType(Header).props.onBack).toBeUndefined();
   expect(screen.findByType(RecoveryDraft).props).toMatchObject({ editable: false, busy: true, canDismiss: false });
+  await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
+  expect(screen.findByType(RecoveryDraft).props.busy).toBe(true);
   await act(async () => {
     screen.findByType(RecoveryDraft).props.onMonths(12);
     screen.findByType(RecoveryDraft).props.onAmount("140.000");
@@ -163,12 +200,84 @@ test("several plans opens a plan list and back from a plan returns to the list",
   expect(onBack).toHaveBeenCalledOnce();
 });
 
-test("the route sends completion actions to Plans and home without retaining Recovery", async () => {
-  await open();
-  await act(async () => { root?.update(createElement(RecoveryRoute)); });
-  if (!root) throw new Error("Recovery not mounted");
-  const recovery = root.root.findByType(Recovery);
-  expect(root.root.findByType(Header).props.title).toBe("Expenses to recover");
-  await act(async () => { recovery.props.onViewPlans(); recovery.props.onHome(); });
-  expect(navigation.dismissTo.mock.calls).toEqual([["/plans"], ["/"]]);
+test.each(["plans", "alerts"])("View Plans replaces the stack from %s with Home then Plans", async (origin) => {
+  const { screen } = await open([], true, origin);
+  await act(async () => { screen.findByType(Recovery).props.onViewPlans(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans"]);
+  expect(stack.getRootState()?.index).toBe(1);
+  await act(async () => { stack.goBack(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index"]);
+});
+
+test("Back home leaves only /", async () => {
+  const { screen } = await open([], true, "alerts");
+  await act(async () => { screen.findByType(Recovery).props.onHome(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index"]);
+});
+
+test.each(["android", "ios"])("%s back follows draft, candidates, opening plan, list, then leaves Recovery", async (platform) => {
+  const back = () => platform === "android" ? stack.goBack() : stack.dispatch(StackActions.pop(1));
+  const { screen } = await open([plan, { ...plan, id: "appliance", title: "Home appliance" }], true);
+  await act(async () => { screen.findAllByType(ListRow)[1].props.onPress(); });
+  await act(async () => { screen.findByType(SecondaryButton).props.onPress(); });
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  await act(async () => { back(); });
+  expect(screen.findByType(RecoveryCandidates).props.candidates[0].title).toBe("Dental care");
+  await act(async () => { back(); });
+  expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("appliance");
+  await act(async () => { back(); });
+  expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(2);
+  await act(async () => { back(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans"]);
+});
+
+test.each([
+  { name: "no opening plan", plans: [] },
+  { name: "a single opening plan", plans: [plan] },
+])("system back unwinds the draft and candidates with $name, then leaves Recovery", async ({ plans }) => {
+  const { screen } = await open(plans, true);
+  if (plans.length) await act(async () => { screen.findByType(SecondaryButton).props.onPress(); });
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  await act(async () => { stack.goBack(); });
+  expect(screen.findByType(RecoveryCandidates).props.candidates[0].title).toBe("Dental care");
+  await act(async () => { stack.dispatch(StackActions.pop(1)); });
+  if (plans.length) {
+    expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+    await act(async () => { stack.goBack(); });
+  }
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans"]);
+});
+
+test.each([{ plans: [] }, { plans: [plan] }])("system back leaves the opening screen directly with $plans.length plans", async ({ plans }) => {
+  await open(plans, true);
+  await act(async () => { stack.goBack(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans"]);
+});
+
+test.each([
+  { origin: "plans", destination: "plans" },
+  { origin: "alerts", destination: "plans" },
+  { origin: "alerts", destination: "home" },
+])("pending and completed activation handle back from $origin before going to $destination", async ({ origin, destination }) => {
+  remote.activate.mockRejectedValueOnce(new Error("offline"));
+  const { screen } = await open([], true, origin);
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ pending: true, canDismiss: false });
+  remote.activate.mockImplementationOnce(async (request) => ({
+    replay: true,
+    plan: { ...request, id: "dental-plan", title: "Dental care", principalMinorUnits: 48_000_000,
+      impliedAnnualRateBps: 0, currency: "COP", activationMonth: "2026-10", createdBy: "owner", createdAt: 1 },
+  }));
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
+  expect(screen.findAllByType(RecoveryDraft)).toHaveLength(0);
+  expect(screen.findAllByType(Header)).toHaveLength(0);
+  expect(screen.findByType(PrimaryButton).props.label).toBe("View Plans");
+  await act(async () => {
+    screen.findByType(destination === "plans" ? PrimaryButton : SecondaryButton).props.onPress();
+  });
+  expect(stack.getRootState()?.routes.map((route) => route.name))
+    .toEqual(destination === "plans" ? ["index", "plans"] : ["index"]);
 });
