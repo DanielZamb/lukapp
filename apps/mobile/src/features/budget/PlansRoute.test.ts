@@ -1,12 +1,28 @@
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { getFunctionName, type FunctionReference, type FunctionReturnType } from "convex/server";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import PlansRoute from "../../../app/plans";
+import { api } from "../api";
 
-const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), timeZone: "America/Bogota" }));
+type RecoveryEvaluation = FunctionReturnType<typeof api.savingsRecovery.evaluate>;
+
+const state = vi.hoisted(() => ({
+  push: vi.fn(),
+  back: vi.fn(),
+  timeZone: "America/Bogota",
+  recovery: { month: "2026-10", currentMonth: "2026-10", currency: "COP", plans: [], candidates: [], destinations: [], sources: [] } as
+    RecoveryEvaluation | undefined,
+}));
 vi.mock("expo-router", () => ({ router: { push: state.push, back: state.back }, Redirect: "Redirect" }));
-vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { timeZone: state.timeZone } }) }));
+vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { id: "workspace", timeZone: state.timeZone } }) }));
+vi.mock("convex/react", () => ({
+  useQuery: (reference: FunctionReference<"query">, args: unknown) => {
+    if (getFunctionName(reference) === "savingsRecovery:evaluate") return state.recovery;
+    throw new Error(`Unexpected query ${getFunctionName(reference)} with ${JSON.stringify(args)}`);
+  },
+}));
 vi.mock("react-native", () => ({
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", View: "View", ScrollView: "ScrollView",
   AppState: { addEventListener: () => ({ remove: () => {} }) },
@@ -22,6 +38,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-01T02:00:00Z"));
   state.timeZone = "America/Bogota";
+  state.recovery = {
+    month: "2026-10", currentMonth: "2026-10", currency: "COP", plans: [], candidates: [], destinations: [], sources: [],
+  };
   state.push.mockClear();
   state.back.mockClear();
 });
@@ -32,12 +51,16 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+function textCopy(screen: ReactTestRenderer["root"]) {
+  return screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join(""));
+}
+
 test("Plans matches the settled landing using the workspace month with separate budget and recovery routes", async () => {
   await act(async () => { root = create(createElement(PlansRoute)); });
   if (!root) throw new Error("Plans not mounted");
   const screen = root.root;
-  expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join(""))).toEqual([
-    "LOOKING AHEAD", "Plans", "October budget", "This month's limits", "Savings recovery", "Emergency repair",
+  expect(textCopy(screen)).toEqual([
+    "LOOKING AHEAD", "Plans", "October budget", "This month's limits", "Savings recovery", "Start from an expense",
     "Budget is the October plan. Recovery is a sibling destination. It is not a budget row.",
   ]);
   expect(screen.findAll((node) => String(node.type) === "Icon").map((node) => node.props.name)).toEqual([
@@ -45,11 +68,55 @@ test("Plans matches the settled landing using the workspace month with separate 
   ]);
   await act(async () => {
     screen.findByProps({ accessibilityLabel: "October budget, This month's limits" }).props.onPress();
-    screen.findByProps({ accessibilityLabel: "Savings recovery, Emergency repair" }).props.onPress();
+    screen.findByProps({ accessibilityLabel: "Savings recovery, Start from an expense" }).props.onPress();
     screen.findByProps({ accessibilityLabel: "Back" }).props.onPress();
   });
   expect(state.push.mock.calls).toEqual([["/budget"], ["/recovery"]]);
   expect(state.back).toHaveBeenCalledOnce();
   await act(async () => { vi.advanceTimersByTime(3 * 60 * 60 * 1000 + 1); });
-  expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join(""))).toContain("November budget");
+  expect(textCopy(screen)).toContain("November budget");
+});
+
+test("Plans shows one recovery plan by title", async () => {
+  state.recovery = {
+    ...state.recovery!,
+    plans: [{
+      id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
+      destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
+      installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+      currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
+    }],
+  };
+  await act(async () => { root = create(createElement(PlansRoute)); });
+  if (!root) throw new Error("Plans not mounted");
+  expect(textCopy(root.root)).toContain("Emergency repair");
+  root.root.findByProps({ accessibilityLabel: "Savings recovery, Emergency repair" });
+});
+
+test("Plans summarizes several recovery plans", async () => {
+  const plan = {
+    id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
+    destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
+    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+    currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
+  };
+  state.recovery = { ...state.recovery!, plans: [plan, { ...plan, id: "plan-2", title: "Laptop repair" }] };
+  await act(async () => { root = create(createElement(PlansRoute)); });
+  if (!root) throw new Error("Plans not mounted");
+  expect(textCopy(root.root)).toContain("2 plans");
+  root.root.findByProps({ accessibilityLabel: "Savings recovery, 2 plans" });
+});
+
+test("Plans keeps the recovery row visible while evaluate is loading", async () => {
+  state.recovery = undefined;
+  await act(async () => { root = create(createElement(PlansRoute)); });
+  if (!root) throw new Error("Plans not mounted");
+  const copy = textCopy(root.root);
+  expect(copy).toEqual([
+    "LOOKING AHEAD", "Plans", "October budget", "This month's limits", "Savings recovery", "",
+    "Budget is the October plan. Recovery is a sibling destination. It is not a budget row.",
+  ]);
+  expect(copy).not.toContain("Emergency repair");
+  root.root.findByProps({ accessibilityLabel: "Savings recovery, " });
+  expect(root.root.findAll((node) => String(node.type) === "Icon").map((node) => node.props.name)).toContain("trending-up-outline");
 });
