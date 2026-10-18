@@ -1,5 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import {
   Choice,
   Field,
@@ -259,45 +259,75 @@ export function RecoveryMoveScreen(props: {
         eyebrow="RECOVERY CONTRIBUTION"
         onBack={props.canDismiss ? props.onBack : undefined}
       />
-      <ListGroup>
-        <ListRow title="To" value={props.plan.destinationName} />
-        <ListRow title="Counts toward" value={props.plan.title} />
-        <ListRow
-          title="Due this month"
-          value={recoveryMoney({ currency: props.plan.currency, minorUnits: props.plan.dueMinorUnits })}
-        />
-      </ListGroup>
-      <View style={ui.section}>
-        <Text style={ui.label}>FROM</Text>
-        {places.length ? places.map((place) => (
-          <Choice
-            key={place.id}
-            label={place.name}
-            selected={place.id === props.sourceId}
-            onPress={() => { if (props.editable) props.onSource(place.id); }}
+      <View style={styles.amountCard}>
+        <Text style={ui.muted}>Amount</Text>
+        <View style={styles.amountEntry}>
+          <Text style={[ui.hero, styles.amount]}>{props.plan.currency}</Text>
+          <TextInput
+            accessibilityLabel={`Amount in ${props.plan.currency}`}
+            keyboardType="decimal-pad"
+            value={props.amount}
+            onChangeText={props.onAmount}
+            editable={props.editable}
+            style={[ui.hero, styles.amount, styles.amountInput]}
+            cursorColor={theme.primary}
+            selectionColor={theme.primary}
           />
-        )) : (
-          <Text style={ui.muted}>Add another place before you can move money into this destination.</Text>
-        )}
+        </View>
+        {props.error ? <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text> : null}
       </View>
-      <Field
-        label={`Amount in ${props.plan.currency}`}
-        accessibilityLabel={`Amount in ${props.plan.currency}`}
-        keyboardType="decimal-pad"
-        value={props.amount}
-        onChangeText={props.onAmount}
-        editable={props.editable}
-        error={props.error}
-      />
-      <Text style={ui.muted}>
-        Progress changes only after this real account-to-account transfer posts.
-      </Text>
+      <ListGroup>
+        {places.length === 1 ? (
+          <ListRow title="From" value={places[0].name} icon="arrow-up-circle-outline" />
+        ) : (
+          <View>
+            <ListRow title="From" icon="arrow-up-circle-outline" />
+            <View style={styles.sources}>
+              {places.length ? places.map((place) => (
+                <Choice
+                  key={place.id}
+                  label={place.name}
+                  selected={place.id === props.sourceId}
+                  onPress={() => { if (props.editable) props.onSource(place.id); }}
+                />
+              )) : (
+                <Text style={ui.muted}>Add another place before you can move money into this destination.</Text>
+              )}
+            </View>
+          </View>
+        )}
+        <ListRow title="To" value={props.plan.destinationName} icon="arrow-down-circle-outline" />
+        <ListRow title="Counts toward" value={props.plan.title} icon="trending-up-outline" />
+      </ListGroup>
       <PrimaryButton
         label={props.busy ? "Moving…" : props.pending ? "Retry transfer" : "Post transfer"}
         disabled={!props.canSubmit || places.length === 0}
         pending={props.busy}
         onPress={() => { void props.submit(); }}
+        trailingIcon="checkmark"
       />
+      <Text style={ui.muted}>
+        Progress changes only after this real account-to-account transfer posts.
+      </Text>
+    </Screen>
+  );
+}
+
+export function RecoveryMoved(props: {
+  title: string;
+  detail: string;
+  onViewPlan: () => void;
+  onHome: () => void;
+}) {
+  return (
+    <Screen contentStyle={styles.completion}>
+      <View style={styles.completionIcon}>
+        <Ionicons name="checkmark" size={32} color={theme.primaryForeground} />
+      </View>
+      <Text accessibilityRole="header" style={styles.completionTitle}>{props.title}</Text>
+      <Text style={[ui.muted, styles.completionCopy]}>{props.detail}</Text>
+      <PrimaryButton label="View recovery plan" trailingIcon="trending-up-outline" onPress={props.onViewPlan} />
+      <SecondaryButton label="Back home" onPress={props.onHome} />
     </Screen>
   );
 }
@@ -335,6 +365,14 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
   },
   amount: { fontSize: 30, lineHeight: 36, letterSpacing: -0.6 },
+  amountEntry: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  amountInput: { flex: 1, minWidth: 0, padding: 0, minHeight: 44 },
+  sources: {
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
+  },
   legend: {
     flexDirection: "row",
     flexWrap: "wrap",

@@ -3,8 +3,8 @@ import { ConvexError } from "convex/values";
 import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import type { api } from "../api";
-import { formatMoney, localDate, parseMoney } from "../money";
-import type { RecoveryPlace, RecoveryPlanView } from "./model";
+import { localDate, parseMoney } from "../money";
+import { recoveryMoney, type RecoveryPlace, type RecoveryPlanView } from "./model";
 
 type Request = FunctionArgs<typeof api.savingsRecovery.recordContribution>;
 type Receipt = FunctionReturnType<typeof api.savingsRecovery.recordContribution>;
@@ -21,7 +21,7 @@ export function useRecoveryMove(
   transport: RecoveryMoveTransport,
 ) {
   const defaultSource = seed.sources.find((place) => place.id !== seed.plan.destinationFinancialAccountProfileId)
-    ?? seed.sources[0] ?? null;
+    ?? null;
   const [sourceId, setSourceId] = useState(defaultSource?.id ?? null);
   const [amount, setAmount] = useState(formatMinor(seed.plan.currency, seed.plan.dueMinorUnits));
   const [busy, setBusy] = useState(false);
@@ -82,7 +82,7 @@ export function useRecoveryMove(
   const canEdit = () => lifetime.current.active && !submitting.current && !request.current;
   return {
     sourceId, amount, busy, pending, error, editable,
-    canSubmit: !busy && (pending || (!!sourceId && minorUnits > 0)),
+    canSubmit: !busy && (pending || (!!sourceId && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
     canDismiss: !busy && !pending,
     onSource: (id: string) => { if (canEdit()) setSourceId(id); },
     onAmount: (value: string) => { if (canEdit()) setAmount(value); },
@@ -91,5 +91,5 @@ export function useRecoveryMove(
 }
 
 function formatMinor(currency: string, minorUnits: number) {
-  return formatMoney({ currency, minorUnits }).replace(`${currency} `, "");
+  return recoveryMoney({ currency, minorUnits }).replace(`${currency} `, "");
 }

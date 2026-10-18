@@ -88,7 +88,7 @@ export function movedCopy(input: {
     recoveredMinorUnits: input.recoveredMinorUnits,
     targetMinorUnits: input.targetMinorUnits,
   }) * 100);
-  const recovered = `${input.title} is now ${percent}% recovered. The savings balance stays separate from plan progress.`;
+  const recovered = `Your ${input.title} plan is now ${percent}% complete. The Savings account balance remains separate from plan progress.`;
   if (input.movedMinorUnits === input.countedMinorUnits) return recovered;
   const counted = recoveryMoney({ currency: input.currency, minorUnits: input.countedMinorUnits });
   return `${counted} counted toward ${input.title}. ${recovered}`;
