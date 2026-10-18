@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { capitalFlow, compactHistoryAmount, historyAmount, historyDate, historyListRow, searchHistory } from "./listModel";
+import { capitalFlow, compactHistoryAmount, historyAmount, historyDate, historyListRow } from "./listModel";
 import type { HistoryRow } from "./types";
 
 const row = {
@@ -20,23 +20,6 @@ test("list uses the primary stored emoji, plain place, workspace year, and rever
     amount: { currency: "USD", minorUnits: 150000 } }, [], places, "2025-12-31")).toMatchObject({
     subtitle: "August 23 · 💸 Income · Daily cash", amountLabel: "+$1.500",
   });
-});
-
-test.each(["weekly", "food", "family", " DAILY CASH ", "1264.25", "august 23, 2025", ""])("search matches %j", (query) => {
-  const result = searchHistory([historyListRow(row, categories, places, "2026-01-01")], query);
-  expect(result.map((item) => item.id)).toEqual(["posted"]);
-});
-
-test("search searches an older posting beyond the first 50 and totals only matched rows", () => {
-  const rows = Array.from({ length: 101 }, (_, index) => historyListRow({
-    ...row, id: String(index), title: index === 100 ? "Older receipt" : "Newer posting",
-    amount: { currency: "COP", minorUnits: index === 100 ? -125050 : 10000 },
-  }, categories, places, "2026-01-01"));
-  const matched = searchHistory(rows, "older receipt");
-  expect(matched.map((item) => item.id)).toEqual(["100"]);
-  expect(capitalFlow(matched)).toEqual({ out: 125050, inn: 0, net: -125050 });
-  expect(capitalFlow(rows)).toEqual({ out: 125050, inn: 1000000, net: 874950 });
-  expect(searchHistory(rows, "absent")).toEqual([]);
 });
 
 test.each([

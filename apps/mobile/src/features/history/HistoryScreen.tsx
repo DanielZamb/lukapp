@@ -6,27 +6,32 @@ import { theme, ui } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import { CapitalFlow } from "./CapitalFlow";
 import { HistoryListRow } from "./HistoryListRow";
-import { capitalFlow, historyListRow, searchHistory, type HistoryCategory, type HistoryPlace } from "./listModel";
+import { HistoryFilters } from "./HistoryFilters";
+import { filterHistory, sortHistory, type HistoryQuery, type SortDir, type SortKey } from "./filter";
+import { capitalFlow, historyListRow, type HistoryCategory, type HistoryPlace } from "./listModel";
 import type { HistoryRow } from "./types";
 
-export function HistoryScreen({ rows, total, categories, places, currentDate, currency, placeSelected, onClear, onEntry, onBack }: {
+export function HistoryScreen({ rows, total, categories, places, currentDate, currency, initialProfileId, onEntry, onBack }: {
   rows: HistoryRow[] | undefined;
   total: number | undefined;
   categories: HistoryCategory[];
   places: HistoryPlace[];
   currentDate: string;
   currency: string;
-  placeSelected: boolean;
-  onClear: () => void;
+  initialProfileId?: string;
   onEntry: (id: string) => void;
   onBack: () => void;
 }) {
-  const [search, setSearch] = useState("");
-  const listRows = useMemo(() => (rows ?? []).map((row) => historyListRow(row, categories, places, currentDate)),
-    [rows, categories, places, currentDate]);
-  const matched = useMemo(() => searchHistory(listRows, search), [listRows, search]);
+  const [query, setQuery] = useState<HistoryQuery>(() => ({ ...emptyQuery, profileIds: initialProfileId ? [initialProfileId] : [] }));
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "date", dir: "desc" });
+  const profileNames = useMemo(() => Object.fromEntries(places.map((place) => [place.id, place.name])), [places]);
+  const matched = useMemo(() => sortHistory(filterHistory(rows ?? [], query, { today: currentDate, profileNames }),
+    sort.key, sort.dir, profileNames).map((row) => historyListRow(row, categories, places, currentDate)),
+    [rows, query, sort, profileNames, categories, places, currentDate]);
   const { out, inn } = capitalFlow(matched);
   const loading = rows === undefined || total === undefined;
+  const filtered = query.search.trim() !== "" || query.profileIds.length > 0 || query.categoryIds.length > 0 ||
+    query.range !== "all" || query.customFrom !== null || query.customTo !== null;
   return <SafeAreaView style={ui.screen}>
     <FlatList
       data={loading ? [] : matched}
@@ -47,13 +52,16 @@ export function HistoryScreen({ rows, total, categories, places, currentDate, cu
         {!loading && <CapitalFlow key={`${out}-${inn}`} out={out} inn={inn} currency={currency} />}
         <View style={styles.search}>
           <Ionicons name="search-outline" size={18} color={theme.mutedForeground} />
-          <TextInput accessibilityLabel="Search transactions" placeholder="Search" value={search} onChangeText={setSearch}
+          <TextInput accessibilityLabel="Search transactions" placeholder="Search" value={query.search}
+            onChangeText={(search) => setQuery((current) => ({ ...current, search }))}
             placeholderTextColor={theme.mutedForeground} style={[ui.input, { flex: 1 }]} />
         </View>
+        <HistoryFilters query={query} onQuery={setQuery} sort={sort} onSort={setSort}
+          places={places} categories={categories} today={currentDate} />
         <View style={styles.count}>
           <Text style={styles.muted}>{loading ? "Loading history…" : `${matched.length} of ${total}`}</Text>
-          {(search.trim() !== "" || placeSelected) && <Pressable accessibilityRole="button" accessibilityLabel="Clear filters"
-            onPress={() => { setSearch(""); onClear(); }} style={styles.clear}>
+          {filtered && <Pressable accessibilityRole="button" accessibilityLabel="Clear filters"
+            onPress={() => setQuery(emptyQuery)} style={styles.clear}>
             <Text style={styles.clearText}>Clear filters</Text>
           </Pressable>}
         </View>
@@ -65,6 +73,8 @@ export function HistoryScreen({ rows, total, categories, places, currentDate, cu
     />
   </SafeAreaView>;
 }
+
+const emptyQuery: HistoryQuery = { search: "", profileIds: [], categoryIds: [], range: "all", customFrom: null, customTo: null };
 
 const styles = StyleSheet.create({
   headerContent: { gap: spacing.xl, marginBottom: spacing.md },
