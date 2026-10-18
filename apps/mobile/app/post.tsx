@@ -7,7 +7,7 @@ import {
   BottomSheetView,
   BottomSheetModalProvider,
 } from "@gorhom/bottom-sheet";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useConvex, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Keyboard, Platform, Text } from "react-native";
@@ -17,6 +17,7 @@ import { formatMoney, localDate, parseMoney } from "../src/features/money";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
+  batchPostingBudgetImpact,
   type PostingBudgetImpact,
 } from "../src/features/budget/postingImpact";
 import { defaultAccountingDate } from "../src/features/timeZones";
@@ -34,6 +35,7 @@ import {
   usePostingEditor,
   type IntakeBinding,
 } from "../src/features/posting/usePostingEditor";
+import { usePostingBatchStorage } from "../src/features/posting/postingBatchStorage";
 import { usePostingTransport } from "../src/features/posting/usePostingTransport";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
@@ -121,7 +123,30 @@ function PostMoney({
     };
   }, [candidateId, confirmOne, intake.consume, intake.fail, intake.read]);
   const transport = usePostingTransport(subject);
-  const batch = usePostingBatch(transport);
+  const batchStorage = usePostingBatchStorage(subject, workspace.id);
+  const convex = useConvex();
+  const active = useRef(true);
+  const batchDecision = useRef<((allow: boolean) => void) | null>(null);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+      batchDecision.current?.(false);
+    };
+  }, []);
+  const batch = usePostingBatch(transport, batchStorage, async (queue) => {
+    const hits = await batchPostingBudgetImpact(
+      queue.map((row) => row.command),
+      (input) => convex.query(api.budget.evaluate, input),
+    );
+    if (!active.current) return false;
+    if (!hits.length) return true;
+    Keyboard.dismiss();
+    return new Promise<boolean>((resolve) => {
+      batchDecision.current = resolve;
+      setImpact({ description: "Batch", hits });
+    });
+  });
   const [mode, setMode] = useState<"one" | "batch">("one");
   const [composing, setComposing] = useState(false);
   const [editingId, setEditingId] = useState<string | undefined>();
@@ -212,10 +237,10 @@ function PostMoney({
     placesValid &&
     !editor.pending &&
     !candidateId;
-  function saveToBatch() {
+  async function saveToBatch() {
     if (!canQueue) return false;
     const draft = editor.captureForBatch();
-    if (!draft || !batch.keep(draft, editingId)) return false;
+    if (!draft || !(await batch.keep(draft, editingId))) return false;
     editor.resetComposer();
     closeCompose();
     return true;
@@ -228,7 +253,7 @@ function PostMoney({
         onBatch={
           !candidateId && !editor.pending && !setup
             ? () => {
-                if (canQueue) saveToBatch();
+                if (canQueue) void saveToBatch();
                 setMode("batch");
               }
             : undefined
@@ -300,7 +325,7 @@ function PostMoney({
         }}
         onPost={() => {
           if (mode === "batch") {
-            saveToBatch();
+            void saveToBatch();
             return;
           }
           if (impact || !editor.canSubmit || setup) return;
@@ -321,16 +346,6 @@ function PostMoney({
         }}
         onDone={() => router.back()}
       />
-      {impact && (
-        <PostingImpactSheet
-          {...impact}
-          onReconsider={() => setImpact(null)}
-          onContinue={() => {
-            setImpact(null);
-            void editor.submit();
-          }}
-        />
-      )}
       {categoryEnabled && (
         <CategoryPicker
           key={editor.direction}
@@ -421,64 +436,91 @@ function PostMoney({
       </BottomSheetModal>
     </>
   );
-  if (mode === "one") return form;
-  return (
-    <BatchNativeStack
-      batch={batch}
-      currency={workspace.functionalCurrency}
-      composing={composing}
-      compose={<BottomSheetModalProvider>{form}</BottomSheetModalProvider>}
-      onCancel={closeCompose}
-      onAdd={() => {
-        editor.resetComposer();
-        setEditingId(undefined);
-        setComposing(true);
+  const impactSheet = impact && (
+    <PostingImpactSheet
+      {...impact}
+      onReconsider={() => {
+        setImpact(null);
+        batchDecision.current?.(false);
+        batchDecision.current = null;
       }}
-      onEdit={(item) => {
-        if (editor.editBatchDraft(item)) {
-          setEditingId(item.id);
-          setComposing(true);
-        }
-      }}
-      onBack={() => router.back()}
-      onOne={() => {
-        editor.resetComposer();
-        setMode("one");
-      }}
-      rowFor={(item: QueuedPosting) => {
-        const command = item.command;
-        const payload = command.payload;
-        const ids =
-          "userCategoryIds" in payload ? payload.userCategoryIds : undefined;
-        const primaryId =
-          "primaryUserCategoryId" in payload
-            ? payload.primaryUserCategoryId
-            : undefined;
-        const category = categories?.find(
-          (row) => row.id === (primaryId ?? ids?.[0]),
-        );
-        const profileId =
-          command.kind === "transfer"
-            ? command.payload.sourceFinancialAccountProfileId
-            : "financialAccountProfileId" in payload
-              ? payload.financialAccountProfileId
-              : undefined;
-        return {
-          category:
-            ids
-              ?.map(
-                (id) =>
-                  categories?.find((row) => row.id === id)?.name ??
-                  "Saved category",
-              )
-              .join(" · ") || "No category",
-          place:
-            profiles?.find((row) => row.id === profileId)?.name ?? "No account",
-          emoji: category?.style.emoji ?? "💰",
-          color: category ? theme[category.style.tone] : theme.primary,
-        };
+      onContinue={() => {
+        setImpact(null);
+        if (batchDecision.current) {
+          batchDecision.current(true);
+          batchDecision.current = null;
+        } else void editor.submit();
       }}
     />
+  );
+  if (mode === "one")
+    return (
+      <>
+        {form}
+        {impactSheet}
+      </>
+    );
+  return (
+    <>
+      <BatchNativeStack
+        batch={batch}
+        currency={workspace.functionalCurrency}
+        composing={composing}
+        compose={<BottomSheetModalProvider>{form}</BottomSheetModalProvider>}
+        onCancel={closeCompose}
+        onAdd={() => {
+          editor.resetComposer();
+          setEditingId(undefined);
+          setComposing(true);
+        }}
+        onEdit={(item) => {
+          if (editor.editBatchDraft(item)) {
+            setEditingId(item.id);
+            setComposing(true);
+          }
+        }}
+        onBack={() => router.back()}
+        onOne={() => {
+          editor.resetComposer();
+          setMode("one");
+        }}
+        rowFor={(item: QueuedPosting) => {
+          const command = item.command;
+          const payload = command.payload;
+          const ids =
+            "userCategoryIds" in payload ? payload.userCategoryIds : undefined;
+          const primaryId =
+            "primaryUserCategoryId" in payload
+              ? payload.primaryUserCategoryId
+              : undefined;
+          const category = categories?.find(
+            (row) => row.id === (primaryId ?? ids?.[0]),
+          );
+          const profileId =
+            command.kind === "transfer"
+              ? command.payload.sourceFinancialAccountProfileId
+              : "financialAccountProfileId" in payload
+                ? payload.financialAccountProfileId
+                : undefined;
+          return {
+            category:
+              ids
+                ?.map(
+                  (id) =>
+                    categories?.find((row) => row.id === id)?.name ??
+                    "Saved category",
+                )
+                .join(" · ") || "No category",
+            place:
+              profiles?.find((row) => row.id === profileId)?.name ??
+              "No account",
+            emoji: category?.style.emoji ?? "💰",
+            color: category ? theme[category.style.tone] : theme.primary,
+          };
+        }}
+      />
+      {impactSheet}
+    </>
   );
 }
 export default function PostRoute() {

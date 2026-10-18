@@ -595,3 +595,19 @@ test("a draft posted or removed by another editor is gone, never recreated under
   }
   expect(other.drafts.map((draft) => draft.id)).toEqual(["still-open"]);
 });
+
+test("batch-owned posting drafts stay out of the one-entry session and survive other draft operations", () => {
+  const queued = { id: "batch-row", command: expense };
+  const batch = { queue: [queued], receipts: { count: 0, net: 0 } };
+  const document: LocalEntryDocument = { v: 1, drafts: [], postingBatches: { workspace: batch } };
+  const begun = beginPostIn(document, { command: expense }, now, newId);
+  // The queue's idempotency key owns the saved draft even before its draftId is persisted.
+  expect(restoreFromDocument(begun.document, { workspaceId: "workspace", currency: "COP" }, now)).toEqual({ kind: "blank" });
+  expect(viewDocument(begun.document, "workspace", now).items).toEqual([]);
+  expect(countDraftsInMonth(begun.document, "workspace", { year: 2026, month: 10 }, now)).toBe(0);
+  const restored = parseLocalEntryDocument(JSON.parse(JSON.stringify(begun.document)), now).document;
+  expect(restored.postingBatches).toEqual({ workspace: batch });
+  const rejected = rejectPostIn(restored, begun.draft.id);
+  const kept = keepIn(rejected, { facts }, now, () => "another-draft");
+  expect(removeIn(kept.document, begun.draft.id).postingBatches).toEqual({ workspace: batch });
+});

@@ -1,10 +1,32 @@
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { usePostingBatch, type BatchDraft } from "./usePostingBatch";
 import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
 
+const memory = vi.hoisted(() => new Map<string, string>());
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: async (key: string) => memory.get(key) ?? null,
+  setItemAsync: async (key: string, value: string) => {
+    memory.set(key, value);
+  },
+  deleteItemAsync: async (key: string) => {
+    memory.delete(key);
+  },
+}));
+import { LocalInputLease } from "../../local-auth/localInput";
+import {
+  beginPostIn,
+  mutateLocalEntryDocument,
+  rejectPostIn,
+  removeIn,
+} from "../localEntryDrafts";
+import { createPostingBatchStorage } from "./postingBatchStorage";
+
+beforeEach(() => memory.clear());
+const lease = new LocalInputLease("owner", "session");
+const storage = () => createPostingBatchStorage(lease, "owner", "workspace");
 let root: ReactTestRenderer | undefined;
 afterEach(async () => {
   await act(async () => root?.unmount());
@@ -18,12 +40,25 @@ const account = {
 } as const;
 function transport() {
   let key = 0;
+  let postingId: string | undefined;
   return {
     load: vi.fn(async () => ({ kind: "none" as const })),
-    save: vi.fn(async (command, draftId) => ({
-      command,
-      id: draftId ?? command.payload.idempotencyKey,
-    })),
+    save: vi.fn<PostingTransport["save"]>(async (command, draftId) =>
+      mutateLocalEntryDocument(lease, "owner", (document, now) => {
+        const begun = beginPostIn(
+          document,
+          { command, draftId },
+          now,
+          () => command.payload.idempotencyKey,
+        );
+        postingId = begun.draft.id;
+        return {
+          document: begun.document,
+          write: true,
+          result: { id: begun.draft.id, command: begun.draft.command },
+        };
+      }),
+    ),
     post: vi.fn(async (command) => ({
       description:
         "description" in command.payload ? command.payload.description : "",
@@ -34,12 +69,27 @@ function transport() {
           command.payload.amount.minorUnits,
       },
     })),
-    clear: vi.fn(async () => {}),
-    abort: vi.fn(async () => {}),
+    clear: vi.fn(async () =>
+      mutateLocalEntryDocument(lease, "owner", (document) => ({
+        document: postingId ? removeIn(document, postingId) : document,
+        write: true,
+        result: undefined,
+      })),
+    ),
+    abort: vi.fn(async () =>
+      mutateLocalEntryDocument(lease, "owner", (document) => ({
+        document: postingId ? rejectPostIn(document, postingId) : document,
+        write: true,
+        result: undefined,
+      })),
+    ),
     newKey: () => `key-${++key}`,
   } satisfies PostingTransport;
 }
-async function open(api = transport()) {
+async function open(
+  api = transport(),
+  beforePost?: (queue: BatchDraft[]) => Promise<boolean>,
+) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let current:
     | {
@@ -47,10 +97,11 @@ async function open(api = transport()) {
         batch: ReturnType<typeof usePostingBatch>;
       }
     | undefined;
+  const batchStorage = storage();
   function Harness() {
     current = {
       editor: usePostingEditor(account, api),
-      batch: usePostingBatch(api),
+      batch: usePostingBatch(api, batchStorage, beforePost),
     };
     return null;
   }
@@ -78,7 +129,7 @@ async function queueEntry(
   await act(async () => {
     captured = session.get().editor.captureForBatch();
     if (!captured) throw new Error("Draft is not postable");
-    session.get().batch.keep(captured);
+    await session.get().batch.keep(captured);
     session.get().editor.resetComposer();
   });
   return captured;
@@ -123,7 +174,7 @@ test("cancelling edits leaves the queue untouched; saving replaces the selected 
   await act(async () => {
     const draft = session.get().editor.captureForBatch();
     if (!draft) throw new Error("Expected postable edit");
-    session.get().batch.keep(draft, item.id);
+    await session.get().batch.keep(draft, item.id);
   });
   expect(session.get().batch.queue).toHaveLength(1);
   expect(session.get().batch.queue[0]).toMatchObject({
@@ -193,4 +244,142 @@ test("a definitive rejection reopens the saved draft for correction", async () =
   expect(session.get().batch.error).toBe("Period is locked");
   expect(session.get().batch.queue[0].draftId).toBe("key-1");
   expect(session.get().batch.posted).toBeNull();
+});
+
+test("device storage restores adds, edits and removals with the exact idempotency keys", async () => {
+  let session = await open();
+  await queueEntry(session, "-10", "Before");
+  await queueEntry(session, "+20", "Remove");
+  const first = session.get().batch.queue[0];
+  await act(async () => {
+    session.get().editor.editBatchDraft(first);
+  });
+  await act(async () => {
+    session.get().editor.setDescription("After");
+  });
+  await act(async () => {
+    const draft = session.get().editor.captureForBatch();
+    if (!draft) throw new Error("Expected edit");
+    await session.get().batch.keep(draft, first.id);
+    await session.get().batch.remove(session.get().batch.queue[1].id);
+  });
+  const expected = session.get().batch.queue;
+  await act(async () => root?.unmount());
+  session = await open();
+  expect(session.get().batch.queue).toEqual(expected);
+  expect(session.get().batch.queue).toHaveLength(1);
+  expect(session.get().batch.queue[0].command).toMatchObject({
+    payload: { description: "After" },
+  });
+  expect(session.api.post).not.toHaveBeenCalled();
+});
+
+test("a restarted partial batch keeps only unconfirmed rows and retries the same saved command", async () => {
+  const api = transport();
+  const realPost = api.post.getMockImplementation()!;
+  api.post
+    .mockImplementationOnce(realPost)
+    .mockRejectedValueOnce(new Error("Response lost"));
+  let session = await open(api);
+  await queueEntry(session, "-10", "Taxi");
+  await queueEntry(session, "+20", "Refund");
+  await act(async () => {
+    await session.get().batch.postAll();
+  });
+  const expected = session.get().batch.queue;
+  expect(expected).toHaveLength(1);
+  await act(async () => root?.unmount());
+  const restarted = transport();
+  session = await open(restarted);
+  expect(session.get().batch.queue).toEqual(expected);
+  expect(session.get().batch.editable).toBe(false);
+  await act(async () => {
+    await session.get().batch.postAll();
+  });
+  expect(restarted.post.mock.calls[0][0]).toEqual(api.post.mock.calls[1][0]);
+  expect(session.get().batch.posted).toEqual({ count: 2, net: 1000 });
+  expect(
+    [...api.post.mock.calls, ...restarted.post.mock.calls].map(
+      ([command]) => command.payload.description,
+    ),
+  ).toEqual(["Taxi", "Refund", "Refund"]);
+  await act(async () => root?.unmount());
+  session = await open();
+  expect(session.get().batch.queue).toEqual([]);
+});
+
+test("an Initial balance rejected by accounting can be edited and posted through the real draft lifecycle", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(
+    new ConvexError({ kind: "accounting", message: "Period is locked" }),
+  );
+  const session = await open(api);
+  await act(async () => {
+    session.get().editor.setEntryType("initial");
+    session.get().editor.setAmount("10");
+  });
+  await act(async () => {
+    const draft = session.get().editor.captureForBatch();
+    if (!draft) throw new Error("Expected Initial balance");
+    await session.get().batch.keep(draft);
+  });
+  await act(async () => {
+    await session.get().batch.postAll();
+  });
+  const rejected = session.get().batch.queue[0];
+  expect(rejected.draftId).toBeUndefined();
+  await act(async () => {
+    session.get().editor.editBatchDraft(rejected);
+  });
+  await act(async () => {
+    session.get().editor.setAmount("20");
+  });
+  await act(async () => {
+    const draft = session.get().editor.captureForBatch();
+    if (!draft) throw new Error("Expected correction");
+    await session.get().batch.keep(draft, rejected.id);
+  });
+  await act(async () => {
+    await session.get().batch.postAll();
+  });
+  expect(api.post).toHaveBeenCalledTimes(2);
+  expect(api.post.mock.calls[1][0]).toMatchObject({
+    kind: "opening",
+    payload: { amount: { minorUnits: 2000 } },
+  });
+  expect(session.get().batch.queue).toEqual([]);
+});
+
+test("Post all waits for one batch budget decision before sending any entry", async () => {
+  let decide: ((value: boolean) => void) | undefined;
+  const check = vi.fn(
+    async (_queue: BatchDraft[]) =>
+      new Promise<boolean>((resolve) => {
+        decide = resolve;
+      }),
+  );
+  const session = await open(transport(), check);
+  await queueEntry(session, "-10", "Taxi");
+  await queueEntry(session, "-20", "Food");
+  let posting: Promise<void> | undefined;
+  await act(async () => {
+    posting = session.get().batch.postAll();
+  });
+  expect(check).toHaveBeenCalledTimes(1);
+  expect(check.mock.calls[0]).toEqual([session.get().batch.queue]);
+  expect(session.api.post).not.toHaveBeenCalled();
+  await act(async () => {
+    decide?.(false);
+    await posting;
+  });
+  expect(session.api.post).not.toHaveBeenCalled();
+  expect(session.get().batch.queue).toHaveLength(2);
+  await act(async () => {
+    posting = session.get().batch.postAll();
+  });
+  await act(async () => {
+    decide?.(true);
+    await posting;
+  });
+  expect(session.api.post).toHaveBeenCalledTimes(2);
 });

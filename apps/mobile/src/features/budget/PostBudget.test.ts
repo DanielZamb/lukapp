@@ -6,6 +6,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { getFunctionName, type FunctionReference } from "convex/server";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { LocalInput, LocalInputLease } from "../../local-auth/localInput";
 import PostRoute from "../../../app/post";
 import { BatchNativeStack } from "../posting/BatchNativeStack";
 import { PostingForm } from "../posting/PostingForm";
@@ -15,6 +16,11 @@ import { PostingImpactSheet } from "./PostingImpactSheet";
 import type { api } from "../api";
 import type { FunctionReturnType } from "convex/server";
 
+const memory = vi.hoisted(() => new Map<string, string>());
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: async (key: string) => memory.get(key) ?? null,
+  setItemAsync: async (key: string, value: string) => { memory.set(key, value); },
+}));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "DateTimePicker" }));
 vi.mock("@gorhom/bottom-sheet", () => ({
@@ -41,6 +47,11 @@ vi.mock("../posting/PlaceSheet", () => ({ PlaceSheet: () => null }));
 vi.mock("../posting/AccountSetupForm", () => ({ AccountSetupForm: () => null }));
 vi.mock("convex/react", () => ({
   useAction: () => vi.fn(),
+  useConvex: () => ({ query: async (_query: unknown, args: unknown) => {
+    batchBudgetArgs.push(args);
+    if (!budget) throw new Error("Budget unavailable");
+    return budget;
+  } }),
   useQuery: (query: FunctionReference<"query">, args: unknown) => {
     if (args === "skip") return undefined;
     switch (getFunctionName(query)) {
@@ -54,6 +65,7 @@ vi.mock("convex/react", () => ({
 let root: ReactTestRenderer | undefined;
 let budget: FunctionReturnType<typeof api.budget.evaluate> | undefined;
 let budgetArgs: unknown;
+let batchBudgetArgs: unknown[];
 let transport: ReturnType<typeof makeTransport>;
 function makeTransport() {
   let nextKey = 0;
@@ -70,6 +82,8 @@ function makeTransport() {
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  memory.clear();
+  batchBudgetArgs = [];
   transport = makeTransport();
   budgetArgs = undefined;
   budget = {
@@ -93,7 +107,7 @@ function text() {
   return root?.root.findAllByType(Text).map((node) => node.children.join("")).join("\n");
 }
 async function open() {
-  await act(async () => { root = create(createElement(PostRoute)); });
+  await act(async () => { root = create(createElement(LocalInput.Provider, { value: new LocalInputLease("owner", "session") }, createElement(PostRoute))); });
   await act(async () => {
     form().onAmountChange("-120.000,00");
     form().onDescriptionChange("Groceries");
@@ -241,4 +255,43 @@ test("batch route queues One, cancels modal edits, adds another, and posts throu
   expect(tape().batch.queue).toEqual([]);
   expect(tape().batch.posted).toEqual({ count: 2, net: -9000000 });
   expect(transport.clear).toHaveBeenCalledTimes(2);
+});
+
+
+test("Post all checks cumulative expenses and shows the existing confirmation once for the whole batch", async () => {
+  await open();
+  const { CategoryPicker } = await import("../categories/CategoryPicker");
+  const tape = () => {
+    if (!root) throw new Error("Post not mounted");
+    return root.root.findByType(BatchNativeStack).props;
+  };
+  await act(async () => {
+    form().onAmountChange("-6.000");
+    root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null });
+  });
+  await act(async () => form().onBatch());
+  await act(async () => tape().onAdd());
+  await act(async () => {
+    form().onAmountChange("-6.000");
+    form().onDescriptionChange("Second expense");
+    root?.root.findByType(DateTimePicker).props.onChange({}, new Date("2026-10-19T12:00:00"));
+    root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null });
+  });
+  await act(async () => form().onPost());
+  let posting: Promise<void> | undefined;
+  await act(async () => { posting = tape().batch.postAll(); });
+  expect(batchBudgetArgs).toEqual([{ workspaceId: "workspace", month: "2026-10" }]);
+  expect(root?.root.findAllByType(PostingImpactSheet)).toHaveLength(1);
+  expect(text()).toContain("Food 2K over");
+  expect(transport.save).not.toHaveBeenCalled();
+  await press("Reconsider");
+  await act(async () => { await posting; });
+  expect(tape().batch.queue).toHaveLength(2);
+  expect(transport.post).not.toHaveBeenCalled();
+  await act(async () => { posting = tape().batch.postAll(); });
+  await press("Continue anyway");
+  await act(async () => { await posting; });
+  expect(transport.post).toHaveBeenCalledTimes(2);
+  expect(root?.root.findAllByType(PostingImpactSheet)).toHaveLength(0);
+  expect(tape().batch.queue).toEqual([]);
 });
