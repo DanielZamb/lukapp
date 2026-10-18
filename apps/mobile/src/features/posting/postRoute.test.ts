@@ -1,6 +1,7 @@
 import * as React from "react";
-import { createElement, useImperativeHandle, type ComponentProps } from "react";
+import { createElement, useImperativeHandle, useState, type ComponentProps } from "react";
 import type { PostingFormProps } from "./PostingForm";
+import type { CategorySheetProps } from "../categories/CategorySheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { seedCandidate } from "../intake/devSeed";
@@ -97,7 +98,18 @@ vi.mock("./PostingForm", () => ({
     return createElement("view");
   },
 }));
-vi.mock("../categories/CategoryPicker", () => ({ CategoryPicker: "picker" }));
+vi.mock("../categories/CategorySheet", () => ({
+  CategorySheet: ({ sheetRef, ...props }: CategorySheetProps) => {
+    const [visible, setVisible] = useState(false);
+    useImperativeHandle(sheetRef, () => ({
+      present: () => setVisible(true),
+      dismiss: () => { setVisible(false); props.onDismiss(); },
+      snapToIndex: vi.fn(), snapToPosition: vi.fn(), expand: vi.fn(),
+      collapse: vi.fn(), close: vi.fn(), forceClose: vi.fn(),
+    }));
+    return visible ? createElement("category-sheet", props) : null;
+  },
+}));
 vi.mock("../categories/transactionSelection", () => ({
   canPostCategories: () => true,
   needsPrimary: () => false,
@@ -213,6 +225,36 @@ test("canceling Add a place preserves the unsaved Post without saving", async ()
   expect(routeBack).not.toHaveBeenCalled();
   expect(writes.save).not.toHaveBeenCalled();
   expect(writes.post).not.toHaveBeenCalled();
+});
+
+test("Android Back dismisses the unsaved category editor and preserves the Post composer", async () => {
+  platform.os = "android";
+  await mount();
+  await act(async () => {
+    formProps().onAmountChange("-7");
+    formProps().onDescriptionChange("PostingCheck-2122");
+    formProps().onCategory();
+  });
+  const categorySheet = () => {
+    if (!root) throw new Error("Post route is not mounted");
+    return root.root.find((node) => String(node.type) === "category-sheet");
+  };
+  await act(async () => categorySheet().props.onCreate());
+  await act(async () => categorySheet().props.onName("Dining"));
+  expect(categorySheet().props.editor).toMatchObject({ kind: "custom", name: "Dining" });
+  let handled = false;
+  await act(async () => { handled = back.handler?.() ?? false; });
+  expect(handled).toBe(true);
+  expect(root?.root.findAll((node) => String(node.type) === "category-sheet")).toHaveLength(0);
+  expect(formProps()).toMatchObject({ amount: "-7", description: "PostingCheck-2122", category: "Pick" });
+  expect(routeBack).not.toHaveBeenCalled();
+  expect(back.handler).toBeUndefined();
+  await act(async () => formProps().onCategory());
+  expect(categorySheet().props.editor).toBeNull();
+  expect(categorySheet().props.options).toEqual([]);
+  expect(writes.save).not.toHaveBeenCalled();
+  expect(writes.post).not.toHaveBeenCalled();
+  expect(confirmOne).not.toHaveBeenCalled();
 });
 
 test("a local entry draft passes Draft on this device", async () => {

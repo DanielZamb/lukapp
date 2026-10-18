@@ -1,14 +1,17 @@
 import * as React from "react";
-import { createElement, createRef } from "react";
+import { createElement, createRef, useState } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { CategorySheet, type CategorySheetProps } from "./CategorySheet";
 import { emojiFrom } from "./appearance";
+import { ScrollView as GestureScrollView } from "react-native-gesture-handler";
+import type { CategoryStyle } from "./model";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+vi.mock("react-native-gesture-handler", () => ({ ScrollView: "gesture-scroll" }));
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "sheet",
   BottomSheetScrollView: "sheet-scroll",
@@ -111,4 +114,32 @@ test.each([
   ["hello", null], ["café", null], ["🇨🇴🇨🇦", "🇨🇴"], ["1️⃣", "1️⃣"], ["🛍️", "🛍️"], ["🏳️‍🌈", "🏳️‍🌈"],
 ])("emoji keyboard parses %j", (input, expected) => {
   expect(emojiFrom(input)).toBe(expected);
+});
+
+test("the palette uses a sheet-compatible horizontal scroller and previews its last color without saving", async () => {
+  const value = props();
+  function Harness() {
+    const [style, setStyle] = useState<CategoryStyle>({ emoji: "🍔", tone: "primary", color: "h0" });
+    return createElement(CategorySheet, {
+      ...value, editor: { kind: "custom", name: "Dining", style }, onStyle: setStyle,
+    });
+  }
+  await act(async () => { root = create(createElement(Harness)); });
+  if (!root) throw new Error("No sheet");
+  const tree = root.root;
+  const strip = tree.findByType(GestureScrollView);
+  expect(strip.props.horizontal).toBe(true);
+  const swatches = strip.findAllByType("button");
+  expect(swatches.map((node) => node.props.accessibilityLabel)).toEqual([
+    "Color h0", "Color h15", "Color h30", "Color h45", "Color h60", "Color h75", "Color h90",
+    "Color h105", "Color h120", "Color h135", "Color h150", "Color h165", "Color h180", "Color h195",
+    "Color h210", "Color h225", "Color h240", "Color h255", "Color h270", "Color h285", "Color h300",
+    "Color h315", "Color h330", "Color h345", "Color cool-gray", "Color warm-gray", "Color brown", "Color olive",
+  ]);
+  await act(async () => swatches[27].props.onPress());
+  const preview = tree.findAllByType("text").find((node) => node.children.join("") === "Dining")?.parent;
+  expect(preview?.props.style).toContainEqual({ backgroundColor: "#55673224", borderColor: "#556732" });
+  expect(preview?.findAllByType("text").map((node) => node.children.join(""))).toEqual(["🍔", "Dining"]);
+  expect(tree.findAllByType("button").find((node) => node.props.accessibilityLabel === "Color olive")?.props.accessibilityState.selected).toBe(true);
+  expect(value.onConfirm).not.toHaveBeenCalled();
 });

@@ -5,7 +5,8 @@ import {
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import { useMemo, useState, type RefObject } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { PickerSheet, usePickerSheetStyles } from "../../ui/PickerSheet";
 import { Choice, PrimaryButton, SecondaryButton, useTheme, useUi } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";

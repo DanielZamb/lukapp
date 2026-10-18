@@ -7,6 +7,16 @@ import type { CategorySheet } from "./CategorySheet";
 import { CategoryPicker } from "./CategoryPicker";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
+const android = vi.hoisted(() => ({
+  os: "ios", busy: false, handler: undefined as (() => boolean) | undefined,
+}));
+vi.mock("react-native", () => ({
+  Platform: { get OS() { return android.os; } },
+  BackHandler: { addEventListener: (_event: string, handler: () => boolean) => {
+    android.handler = handler;
+    return { remove: () => { android.handler = undefined; } };
+  } },
+}));
 // Exercise the installed Gorhom modal, provider and portal. Only native drawing/animation is replaced.
 vi.mock("@gorhom/bottom-sheet", async () => ({
   BottomSheetModal: (await vi.importActual<{ default: typeof BottomSheetModal }>("@gorhom/bottom-sheet/src/components/bottomSheetModal/BottomSheetModal")).default,
@@ -37,7 +47,7 @@ vi.mock("@gorhom/bottom-sheet/src/components/bottomSheet", () => ({
   }),
 }));
 vi.mock("./useCategoryPicker", () => ({
-  useCategoryPicker: (_mode: unknown, onClose: () => void) => ({ sheet: { onDismiss: onClose } }),
+  useCategoryPicker: (_mode: unknown, onClose: () => void) => ({ sheet: { busy: android.busy, onDismiss: onClose } }),
 }));
 vi.mock("./CategorySheet", async () => {
   const { default: Modal } = await vi.importActual<{ default: typeof BottomSheetModal }>("@gorhom/bottom-sheet/src/components/bottomSheetModal/BottomSheetModal");
@@ -56,6 +66,9 @@ vi.mock("./CategorySheet", async () => {
 let root: ReactTestRenderer | undefined;
 let frames: FrameRequestCallback[];
 beforeEach(() => {
+  android.os = "ios";
+  android.busy = false;
+  android.handler = undefined;
   frames = [];
   vi.stubGlobal("__DEV__", false);
   vi.stubGlobal("React", React);
@@ -109,4 +122,30 @@ test("a visible picker dismisses and can reopen the actual modal portal", async 
   await act(async () => { root?.update(render(true, onClose)); });
   await flushFrames();
   expect(root?.root.findAll((node) => node.props.testID === "category-options")).toHaveLength(1);
+});
+
+test("Android Back consumes without dismissing while saving, then dismisses the actual portal when idle", async () => {
+  android.os = "android";
+  android.busy = true;
+  const onClose = vi.fn();
+  await act(async () => { root = create(render(true, onClose)); });
+  await flushFrames();
+  expect(android.handler?.()).toBe(true);
+  expect(root?.root.findAll((node) => node.props.testID === "category-options")).toHaveLength(1);
+  expect(onClose).not.toHaveBeenCalled();
+  android.busy = false;
+  await act(async () => { root?.update(render(true, onClose)); });
+  let handled = false;
+  await act(async () => { handled = android.handler?.() ?? false; });
+  expect(handled).toBe(true);
+  expect(content()).toBeNull();
+  expect(onClose).toHaveBeenCalledOnce();
+  await act(async () => { root?.update(render(false, onClose)); });
+  expect(android.handler).toBeUndefined();
+  await act(async () => { root?.update(render(true, onClose)); });
+  await flushFrames();
+  expect(root?.root.findAll((node) => node.props.testID === "category-options")).toHaveLength(1);
+  await act(async () => root?.unmount());
+  root = undefined;
+  expect(android.handler).toBeUndefined();
 });
