@@ -6,7 +6,7 @@ import { OverviewScreen } from "./OverviewScreen";
 
 export function Overview({ workspaceId, timeZone, onBack, onHistory, onCategory }: {
   workspaceId: string; timeZone: string;
-  onBack: () => void; onHistory: () => void; onCategory: () => void;
+  onBack: () => void; onHistory: () => void; onCategory: (categoryId: string) => void;
 }) {
   const { month } = useWorkspaceCalendar(timeZone);
   const entries = useQuery(api.accounting.listJournalEntries, { workspaceId });

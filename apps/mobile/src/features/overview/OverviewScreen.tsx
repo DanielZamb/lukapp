@@ -11,7 +11,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
   data: MonthOverview | undefined;
   onBack: () => void;
   onHistory: () => void;
-  onCategory: () => void;
+  onCategory: (categoryId: string) => void;
 }) {
   const [view, setView] = useState<"list" | "spend" | "remaining">("list");
   const symbol = data ? currencySymbol(data.currency) : "$";
@@ -42,7 +42,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
             const over = left !== null && left < 0;
             return (
               <Pressable key={category.id} accessibilityRole="button" accessibilityLabel={category.name}
-                onPress={onCategory} style={({ pressed }) => [styles.row, index === categories.length - 1 && styles.lastRow, pressed && styles.pressed]}>
+                onPress={() => onCategory(category.id)} style={({ pressed }) => [styles.row, index === categories.length - 1 && styles.lastRow, pressed && styles.pressed]}>
                 <CategoryCoin category={category} />
                 <Text style={styles.name}>{category.name}</Text>
                 <View style={styles.trail}>

@@ -55,7 +55,7 @@ async function press(label: string) {
   await act(async () => button.props.onPress());
 }
 
-test("the route reads Convex with the workspace month and navigates back, all-place history and Budget", async () => {
+test("the route reads Convex with the workspace month and navigates back, all-place history and the category look", async () => {
   await act(async () => { root = create(createElement(OverviewRoute)); });
   expect(provider.calendar).toHaveBeenCalledWith("America/Bogota");
   expect(provider.query.mock.calls.map(([reference, args]) => [getFunctionName(reference), args])).toEqual([
@@ -67,7 +67,7 @@ test("the route reads Convex with the workspace month and navigates back, all-pl
   expect(texts()).toEqual(expect.arrayContaining(["Net", "$500", "Out", "$1.5K", "In", "$2K", "Food", "$1.500", "500 left"]));
   await press("Back"); await press("Go to tx history"); await press("Food");
   expect(provider.back).toHaveBeenCalledOnce();
-  expect(provider.push.mock.calls).toEqual([["/history"], ["/budget"]]);
+  expect(provider.push.mock.calls).toEqual([["/history"], [{ pathname: "/category-look", params: { categoryId: "food" } }]]);
   provider.month = "2026-11";
   await act(async () => root?.update(createElement(OverviewRoute)));
   expect(texts().filter((value) => value === "$0")).toHaveLength(4);
