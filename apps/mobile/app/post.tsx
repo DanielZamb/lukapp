@@ -165,7 +165,6 @@ function PostMoney({
     recordInteraction();
     action();
   }
-  const selectedDate = setup?.date ?? editor.date;
   if (candidateId && missingCandidate)
     return (
       <Screen>
@@ -244,7 +243,9 @@ function PostMoney({
           placeSheet.current?.present();
         }}
         onCategory={() => setCategoryVisible(true)}
-        onDate={() => dateSheet.current?.present()}
+        onDate={() => {
+          if (!setup) dateSheet.current?.present();
+        }}
         onPost={() => {
           if (impact || !editor.canSubmit || setup) return;
           if (needsBudgetCheck) {
@@ -345,18 +346,14 @@ function PostMoney({
         enableDynamicSizing={false}
       >
         <BottomSheetView style={{ padding: spacing.xxl, gap: spacing.xl }}>
-          <Header title={setup ? "Starting date" : "Date occurred"} />
+          <Header title="Date occurred" />
           <DateTimePicker
-            value={new Date(`${selectedDate}T12:00:00`)}
+            value={new Date(`${editor.date}T12:00:00`)}
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={(_, selected) => {
               if (selected)
-                interaction(() => {
-                  if (setup)
-                    editor.setSetup({ ...setup, date: localDate(selected) });
-                  else editor.setDate(localDate(selected));
-                });
+                interaction(() => editor.setDate(localDate(selected)));
               if (Platform.OS !== "ios") dateSheet.current?.dismiss();
             }}
           />

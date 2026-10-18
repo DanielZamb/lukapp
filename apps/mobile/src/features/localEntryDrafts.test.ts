@@ -36,6 +36,7 @@ import {
   viewDocument,
   writeDocument,
   countDraftsInMonth,
+  factsFromCommand,
   type LocalEntryDocument,
   type LocalEntryFacts,
   type PostableCommand,
@@ -77,6 +78,20 @@ const opening = {
     accountingDate: "2026-10-17",
     description: "",
     idempotencyKey: "opening-key",
+  },
+} satisfies PostableCommand;
+const transfer = {
+  kind: "transfer",
+  payload: {
+    workspaceId: "workspace",
+    sourceFinancialAccountProfileId: "cash",
+    destinationFinancialAccountProfileId: "savings",
+    amount: { currency: "COP", minorUnits: 50000 },
+    accountingDate: "2026-10-17",
+    description: "Move",
+    idempotencyKey: "transfer-key",
+    userCategoryIds: ["food"],
+    primaryUserCategoryId: "food",
   },
 } satisfies PostableCommand;
 const setup = {
@@ -415,6 +430,13 @@ test("setup and opening posts append their own rows instead of replacing an expe
   expect(
     posted.document.drafts.find((draft) => draft.id === "setup-1"),
   ).toMatchObject({ status: "posting", command: setup });
+});
+
+test("factsFromCommand keeps transfer categories for a rejected retry", () => {
+  expect(factsFromCommand(transfer).categories).toEqual({
+    ids: ["food"],
+    primaryId: "food",
+  });
 });
 
 test("an accounting rejection reopens a money draft with its facts", () => {

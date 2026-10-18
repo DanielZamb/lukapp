@@ -654,6 +654,33 @@ test("place setup preserves its emoji in profile reads and idempotent retries", 
   ).rejects.toMatchObject({ data: { code: "account_setup_conflict" } });
 });
 
+test("place setup treats a missing emoji like an empty retry", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const base = {
+    workspaceId: workspace.id,
+    name: "Petty cash",
+    productKind: "cash" as const,
+    amount: { currency: "COP", minorUnits: 0 },
+    accountingDate: "2026-09-24",
+    idempotencyKey: "empty-emoji-setup",
+  };
+  const first = await t.action(api.accounting.setupFinancialAccountProfile, {
+    ...base,
+    emoji: "",
+  });
+  expect(first.financialAccountProfile.emoji).toBeUndefined();
+  expect(
+    await t.action(api.accounting.setupFinancialAccountProfile, {
+      ...base,
+      emoji: "",
+    }),
+  ).toEqual({ ...first, replay: true });
+  expect(
+    await t.action(api.accounting.setupFinancialAccountProfile, base),
+  ).toEqual({ ...first, replay: true });
+});
+
 test("Transfer retains category metadata without changing spending and rejects unknown categories", async () => {
   const { t, workspaceId, bank, card } = await fixture();
   const category = await t.action(api.accounting.createUserCategory, {
@@ -674,6 +701,11 @@ test("Transfer retains category metadata without changing spending and rejects u
   expect(result.lines.flatMap((line) => line.userCategories ?? [])).toEqual([
     { id: category.category.id, name: "Food" },
   ]);
+  const detail = await t.query(api.accounting.postedEntry, {
+    workspaceId,
+    journalEntryId: result.id,
+  });
+  expect(detail.row.detail).toBe("Bank → Card");
   const activity = await t.query(api.accounting.postedActivity, {
     workspaceId,
     month: "2026-09",

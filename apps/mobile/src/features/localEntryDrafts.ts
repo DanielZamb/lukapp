@@ -404,7 +404,12 @@ export function factsFromCommand(command: PostableCommand): LocalEntryFacts {
       description: payload.description,
       profileId: payload.sourceFinancialAccountProfileId,
       destinationId: payload.destinationFinancialAccountProfileId,
-      categories: { ids: [], primaryId: null },
+      categories: {
+        ids:
+          payload.userCategoryIds ??
+          (payload.userCategoryId ? [payload.userCategoryId] : []),
+        primaryId: payload.primaryUserCategoryId ?? null,
+      },
     };
   }
   const payload = command.payload;

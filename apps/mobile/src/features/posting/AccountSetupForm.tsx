@@ -105,7 +105,7 @@ export function AccountSetupForm(props: {
               accessibilityLabel="Balance today"
               value={value.amount}
               editable={props.editable}
-              keyboardType="decimal-pad"
+              keyboardType="numbers-and-punctuation"
               placeholder="0"
               onChangeText={(amount) => props.onChange({ ...value, amount })}
               InputComponent={BottomSheetTextInput}
@@ -168,15 +168,6 @@ export function AccountSetupForm(props: {
                 </Pressable>
               ))}
             </View>
-            <BottomSheetTextInput
-              accessibilityLabel="Custom emoji"
-              placeholder="Or type your own"
-              maxLength={32}
-              value={emojis.includes(value.emoji ?? "💰") ? "" : value.emoji}
-              editable={props.editable}
-              onChangeText={(emoji) => props.onChange({ ...value, emoji })}
-              style={ui.input}
-            />
             <PrimaryButton
               label="Use this"
               trailingIcon="checkmark"
