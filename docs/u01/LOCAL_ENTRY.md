@@ -6,7 +6,7 @@ The original ADR-0080 and `docs/research/mobile-access-device-loss-controls.md` 
 
 ## Implemented behavior
 
-`LocalEntryGate` sits inside Clerk and outside `ConvexProviderWithClerk`. Protected providers, queries, native sheets, and routes mount only after local entry succeeds. Cold entry always starts locked. Ordinary foreground inactivity and background time each have a two-minute limit. `/month-close` has a ten-minute foreground window and the same two-minute background limit. Leaving focus hides financial content immediately. Short background visits preserve the remaining foreground inactivity allowance. Entering `/settings` requires another unlock; the same local route rule covers future `/devices`, `/sessions`, `/security`, and `/export` destinations.
+`LocalEntryGate` sits inside Clerk and outside `ConvexProviderWithClerk`. Protected providers, queries, native sheets, and routes mount only after local entry succeeds. Cold entry always starts locked. Ordinary foreground inactivity and background time each have a two-minute limit. `/month-close` has a ten-minute foreground window and the same two-minute background limit. Leaving focus hides financial content immediately. Short background visits preserve the remaining foreground inactivity allowance. The profile page at `/settings` and its appearance controls preserve the current unlock. Entering `/devices`, `/sessions`, `/security`, or `/export` requires another unlock.
 
 The root records touches and scrolling. `useLocalEntryInteraction()` returns a callback for input owners to call on keyboard edits, which do not bubble through root touches. U02 owns that wiring in setup, posting, and category handlers. Independent presentation fixtures can render outside the gate.
 

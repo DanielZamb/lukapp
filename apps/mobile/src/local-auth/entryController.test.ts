@@ -127,10 +127,22 @@ test("two minutes in the background or notification shade requires re-entry", as
   }
 });
 
-test("security routes hide before effects and require fresh biometrics, never the prior app unlock", async () => {
+test("opening the profile and returning home preserves the unlocked session", async () => {
   const { gate, deps } = await opened();
-  expect(gate.needsPathUnlock("/settings")).toBe(true);
+  const lease = gate.unlockedInputLease();
+  expect(gate.needsPathUnlock("/settings")).toBe(false);
   gate.setPath("/settings");
+  expect(gate.getSnapshot()).toEqual({ state: { kind: "open" }, obscured: false });
+  gate.setPath("/");
+  expect(gate.getSnapshot()).toEqual({ state: { kind: "open" }, obscured: false });
+  expect(gate.unlockedInputLease()).toBe(lease);
+  expect(deps.unlock).toHaveBeenCalledOnce();
+});
+
+test.each(["/devices", "/sessions", "/security", "/export", "/security/biometry"])("%s hides before effects and requires fresh biometrics, never the prior app unlock", async path => {
+  const { gate, deps } = await opened();
+  expect(gate.needsPathUnlock(path)).toBe(true);
+  gate.setPath(path);
   expect(gate.isOpenFor(identity)).toBe(false);
   await gate.unlock();
   expect(gate.isOpenFor(identity)).toBe(true);

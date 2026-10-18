@@ -12,6 +12,7 @@ const sdk = vi.hoisted(() => ({
   enroll: vi.fn(async () => {}),
   writeMarker: vi.fn(async (_marker: InstallMarker) => {}),
   platform: "ios",
+  path: "/",
   listeners: new Map<string, (state: AppStateStatus) => void>(),
   addEventListener: vi.fn((event: string, listener: (state: AppStateStatus) => void) => {
     sdk.listeners.set(event, listener);
@@ -23,9 +24,10 @@ vi.mock("@clerk/expo", () => ({
   useAuth: () => sdk.identity,
   useClerk: () => ({ signOut: sdk.signOut }),
 }));
-vi.mock("expo-router", () => ({ usePathname: () => "/" }));
+vi.mock("expo-router", () => ({ usePathname: () => sdk.path }));
 vi.mock("react-native", () => ({
   ActivityIndicator: "spinner", Text: "text", View: "view",
+  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   Platform: { get OS() { return sdk.platform; } },
   AppState: { currentState: "active", addEventListener: sdk.addEventListener },
 }));
@@ -44,10 +46,12 @@ vi.mock("./nativeEntry", () => ({
   revealFinancialScreen: async () => {},
 }));
 vi.mock("../features/clearLocalInput", () => ({ clearLocalInput: async () => {} }));
-vi.mock("../ui/core", () => ({
-  Header: "header", Screen: "screen", PrimaryButton: "button", SecondaryButton: "button", useUi: () => ({}),
+vi.mock("../ui/core", async () => ({
+  Header: "header", Screen: "screen", PrimaryButton: "button", SecondaryButton: "button",
+  useUi: (await import("../ui/themeContext")).useUi,
 }));
 import { LocalEntryGate } from "./LocalEntryGate";
+import { ThemeProvider, useThemeContext } from "../ui/themeContext";
 
 let root: ReactTestRenderer | undefined;
 function FinancialScreen() { return createElement("div"); }
@@ -56,7 +60,49 @@ beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.clearAllMocks();
   sdk.platform = "ios";
+  sdk.path = "/";
   sdk.listeners.clear();
+});
+
+test.each(["ios", "android"])("%s keeps the session unlocked through profile navigation and live theme changes", async platform => {
+  sdk.platform = platform;
+  function ProfileRoute() {
+    const { mode, setMode } = useThemeContext();
+    return createElement("div", {
+      path: sdk.path,
+      mode,
+      onDark: () => setMode("dark"),
+      onLight: () => setMode("light"),
+    });
+  }
+  function App() {
+    return createElement(ThemeProvider, null, createElement(LocalEntryGate, {
+      children: createElement(ProfileRoute),
+      renderSignIn: () => createElement("sign-in"),
+    }));
+  }
+  await act(async () => { root = create(createElement(App)); });
+  if (!root) throw new Error("Gate not mounted");
+  await act(async () => root?.root.findByProps({ label: "Unlock Lukapp" }).props.onPress());
+  expect(root.root.findByType("div").props.path).toBe("/");
+  await act(async () => {
+    sdk.path = "/settings";
+    root?.update(createElement(App));
+  });
+  expect(root.root.findByType("div").props.path).toBe("/settings");
+  await act(async () => root?.root.findByType("div").props.onDark());
+  expect(root.root.findByType("div").props.mode).toBe("dark");
+  await act(async () => root?.root.findByType("div").props.onLight());
+  expect(root.root.findByType("div").props.mode).toBe("light");
+  await act(async () => {
+    sdk.path = "/";
+    root?.update(createElement(App));
+  });
+  expect(root.root.findByType("div").props.path).toBe("/");
+  expect(sdk.unlock).toHaveBeenCalledOnce();
+  expect(sdk.enroll).not.toHaveBeenCalled();
+  expect(sdk.signOut).not.toHaveBeenCalled();
+  expect(sdk.cancelPrompt).not.toHaveBeenCalled();
 });
 
 test.each(["ios", "android"])("%s registers only supported AppState events and removes them on unmount", async platform => {

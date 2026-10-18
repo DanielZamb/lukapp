@@ -30,7 +30,7 @@ export type EntryDependencies = {
 };
 
 function sensitivePath(path: string) {
-  return /^\/(settings|devices|sessions|security|export)(\/|$)/.test(path);
+  return /^\/(devices|sessions|security|export)(\/|$)/.test(path);
 }
 
 export class EntryController {
