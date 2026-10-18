@@ -7,7 +7,7 @@ import {
 } from "../src/features/activity";
 import { ActivityRows } from "../src/features/ActivityRows";
 import { formatMoney } from "../src/features/money";
-import { Header, PrimaryButton, Screen, SecondaryButton, ui } from "../src/ui/core";
+import { Header, PrimaryButton, Screen, ui } from "../src/ui/core";
 
 function Account({
   workspaceId,
@@ -53,7 +53,7 @@ function Account({
           onEntry={(entryId) => router.push({ pathname: "/entry", params: { entryId } })}
         />
       )}
-      <SecondaryButton label="View all activity" onPress={() => router.push({ pathname: "/history", params: { profileId } })} />
+      <PrimaryButton label="See in tx history" trailingIcon="receipt-outline" onPress={() => router.push({ pathname: "/history", params: { profileId } })} />
     </Screen>
   );
 }
