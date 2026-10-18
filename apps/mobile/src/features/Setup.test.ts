@@ -7,6 +7,7 @@ import {
   type ReactTestRenderer,
 } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { ConvexError } from "convex/values";
 import { Setup } from "./Setup";
 import { SetupCompletion } from "./setup/Completion";
 import {
@@ -263,7 +264,7 @@ test("Start tracking saves real setup answers once, with empty meaning zero and 
   });
 });
 
-test("comma cents parse exactly, malformed amounts stay editable, and uncertain retries preserve their payload", async () => {
+test("comma cents parse exactly, malformed amounts stay editable, and a thrown ensure unlocks an identical retry", async () => {
   const { complete } = await open();
   await reveal();
   await type("Starting amount", "1,234");
@@ -273,12 +274,64 @@ test("comma cents parse exactly, malformed amounts stay editable, and uncertain 
   await type("Starting amount", "1.500,25");
   backend.ensure.mockRejectedValueOnce(new Error("lost acknowledgement"));
   await press("Start tracking");
-  expect(node("Starting amount").props.editable).toBe(false);
+  expect(node("Starting amount").props.editable).toBe(true);
+  expect(node("Cancel setup").props.disabled).toBe(false);
+  expect(node("Start tracking").props.disabled).toBe(false);
+  expect(text()).toContain("Retry with the same answers.");
+  await type("Starting amount", "invalid edit");
+  await press("Food");
   await press("Start tracking");
   expect(
     backend.ensure.mock.calls.map(([payload]) => payload.startingMinorUnits),
   ).toEqual([150025, 150025]);
+  expect(backend.ensure.mock.calls[1][0]).toEqual(backend.ensure.mock.calls[0][0]);
   expect(complete).toHaveBeenCalledOnce();
+  expect(complete).toHaveBeenCalledWith(expect.objectContaining({
+    startingMinorUnits: 150025,
+    categories: [{ ...starterCategories[0], source: "starter" }],
+  }));
+});
+
+test("setup_conflict drops the saved request and allows edited answers to be submitted", async () => {
+  const { complete } = await open();
+  await reveal();
+  backend.ensure.mockRejectedValueOnce(new ConvexError({ code: "setup_conflict" }));
+  await press("Start tracking");
+
+  expect(node("Cancel setup").props.disabled).toBe(false);
+  expect(node("Starting amount").props.editable).toBe(true);
+  expect(node("Start tracking").props.disabled).toBe(false);
+  expect(text()).toContain("Setup was already saved with different answers.");
+  await type("Starting amount", "25");
+  await press("USD");
+  await press("Start tracking");
+
+  expect(backend.ensure.mock.calls.map(([payload]) => ({
+    currency: payload.functionalCurrency,
+    amount: payload.startingMinorUnits,
+  }))).toEqual([
+    { currency: "COP", amount: 0 },
+    { currency: "USD", amount: 2500 },
+  ]);
+  expect(complete).toHaveBeenCalledWith(expect.objectContaining({
+    currency: "USD",
+    startingMinorUnits: 2500,
+  }));
+});
+
+test.each([
+  { failure: "setup_conflict", error: new ConvexError({ code: "setup_conflict" }) },
+  { failure: "thrown ensure", error: new Error("lost acknowledgement") },
+])("$failure leaves Cancel enabled and dismissal calls onCancel", async ({ error }) => {
+  const { cancel, complete } = await open();
+  await reveal();
+  backend.ensure.mockRejectedValueOnce(error);
+  await press("Start tracking");
+  expect(node("Cancel setup").props.disabled).toBe(false);
+  await press("Cancel setup");
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(complete).not.toHaveBeenCalled();
+  expect(nodes("Start tracking")).toHaveLength(0);
 });
 
 test("Cancel setup and pan dismissal leave without saving", async () => {

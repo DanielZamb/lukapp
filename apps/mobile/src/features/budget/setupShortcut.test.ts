@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { getFunctionName, type FunctionReference } from "convex/server";
 import { afterEach, expect, test, vi } from "vitest";
 import { Budget } from "./Budget";
 import { BudgetEditorSheet } from "./BudgetEditorSheet";
@@ -18,7 +19,8 @@ const backend = vi.hoisted(() => ({
   },
 }));
 vi.mock("convex/react", () => ({
-  useQuery: () => backend.board,
+  useQuery: (reference: FunctionReference<"query">) =>
+    getFunctionName(reference) === "budget:evaluate" ? backend.board : [],
   useAction: () => vi.fn(),
 }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "test-key" }));

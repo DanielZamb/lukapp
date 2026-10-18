@@ -15,7 +15,7 @@ let month = "2026-10";
 const queries = vi.fn();
 const save = vi.fn<BudgetTransport["save"]>();
 const back = vi.fn();
-vi.mock("expo-router", () => ({ router: { back: () => back() }, Redirect: "Redirect" }));
+vi.mock("expo-router", () => ({ router: { back: () => back() }, Redirect: "Redirect", useLocalSearchParams: () => ({}) }));
 vi.mock("expo-crypto", () => {
   let sequence = 0;
   return { randomUUID: () => `key-${++sequence}` };

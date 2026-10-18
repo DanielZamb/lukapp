@@ -7,8 +7,10 @@ import {
 } from "@gorhom/bottom-sheet";
 import { useAction, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
+import { ConvexError } from "convex/values";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { z } from "zod";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { Header, PrimaryButton, theme, ui } from "../ui/core";
@@ -33,6 +35,7 @@ import { SearchSheet, SetupBackdrop } from "./setup/SearchSheet";
 import { setupStyles as styles } from "./setup/styles";
 
 type SetupRequest = FunctionArgs<typeof api.accounting.ensurePersonalDefaults>;
+const setupConflict = z.object({ code: z.literal("setup_conflict") });
 export function Setup({
   onComplete,
   onCancel,
@@ -58,7 +61,6 @@ export function Setup({
   const [starting, setStarting] = useState("");
   const [wantsBudgets, setWantsBudgets] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const saving = useRef(false);
   const completed = useRef(false);
@@ -80,7 +82,7 @@ export function Setup({
   function advance(next: number) {
     setStage((current) => Math.max(current, next));
   }
-  const disabled = busy || pending;
+  const disabled = busy;
   function chooseCurrency(code: string) {
     interact();
     setCurrency(code);
@@ -97,38 +99,35 @@ export function Setup({
     /* Keep incomplete input editable. */
   }
   async function finish() {
-    if (
-      saving.current ||
-      !presets ||
-      !categories.length ||
-      !currencyChosen ||
-      consent === null
-    )
-      return;
+    if (saving.current) return;
     interact();
     setError("");
     try {
-      const startingMinorUnits = startingAmount(starting);
-      const submission = request.current ?? {
-        payload: {
-          functionalCurrency: currency,
-          startingMinorUnits,
-          categories: setupSelections(categories, presets),
-          timeZone,
-          purchaseAlertsConsent: consent,
-          wantsBudgets,
-        },
-        summary: {
-          categories,
-          currency,
-          startingMinorUnits,
-          purchaseAlertsConsent: consent,
-          wantsBudgets,
-        },
-      };
+      let submission = request.current;
+      if (!submission) {
+        if (!presets || !categories.length || !currencyChosen || consent === null)
+          return;
+        const startingMinorUnits = startingAmount(starting);
+        submission = {
+          payload: {
+            functionalCurrency: currency,
+            startingMinorUnits,
+            categories: setupSelections(categories, presets),
+            timeZone,
+            purchaseAlertsConsent: consent,
+            wantsBudgets,
+          },
+          summary: {
+            categories,
+            currency,
+            startingMinorUnits,
+            purchaseAlertsConsent: consent,
+            wantsBudgets,
+          },
+        };
+      }
       saving.current = true;
       setBusy(true);
-      setPending(true);
       request.current = submission;
       const result = await ensure(submission.payload);
       completed.current = true;
@@ -139,13 +138,23 @@ export function Setup({
       });
     } catch (error) {
       if (reportFailure(error)) return;
-      setError(
-        request.current
-          ? "Setup could not be confirmed. Retry with the same answers."
-          : error instanceof Error
-            ? error.message
-            : "Setup could not finish.",
-      );
+      if (
+        error instanceof ConvexError &&
+        setupConflict.safeParse(error.data).success
+      ) {
+        request.current = null;
+        setError(
+          "Setup was already saved with different answers. You can edit your answers or cancel.",
+        );
+      } else {
+        setError(
+          request.current
+            ? "Setup could not be confirmed. Retry with the same answers."
+            : error instanceof Error
+              ? error.message
+              : "Setup could not finish.",
+        );
+      }
     } finally {
       saving.current = false;
       setBusy(false);
@@ -162,8 +171,10 @@ export function Setup({
         backdropComponent={disabled ? undefined : SetupBackdrop}
         backgroundStyle={{ backgroundColor: theme.background }}
         onDismiss={() => {
-          if (!completed.current && !saving.current && !request.current)
+          if (!completed.current && !saving.current) {
+            request.current = null;
             onCancel();
+          }
         }}
       >
         <BottomSheetScrollView
@@ -356,7 +367,7 @@ export function Setup({
                 label="Start tracking"
                 trailingIcon="checkmark"
                 pending={busy}
-                disabled={!categories.length || !presets}
+                disabled={!request.current && (!categories.length || !presets)}
                 onPress={() => void finish()}
               />
               {!categories.length && (
