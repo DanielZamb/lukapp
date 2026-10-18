@@ -146,6 +146,27 @@ test("a custom end overrides the quick range while bounds stay inclusive", () =>
   expect(bounded).toEqual([corpus[0]]);
 });
 
+test("search matches row detail such as income labels and transfer place lines", () => {
+  const transfer = row({
+    id: "xfer",
+    date: "2026-08-20",
+    title: "Move cash",
+    detail: "Bank → Cash",
+    financialAccountProfileId: "cash",
+    amount: { currency: "COP", minorUnits: 200_000 },
+  });
+  const income = row({
+    id: "inc",
+    date: "2026-08-21",
+    title: "Deposit",
+    detail: "Income",
+    userCategories: [],
+    amount: { currency: "COP", minorUnits: 50_000 },
+  });
+  expect(filterHistory([transfer], { ...baseQuery(), search: "bank" }, context)).toEqual([transfer]);
+  expect(filterHistory([income], { ...baseQuery(), search: "income" }, context)).toEqual([income]);
+});
+
 test("search matches description, categories, place, date label, and major-unit digits", () => {
   expect(
     filterHistory(corpus, { ...baseQuery(), search: "groceries" }, context),

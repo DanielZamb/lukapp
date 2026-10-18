@@ -127,6 +127,7 @@ function searchHaystack(
   const workspaceYear = Number(context.today.slice(0, 4));
   return [
     row.title,
+    row.detail,
     ...row.userCategories.map((category) => category.name),
     profileName(row, context.profileNames),
     majorUnitDigits(row.amount),

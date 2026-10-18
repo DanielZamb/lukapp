@@ -1,5 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme, ui } from "../../ui/core";
@@ -11,25 +11,35 @@ import { filterHistory, sortHistory, type HistoryQuery, type SortDir, type SortK
 import { capitalFlow, historyListRow, type HistoryCategory, type HistoryPlace } from "./listModel";
 import type { HistoryRow } from "./types";
 
-export function HistoryScreen({ rows, total, categories, places, currentDate, currency, initialProfileId, onEntry, onBack }: {
+export function HistoryScreen({ rows, scopedRows, total, categories, places, currentDate, currency, initialProfileId, onScopedProfileId, onEntry, onBack }: {
   rows: HistoryRow[] | undefined;
+  scopedRows: HistoryRow[] | undefined;
   total: number | undefined;
   categories: HistoryCategory[];
   places: HistoryPlace[];
   currentDate: string;
   currency: string;
   initialProfileId?: string;
+  onScopedProfileId?: (profileId: string | undefined) => void;
   onEntry: (id: string) => void;
   onBack: () => void;
 }) {
   const [query, setQuery] = useState<HistoryQuery>(() => ({ ...emptyQuery, profileIds: initialProfileId ? [initialProfileId] : [] }));
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "date", dir: "desc" });
+  const singleProfileId = query.profileIds.length === 1 ? query.profileIds[0] : undefined;
+  useEffect(() => { onScopedProfileId?.(singleProfileId); }, [singleProfileId, onScopedProfileId]);
   const profileNames = useMemo(() => Object.fromEntries(places.map((place) => [place.id, place.name])), [places]);
-  const matched = useMemo(() => sortHistory(filterHistory(rows ?? [], query, { today: currentDate, profileNames }),
+  const filterQuery = useMemo(
+    () => (singleProfileId !== undefined ? { ...query, profileIds: [] } : query),
+    [query, singleProfileId],
+  );
+  const filterRows = singleProfileId !== undefined ? (scopedRows ?? []) : (rows ?? []);
+  const matched = useMemo(() => sortHistory(filterHistory(filterRows, filterQuery, { today: currentDate, profileNames }),
     sort.key, sort.dir, profileNames).map((row) => historyListRow(row, categories, places, currentDate)),
-    [rows, query, sort, profileNames, categories, places, currentDate]);
+    [filterRows, filterQuery, sort, profileNames, categories, places, currentDate]);
   const { out, inn } = capitalFlow(matched);
-  const loading = rows === undefined || total === undefined;
+  const loading = rows === undefined || total === undefined ||
+    (singleProfileId !== undefined && scopedRows === undefined);
   const filtered = query.search.trim() !== "" || query.profileIds.length > 0 || query.categoryIds.length > 0 ||
     query.range !== "all" || query.customFrom !== null || query.customTo !== null;
   return <SafeAreaView style={ui.screen}>

@@ -94,7 +94,8 @@ test("detail shows category/primary, signed amount, confirmation and links witho
 });
 
 function historyProps() { return {
-  rows: undefined, total: undefined, categories: [{ id: "food", name: "Food", style: { emoji: "🥑", tone: "primary" } }],
+  rows: undefined, scopedRows: undefined, total: undefined,
+  categories: [{ id: "food", name: "Food", style: { emoji: "🥑", tone: "primary" } }],
   places: [{ id: "cash", name: "Daily" }], currentDate: "2026-10-18", currency: "COP",
   onEntry: vi.fn(), onBack: vi.fn(),
 } satisfies Parameters<typeof HistoryScreen>[0]; }
@@ -123,7 +124,8 @@ test("history distinguishes loading, empty workspace, and no matches", async () 
 });
 
 test("history matches the prototype row, uses primary for money in, and navigates to the entry", async () => {
-  const props = { ...historyProps(), rows: [{ ...detail.row, financialAccountProfileId: "cash", reversed: true }], total: 3, initialProfileId: "cash" };
+  const cashRow = { ...detail.row, financialAccountProfileId: "cash", reversed: true };
+  const props = { ...historyProps(), rows: [cashRow], scopedRows: [cashRow], total: 3, initialProfileId: "cash" };
   await act(async () => { root = create(createElement(HistoryScreen, props)); });
   expect(text()).toContain("ACROSS ALL PLACES\nTx history");
   expect(text()).toContain("1 of 3");
@@ -133,9 +135,8 @@ test("history matches the prototype row, uses primary for money in, and navigate
   expect(props.onEntry).toHaveBeenCalledWith("entry");
   await act(async () => button("Go back").props.onPress());
   expect(props.onBack).toHaveBeenCalledOnce();
-  await act(async () => root?.update(createElement(HistoryScreen, {
-    ...props, rows: [{ ...detail.row, financialAccountProfileId: "cash", userCategories: [], primaryUserCategoryId: undefined, detail: "Income", amount: { currency: "USD", minorUnits: 150025 } }],
-  })));
+  const incomeRow = { ...detail.row, financialAccountProfileId: "cash", userCategories: [], primaryUserCategoryId: undefined, detail: "Income", amount: { currency: "USD", minorUnits: 150025 } };
+  await act(async () => root?.update(createElement(HistoryScreen, { ...props, rows: [incomeRow], scopedRows: [incomeRow] })));
   expect(text()).toContain("💸 Income");
   expect(text()).toContain("+$1.500,25");
   const amount = root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1.500,25");
@@ -224,7 +225,10 @@ test("chips wrap with chevrons; one dismissible sheet; sort flips active keys an
 });
 
 test("places multi-pick, empty means all, and clear removes the initial place and search", async () => {
-  await act(async () => { root = create(createElement(HistoryScreen, { ...filterProps(), initialProfileId: "cash" })); });
+  const cashOnly = filterRows.filter((row) => row.financialAccountProfileId === "cash");
+  await act(async () => { root = create(createElement(HistoryScreen, {
+    ...filterProps(), initialProfileId: "cash", scopedRows: cashOnly,
+  })); });
   expect(text()).toContain("1 of 3");
   expect(text()).toContain("Out\n$1.5K");
   await act(async () => button("Daily").props.onPress());

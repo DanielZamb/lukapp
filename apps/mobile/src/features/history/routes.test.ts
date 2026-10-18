@@ -95,8 +95,11 @@ test("history loads all pages before reporting counts, and searches and opens th
 
 test("place history counts against the full corpus, and clear removes both place and search", async () => {
   provider.params = { profileId: "daily" };
-  provider.all = { results: rows.map((row, index) => ({ ...row, financialAccountProfileId: index === 100 ? "daily" : "other" })), status: "Exhausted" };
+  const corpus = rows.map((row, index) => ({ ...row, financialAccountProfileId: index === 100 ? "daily" : "other" }));
+  provider.all = { results: corpus, status: "Exhausted" };
+  provider.place = { results: [corpus[100]], status: "Exhausted" };
   await act(async () => { root = create(createElement(HistoryRoute)); });
+  await act(async () => root?.update(createElement(HistoryRoute)));
   expect(text()).toContain("ACROSS ALL PLACES\nTx history");
   expect(text()).toContain("1 of 101");
   expect(text()).not.toContain("Newer posting");
