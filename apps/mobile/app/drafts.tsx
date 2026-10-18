@@ -10,7 +10,7 @@ import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { applyBatchResults, readyTotalMinorUnits } from "../src/features/intake/applyBatch";
 import { confirmReadyBatches, handleReadyBatchError } from "../src/features/intake/confirmReady";
-import { seedCandidate, shouldPlantDevSeed } from "../src/features/intake/devSeed";
+import { devSeedAction, seedCandidate } from "../src/features/intake/devSeed";
 import { suggestionOf } from "../src/features/intake/facts";
 import { api } from "../src/features/api";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
@@ -36,8 +36,9 @@ function Drafts({
   currency: "COP" | "USD";
   profileId: string;
 }) {
-  const { seed, segment: segmentParam } = useLocalSearchParams<{
-    seed?: string;
+  const { seed, seedId, segment: segmentParam } = useLocalSearchParams<{
+    seed?: string | string[];
+    seedId?: string | string[];
     segment?: string | string[];
   }>();
   const requestedSegment = Array.isArray(segmentParam) ? segmentParam[0] : segmentParam;
@@ -86,18 +87,18 @@ function Drafts({
   }, [paramSegment, listsLoaded, needsYouNowCount]);
   const [confirming, setConfirming] = useState(false);
   const [confirmedCount, setConfirmedCount] = useState<number | null>(null);
-  const seeded = useRef(false);
+  const handledSeed = useRef<string | null>(null);
   const period = { year: currentPeriod.year, month: currentPeriod.month };
   useEffect(() => {
     if (!__DEV__) return;
-    if (
-      !shouldPlantDevSeed(typeof seed === "string" ? seed : undefined) ||
-      seeded.current
-    )
-      return;
-    seeded.current = true;
-    void intake.accept(seedCandidate(workspaceId, profileId, currency));
-  }, [seed, workspaceId, profileId, currency, intake.accept]);
+    const action = devSeedAction(seed, seedId);
+    if (!action) return;
+    const actionKey = `${action.kind}:${action.id}`;
+    if (handledSeed.current === actionKey) return;
+    handledSeed.current = actionKey;
+    if (action.kind === "remove") void intake.consume(action.id);
+    else void intake.accept(seedCandidate(workspaceId, profileId, currency, action.id));
+  }, [seed, seedId, workspaceId, profileId, currency, intake.accept, intake.consume]);
   return (
     <DraftsScreen
       drafts={drafts.items}
