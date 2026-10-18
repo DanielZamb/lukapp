@@ -83,7 +83,7 @@ test("List is default with spend, draining/flat coins, colored remaining amounts
   await press("Back"); await press("Go to tx history"); await press("Partial");
   expect(callbacks.onBack).toHaveBeenCalledOnce();
   expect(callbacks.onHistory).toHaveBeenCalledOnce();
-  expect(callbacks.onCategory).toHaveBeenCalledOnce();
+  expect(callbacks.onCategory).toHaveBeenCalledExactlyOnceWith("partial");
 });
 
 test("Bars toggle to limited categories in remaining order, clamp over to zero, toggle back and reset through List", async () => {
