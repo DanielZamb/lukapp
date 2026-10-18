@@ -15,9 +15,13 @@ vi.mock("expo-router", () => ({
   router: { push: provider.push, back: provider.back }, Redirect: "redirect", useLocalSearchParams: () => provider.params,
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ bottom: 0 }) }));
+vi.mock("@gorhom/bottom-sheet", () => ({
+  BottomSheetModal: "sheet", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
+}));
+vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }));
 vi.mock("react-native", () => ({
-  Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
+  Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   FlatList: (props: {
     data: HistoryRow[]; ListHeaderComponent: ReactNode; ListEmptyComponent: ReactNode;
@@ -91,8 +95,7 @@ test("history loads all pages before reporting counts, and searches and opens th
 
 test("place history counts against the full corpus, and clear removes both place and search", async () => {
   provider.params = { profileId: "daily" };
-  provider.all = { results: rows, status: "Exhausted" };
-  provider.place = { results: [rows[100]], status: "Exhausted" };
+  provider.all = { results: rows.map((row, index) => ({ ...row, financialAccountProfileId: index === 100 ? "daily" : "other" })), status: "Exhausted" };
   await act(async () => { root = create(createElement(HistoryRoute)); });
   expect(text()).toContain("ACROSS ALL PLACES\nTx history");
   expect(text()).toContain("1 of 101");

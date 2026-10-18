@@ -1,6 +1,5 @@
 import { useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
@@ -12,16 +11,14 @@ import { Screen } from "../src/ui/core";
 function History({ workspaceId, profileId, timeZone, currency }: {
   workspaceId: string; profileId?: string; timeZone: string; currency: string;
 }) {
-  const [selectedPlace, setSelectedPlace] = useState(profileId);
   const allRows = usePostedHistory(workspaceId);
-  const placeRows = usePostedHistory(workspaceId, selectedPlace, selectedPlace !== undefined);
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
   const { date } = useWorkspaceCalendar(timeZone);
   const ready = categories !== undefined && places !== undefined && allRows !== undefined;
-  return <HistoryScreen rows={ready ? selectedPlace ? placeRows : allRows : undefined}
+  return <HistoryScreen rows={ready ? allRows : undefined}
     total={allRows?.length} categories={categories ?? []} places={places ?? []} currentDate={date} currency={currency}
-    placeSelected={selectedPlace !== undefined} onClear={() => setSelectedPlace(undefined)}
+    initialProfileId={profileId}
     onBack={() => router.back()}
     onEntry={(entryId) => router.push({ pathname: "/entry", params: { entryId } })} />;
 }

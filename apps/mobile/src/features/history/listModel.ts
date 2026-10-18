@@ -43,15 +43,6 @@ export function historyListRow(row: HistoryRow, categories: HistoryCategory[], p
   return { ...row, dateLabel, subtitle, placeName, amountLabel: historyAmount(row.amount, true) };
 }
 
-export function searchHistory(rows: HistoryListRow[], search: string) {
-  const needle = search.trim().toLowerCase();
-  if (!needle) return rows;
-  return rows.filter((row) => [
-    row.title, ...row.userCategories.map((category) => category.name), row.detail,
-    row.placeName, String(Math.abs(row.amount.minorUnits) / 100), row.dateLabel,
-  ].join(" ").toLowerCase().includes(needle));
-}
-
 export function capitalFlow(rows: HistoryRow[]) {
   const out = rows.reduce((sum, row) => sum + Math.max(0, -row.amount.minorUnits), 0);
   const inn = rows.reduce((sum, row) => sum + Math.max(0, row.amount.minorUnits), 0);
