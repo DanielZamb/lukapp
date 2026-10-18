@@ -5,6 +5,7 @@ export type NatureAnswer = "spend" | "receive" | "stillMine" | "payDebt";
 export type CategoryStyle = {
   emoji: string;
   tone: "primary" | "positive" | "warning";
+  color?: string;
 };
 export type CategorySelection =
   | { kind: "preset"; presetId: string; style: CategoryStyle }

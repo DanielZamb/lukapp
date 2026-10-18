@@ -11,7 +11,6 @@ import type {
   CategoryPreset,
   CategorySelection,
   CategoryStyle,
-  NatureAnswer,
 } from "./model";
 
 export type CategoryPickerMode =
@@ -53,19 +52,6 @@ export function useCategoryPicker(
   const [limitReached, setLimitReached] = useState(false);
   const [replaceSelection, setReplaceSelection] = useState(false);
   const saving = useRef(false);
-  const suggestion = useQuery(
-    api.accounting.suggestCategoryNature,
-    editor?.kind === "custom"
-      ? {
-          name: editor.name,
-          ...(mode.kind === "posting" ? { direction: mode.direction ?? "out" } : {}),
-        }
-      : "skip",
-  );
-  const effectiveAnswer =
-    editor?.kind === "custom"
-      ? (editor.answer ?? suggestion?.suggested ?? null)
-      : null;
   const options: CategoryOption[] | undefined =
     mode.kind === "posting"
       ? categories
@@ -117,16 +103,20 @@ export function useCategoryPicker(
     setError("");
     setReplaceSelection(false);
   }
+  const existingNames = mode.kind === "posting"
+    ? categories?.map((category) => category.name)
+    : options?.map((option) => option.name);
+  const categoryCount = mode.kind === "posting" ? categories?.length : mode.selections.length;
+  const canConfirm = !!editor && (editor.kind === "restyle" || (
+    existingNames !== undefined && categoryCount !== undefined && categoryCount < 12 &&
+    (editor.kind === "preset" || (
+      !!editor.name.trim() && !existingNames.some((name) =>
+        searchable(name.trim().replace(/\s+/g, " ")) === searchable(editor.name.trim().replace(/\s+/g, " ")),
+      )
+    ))
+  ));
   async function confirm() {
-    if (!editor || saving.current) return;
-    if (
-      editor.kind === "custom" &&
-      (!editor.name.trim() ||
-        !effectiveAnswer ||
-        effectiveAnswer === "stillMine" ||
-        effectiveAnswer === "payDebt")
-    )
-      return;
+    if (!editor || saving.current || !canConfirm) return;
     recordInteraction();
     saving.current = true;
     setBusy(true);
@@ -158,11 +148,10 @@ export function useCategoryPicker(
           style: editor.style,
         };
       else {
-        if (!effectiveAnswer) return;
         selection = {
           kind: "custom",
           name: editor.name.trim(),
-          answer: effectiveAnswer,
+          answer: mode.kind === "posting" && mode.direction === "in" ? "receive" : "spend",
           style: editor.style,
         };
       }
@@ -183,6 +172,7 @@ export function useCategoryPicker(
           } else setLimitReached(true);
           setEditor(null);
           setReplaceSelection(false);
+          onClose();
         }
       } else {
         const key = selectionKey(selection);
@@ -191,11 +181,12 @@ export function useCategoryPicker(
           selection,
         ]);
         setEditor(null);
+        onClose();
       }
     } catch (error) {
       if (reportFailure(error)) return;
       setError(
-        "Could not save this category. Your answers are still here. Try again.",
+        "Could not save this category. Try again.",
       );
     } finally {
       saving.current = false;
@@ -205,13 +196,7 @@ export function useCategoryPicker(
   function name(name: string) {
     recordInteraction();
     setEditor((current) =>
-      current?.kind === "custom" ? { ...current, name, answer: null } : current,
-    );
-  }
-  function answer(answer: NatureAnswer) {
-    recordInteraction();
-    setEditor((current) =>
-      current?.kind === "custom" ? { ...current, answer } : current,
+      current?.kind === "custom" ? { ...current, name } : current,
     );
   }
   function style(style: CategoryStyle) {
@@ -219,12 +204,7 @@ export function useCategoryPicker(
     setEditor((current) => (current ? { ...current, style } : current));
   }
   const includes = (name: string) =>
-    searchable(name).includes(searchable(search));
-  const allowedAnswers: NatureAnswer[] =
-    suggestion?.allowed ??
-    (mode.kind === "setup"
-      ? ["spend", "receive", "stillMine", "payDebt"]
-      : mode.direction === "in" ? ["receive", "stillMine", "payDebt"] : ["spend", "stillMine", "payDebt"]);
+    searchable(name).includes(searchable(search.trim()));
   return {
     categories,
     allPresets: presets,
@@ -234,17 +214,9 @@ export function useCategoryPicker(
       editor,
       busy,
       error,
-      effectiveAnswer,
-      allowedAnswers,
       options: options?.filter((o) => includes(o.name)),
       presets: presets?.filter((p) => includes(p.name)),
-      canConfirm:
-        !!editor &&
-        (editor.kind !== "custom" ||
-          (!!editor.name.trim() &&
-            !!effectiveAnswer &&
-            effectiveAnswer !== "stillMine" &&
-            effectiveAnswer !== "payDebt")),
+      canConfirm,
       onSearch: (value: string) => {
         recordInteraction();
         setSearch(value);
@@ -254,17 +226,15 @@ export function useCategoryPicker(
       onPreset: preset,
       onCreate: () => {
         recordInteraction();
-        setReplaceSelection(false);
+        setReplaceSelection(mode.kind === "posting" && mode.value.ids.length >= 3);
         setEditor({
           kind: "custom",
           name: search,
-          answer: null,
           style: defaultCategoryStyle,
         });
         setError("");
       },
       onName: name,
-      onAnswer: answer,
       onStyle: style,
       onConfirm: () => void confirm(),
       onBack: back,
@@ -274,7 +244,7 @@ export function useCategoryPicker(
       onCreateEncompassing: () => {
         recordInteraction();
         setReplaceSelection(true);
-        setEditor({ kind: "custom", name: search, answer: null, style: defaultCategoryStyle });
+        setEditor({ kind: "custom", name: search, style: defaultCategoryStyle });
         setError("");
       },
       primaryOptions: mode.kind === "posting" && categories && needsPrimary(mode.value.ids, categories)
