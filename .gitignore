@@ -21,3 +21,7 @@ apps/mobile/ios/
 apps/mobile/android/
 apps/mobile/dist/
 apps/mobile/.env*
+
+# Env files hold credentials at any depth. Commit only examples.
+.env*
+!.env.example
