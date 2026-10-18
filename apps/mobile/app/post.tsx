@@ -152,6 +152,11 @@ function PostMoney({
         ? `${profile?.productKind === "creditCard" || profile?.productKind === "loan" ? "Enter the amount owed" : "Enter the amount held"} on the starting date. Use zero or a positive amount. Earlier activity is outside Start Tracking.`
         : "Use a positive amount for income and a negative amount for spending. Choose up to three categories; each counts the full amount.";
   const selectedDate = setup?.date ?? editor.date;
+  const sourceNote = candidateId
+    ? "From drafts"
+    : draftId
+      ? "Draft on this device"
+      : undefined;
   if (candidateId && missingCandidate)
     return (
       <Screen>
@@ -171,6 +176,7 @@ function PostMoney({
     <>
       <PostingForm
         {...editor}
+        sourceNote={sourceNote}
         lockEntryType={editor.lockEntryType}
         currency={workspace.functionalCurrency}
         place={profile?.name ?? "Choose a place"}
