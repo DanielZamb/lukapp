@@ -615,3 +615,80 @@ test("a locked opening month rolls back the complete account setup and its recei
     await t.run((ctx) => ctx.db.query("financialAccountSetups").collect()),
   ).toEqual([]);
 });
+
+test("place setup preserves its emoji in profile reads and idempotent retries", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const input = {
+    workspaceId: workspace.id,
+    name: "Travel",
+    productKind: "cash",
+    emoji: "👛",
+    amount: { currency: "COP", minorUnits: 0 },
+    accountingDate: "2026-09-24",
+    idempotencyKey: "emoji-wallet",
+  } as const;
+  const result = await t.action(
+    api.accounting.setupFinancialAccountProfile,
+    input,
+  );
+  expect(result.financialAccountProfile).toMatchObject({
+    name: "Travel",
+    productKind: "cash",
+    emoji: "👛",
+  });
+  expect(result.openingEntry).toBeNull();
+  expect(
+    await t.query(api.accounting.listFinancialAccountProfiles, {
+      workspaceId: workspace.id,
+    }),
+  ).toEqual([result.financialAccountProfile]);
+  expect(
+    await t.action(api.accounting.setupFinancialAccountProfile, input),
+  ).toEqual({ ...result, replay: true });
+  await expect(
+    t.action(api.accounting.setupFinancialAccountProfile, {
+      ...input,
+      emoji: "🏦",
+    }),
+  ).rejects.toMatchObject({ data: { code: "account_setup_conflict" } });
+});
+
+test("Transfer retains category metadata without changing spending and rejects unknown categories", async () => {
+  const { t, workspaceId, bank, card } = await fixture();
+  const category = await t.action(api.accounting.createUserCategory, {
+    workspaceId,
+    selection: {
+      kind: "preset",
+      presetId: "groceries",
+      style: { emoji: "🛒", tone: "primary" },
+    },
+  });
+  if (category.kind !== "category") throw new Error("Expected category");
+  const input = {
+    ...transfer(workspaceId, bank.id, card.id),
+    userCategoryIds: [category.category.id],
+    primaryUserCategoryId: category.category.id,
+  };
+  const result = await t.action(api.accounting.recordAccountTransfer, input);
+  expect(result.lines.flatMap((line) => line.userCategories ?? [])).toEqual([
+    { id: category.category.id, name: "Food" },
+  ]);
+  const activity = await t.query(api.accounting.postedActivity, {
+    workspaceId,
+    month: "2026-09",
+  });
+  expect(activity.monthSpendMinorUnits).toBe(0);
+  expect(await t.action(api.accounting.recordAccountTransfer, input)).toEqual({
+    ...result,
+    replay: true,
+  });
+  await expect(
+    t.action(api.accounting.recordAccountTransfer, {
+      ...input,
+      idempotencyKey: "invalid-category",
+      userCategoryIds: ["missing"],
+      primaryUserCategoryId: "missing",
+    }),
+  ).rejects.toMatchObject({ data: { code: "category_not_found" } });
+});

@@ -54,6 +54,7 @@ type Account = {
 };
 export type PlaceDraft = {
   name: string;
+  emoji?: string;
   productKind: PlaceKind;
   amount: string;
   date: string;
@@ -147,6 +148,7 @@ export function usePostingEditor(
     if (value.kind === "setup")
       setSetup({
         name: value.payload.name,
+        ...(value.payload.emoji ? { emoji: value.payload.emoji } : {}),
         productKind: value.payload.productKind,
         amount: formatMoney(value.payload.amount).replace(
           `${payload.amount.currency} `,
@@ -159,7 +161,11 @@ export function usePostingEditor(
       setProfileId(value.payload.sourceFinancialAccountProfileId);
       setDestinationId(value.payload.destinationFinancialAccountProfileId);
     } else setProfileId(value.payload.financialAccountProfileId);
-    if (value.kind === "expense" || value.kind === "income")
+    if (
+      value.kind === "expense" ||
+      value.kind === "income" ||
+      value.kind === "transfer"
+    )
       setCategories({
         ids:
           value.payload.userCategoryIds ??
@@ -328,6 +334,7 @@ export function usePostingEditor(
         payload: {
           workspaceId: account.workspaceId,
           name: setup.name.trim(),
+          ...(setup.emoji?.trim() ? { emoji: setup.emoji.trim() } : {}),
           productKind: setup.productKind,
           amount: {
             currency: account.currency,
@@ -347,12 +354,19 @@ export function usePostingEditor(
       description: description.trim(),
       idempotencyKey: transport.newKey(),
     };
+    const categoryAssignments = {
+      ...(categories.ids.length ? { userCategoryIds: [...categories.ids] } : {}),
+      ...(categories.primaryId
+        ? { primaryUserCategoryId: categories.primaryId }
+        : {}),
+    };
     if (entryType === "transfer") {
       if (!destinationId) throw new Error("Choose where the money goes");
       return {
         kind: "transfer",
         payload: {
           ...payload,
+          ...categoryAssignments,
           sourceFinancialAccountProfileId: profileId,
           destinationFinancialAccountProfileId: destinationId,
         },
@@ -368,12 +382,7 @@ export function usePostingEditor(
       payload: {
         ...payload,
         financialAccountProfileId: profileId,
-        ...(categories.ids.length
-          ? { userCategoryIds: [...categories.ids] }
-          : {}),
-        ...(categories.primaryId
-          ? { primaryUserCategoryId: categories.primaryId }
-          : {}),
+        ...categoryAssignments,
       },
     };
   }
@@ -481,9 +490,6 @@ export function usePostingEditor(
       setPending(null);
       setDraftId(undefined);
       appliedDraft.current = undefined;
-      setAmount(entryType === "initial" ? "0" : "-");
-      setDescription("");
-      setCategories({ ids: [], primaryId: null });
       setSetup(null);
       if (saved.command.kind === "setup" && receipt.financialAccountProfileId) {
         if (saved.command.target?.kind === "destination") {
@@ -491,7 +497,11 @@ export function usePostingEditor(
           setDestinationId(receipt.financialAccountProfileId);
           setEntryType("transfer");
         } else setProfileId(receipt.financialAccountProfileId);
+        return;
       }
+      setAmount(entryType === "initial" ? "0" : "-");
+      setDescription("");
+      setCategories({ ids: [], primaryId: null });
       setPosted(receipt);
     } catch (error) {
       if (transport.reportFailure?.(error)) return;

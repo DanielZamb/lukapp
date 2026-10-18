@@ -17,6 +17,7 @@ export async function createFinancialAccountProfile(
     actor: Actor;
     workspaceId: string;
     name: string;
+    emoji?: string;
     productKind: FinancialAccountProductKind;
   },
 ): Promise<FinancialAccountProfile> {
@@ -41,6 +42,7 @@ export async function createFinancialAccountProfile(
     workspaceId: input.workspaceId,
     name,
     productKind: classified.productKind,
+    ...(input.emoji ? { emoji: input.emoji } : {}),
     classificationPolicy: classified.policy,
     postingAccountId: postingAccount.id,
   });

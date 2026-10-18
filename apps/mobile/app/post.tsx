@@ -122,7 +122,10 @@ function PostMoney({
     },
   );
   const profile = profiles?.find((place) => place.id === editor.profileId);
-  const categoryEnabled = editor.entryType === "normal";
+  const destination = profiles?.find(
+    (place) => place.id === editor.destinationId,
+  );
+  const categoryEnabled = editor.entryType !== "initial";
   const categoryValid =
     !categoryEnabled || canPostCategories(editor.categories, categories);
   const placesValid =
@@ -145,12 +148,6 @@ function PostMoney({
     recordInteraction();
     action();
   }
-  const hint =
-    editor.entryType === "transfer"
-      ? "Move money from Place to To. Paying a card or loan reduces what you owe. Record any fee as a separate expense."
-      : editor.entryType === "initial"
-        ? `${profile?.productKind === "creditCard" || profile?.productKind === "loan" ? "Enter the amount owed" : "Enter the amount held"} on the starting date. Use zero or a positive amount. Earlier activity is outside Start Tracking.`
-        : "Use a positive amount for income and a negative amount for spending. Choose up to three categories; each counts the full amount.";
   const selectedDate = setup?.date ?? editor.date;
   if (candidateId && missingCandidate)
     return (
@@ -173,21 +170,25 @@ function PostMoney({
         {...editor}
         lockEntryType={editor.lockEntryType}
         currency={workspace.functionalCurrency}
-        place={profile?.name ?? "Choose a place"}
+        place={profile ? `${profile.emoji ?? "💰"} ${profile.name}` : "Pick"}
         destination={
-          profiles?.find((place) => place.id === editor.destinationId)?.name
+          destination
+            ? `${destination.emoji ?? "💰"} ${destination.name}`
+            : "Pick"
         }
         category={
           editor.categories.ids
-            .map(
-              (id) =>
-                categories?.find((category) => category.id === id)?.name ??
-                "Saved category",
-            )
-            .join(" · ") || "No category"
+            .map((id) => {
+              const category = categories?.find(
+                (category) => category.id === id,
+              );
+              return category
+                ? `${category.style.emoji} ${category.name}`
+                : "Saved category";
+            })
+            .join(" · ") || "Pick"
         }
         categoryEnabled={categoryEnabled}
-        hint={hint}
         categoryNeedsPrimary={
           categoryEnabled &&
           !!categories &&
@@ -204,10 +205,9 @@ function PostMoney({
         )}
         posted={
           editor.posted
-            ? `${editor.posted.description || "Entry"} · ${formatMoney(editor.posted.amount)}`
+            ? `${editor.posted.description || "Entry"} · ${editor.posted.amount.minorUnits > 0 ? "+" : ""}${formatMoney(editor.posted.amount)}`
             : null
         }
-        postedTitle={editor.posted?.title}
         onAmountChange={(value) => interaction(() => editor.setAmount(value))}
         onDescriptionChange={(value) =>
           interaction(() => editor.setDescription(value))
@@ -227,13 +227,7 @@ function PostMoney({
         onCategory={() => setCategoryVisible(true)}
         onDate={() => dateSheet.current?.present()}
         onPost={() => void editor.submit()}
-        onKeepDraft={() => {
-          void editor.keepDraft().then((id) => {
-            if (id) router.setParams({ draftId: id });
-          });
-        }}
-        canKeepDraft={editor.canKeepDraft}
-        onDone={editor.dismissPosted}
+        onDone={() => router.back()}
       />
       {categoryEnabled && (
         <CategoryPicker
@@ -248,7 +242,7 @@ function PostMoney({
       )}
       <PlaceSheet
         sheetRef={placeSheet}
-        title={placeTarget === "source" ? "Place" : "To"}
+        title={placeTarget === "source" ? "From" : "To"}
         search={search}
         onSearch={(value) => interaction(() => setSearch(value))}
         places={profiles}
@@ -258,7 +252,9 @@ function PostMoney({
         excludedId={
           placeTarget === "destination"
             ? editor.profileId
-            : (editor.destinationId ?? undefined)
+            : editor.entryType === "transfer"
+              ? (editor.destinationId ?? undefined)
+              : undefined
         }
         disabled={!editor.editable}
         onSelect={(id) =>
@@ -274,6 +270,7 @@ function PostMoney({
             editor.setSetup({
               name: "",
               productKind: "bankAccount",
+              emoji: "💰",
               amount: "0",
               date: defaultAccountingDate(workspace.timeZone),
               target:
@@ -294,7 +291,6 @@ function PostMoney({
         error={editor.error}
         canSubmit={editor.canSubmit}
         onChange={(value) => interaction(() => editor.setSetup(value))}
-        onDate={() => dateSheet.current?.present()}
         onSubmit={() => void editor.submit()}
         onDismiss={() => editor.setSetup(null)}
       />
