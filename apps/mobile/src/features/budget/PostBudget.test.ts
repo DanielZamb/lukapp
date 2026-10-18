@@ -42,7 +42,7 @@ vi.mock("convex/react", () => ({
   useQuery: (query: FunctionReference<"query">, args: unknown) => {
     if (args === "skip") return undefined;
     switch (getFunctionName(query)) {
-      case "accounting:listUserCategories": return ["food", "home"].map((id) => ({ id, name: id, resolvedPostingAccountCode: "expense" }));
+      case "accounting:listUserCategories": return ["food", "home"].map((id) => ({ id, name: id, resolvedPostingAccountCode: "expense", style: { emoji: "🛒", tone: "primary" } }));
       case "accounting:listFinancialAccountProfiles": return [{ id: "bank", name: "Bank" }, { id: "card", name: "Card" }];
       case "budget:evaluate": budgetArgs = args; return budget;
     }
