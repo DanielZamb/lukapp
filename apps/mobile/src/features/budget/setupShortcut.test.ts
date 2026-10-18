@@ -30,6 +30,7 @@ vi.mock("../useWorkspaceCalendar", () => ({
   useWorkspaceCalendar: () => ({ month: "2026-10" }),
 }));
 vi.mock("./BudgetBoard", () => ({ BudgetBoard: "board" }));
+vi.mock("./BudgetCreation", () => ({ BudgetCreation: "creation" }));
 vi.mock("./BudgetEditorSheet", () => ({ BudgetEditorSheet: "editor" }));
 let root: ReactTestRenderer | undefined;
 afterEach(async () => {
