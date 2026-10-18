@@ -1,16 +1,17 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { ConfirmationScreen, Header, ListGroup, ListRow, PrimaryButton, Screen, theme, ui } from "../ui/core";
+import { ConfirmationScreen, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, theme, ui } from "../ui/core";
 import { font, radius, spacing, touchTarget } from "../ui/tokens";
 import { formatMoney } from "./money";
 import type { DraftListItem, LocalEntryDraftId } from "./localEntryDrafts";
 import type { IntakeCandidate, IntakeCandidateId } from "./intake/candidates";
 import { currencyMismatchReason, isReadyCandidate } from "./intake/ready";
 import { IntakeSources, MonthCloseWarning, ReconciliationWarning, WarningIconButton } from "./intake/InboxDetails";
+import type { DiscardNotice } from "./localDiscardNotices";
 
 export type InboxSegment = "now" | "wait";
-type InboxScreen = "inbox" | "warning" | "sources" | "month-close";
+type InboxScreen = "inbox" | "warning" | "sources" | "month-close" | "discard";
 
 function candidateDetail(
   candidate: IntakeCandidate,
@@ -28,7 +29,10 @@ export function DraftsScreen({
   drafts, now, wait, ready, readyTotal, currency, segment, readyToShow, error,
   confirming, month, places, confirmedCount, onContinueAfterConfirmation,
   onSegment, onBack, onResumeDraft, onOpenCandidate, onConfirmReady, onCompleteMonth,
+  discardNotices = [], onDismissDiscardNotices,
 }: {
+  discardNotices?: DiscardNotice[];
+  onDismissDiscardNotices?: () => Promise<void>;
   drafts: DraftListItem[];
   now: IntakeCandidate[];
   wait: IntakeCandidate[];
@@ -52,6 +56,8 @@ export function DraftsScreen({
 }) {
   const [screen, setScreen] = useState<InboxScreen>("inbox");
   const [warningViewed, setWarningViewed] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const [discardError, setDiscardError] = useState("");
   const empty = drafts.length === 0 && now.length === 0 && wait.length === 0;
   const candidateRows = segment === "now" ? now : wait;
   const postingDrafts = drafts.filter((item) => item.status === "posting");
@@ -75,6 +81,40 @@ export function DraftsScreen({
   if (screen === "sources") return <IntakeSources onBack={backToInbox} />;
   if (screen === "month-close") {
     return <MonthCloseWarning month={month} count={now.length + wait.length} onBack={backToInbox} onContinue={onCompleteMonth} />;
+  }
+  if (screen === "discard") {
+    return (
+      <Screen>
+        <Header title="Discarded notifications" eyebrow="NOT SAVED AS CANDIDATES" onBack={backToInbox} />
+        <Text style={styles.body}>These notices contain no notification text. They disappear after 15 days.</Text>
+        <ListGroup>
+          {discardNotices.map((notice, index) => (
+            <ListRow
+              key={`${notice.time}-${index}`}
+              title={notice.reason}
+              detail={new Date(notice.time).toLocaleString()}
+              isLast={index === discardNotices.length - 1}
+            />
+          ))}
+        </ListGroup>
+        {discardError ? <Text accessibilityRole="alert" style={ui.error}>{discardError}</Text> : null}
+        <PrimaryButton label="OK" disabled={dismissing} pending={dismissing} onPress={() => {
+          void (async () => {
+            if (dismissing) return;
+            setDismissing(true);
+            setDiscardError("");
+            try {
+              await onDismissDiscardNotices?.();
+              backToInbox();
+            } catch {
+              setDiscardError("Could not remove discarded notification notices. Try again.");
+            } finally {
+              setDismissing(false);
+            }
+          })();
+        }} />
+      </Screen>
+    );
   }
 
   return (
@@ -166,10 +206,15 @@ export function DraftsScreen({
         </>
       )}
       {readyToShow && !empty ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Preview Month Close warning" onPress={() => setScreen("month-close")} style={styles.footer}>
-          <Text style={styles.linkText}>Preview Month Close warning</Text>
-          <Ionicons name="arrow-forward" size={16} color={theme.primary} />
-        </Pressable>
+        <>
+          {discardNotices.length > 0 && (
+            <SecondaryButton label="Notifications discarded" onPress={() => setScreen("discard")} />
+          )}
+          <Pressable accessibilityRole="button" accessibilityLabel="Preview Month Close warning" onPress={() => setScreen("month-close")} style={styles.footer}>
+            <Text style={styles.linkText}>Preview Month Close warning</Text>
+            <Ionicons name="arrow-forward" size={16} color={theme.primary} />
+          </Pressable>
+        </>
       ) : null}
     </Screen>
   );

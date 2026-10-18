@@ -14,6 +14,7 @@ import { seedCandidate, shouldPlantDevSeed } from "../src/features/intake/devSee
 import { suggestionOf } from "../src/features/intake/facts";
 import { api } from "../src/features/api";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
+import { clearDiscardNotices, DISCARD_NOTICE_TTL_MS, readDiscardNotices, type DiscardNotice } from "../src/features/localDiscardNotices";
 import { Screen } from "../src/ui/core";
 
 function inboxSegmentFromParam(param: string | undefined): InboxSegment | null {
@@ -43,6 +44,26 @@ function Drafts({
   const paramSegment = inboxSegmentFromParam(requestedSegment);
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
   const intake = useIntakeCandidates({ subject, workspaceId, currency });
+  const [discardNotices, setDiscardNotices] = useState<DiscardNotice[]>([]);
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      try {
+        const notices = await readDiscardNotices(subject);
+        if (!active) return;
+        setDiscardNotices(notices);
+        if (notices.length > 0) {
+          const expiry = Math.min(...notices.map((notice) => notice.time + DISCARD_NOTICE_TTL_MS));
+          timer = setTimeout(() => void refresh(), Math.max(1, expiry - Date.now()));
+        }
+      } catch {
+        if (active) setDiscardNotices([]);
+      }
+    }
+    void refresh();
+    return () => { active = false; clearTimeout(timer); };
+  }, [subject]);
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
   const reportFailure = useDeviceAccessFailure();
@@ -80,6 +101,11 @@ function Drafts({
   return (
     <DraftsScreen
       drafts={drafts.items}
+      discardNotices={discardNotices}
+      onDismissDiscardNotices={async () => {
+        await clearDiscardNotices(subject);
+        setDiscardNotices([]);
+      }}
       now={intake.now}
       wait={intake.wait}
       ready={intake.ready}
