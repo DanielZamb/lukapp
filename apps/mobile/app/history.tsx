@@ -28,7 +28,7 @@ function History({ workspaceId, profileId, timeZone, currency }: {
     initialProfileId={profileId} onScopedProfileId={setScopedProfileId}
     onBack={() => router.back()}
     onEntry={setEntryId} />
-    {entryId && <EntryDetailSheet workspaceId={workspaceId} entryId={entryId} categories={categories ?? []}
+    {entryId && <EntryDetailSheet workspaceId={workspaceId} entryId={entryId} profileId={scopedProfileId} categories={categories ?? []}
       currentDate={date} onEntry={setEntryId} onClose={() => setEntryId(null)} />}
   </>;
 }

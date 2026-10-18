@@ -10,6 +10,7 @@ import { useEntryDetail } from "./useEntryDetail";
 type Props = {
   workspaceId: string;
   entryId: string;
+  profileId?: string;
   categories: HistoryCategory[];
   currentDate: string;
   onEntry: (id: string) => void;
@@ -22,8 +23,8 @@ export function EntryDetailSheet(props: Props) {
   </Sheet>;
 }
 
-function EntryDetail({ workspaceId, entryId, categories, currentDate, onEntry }: Props) {
-  const { detail, reversal } = useEntryDetail(workspaceId, entryId);
+function EntryDetail({ workspaceId, entryId, profileId, categories, currentDate, onEntry }: Props) {
+  const { detail, reversal } = useEntryDetail(workspaceId, entryId, profileId);
   if (!detail) return <ActivityIndicator accessibilityLabel="Loading entry" />;
   const { entry, row } = detail;
   const moneyIn = row.amount.minorUnits > 0;

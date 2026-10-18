@@ -14,7 +14,7 @@ const provider = vi.hoisted(() => ({
   place: { results: [] as HistoryRow[], status: "LoadingFirstPage" },
   loadAll: vi.fn(), loadPlace: vi.fn(), push: vi.fn(), back: vi.fn(),
   details: new Map<string, EntryDetail>(), post: vi.fn<ReversalTransport["post"]>(),
-  present: vi.fn(), dismiss: vi.fn(), hardwareBack: undefined as (() => boolean) | undefined,
+  detailQuery: vi.fn(), present: vi.fn(), dismiss: vi.fn(), hardwareBack: undefined as (() => boolean) | undefined,
 }));
 vi.mock("expo-router", () => ({
   router: { push: provider.push, back: provider.back }, Redirect: "redirect", useLocalSearchParams: () => provider.params,
@@ -55,10 +55,16 @@ vi.mock("convex/react", () => ({
     if (args === "skip") return { results: [], status: "LoadingFirstPage", loadMore: provider.loadPlace };
     return args.financialAccountProfileId ? { ...provider.place, loadMore: provider.loadPlace } : { ...provider.all, loadMore: provider.loadAll };
   },
-  useQuery: (_query: unknown, args: { journalEntryId?: string }) => args.journalEntryId ? provider.details.get(args.journalEntryId) : [
+  useQuery: (_query: unknown, args: { journalEntryId?: string; financialAccountProfileId?: string }) => {
+    if (args.journalEntryId) {
+      provider.detailQuery(args);
+      return provider.details.get(`${args.journalEntryId}:${args.financialAccountProfileId ?? "all"}`) ?? provider.details.get(args.journalEntryId);
+    }
+    return [
     { id: "daily", name: "Daily", style: { emoji: "🥑", tone: "primary" } },
     { id: "family", name: "Family", style: { emoji: "🦋", tone: "positive" } },
-  ],
+  ];
+  },
   useAction: () => provider.post,
 }));
 
@@ -273,8 +279,9 @@ test("sheet keeps fractional amounts and the uncategorized money-in fallback", a
 });
 
 test("standalone entry callers keep the detail screen, reversal confirmation, linked routes, and back", async () => {
-  provider.params = { entryId: "100" };
+  provider.params = { entryId: "100", profileId: "family" };
   await act(async () => { root = create(createElement(EntryRoute)); });
+  expect(provider.detailQuery).toHaveBeenLastCalledWith({ workspaceId: "ws", journalEntryId: "100" });
   expect(text()).toContain("Posted entry");
   expect(text()).toContain("Older receipt");
   expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
@@ -322,4 +329,59 @@ test("overview and account use primary receipt buttons and pass the account sele
   expect(account.props.style({ pressed: false })[0].backgroundColor).toBe("#6d28d9");
   await act(async () => account.props.onPress());
   expect(provider.push).toHaveBeenLastCalledWith({ pathname: "/history", params: { profileId: "daily" } });
+});
+
+
+test.each([
+  { selection: "all", profileId: undefined, amount: -2500 },
+  { selection: "source", profileId: "daily", amount: -2500 },
+  { selection: "destination", profileId: "family", amount: 2500 },
+  { selection: "multiple", profileId: undefined, amount: -2500 },
+])("$selection place transfer keeps row direction in detail and linked reversals", async ({ selection, profileId, amount }) => {
+  const original: EntryDetail = {
+    entry: { ...detail.entry, policy: "account-transfer@1", description: "Transfer", reversedByEntryId: "reversal" },
+    row: { ...detail.row, title: "Transfer", userCategories: [], detail: "Daily → Family",
+      amount: { currency: "COP", minorUnits: -2500 }, reversed: true },
+  };
+  const reversal: EntryDetail = {
+    entry: { ...receipt, description: "Reversal: Transfer" },
+    row: { ...linked.row, title: "Reversal: Transfer", amount: { currency: "COP", minorUnits: 2500 } },
+  };
+  provider.details.set("100", original);
+  provider.details.set("reversal", reversal);
+  provider.details.set("100:family", { ...original, row: { ...original.row, amount: { currency: "COP", minorUnits: 2500 } } });
+  provider.details.set("reversal:family", { ...reversal, row: { ...reversal.row, amount: { currency: "COP", minorUnits: -2500 } } });
+  provider.params = { profileId: selection === "multiple" ? "daily" : profileId };
+  provider.all = { results: [original.row], status: "Exhausted" };
+  provider.place = { results: [{ ...original.row, amount: { currency: "COP", minorUnits: amount } }], status: "Exhausted" };
+  await act(async () => { root = create(createElement(HistoryRoute)); });
+  if (selection === "multiple") {
+    await act(async () => button("Daily").props.onPress());
+    const destination = root?.root.findAllByType("button").find((node) =>
+      node.props.accessibilityRole === "checkbox" && node.props.accessibilityLabel === "Family");
+    if (!destination) throw new Error("Missing destination place");
+    await act(async () => destination.props.onPress());
+    await act(async () => root?.root.findByType(BottomSheetModal).props.onDismiss());
+  }
+  const label = amount > 0 ? "+$25" : "−$25";
+  await act(async () => button(`Transfer, ${label}`).props.onPress());
+  function expectDirection(minorUnits: number) {
+    const positive = minorUnits > 0;
+    expect(text()).toContain(positive ? "MONEY IN" : "MONEY OUT");
+    const hero = root?.root.findByType(BottomSheetModal).findAllByType("text")
+      .find((node) => node.children.join("") === (positive ? "+$25" : "−$25"));
+    expect(hero?.children.join("")).toBe(positive ? "+$25" : "−$25");
+    if (positive) expect(hero?.props.style).toContainEqual({ color: "#6d28d9" });
+    else expect(hero?.props.style).not.toContainEqual({ color: "#6d28d9" });
+    expect(provider.detailQuery).toHaveBeenLastCalledWith({
+      workspaceId: "ws", journalEntryId: minorUnits === amount ? "100" : "reversal",
+      ...(profileId ? { financialAccountProfileId: profileId } : {}),
+    });
+  }
+  expectDirection(amount);
+  await act(async () => button("View reversal").props.onPress());
+  expectDirection(-amount);
+  await act(async () => button("View original entry").props.onPress());
+  expectDirection(amount);
+  expect(provider.push).not.toHaveBeenCalled();
 });
