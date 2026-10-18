@@ -188,7 +188,7 @@ export function DraftsScreen({
               <Pressable
                 key={item.id}
                 accessibilityRole="radio"
-                accessibilityState={{ selected: segment === item.id }}
+                accessibilityState={{ selected: segment === item.id, checked: segment === item.id }}
                 accessibilityLabel={`${item.label}, ${item.count}`}
                 onPress={() => onSegment(item.id)}
                 style={[styles.segment, segment === item.id && styles.selectedSegment]}

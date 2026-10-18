@@ -159,7 +159,7 @@ test("a Candidate row opens the shared form and Confirm all Ready posts the read
   });
   expect(text()).toContain("Groceries");
   expect(text()).toContain("Confirm all Ready");
-  expect(button("Needs you now, 2").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Needs you now, 2").props.accessibilityState).toEqual({ selected: true, checked: true });
   expect(text()).toContain("Daily money");
   expect(text()).toContain("COP 1.264,00");
   expect(text()).not.toContain("Expires");
@@ -195,7 +195,7 @@ test("a Candidate row opens the shared form and Confirm all Ready posts the read
   expect(onResumeDraft).toHaveBeenCalledWith("open-1");
 });
 
-test.each(["now", "wait"] as const)("priority segments are radios with %s selected", async (segment) => {
+test.each(["now", "wait"] as const)("priority segments are radios with %s selected and checked", async (segment) => {
   const onSegment = vi.fn();
   await act(async () => {
     root = create(createElement(DraftsScreen, render({ now: [candidate], segment, onSegment })));
@@ -206,8 +206,8 @@ test.each(["now", "wait"] as const)("priority segments are radios with %s select
     role: node.props.accessibilityRole,
     state: node.props.accessibilityState,
   }))).toEqual([
-    { role: "radio", state: { selected: segment === "now" } },
-    { role: "radio", state: { selected: segment === "wait" } },
+    { role: "radio", state: { selected: segment === "now", checked: segment === "now" } },
+    { role: "radio", state: { selected: segment === "wait", checked: segment === "wait" } },
   ]);
   await act(async () => button("Needs you now, 1").props.onPress());
   await act(async () => button("Can wait, 0").props.onPress());

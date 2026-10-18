@@ -97,15 +97,15 @@ test("an alert can open Can wait, then Needs you now, while Month Close remains 
   route.segment = ["wait"];
   intakeState.wait = [candidate("later")];
   await act(async () => { root = create(createElement(DraftsRoute)); });
-  expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true });
-  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: false });
+  expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
+  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: false, checked: false });
   route.segment = "now";
   await act(async () => { root.update(createElement(DraftsRoute)); });
-  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true, checked: true });
   await act(async () => button("Preview Month Close warning").props.onPress());
   expect(route.replace).not.toHaveBeenCalled();
   await act(async () => button("Review Candidates").props.onPress());
-  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true, checked: true });
   await act(async () => button("Preview Month Close warning").props.onPress());
   await act(async () => button("Continue Month Close anyway").props.onPress());
   expect(route.replace).toHaveBeenCalledExactlyOnceWith("/month-close");
@@ -143,7 +143,7 @@ test("later Candidates without a segment open Can wait when nothing needs you no
   route.segment = undefined;
   intakeState.wait = [candidate("later")];
   await act(async () => { root = create(createElement(DraftsRoute)); });
-  expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
   expect(text()).toContain("Groceries");
 });
 
@@ -151,31 +151,31 @@ test("a priority Candidate without a segment opens Needs you now", async () => {
   route.segment = undefined;
   intakeState.now = [candidate("c1")];
   await act(async () => { root = create(createElement(DraftsRoute)); });
-  expect(button("Needs you now, 1").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Needs you now, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
 });
 
 test("a manual segment choice is kept when the inbox still has no priority rows", async () => {
   route.segment = undefined;
   intakeState.wait = [candidate("later")];
   await act(async () => { root = create(createElement(DraftsRoute)); });
-  expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
   await act(async () => button("Needs you now, 0").props.onPress());
-  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true, checked: true });
   await act(async () => { root.update(createElement(DraftsRoute)); });
-  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true, checked: true });
 });
 
 test("a manual Can wait choice survives when the priority count changes", async () => {
   route.segment = undefined;
   intakeState.now = [candidate("c1")];
   await act(async () => { root = create(createElement(DraftsRoute)); });
-  expect(button("Needs you now, 1").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Needs you now, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
   await act(async () => button("Can wait, 0").props.onPress());
-  expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true });
+  expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true, checked: true });
   intakeState.now = [candidate("c1"), candidate("c2")];
   await act(async () => { root.update(createElement(DraftsRoute)); });
-  expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true });
-  expect(button("Needs you now, 2").props.accessibilityState).toEqual({ selected: false });
+  expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true, checked: true });
+  expect(button("Needs you now, 2").props.accessibilityState).toEqual({ selected: false, checked: false });
 });
 
 test("Confirm all Ready retains the Convex payload and waits for local acknowledgement before success", async () => {
