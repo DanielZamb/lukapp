@@ -5,7 +5,7 @@ import {
 } from "@gorhom/bottom-sheet";
 import type { RefObject } from "react";
 import { Text } from "react-native";
-import { Choice, Header, SecondaryButton, theme, ui } from "../../ui/core";
+import { Choice, Header, SecondaryButton, useUi, useTheme } from "../../ui/core";
 import { spacing } from "../../ui/tokens";
 
 export function PlaceSheet(props: {
@@ -20,6 +20,8 @@ export function PlaceSheet(props: {
   onSelect: (id: string) => void;
   onAdd: () => void;
 }) {
+  const ui = useUi();
+  const theme = useTheme();
   const visible = props.places?.filter(
     (place) =>
       place.id !== props.excludedId &&

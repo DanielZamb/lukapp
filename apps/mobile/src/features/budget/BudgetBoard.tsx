@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, Screen, SecondaryButton, theme, ui } from "../../ui/core";
+import type { Theme } from "../../ui/tokens";
+import { Header, PrimaryButton, Screen, SecondaryButton, useUi, useTheme } from "../../ui/core";
 import { font, fontSize, radius, spacing } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import { compactAmount, jarPresentation, monthLabel, nextAction, type BudgetJar } from "./model";
@@ -16,7 +18,26 @@ export type BudgetBoardProps = {
   onEdit: (jar: BudgetJar) => void;
 };
 
+function boardStyles(theme: Theme) {
+  return StyleSheet.create({
+    page: { gap: spacing.xl, paddingTop: spacing.md },
+    grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+    jar: {
+      width: "48%", minHeight: 132, padding: spacing.md, borderRadius: radius.md,
+      borderWidth: 2, overflow: "hidden", justifyContent: "flex-end", gap: spacing.xs,
+    },
+    fill: { position: "absolute", left: 0, right: 0, bottom: 0 },
+    emoji: { fontSize: 28 },
+    name: { fontSize: fontSize.body, fontFamily: font.semibold, color: theme.foreground },
+    amount: { fontSize: fontSize.label, fontFamily: font.bold },
+    pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
+  });
+}
+
 export function BudgetBoard(props: BudgetBoardProps) {
+  const ui = useUi();
+  const theme = useTheme();
+  const styles = useMemo(() => boardStyles(theme), [theme]);
   const action = nextAction(props.jars, props.month);
   return (
     <Screen contentStyle={styles.page}>
@@ -35,6 +56,8 @@ export function BudgetBoard(props: BudgetBoardProps) {
 }
 
 function Jar({ jar, currency, color, onPress }: { jar: BudgetJar; currency: string; color: string; onPress: () => void }) {
+  const theme = useTheme();
+  const styles = useMemo(() => boardStyles(theme), [theme]);
   const { over, amount, fill } = jarPresentation(jar);
   const value = formatMoney({ currency, minorUnits: amount });
   const limit = formatMoney({ currency, minorUnits: jar.limitMinorUnits });
@@ -55,17 +78,3 @@ function Jar({ jar, currency, color, onPress }: { jar: BudgetJar; currency: stri
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  page: { gap: spacing.xl, paddingTop: spacing.md },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  jar: {
-    width: "48%", minHeight: 132, padding: spacing.md, borderRadius: radius.md,
-    borderWidth: 2, overflow: "hidden", justifyContent: "flex-end", gap: spacing.xs,
-  },
-  fill: { position: "absolute", left: 0, right: 0, bottom: 0 },
-  emoji: { fontSize: 28 },
-  name: { fontSize: fontSize.body, fontFamily: font.semibold, color: theme.foreground },
-  amount: { fontSize: fontSize.label, fontFamily: font.bold },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
-});

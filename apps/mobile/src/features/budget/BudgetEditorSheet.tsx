@@ -1,14 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
-import {
-  Choice,
-  Header,
-  PrimaryButton,
-  SecondaryButton,
-  theme,
-  ui,
-} from "../../ui/core";
+import { Choice, Header, PrimaryButton, SecondaryButton, useUi, useTheme } from "../../ui/core";
 import { spacing } from "../../ui/tokens";
 import type { BudgetCategory } from "./model";
 
@@ -37,6 +30,8 @@ export type BudgetEditorSheetProps = {
 
 // Mounted for one editor lifetime so late acknowledgements cannot affect a newer sheet.
 export function BudgetEditorSheet(props: BudgetEditorSheetProps) {
+  const ui = useUi();
+  const theme = useTheme();
   const sheet = useRef<BottomSheetModal>(null);
   const active = useRef(false);
   useLayoutEffect(() => {

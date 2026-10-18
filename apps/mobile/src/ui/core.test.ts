@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { ActionTile, Field, ListGroup, ListRow } from "./core";
+import { withThemeProvider } from "./testTheme";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
@@ -30,12 +31,12 @@ afterEach(async () => {
 test("Field renders label, input, and helper copy", async () => {
   await act(async () => {
     root = create(
-      createElement(Field, {
+      withThemeProvider(createElement(Field, {
         label: "Amount",
         helperText: "Enter an amount.",
         value: "10",
         onChangeText: vi.fn(),
-      }),
+      })),
     );
   });
   const text = root?.root.findAllByType("text").map((node) => node.children.join("")) ?? [];
@@ -48,13 +49,13 @@ test("ActionTile with count 0 stays pressable and shows 0", async () => {
   const onPress = vi.fn();
   await act(async () => {
     root = create(
-      createElement(ActionTile, {
+      withThemeProvider(createElement(ActionTile, {
         title: "Drafts",
         detail: "On this device",
         icon: "document-text-outline",
         count: 0,
         onPress,
-      }),
+      })),
     );
   });
   const labels =
@@ -69,7 +70,7 @@ test("ActionTile with count 0 stays pressable and shows 0", async () => {
 test("ListRow shows chevron only when actionable and marks the last grouped row", async () => {
   await act(async () => {
     root = create(
-      createElement(
+      withThemeProvider(createElement(
         ListGroup,
         null,
         createElement(ListRow, { title: "Static", value: "COP 1" }),
@@ -79,7 +80,7 @@ test("ListRow shows chevron only when actionable and marks the last grouped row"
           value: "COP 2",
           onPress: vi.fn(),
         }),
-      ),
+      )),
     );
   });
   const text =
@@ -99,12 +100,12 @@ test("ListRow shows chevron only when actionable and marks the last grouped row"
 test("primary ActionTile detail text uses full opacity on primaryForeground", async () => {
   await act(async () => {
     root = create(
-      createElement(ActionTile, {
+      withThemeProvider(createElement(ActionTile, {
         title: "Drafts",
         detail: "Coming later",
         icon: "document-text-outline",
         primary: true,
-      }),
+      })),
     );
   });
   const detailNode = root?.root

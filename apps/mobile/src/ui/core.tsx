@@ -8,7 +8,6 @@ import {
 import {
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -19,56 +18,28 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { font, fontSize, radius, spacing, themes, touchTarget } from "./tokens";
+import { useThemeContext } from "./themeContext";
 
+export {
+  ThemeProvider,
+  useTheme,
+  useThemeMode,
+  useSetThemeMode,
+  useUi,
+} from "./themeContext";
+
+/** Static light theme for tests that assert palette values without a provider. */
 export const theme = themes.light;
-export const ui = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.background },
-  content: { padding: spacing.xxl, gap: spacing.xxl, flexGrow: 1 },
-  title: {
-    fontFamily: font.bold,
-    fontSize: fontSize.title,
-    color: theme.foreground,
-  },
-  body: {
-    fontFamily: font.regular,
-    fontSize: fontSize.body,
-    color: theme.foreground,
-  },
-  muted: {
-    fontFamily: font.regular,
-    fontSize: fontSize.body,
-    color: theme.mutedForeground,
-  },
-  label: {
-    fontFamily: font.bold,
-    fontSize: fontSize.label,
-    color: theme.mutedForeground,
-    letterSpacing: 1,
-  },
-  hero: {
-    fontFamily: font.extrabold,
-    fontSize: fontSize.hero,
-    lineHeight: 52,
-    color: theme.foreground,
-  },
-  input: {
-    minHeight: touchTarget,
-    fontFamily: font.regular,
-    fontSize: fontSize.body,
-    color: theme.foreground,
-  },
-  error: {
-    fontFamily: font.regular,
-    fontSize: fontSize.label,
-    color: theme.danger,
-  },
-  section: { gap: spacing.md },
-});
+
+function useCore() {
+  return useThemeContext();
+}
 
 export function Screen({
   children,
   contentStyle,
 }: PropsWithChildren<{ contentStyle?: StyleProp<ViewStyle> }>) {
+  const { ui } = useCore();
   return (
     <SafeAreaView style={ui.screen}>
       <ScrollView
@@ -94,6 +65,7 @@ export function Header({
   onUser?: () => void;
   titleStyle?: StyleProp<TextStyle>;
 }) {
+  const { theme, ui, styles } = useCore();
   return (
     <View style={styles.header}>
       {onBack && (
@@ -144,6 +116,7 @@ export function PrimaryButton({
   accessibilityLabel,
   trailingIcon = "arrow-forward",
 }: ButtonProps & { pending?: boolean }) {
+  const { theme, styles } = useCore();
   const inactive = disabled || pending;
   return (
     <Pressable
@@ -174,6 +147,7 @@ export function SecondaryButton({
   disabled,
   accessibilityLabel,
 }: ButtonProps) {
+  const { styles } = useCore();
   return (
     <Pressable
       accessibilityRole="button"
@@ -209,6 +183,7 @@ export function Field({
   style,
   ...inputProps
 }: FieldProps) {
+  const { theme, ui, styles } = useCore();
   const showError = invalid || !!error;
   const hint = error ?? helperText;
   return (
@@ -238,6 +213,7 @@ export function Field({
 }
 
 export function ListGroup({ children }: PropsWithChildren) {
+  const { styles } = useCore();
   const items = Children.toArray(children).filter(Boolean);
   return (
     <View style={styles.group}>
@@ -255,6 +231,7 @@ type ListRowProps = {
   detail?: string;
   value?: string;
   onPress?: () => void;
+  icon?: ComponentProps<typeof Ionicons>["name"];
   titleStyle?: StyleProp<TextStyle>;
   valueStyle?: StyleProp<TextStyle>;
   isLast?: boolean;
@@ -265,12 +242,19 @@ export function ListRow({
   detail,
   value,
   onPress,
+  icon,
   titleStyle,
   valueStyle,
   isLast,
 }: ListRowProps) {
+  const { theme, styles } = useCore();
   const content = (
     <>
+      {icon ? (
+        <View style={styles.rowIcon}>
+          <Ionicons name={icon} size={20} color={theme.foreground} />
+        </View>
+      ) : null}
       <View style={styles.rowCopy}>
         <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
         {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
@@ -304,6 +288,7 @@ export function Choice({
   selected: boolean;
   onPress: () => void;
 }) {
+  const { theme, styles } = useCore();
   return (
     <Pressable
       accessibilityRole="radio"
@@ -327,6 +312,32 @@ export function Choice({
   );
 }
 
+export function AppearanceToggle() {
+  const { theme, styles, mode, setMode } = useCore();
+  return (
+    <View style={styles.segmented}>
+      <Pressable
+        accessibilityRole="radio"
+        accessibilityState={{ selected: mode === "light" }}
+        onPress={() => setMode("light")}
+        style={[styles.segment, mode === "light" && styles.segmentSelected]}
+      >
+        <Ionicons name="sunny-outline" size={20} color={theme.foreground} />
+        <Text style={styles.segmentText}>Light</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="radio"
+        accessibilityState={{ selected: mode === "dark" }}
+        onPress={() => setMode("dark")}
+        style={[styles.segment, mode === "dark" && styles.segmentSelected]}
+      >
+        <Ionicons name="moon-outline" size={20} color={theme.foreground} />
+        <Text style={styles.segmentText}>Dark</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function ActionTile({
   title,
   detail,
@@ -342,6 +353,7 @@ export function ActionTile({
   icon: ComponentProps<typeof Ionicons>["name"];
   count?: number;
 }) {
+  const { theme, styles } = useCore();
   const color = primary ? theme.primaryForeground : theme.foreground;
   const content = (
     <>
@@ -406,6 +418,7 @@ export function ProgressBar({
   value: number;
   label: string;
 }) {
+  const { theme, styles } = useCore();
   const percent = Math.round(Math.min(1, Math.max(0, value)) * 100);
   return (
     <View
@@ -437,6 +450,7 @@ export function ConfirmationScreen({
   onContinue: () => void;
   buttonLabel?: string;
 }) {
+  const { theme, styles } = useCore();
   return (
     <Screen contentStyle={styles.confirmationContent}>
       <View style={styles.confirmation}>
@@ -450,184 +464,3 @@ export function ConfirmationScreen({
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  icon: {
-    width: touchTarget,
-    height: touchTarget,
-    borderRadius: radius.full,
-    backgroundColor: theme.secondary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  headerTitle: {
-    fontFamily: font.extrabold,
-    fontSize: 32,
-    lineHeight: 37,
-    letterSpacing: -0.7,
-    color: theme.foreground,
-  },
-  buttonDisabled: { opacity: 0.45 },
-  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
-  primaryButton: {
-    minHeight: 56,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: theme.primary,
-  },
-  primaryButtonLabel: {
-    fontFamily: font.bold,
-    fontSize: fontSize.action,
-    color: theme.primaryForeground,
-  },
-  secondaryButton: {
-    minHeight: touchTarget,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.background,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  secondaryButtonLabel: {
-    fontFamily: font.semibold,
-    fontSize: fontSize.body,
-    color: theme.foreground,
-    textAlign: "center",
-  },
-  field: { gap: spacing.sm },
-  fieldLabel: {
-    fontFamily: font.semibold,
-    fontSize: 14,
-    color: theme.foreground,
-  },
-  fieldInput: {
-    minHeight: 56,
-    width: "100%",
-    borderWidth: 1,
-    borderColor: theme.ring,
-    backgroundColor: theme.secondary,
-    color: theme.foreground,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontFamily: font.regular,
-    fontSize: fontSize.body,
-  },
-  fieldInputInvalid: { borderColor: theme.danger },
-  fieldHelper: {
-    fontFamily: font.regular,
-    fontSize: fontSize.label,
-    color: theme.mutedForeground,
-  },
-  group: {
-    backgroundColor: theme.secondary,
-    borderRadius: radius.lg,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  row: {
-    minHeight: 70,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.border,
-  },
-  rowLast: { borderBottomWidth: 0 },
-  rowCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
-  rowTitle: {
-    fontFamily: font.semibold,
-    fontSize: fontSize.body,
-    lineHeight: 22,
-    color: theme.foreground,
-  },
-  rowDetail: {
-    fontFamily: font.regular,
-    fontSize: 14,
-    lineHeight: 20,
-    color: theme.mutedForeground,
-  },
-  rowValue: {
-    maxWidth: "42%",
-    fontFamily: font.semibold,
-    fontSize: 14,
-    lineHeight: 20,
-    color: theme.foreground,
-    textAlign: "right",
-  },
-  choice: {
-    minHeight: 76,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-    backgroundColor: theme.secondary,
-  },
-  choiceSelected: { borderWidth: 2, borderColor: theme.primary },
-  tile: {
-    width: "47%",
-    minHeight: 156,
-    justifyContent: "flex-end",
-    padding: spacing.lg,
-    borderRadius: radius.xl,
-    gap: spacing.sm,
-  },
-  tileBadge: {
-    position: "absolute",
-    top: spacing.lg,
-    right: spacing.lg,
-    minWidth: 26,
-    minHeight: 26,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  track: {
-    height: 6,
-    borderRadius: radius.full,
-    backgroundColor: theme.border,
-    overflow: "hidden",
-  },
-  confirmationContent: { flexGrow: 1, justifyContent: "center" },
-  confirmation: {
-    alignItems: "center",
-    gap: spacing.xl,
-  },
-  confirmIcon: {
-    width: 68,
-    height: 68,
-    borderRadius: radius.full,
-    backgroundColor: theme.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  confirmTitle: {
-    fontFamily: font.extrabold,
-    fontSize: 30,
-    lineHeight: 36,
-    color: theme.foreground,
-    textAlign: "center",
-  },
-  confirmDetail: {
-    fontFamily: font.regular,
-    fontSize: fontSize.body,
-    lineHeight: 24,
-    color: theme.mutedForeground,
-    textAlign: "center",
-  },
-});

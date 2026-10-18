@@ -7,7 +7,7 @@ import {
 } from "../src/features/activity";
 import { ActivityRows } from "../src/features/ActivityRows";
 import { formatMoney } from "../src/features/money";
-import { Header, PrimaryButton, Screen, SecondaryButton, ui } from "../src/ui/core";
+import { Header, PrimaryButton, Screen, SecondaryButton, useUi } from "../src/ui/core";
 
 function Account({
   workspaceId,
@@ -18,6 +18,7 @@ function Account({
   profileId: string;
   timeZone: string;
 }) {
+  const ui = useUi();
   const activity = usePostedActivity(workspaceId, timeZone);
   const recent = useRecentActivity(workspaceId, 3, profileId);
   const { posted } = useLocalSearchParams<{ posted?: string }>();

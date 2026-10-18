@@ -5,16 +5,7 @@ import {
 } from "@gorhom/bottom-sheet";
 import type { RefObject } from "react";
 import { Text } from "react-native";
-import {
-  Choice,
-  Field,
-  Header,
-  ListGroup,
-  ListRow,
-  PrimaryButton,
-  theme,
-  ui,
-} from "../../ui/core";
+import { Choice, Field, Header, ListGroup, ListRow, PrimaryButton, useUi, useTheme } from "../../ui/core";
 import { spacing } from "../../ui/tokens";
 import type { PlaceDraft } from "./usePostingEditor";
 import type { PlaceKind } from "./pendingPostingSchema";
@@ -40,6 +31,8 @@ export function AccountSetupForm(props: {
   onSubmit: () => void;
   onDismiss: () => void;
 }) {
+  const ui = useUi();
+  const theme = useTheme();
   const value = props.value;
   const owed =
     value?.productKind === "creditCard" || value?.productKind === "loan";

@@ -14,10 +14,12 @@ import { api } from "./api";
 import { parseMoney } from "./money";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { deviceTimeZone } from "./timeZones";
-import { Choice, Field, Header, PrimaryButton, theme, ui } from "../ui/core";
+import { Choice, Field, Header, PrimaryButton, useUi, useTheme } from "../ui/core";
 import { spacing } from "../ui/tokens";
 
 export function Setup({ onComplete }: { onComplete: () => void }) {
+  const ui = useUi();
+  const theme = useTheme();
   const recordInteraction = useLocalEntryInteraction();
   const reportFailure = useDeviceAccessFailure();
   const sheet = useRef<BottomSheetModal>(null);

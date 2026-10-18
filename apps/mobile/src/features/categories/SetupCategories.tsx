@@ -1,7 +1,7 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useRef } from "react";
 import { Pressable, Text, View } from "react-native";
-import { SecondaryButton, theme, ui } from "../../ui/core";
+import { SecondaryButton, useUi, useTheme } from "../../ui/core";
 import { radius, spacing, touchTarget } from "../../ui/tokens";
 import { CategorySheet } from "./CategorySheet";
 import type { CategorySelection } from "./model";
@@ -16,6 +16,8 @@ export function SetupCategories({
   onChange: (selections: CategorySelection[]) => void;
   disabled: boolean;
 }) {
+  const ui = useUi();
+  const theme = useTheme();
   const sheet = useRef<BottomSheetModal>(null);
   const picker = useCategoryPicker(
     { kind: "setup", selections, onChange },

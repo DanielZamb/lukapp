@@ -1,4 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useMemo } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -7,17 +8,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import {
-  Field,
-  Header,
-  ListGroup,
-  ListRow,
-  PrimaryButton,
-  Screen,
-  SecondaryButton,
-  theme,
-  ui,
-} from "../../ui/core";
+import type { Theme } from "../../ui/tokens";
+import { Field, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useUi, useTheme } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export type EntryType = "normal" | "initial" | "transfer";
@@ -56,7 +48,104 @@ export type PostingFormProps = {
   lockEntryType?: boolean;
 };
 
+function postingFormStyles(theme: Theme) {
+  return StyleSheet.create({
+    rowTitle: { fontFamily: font.bold },
+    rowValue: { fontFamily: font.semibold },
+    banner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      padding: spacing.sm,
+      paddingLeft: spacing.lg,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.secondary,
+    },
+    bannerTitle: {
+      fontFamily: font.bold,
+      fontSize: fontSize.body,
+      color: theme.foreground,
+    },
+    detail: {
+      fontFamily: font.regular,
+      fontSize: fontSize.label,
+      color: theme.mutedForeground,
+    },
+    track: {
+      flexDirection: "row",
+      padding: spacing.xs,
+      borderRadius: radius.full,
+      backgroundColor: theme.secondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    activeSegment: {
+      flex: 1,
+      minHeight: touchTarget,
+      borderRadius: radius.full,
+      backgroundColor: theme.background,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    segment: {
+      flex: 1,
+      minHeight: touchTarget,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    segmentText: {
+      fontFamily: font.bold,
+      fontSize: fontSize.body,
+      color: theme.foreground,
+    },
+    disabledText: {
+      fontFamily: font.semibold,
+      fontSize: fontSize.body,
+      color: theme.mutedForeground,
+    },
+    amountRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      marginVertical: spacing.xxl,
+      minHeight: 72,
+    },
+    currency: {
+      fontFamily: font.extrabold,
+      fontSize: spacing.section,
+      color: theme.mutedForeground,
+    },
+    amount: {
+      flex: 1,
+      fontFamily: font.extrabold,
+      fontSize: fontSize.hero,
+      minHeight: 64,
+      padding: 0,
+    },
+    types: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+    chip: {
+      minHeight: touchTarget,
+      justifyContent: "center",
+      paddingHorizontal: spacing.lg,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderRadius: radius.full,
+      backgroundColor: theme.secondary,
+    },
+    chipText: {
+      fontFamily: font.bold,
+      fontSize: (fontSize.label + fontSize.body) / 2,
+      color: theme.foreground,
+    },
+  });
+}
+
 export function PostingForm(props: PostingFormProps) {
+  const ui = useUi();
+  const theme = useTheme();
+  const styles = useMemo(() => postingFormStyles(theme), [theme]);
   return (
     <Screen contentStyle={{ gap: spacing.xl }}>
       <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
@@ -229,95 +318,3 @@ export function PostingForm(props: PostingFormProps) {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  rowTitle: { fontFamily: font.bold },
-  rowValue: { fontFamily: font.semibold },
-  banner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.sm,
-    paddingLeft: spacing.lg,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: theme.border,
-    backgroundColor: theme.secondary,
-  },
-  bannerTitle: {
-    fontFamily: font.bold,
-    fontSize: fontSize.body,
-    color: theme.foreground,
-  },
-  detail: {
-    fontFamily: font.regular,
-    fontSize: fontSize.label,
-    color: theme.mutedForeground,
-  },
-  track: {
-    flexDirection: "row",
-    padding: spacing.xs,
-    borderRadius: radius.full,
-    backgroundColor: theme.secondary,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  activeSegment: {
-    flex: 1,
-    minHeight: touchTarget,
-    borderRadius: radius.full,
-    backgroundColor: theme.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  segment: {
-    flex: 1,
-    minHeight: touchTarget,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  segmentText: {
-    fontFamily: font.bold,
-    fontSize: fontSize.body,
-    color: theme.foreground,
-  },
-  disabledText: {
-    fontFamily: font.semibold,
-    fontSize: fontSize.body,
-    color: theme.mutedForeground,
-  },
-  amountRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginVertical: spacing.xxl,
-    minHeight: 72,
-  },
-  currency: {
-    fontFamily: font.extrabold,
-    fontSize: spacing.section,
-    color: theme.mutedForeground,
-  },
-  amount: {
-    flex: 1,
-    fontFamily: font.extrabold,
-    fontSize: fontSize.hero,
-    minHeight: 64,
-    padding: 0,
-  },
-  types: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
-  chip: {
-    minHeight: touchTarget,
-    justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderRadius: radius.full,
-    backgroundColor: theme.secondary,
-  },
-  chipText: {
-    fontFamily: font.bold,
-    fontSize: (fontSize.label + fontSize.body) / 2,
-    color: theme.foreground,
-  },
-});

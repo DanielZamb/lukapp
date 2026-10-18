@@ -1,16 +1,5 @@
 import { Text, View } from "react-native";
-import {
-  Choice,
-  Field,
-  Header,
-  ListGroup,
-  ListRow,
-  PrimaryButton,
-  ProgressBar,
-  Screen,
-  SecondaryButton,
-  ui,
-} from "../../ui/core";
+import { Choice, Field, Header, ListGroup, ListRow, PrimaryButton, ProgressBar, Screen, SecondaryButton, useUi } from "../../ui/core";
 import { formatMoney } from "../money";
 import {
   formatRate,
@@ -34,6 +23,7 @@ export function RecoveryBoard(props: {
   onPlan: (id: string) => void;
   onStart: (candidate: RecoveryCandidate) => void;
 }) {
+  const ui = useUi();
   return (
     <Screen>
       <Header title="Savings Recovery" eyebrow="PLANS" onBack={props.onBack} />
@@ -107,6 +97,7 @@ export function RecoveryDraft(props: {
   onSave: () => void;
   onBack: () => void;
 }) {
+  const ui = useUi();
   const limits = limitsCopy(props.currency, props.suggestion);
   const principal = formatMoney({
     currency: props.currency,
@@ -183,6 +174,7 @@ export function RecoveryPlanScreen(props: {
   onMove: () => void;
   onFind: () => void;
 }) {
+  const ui = useUi();
   const due = formatMoney({ currency: props.plan.currency, minorUnits: props.plan.dueMinorUnits });
   const remaining = formatMoney({ currency: props.plan.currency, minorUnits: props.plan.remainingMinorUnits });
   const complete = props.plan.remainingMinorUnits === 0;
@@ -231,6 +223,7 @@ export function RecoveryMoveScreen(props: {
   submit: () => Promise<void>;
   onBack: () => void;
 }) {
+  const ui = useUi();
   const places = props.sources.filter((place) => place.id !== props.plan.destinationFinancialAccountProfileId);
   return (
     <Screen>

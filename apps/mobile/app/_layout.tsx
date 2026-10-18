@@ -28,7 +28,8 @@ import {
   PrimaryButton,
   Screen,
   SecondaryButton,
-  ui,
+  ThemeProvider,
+  useUi,
 } from "../src/ui/core";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -36,24 +37,47 @@ const url = process.env.EXPO_PUBLIC_CONVEX_URL;
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const convex = url ? new ConvexReactClient(url) : null;
 
-export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
+  const ui = useUi();
   const report = useDeviceAccessFailure();
   useLayoutEffect(() => { report(error); }, [error, report]);
   return (
+    <Screen>
+      <Header title="Could not load your money" />
+      <Text style={ui.body}>Check your connection and try again.</Text>
+      <PrimaryButton label="Try again" onPress={retry} />
+    </Screen>
+  );
+}
+
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return (
     <SafeAreaProvider>
-      <Screen>
-        <Header title="Could not load your money" />
-        <Text style={ui.body}>Check your connection and try again.</Text>
-        <PrimaryButton label="Try again" onPress={retry} />
-      </Screen>
+      <ThemeProvider>
+        <ErrorFallback {...props} />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
+function ConfigNeeded() {
+  const ui = useUi();
+  return (
+    <Screen>
+      <Header title="Development configuration needed" />
+      <Text style={ui.body}>
+        Set EXPO_PUBLIC_CONVEX_URL and EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, then
+        restart Metro.
+      </Text>
+    </Screen>
+  );
+}
+
 function SignIn({
   onSessionCreated,
 }: {
   onSessionCreated: (sessionId: string) => void;
 }) {
+  const ui = useUi();
   const { startSSOFlow } = useSSO();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -102,6 +126,7 @@ function SignIn({
   );
 }
 function Admission() {
+  const ui = useUi();
   const { isLoaded, isSignedIn } = useAuth();
   const { signOut } = useClerk();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -172,19 +197,16 @@ export default function Layout() {
   if (!convex || !publishableKey)
     return (
       <SafeAreaProvider>
-        <Screen>
-          <Header title="Development configuration needed" />
-          <Text style={ui.body}>
-            Set EXPO_PUBLIC_CONVEX_URL and EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
-            then restart Metro.
-          </Text>
-        </Screen>
+        <ThemeProvider>
+          <ConfigNeeded />
+        </ThemeProvider>
       </SafeAreaProvider>
     );
   if (!loaded && !error) return null;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <ThemeProvider>
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
           <LocalEntryGate
             renderSignIn={(onSessionCreated) => (
@@ -198,6 +220,7 @@ export default function Layout() {
             </ConvexProviderWithClerk>
           </LocalEntryGate>
         </ClerkProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

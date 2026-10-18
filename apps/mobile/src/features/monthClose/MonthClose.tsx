@@ -5,7 +5,7 @@ import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalInputLease } from "../../local-auth/localInput";
 import { lockWhenClear } from "./lockWhenClear";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
-import { Header, Screen, ui } from "../../ui/core";
+import { Header, Screen, useUi } from "../../ui/core";
 import { api } from "../api";
 import { useLocalEntryDrafts } from "../useLocalEntryDrafts";
 import { MonthCloseScreen } from "./MonthCloseScreen";
@@ -37,6 +37,7 @@ export function MonthClose({
   onBack: () => void;
   onReviewDrafts: () => void;
 }) {
+  const ui = useUi();
   const intake = useIntakeCandidates({ subject, workspaceId, currency });
   const drafts = useLocalEntryDrafts({
     subject,

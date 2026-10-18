@@ -1,7 +1,7 @@
 import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import { Choice, Field, ui } from "../ui/core";
+import { Choice, Field, useUi } from "../ui/core";
 import { spacing } from "../ui/tokens";
 import {
   deviceTimeZone,
@@ -19,6 +19,7 @@ export function TimeZonePicker({
   onChange: (timeZone: string) => void;
   disabled?: boolean;
 }) {
+  const ui = useUi();
   const [query, setQuery] = useState("");
   const zones = useMemo(
     () => filterTimeZones(orderedTimeZones(deviceTimeZone()), query),

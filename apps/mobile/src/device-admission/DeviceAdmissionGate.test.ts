@@ -42,7 +42,8 @@ vi.mock("react-native", () => ({
 }));
 vi.mock("../ui/core", () => ({
   Header: "header", Screen: "screen", PrimaryButton: "button", SecondaryButton: "button",
-  ui: {}, theme: { mutedForeground: "muted" },
+  useUi: () => ({ body: {}, error: {}, muted: {}, label: {}, screen: {}, input: {} }),
+  useTheme: () => ({ background: "#fff", foreground: "#000", mutedForeground: "#666", border: "#eee", primary: "#000" }),
 }));
 vi.mock("../local-auth/installation", () => ({ useLocalInstallId: () => "existing-install-marker" }));
 vi.mock("../local-auth/interaction", () => ({ useLocalEntryInteraction: () => sdk.interaction }));

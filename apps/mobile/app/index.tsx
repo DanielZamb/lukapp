@@ -18,16 +18,7 @@ import { spentMonthEyebrow } from "../src/features/timeZones";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { useAttention } from "../src/features/attention/useAttention";
 import { updatesDetail } from "../src/features/attention/model";
-import {
-  ActionTile,
-  ConfirmationScreen,
-  Header,
-  PrimaryButton,
-  ProgressBar,
-  Screen,
-  SecondaryButton,
-  ui,
-} from "../src/ui/core";
+import { ActionTile, ConfirmationScreen, Header, PrimaryButton, ProgressBar, Screen, SecondaryButton, useUi } from "../src/ui/core";
 import { spacing, touchTarget } from "../src/ui/tokens";
 
 function Home({
@@ -43,6 +34,7 @@ function Home({
   subject: string;
   currentPeriod: Parameters<typeof useAttention>[0]["currentPeriod"];
 }) {
+  const ui = useUi();
   const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
   const { inboxCount, alerts } = useAttention({
