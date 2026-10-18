@@ -10,7 +10,7 @@ import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { applyBatchResults, readyTotalMinorUnits } from "../src/features/intake/applyBatch";
 import { confirmReadyBatches, handleReadyBatchError } from "../src/features/intake/confirmReady";
-import { devSeedAction, readySeedCandidate, seedCandidate } from "../src/features/intake/devSeed";
+import { devSeedAction, readySeedCandidate, seedCandidate, seedDiscardNotices } from "../src/features/intake/devSeed";
 import { suggestionOf } from "../src/features/intake/facts";
 import { api } from "../src/features/api";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
@@ -49,6 +49,7 @@ function Drafts({
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
   const intake = useIntakeCandidates({ subject, workspaceId, currency });
   const [discardNotices, setDiscardNotices] = useState<DiscardNotice[]>([]);
+  const [discardRevision, setDiscardRevision] = useState(0);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -67,7 +68,7 @@ function Drafts({
     }
     void refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, [subject]);
+  }, [subject, discardRevision]);
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
   const seedAction = devSeedAction(seed, seedId);
@@ -102,6 +103,13 @@ function Drafts({
     if (!action) return;
     const actionKey = `${action.kind}:${action.id}`;
     if (handledSeed.current === actionKey) return;
+    if (action.kind === "discard") {
+      handledSeed.current = actionKey;
+      void seedDiscardNotices(subject, action.id).then((notices) => {
+        if (notices) setDiscardRevision((revision) => revision + 1);
+      }).catch(() => { handledSeed.current = null; });
+      return;
+    }
     const candidate = action.kind === "ready" ? readySeedCandidate({
       workspaceId, profileId, currency, seedId: action.id,
       categoryId: seedCategoryId, categories: seedCategories, timeZone,
@@ -111,7 +119,7 @@ function Drafts({
     if (action.kind === "remove") void intake.consume(action.id);
     else if (candidate) void intake.accept(candidate);
     else void intake.accept(seedCandidate(workspaceId, profileId, currency, action.id));
-  }, [seed, seedId, seedCategoryId, seedCategories, places, workspaceId, profileId, currency, timeZone, intake.accept, intake.consume]);
+  }, [seed, seedId, seedCategoryId, seedCategories, places, subject, workspaceId, profileId, currency, timeZone, intake.accept, intake.consume]);
   return (
     <DraftsScreen
       drafts={drafts.items}

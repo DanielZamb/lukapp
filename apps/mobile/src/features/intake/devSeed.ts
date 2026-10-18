@@ -1,8 +1,9 @@
 import type { IntakeCandidate } from "./candidates";
 import type { UserCategory } from "../../../../../src/accounting/categories/types";
 import { defaultAccountingDate } from "../timeZones";
+import { addDiscardNotice, readDiscardNotices, type DiscardNotice } from "../localDiscardNotices";
 
-type DevSeedAction = { kind: "plant" | "ready" | "remove"; id: string };
+type DevSeedAction = { kind: "plant" | "ready" | "discard" | "remove"; id: string };
 
 export function devSeedAction(
   seed: string | string[] | undefined,
@@ -16,8 +17,29 @@ export function devSeedAction(
   ) return null;
   if (seed === "1") return { kind: "plant", id: seedId };
   if (seed === "ready") return { kind: "ready", id: seedId };
+  if (seed === "discard") return { kind: "discard", id: seedId };
   if (seed === "remove") return { kind: "remove", id: seedId };
   return null;
+}
+
+export async function seedDiscardNotices(
+  subject: string,
+  seedId: string,
+  dev = typeof __DEV__ !== "undefined" && __DEV__,
+): Promise<DiscardNotice[] | null> {
+  if (!devSeedAction("discard", seedId, dev) ||
+    seedId !== "QA-DRAFTS-20261018-D1" || !subject.trim()) return null;
+  const fixtures: DiscardNotice[] = [
+    { reason: "Missing amount or direction", time: Date.parse("2026-10-18T14:42:00Z") },
+    { reason: "Security alert", time: Date.parse("2026-10-17T23:18:00Z") },
+  ];
+  const existing = await readDiscardNotices(subject);
+  for (const notice of fixtures) {
+    if (!existing.some((item) => item.reason === notice.reason && item.time === notice.time)) {
+      await addDiscardNotice(subject, notice);
+    }
+  }
+  return readDiscardNotices(subject);
 }
 
 export function readySeedCandidate(input: {
