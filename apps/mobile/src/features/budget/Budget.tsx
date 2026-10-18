@@ -9,7 +9,6 @@ import { Screen, theme } from "../../ui/core";
 import { api } from "../api";
 import { usePostedActivity } from "../activity";
 import { experienceLevel } from "../levelDoor/model";
-import { useLevelNavigation } from "../levelDoor/navigation";
 import { BudgetBoard } from "./BudgetBoard";
 import { BudgetCreation } from "./BudgetCreation";
 import { BudgetEditorSheet } from "./BudgetEditorSheet";
@@ -26,7 +25,6 @@ export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string;
   const board = useQuery(api.budget.evaluate, { workspaceId, refreshKey, month: calendar.month });
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
   const activity = usePostedActivity(workspaceId, timeZone);
-  const navigation = useLevelNavigation();
   const interact = useLocalEntryInteraction();
   if (!board || !categories || !activity) return <Screen><ActivityIndicator accessibilityLabel="Loading Budget" /></Screen>;
   if (creation) return <BudgetCreation key={creation.key} seed={creation.seed} categories={creation.categories}
@@ -53,7 +51,7 @@ export function Budget({ workspaceId, timeZone, onBack }: { workspaceId: string;
         }} />
       {editor && <Editor key={editor.key} seed={editor.seed} categories={editor.categories}
         onClose={() => { setEditor(null); refresh(Crypto.randomUUID()); }}
-        onSaved={() => { setEditor(null); refresh(Crypto.randomUUID()); setSaved(true); navigation.home(); }} />}
+        onSaved={() => { setEditor(null); refresh(Crypto.randomUUID()); setSaved(true); }} />}
     </>
   );
 }

@@ -186,7 +186,7 @@ test("composer waits for spending and preserves a failed save for a safe retry",
   expect(reset).toHaveBeenCalledOnce();
 });
 
-test("the live next action opens the current jar revision and uses the category's saved color", async () => {
+test("editing an existing limit closes and refreshes the board with a saved confirmation without navigating", async () => {
   board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, availableCategories: [], jars: [{
     category: { id: "food", name: "Food", emoji: "🛒" }, revisionId: "live-revision", limitMinorUnits: 10_000_000, consumptionMinorUnits: 8_000_000,
   }] };
@@ -196,9 +196,14 @@ test("the live next action opens the current jar revision and uses the category'
   await act(async () => screen.findByProps({ accessibilityLabel: "Food hit 80%" }).props.onPress());
   expect(screen.find((node) => String(node.type) === "EditorSheet").props).toMatchObject({ title: "Edit Budget", categoryFixed: true, amount: "100.000,00" });
   await act(async () => screen.find((node) => String(node.type) === "EditorSheet").props.onAmount("120.000"));
+  const evaluationBeforeSave = queries.mock.calls.filter(([name]) => name === "budget:evaluate").at(-1);
   await act(async () => screen.find((node) => String(node.type) === "EditorSheet").props.onSave());
   expect(save.mock.calls[0][0]).toMatchObject({ categoryId: "food", expectedRevisionId: "live-revision", limit: { currency: "COP", minorUnits: 12_000_000 } });
-  expect(reset.mock.calls).toEqual([[{ type: "RESET", payload: { index: 0, routes: [{ name: "index" }] } }]]);
+  expect(reset).not.toHaveBeenCalled();
+  expect(screen.findAll((node) => String(node.type) === "EditorSheet")).toHaveLength(0);
+  expect(texts(screen)).toContain("Budgets");
+  expect(texts(screen)).toContain("Budget saved");
+  expect(queries.mock.calls.filter(([name]) => name === "budget:evaluate").at(-1)).not.toEqual(evaluationBeforeSave);
   await act(async () => screen.findByProps({ accessibilityLabel: "Back" }).props.onPress());
   expect(back).toHaveBeenCalledOnce();
 });
