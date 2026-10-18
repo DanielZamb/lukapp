@@ -10,7 +10,7 @@ import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { applyBatchResults, readyTotalMinorUnits } from "../src/features/intake/applyBatch";
 import { confirmReadyBatches, handleReadyBatchError } from "../src/features/intake/confirmReady";
-import { devSeedAction, seedCandidate } from "../src/features/intake/devSeed";
+import { devSeedAction, readySeedCandidate, seedCandidate } from "../src/features/intake/devSeed";
 import { suggestionOf } from "../src/features/intake/facts";
 import { api } from "../src/features/api";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
@@ -29,16 +29,19 @@ function Drafts({
   currentPeriod,
   currency,
   profileId,
+  timeZone,
 }: {
   subject: string;
   workspaceId: string;
   currentPeriod: { year: number; month: number };
   currency: "COP" | "USD";
   profileId: string;
+  timeZone: string;
 }) {
-  const { seed, seedId, segment: segmentParam } = useLocalSearchParams<{
+  const { seed, seedId, seedCategoryId, segment: segmentParam } = useLocalSearchParams<{
     seed?: string | string[];
     seedId?: string | string[];
+    seedCategoryId?: string | string[];
     segment?: string | string[];
   }>();
   const requestedSegment = Array.isArray(segmentParam) ? segmentParam[0] : segmentParam;
@@ -67,6 +70,10 @@ function Drafts({
   }, [subject]);
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
+  const seedAction = devSeedAction(seed, seedId);
+  const seedCategories = useQuery(api.accounting.listUserCategories,
+    seedAction?.kind === "ready" && typeof seedCategoryId === "string" && seedCategoryId.trim()
+      ? { workspaceId } : "skip");
   const reportFailure = useDeviceAccessFailure();
   const listsLoaded =
     drafts.count !== null && (intake.count !== null || !!intake.error);
@@ -95,10 +102,16 @@ function Drafts({
     if (!action) return;
     const actionKey = `${action.kind}:${action.id}`;
     if (handledSeed.current === actionKey) return;
+    const candidate = action.kind === "ready" ? readySeedCandidate({
+      workspaceId, profileId, currency, seedId: action.id,
+      categoryId: seedCategoryId, categories: seedCategories, timeZone,
+    }) : null;
+    if (action.kind === "ready" && (!candidate || !places?.some((place) => place.id === profileId))) return;
     handledSeed.current = actionKey;
     if (action.kind === "remove") void intake.consume(action.id);
+    else if (candidate) void intake.accept(candidate);
     else void intake.accept(seedCandidate(workspaceId, profileId, currency, action.id));
-  }, [seed, seedId, workspaceId, profileId, currency, intake.accept, intake.consume]);
+  }, [seed, seedId, seedCategoryId, seedCategories, places, workspaceId, profileId, currency, timeZone, intake.accept, intake.consume]);
   return (
     <DraftsScreen
       drafts={drafts.items}
@@ -177,6 +190,7 @@ export default function DraftsRoute() {
       currentPeriod={defaults.workspace.currentAccountingPeriod}
       currency={defaults.workspace.functionalCurrency === "USD" ? "USD" : "COP"}
       profileId={defaults.financialAccountProfile.id}
+      timeZone={defaults.workspace.timeZone}
     />
   ) : defaults === null ? (
     <Redirect href="/" />
