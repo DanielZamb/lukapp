@@ -232,6 +232,11 @@ export class EntryController {
     }
   }
   async reauthenticate() {
+    if (this.snapshot.state.kind === "locked") {
+      const generation = ++this.generation;
+      await this.requireReauthentication(generation);
+      if (!this.current(generation)) return;
+    }
     if (this.snapshot.state.kind !== "reauthentication") return;
     const generation = ++this.generation;
     this.approvedSession = null;

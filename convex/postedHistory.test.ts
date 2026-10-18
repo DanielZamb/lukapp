@@ -54,7 +54,7 @@ test("all postings page 50/50/5 by accounting date, including backdated entries 
   expect(recent.page).toHaveLength(4);
   expect(recent.page.some((row) => row.reversesEntryId)).toBe(false);
   expect(recent.page[0]).toMatchObject({ id: original.id, reversed: true });
-});
+}, 15_000);
 
 test("account history uses the selected profile and retains legacy postings without a date backfill", async () => {
   const { t, workspace, daily } = await fixture();

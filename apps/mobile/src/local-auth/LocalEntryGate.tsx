@@ -27,7 +27,7 @@ import {
   unlockBiometry,
   writeInstallMarker,
 } from "./nativeEntry";
-import { Header, PrimaryButton, Screen, ui } from "../ui/core";
+import { Header, PrimaryButton, SecondaryButton, Screen, ui } from "../ui/core";
 
 export function LocalEntryGate({
   children,
@@ -187,6 +187,10 @@ export function LocalEntryGate({
           <PrimaryButton
             label="Unlock Lukapp"
             onPress={() => void controller.unlock()}
+          />
+          <SecondaryButton
+            label="Sign in instead"
+            onPress={() => void controller.reauthenticate()}
           />
         </>
       )}
