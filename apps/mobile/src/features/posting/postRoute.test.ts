@@ -236,6 +236,45 @@ test.each(["normal", "transfer"] satisfies Array<NonNullable<PostingFormProps["e
   },
 );
 
+test.each(["normal", "transfer", "initial"] satisfies Array<NonNullable<PostingFormProps["entryType"]>>)(
+  "%s requires a nonblank description before enabling Post",
+  async (entryType) => {
+    queryData.categories = [{
+      id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food",
+      nature: "Expense", natureSource: "answered",
+      classification: { kind: "fallback", version: "test" },
+      style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
+    }];
+    await mount();
+    await act(async () => {
+      formProps().onEntryType?.(entryType);
+      formProps().onAmountChange(entryType === "initial" ? "0" : "-1");
+    });
+    if (entryType === "transfer") {
+      await act(async () => formProps().onDestination?.());
+      const place = root?.root.find((node) => String(node.type) === "place-sheet");
+      await act(async () => place?.props.onSelect("wallet"));
+    }
+    if (entryType !== "initial") {
+      await act(async () => formProps().onCategory());
+      if (!root) throw new Error("Post route is not mounted");
+      const sheet = root.root.find((node) => String(node.type) === "category-sheet");
+      await act(async () => sheet.props.onSelect("food"));
+      await act(async () => sheet.props.onDone());
+    }
+    expect(formProps().canSubmit).toBe(false);
+    await act(async () => formProps().onDescriptionChange(" \t\n "));
+    expect(formProps().canSubmit).toBe(false);
+    await act(async () => formProps().onDescriptionChange(" Lunch "));
+    expect(formProps().canSubmit).toBe(true);
+    await act(async () => formProps().onDescriptionChange(""));
+    expect(formProps().canSubmit).toBe(false);
+    expect(writes.save).not.toHaveBeenCalled();
+    expect(writes.post).not.toHaveBeenCalled();
+    expect(confirmOne).not.toHaveBeenCalled();
+  },
+);
+
 test("Initial balance can enable Post without a category", async () => {
   await mount();
   await act(async () => {
