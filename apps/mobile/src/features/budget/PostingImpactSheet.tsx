@@ -40,7 +40,7 @@ export function PostingImpactSheet({
       <BottomSheetScrollView contentContainerStyle={{ padding: spacing.xxl, gap: spacing.xl }}>
         <Header title={description || "Entry"} eyebrow="BUDGET WOULD CROSS" />
         {hits.map((hit, index) => (
-          <Text key={hit.category.id} style={[index === 0 ? { fontSize: 36, fontFamily: font.extrabold } : ui.body, { color: theme.danger }]}>
+          <Text key={`${hit.category.id}-${index}`} style={[index === 0 ? { fontSize: 36, fontFamily: font.extrabold } : ui.body, { color: theme.danger }]}>
             {hit.category.name} {new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(hit.overMinorUnits / 100)} over
           </Text>
         ))}

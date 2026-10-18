@@ -19,7 +19,7 @@ vi.mock("convex/react", () => ({
     getFunctionName(reference).endsWith(":createUserCategory") ? provider.create : provider.restyle,
 }));
 let root: ReactTestRenderer | undefined;
-afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); vi.clearAllMocks(); });
+afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); vi.resetAllMocks(); });
 
 function category(id: string, code = "same"): Category {
   return { id, workspaceId: "workspace", name: id, normalizedName: id, nature: "Expense", natureSource: "answered",
@@ -81,12 +81,12 @@ test("creating an encompassing category replaces the set only after explicit con
   for (const id of ["one", "two", "three", "four"])
     await act(async () => picker.sheet().onSelect(id));
   await act(async () => picker.sheet().onCreateEncompassing());
-  await act(async () => { picker.sheet().onName("Family weekend"); picker.sheet().onAnswer("spend"); });
+  await act(async () => { picker.sheet().onName("Family weekend"); });
   expect(picker.value().ids).toEqual(["one", "two", "three"]);
   provider.create.mockResolvedValueOnce({ kind: "category", category: category("encompassing") });
   await act(async () => picker.sheet().onConfirm());
   expect(picker.value()).toEqual({ ids: ["encompassing"], primaryId: null });
-  expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: { kind: "custom", name: "Family weekend", answer: "spend", style: { emoji: "🏷️", tone: "primary" } } });
+  expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: { kind: "custom", name: "Family weekend", answer: "spend", style: { emoji: "✨", tone: "primary", color: "h270" } } });
 });
 
 test("adding a preset uses the same sheet without replacing selected categories", async () => {
@@ -110,15 +110,82 @@ test("posting waits for all selected classification details and an explicit prim
   expect(canPostCategories({ ...selected, primaryId: "food" }, mixed)).toBe(true);
 });
 
-test("income uses Income categories and receive classification answers in the shared picker", async () => {
+test("income creation inherits receive without asking nature questions", async () => {
   const salary = { ...category("salary"), nature: "Income" as const };
   const picker = await open([category("food"), salary], "in");
   expect(picker.sheet().options?.map((option) => option.key)).toEqual(["salary"]);
   await act(async () => picker.sheet().onCreate());
-  expect(picker.sheet().allowedAnswers).toEqual(["receive", "stillMine", "payDebt"]);
-  await act(async () => { picker.sheet().onName("Salary"); picker.sheet().onAnswer("receive"); });
-  provider.create.mockResolvedValueOnce({ kind: "category", category: salary });
+  await act(async () => { picker.sheet().onName("Bonus"); });
+  provider.create.mockResolvedValueOnce({ kind: "category", category: { ...category("bonus"), nature: "Income" } });
   await act(async () => picker.sheet().onConfirm());
-  expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: { kind: "custom", name: "Salary", answer: "receive", style: { emoji: "🏷️", tone: "primary" } } });
-  expect(picker.value()).toEqual({ ids: ["salary"], primaryId: null });
+  expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: { kind: "custom", name: "Bonus", answer: "receive", style: { emoji: "✨", tone: "primary", color: "h270" } } });
+  expect(picker.value()).toEqual({ ids: ["bonus"], primaryId: null });
+});
+
+
+test("custom creation selects the new category, persists its look and closes", async () => {
+  const picker = await open([category("food")]);
+  await act(async () => picker.sheet().onSelect("food"));
+  await act(async () => picker.sheet().onCreate());
+  expect(picker.sheet().canConfirm).toBe(false);
+  await act(async () => {
+    picker.sheet().onName("  Weekend  ");
+    picker.sheet().onStyle({ emoji: "👩🏽‍💻", tone: "primary", color: "olive" });
+  });
+  expect(picker.sheet().canConfirm).toBe(true);
+  provider.create.mockResolvedValueOnce({ kind: "category", category: category("weekend") });
+  await act(async () => picker.sheet().onConfirm());
+  expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: {
+    kind: "custom", name: "Weekend", answer: "spend", style: { emoji: "👩🏽‍💻", tone: "primary", color: "olive" },
+  } });
+  expect(picker.value()).toEqual({ ids: ["food", "weekend"], primaryId: null });
+  expect(picker.close).toHaveBeenCalledOnce();
+  expect(picker.sheet().editor).toBeNull();
+});
+
+test.each(["", "   ", "Food", " FÓOD  ", "food"])("creation blocks empty or duplicate name %j, including direct confirmation", async (name) => {
+  const picker = await open([category("Food")]);
+  await act(async () => picker.sheet().onCreate());
+  await act(async () => picker.sheet().onName(name));
+  expect(picker.sheet().canConfirm).toBe(false);
+  await act(async () => picker.sheet().onConfirm());
+  expect(provider.create).not.toHaveBeenCalled();
+  expect(picker.close).not.toHaveBeenCalled();
+});
+
+test("the twelve-category limit uses the full list even when search hides it", async () => {
+  const picker = await open(Array.from({ length: 12 }, (_, index) => category(`category-${index}`)));
+  await act(async () => picker.sheet().onSearch("New category"));
+  expect(picker.sheet().options).toEqual([]);
+  await act(async () => picker.sheet().onCreate());
+  expect(picker.sheet().canConfirm).toBe(false);
+  await act(async () => picker.sheet().onConfirm());
+  expect(provider.create).not.toHaveBeenCalled();
+});
+
+test("Add your own at three explicitly replaces the set and selects the created category", async () => {
+  const picker = await open([category("one"), category("two"), category("three")]);
+  for (const id of ["one", "two", "three"])
+    await act(async () => picker.sheet().onSelect(id));
+  await act(async () => picker.sheet().onCreate());
+  expect(picker.sheet().replacingSelection).toBe(true);
+  await act(async () => picker.sheet().onName("Together"));
+  provider.create.mockResolvedValueOnce({ kind: "category", category: category("together") });
+  await act(async () => picker.sheet().onConfirm());
+  expect(picker.value()).toEqual({ ids: ["together"], primaryId: null });
+  expect(picker.close).toHaveBeenCalledOnce();
+});
+
+test("a failed create leaves the selection and editor available for retry", async () => {
+  const picker = await open([category("food")]);
+  await act(async () => picker.sheet().onSelect("food"));
+  await act(async () => picker.sheet().onCreate());
+  await act(async () => picker.sheet().onName("Weekend"));
+  provider.create.mockRejectedValueOnce(new Error("offline"));
+  await act(async () => picker.sheet().onConfirm());
+  expect(picker.value()).toEqual({ ids: ["food"], primaryId: null });
+  expect(picker.sheet().editor).toMatchObject({ kind: "custom", name: "Weekend" });
+  expect(picker.sheet().error).toBe("Could not save this category. Try again.");
+  expect(picker.sheet().busy).toBe(false);
+  expect(picker.close).not.toHaveBeenCalled();
 });

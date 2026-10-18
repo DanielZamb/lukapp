@@ -36,6 +36,7 @@ import {
   viewDocument,
   writeDocument,
   countDraftsInMonth,
+  factsFromCommand,
   type LocalEntryDocument,
   type LocalEntryFacts,
   type PostableCommand,
@@ -77,6 +78,20 @@ const opening = {
     accountingDate: "2026-10-17",
     description: "",
     idempotencyKey: "opening-key",
+  },
+} satisfies PostableCommand;
+const transfer = {
+  kind: "transfer",
+  payload: {
+    workspaceId: "workspace",
+    sourceFinancialAccountProfileId: "cash",
+    destinationFinancialAccountProfileId: "savings",
+    amount: { currency: "COP", minorUnits: 50000 },
+    accountingDate: "2026-10-17",
+    description: "Move",
+    idempotencyKey: "transfer-key",
+    userCategoryIds: ["food"],
+    primaryUserCategoryId: "food",
   },
 } satisfies PostableCommand;
 const setup = {
@@ -417,6 +432,13 @@ test("setup and opening posts append their own rows instead of replacing an expe
   ).toMatchObject({ status: "posting", command: setup });
 });
 
+test("factsFromCommand keeps transfer categories for a rejected retry", () => {
+  expect(factsFromCommand(transfer).categories).toEqual({
+    ids: ["food"],
+    primaryId: "food",
+  });
+});
+
 test("an accounting rejection reopens a money draft with its facts", () => {
   const posted = beginPostIn(empty, { command: expense }, now, () => "food");
   const reopened = rejectPostIn(posted.document, "food");
@@ -572,4 +594,20 @@ test("a draft posted or removed by another editor is gone, never recreated under
     expect(act).toThrow(LocalEntryDraftGoneError);
   }
   expect(other.drafts.map((draft) => draft.id)).toEqual(["still-open"]);
+});
+
+test("batch-owned posting drafts stay out of the one-entry session and survive other draft operations", () => {
+  const queued = { id: "batch-row", command: expense };
+  const batch = { queue: [queued], receipts: { count: 0, net: 0 } };
+  const document: LocalEntryDocument = { v: 1, drafts: [], postingBatches: { workspace: batch } };
+  const begun = beginPostIn(document, { command: expense }, now, newId);
+  // The queue's idempotency key owns the saved draft even before its draftId is persisted.
+  expect(restoreFromDocument(begun.document, { workspaceId: "workspace", currency: "COP" }, now)).toEqual({ kind: "blank" });
+  expect(viewDocument(begun.document, "workspace", now).items).toEqual([]);
+  expect(countDraftsInMonth(begun.document, "workspace", { year: 2026, month: 10 }, now)).toBe(0);
+  const restored = parseLocalEntryDocument(JSON.parse(JSON.stringify(begun.document)), now).document;
+  expect(restored.postingBatches).toEqual({ workspace: batch });
+  const rejected = rejectPostIn(restored, begun.draft.id);
+  const kept = keepIn(rejected, { facts }, now, () => "another-draft");
+  expect(removeIn(kept.document, begun.draft.id).postingBatches).toEqual({ workspace: batch });
 });
