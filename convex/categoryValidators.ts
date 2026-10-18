@@ -12,6 +12,7 @@ export const natureAnswer = v.union(
 );
 export const categoryStyle = v.object({
   emoji: v.string(),
+  color: v.optional(v.string()),
   tone: v.union(
     v.literal("primary"),
     v.literal("positive"),

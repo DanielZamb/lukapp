@@ -60,6 +60,13 @@ export function activityRow(
     0,
   );
   const label = placesDetail(entry, namesByLedgerAccountId);
+  const categoryDetail = userCategories
+    .map((category) => category.name)
+    .join(" · ");
+  const detail =
+    entry.policy === "account-transfer@1"
+      ? label
+      : categoryDetail || label;
   return {
     id: entry.id,
     ...(entry.financialAccountProfileId
@@ -67,7 +74,7 @@ export function activityRow(
       : {}),
     title: entry.description || fallbackLabel(entry),
     date: entry.accountingDate,
-    detail: userCategories.map((category) => category.name).join(" · ") || label,
+    detail,
     userCategories,
     ...(primaryUserCategoryId ? { primaryUserCategoryId } : {}),
     reversed: entry.reversedByEntryId !== undefined,

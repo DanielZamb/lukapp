@@ -30,6 +30,7 @@ export const profileCreation = {
   ...inWorkspace,
   name: v.string(),
   productKind,
+  emoji: v.optional(v.string()),
 };
 export const periodLock = {
   ...inWorkspace,
@@ -76,6 +77,9 @@ export const accountTransfer = {
   accountingDate: v.string(),
   description: v.string(),
   idempotencyKey: v.string(),
+  userCategoryId: v.optional(v.string()),
+  userCategoryIds: v.optional(v.array(v.string())),
+  primaryUserCategoryId: v.optional(v.string()),
 };
 export const accountSetup = {
   ...profileCreation,

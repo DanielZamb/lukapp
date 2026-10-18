@@ -226,7 +226,7 @@ export const postedHistory = query({
 });
 
 export const postedEntry = query({
-  args: { ...inWorkspace, journalEntryId: v.string() },
+  args: { ...inWorkspace, journalEntryId: v.string(), financialAccountProfileId: v.optional(v.string()) },
   returns: v.object({ entry: postedJournalEntry, row: activityRow }),
   handler: async (ctx, args) => run(async () => readPostedEntry(convexReadStore(ctx.db), {
     ...args,
