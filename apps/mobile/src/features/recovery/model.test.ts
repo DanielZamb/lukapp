@@ -1,5 +1,13 @@
 import { expect, test } from "vitest";
-import { formatRate, limitsCopy, minInstallment, movedCopy, progressCopy, progressRatio, suggestionFor } from "./model";
+import { candidateDetail, formatRate, limitsCopy, minInstallment, movedCopy, progressCopy, progressRatio, recoveryMoney, recoveryMonthName, suggestionFor } from "./model";
+
+test("recovery amounts hide only zero cents and dates use English without a year", () => {
+  expect(recoveryMoney({ currency: "COP", minorUnits: 48_000_000 })).toBe("COP 480.000");
+  expect(recoveryMoney({ currency: "COP", minorUnits: 48_000_025 })).toBe("COP 480.000,25");
+  expect(recoveryMonthName("2026-10")).toBe("October");
+  expect(candidateDetail({ accountingDate: "2026-08-04", placeName: undefined }))
+    .toBe("August 4");
+});
 
 test("the Plans suggestion uses the same split and limits as the recovery core", () => {
   expect(suggestionFor(1_200_000, 6)).toEqual({
@@ -36,11 +44,11 @@ test("progress is recovered of the plan target, and the implied rate stays a per
     impliedAnnualRateBps: 150, activationMonth: "2026-09", currency: "COP",
     recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, targetMinorUnits: 1_380_000,
     dueMinorUnits: 230_000,
-  })).toBe("COP 2.300,00 of COP 13.800,00 moved back to savings");
+  })).toBe("COP 2.300 of COP 13.800 moved back to savings");
   expect(limitsCopy("COP", suggestionFor(1_200_000, 4, 330_000))).toEqual({
-    range: "Each month must be at least COP 3.000,00 and at most COP 12.000,00.",
-    extra: "This schedule saves COP 1.200,00 extra.",
-    invalid: "Enter a monthly amount between COP 3.000,00 and COP 12.000,00.",
+    range: "Each month must be at least COP 3.000 and at most COP 12.000.",
+    extra: "This schedule saves COP 1.200 extra.",
+    invalid: "Enter a monthly amount between COP 3.000 and COP 12.000.",
   });
 });
 
@@ -54,5 +62,5 @@ test("a replayed move uses server progress, and a larger transfer shows moved ve
     currency: "COP", title: "Laptop repair",
     movedMinorUnits: 500_000, countedMinorUnits: 230_000,
     recoveredMinorUnits: 230_000, targetMinorUnits: 1_380_000,
-  })).toBe("COP 2.300,00 counted toward Laptop repair. Laptop repair is now 17% recovered. The savings balance stays separate from plan progress.");
+  })).toBe("COP 2.300 counted toward Laptop repair. Laptop repair is now 17% recovered. The savings balance stays separate from plan progress.");
 });

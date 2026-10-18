@@ -1,9 +1,10 @@
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { Text } from "react-native";
 import { afterEach, expect, test, vi } from "vitest";
 import type { RecoveryCandidate, RecoveryPlace, RecoveryPlanView } from "./model";
-import { RecoveryBoard, RecoveryDraft, RecoveryMoveScreen, RecoveryPlanScreen } from "./RecoveryScreens";
+import { RecoveryCandidates, RecoveryDraft, RecoveryMoveScreen, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
 
 vi.mock("react-native", () => ({
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput",
@@ -39,20 +40,27 @@ async function render(node: React.ReactElement) {
   return root.root;
 }
 
-test("Plans recovery lists progress and starts a plan from a posted expense", async () => {
-  const onStart = vi.fn();
+test("the recovery plan list shows progress and opens a live plan", async () => {
   const onPlan = vi.fn();
-  const screen = await render(createElement(RecoveryBoard, {
-    currency: "COP", plans: [plan], candidates: [candidate],
-    onBack: () => {}, onPlan, onStart,
+  const screen = await render(createElement(RecoveryPlanList, {
+    plans: [plan], onBack: () => {}, onPlan,
   }));
-  expect(screen.findAll((node) => node.props.detail === "COP 2.300,00 of COP 13.800,00 moved back to savings")).toHaveLength(1);
-  expect(screen.findAll((node) => node.props.value === "COP 12.000,00" && node.props.title === "Laptop repair")).toHaveLength(1);
+  expect(screen.findAll((node) => node.props.detail === "COP 2.300 of COP 13.800 moved back to savings")).toHaveLength(1);
   await act(async () => {
     screen.findAll((node) => node.props.title === "Laptop repair" && node.props.onPress)[0].props.onPress();
-    screen.findAll((node) => node.props.title === "Laptop repair" && node.props.detail?.includes("2026-09-09"))[0].props.onPress();
   });
   expect(onPlan).toHaveBeenCalledExactlyOnceWith("plan-1");
+});
+
+test("candidates use a human date and open their own expense", async () => {
+  const onStart = vi.fn();
+  const screen = await render(createElement(RecoveryCandidates, {
+    currency: "COP", month: "2026-10", candidates: [candidate], onBack: () => {}, onStart,
+  }));
+  expect(screen.findAll((node) => node.props.eyebrow === "OCTOBER CLOSE")).toHaveLength(1);
+  const row = screen.findAll((node) => node.props.title === "Laptop repair" && node.props.onPress)[0];
+  expect(row.props).toMatchObject({ detail: "September 9 · Daily", value: "COP 12.000" });
+  await act(async () => { row.props.onPress(); });
   expect(onStart).toHaveBeenCalledExactlyOnceWith(candidate);
 });
 
@@ -71,10 +79,14 @@ test("the draft shows the even-split limits and keeps the edited monthly amount"
   }));
   expect(screen.findAll((node) =>
     typeof node.props.helperText === "string"
-    && node.props.helperText.includes("at least COP 3.000,00")
-    && node.props.helperText.includes("COP 1.200,00 extra"),
+    && node.props.helperText.includes("at least COP 3.000")
+    && node.props.helperText.includes("COP 1.200 extra"),
   )).toHaveLength(1);
   expect(screen.findAll((node) => node.props.label === "4 months" && node.props.selected)).toHaveLength(1);
+  expect(screen.findAll((node) => node.props.label === "4 months")[0].props.detail).toBe("COP 3.300 each · COP 1.200 extra saving");
+  expect(screen.findAll((node) => node.props.label === "6 months")[0].props.detail).toBe("COP 2.000 each · COP 0 extra saving");
+  expect(screen.findAll((node) => node.props.label === "8 months")[0].props.detail).toBe("COP 1.500 each · COP 0 extra saving");
+  expect(screen.findAll((node) => node.props.label === "12 months")[0].props.detail).toBe("COP 1.000 each · COP 0 extra saving");
   expect(screen.findAll((node) => node.props.label === "Activate plan")).toHaveLength(1);
   await act(async () => {
     screen.findAll((node) => node.props.label === "6 months")[0].props.onPress();
@@ -87,12 +99,26 @@ test("the draft shows the even-split limits and keeps the edited monthly amount"
 test("an open plan shows due progress and offers a real transfer", async () => {
   const onMove = vi.fn();
   const screen = await render(createElement(RecoveryPlanScreen, {
-    plan, onBack: () => {}, onMove, onFind: () => {},
+    plan, month: "2026-10", onBack: () => {}, onMove, onFind: () => {},
   }));
-  expect(screen.findAll((node) => node.props.title === "Due this month" && node.props.value === "COP 2.300,00")).toHaveLength(1);
+  expect(screen.findAll((node) => node.props.title === "Due this month" && node.props.value === "COP 2.300")[0].props.valueStyle).toEqual({ color: "#9c5f06" });
+  expect(screen.findAll((node) => node.type === Text && node.children.join("") === "17% complete")).toHaveLength(1);
+  expect(screen.findAll((node) => node.type === Text && node.children.join("") === "COP 11.500 left")).toHaveLength(1);
   expect(screen.findAll((node) => node.props.accessibilityLabel === "Laptop repair recovery progress")).toHaveLength(1);
-  await act(async () => { screen.findAll((node) => node.props.label === "Move money")[0].props.onPress(); });
+  await act(async () => { screen.findAll((node) => node.props.label === "Move money for October")[0].props.onPress(); });
   expect(onMove).toHaveBeenCalledOnce();
+});
+
+test("a completed plan has a neutral zero due and no movement button", async () => {
+  const screen = await render(createElement(RecoveryPlanScreen, {
+    plan: { ...plan, recoveredMinorUnits: 1_380_000, remainingMinorUnits: 0, dueMinorUnits: 0 },
+    month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }));
+  expect(screen.findAll((node) => node.type === Text && node.children.join("") === "100% complete")).toHaveLength(1);
+  const due = screen.findAll((node) => node.props.title === "Due this month")[0];
+  expect(due.props.value).toBe("COP 0");
+  expect(due.props.valueStyle).toBeUndefined();
+  expect(screen.findAll((node) => node.props.label === "Move money for October")).toHaveLength(0);
 });
 
 test("moving money names the destination and posts a transfer", async () => {

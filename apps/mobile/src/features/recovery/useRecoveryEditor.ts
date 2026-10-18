@@ -3,11 +3,12 @@ import { ConvexError } from "convex/values";
 import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import type { api } from "../api";
-import { formatMoney, parseMoney } from "../money";
+import { parseMoney } from "../money";
 import {
   DEFAULT_INSTALLMENT_COUNT,
   INSTALLMENT_COUNTS,
   minInstallment,
+  recoveryMoney,
   suggestionFor,
   type RecoveryCandidate,
   type RecoveryPlace,
@@ -107,5 +108,5 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
 }
 
 function formatMinor(currency: string, minorUnits: number) {
-  return formatMoney({ currency, minorUnits }).replace(`${currency} `, "");
+  return recoveryMoney({ currency, minorUnits }).replace(`${currency} `, "");
 }
