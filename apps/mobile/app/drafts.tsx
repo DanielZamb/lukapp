@@ -16,6 +16,12 @@ import { api } from "../src/features/api";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import { Screen } from "../src/ui/core";
 
+function inboxSegmentFromParam(param: string | undefined): InboxSegment | null {
+  if (param === "wait") return "wait";
+  if (param === "now") return "now";
+  return null;
+}
+
 function Drafts({
   subject,
   workspaceId,
@@ -34,15 +40,29 @@ function Drafts({
     segment?: string | string[];
   }>();
   const requestedSegment = Array.isArray(segmentParam) ? segmentParam[0] : segmentParam;
+  const paramSegment = inboxSegmentFromParam(requestedSegment);
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
   const intake = useIntakeCandidates({ subject, workspaceId, currency });
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
   const reportFailure = useDeviceAccessFailure();
-  const [segment, setSegment] = useState<InboxSegment>(requestedSegment === "wait" ? "wait" : "now");
+  const listsLoaded =
+    drafts.count !== null && (intake.count !== null || !!intake.error);
+  const needsYouNowCount =
+    intake.now.length + drafts.items.filter((item) => item.status === "posting").length;
+  const [segment, setSegment] = useState<InboxSegment>(() => paramSegment ?? "now");
+  const segmentTouched = useRef(false);
   useEffect(() => {
-    setSegment(requestedSegment === "wait" ? "wait" : "now");
+    const fromParam = inboxSegmentFromParam(requestedSegment);
+    if (fromParam !== null) {
+      segmentTouched.current = false;
+      setSegment(fromParam);
+    }
   }, [requestedSegment]);
+  useEffect(() => {
+    if (paramSegment !== null || !listsLoaded || segmentTouched.current) return;
+    setSegment(needsYouNowCount > 0 ? "now" : "wait");
+  }, [paramSegment, listsLoaded, needsYouNowCount]);
   const [confirming, setConfirming] = useState(false);
   const [confirmedCount, setConfirmedCount] = useState<number | null>(null);
   const seeded = useRef(false);
@@ -73,7 +93,10 @@ function Drafts({
       places={places ?? []}
       confirmedCount={confirmedCount}
       onContinueAfterConfirmation={() => setConfirmedCount(null)}
-      onSegment={setSegment}
+      onSegment={(next) => {
+        segmentTouched.current = true;
+        setSegment(next);
+      }}
       onBack={() => router.back()}
       onResumeDraft={(id) =>
         router.push({ pathname: "/post", params: { draftId: id } })
