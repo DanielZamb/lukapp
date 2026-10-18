@@ -30,11 +30,13 @@ const sentinelOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   requireAuthentication: true,
   authenticationPrompt: "Unlock Lukapp",
+  cancellableAuthentication: true,
 };
 const sentinelKey = (marker: InstallMarker) => `enrollment.${marker.installId}`;
 const sentinelValue = (marker: InstallMarker, subject: string) =>
   `${marker.installId}:${subject}`;
-async function authenticateStrongly() {
+let biometricGeneration = 0;
+async function checkStrongBiometry() {
   const [hardware, enrolled, level] = await Promise.all([
     LocalAuthentication.hasHardwareAsync(),
     LocalAuthentication.isEnrolledAsync(),
@@ -44,24 +46,18 @@ async function authenticateStrongly() {
     !hardware ||
     !enrolled ||
     !SecureStore.canUseBiometricAuthentication() ||
+    !SecureStore.isCancellableAuthenticationAvailable() ||
     (Platform.OS === "android" &&
       level !== LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG)
   )
     throw new Error("Strong biometry required");
-  const result = await LocalAuthentication.authenticateAsync({
-    promptMessage: "Unlock Lukapp",
-    biometricsSecurityLevel: "strong",
-    disableDeviceFallback: true,
-    fallbackLabel: "",
-    cancelLabel: "Sign in instead",
-    requireConfirmation: true,
-  });
-  if (!result.success)
-    throw new Error("Biometric authentication did not complete");
 }
 export async function enrollBiometry(marker: InstallMarker, subject: string) {
-  await authenticateStrongly();
+  const generation = biometricGeneration;
+  await checkStrongBiometry();
+  if (generation !== biometricGeneration) throw new Error("Biometrics cancelled");
   await SecureStore.deleteItemAsync(sentinelKey(marker), sentinelOptions);
+  if (generation !== biometricGeneration) throw new Error("Biometrics cancelled");
   await SecureStore.setItemAsync(
     sentinelKey(marker),
     sentinelValue(marker, subject),
@@ -69,9 +65,11 @@ export async function enrollBiometry(marker: InstallMarker, subject: string) {
   );
 }
 export async function unlockBiometry(marker: InstallMarker, subject: string) {
+  const generation = biometricGeneration;
   if (marker.kind !== "enrolled" || marker.subject !== subject)
     throw new Error("Sign in required");
-  await authenticateStrongly();
+  await checkStrongBiometry();
+  if (generation !== biometricGeneration) throw new Error("Biometrics cancelled");
   const sentinel = await SecureStore.getItemAsync(
     sentinelKey(marker),
     sentinelOptions,
@@ -83,7 +81,8 @@ export async function clearBiometricEnrollment(marker: InstallMarker) {
   await SecureStore.deleteItemAsync(sentinelKey(marker), sentinelOptions);
 }
 export async function cancelBiometricPrompt() {
-  if (Platform.OS === "android") await LocalAuthentication.cancelAuthenticate();
+  biometricGeneration++;
+  await SecureStore.cancelAuthentication();
 }
 const privacyKey = "lukapp-local-entry";
 export async function hideFinancialScreen() {
