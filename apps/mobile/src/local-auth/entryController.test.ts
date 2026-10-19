@@ -501,3 +501,20 @@ for (const stage of ["sentinel", "marker"]) {
     expect(deps.signOut).toHaveBeenCalledOnce();
   });
 }
+
+test("a denial captured for a former identity cannot clear a newly enrolled session", async () => {
+  const { gate, deps } = await opened();
+  const former = { ...identity };
+  await gate.setIdentity(null);
+  gate.approveSignIn("fresh-session");
+  await gate.setIdentity({ subject: identity.subject, sessionId: "fresh-session" });
+  await gate.ensureEnrollment();
+  deps.clearInput.mockClear();
+  deps.clearEnrollment.mockClear();
+  deps.signOut.mockClear();
+  await gate.denyIdentityFor(former);
+  expect(gate.isOpenFor({ subject: identity.subject, sessionId: "fresh-session" })).toBe(true);
+  expect(deps.clearInput).not.toHaveBeenCalled();
+  expect(deps.clearEnrollment).not.toHaveBeenCalled();
+  expect(deps.signOut).not.toHaveBeenCalled();
+});

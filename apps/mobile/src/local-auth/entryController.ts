@@ -278,10 +278,8 @@ export class EntryController {
   unlockedInputLease() {
     return this.snapshot.state.kind === "open" ? this.inputLease : null;
   }
-  denyAdmissionFor(identity: NonNullable<EntryIdentity>, movedTo?: string) {
-    const state = this.snapshot.state;
-    if (identity.subject !== this.identity?.subject || identity.sessionId !== this.identity.sessionId ||
-        !(state.kind === "admission" || state.kind === "enrolling"))
+  denyIdentityFor(identity: NonNullable<EntryIdentity>, movedTo?: string) {
+    if (this.disposed || identity.subject !== this.identity?.subject || identity.sessionId !== this.identity.sessionId)
       return Promise.resolve();
     return this.denyAccess(identity, movedTo);
   }

@@ -107,7 +107,7 @@ export function LocalEntryGate({
   const report = useCallback((error: unknown) => {
     if (!requiresLocalWipe(error)) return false;
     if (lease) void controller.denyAccessFor(lease, movedAccessLabel(error));
-    else if (userId && sessionId) void controller.denyAdmissionFor({ subject: userId, sessionId }, movedAccessLabel(error));
+    else if (userId && sessionId) void controller.denyIdentityFor({ subject: userId, sessionId }, movedAccessLabel(error));
     return true;
   }, [controller, lease, userId, sessionId]);
   if (state.kind === "sign-in")

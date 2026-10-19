@@ -173,3 +173,13 @@ export async function replaceDevice(
   await ctx.db.patch(target._id, { replacedByLabel: metadata.label, replacedByDeviceId: deviceId });
   return deviceId;
 }
+
+export async function recordDeviceActivity(ctx: MutationCtx, session: LiveSession) {
+  const actor = await requireLiveObservation(ctx.auth, session);
+  await requireDeviceManagement(ctx);
+  const device = await ctx.db.query("mobileDevices")
+    .withIndex("by_session", (q) => q.eq("clerkSessionId", actor.clerkSessionId)).unique();
+  if (!device || device.clerkUserId !== actor.userId || device.clerkClientId !== session.clerkClientId)
+    throw new ConvexError({ code: "device_registration_required" });
+  await ctx.db.patch(device._id, { lastSeenAt: Date.now() });
+}

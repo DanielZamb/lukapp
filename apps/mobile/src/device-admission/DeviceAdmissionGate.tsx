@@ -13,6 +13,7 @@ import { admissionFailure, type AdmissionFailure } from "./failure";
 import { useLocalEnrollment } from "../local-auth/enrollment";
 import { OccupiedDeviceStep } from "./OccupiedDeviceStep";
 import { NamedDeviceStep } from "./NamedDeviceStep";
+import { DeviceActivity } from "./DeviceActivity";
 import { ProtectedReadBoundary } from "./ProtectedReadBoundary";
 
 export function DeviceAdmissionGate({ children }: { children: ReactNode }) {
@@ -127,20 +128,20 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     : status.status === "success" && status.data.status === "revoked"
       ? { kind: "denied", message: status.data.movedTo ? `Access moved to ${status.data.movedTo}` : "This device’s access was revoked." } satisfies AdmissionFailure
       : failure?.kind === "denied" ? failure : null;
-  const closed = denied ?? (existingLabel && failure ? failure : null);
+  const closed = denied ?? (existingLabel && failure && !(occupier && failure.kind === "occupied") ? failure : null);
   if (closed || !validBuild) return (
     <Screen>
       <Header title="Device access unavailable" />
       <Text accessibilityRole="alert" style={ui.error}>
         {closed?.message ?? "This build does not support native device registration."}
       </Text>
-      {closed?.kind === "retry" && <PrimaryButton label="Try again" onPress={retry} />}
+      {closed && closed.kind !== "denied" && <PrimaryButton label="Try again" onPress={retry} />}
       <SecondaryButton label={busy ? "Signing out…" : "Sign out"} disabled={busy} onPress={() => void leave()} />
     </Screen>
   );
   if (status.status === "success" && status.data.status === "registered" && enrollment.ready)
-    return <ProtectedReadBoundary>{children}</ProtectedReadBoundary>;
-  if (occupier && nativePlatform && !submitted) return (
+    return <DeviceActivity><ProtectedReadBoundary>{children}</ProtectedReadBoundary></DeviceActivity>;
+  if (occupier && nativePlatform && !submitted && (!existingLabel || failure?.kind === "occupied")) return (
     <OccupiedDeviceStep platform={nativePlatform} label={occupier.label} lastSeenAt={occupier.lastSeenAt}
       name={replacementName} busy={busy} error={failure?.message ?? ""}
       onNameChange={(value) => { interaction(); setReplacementName(value); }}

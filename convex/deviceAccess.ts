@@ -24,6 +24,14 @@ export const register = action({
   },
 });
 
+export const recordActivity = action({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx): Promise<null> => ctx.runMutation(
+    internal.deviceAccessInternal.recordActivity, { session: await verifyCurrentSession(ctx.auth) },
+  ),
+});
+
 export const replace = action({
   args: {
     installId: v.string(), label: v.string(), platform: mobilePlatform, appVersion: v.string(),
@@ -75,20 +83,15 @@ export const status = query({
     await requireDeviceManagement(ctx);
     if (device && device.clerkUserId === actor.userId)
       return { status: "registered", deviceId: device._id, wipeLocalInput: false };
-    if (args.installId) {
-      const known = await findOwnedInstall(ctx, {
-        userId: actor.userId, installId: args.installId, platform: args.platform,
-      });
-      const storedDenied = known && await ctx.db.query("clerkRevocations")
-        .withIndex("by_session", (q) => q.eq("clerkSessionId", known.clerkSessionId)).unique();
-      if (known && storedDenied)
-        return { status: "unregistered", wipeLocalInput: false, existingLabel: known.label };
-    }
+    const known = args.installId ? await findOwnedInstall(ctx, {
+      userId: actor.userId, installId: args.installId, platform: args.platform,
+    }) : undefined;
     const devices = args.platform ? await ctx.db.query("mobileDevices")
       .withIndex("by_user", (q) => q.eq("clerkUserId", actor.userId)).collect() : [];
     const occupier = devices.find((d) => d.platform === args.platform && d.revokedAt === undefined);
     return {
       status: "unregistered", wipeLocalInput: false,
+      ...(known ? { existingLabel: known.label } : {}),
       ...(occupier ? { occupier: {
         deviceId: occupier._id, sessionId: occupier.clerkSessionId,
         label: occupier.label, lastSeenAt: occupier.lastSeenAt,

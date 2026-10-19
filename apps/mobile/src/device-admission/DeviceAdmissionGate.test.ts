@@ -20,6 +20,7 @@ const sdk = vi.hoisted(() => ({
   register: vi.fn(async (_args: unknown) => "device-id"),
   signOut: vi.fn(async () => {}),
   replace: vi.fn(async (_args: unknown) => "replacement-id"),
+  recordActivity: vi.fn(async (_args: unknown) => null),
   ensure: vi.fn(async () => true),
   ready: true,
   interaction: vi.fn(),
@@ -36,7 +37,8 @@ vi.mock("convex/react", () => ({
   },
   useAction: (action: typeof api.deviceAccess.register) => {
     sdk.actionNames.push(getFunctionName(action));
-    return getFunctionName(action) === "deviceAccess:replace" ? sdk.replace : sdk.register;
+    const name = getFunctionName(action);
+    return name === "deviceAccess:recordActivity" ? sdk.recordActivity : name === "deviceAccess:replace" ? sdk.replace : sdk.register;
   },
 }));
 vi.mock("../local-auth/enrollment", () => ({ useLocalEnrollment: () => ({ ready: sdk.ready, ensure: sdk.ensure }) }));
@@ -52,7 +54,10 @@ vi.mock("../ui/core", () => ({
   useTheme: () => ({ background: "#fff", foreground: "#000", mutedForeground: "#666", border: "#eee", primary: "#000" }),
 }));
 vi.mock("../local-auth/installation", () => ({ useLocalInstallId: () => "existing-install-marker" }));
-vi.mock("../local-auth/interaction", () => ({ useLocalEntryInteraction: () => sdk.interaction }));
+vi.mock("../local-auth/interaction", async importOriginal => ({
+  ...await importOriginal<typeof import("../local-auth/interaction")>(),
+  useLocalEntryInteraction: () => sdk.interaction,
+}));
 vi.mock("../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => sdk.report }));
 
 let root: ReactTestRenderer | undefined;
@@ -115,7 +120,7 @@ test("financial screens mount only on reactive registration and unmount immediat
   expect(sdk.report).toHaveBeenCalledWith(new ConvexError({ code: "device_revoked", wipeLocalInput: true }));
   expect(sdk.register).not.toHaveBeenCalled();
   expect(new Set(sdk.queryNames)).toEqual(new Set(["deviceAccess:status"]));
-  expect(new Set(sdk.actionNames)).toEqual(new Set(["deviceAccess:register", "deviceAccess:replace"]));
+  expect(new Set(sdk.actionNames)).toEqual(new Set(["deviceAccess:register", "deviceAccess:replace", "deviceAccess:recordActivity"]));
 });
 
 test("registration sends only allowed metadata and waits for the query acknowledgement", async () => {
@@ -314,5 +319,20 @@ test("moved access forwards the replacement label to the local cleanup owner", a
   await open({ status: "success", data: { status: "revoked", wipeLocalInput: true, movedTo: "New Android" } });
   expect(JSON.stringify(root?.toJSON())).toContain("Access moved to New Android");
   expect(sdk.report).toHaveBeenCalledWith(new ConvexError({ code: "device_revoked", wipeLocalInput: true, movedTo: "New Android" }));
+  expect(mounts).toBe(0);
+});
+
+test("a same-install candidate attempts verified reclaim and offers replacement only after occupied refusal", async () => {
+  let refuse = (_error: Error) => {};
+  sdk.register.mockImplementationOnce(() => new Promise<string>((_resolve, reject) => { refuse = reject; }));
+  await open({ status: "success", data: { ...occupied, existingLabel: "Old Android" } });
+  expect(sdk.register).toHaveBeenCalledExactlyOnceWith({
+    installId: "existing-install-marker", label: "Old Android", platform: "android", appVersion: "0.1.0",
+  });
+  expect(root?.root.findAllByProps({ label: "Use this phone instead" })).toHaveLength(0);
+  expect(JSON.stringify(root?.toJSON())).toContain("Confirming device access");
+  await act(async () => refuse(new ConvexError({ code: "device_slot_occupied", occupiedLabel: "Old Android" })));
+  expect(root?.root.findAllByProps({ label: "Use this phone instead" })).toHaveLength(1);
+  expect(sdk.replace).not.toHaveBeenCalled();
   expect(mounts).toBe(0);
 });

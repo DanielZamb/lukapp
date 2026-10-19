@@ -657,3 +657,55 @@ test("membership loss rejects replacement and a conflicting other platform rolls
   expect(await root.run(ctx => ctx.db.query("mobileDevices").collect())).toHaveLength(2);
   expect(await root.run(ctx => ctx.db.query("journalEntries").collect())).toHaveLength(1);
 });
+
+test("same-install reauthentication returns a reclaim candidate and verified register preserves the device row", async () => {
+  vi.useFakeTimers();
+  const { root, oldId, next } = await occupiedAndroid();
+  sessions.set("sess_new_android", { ...session("sess_new_android"), client_id: "client_sess_old_android" });
+  const status = await next.query(api.deviceAccess.status, { installId: androidRegistration.installId, platform: "android" });
+  expect(status).toMatchObject({ status: "unregistered", existingLabel: "U01 Android" });
+  expect(await next.action(api.deviceAccess.register, androidRegistration)).toBe(oldId);
+  expect(await root.run(ctx => ctx.db.get(oldId))).not.toHaveProperty("revokedAt");
+  expect(await root.run(ctx => ctx.db.query("clerkRevocations").collect())).toMatchObject([
+    { clerkSessionId: "sess_old_android", reason: "superseded" },
+  ]);
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});
+
+test("ordinary authenticated activity refreshes the occupied phone's last seen time without re-registering", async () => {
+  const { root, old, oldId, next, args } = await occupiedAndroid();
+  const initial = Date.now();
+  vi.setSystemTime(initial + 30_000);
+  await old.action(api.deviceAccess.recordActivity, {});
+  expect(await root.run(ctx => ctx.db.get(oldId))).toMatchObject({ lastSeenAt: initial + 30_000, createdAt: initial });
+  expect(await next.query(api.deviceAccess.status, { installId: args.installId, platform: "android" })).toMatchObject({
+    status: "unregistered", occupier: { deviceId: oldId, lastSeenAt: initial + 30_000 },
+  });
+  expect(await root.run(ctx => ctx.db.query("mobileDevices").collect())).toHaveLength(2);
+  expect(await root.run(ctx => ctx.db.query("clerkRevocations").collect())).toEqual([]);
+  vi.setSystemTime(initial + 40_000);
+  await expect(next.action(api.deviceAccess.recordActivity, {})).rejects.toMatchObject({ data: { code: "device_registration_required" } });
+  sessions.set("sess_old_android", { ...session("sess_old_android"), status: "ended" });
+  await expect(old.action(api.deviceAccess.recordActivity, {})).rejects.toMatchObject({ data: { code: "session_inactive" } });
+  expect(await root.run(ctx => ctx.db.get(oldId))).toMatchObject({ lastSeenAt: initial + 30_000 });
+});
+
+test("last seen cannot refresh through a mismatched client, lost membership or revoked device", async () => {
+  vi.useFakeTimers();
+  const { root, client, old, oldId } = await occupiedAndroid();
+  await client.action(setup, {});
+  const initial = Date.now();
+  vi.setSystemTime(initial + 20_000);
+  sessions.set("sess_old_android", { ...session("sess_old_android"), client_id: "different-client" });
+  await expect(old.action(api.deviceAccess.recordActivity, {})).rejects.toMatchObject({ data: { code: "device_registration_required" } });
+  sessions.set("sess_old_android", session("sess_old_android"));
+  const member = await root.run(ctx => ctx.db.query("workspaceMemberships").unique());
+  if (!member) throw new Error("Missing membership");
+  await root.run(ctx => ctx.db.delete(member._id));
+  await expect(old.action(api.deviceAccess.recordActivity, {})).rejects.toMatchObject({ data: { code: "membership_required" } });
+  await root.run(ctx => ctx.db.insert("workspaceMemberships", { workspaceId: member.workspaceId, userId: member.userId, role: "Owner" }));
+  await old.action(api.deviceAccess.revoke, { deviceId: oldId });
+  await expect(old.action(api.deviceAccess.recordActivity, {})).rejects.toMatchObject({ data: { code: "device_revoked" } });
+  expect(await root.run(ctx => ctx.db.get(oldId))).toMatchObject({ lastSeenAt: initial });
+  await root.finishAllScheduledFunctions(vi.runAllTimers);
+});

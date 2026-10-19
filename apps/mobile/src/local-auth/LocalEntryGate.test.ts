@@ -7,6 +7,7 @@ import type { AppStateStatus } from "react-native";
 
 type DeviceStatus = Pick<import("convex/server").FunctionReturnType<typeof import("../features/api").api.deviceAccess.status>, "status" | "wipeLocalInput"> & {
   deviceId?: string;
+  existingLabel?: string;
   movedTo?: string;
   occupier?: { deviceId: string; sessionId: string; label: string; lastSeenAt: number };
 };
@@ -18,6 +19,8 @@ const sdk = vi.hoisted(() => ({
   register: vi.fn(async (_args: unknown) => "registered-id"),
   replace: vi.fn(async (_args: unknown) => "replacement-id"),
   clearInput: vi.fn(async (_subject: string) => {}),
+  clearEnrollment: vi.fn(async () => {}),
+  recordActivity: vi.fn(async (_args: unknown) => null),
   signOut: vi.fn(async () => {}),
   unlock: vi.fn(async () => {}),
   enroll: vi.fn(async () => {}),
@@ -37,8 +40,10 @@ vi.mock("@clerk/expo", () => ({
 }));
 vi.mock("convex/react", () => ({
   useQuery_experimental: () => ({ status: "success", data: sdk.status }),
-  useAction: (action: typeof api.deviceAccess.register | typeof api.deviceAccess.replace) =>
-    getFunctionName(action) === "deviceAccess:replace" ? sdk.replace : sdk.register,
+  useAction: (action: typeof api.deviceAccess.register | typeof api.deviceAccess.replace | typeof api.deviceAccess.recordActivity) => {
+    const name = getFunctionName(action);
+    return name === "deviceAccess:recordActivity" ? sdk.recordActivity : name === "deviceAccess:replace" ? sdk.replace : sdk.register;
+  },
 }));
 vi.mock("expo-constants", () => ({ default: { nativeAppVersion: "0.1.0" } }));
 vi.mock("expo-router", () => ({ usePathname: () => sdk.path }));
@@ -53,7 +58,7 @@ vi.mock("./nativeEntry", () => ({
   writeInstallMarker: sdk.writeMarker,
   unlockBiometry: sdk.unlock,
   enrollBiometry: sdk.enroll,
-  clearBiometricEnrollment: async () => {},
+  clearBiometricEnrollment: sdk.clearEnrollment,
   cancelBiometricPrompt: sdk.cancelPrompt,
   initializeScreenPrivacy: async () => {},
   hideFinancialScreen: async () => {},
@@ -67,6 +72,7 @@ vi.mock("../ui/core", async () => ({
 }));
 import { DeviceAdmissionGate } from "../device-admission/DeviceAdmissionGate";
 import { getFunctionName } from "convex/server";
+import { ConvexError } from "convex/values";
 import { api } from "../features/api";
 import { LocalEntryGate } from "./LocalEntryGate";
 import { ThemeProvider, useThemeContext } from "../ui/themeContext";
@@ -230,6 +236,7 @@ test("fresh Clerk sign-in shows the occupied screen before any enrollment; Keep 
   expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
   expect(sdk.enroll).not.toHaveBeenCalled();
   expect(sdk.unlock).not.toHaveBeenCalled();
+  expect(sdk.recordActivity).not.toHaveBeenCalled();
   await act(async () => root?.root.findByProps({ label: "Keep using Old Android" }).props.onPress());
   expect(sdk.signOut).toHaveBeenCalledOnce();
   expect(sdk.enroll).not.toHaveBeenCalled();
@@ -301,4 +308,52 @@ test("an unoccupied fresh sign-in still enrolls once before ordinary registratio
   await act(async () => root?.update(createElement(AdmittedApp)));
   expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(1);
   expect(sdk.enroll).toHaveBeenCalledOnce();
+});
+
+test("a pre-enrollment failure callback still clears input, enrollment and session after replacement is denied", async () => {
+  await freshOccupiedSignIn();
+  let deny = (_error: Error) => {};
+  sdk.replace.mockImplementationOnce(() => new Promise<string>((_resolve, reject) => { deny = reject; }));
+  await act(async () => { void root?.root.findByProps({ label: "Use this phone instead" }).props.onPress(); });
+  expect(sdk.enroll).toHaveBeenCalledOnce();
+  expect(sdk.replace).toHaveBeenCalledOnce();
+  expect(sdk.clearInput).toHaveBeenCalledTimes(1);
+  expect(sdk.writeMarker).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "enrolled" }));
+  await act(async () => deny(new ConvexError({ code: "session_inactive", wipeLocalInput: true })));
+  expect(sdk.clearInput).toHaveBeenCalledTimes(2);
+  expect(sdk.clearInput).toHaveBeenLastCalledWith("owner");
+  expect(sdk.clearEnrollment).toHaveBeenCalledOnce();
+  expect(sdk.signOut).toHaveBeenCalledOnce();
+  expect(sdk.writeMarker).toHaveBeenLastCalledWith({ version: 1, installId: sdk.marker.installId, kind: "sign-in-required" });
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
+  expect(root?.root.findAllByProps({ label: "Use this phone instead" })).toHaveLength(0);
+});
+
+test("Sign in instead on the same install enrolls once and uses verified reclaim without a replacement choice", async () => {
+  sdk.platform = "android";
+  await act(async () => { root = create(createElement(AdmittedApp)); });
+  await act(async () => root?.root.findByProps({ label: "Sign in instead" }).props.onPress());
+  sdk.identity = { userId: null, sessionId: null, isLoaded: true };
+  await act(async () => root?.update(createElement(AdmittedApp)));
+  sdk.status = {
+    status: "unregistered", wipeLocalInput: false, existingLabel: "This Android",
+    occupier: { deviceId: "same-phone", sessionId: "session", label: "This Android", lastSeenAt: 1_792_238_400_000 },
+  };
+  await act(async () => {
+    root?.root.findByType(SignInStub).props.onApprove("fresh-session");
+    sdk.identity = { userId: "owner", sessionId: "fresh-session", isLoaded: true };
+    root?.update(createElement(AdmittedApp));
+  });
+  expect(root?.root.findAllByProps({ label: "Use this phone instead" })).toHaveLength(0);
+  expect(sdk.enroll).toHaveBeenCalledOnce();
+  expect(sdk.register).toHaveBeenCalledExactlyOnceWith({
+    installId: sdk.marker.installId, label: "This Android", platform: "android", appVersion: "0.1.0",
+  });
+  expect(sdk.replace).not.toHaveBeenCalled();
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(0);
+  sdk.status = { status: "registered", deviceId: "same-phone", wipeLocalInput: false };
+  await act(async () => root?.update(createElement(AdmittedApp)));
+  expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(1);
+  expect(sdk.enroll).toHaveBeenCalledOnce();
+  expect(sdk.unlock).not.toHaveBeenCalled();
 });

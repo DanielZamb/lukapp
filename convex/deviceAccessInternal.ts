@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { liveSession, mobilePlatform } from "./lib/securityValues";
-import { registerDevice, replaceDevice, revokeDevice, queueRevocation, requireDeviceManagement } from "./lib/deviceRegistry";
+import { registerDevice, recordDeviceActivity, replaceDevice, revokeDevice, queueRevocation, requireDeviceManagement } from "./lib/deviceRegistry";
 import { requireLiveObservation } from "./lib/session";
 import { revokeClerkSession } from "./lib/clerkProvider";
 
@@ -14,6 +14,15 @@ export const register = internalMutation({
   returns: v.id("mobileDevices"),
   handler: async (ctx, { session, terminalSessionId, ...metadata }) =>
     registerDevice(ctx, session, metadata, terminalSessionId),
+});
+
+export const recordActivity = internalMutation({
+  args: { session: liveSession },
+  returns: v.null(),
+  handler: async (ctx, { session }) => {
+    await recordDeviceActivity(ctx, session);
+    return null;
+  },
 });
 
 export const replace = internalMutation({

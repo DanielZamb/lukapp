@@ -6,7 +6,7 @@ const securityError = z.object({
   occupiedLabel: z.string().trim().min(1).max(80).optional(),
 });
 export type AdmissionFailure = {
-  kind: "retry" | "denied";
+  kind: "retry" | "denied" | "occupied";
   message: string;
 };
 
@@ -21,7 +21,7 @@ export function admissionFailure(error: unknown): AdmissionFailure {
       return { kind: "retry", message: "The active phone changed. Check the device shown here and try again." };
     case "device_slot_occupied":
       return {
-        kind: "retry",
+        kind: "occupied",
         message: occupiedLabel
           ? `${occupiedLabel} already uses this slot. Check the active device and try again.`
           : "Another device uses this slot. Check the active device and try again.",
