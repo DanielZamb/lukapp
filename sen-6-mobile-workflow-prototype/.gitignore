@@ -1,0 +1,48 @@
+# Private configuration and credentials, at every depth
+.env*
+*.env
+*.env.*
+env
+env.*
+*.key
+*.keys
+*.ppk
+*.der
+*.p8
+*.asc
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+*.cer
+*.crt
+*credentials*
+*secret*
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+.npmrc
+# Hidden directories, dependencies, generated output and caches
+**/.*/
+node_modules/
+dist/
+build/
+web-build/
+coverage/
+cache/
+*-cache/
+*.tsbuildinfo
+expo-env.d.ts
+# Excluded archives and private project notes
+app-example/
+docs/
+CONTEXT*
+MIGRATION*
+# Logs and editor/system debris
+*.log
+.DS_Store
+*.swp
+*.swo
