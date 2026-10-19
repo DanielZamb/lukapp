@@ -1,23 +1,31 @@
+import type { UserCategory } from "../src/accounting/categories/types";
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import { AccountingError } from "../src/accounting/errors";
+import { workspaceTimeZone } from "../src/accounting/timeZone";
 import type {
   AccountingPeriod,
   AccountingStore,
   LedgerAccount,
   StoredJournalEntry,
+  StoredOpeningMarker,
   StoredPeriodStatus,
   StoredProfile,
   StoredWorkspace,
 } from "../src/accounting/types";
 import type { DataModel, Doc, Id, TableNames } from "./_generated/dataModel";
 
-type ReadDb = GenericQueryCtx<DataModel>["db"];
+export type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
 type ReadMethods = Omit<AccountingStore, WriteMethod>;
 type WriteMethod =
+  | "insertAccountSetup"
+  | "insertOpeningMarker"
+  | "insertCategory"
+  | "restyleCategory"
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
+  | "restyleProfile"
   | "insertJournalEntry"
   | "insertAccountingPeriod"
   | "setAccountingPeriodStatus"
@@ -33,7 +41,7 @@ function idFor<Table extends TableNames>(
 }
 
 /** Only for ids the kernel got back from this store, never raw caller input. */
-function storedId<Table extends TableNames>(id: string): Id<Table> {
+export function storedId<Table extends TableNames>(id: string): Id<Table> {
   return id as Id<Table>;
 }
 
@@ -75,16 +83,36 @@ function toLedgerAccount(doc: Doc<"ledgerAccounts">): LedgerAccount {
 
 function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
   return {
+    createdAt: doc._creationTime,
     id: doc._id,
     workspaceId: doc.workspaceId,
     name: doc.name,
     productKind: doc.productKind,
     classificationPolicy: doc.classificationPolicy,
+    ...(doc.emoji ? { emoji: doc.emoji } : {}),
     postingAccountId: doc.postingAccountId,
   };
 }
 
-function toEntry(
+function toOpening(doc: Doc<"financialAccountOpenings">): StoredOpeningMarker {
+  return {
+    workspaceId: doc.workspaceId,
+    financialAccountProfileId: doc.financialAccountProfileId,
+    accountingDate: doc.accountingDate,
+    idempotencyKey: doc.idempotencyKey,
+    amount: doc.amount,
+    description: doc.description,
+    policy: doc.policy,
+    ...(doc.journalEntryId ? { journalEntryId: doc.journalEntryId } : {}),
+  };
+}
+
+function toCategory(doc: Doc<"userCategories">): UserCategory {
+  const { _id, _creationTime, ...category } = doc;
+  return { id: _id, ...category };
+}
+
+export function toEntry(
   doc: Doc<"journalEntries">,
   lines: Doc<"journalLines">[],
 ): StoredJournalEntry {
@@ -103,6 +131,9 @@ function toEntry(
       .sort((a, b) => a.lineNumber - b.lineNumber)
       .map((line) => ({
         ledgerAccountId: line.ledgerAccountId,
+        ...(line.userCategoryId ? { userCategoryId: line.userCategoryId } : {}),
+        ...(line.userCategoryIds ? { userCategoryIds: line.userCategoryIds } : {}),
+        ...(line.primaryUserCategoryId ? { primaryUserCategoryId: line.primaryUserCategoryId } : {}),
         debitMinorUnits: line.debitMinorUnits,
         creditMinorUnits: line.creditMinorUnits,
       })),
@@ -129,6 +160,56 @@ function readStore(db: ReadDb): ReadMethods {
   }
 
   return {
+    async findAccountSetup(workspaceId, idempotencyKey) {
+      const doc = await db
+        .query("financialAccountSetups")
+        .withIndex("by_workspace_idempotency", (q) =>
+          q.eq("workspaceId", storedId<"workspaces">(workspaceId)).eq("idempotencyKey", idempotencyKey),
+        )
+        .unique();
+      if (!doc) return undefined;
+      const { _id, _creationTime, ...setup } = doc;
+      return setup;
+    },
+    async findOpeningMarkerByIdempotencyKey(workspaceId, idempotencyKey) {
+      const doc = await db
+        .query("financialAccountOpenings")
+        .withIndex("by_workspace_idempotency", (q) =>
+          q
+            .eq("workspaceId", storedId<"workspaces">(workspaceId))
+            .eq("idempotencyKey", idempotencyKey),
+        )
+        .unique();
+      return doc ? toOpening(doc) : undefined;
+    },
+    async listOpeningMarkersByProfile(workspaceId, profileId) {
+      const docs = await db
+        .query("financialAccountOpenings")
+        .withIndex("by_workspace_profile", (q) =>
+          q
+            .eq("workspaceId", storedId<"workspaces">(workspaceId))
+            .eq(
+              "financialAccountProfileId",
+              storedId<"financialAccountProfiles">(profileId),
+            ),
+        )
+        .collect();
+      return docs.map(toOpening);
+    },
+    async getCategory(categoryId) {
+      const id = idFor(db, "userCategories", categoryId);
+      const doc = id && (await db.get(id));
+      return doc ? toCategory(doc) : undefined;
+    },
+    async listCategories(workspaceId) {
+      const docs = await db
+        .query("userCategories")
+        .withIndex("by_workspace", (q) =>
+          q.eq("workspaceId", storedId<"workspaces">(workspaceId)),
+        )
+        .collect();
+      return docs.map(toCategory);
+    },
     async getWorkspace(workspaceId) {
       const id = idFor(db, "workspaces", workspaceId);
       const doc = id && (await db.get(id));
@@ -140,6 +221,7 @@ function readStore(db: ReadDb): ReadMethods {
         kind: doc.kind,
         functionalCurrency: doc.functionalCurrency,
         chartOfAccountsTemplate: doc.chartOfAccountsTemplate,
+        timeZone: workspaceTimeZone(doc),
       };
       return stored;
     },
@@ -259,6 +341,42 @@ function readStore(db: ReadDb): ReadMethods {
 
 function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
   return {
+    async insertAccountSetup({ openingJournalEntryId, ...setup }) {
+      await db.insert("financialAccountSetups", {
+        ...setup,
+        workspaceId: storedId<"workspaces">(setup.workspaceId),
+        financialAccountProfileId: storedId<"financialAccountProfiles">(setup.financialAccountProfileId),
+        ...(openingJournalEntryId
+          ? { openingJournalEntryId: storedId<"journalEntries">(openingJournalEntryId) }
+          : {}),
+      });
+    },
+    async insertOpeningMarker({ journalEntryId, ...marker }) {
+      await db.insert("financialAccountOpenings", {
+        ...marker,
+        workspaceId: storedId<"workspaces">(marker.workspaceId),
+        financialAccountProfileId: storedId<"financialAccountProfiles">(
+          marker.financialAccountProfileId,
+        ),
+        ...(journalEntryId
+          ? { journalEntryId: storedId<"journalEntries">(journalEntryId) }
+          : {}),
+      });
+    },
+    async insertCategory(category) {
+      const id = await db.insert("userCategories", {
+        ...category,
+        workspaceId: storedId<"workspaces">(category.workspaceId),
+      });
+      return { id, ...category };
+    },
+    async restyleCategory(categoryId, style) {
+      const id = storedId<"userCategories">(categoryId);
+      await db.patch(id, { style });
+      const doc = await db.get(id);
+      if (!doc) throw new AccountingError("category_not_found");
+      return toCategory(doc);
+    },
     async insertWorkspace(workspace, ownerUserId) {
       const workspaceId = await db.insert("workspaces", workspace);
       await db.insert("workspaceMemberships", {
@@ -275,6 +393,14 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
         workspaceId: storedId<"workspaces">(account.workspaceId),
       });
       return { id, ...account };
+    },
+
+    async restyleProfile(profileId, emoji) {
+      const id = storedId<"financialAccountProfiles">(profileId);
+      await db.patch(id, { emoji });
+      const doc = await db.get(id);
+      if (!doc) throw new AccountingError("financial_account_profile_not_found");
+      return toProfile(doc);
     },
 
     async insertProfile(profile) {
@@ -306,7 +432,11 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
             }
           : {}),
         ...(entry.reversesEntryId
-          ? { reversesEntryId: storedId<"journalEntries">(entry.reversesEntryId) }
+          ? {
+              reversesEntryId: storedId<"journalEntries">(
+                entry.reversesEntryId,
+              ),
+            }
           : {}),
       });
       for (const [lineNumber, line] of entry.lines.entries()) {
@@ -314,9 +444,42 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
           workspaceId,
           journalEntryId,
           lineNumber,
+          ...(line.userCategoryId
+            ? {
+                userCategoryId: storedId<"userCategories">(line.userCategoryId),
+              }
+            : {}),
           ledgerAccountId: storedId<"ledgerAccounts">(line.ledgerAccountId),
+          ...(line.userCategoryIds ? { userCategoryIds: line.userCategoryIds.map((id) => storedId<"userCategories">(id)) } : {}),
+          ...(line.primaryUserCategoryId ? { primaryUserCategoryId: storedId<"userCategories">(line.primaryUserCategoryId) } : {}),
           debitMinorUnits: line.debitMinorUnits,
           creditMinorUnits: line.creditMinorUnits,
+        });
+      }
+      const profiles = await db
+        .query("financialAccountProfiles")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .collect();
+      for (const profile of profiles) {
+        if (
+          !entry.lines.some(
+            (line) => line.ledgerAccountId === profile.postingAccountId,
+          )
+        )
+          continue;
+        await db.insert("journalEntryProfiles", {
+          workspaceId,
+          journalEntryId,
+          financialAccountProfileId: profile._id,
+          accountingDate: entry.accountingDate,
+          postedAt: entry.postedAt,
+          ...(entry.reversesEntryId
+            ? {
+                reversesEntryId: storedId<"journalEntries">(
+                  entry.reversesEntryId,
+                ),
+              }
+            : {}),
         });
       }
       return { ...entry, id: journalEntryId };
@@ -365,12 +528,18 @@ function unavailable(method: string): never {
 
 function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
   return {
+    insertAccountSetup: async () => unavailable("insertAccountSetup"),
+    insertOpeningMarker: async () => unavailable("insertOpeningMarker"),
+    insertCategory: async () => unavailable("insertCategory"),
+    restyleCategory: async () => unavailable("restyleCategory"),
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),
+    restyleProfile: async () => unavailable("restyleProfile"),
     insertJournalEntry: async () => unavailable("insertJournalEntry"),
     insertAccountingPeriod: async () => unavailable("insertAccountingPeriod"),
-    setAccountingPeriodStatus: async () => unavailable("setAccountingPeriodStatus"),
+    setAccountingPeriodStatus: async () =>
+      unavailable("setAccountingPeriodStatus"),
     insertPeriodControlDecision: async () =>
       unavailable("insertPeriodControlDecision"),
   };

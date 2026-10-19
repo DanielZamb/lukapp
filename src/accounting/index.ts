@@ -6,8 +6,7 @@
  *    sparse `co-puc-personal@1` Chart of Accounts: 313001 Patrimonio de apertura,
  *    42959595 Otros ingresos, 51959595 Otros gastos personales. Pass
  *    `chartOfAccountsTemplate: "us-gaap-personal@1"` for the English template, whose
- *    accounts cite FASB US GAAP Taxonomy concepts. Pass `now` (UTC ms) on the Convex
- *    mutation.
+ *    accounts cite FASB US GAAP Taxonomy concepts. The Convex adapter uses its server clock.
  * 2. `createFinancialAccountProfile({ name: "Daily", productKind: "bankAccount" })`.
  *    The product kind decides the PUC parent and so the nature: the profile gets its
  *    own auxiliary Posting Account, such as 11100501 under 111005 Bancos, or
@@ -24,7 +23,7 @@
  * Every write goes through `postJournalEntry` in `posting.ts`. Reuse an idempotency key
  * only for the same command; anything else returns `idempotency_key_conflict`.
  * Failures are `AccountingError` (`code` + `message`), wrapped as ConvexError on the API.
- * Actor `userId` is still caller-supplied until the auth ticket.
+ * Public adapters derive the actor from admitted Clerk identity.
  */
 export { createAccountingCore } from "./core";
 export {
@@ -34,6 +33,10 @@ export {
 } from "./errors";
 export type {
   AccountBalance,
+  AccountSetupInput,
+  AccountSetupResult,
+  AccountTransferInput,
+  OpeningPositionInput,
   AccountingCore,
   AccountingPeriod,
   AccountNature,

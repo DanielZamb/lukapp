@@ -1,3 +1,6 @@
+import type { UserCategory } from "./categories/types";
+import type { CategoryAssignments } from "./categories/assignments";
+
 export type Actor = {
   userId: string;
 };
@@ -62,13 +65,20 @@ export type FinancialAccountProductKind =
   | "loan";
 
 /** Versioned rule that built a Journal Entry, kept as provenance. */
-export type PostingPolicy = "cash-expense@1" | "cash-income@1" | "reversal@1";
+export type PostingPolicy =
+  | "cash-expense@1"
+  | "cash-income@1"
+  | "reversal@1"
+  | "start-tracking@1"
+  | "opening-position@1"
+  | "account-transfer@1";
 
 export type Workspace = {
   id: string;
   kind: WorkspaceKind;
   functionalCurrency: string;
   chartOfAccountsTemplate: string;
+  timeZone: string;
   currentAccountingPeriod: AccountingPeriod;
 };
 
@@ -76,6 +86,7 @@ export type FinancialAccountProfile = {
   id: string;
   workspaceId: string;
   name: string;
+  emoji?: string;
   productKind: FinancialAccountProductKind;
   /** The Posting Account behind the profile, for advanced views. */
   ledgerAccountId: string;
@@ -109,7 +120,9 @@ export type Money = {
   minorUnits: number;
 };
 
-export type JournalLineView = {
+export type JournalLineView = CategoryAssignments & {
+  userCategoryName?: string;
+  userCategories: Array<{ id: string; name: string }>;
   ledgerAccountId: string;
   code: string;
   name: string;
@@ -162,12 +175,15 @@ export type StoredWorkspace = {
   kind: WorkspaceKind;
   functionalCurrency: string;
   chartOfAccountsTemplate: string;
+  timeZone: string;
 };
 
 export type StoredProfile = {
+  createdAt?: number;
   id: string;
   workspaceId: string;
   name: string;
+  emoji?: string;
   productKind: FinancialAccountProductKind;
   classificationPolicy: string;
   postingAccountId: string;
@@ -184,7 +200,7 @@ export type LedgerAccount = {
   role: LedgerAccountRole;
 };
 
-export type DraftJournalLine = {
+export type DraftJournalLine = CategoryAssignments & {
   ledgerAccountId: string;
   debitMinorUnits: number;
   creditMinorUnits: number;
@@ -222,6 +238,24 @@ export type AccountingClock = {
 };
 
 export type AccountingStore = {
+  findAccountSetup(workspaceId: string, idempotencyKey: string): Promise<StoredAccountSetup | undefined>;
+  insertAccountSetup(setup: StoredAccountSetup): Promise<void>;
+  findOpeningMarkerByIdempotencyKey(
+    workspaceId: string,
+    idempotencyKey: string,
+  ): Promise<StoredOpeningMarker | undefined>;
+  listOpeningMarkersByProfile(
+    workspaceId: string,
+    profileId: string,
+  ): Promise<StoredOpeningMarker[]>;
+  insertOpeningMarker(marker: StoredOpeningMarker): Promise<void>;
+  insertCategory(category: Omit<UserCategory, "id">): Promise<UserCategory>;
+  getCategory(categoryId: string): Promise<UserCategory | undefined>;
+  listCategories(workspaceId: string): Promise<UserCategory[]>;
+  restyleCategory(
+    categoryId: string,
+    style: UserCategory["style"],
+  ): Promise<UserCategory>;
   insertWorkspace(
     workspace: Omit<StoredWorkspace, "id">,
     ownerUserId: string,
@@ -235,7 +269,8 @@ export type AccountingStore = {
     code: string,
   ): Promise<LedgerAccount | undefined>;
   listLedgerAccounts(workspaceId: string): Promise<LedgerAccount[]>;
-  insertProfile(profile: Omit<StoredProfile, "id">): Promise<StoredProfile>;
+  insertProfile(profile: Omit<StoredProfile, "id" | "createdAt">): Promise<StoredProfile>;
+  restyleProfile(profileId: string, emoji: string): Promise<StoredProfile>;
   getProfile(profileId: string): Promise<StoredProfile | undefined>;
   listProfiles(workspaceId: string): Promise<StoredProfile[]>;
   insertJournalEntry(
@@ -273,6 +308,7 @@ export type AccountingCore = {
     functionalCurrency: string;
     /** COA Template version; co-puc-personal@1 when omitted. */
     chartOfAccountsTemplate?: string;
+    timeZone?: string;
   }): Promise<Workspace>;
   openWorkspace(input: {
     actor: Actor;
@@ -283,6 +319,7 @@ export type AccountingCore = {
     actor: Actor;
     workspaceId: string;
     name: string;
+    emoji?: string;
     productKind: FinancialAccountProductKind;
   }): Promise<FinancialAccountProfile>;
   listFinancialAccountProfiles(input: {
@@ -299,6 +336,9 @@ export type AccountingCore = {
   }): Promise<CatalogAccountView[]>;
   recordCashExpense(input: CashActivityInput): Promise<PostedJournalEntry>;
   recordCashIncome(input: CashActivityInput): Promise<PostedJournalEntry>;
+  recordAccountTransfer(input: AccountTransferInput): Promise<PostedJournalEntry>;
+  recordOpeningPosition(input: OpeningPositionInput): Promise<PostedJournalEntry | null>;
+  setupFinancialAccountProfile(input: AccountSetupInput): Promise<AccountSetupResult>;
   reversePostedEntry(input: {
     actor: Actor;
     workspaceId: string;
@@ -328,7 +368,7 @@ export type AccountingCore = {
 };
 
 /** Familiar facts a basic user enters for money that moved in or out of an account. */
-export type CashActivityInput = {
+export type CashActivityInput = CategoryAssignments & {
   actor: Actor;
   workspaceId: string;
   financialAccountProfileId: string;
@@ -336,6 +376,45 @@ export type CashActivityInput = {
   accountingDate: string;
   description: string;
   idempotencyKey: string;
-  /** Template account the money went to or came from; the template default when omitted. */
+  /** Advanced override; otherwise use the category policy or the template default. */
   ledgerAccountCode?: string;
+};
+
+export type OpeningPositionInput = {
+  actor: Actor;
+  workspaceId: string;
+  financialAccountProfileId: string;
+  amount: Money;
+  accountingDate: string;
+  description: string;
+  idempotencyKey: string;
+};
+export type AccountTransferInput = CategoryAssignments &
+  Omit<OpeningPositionInput, "financialAccountProfileId"> & {
+    sourceFinancialAccountProfileId: string;
+    destinationFinancialAccountProfileId: string;
+  };
+export type AccountSetupInput = Omit<OpeningPositionInput, "financialAccountProfileId" | "description"> & {
+  name: string;
+  emoji?: string;
+  productKind: FinancialAccountProductKind;
+};
+export type StoredAccountSetup = Omit<AccountSetupInput, "actor"> & {
+  financialAccountProfileId: string;
+  openingJournalEntryId?: string;
+};
+export type StoredOpeningMarker = {
+  workspaceId: string;
+  financialAccountProfileId: string;
+  accountingDate: string;
+  idempotencyKey: string;
+  amount: Money;
+  description: string;
+  policy: PostingPolicy;
+  journalEntryId?: string;
+};
+export type AccountSetupResult = {
+  financialAccountProfile: FinancialAccountProfile;
+  openingEntry: PostedJournalEntry | null;
+  replay: boolean;
 };

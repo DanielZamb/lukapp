@@ -4,6 +4,7 @@ import { api } from "./_generated/api";
 import {
   caught,
   convexAccounting,
+  provisionWorkspace,
   createDaily,
   createOwnedWorkspace,
   createProfile,
@@ -23,11 +24,11 @@ function testdb() {
 }
 
 test("cash income debits the profile and credits Otros ingresos", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
 
-  const salary = await t.mutation(
+  const salary = await t.action(
     api.accounting.recordCashIncome,
     groceries(workspace.id, daily.id, {
       amount: 4000000,
@@ -51,12 +52,12 @@ test("cash income debits the profile and credits Otros ingresos", async () => {
 });
 
 test("a card purchase grows a Liability, shown as money owed", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const card = await createProfile(t, workspace.id, "Visa", "creditCard");
   const loan = await createProfile(t, workspace.id, "Car loan", "loan");
 
-  await t.mutation(api.accounting.recordCashExpense, groceries(workspace.id, card.id));
+  await t.action(api.accounting.recordCashExpense, groceries(workspace.id, card.id));
   const balances = await reader(t, workspace.id).balances();
 
   expect(card.productKind).toBe("creditCard");
@@ -81,11 +82,11 @@ test("a card purchase grows a Liability, shown as money owed", async () => {
 });
 
 test("the trial balance names each account by id and nature, even with duplicate names", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const confusing = await createProfile(t, workspace.id, "Otros gastos personales", "cash");
 
-  await t.mutation(api.accounting.recordCashExpense, groceries(workspace.id, confusing.id));
+  await t.action(api.accounting.recordCashExpense, groceries(workspace.id, confusing.id));
   const trial = await reader(t, workspace.id).trialBalance();
 
   expect(trial.map(({ code, name, nature }) => ({ code, name, nature }))).toEqual([
@@ -96,7 +97,7 @@ test("the trial balance names each account by id and nature, even with duplicate
 });
 
 test("a profile needs a name, and names are trimmed", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
 
   const blank = await caught(createProfile(t, workspace.id, "   ", "cash"));
@@ -107,14 +108,12 @@ test("a profile needs a name, and names are trimmed", async () => {
 });
 
 test("a Workspace needs an active ISO 4217 Functional Currency", async () => {
-  const t = testdb();
+  const t = await testdb();
 
   for (const functionalCurrency of ["", "cop", "PESOS", "ZZZ"]) {
     const error = await caught(
-      t.mutation(api.accounting.createPersonalWorkspace, {
-        userId: owner.userId,
+      provisionWorkspace(t, {
         functionalCurrency,
-        now: Date.UTC(2026, 8, 24),
       }),
     );
     expect(error).toMatchObject({ data: { code: "functional_currency_invalid" } });
@@ -122,32 +121,32 @@ test("a Workspace needs an active ISO 4217 Functional Currency", async () => {
 });
 
 test("malformed ids read as missing rather than crashing", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
 
   const profile = await caught(
-    t.mutation(api.accounting.recordCashExpense, groceries(workspace.id, "not-an-id")),
+    t.action(api.accounting.recordCashExpense, groceries(workspace.id, "not-an-id")),
   );
   const wrongTable = await caught(
-    t.mutation(api.accounting.recordCashExpense, groceries(workspace.id, workspace.id)),
+    t.action(api.accounting.recordCashExpense, groceries(workspace.id, workspace.id)),
   );
   const noWorkspace = await caught(
-    t.query(api.accounting.balances, { userId: owner.userId, workspaceId: "garbage" }),
+    t.query(api.accounting.balances, { workspaceId: "garbage" }),
   );
 
   expect(profile).toMatchObject({ data: { code: "financial_account_profile_not_found" } });
   expect(wrongTable).toMatchObject({ data: { code: "financial_account_profile_not_found" } });
-  expect(noWorkspace).toMatchObject({ data: { code: "workspace_membership_required" } });
+  expect(noWorkspace).toMatchObject({ data: { code: "membership_required" } });
 });
 
 test("cash activity cannot use another Workspace's profile", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const other = await createOwnedWorkspace(t);
   const otherDaily = await createDaily(t, other.id);
 
   const error = await caught(
-    t.mutation(api.accounting.recordCashIncome, groceries(workspace.id, otherDaily.id)),
+    t.action(api.accounting.recordCashIncome, groceries(workspace.id, otherDaily.id)),
   );
 
   expect(error).toMatchObject({ data: { code: "financial_account_profile_not_found" } });

@@ -4,6 +4,7 @@ import { api } from "./_generated/api";
 import {
   caught,
   convexAccounting,
+  provisionWorkspace,
   createDaily,
   createOwnedWorkspace,
   createProfile,
@@ -22,7 +23,7 @@ function testdb() {
 }
 
 test("a Personal Workspace starts from the sparse PUC Chart of Accounts in Spanish", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
 
@@ -47,15 +48,15 @@ test("a Personal Workspace starts from the sparse PUC Chart of Accounts in Spani
 });
 
 test("a cash expense posts to the chosen PUC expense account, activated once", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
 
-  const fee = await t.mutation(api.accounting.recordCashExpense, {
+  const fee = await t.action(api.accounting.recordCashExpense, {
     ...groceries(workspace.id, daily.id, { amount: 1490000, description: "Cuota de manejo" }),
     ledgerAccountCode: "530505",
   });
-  await t.mutation(api.accounting.recordCashExpense, {
+  await t.action(api.accounting.recordCashExpense, {
     ...groceries(workspace.id, daily.id, { amount: 600000, idempotencyKey: "fee-2" }),
     ledgerAccountCode: "530505",
   });
@@ -73,17 +74,17 @@ test("a cash expense posts to the chosen PUC expense account, activated once", a
 });
 
 test("a cash expense without a code posts to Otros gastos personales", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
 
-  const posted = await t.mutation(api.accounting.recordCashExpense, groceries(workspace.id, daily.id));
+  const posted = await t.action(api.accounting.recordCashExpense, groceries(workspace.id, daily.id));
 
   expect(posted.lines[0]).toMatchObject({ code: "51959595", name: "Otros gastos personales" });
 });
 
 test("a cash expense only reaches accounts the template allows for cash expenses", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const before = await reader(t, workspace.id).ledgerAccounts();
@@ -91,7 +92,7 @@ test("a cash expense only reaches accounts the template allows for cash expenses
   const attempts = await Promise.all(
     ["137010", "516005", "421005", "313001", "999999", "11100501", ""].map((ledgerAccountCode) =>
       caught(
-        t.mutation(api.accounting.recordCashExpense, {
+        t.action(api.accounting.recordCashExpense, {
           ...groceries(workspace.id, daily.id, { idempotencyKey: `bad-${ledgerAccountCode}` }),
           ledgerAccountCode,
         }),
@@ -113,20 +114,20 @@ test("a cash expense only reaches accounts the template allows for cash expenses
 });
 
 test("cash income posts to the chosen PUC income account and refuses expense accounts", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const nu = await createProfile(t, workspace.id, "Nu", "bankAccount");
 
-  const interest = await t.mutation(api.accounting.recordCashIncome, {
+  const interest = await t.action(api.accounting.recordCashIncome, {
     ...groceries(workspace.id, nu.id, { amount: 40909663, description: "Rendimientos Nu" }),
     ledgerAccountCode: "421005",
   });
-  const salary = await t.mutation(api.accounting.recordCashIncome, {
+  const salary = await t.action(api.accounting.recordCashIncome, {
     ...groceries(workspace.id, nu.id, { idempotencyKey: "salary" }),
     ledgerAccountCode: "42959501",
   });
   const wrong = await caught(
-    t.mutation(api.accounting.recordCashIncome, {
+    t.action(api.accounting.recordCashIncome, {
       ...groceries(workspace.id, nu.id, { idempotencyKey: "wrong" }),
       ledgerAccountCode: "530520",
     }),
@@ -141,7 +142,7 @@ test("cash income posts to the chosen PUC income account and refuses expense acc
 });
 
 test("each profile gets the next auxiliary account under its PUC parent", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
 
   const profiles = [
@@ -168,7 +169,7 @@ test("each profile gets the next auxiliary account under its PUC parent", async 
 });
 
 test("a PUC parent holds at most 99 auxiliary accounts", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   for (let index = 1; index <= 99; index += 1) {
     await createProfile(t, workspace.id, `Caja ${index}`, "cash");
@@ -183,12 +184,11 @@ test("a PUC parent holds at most 99 auxiliary accounts", async () => {
 });
 
 test("the catalog lists template accounts with their PUC levels, nature, and activation", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const accounts = await reader(t, workspace.id).ledgerAccounts();
 
   const catalog = await t.query(api.accounting.listCatalogAccounts, {
-    userId: "owner-1",
     workspaceId: workspace.id,
   });
 
@@ -216,14 +216,14 @@ test("the catalog lists template accounts with their PUC levels, nature, and act
 });
 
 test("the trial balance lists accounts in PUC code order with their codes", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  await t.mutation(api.accounting.recordCashIncome, {
+  await t.action(api.accounting.recordCashIncome, {
     ...groceries(workspace.id, daily.id, { amount: 500000, idempotencyKey: "in" }),
     ledgerAccountCode: "421005",
   });
-  await t.mutation(api.accounting.recordCashExpense, {
+  await t.action(api.accounting.recordCashExpense, {
     ...groceries(workspace.id, daily.id, { amount: 1000 }),
     ledgerAccountCode: "51159501",
   });
@@ -238,24 +238,23 @@ test("the trial balance lists accounts in PUC code order with their codes", asyn
 });
 
 test("a Workspace can start from the English US GAAP template instead", async () => {
-  const t = testdb();
-  const workspace = await t.mutation(api.accounting.createPersonalWorkspace, {
-    userId: "owner-1",
+  const t = await testdb();
+  const workspace = await provisionWorkspace(t, {
     functionalCurrency: "USD",
-    now: Date.UTC(2026, 8, 24),
+
     chartOfAccountsTemplate: "us-gaap-personal@1",
   });
   const checking = await createProfile(t, workspace.id, "Checking", "bankAccount");
   const card = await createProfile(t, workspace.id, "Visa", "creditCard");
   await createProfile(t, workspace.id, "High-yield savings", "savingsAccount");
 
-  const fee = await t.mutation(api.accounting.recordCashExpense, {
+  const fee = await t.action(api.accounting.recordCashExpense, {
     ...groceries(workspace.id, checking.id),
     amount: { currency: "USD", minorUnits: 1200 },
     ledgerAccountCode: "6010",
   });
   const pucCode = await caught(
-    t.mutation(api.accounting.recordCashExpense, {
+    t.action(api.accounting.recordCashExpense, {
       ...groceries(workspace.id, checking.id, { idempotencyKey: "puc" }),
       amount: { currency: "USD", minorUnits: 1200 },
       ledgerAccountCode: "530505",
@@ -263,7 +262,6 @@ test("a Workspace can start from the English US GAAP template instead", async ()
   );
   const accounts = await reader(t, workspace.id).ledgerAccounts();
   const catalog = await t.query(api.accounting.listCatalogAccounts, {
-    userId: "owner-1",
     workspaceId: workspace.id,
   });
 
@@ -295,13 +293,12 @@ test("a Workspace can start from the English US GAAP template instead", async ()
 });
 
 test("a Workspace cannot start from an unknown COA Template", async () => {
-  const t = testdb();
+  const t = await testdb();
 
   const error = await caught(
-    t.mutation(api.accounting.createPersonalWorkspace, {
-      userId: "owner-1",
+    provisionWorkspace(t, {
       functionalCurrency: "COP",
-      now: Date.UTC(2026, 8, 24),
+
       chartOfAccountsTemplate: "personal@1",
     }),
   );

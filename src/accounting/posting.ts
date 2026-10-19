@@ -1,5 +1,7 @@
 /* The one entry point that writes to the General Ledger. Commands build drafts; this recognizes them. */
+import { requireOpeningDate } from "./openingControl";
 import { AccountingError } from "./errors";
+import { requireCategoryAssignments, sameCategoryAssignments } from "./categories/assignments";
 import { requireWorkspace } from "./membership";
 import { periodFromAccountingDate } from "./period";
 import { requirePostablePeriod } from "./periodControl";
@@ -41,6 +43,7 @@ export async function postJournalEntry(
   await assertPostingAccounts(store, input.workspaceId, draft.lines);
   await assertLinkedRecords(store, input.workspaceId, draft);
   const period = periodFromAccountingDate(draft.accountingDate);
+  await requireOpeningDate(store, input.workspaceId, draft);
   await requirePostablePeriod(store, input.workspaceId, draft.accountingDate);
   const entry = await store.insertJournalEntry({
     ...draft,
@@ -98,6 +101,15 @@ async function assertLinkedRecords(
   workspaceId: string,
   draft: JournalEntryDraft,
 ): Promise<void> {
+  for (const line of draft.lines) {
+    for (const id of requireCategoryAssignments(line)) {
+      const category = await store.getCategory(id);
+      if (!category || category.workspaceId !== workspaceId) {
+        throw new AccountingError("category_not_found");
+      }
+      if (!category.nature) throw new AccountingError("category_nature_required");
+    }
+  }
   if (draft.financialAccountProfileId !== undefined) {
     const profile = await store.getProfile(draft.financialAccountProfileId);
     if (!profile || profile.workspaceId !== workspaceId) {
@@ -125,6 +137,7 @@ function sameDraft(entry: StoredJournalEntry, draft: JournalEntryDraft): boolean
       return (
         other !== undefined &&
         line.ledgerAccountId === other.ledgerAccountId &&
+        sameCategoryAssignments(line, other) &&
         line.debitMinorUnits === other.debitMinorUnits &&
         line.creditMinorUnits === other.creditMinorUnits
       );

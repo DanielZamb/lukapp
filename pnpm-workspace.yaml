@@ -1,4 +1,8 @@
 packages:
   - "."
+  - "apps/*"
 
 minimumReleaseAge: 4320
+
+patchedDependencies:
+  expo-secure-store@55.0.18: patches/expo-secure-store@55.0.18.patch
