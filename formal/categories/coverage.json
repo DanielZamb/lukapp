@@ -1,0 +1,233 @@
+{
+  "syncCommit": "0da53d45c19702f894851f99c3702e3ec04bfc39",
+  "rootHeadAtAudit": "57d58acd5f802aefb3959a378e238e130da267c1",
+  "allCoveredBytesMatchSyncCommit": true,
+  "toolVersions": {
+    "vitest": "3.2.7",
+    "convex-test": "0.0.59",
+    "convex": "1.46.0",
+    "typescript": "5.9.2"
+  },
+  "files": [
+    {
+      "path": "src/accounting/commands/createUserCategory.ts",
+      "functionsAndChecks": [
+        "createUserCategory",
+        "P1",
+        "P2"
+      ],
+      "sha256": "70afc63d52835596532ca29f8adef44d25a13f79f11b928a5c53020cbbaf3ee8"
+    },
+    {
+      "path": "src/accounting/commands/restyleUserCategory.ts",
+      "functionsAndChecks": [
+        "restyleUserCategory",
+        "P2",
+        "P3"
+      ],
+      "sha256": "0838be5ea19f17fab95af41566a220c2f853d61c0ed08b311efae26e3d46a913"
+    },
+    {
+      "path": "src/accounting/queries/listUserCategories.ts",
+      "functionsAndChecks": [
+        "listUserCategories",
+        "P2",
+        "P3"
+      ],
+      "sha256": "fc48bd8bb3bac5e2ced87eab4f04a19011d390a98fd810a3b24d3eefb6d65116"
+    },
+    {
+      "path": "src/accounting/categories/policy.ts",
+      "functionsAndChecks": [
+        "normalizeCategoryName",
+        "resolveCategoryAccount",
+        "P1",
+        "P2"
+      ],
+      "sha256": "e14bdf1241cf49ce76c4605f46af36f7ccc3d206bd9c7756df5c4e8f40fa08e6"
+    },
+    {
+      "path": "src/accounting/categories/assignments.ts",
+      "functionsAndChecks": [
+        "requireCategoryAssignments",
+        "P4",
+        "P4b"
+      ],
+      "sha256": "8a93e804d3528e170c06e41cb175bfd7b1e93689c6eabd4225610eae2afb8fb8"
+    },
+    {
+      "path": "src/accounting/categories/posting.ts",
+      "functionsAndChecks": [
+        "categoryPostingCode",
+        "P4"
+      ],
+      "sha256": "2c7aaa3a6fefaf679cbc105b407ab484407aaeebdba9bce4ceeb7778478b10c6"
+    },
+    {
+      "path": "src/accounting/categories/types.ts",
+      "functionsAndChecks": [
+        "CategorySelection",
+        "UserCategory",
+        "P1",
+        "P2"
+      ],
+      "sha256": "058bcab2e52bde83ada358b98b4ff54102a0efb8c48f91cc52960f0e9f92a5af"
+    },
+    {
+      "path": "src/accounting/cashActivity.ts",
+      "functionsAndChecks": [
+        "recordCashActivity",
+        "P2",
+        "P4"
+      ],
+      "sha256": "e6de049b515052c2c8c38e5e6482543b88d6d0e3836193d838cf625048e43c55"
+    },
+    {
+      "path": "src/accounting/posting.ts",
+      "functionsAndChecks": [
+        "postJournalEntry",
+        "P2",
+        "P4"
+      ],
+      "sha256": "be7de85eec27c063b60a768c9931f2f2a531e1fc9e193acbac7c1f2b7649f214"
+    },
+    {
+      "path": "src/accounting/views.ts",
+      "functionsAndChecks": [
+        "toPostedJournalEntry",
+        "P2",
+        "P4"
+      ],
+      "sha256": "f6e2fedef6950df513c66ed78eafae763454ff5afe56912f096d1d3d2460a314"
+    },
+    {
+      "path": "src/accounting/membership.ts",
+      "functionsAndChecks": [
+        "requireWorkspace",
+        "P3"
+      ],
+      "sha256": "f9ff8a20300b9e32eba5f9ed53636a9c75205e28b1d43c2838c3e423de577e04"
+    },
+    {
+      "path": "convex/accounting.ts",
+      "functionsAndChecks": [
+        "createUserCategory",
+        "restyleUserCategory",
+        "listUserCategories",
+        "recordCashExpense",
+        "recordCashIncome",
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ],
+      "sha256": "15f6a8bc99e66c63de6a654cf7f9d884197f367de21aedefc67c380eb38c72f0"
+    },
+    {
+      "path": "convex/accountingWrites.ts",
+      "functionsAndChecks": [
+        "createUserCategory",
+        "restyleUserCategory",
+        "recordCashExpense",
+        "recordCashIncome",
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ],
+      "sha256": "b98bce45d2b9ec2e4e3638b2e8aff4eeab8b33276b1d65b1efa0fe90a791b7af"
+    },
+    {
+      "path": "convex/store.ts",
+      "functionsAndChecks": [
+        "insertCategory",
+        "restyleCategory",
+        "listCategories",
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ],
+      "sha256": "f05f57f1afbcebd34f3ddd92f1cf91ffdb59d97387d46e543e13cb0f23f6bfee"
+    },
+    {
+      "path": "convex/schema.ts",
+      "functionsAndChecks": [
+        "userCategories",
+        "journalEntries",
+        "journalLines",
+        "P1",
+        "P2",
+        "P4"
+      ],
+      "sha256": "920dfe5a858e00124085e970d651bd4df986e09eae40130d36de1f10b09c7413"
+    },
+    {
+      "path": "convex/categoryValidators.ts",
+      "functionsAndChecks": [
+        "categorySelection",
+        "categoryStyle",
+        "P1",
+        "P2"
+      ],
+      "sha256": "50271f1875a295f49afe3ad1d1e157959c6daf0bac6803822baee0df09cce0c3"
+    },
+    {
+      "path": "convex/accountingValues.ts",
+      "functionsAndChecks": [
+        "categoryCreation",
+        "categoryRestyle",
+        "P1",
+        "P2",
+        "P4"
+      ],
+      "sha256": "0c9fd1471f6deca6abe5112c22dbb354ac1c5d9e0c3877a71d97685489f6944b"
+    },
+    {
+      "path": "apps/mobile/src/features/categories/transactionSelection.ts",
+      "functionsAndChecks": [
+        "toggleCategory",
+        "canPostCategories",
+        "P5",
+        "P6"
+      ],
+      "sha256": "f999d062ae1f50d6c62d5986b4a8ad268538eae107d47dd1dac23dc242fc585d"
+    },
+    {
+      "path": "convex/personalDefaults.ts",
+      "functionsAndChecks": [
+        "ensurePersonalDefaults",
+        "P7"
+      ],
+      "sha256": "28846c146fae512eff3742023ef1065374c378a3c00a532caa007be0aff86d5c"
+    },
+    {
+      "path": "src/accounting/commands/updateUserCategory.ts",
+      "functionsAndChecks": [
+        "updateUserCategory",
+        "P3",
+        "P8"
+      ],
+      "sha256": "67e19eae3fcd5d690d36a8ee68c3cbd77138a7b07a7ab056d91d9eae56ba7416"
+    },
+    {
+      "path": "src/accounting/commands/deleteUserCategory.ts",
+      "functionsAndChecks": [
+        "deleteUserCategory",
+        "P3",
+        "P8"
+      ],
+      "sha256": "3974a0ee744154ce6f13d3622b2b4ded739231b2a565789062d48f3b2548e78c"
+    },
+    {
+      "path": "convex/budgetStore.ts",
+      "functionsAndChecks": [
+        "budgetReadStore.listCategories",
+        "P8"
+      ],
+      "sha256": "ca506963f8ead226a79d9acd83dcf7181857610eaddc907456fc3d6a337dffc2"
+    }
+  ],
+  "previousSyncCommit": "f5315c37a03154b8f6066adce8bc6d92458592f7",
+  "sourcePinKind": "local snapshot commit; root branch and index unchanged"
+}

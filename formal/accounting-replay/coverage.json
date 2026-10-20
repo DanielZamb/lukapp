@@ -1,0 +1,183 @@
+{
+  "syncCommit": "f5315c37a03154b8f6066adce8bc6d92458592f7",
+  "syncCommitRef": "refs/orchestrator/category-nature-20261020/source/f5315c37a03154b8f6066adce8bc6d92458592f7",
+  "rootHeadAtConfirmation": "57d58acd5f802aefb3959a378e238e130da267c1",
+  "at": "2026-10-20T18:56:38.017630+00:00",
+  "syncNote": "The retained committed source snapshot describes the confirmed files. Other threads may have advanced the shared checkout; use --source-ref to reproduce this baseline without mixing versions. Do not claim rootHEAD alone represents it. Move this commit and hashes forward only after reviewing atomicity and state-projection completeness.",
+  "files": [
+    {
+      "path": "src/accounting/posting.ts",
+      "functions": [
+        "postJournalEntry",
+        "assertBalancedLines",
+        "sameDraft"
+      ],
+      "role": "Key recognition, payload equality and balanced append",
+      "sha256": "5be33a6369e9f40cc43620206b82166dfa356fee931bae0d1d3bde77fa1a1f2e"
+    },
+    {
+      "path": "src/accounting/commands/reversePostedEntry.ts",
+      "functions": [
+        "reversePostedEntry"
+      ],
+      "role": "Single exact mirror; refuses reversal-of-reversal",
+      "sha256": "8bd52c59c4aaf951a2529044b1f275ce85e508e364ca40c93bfaf3401a98e742"
+    },
+    {
+      "path": "src/accounting/commands/recordAccountTransfer.ts",
+      "functions": [
+        "recordAccountTransfer"
+      ],
+      "role": "Cash-to-loan two-line transfer",
+      "sha256": "3e8a125f9e63c9faad712c4557c0ea37eba73c45b3af5ea091297e14f065b597"
+    },
+    {
+      "path": "src/accounting/commands/recordCashExpense.ts",
+      "functions": [
+        "recordCashExpense"
+      ],
+      "role": "Expense command adapter",
+      "sha256": "65ccfc5ed1bf8565b0a6186c8c4ca5ad404addcaa650dd144edb899115ceb131"
+    },
+    {
+      "path": "src/accounting/commands/recordCashIncome.ts",
+      "functions": [
+        "recordCashIncome"
+      ],
+      "role": "Income command adapter",
+      "sha256": "7fcbc7dd1c8a2a4669f32ed325246ec26a7d94dab29bff01940c16215ae408eb"
+    },
+    {
+      "path": "src/accounting/cashActivity.ts",
+      "functions": [
+        "recordCashActivity"
+      ],
+      "role": "Real category and counterpart resolution",
+      "sha256": "ba18d6fbaf83e374e6ef6e6c0c4a997aaf89d27fda688cd5704afb97e1cdfd83"
+    },
+    {
+      "path": "src/accounting/commands/setupFinancialAccountProfile.ts",
+      "functions": [
+        "setupFinancialAccountProfile"
+      ],
+      "role": "One initial nonzero account setup and same/conflicting retries",
+      "sha256": "1cb91eaab57703619d113f29c8bf53bf0ed29e92b3df5a29d62f028e1fcc4f60"
+    },
+    {
+      "path": "src/accounting/commands/recordOpeningPosition.ts",
+      "functions": [
+        "recordOpeningPosition"
+      ],
+      "role": "Opening within the modeled account setup",
+      "sha256": "d7266a782e1a5d3eadb088ba3537c858b7a530b9acc285455732c43ee6029cd8"
+    },
+    {
+      "path": "src/accounting/openingControl.ts",
+      "functions": [
+        "requireOpeningDate",
+        "requireOpeningOnProfile"
+      ],
+      "role": "Opening date checks for the fixed-date fixture",
+      "sha256": "794e3ca6b1fa03933c4a29d7f9fbfc7abdd8575c596a33afda9d5ee4a472f887"
+    },
+    {
+      "path": "src/accounting/periodControl.ts",
+      "functions": [
+        "requirePostablePeriod",
+        "earliestPermittedDate"
+      ],
+      "role": "One fixed open period; locks excluded",
+      "sha256": "beb7e0553f66a03e2c61f77397f75f974a52124c2232329280aab916076c3788"
+    },
+    {
+      "path": "convex/accounting.ts",
+      "functions": [
+        "recordCashExpense",
+        "recordCashIncome",
+        "recordAccountTransfer",
+        "reversePostedEntry",
+        "recordOpeningPosition",
+        "setupFinancialAccountProfile"
+      ],
+      "role": "Public action to one internal mutation boundary",
+      "sha256": "34f797b474ea85bf24d2111c55018f44967bd9f61660c4b24dcc619dc389b49a"
+    },
+    {
+      "path": "convex/accountingWrites.ts",
+      "functions": [
+        "recordCashExpense",
+        "recordCashIncome",
+        "recordAccountTransfer",
+        "reversePostedEntry",
+        "recordOpeningPosition",
+        "setupFinancialAccountProfile"
+      ],
+      "role": "Actual internal mutation handlers and permission checks in the synthetic fixture",
+      "sha256": "16dda935149da8ece0be5ff8d8d642fbfd09ad2d46b34e2ca0737f2362314f81"
+    },
+    {
+      "path": "convex/store.ts",
+      "functions": [
+        "convexStore",
+        "insertJournalEntry",
+        "findJournalEntryByIdempotencyKey",
+        "findReversalOf"
+      ],
+      "role": "Actual indexed lookups and atomic entry/line writes",
+      "sha256": "fce8555028bcc03bb4a0d4d277d79d48abf3fbaadb3da3b56c070c2788af27c2"
+    },
+    {
+      "path": "convex/schema.ts",
+      "functions": [
+        "journalEntries",
+        "journalLines"
+      ],
+      "role": "Indexes and stored shape",
+      "sha256": "920dfe5a858e00124085e970d651bd4df986e09eae40130d36de1f10b09c7413"
+    },
+    {
+      "path": "convex/personalDefaults.ts",
+      "functions": [
+        "ensurePersonalDefaults"
+      ],
+      "role": "Actual first-setup fixture only; setup races excluded",
+      "sha256": "28846c146fae512eff3742023ef1065374c378a3c00a532caa007be0aff86d5c"
+    },
+    {
+      "path": "src/accounting/commands/createUserCategory.ts",
+      "functions": [
+        "createUserCategory"
+      ],
+      "role": "Actual explicit Expense/Income fixture only; no category state-space proof",
+      "sha256": "607d100b01ed9a8a7db20ddb709f60c7e3e8b899efb082e606eda4414c941545"
+    },
+    {
+      "path": "src/accounting/convexHarness.ts",
+      "functions": [
+        "convexAccounting",
+        "accountingFixture"
+      ],
+      "role": "Synthetic Clerk/convex-test execution, never live admission proof",
+      "sha256": "f82473ff4bbaf4036d3be9734bf54a12ba0a3364d717fd6e504b68743935bc9c"
+    }
+  ],
+  "assumptions": [
+    "One admitted owner and one COP Personal workspace. Auth/provider behavior is a fixture, not proven.",
+    "Every modeled public command has one actual internal mutation; Convex supplies serializable atomic rollback. AST checks guard that boundary.",
+    "Two initialized account profiles: cash Asset and loan Liability, immutable catalog/category/profile/period data during command exploration.",
+    "One open2026-09period, fixed accountingDate2026-09-24; no period-lock or revocation races.",
+    "Projection quotients generated IDs/timestamps into stable keys/names/codes. Reject any future code whose behavior depends on erased attributes without revising the abstraction."
+  ],
+  "excluded": [
+    "Entire1076-action UI replay, unsupported v1 operations, full financial feature equivalence",
+    "Arbitrary amounts/currencies/dates or unbounded concurrency",
+    "Provider implementation, real Clerk admission, native UI, crash durability, local storage races",
+    "Budgets, recovery plans, corrections/replacements, changed permissions, period locks, creation/deletion races",
+    "Calendar/description fidelity and accounting classification correctness for arbitrary names"
+  ],
+  "primarySources": [
+    "https://docs.tlapl.us/using:tlc:start",
+    "https://github.com/tlaplus/tlaplus/releases/tag/v1.7.4",
+    "https://docs.convex.dev/database/advanced/occ"
+  ]
+}

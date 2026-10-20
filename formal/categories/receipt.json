@@ -1,0 +1,51 @@
+{
+  "at": "2026-10-20T19:54:36.361957+00:00",
+  "status": "PASS_BOUNDED_LOCAL_IOS_METADATA_CRUD_ACCEPTED_ANDROID_RUNTIME_OPEN",
+  "previousAudit": ".orchestrator/runs/2026-10-20-category-formal-verification/receipt.json",
+  "skill": ".agents/skills/verify-categories/SKILL.md",
+  "syncCommit": "0da53d45c19702f894851f99c3702e3ec04bfc39",
+  "clientSourceCommit": "bef2bf0e1700781e764e115cf5e9e8a368821129",
+  "coverage": {
+    "path": "formal/categories/coverage.json",
+    "sha256": "9e4f74ae274e091ede5e86e53d2daffb2238b0689455f3c7102969e60e8c77b6"
+  },
+  "coveredFiles": 22,
+  "allCoveredBytesMatchReviewedSync": true,
+  "toolVersions": {
+    "vitest": "3.2.7",
+    "convex-test": "0.0.59",
+    "convex": "1.46.0",
+    "typescript": "5.9.2"
+  },
+  "method": "Bounded execution of actual TypeScript and public Convex handlers in convex-test; finite bounds, synthetic local identity; no unbounded formal-proof claim",
+  "boundedTests": 12,
+  "realSourceMutationsCaughtByAssertion": 18,
+  "restoredCopyPass": true,
+  "proofReceipt": {
+    "path": ".orchestrator/verification/categories/20261020T192533.905923Z/receipt.json",
+    "sha256": "f87eedeedcaf7171f6f3978dd430b0b80596a45a81f6b345f466c0e0528dc752"
+  },
+  "fullSuite": {
+    "passed": 1081,
+    "failed": 0,
+    "evidence": {
+      "path": ".orchestrator/runs/2026-10-20-category-crud/local-final-tests.json",
+      "sha256": "c1f5fcd7586c2d0de3fbf020e9bcb380933cc11772289fa51484ecda7ee4631d"
+    }
+  },
+  "runtimeReceipt": {
+    "path": ".orchestrator/runs/2026-10-20-category-crud/receipt.json",
+    "sha256": "e69424c8471a2b9296349780c8a545db4325fa8b87c127503a7e44eb7cc091ff"
+  },
+  "iosRuntimeStatus": "PASS_AUTHENTICATED_IOS_CATEGORY_METADATA_CRUD",
+  "androidRuntimeStatus": "BUILD_AND_INSTALL_PASS_AUTHENTICATED_RUNTIME_OPEN",
+  "runtimeAcceptanceClosed": false,
+  "fullSystemProofClaimed": false,
+  "natureReclassificationIncluded": false,
+  "uiAuditHistorical": "formal/categories/ui-adherence.md",
+  "currentUiAcceptance": "formal/categories/ui-acceptance.md",
+  "typecheckEvidence": {
+    "path": ".orchestrator/runs/2026-10-20-category-crud/final-typecheck.log",
+    "sha256": "07a5faa841ba28001e862de3684ca63404fa81b93a1b5da0d2bd8b05811638da"
+  }
+}
