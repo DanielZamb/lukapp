@@ -26,6 +26,9 @@ export const productKind = v.union(
 );
 
 export const postingPolicy = v.union(
+  v.literal("start-tracking@1"),
+  v.literal("opening-position@1"),
+  v.literal("account-transfer@1"),
   v.literal("cash-expense@1"),
   v.literal("cash-income@1"),
   v.literal("reversal@1"),
@@ -58,6 +61,7 @@ export const workspace = v.object({
   kind: v.literal("Personal"),
   functionalCurrency: v.string(),
   chartOfAccountsTemplate: v.string(),
+  timeZone: v.string(),
   currentAccountingPeriod: accountingPeriod,
 });
 
@@ -65,6 +69,7 @@ export const financialAccountProfile = v.object({
   id: v.string(),
   workspaceId: v.string(),
   name: v.string(),
+  emoji: v.optional(v.string()),
   productKind,
   ledgerAccountId: v.string(),
 });
@@ -91,6 +96,11 @@ export const catalogAccount = v.object({
 });
 
 export const journalLine = v.object({
+  userCategoryId: v.optional(v.string()),
+  userCategoryName: v.optional(v.string()),
+  userCategoryIds: v.optional(v.array(v.string())),
+  primaryUserCategoryId: v.optional(v.string()),
+  userCategories: v.array(v.object({ id: v.string(), name: v.string() })),
   ledgerAccountId: v.string(),
   code: v.string(),
   name: v.string(),
@@ -132,4 +142,10 @@ export const trialBalanceRow = v.object({
   nature: accountNature,
   debitMinorUnits: v.number(),
   creditMinorUnits: v.number(),
+});
+
+export const accountSetupResult = v.object({
+  financialAccountProfile,
+  openingEntry: v.union(v.null(), postedJournalEntry),
+  replay: v.boolean(),
 });

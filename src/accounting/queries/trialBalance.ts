@@ -1,4 +1,3 @@
-import { totalsByAccount } from "../ledgerTotals";
 import { requireWorkspace } from "../membership";
 import type { AccountingStore, Actor, TrialBalanceRow } from "../types";
 import { byCode } from "../views";
@@ -9,11 +8,10 @@ export async function trialBalance(
   input: { actor: Actor; workspaceId: string },
 ): Promise<TrialBalanceRow[]> {
   await requireWorkspace(store, input.workspaceId, input.actor);
-  const [accounts, entries] = await Promise.all([
+  const [accounts, totals] = await Promise.all([
     store.listLedgerAccounts(input.workspaceId),
-    store.listJournalEntries(input.workspaceId),
+    store.accountTotals(input.workspaceId),
   ]);
-  const totals = totalsByAccount(entries);
   return accounts.sort(byCode).flatMap((account) => {
     const row = totals.get(account.id);
     return row

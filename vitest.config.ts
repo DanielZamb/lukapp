@@ -2,7 +2,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["src/**/*.test.ts", "convex/**/*.test.ts"],
+    setupFiles: ["apps/mobile/vitest.setup.ts"],
+    include: ["src/**/*.test.ts", "convex/**/*.test.ts", "apps/mobile/src/**/*.test.ts"],
     environmentMatchGlobs: [["convex/**", "edge-runtime"]],
     coverage: {
       provider: "v8",

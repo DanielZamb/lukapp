@@ -20,15 +20,14 @@ function testdb() {
 }
 
 test("a posted cash expense can be read back with its profile and lines", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  const posted = await t.mutation(
+  const posted = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
   const activity = await t.query(api.accounting.listJournalEntries, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -45,19 +44,17 @@ test("a posted cash expense can be read back with its profile and lines", async 
 });
 
 test("repeating an idempotency key posts the cash expense once", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const input = groceries(workspace.id, daily.id);
 
-  const first = await t.mutation(api.accounting.recordCashExpense, input);
-  const second = await t.mutation(api.accounting.recordCashExpense, input);
+  const first = await t.action(api.accounting.recordCashExpense, input);
+  const second = await t.action(api.accounting.recordCashExpense, input);
   const activity = await t.query(api.accounting.listJournalEntries, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
   const balances = await t.query(api.accounting.balances, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -77,16 +74,16 @@ test("repeating an idempotency key posts the cash expense once", async () => {
 });
 
 test("a replayed idempotency key still rejects a different currency", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  await t.mutation(
+  await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
 
   const error = await t
-    .mutation(api.accounting.recordCashExpense, {
+    .action(api.accounting.recordCashExpense, {
       ...groceries(workspace.id, daily.id),
       amount: { currency: "USD", minorUnits: 150000 },
     })
@@ -96,16 +93,16 @@ test("a replayed idempotency key still rejects a different currency", async () =
 });
 
 test("an idempotency key cannot post a different cash expense", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  await t.mutation(
+  await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
 
   const error = await t
-    .mutation(
+    .action(
       api.accounting.recordCashExpense,
       groceries(workspace.id, daily.id, {
         amount: 1,
@@ -119,15 +116,14 @@ test("an idempotency key cannot post a different cash expense", async () => {
 });
 
 test("a posted cash expense is balanced in Functional Currency", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
-  const posted = await t.mutation(
+  const posted = await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
   const trial = await t.query(api.accounting.trialBalance, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -153,19 +149,17 @@ test("a posted cash expense is balanced in Functional Currency", async () => {
 });
 
 test("balances move only after a cash expense is posted", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const empty = await t.query(api.accounting.balances, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
-  await t.mutation(
+  await t.action(
     api.accounting.recordCashExpense,
     groceries(workspace.id, daily.id),
   );
   const after = await t.query(api.accounting.balances, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -192,24 +186,23 @@ test("balances move only after a cash expense is posted", async () => {
 });
 
 test("a non-finite or fractional amount cannot become Posted", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
 
   const infinite = await t
-    .mutation(api.accounting.recordCashExpense, {
+    .action(api.accounting.recordCashExpense, {
       ...groceries(workspace.id, daily.id, { idempotencyKey: "infinite" }),
       amount: { currency: "COP", minorUnits: Number.POSITIVE_INFINITY },
     })
     .catch((caught: unknown) => caught);
   const fractional = await t
-    .mutation(api.accounting.recordCashExpense, {
+    .action(api.accounting.recordCashExpense, {
       ...groceries(workspace.id, daily.id, { idempotencyKey: "fractional" }),
       amount: { currency: "COP", minorUnits: 1.5 },
     })
     .catch((caught: unknown) => caught);
   const activity = await t.query(api.accounting.listJournalEntries, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -219,11 +212,11 @@ test("a non-finite or fractional amount cannot become Posted", async () => {
 });
 
 test("a zero-amount cash expense cannot become Posted", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const error = await t
-    .mutation(
+    .action(
       api.accounting.recordCashExpense,
       groceries(workspace.id, daily.id, {
         amount: 0,
@@ -232,7 +225,6 @@ test("a zero-amount cash expense cannot become Posted", async () => {
     )
     .catch((caught: unknown) => caught);
   const activity = await t.query(api.accounting.listJournalEntries, {
-    userId: owner.userId,
     workspaceId: workspace.id,
   });
 
@@ -241,11 +233,11 @@ test("a zero-amount cash expense cannot become Posted", async () => {
 });
 
 test("an invalid Accounting Date cannot become Posted", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const error = await t
-    .mutation(
+    .action(
       api.accounting.recordCashExpense,
       groceries(workspace.id, daily.id, {
         accountingDate: "2026-09-31",
@@ -258,11 +250,11 @@ test("an invalid Accounting Date cannot become Posted", async () => {
 });
 
 test("a cash expense must use the Workspace Functional Currency", async () => {
-  const t = testdb();
+  const t = await testdb();
   const workspace = await createOwnedWorkspace(t);
   const daily = await createDaily(t, workspace.id);
   const error = await t
-    .mutation(api.accounting.recordCashExpense, {
+    .action(api.accounting.recordCashExpense, {
       ...groceries(workspace.id, daily.id, { idempotencyKey: "usd" }),
       amount: { currency: "USD", minorUnits: 100 },
     })

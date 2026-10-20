@@ -1,4 +1,5 @@
 import { AccountingError } from "./errors";
+import { calendarMonth } from "./timeZone";
 
 export function dateFromTimestamp(now: number): Date {
   // Stryker disable next-line ConditionalExpression,BlockStatement -- Invalid Date also rejects non-finite
@@ -12,14 +13,11 @@ export function dateFromTimestamp(now: number): Date {
   return date;
 }
 
-export function clockMonth(now: Date): { year: number; month: number } {
-  if (Number.isNaN(now.getTime())) {
-    throw new AccountingError("clock_required");
-  }
-  return {
-    year: now.getUTCFullYear(),
-    month: now.getUTCMonth() + 1,
-  };
+export function clockMonth(
+  now: Date,
+  timeZone: string,
+): { year: number; month: number } {
+  return calendarMonth(now, timeZone);
 }
 
 export function periodFromAccountingDate(accountingDate: string): {

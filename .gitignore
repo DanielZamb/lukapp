@@ -1,18 +1,46 @@
-.agents/*
-!.agents/skills/
-.agents/skills/*
-!.agents/skills/finance-tracker-v2-core-structure/
-.claude/
-.vscode/
+# Private local folders, including orchestration and editor state.
+**/.*/
+
+# Credentials and environment files at every depth.
+.env*
+*.env
+*.env.*
+.envrc
+*.pem
+*.key
+*.p12
+*.p8
+*.jks
+*.keystore
+*.pfx
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+credentials.json
+service-account*.json
+service_account*.json
+
+# Local documentation, exports, scratch and tooling metadata.
 docs/
 exports/
-.DS_Store
-node_modules/
-.pnpm/
-.pnpm-store/
-.env.local
-.convex/
 scratch/
-.stryker-tmp/
-reports/mutation/
+design/
+CONTEXT*
+MIGRATION*
+skills-lock.json
+*.log
+.DS_Store
+
+# Prototype is published only on its standalone branch.
+/sen-6-mobile-workflow-prototype/
+
+# Dependencies and generated output.
+node_modules/
 coverage/
+reports/
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/dist/
+*.apk
+*.aab
+*.ipa

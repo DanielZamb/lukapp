@@ -35,6 +35,7 @@ const cop: StoredWorkspace = {
   kind: "Personal",
   functionalCurrency: "COP",
   chartOfAccountsTemplate: "co-puc-personal@1",
+  timeZone: "America/Bogota",
 };
 
 function line(ledgerAccountId: string, debitMinorUnits: number, creditMinorUnits: number) {
@@ -279,8 +280,8 @@ test("period helpers reject malformed clocks and dates", () => {
   expectAccountingError(() => dateFromTimestamp(Number.POSITIVE_INFINITY), "clock_required");
   expectAccountingError(() => dateFromTimestamp(Number.NaN), "clock_required");
   expectAccountingError(() => dateFromTimestamp(Number.MAX_VALUE), "clock_required");
-  expectAccountingError(() => clockMonth(new Date(Number.NaN)), "clock_required");
-  expect(clockMonth(dateFromTimestamp(Date.UTC(2026, 8, 24))).month).toBe(9);
+  expectAccountingError(() => clockMonth(new Date(Number.NaN), "UTC"), "clock_required");
+  expect(clockMonth(dateFromTimestamp(Date.UTC(2026, 8, 24)), "UTC").month).toBe(9);
   for (const bad of [
     "not-a-date",
     "x2026-09-24",

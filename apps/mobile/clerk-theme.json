@@ -1,0 +1,36 @@
+{
+  "colors": {
+    "primary": "#6d28d9",
+    "background": "#ffffff",
+    "input": "#f4f4f5",
+    "danger": "#b91c1c",
+    "success": "#047857",
+    "warning": "#9c5f06",
+    "foreground": "#0a0a0a",
+    "mutedForeground": "#6e6e6e",
+    "primaryForeground": "#f5f3ff",
+    "inputForeground": "#0a0a0a",
+    "border": "#e5e5e5",
+    "ring": "#8a8a8a",
+    "muted": "#f4f4f5"
+  },
+  "darkColors": {
+    "primary": "#7c3aed",
+    "background": "#0a0a0a",
+    "input": "#27272a",
+    "danger": "#f87171",
+    "success": "#34d399",
+    "warning": "#fbbf24",
+    "foreground": "#fafafa",
+    "mutedForeground": "#a3a3a3",
+    "primaryForeground": "#f5f3ff",
+    "inputForeground": "#fafafa",
+    "border": "#ffffff1a",
+    "ring": "#737373",
+    "muted": "#27272a"
+  },
+  "design": {
+    "borderRadius": 16,
+    "fontFamily": "Geist"
+  }
+}
