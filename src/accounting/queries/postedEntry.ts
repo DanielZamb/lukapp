@@ -2,7 +2,7 @@ import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
 import type { AccountingStore, Actor } from "../types";
 import { journalContext, toPostedJournalEntry } from "../views";
-import { activityRow, profileNamesByPostingAccount } from "./activityRow";
+import { activityRow, profilesByPostingAccount } from "./activityRow";
 
 export async function postedEntry(
   store: AccountingStore,
@@ -29,7 +29,7 @@ export async function postedEntry(
     row: activityRow(
       entry,
       profile?.postingAccountId,
-      profileNamesByPostingAccount(context.profiles.values()),
+      profilesByPostingAccount(context.profiles.values()),
     ),
   };
 }

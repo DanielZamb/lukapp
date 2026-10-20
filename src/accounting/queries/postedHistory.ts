@@ -2,7 +2,7 @@ import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
 import type { AccountingStore, Actor, StoredJournalEntry } from "../types";
 import { journalContext, toPostedJournalEntry } from "../views";
-import { activityRow, profileNamesByPostingAccount } from "./activityRow";
+import { activityRow, profilesByPostingAccount } from "./activityRow";
 
 export type HistoryPageOptions = {
   cursor: string | null;
@@ -56,7 +56,7 @@ export async function postedHistory(
       return activityRow(
         entry,
         viewing?.postingAccountId,
-        profileNamesByPostingAccount(context.profiles.values()),
+        profilesByPostingAccount(context.profiles.values()),
       );
     })),
   };

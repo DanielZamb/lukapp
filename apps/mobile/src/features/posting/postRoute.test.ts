@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createElement, useImperativeHandle, useState, type ComponentProps } from "react";
 import type { PostingFormProps } from "./PostingForm";
+import { BatchNativeStack } from "./BatchNativeStack";
 import { parsePendingPosting } from "./pendingPostingSchema";
 import type { CategorySheetProps } from "../categories/CategorySheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -22,7 +23,7 @@ const form = vi.hoisted(() => {
   return state;
 });
 const picker = vi.hoisted(() => ({ present: vi.fn(), dismiss: vi.fn() }));
-const writes = vi.hoisted(() => ({ save: vi.fn(), post: vi.fn() }));
+const writes = vi.hoisted(() => ({ save: vi.fn(), post: vi.fn(), batchUpdate: vi.fn() }));
 const back = vi.hoisted(() => ({ handler: undefined as (() => boolean) | undefined }));
 const routeBack = vi.hoisted(() => vi.fn());
 const platform = vi.hoisted(() => ({ os: "ios" }));
@@ -69,6 +70,7 @@ vi.mock("@react-native-community/datetimepicker", () => ({ default: "picker" }))
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "sheet",
   BottomSheetView: "sheet-view",
+  BottomSheetModalProvider: "sheet-provider",
 }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => ({
@@ -103,7 +105,7 @@ vi.mock("./usePostingTransport", () => {
 vi.mock("./postingBatchStorage", () => {
   const storage = {
     load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }),
-    update: vi.fn(),
+    update: writes.batchUpdate,
   };
   return { usePostingBatchStorage: () => storage };
 });
@@ -238,9 +240,12 @@ test.each(["normal", "transfer"] satisfies Array<NonNullable<PostingFormProps["e
   },
 );
 
-test.each(["normal", "transfer", "initial"] satisfies Array<NonNullable<PostingFormProps["entryType"]>>)(
-  "%s requires a nonblank description before enabling Post",
-  async (entryType) => {
+test.each([
+  ["normal", "one"], ["transfer", "one"], ["initial", "one"],
+  ["normal", "batch"], ["transfer", "batch"], ["initial", "batch"],
+] satisfies [NonNullable<PostingFormProps["entryType"]>, "one" | "batch"][])(
+  "%s requires a nonblank description before enabling %s posting",
+  async (entryType, mode) => {
     queryData.categories = [{
       id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food",
       nature: "Expense", natureSource: "answered",
@@ -248,6 +253,11 @@ test.each(["normal", "transfer", "initial"] satisfies Array<NonNullable<PostingF
       style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
     }];
     await mount();
+    if (mode === "batch") {
+      await act(async () => { formProps().onBatch?.(); });
+      await act(async () => { root?.root.findByType(BatchNativeStack).props.onAdd(); });
+      expect(formProps().saveToBatch).toBe(true);
+    }
     await act(async () => {
       formProps().onEntryType?.(entryType);
       formProps().onAmountChange(entryType === "initial" ? "0" : "-1");
@@ -265,6 +275,8 @@ test.each(["normal", "transfer", "initial"] satisfies Array<NonNullable<PostingF
       await act(async () => sheet.props.onDone());
     }
     expect(formProps().canSubmit).toBe(false);
+    if (mode === "batch") await act(async () => { formProps().onPost(); });
+    expect(writes.batchUpdate).not.toHaveBeenCalled();
     await act(async () => formProps().onDescriptionChange(" \t\n "));
     expect(formProps().canSubmit).toBe(false);
     await act(async () => formProps().onDescriptionChange(" Lunch "));

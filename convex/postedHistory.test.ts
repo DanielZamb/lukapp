@@ -3,6 +3,7 @@ import { api } from "./_generated/api";
 import {
   convexAccounting, createDaily, createOwnedWorkspace, createProfile, groceries, reverse, septNow,
 } from "../src/accounting/convexHarness";
+import { filterHistory } from "../apps/mobile/src/features/history/filter";
 import { reversalPayload } from "../apps/mobile/src/features/history/useReversal";
 
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
@@ -151,6 +152,17 @@ test("transfer details match history for source, destination and stored scope, i
     accountingDate: "2026-09-18", description: "Transfer", idempotencyKey: "detail-transfer",
   });
   const correction = await reverse(t, workspace.id, original.id);
+  const unrelated = await createProfile(t, workspace.id, "Unrelated", "cash");
+  const globalHistory = await t.query(api.accounting.postedHistory, {
+    workspaceId: workspace.id, paginationOpts: { cursor: null, numItems: 50 },
+  });
+  const selected = filterHistory(globalHistory.page, {
+    search: "", profileIds: [destination.id, unrelated.id], categoryIds: [], range: "all", customFrom: null, customTo: null,
+  }, { today: "2026-09-24", profileNames: {} });
+  expect(selected.map((row) => row.id).sort()).toEqual([original.id, correction.id].sort());
+  for (const row of globalHistory.page) {
+    expect(row).toMatchObject({ financialAccountProfileIds: expect.arrayContaining([daily.id, destination.id]) });
+  }
   for (const [profileId, expected] of [[undefined, -2500], [daily.id, -2500], [destination.id, 2500]] as const) {
     const scope = { workspaceId: workspace.id, ...(profileId ? { financialAccountProfileId: profileId } : {}) };
     const history = await t.query(api.accounting.postedHistory, { ...scope, paginationOpts: { cursor: null, numItems: 50 } });

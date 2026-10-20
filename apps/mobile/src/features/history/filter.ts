@@ -152,10 +152,11 @@ export function filterHistory(
   const needle = query.search.trim().toLowerCase();
 
   return rows.filter((row) => {
+    const profileIds = row.financialAccountProfileIds ??
+      (row.financialAccountProfileId ? [row.financialAccountProfileId] : []);
     if (
       query.profileIds.length > 0 &&
-      (!row.financialAccountProfileId ||
-        !query.profileIds.includes(row.financialAccountProfileId))
+      !profileIds.some((id) => query.profileIds.includes(id))
     ) {
       return false;
     }

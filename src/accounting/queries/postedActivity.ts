@@ -1,7 +1,7 @@
 import { balances } from "./balances";
 import { AccountingError } from "../errors";
 import { calendarDate } from "../timeZone";
-import { activityRow, profileNamesByPostingAccount } from "./activityRow";
+import { activityRow, profilesByPostingAccount } from "./activityRow";
 import { requireWorkspace } from "../membership";
 import { findActiveOpening } from "../openingControl";
 import { journalContext, toPostedJournalEntry } from "../views";
@@ -37,7 +37,7 @@ export async function postedActivity(
       return activityRow(
         entry,
         profile?.postingAccountId,
-        profileNamesByPostingAccount(context.profiles.values()),
+        profilesByPostingAccount(context.profiles.values()),
       );
     }));
   return {

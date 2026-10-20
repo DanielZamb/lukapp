@@ -247,12 +247,12 @@ function PostMoney({
         <ActivityIndicator />
       </Screen>
     );
+  const completeEntry = editor.description.trim().length > 0 && categoryValid && placesValid;
   const canQueue =
     editor.canSubmit &&
     !setup &&
     !impact &&
-    categoryValid &&
-    placesValid &&
+    completeEntry &&
     !editor.pending &&
     !candidateId;
   async function saveToBatch() {
@@ -312,10 +312,7 @@ function PostMoney({
               !impact &&
               (!needsBudgetCheck || budget !== undefined) &&
               editor.canSubmit &&
-              (editor.pending ||
-                (editor.description.trim().length > 0 &&
-                  categoryValid &&
-                  placesValid))
+              (editor.pending || completeEntry)
         }
         date={new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
           new Date(`${editor.date}T12:00:00`),
