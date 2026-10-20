@@ -32,7 +32,7 @@ test.each([
   [100_000_000, "1M"], [110_000_000, "1.1M"], [123_000_000, "1.23M"],
   [1_234_000_000, "12M"], [-35_400_000, "−354K"], [-123, "−1.23"],
 ])("compact minor-unit amount %s is %s without a currency symbol", (minor, expected) => {
-  expect(compactAmount(minor)).toBe(expected);
+  expect(compactAmount(minor, "COP")).toBe(expected);
 });
 
 test.each([

@@ -1,3 +1,4 @@
+import { toMajorUnits } from "../money";
 import type { HistoryRow } from "./types";
 
 const MONTH_NAMES = [
@@ -117,7 +118,7 @@ function primaryCategoryName(row: HistoryRow) {
 }
 
 function majorUnitDigits(amount: HistoryRow["amount"]) {
-  return String(Math.abs(amount.minorUnits) / 100);
+  return String(toMajorUnits(Math.abs(amount.minorUnits), amount.currency));
 }
 
 function searchHaystack(

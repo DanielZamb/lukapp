@@ -358,7 +358,7 @@ function PostMoney({
             const hits = postingBudgetImpact({
               jars: budget.jars,
               categoryIds: editor.categories.ids,
-              expenseMinorUnits: -parseMoney(editor.amount),
+              expenseMinorUnits: -parseMoney(editor.amount, "es-CO", workspace.functionalCurrency),
             });
             if (hits.length) {
               Keyboard.dismiss();
@@ -466,6 +466,7 @@ function PostMoney({
   );
   const impactSheet = impact && (
     <PostingImpactSheet
+          currency={workspace.functionalCurrency}
       {...impact}
       onReconsider={() => {
         setImpact(null);

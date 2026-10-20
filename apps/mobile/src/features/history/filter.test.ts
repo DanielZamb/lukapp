@@ -271,3 +271,9 @@ test("sortHistory orders by date, absolute amount, place, and primary category",
     "bills",
   ]);
 });
+
+
+test("numeric search uses the row currency's major units", () => {
+  const yen = row({ id: "yen", title: "Receipt", date: today, amount: { currency: "JPY", minorUnits: 100 } });
+  expect(filterHistory([yen], { ...baseQuery(), search: "100" }, context)).toEqual([yen]);
+});

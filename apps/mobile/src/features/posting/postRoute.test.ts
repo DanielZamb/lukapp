@@ -376,21 +376,23 @@ test("a Candidate passes From drafts without an application name", async () => {
   expect(form.sourceNote).toBe("From drafts");
 });
 
-test.each(["EUR", "MXN"])("posting preserves the %s workspace currency", async (currency) => {
+test.each([
+  ["EUR", "12,50", 1250], ["MXN", "12,50", 1250], ["JPY", "100", 100], ["BHD", "1,234", 1234],
+] satisfies [string, string, number][])("posting preserves the %s workspace currency and precision", async (currency, amount, minorUnits) => {
   queryData.currency = currency;
   writes.save.mockImplementationOnce(async (command: unknown) => ({ id: "currency-draft", command: parsePendingPosting(command) }));
-  writes.post.mockResolvedValueOnce({ description: "Opening money", amount: { currency, minorUnits: 1250 } });
+  writes.post.mockResolvedValueOnce({ description: "Opening money", amount: { currency, minorUnits } });
   await mount();
   await act(async () => {
     formProps().onEntryType?.("initial");
-    formProps().onAmountChange("12,50");
+    formProps().onAmountChange(amount);
     formProps().onDescriptionChange("Opening money");
   });
   await act(async () => { formProps().onPost(); });
   expect(writes.save).toHaveBeenCalledWith(expect.objectContaining({
-    kind: "opening", payload: expect.objectContaining({ amount: { currency, minorUnits: 1250 } }),
+    kind: "opening", payload: expect.objectContaining({ amount: { currency, minorUnits } }),
   }), undefined);
   expect(writes.post).toHaveBeenCalledWith(expect.objectContaining({
-    payload: expect.objectContaining({ amount: { currency, minorUnits: 1250 } }),
+    payload: expect.objectContaining({ amount: { currency, minorUnits } }),
   }));
 });

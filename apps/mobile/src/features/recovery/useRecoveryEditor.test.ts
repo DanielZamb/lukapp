@@ -90,3 +90,12 @@ test.each(["", "0", "2.999", "12.001"])("invalid monthly amount %s stays editabl
   await act(async () => { await editor().submit(); });
   expect(api.save).not.toHaveBeenCalled();
 });
+
+
+test("a three-decimal recovery plan keeps the edited installment in exact minor units", async () => {
+  const api = transport();
+  const editor = await open(api, { ...seed, currency: "BHD", candidate: { ...seed.candidate, amountMinorUnits: 1234 } });
+  await act(async () => { editor().onMonths(4); editor().onAmount("0,400"); });
+  await act(async () => { await editor().submit(); });
+  expect(api.save.mock.calls[0][0].installmentMinorUnits).toBe(400);
+});

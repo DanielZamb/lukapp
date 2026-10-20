@@ -361,3 +361,15 @@ test("zero-balance setup rejects activity before its tracking date without creat
   await expect(t.action(api.accounting.recordCashExpense, payload)).resolves.toMatchObject({ accountingDate: "2026-09-24" });
   expect(await t.run((ctx) => ctx.db.query("financialAccountOpenings").collect())).toHaveLength(1);
 });
+
+
+test.each([["JPY", 100], ["BHD", 1234]] satisfies [string, number][])(
+  "%s setup stores its opening amount in the supplied minor units", async (functionalCurrency, startingMinorUnits) => {
+    const t = await convexAccounting(modules);
+    const defaults = await t.action(api.accounting.ensurePersonalDefaults, {
+      functionalCurrency, startingMinorUnits, timeZone: "America/Bogota",
+    });
+    expect(await t.query(api.accounting.balances, { workspaceId: defaults.workspace.id }))
+      .toMatchObject([{ balance: { currency: functionalCurrency, minorUnits: startingMinorUnits } }]);
+  },
+);

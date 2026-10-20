@@ -37,7 +37,7 @@ export function useRecoveryMove(
     return () => { mounted.active = false; };
   }, []);
   let minorUnits = 0;
-  try { minorUnits = parseMoney(amount); } catch { /* Incomplete amount stays editable. */ }
+  try { minorUnits = parseMoney(amount, "es-CO", seed.plan.currency); } catch { /* Incomplete amount stays editable. */ }
   const editable = !busy && !pending;
   async function submit() {
     const mounted = lifetime.current;

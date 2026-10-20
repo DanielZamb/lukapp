@@ -1,3 +1,4 @@
+import { formatAmount } from "../money";
 import type { Theme } from "../../ui/tokens";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useEffect, useRef, useState, type ReactNode } from "react";
@@ -75,7 +76,7 @@ export function batchRowFor({
 }
 
 export function signedBatchMoney(minorUnits: number, currency: string) {
-  return `${minorUnits < 0 ? "−" : "+"}${currency === "COP" ? "$" : `${currency} `}${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 }).format(Math.abs(minorUnits) / 100)}`;
+  return `${minorUnits < 0 ? "−" : "+"}${currency === "COP" ? "$" : `${currency} `}${formatAmount(Math.abs(minorUnits), currency, { hideZeroDecimals: true })}`;
 }
 
 export function BatchNativeStack({

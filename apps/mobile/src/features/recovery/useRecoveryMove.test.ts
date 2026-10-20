@@ -162,3 +162,15 @@ test("recovery uses the workspace date and keeps it unchanged when retry crosses
   expect(api.move.mock.calls.map(([request]) => request.accountingDate)).toEqual(["2026-02-28", "2026-02-28"]);
   expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
 });
+
+
+test.each([["JPY", 100, "100"], ["BHD", 1234, "1,234"]] satisfies [string, number, string][])(
+  "a %s recovery movement preserves its displayed and posted precision", async (currency, minorUnits, amount) => {
+    const api = transport();
+    const move = await open(api, { workspaceId: "workspace", timeZone: "America/Bogota", sources,
+      plan: { ...plan, currency, dueMinorUnits: minorUnits } });
+    expect(move().amount).toBe(amount);
+    await act(async () => { await move().submit(); });
+    expect(api.move.mock.calls[0][0].amount).toEqual({ currency, minorUnits });
+  },
+);

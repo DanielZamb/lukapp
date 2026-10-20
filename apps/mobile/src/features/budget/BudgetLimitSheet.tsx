@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Header, PrimaryButton, SecondaryButton, useTheme, useUi } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
-import { formatMoney, narrowCurrencySymbol } from "../money";
+import { formatMoney, minorUnitFactor, narrowCurrencySymbol } from "../money";
 import { compactAmount, jarPresentation, monthLabel, type BudgetJar } from "./model";
 import type { useBudgetEditor } from "./useBudgetEditor";
 
@@ -35,7 +35,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
   }, []);
   useEffect(() => { sheet.current?.present(); }, []);
   const { over, amount, fill } = jarPresentation({ ...props.jar, limitMinorUnits: props.minorUnits });
-  const stepMinorUnits = 100_000 * 100;
+  const stepMinorUnits = 100_000 * minorUnitFactor(props.currency);
   const choices = [
     props.jar.limitMinorUnits,
     Math.round(props.jar.limitMinorUnits * 1.2),
@@ -53,7 +53,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
         appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={props.canDismiss ? "close" : "none"} />}>
       <BottomSheetScrollView contentContainerStyle={styles.content}>
         <Header eyebrow={month.toUpperCase()} title={props.jar.category.name} titleStyle={styles.title} />
-        <Text style={[styles.amount, over && { color: theme.danger }]}>{`${over ? "−" : ""}${symbol}${compactAmount(amount)}`}</Text>
+        <Text style={[styles.amount, over && { color: theme.danger }]}>{`${over ? "−" : ""}${symbol}${compactAmount(amount, props.currency)}`}</Text>
         <View accessible accessibilityRole="progressbar" accessibilityLabel={`Remaining in ${props.jar.category.name}`}
           accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100),
             text: `${formatMoney({ currency: props.currency, minorUnits: amount })} ${over ? "over" : "left"}` }}
@@ -63,17 +63,17 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
         <Text style={styles.meta}>Stay under this month</Text>
         <View style={styles.chips}>
           {choices.map((value) => (
-            <Pressable key={value} accessibilityRole="button" accessibilityLabel={`Limit ${symbol}${compactAmount(value)}`}
+            <Pressable key={value} accessibilityRole="button" accessibilityLabel={`Limit ${symbol}${compactAmount(value, props.currency)}`}
               accessibilityState={{ selected: value === props.minorUnits, disabled: !props.editable }}
               disabled={!props.editable} onPress={() => props.onLimit(value)}
               style={[styles.chip, value === props.minorUnits && styles.selectedChip]}>
-              <Text style={styles.chipText}>{symbol}{compactAmount(value)}</Text>
+              <Text style={styles.chipText}>{symbol}{compactAmount(value, props.currency)}</Text>
             </Pressable>
           ))}
         </View>
         {props.minorUnits !== props.jar.limitMinorUnits && <Text style={styles.note}>
           {props.previousSpendMinorUnits === undefined ? `Loading ${previousMonth} spending.`
-            : `${previousMonth} ${props.jar.category.name} spent ${symbol}${compactAmount(props.previousSpendMinorUnits)}.`}
+            : `${previousMonth} ${props.jar.category.name} spent ${symbol}${compactAmount(props.previousSpendMinorUnits, props.currency)}.`}
           {` Saving applies to ${month} and future months.`}
         </Text>}
         {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}

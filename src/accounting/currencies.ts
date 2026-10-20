@@ -22,3 +22,16 @@ export const functionalCurrencyCodes: ReadonlySet<string> = new Set([
   "UZS", "VED", "VES", "VND", "VUV", "WST", "XAF", "XCD", "XCG", "XOF",
   "XPF", "YER", "ZAR", "ZMW", "ZWG",
 ]);
+
+
+// ISO 4217 List One, SIX, published 2026-09-17. All other supported currencies use two digits.
+// https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml
+const minorUnitDigits: Readonly<Record<string, 0 | 3>> = {
+  BIF: 0, CLP: 0, DJF: 0, GNF: 0, ISK: 0, JPY: 0, KMF: 0, KRW: 0,
+  PYG: 0, RWF: 0, UGX: 0, VND: 0, VUV: 0, XAF: 0, XOF: 0, XPF: 0,
+  BHD: 3, IQD: 3, JOD: 3, KWD: 3, LYD: 3, OMR: 3, TND: 3,
+};
+
+export function currencyMinorUnitDigits(currency: string): 0 | 2 | 3 {
+  return minorUnitDigits[currency] ?? 2;
+}

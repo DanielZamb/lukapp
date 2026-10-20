@@ -1,3 +1,4 @@
+import { toMajorUnits, minorUnitFactor } from "../money";
 import * as Crypto from "expo-crypto";
 import { useAction, useQuery } from "convex/react";
 import { useLayoutEffect, useRef } from "react";
@@ -46,7 +47,7 @@ export function BudgetCreation({ seed, categories, categoryColors, unlocking, on
   useLayoutEffect(() => {
     if (!selected || !totals || initializedCategory.current === selected.id) return;
     const spent = totals.categories.find((category) => category.categoryId === selected.id)?.minorUnits ?? 0;
-    editor.onAmount(String((limitSuggestions(spent)[1] ?? 40_000_000) / 100));
+    editor.onAmount(String(toMajorUnits(limitSuggestions(spent, seed.currency)[1] ?? 400_000 * minorUnitFactor(seed.currency), seed.currency)));
     initializedCategory.current = selected.id;
   }, [selected, totals, editor.onAmount]);
   const matches = categories.filter((category) => category.name.toLocaleLowerCase().includes(editor.search.trim().toLocaleLowerCase()));

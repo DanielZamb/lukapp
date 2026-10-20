@@ -20,7 +20,7 @@ export function CapitalFlow({ out, inn, currency }: { out: number; inn: number; 
       <Text style={styles.label}>{label}</Text>
       <Text numberOfLines={1} adjustsFontSizeToFit={selected} minimumFontScale={0.55}
         style={[styles.amount, (id === "net" || selected) && styles.large, { color }]}>
-        {selected ? historyAmount({ currency, minorUnits }) : compactHistoryAmount(minorUnits)}
+        {selected ? historyAmount({ currency, minorUnits }) : compactHistoryAmount(minorUnits, currency)}
       </Text>
     </Pressable>;
   }

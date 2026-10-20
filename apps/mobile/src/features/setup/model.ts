@@ -37,8 +37,8 @@ export function setupSelections(
         };
   });
 }
-export function startingAmount(text: string) {
-  const minorUnits = text.trim() ? parseMoney(text) : 0;
+export function startingAmount(text: string, currency: string) {
+  const minorUnits = text.trim() ? parseMoney(text, "es-CO", currency) : 0;
   if (minorUnits < 0) throw new Error("Enter zero or the amount you hold.");
   return minorUnits;
 }

@@ -1,3 +1,4 @@
+import { toMajorUnits } from "../money";
 import type { Theme } from "../../ui/tokens";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useState } from "react";
@@ -30,7 +31,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
   return (
     <Screen>
       <Header title="Overview" eyebrow="THIS MONTH" onBack={onBack} />
-      {data ? <CapitalFlow outMinorUnits={data.outMinorUnits} inMinorUnits={data.inMinorUnits} symbol={symbol} />
+      {data ? <CapitalFlow outMinorUnits={data.outMinorUnits} inMinorUnits={data.inMinorUnits} symbol={symbol} currency={data.currency} />
         : <ActivityIndicator accessibilityLabel="Loading Overview" />}
       <PrimaryButton label="Go to tx history" trailingIcon="receipt-outline" onPress={onHistory} />
       <View accessibilityRole="radiogroup" style={styles.toggle}>
@@ -50,9 +51,9 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
                 <CategoryCoin category={category} />
                 <Text style={styles.name}>{category.name}</Text>
                 <View style={styles.trail}>
-                  <Text style={styles.value} numberOfLines={1}>{symbolAmount(category.spendMinorUnits, symbol, "grouped")}</Text>
+                  <Text style={styles.value} numberOfLines={1}>{symbolAmount(category.spendMinorUnits, symbol, "grouped", data.currency)}</Text>
                   {left !== null && <Text style={[styles.left, { color: over ? theme.danger : color }]}>
-                    {compactAmount(Math.abs(left) / 100)} {over ? "over" : "left"}
+                    {compactAmount(toMajorUnits(Math.abs(left), data.currency))} {over ? "over" : "left"}
                   </Text>}
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
@@ -69,8 +70,8 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
             const color = over ? theme.danger : theme[category.style.tone];
             const fill = showRemaining ? remainingFill(category) : Math.max(0, Math.min(1, category.spendMinorUnits / maxSpend));
             const value = showRemaining && left !== null
-              ? `${compactAmount(Math.abs(left) / 100)}${over ? " over" : ""}`
-              : compactAmount(category.spendMinorUnits / 100);
+              ? `${compactAmount(toMajorUnits(Math.abs(left), data.currency))}${over ? " over" : ""}`
+              : compactAmount(toMajorUnits(category.spendMinorUnits, data.currency));
             return (
               <Pressable key={category.id} accessibilityRole="button"
                 accessibilityLabel={showRemaining ? `${category.name}, what's left` : category.name}

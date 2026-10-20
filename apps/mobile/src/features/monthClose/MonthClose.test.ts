@@ -6,7 +6,9 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import MonthCloseRoute from "../../../app/month-close";
 
 const source = vi.hoisted(() => {
-  const intake: { count: number | null; error: string } = { count: 2, error: "" };
+  const intake: { count: number | null; error: string; now: { suggestion: { accountingDate: string } }[]; wait: { suggestion: { accountingDate: string } }[] } = {
+    count: 2, error: "", now: [], wait: [],
+  };
   return {
     query: vi.fn(),
     lock: vi.fn(),
@@ -74,6 +76,8 @@ beforeEach(() => {
   source.loading = false;
   source.locked = false;
   source.intake.count = 2;
+  source.intake.now = [{ suggestion: { accountingDate: "2026-10-01" } }, { suggestion: { accountingDate: "2026-10-31" } }];
+  source.intake.wait = [];
   source.intake.error = "";
 });
 afterEach(async () => {
@@ -151,4 +155,14 @@ test("the complete screen routes to overview and home without another lock", asy
   await act(async () => row("Back home").props.onPress());
   expect(source.replace.mock.calls).toEqual([["/overview"], ["/"]]);
   expect(source.lock).not.toHaveBeenCalled();
+});
+
+
+test("Month Close counts only Candidates in the requested month across both inbox segments", async () => {
+  source.intake.count = 3;
+  source.intake.now = [{ suggestion: { accountingDate: "2026-10-01" } }];
+  source.intake.wait = [{ suggestion: { accountingDate: "2026-09-30" } }, { suggestion: { accountingDate: "2026-11-01" } }];
+  await act(async () => { root = create(createElement(MonthCloseRoute)); });
+  expect(text()).toContain("1 still local. Intake is not a statement.");
+  expect(text()).not.toContain("3 still local");
 });
