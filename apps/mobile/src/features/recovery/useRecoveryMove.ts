@@ -41,6 +41,7 @@ export function useRecoveryMove(
   const editable = !busy && !pending;
   async function submit() {
     const mounted = lifetime.current;
+    if (!request.current && seed.plan.status === "suspended") return;
     const selected = request.current?.sourceFinancialAccountProfileId ?? sourceId;
     if (!mounted.active || submitting.current || !selected || (!request.current && minorUnits <= 0)) return;
     if (!request.current && selected === seed.plan.destinationFinancialAccountProfileId) {
@@ -83,7 +84,7 @@ export function useRecoveryMove(
   const canEdit = () => lifetime.current.active && !submitting.current && !request.current;
   return {
     sourceId, amount, busy, pending, error, editable,
-    canSubmit: !busy && (pending || (!!sourceId && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
+    canSubmit: !busy && (pending || (seed.plan.status === "active" && !!sourceId && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
     canDismiss: !busy && !pending,
     onSource: (id: string) => { if (canEdit()) setSourceId(id); },
     onAmount: (value: string) => { if (canEdit()) setAmount(value); },

@@ -95,6 +95,29 @@ test("a transfer posted under the same key before the contribution is adopted on
   expect(after.entries.filter((entry) => entry.policy === "account-transfer@1")).toHaveLength(1);
 });
 
+test("reversing the source suspends recovery without undoing saved money or replay receipts", async () => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const gift = await s.move(plan.id, "saved-before-reversal");
+  await s.t.action(api.accounting.reversePostedEntry, {
+    workspaceId: s.workspaceId, journalEntryId: s.expenseId, idempotencyKey: "reverse-expense",
+  });
+  const before = await s.ledger();
+  expect((await s.read()).plans[0]).toMatchObject({
+    status: "suspended", recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000,
+    dueMinorUnits: 0,
+  });
+  await expect(s.move(plan.id, "new-after-reversal")).rejects.toMatchObject({
+    data: { kind: "recovery", code: "expense_not_recoverable" },
+  });
+  expect(await s.move(plan.id, "saved-before-reversal")).toEqual({ ...gift, replay: true });
+  await expect(s.move(plan.id, "saved-before-reversal", 300_000)).rejects.toMatchObject({
+    data: { kind: "accounting", code: "idempotency_key_conflict" },
+  });
+  expect(await s.ledger()).toEqual(before);
+  expect(await s.t.run((ctx) => ctx.db.query("savingsRecoveryContributions").collect())).toHaveLength(1);
+});
+
 test("a card source or liability destination is rejected without a second ledger write", async () => {
   const s = await setup();
   const card = await s.t.action(api.accounting.createFinancialAccountProfile, {

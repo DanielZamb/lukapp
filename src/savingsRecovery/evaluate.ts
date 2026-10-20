@@ -67,6 +67,7 @@ export async function evaluateWorkspace(
       const progress = await planProgress(plan, contributions, async (entryId) =>
         Boolean(await store.findReversalOf(entryId)), month);
       const source = await store.getEntry(plan.sourceJournalEntryId);
+      const status: "active" | "suspended" = await store.findReversalOf(plan.sourceJournalEntryId) ? "suspended" : "active";
       const destination = destinations.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
       return {
         id: plan.id,
@@ -82,6 +83,8 @@ export async function evaluateWorkspace(
         activationMonth: plan.activationMonth,
         currency: plan.currency,
         ...progress,
+        status,
+        dueMinorUnits: status === "suspended" ? 0 : progress.dueMinorUnits,
       };
     }));
   return {

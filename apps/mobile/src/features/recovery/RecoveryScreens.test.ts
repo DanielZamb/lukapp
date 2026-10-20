@@ -20,6 +20,7 @@ const candidate: RecoveryCandidate = {
   amountMinorUnits: 1_200_000, financialAccountProfileId: "daily", placeName: "Daily",
 };
 const plan: RecoveryPlanView = {
+  status: "active",
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 230_000,
@@ -119,6 +120,16 @@ test("a completed plan has a neutral zero due and no movement button", async () 
   const due = screen.findAll((node) => node.props.title === "Due this month")[0];
   expect(due.props.value).toBe("COP 0");
   expect(due.props.valueStyle).toBeUndefined();
+  expect(screen.findAll((node) => node.props.label === "Move money for October")).toHaveLength(0);
+});
+
+test("a suspended plan explains its reversed expense and offers no movement", async () => {
+  const screen = await render(createElement(RecoveryPlanScreen, {
+    plan: { ...plan, status: "suspended", dueMinorUnits: 0 },
+    month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }));
+  expect(screen.findAll((node) => node.type === Text && node.children.join("") ===
+    "Plan suspended because the original expense was reversed. Money already saved stays in your accounts.")).toHaveLength(1);
   expect(screen.findAll((node) => node.props.label === "Move money for October")).toHaveLength(0);
 });
 

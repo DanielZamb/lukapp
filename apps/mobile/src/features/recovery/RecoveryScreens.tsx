@@ -229,7 +229,12 @@ export function RecoveryPlanScreen(props: {
         <ListRow title="Destination" value={props.plan.destinationName} />
         <ListRow title="Original plan" value={`${props.plan.installmentCount} months`} />
       </ListGroup>
-      {!complete && (
+      {props.plan.status === "suspended" && (
+        <Text style={ui.muted}>
+          Plan suspended because the original expense was reversed. Money already saved stays in your accounts.
+        </Text>
+      )}
+      {!complete && props.plan.status === "active" && (
         <PrimaryButton
           label={`Move money for ${recoveryMonthName(props.month)}`}
           trailingIcon="swap-horizontal"

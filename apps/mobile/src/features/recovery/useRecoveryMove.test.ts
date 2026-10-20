@@ -6,6 +6,7 @@ import type { RecoveryPlace, RecoveryPlanView } from "./model";
 import { useRecoveryMove, type RecoveryMoveTransport } from "./useRecoveryMove";
 
 const plan: RecoveryPlanView = {
+  status: "active",
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 230_000,
@@ -55,6 +56,16 @@ test("the due amount posts one guarded movement under one key", async () => {
     accountingDate: "2026-10-17", description: "Recovery: Laptop repair", idempotencyKey: "move-1",
   }]);
   expect(api.onMoved).toHaveBeenCalledOnce();
+});
+
+test("a suspended plan cannot start a movement even when its handler is called", async () => {
+  const api = transport();
+  const move = await open(api, { workspaceId: "workspace", timeZone: "America/Bogota", sources,
+    plan: { ...plan, status: "suspended" },
+  });
+  expect(move().canSubmit).toBe(false);
+  await act(async () => { await move().submit(); });
+  expect(api.move).not.toHaveBeenCalled();
 });
 
 test("an uncertain movement freezes edits and retry reuses the same key", async () => {

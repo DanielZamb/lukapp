@@ -58,6 +58,7 @@ const candidate = {
   amountMinorUnits: 48_000_000, financialAccountProfileId: "daily", placeName: "Daily account",
 };
 const plan = {
+  status: "active",
   id: "repair", title: "Emergency repair", sourceJournalEntryId: "expense-repair", sourceTitle: "Emergency repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 300_000_000, installmentCount: 10, installmentMinorUnits: 30_000_000,

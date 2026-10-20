@@ -73,7 +73,9 @@ export function limitsCopy(
 export function progressCopy(plan: RecoveryPlanView) {
   const recovered = recoveryMoney({ currency: plan.currency, minorUnits: plan.recoveredMinorUnits });
   const target = recoveryMoney({ currency: plan.currency, minorUnits: plan.targetMinorUnits });
-  return `${recovered} of ${target} moved back to savings`;
+  return plan.status === "suspended"
+    ? `Suspended · ${recovered} moved back to savings`
+    : `${recovered} of ${target} moved back to savings`;
 }
 
 export function movedCopy(input: {
