@@ -54,6 +54,15 @@ try {
   const outcome = receipt => ({ graphs: receipt.graphs,
     results: receipt.results.map(result => [result.invariant, result.status]) });
   if (JSON.stringify(outcome(before)) !== JSON.stringify(outcome(after))) throw new Error('Restored invariant results/graph differ from baseline');
+  const artifacts = ['graph.json', 'crud-graph.json', 'RealUI.tla', 'RealCRUD.tla', 'counterexamples.json', 'crud-counterexamples.json', 'finding.json'];
+  const artifactHashes = {};
+  for (const path of artifacts) {
+    const baselineBytes = readFileSync(resolve(out, 'baseline', path));
+    const restoredBytes = readFileSync(resolve(out, 'restored', path));
+    if (!baselineBytes.equals(restoredBytes)) throw new Error(`Restored artifact differs byte-for-byte: ${path}`);
+    artifactHashes[path] = createHash('sha256').update(baselineBytes).digest('hex');
+  }
+  writeFileSync(resolve(out, 'artifact-equality.json'), JSON.stringify({ status: 'BYTE_EXACT', sha256: artifactHashes }, null, 2));
   writeFileSync(resolve(out, 'reproduction.json'), JSON.stringify({ snapshot, baselineExit: baseline, restoredExit: restored,
     challengeRun: args.includes('--prove-checks'), sharedProductWritten: false, scratchDropped: true }, null, 2));
   console.log(`Pinned snapshot reproduced; baseline/restored exit ${restored}. Read ${out}`);

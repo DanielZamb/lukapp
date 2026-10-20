@@ -406,7 +406,12 @@ test("extract finite committed-callback graph from production category/account-d
     }
   }
   const maxDepth = 28;
-  for (let cursor = 0; cursor < nodes.length; cursor++) {
+  const mutationFlag = process.env.CATEGORY_UI_MUTATION_FLAG;
+  let stoppedOnMutation = false;
+  const matchesMutation = (node: Node) => !!mutationFlag && !Reflect.get(node.monitor, mutationFlag) &&
+    (process.env.CATEGORY_UI_MUTATION_NAME !== "swap-silently-confirms" ||
+      node.trace.includes("Swap") && !node.trace.includes("ChangeTo") && !node.trace.includes("ChangeFrom"));
+  exploration: for (let cursor = 0; cursor < nodes.length; cursor++) {
     const node = nodes[cursor]; if (!node) throw new Error("Missing node");
     let replay = await mount(node.seed);
     for (const event of node.trace) await step(node.seed, replay, event);
@@ -424,6 +429,8 @@ test("extract finite committed-callback graph from production category/account-d
         indices.set(stateKey, id);
       }
       edges.push({ from: cursor + 1, to: id, event });
+      const reached = nodes[id - 1];
+      if (reached && matchesMutation(reached)) { stoppedOnMutation = true; break exploration; }
     }
     if (nodes.length > 10_000) throw new Error("Extraction exceeded declared state cap");
   }
@@ -440,6 +447,7 @@ test("extract finite committed-callback graph from production category/account-d
   writeFileSync(resolve(out, "counterexamples.json"), JSON.stringify(failures, null, 2));
   writeFileSync(resolve(out, "extraction-summary.json"), JSON.stringify({ states: nodes.length, edges: edges.length, initial: initial.length,
     maxDepth, maxObservedDepth: Math.max(...nodes.map(n => n.trace.length)), depthFrontier: nodes.filter(n => n.trace.length === maxDepth).length,
-    failingInvariants: failures.map(f => f.invariant) }, null, 2));
+    failingInvariants: failures.map(f => f.invariant),
+    exploration: mutationFlag ? { mode: "MUTATION_WITNESS_ONLY", target: mutationFlag, stoppedOnMutation } : { mode: "COMPLETE_BOUNDED" } }, null, 2));
   console.log(`UI_GRAPH states=${nodes.length} edges=${edges.length} findings=${failures.map(f => f.invariant).join(",") || "none"}`);
 });

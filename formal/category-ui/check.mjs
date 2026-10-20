@@ -9,7 +9,10 @@ const args = process.argv.slice(2);
 const option = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback;
 const out = resolve(root, option('--out', '.orchestrator/runs/2026-10-20-category-ui-crud-formal/latest'));
 const graphSelection = option('--graph', 'all');
+const invariantSelection = option('--invariant', null);
+if (invariantSelection && !args.includes('--scratch-mutation')) throw new Error('Selecting one invariant requires --scratch-mutation');
 if (!['all', 'account', 'crud'].includes(graphSelection)) throw new Error('Expected --graph all|account|crud');
+if (process.env.CATEGORY_UI_MUTATION_FLAG && !args.includes('--scratch-mutation')) throw new Error('Mutation witness mode requires --scratch-mutation');
 const accountEnabled = graphSelection !== 'crud';
 const crudEnabled = graphSelection !== 'account';
 const jar = resolve(root, option('--jar', '.orchestrator/tools/tla/v1.7.4/tla2tools.jar'));
@@ -69,8 +72,9 @@ const invariants = [
   ...(accountEnabled ? ['OriginalComposerPreserved', 'IndependentSetup', 'FrozenSetupRetry', 'SeparatePairConfirmation', 'NativeDismissAcknowledged'].map(name => ({ name, model: 'CategoryUI.tla' })) : []),
   ...(crudEnabled ? ['CRUDRequestIntegrity', 'CRUDDeleteConfirmation', 'CRUDFrozenEditor', 'CRUDRetryRetention', 'CRUDDismissal', 'CRUDAccountHandoff', 'DeletedSelectionRecoverable', 'CRUDFieldIntent'].map(name => ({ name, model: 'CategoryCRUD.tla' })) : []),
 ];
+if (invariantSelection && !invariants.some(item => item.name === invariantSelection)) throw new Error('Selected invariant is not in this graph');
 const results = [];
-for (const { name: invariant, model } of invariants) {
+for (const { name: invariant, model } of invariants.filter(item => !invariantSelection || item.name === invariantSelection)) {
   const config = `SPECIFICATION Spec\nINVARIANTS TypeOK ${invariant}\nCHECK_DEADLOCK FALSE\n`;
   writeFileSync(resolve(out, `${invariant}.cfg`), config);
   const result = run('java', ['-XX:+UseParallelGC', '-Xmx2g', '-Dtlc2.tool.fp.FPSet.impl=tlc2.tool.fp.MemFPSet', '-cp', jar, 'tlc2.TLC', '-workers', '1',
@@ -102,12 +106,12 @@ const summary = accountEnabled ? JSON.parse(readFileSync(resolve(out, 'extractio
 const crudSummary = crudEnabled ? JSON.parse(readFileSync(resolve(out, 'crud-summary.json'), 'utf8')) : {};
 if (summary.depthFrontier || crudSummary.depthFrontier) throw new Error('Finite event policy reached the depth frontier; review bounds before accepting');
 const receipt = { at: new Date().toISOString(), status: results.some(r => r.status === 'FINDING') ? 'FINDINGS' : 'PASS_BOUNDED',
-  ...summary, graphs: { account: accountEnabled ? summary : null, crud: crudEnabled ? crudSummary : null }, graphSelection, results, sourceSync: sourceReceipt.sourceSync, runtimeAcceptance: sourceReceipt.runtimeAcceptance,
+  ...summary, proofScope: args.includes('--scratch-mutation') ? 'MUTATION_WITNESS_ONLY' : 'COMPLETE_BOUNDED', invariantSelection, graphs: { account: accountEnabled ? summary : null, crud: crudEnabled ? crudSummary : null }, graphSelection, results, sourceSync: sourceReceipt.sourceSync, runtimeAcceptance: sourceReceipt.runtimeAcceptance,
   bounds: { seeds: '2 signed amounts x 2 account answers x 3 event lanes', maxCallbackEventsAfterPreparedCategory: 28,
     maxAccountDoorEntries: 2, maxSetupAttempts: 2, maxLostReplies: 1, maxSwaps: 1, maxPairConfirmations: 2,
     maxFromOrToChangesAfterConfirmation: 1, originalTransfers: 'stop at first save boundary',
     symbols: 'daily, existing, other, created; COP 1000 original minor units; zero opening balance',
-    crud: { preparedSeeds: 12, maxCallbackEvents: 24, categoryWriteAttempts: 2, failures: 1, cancellationAndReentry: 1, keepDeleteChoice: 1, appearance: 'one rendered emoji and h270 swatch', retainedSelection: 'original; one external fresh identity with same name; one explicit deselection' } } };
+    crud: { preparedSeeds: 12, maxCallbackEvents: 24, categoryWriteAttempts: 2, failures: 1, cancellationAndReentry: 1, keepDeleteChoice: 1, appearance: 'one rendered emoji and h30 swatch from initial h270', retainedSelection: 'original; one external fresh identity with same name; one explicit deselection' } } };
 writeFileSync(resolve(out, 'receipt.json'), JSON.stringify(receipt, null, 2));
 console.log(JSON.stringify(receipt, null, 2));
 process.exit(receipt.status === 'FINDINGS' ? 2 : 0);

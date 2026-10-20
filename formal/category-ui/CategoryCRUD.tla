@@ -14,30 +14,42 @@ DeleteMethod == "ZGVsZXRl"
 CustomEditor == "Y3VzdG9t"
 WeekendName == "V2Vla2VuZA=="
 Sparkles == "4pyo"
+ChosenColor == "aDMw"
 OriginalId == "b3JpZ2luYWw="
 UnavailableLabel == "VW5hdmFpbGFibGUgY2F0ZWdvcnk="
 
 CRUDRequestIntegrity ==
   /\ Len(Current.requests) <= Len(Before.requests) + 1
+  /\ ((action = "Save" \/ action = "DeleteConfirm") /\ Current.expectedMethod # "") =>
+       Len(Current.requests) = Len(Before.requests) + 1
   /\ \A n \in NewRequests:
        /\ Current.expectedMethod # ""
        /\ Current.requests[n].method = Current.expectedMethod
+       /\ Current.requests[n].functionName = Current.expectedFunction
        /\ Current.requests[n].exact = Current.expectedPayload
        /\ Current.busy /\ Current.editorOpen
 
-CRUDDeleteConfirmation == \A n \in NewRequests:
-  Current.requests[n].method = DeleteMethod =>
-    /\ action = "DeleteConfirm" /\ Before.confirmingDelete
+CRUDDeleteConfirmation ==
+  /\ \A n \in NewRequests:
+       Current.requests[n].method = DeleteMethod =>
+         /\ action = "DeleteConfirm" /\ Before.confirmingDelete
+  /\ action = "DeleteArm" => Current.confirmingDelete
+  /\ action = "Keep" =>
+       /\ ~Current.confirmingDelete /\ Current.editorOpen
+       /\ Current.requests = Before.requests
 
 CRUDFrozenEditor == action = "FrozenCallbacks" =>
   /\ Current.editor = Before.editor /\ Current.requests = Before.requests
 CRUDRetryRetention == action = "ReplyFailed" =>
   /\ Current.editor = Before.editor /\ Current.editorOpen
   /\ ~Current.busy /\ Current.error # ""
-CRUDDismissal == (action = "NativeDismiss" /\ ~Before.busy) =>
-  /\ ~Current.editorOpen /\ ~Current.confirmingDelete
-  /\ Current.requests = Before.requests
+CRUDDismissal ==
+  /\ Current.editorOpen => Current.presented
+  /\ (action = "NativeDismiss" /\ ~Before.busy) =>
+       /\ ~Current.editorOpen /\ ~Current.confirmingDelete
+       /\ Current.requests = Before.requests
 CRUDAccountHandoff ==
+  /\ (Current.accountExpected # "" /\ Current.handoff = "") => Current.dismissRequested
   /\ Current.handoff # "" =>
        /\ Current.dismissedAfterAccount /\ Current.handoff = Current.accountExpected
        /\ Current.requests = <<>>
@@ -63,4 +75,5 @@ CRUDFieldIntent ==
        /\ Before.editorKind = CustomEditor => Current.answer = ""
   /\ action = "AnswerFinal" => Current.answer = Current.userAnswer
   /\ action = "Style" => Current.emoji = Sparkles
+  /\ action = "Color" => Current.color = ChosenColor
 =======================================================================

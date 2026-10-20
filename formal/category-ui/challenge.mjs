@@ -19,6 +19,22 @@ const exact = (text, from, to) => {
   return text.replace(from, to);
 };
 const mutations = [
+  { name: 'crud-native-presentation-not-requested', graph: 'crud', file: manager, invariant: 'CRUDDismissal', flag: 'dismiss',
+    mutate: text => exact(text, 'if (open) sheet.current?.present();', 'if (open) {}') },
+  { name: 'crud-save-control-disconnected', graph: 'crud', file: manager, invariant: 'CRUDRequestIntegrity', flag: 'request',
+    mutate: text => exact(text, 'onConfirm={() => void save()}', 'onConfirm={() => {}}') },
+  { name: 'crud-delete-arm-disconnected', graph: 'crud', file: manager, invariant: 'CRUDDeleteConfirmation', flag: 'deletion',
+    mutate: text => exact(text, 'if (confirmingDelete) void save(true); else setConfirmingDelete(true);', 'if (confirmingDelete) void save(true); else {}') },
+  { name: 'crud-delete-confirm-disconnected', graph: 'crud', file: manager, invariant: 'CRUDRequestIntegrity', flag: 'request',
+    mutate: text => exact(text, 'if (confirmingDelete) void save(true); else setConfirmingDelete(true);', 'if (confirmingDelete) {} else setConfirmingDelete(true);') },
+  { name: 'crud-keep-control-disconnected', graph: 'crud', file: manager, invariant: 'CRUDDeleteConfirmation', flag: 'deletion',
+    mutate: text => exact(text, 'onCancelDelete={() => { interact(); setConfirmingDelete(false); }}', 'onCancelDelete={() => {}}') },
+  { name: 'crud-native-dismiss-not-requested', graph: 'crud', file: manager, invariant: 'CRUDAccountHandoff', flag: 'handoff',
+    mutate: text => exact(text, 'else if (presented.current) sheet.current?.dismiss();', 'else if (presented.current) {}') },
+  { name: 'crud-color-control-corrupted', graph: 'crud', file: 'apps/mobile/src/features/categories/CategorySheet.tsx', invariant: 'CRUDFieldIntent', flag: 'input',
+    mutate: text => exact(text, 'props.onStyle({ ...editor.style, color: entry.id })', 'props.onStyle({ ...editor.style, color: "h270" })') },
+  { name: 'crud-wrong-api-module', graph: 'crud', file: manager, invariant: 'CRUDRequestIntegrity', flag: 'request',
+    mutate: text => 'import { makeFunctionReference } from "convex/server";\n' + exact(text, 'useAction(api.accounting.updateUserCategory)', 'useAction(makeFunctionReference<"action">("incorrectAccounting:updateUserCategory"))') },
   { name: 'crud-update-wrong-identity', graph: 'crud', file: manager, invariant: 'CRUDRequestIntegrity', flag: 'request',
     mutate: text => exact(text, 'await update({ workspaceId, categoryId: editor.category.id, name: editor.name.trim(), style: editor.style });', 'await update({ workspaceId, categoryId: "foreign", name: editor.name.trim(), style: editor.style });') },
   { name: 'crud-delete-without-confirmation', graph: 'crud', file: manager, invariant: 'CRUDDeleteConfirmation', flag: 'deletion',
@@ -73,8 +89,9 @@ for (const mutation of mutations) {
     writeFileSync(file, after);
     const mutationOut = resolve(out, mutation.name);
     const run = spawnSync(process.execPath, [resolve(scratch, 'formal/category-ui/check.mjs'), '--out', mutationOut,
-      '--graph', mutation.graph ?? 'account', '--jar', resolve(root, '.orchestrator/tools/tla/v1.7.4/tla2tools.jar'), '--scratch-mutation'],
-      { cwd: scratch, encoding: 'utf8', maxBuffer: 20_000_000, env: { ...process.env, CATEGORY_UI_GIT_ROOT: process.env.CATEGORY_UI_GIT_ROOT ?? root } });
+      '--graph', mutation.graph ?? 'account', '--invariant', mutation.invariant, '--jar', resolve(root, '.orchestrator/tools/tla/v1.7.4/tla2tools.jar'), '--scratch-mutation'],
+      { cwd: scratch, encoding: 'utf8', maxBuffer: 20_000_000, env: { ...process.env, CATEGORY_UI_GIT_ROOT: process.env.CATEGORY_UI_GIT_ROOT ?? root,
+        CATEGORY_UI_MUTATION_FLAG: mutation.flag, CATEGORY_UI_MUTATION_NAME: mutation.name } });
     mkdirSync(mutationOut, { recursive: true });
     writeFileSync(resolve(mutationOut, 'command.log'), run.stdout + run.stderr);
     if (run.status !== 2) throw new Error(`Mutation ${mutation.name} did not finish as a TLC finding; exit ${run.status}`);
