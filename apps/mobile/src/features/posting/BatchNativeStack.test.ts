@@ -15,6 +15,7 @@ const backHandler = vi.hoisted(() => ({
   })),
 }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   Text: "text",
   View: "view",
   Pressable: "button",

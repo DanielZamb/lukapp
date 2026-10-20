@@ -8,6 +8,7 @@ import { BudgetBoard, type BudgetBoardProps } from "./BudgetBoard";
 import type { BudgetJar } from "./model";
 
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", View: "View", ScrollView: "ScrollView",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
 }));

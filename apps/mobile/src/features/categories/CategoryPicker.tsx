@@ -3,11 +3,13 @@ import { useEffect, useRef } from "react";
 import { BackHandler, Platform } from "react-native";
 import { CategorySheet } from "./CategorySheet";
 import { useCategoryPicker } from "./useCategoryPicker";
+import type { AccountSetupRequest } from "./model";
 import type { TransactionCategories } from "./transactionSelection";
 
 export type CategoryPickerProps = {
   workspaceId: string;
   direction?: "in" | "out";
+  onAccountSetup?: (request: AccountSetupRequest) => boolean;
   value: TransactionCategories;
   onChange: (value: TransactionCategories) => void;
   visible: boolean;

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { compactAmount, currencySymbol, fullAmount, symbolAmount } from "./amounts";
+import { compactAmount, fullAmount, symbolAmount } from "./amounts";
 
 test.each([
   [0, "0"], [999, "999"], [1000, "1K"], [1500, "1.5K"],
@@ -10,8 +10,6 @@ test.each([
 });
 
 test("symbol amounts convert minor units once and use es-CO grouping", () => {
-  expect(currencySymbol("COP")).toBe("$");
-  expect(currencySymbol("USD")).toBe("$");
   expect(symbolAmount(123456789, "$", "compact")).toBe("$1.2M");
   expect(symbolAmount(-10800000000, "$", "compact")).toBe("−$108M");
   expect(symbolAmount(123456789, "$", "grouped")).toBe("$1.234.567,89");

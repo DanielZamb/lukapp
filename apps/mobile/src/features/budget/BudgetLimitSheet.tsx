@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Header, PrimaryButton, SecondaryButton, useTheme, useUi } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
-import { formatMoney, narrowCurrencySymbol } from "../money";
+import { formatMoney, currencyDisplayPrefix } from "../money";
 import { compactAmount, jarPresentation, monthLabel, type BudgetJar } from "./model";
 import type { useBudgetEditor } from "./useBudgetEditor";
 
@@ -41,7 +41,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
     Math.round(props.jar.limitMinorUnits * 1.2),
     Math.round(props.jar.consumptionMinorUnits / stepMinorUnits) * stepMinorUnits + 2 * stepMinorUnits,
   ].filter((value, index, all) => value > 0 && all.indexOf(value) === index);
-  const symbol = narrowCurrencySymbol(props.currency);
+  const symbol = currencyDisplayPrefix(props.currency);
   const month = monthLabel(props.month, "month");
   const previousMonth = monthLabel(props.previousMonth, "month");
   return (
@@ -95,10 +95,10 @@ function createStyles(theme: Theme) {
     fill: { height: "100%", borderRadius: radius.full },
     meta: { color: theme.mutedForeground, fontSize: 14, lineHeight: 20, fontFamily: font.regular },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-    chip: { minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.lg,
+    chip: { maxWidth: "100%", paddingVertical: spacing.sm, minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.lg,
       borderRadius: radius.full, borderWidth: 1, borderColor: theme.border },
     selectedChip: { borderColor: theme.primary, borderWidth: 2 },
-    chipText: { color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
+    chipText: { flexShrink: 1, color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
     note: { color: theme.mutedForeground, fontSize: 13, lineHeight: 19, fontFamily: font.regular },
   });
 }

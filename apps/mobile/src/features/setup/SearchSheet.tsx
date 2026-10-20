@@ -8,6 +8,7 @@ import {
 } from "@gorhom/bottom-sheet";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, useUi } from "../../ui/core";
 import { useSetupStyles } from "./styles";
 
@@ -38,6 +39,7 @@ export function SearchSheet({
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const ui = useUi();
   const styles = useSetupStyles();
   const sheet = useRef<BottomSheetModal>(null);
@@ -52,6 +54,8 @@ export function SearchSheet({
   return (
     <BottomSheetModal
       ref={sheet}
+      topInset={insets.top}
+      stackBehavior="push"
       snapPoints={["70%"]}
       enableDynamicSizing={false}
       enablePanDownToClose

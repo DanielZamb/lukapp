@@ -2,6 +2,7 @@ import * as React from "react";
 import { createElement, useEffect } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+vi.mock("../ui/Brand", () => ({ BrandLogo: "brand-logo", BrandMark: "brand-mark", BrandSplash: "brand-splash" }));
 
 const sdk = vi.hoisted(() => ({
   session: ((): { id: string; status: string; currentTask: { key: string } | null } | null => null)(),
@@ -10,6 +11,7 @@ const sdk = vi.hoisted(() => ({
   authOptions: vi.fn(),
   mounts: vi.fn(),
   unmounts: vi.fn(),
+  window: { width: 320, height: 693, fontScale: 1.3, scale: 3.375 },
   complete: vi.fn(async (_id: string) => {}),
 }));
 vi.mock("@clerk/expo", () => ({
@@ -29,7 +31,10 @@ vi.mock("@clerk/expo/native-components", () => ({
     return createElement("div", { ...props, className: "native-auth" });
   },
 }));
-vi.mock("react-native", () => ({ Text: "text", View: "view" }));
+vi.mock("react-native", () => ({
+  Text: "text", View: "view", ScrollView: "scroll", KeyboardAvoidingView: "keyboard-viewport",
+  useWindowDimensions: () => sdk.window,
+}));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("../ui/core", () => ({
   Header: "header", SecondaryButton: "button", useUi: () => ({}),
@@ -51,6 +56,7 @@ beforeEach(() => {
   sdk.session = null;
   sdk.sessionId = null;
   sdk.flow = { isLoaded: true, isAuthFlowComplete: false };
+  sdk.window.fontScale = 1.3;
 });
 afterEach(async () => {
   await act(async () => root?.unmount());
@@ -87,6 +93,15 @@ test("keeps the same combined native flow through verification, pending tasks an
   expect(sdk.complete).toHaveBeenCalledOnce();
   expect(sdk.mounts).toHaveBeenCalledOnce();
   expect(sdk.unmounts).not.toHaveBeenCalled();
+});
+
+test("changing system text size preserves the in-progress native authentication flow", async () => {
+  await render();
+  sdk.window.fontScale = 2;
+  await render();
+  expect(sdk.mounts).toHaveBeenCalledOnce();
+  expect(sdk.unmounts).not.toHaveBeenCalled();
+  expect(sdk.complete).not.toHaveBeenCalled();
 });
 
 test("cancellation and an incomplete challenge cannot approve a session", async () => {

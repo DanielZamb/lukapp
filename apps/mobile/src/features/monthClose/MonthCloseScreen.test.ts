@@ -9,6 +9,7 @@ import type { MonthClosePhase } from "./useMonthClose";
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   Text: "text",
   View: "view",
   Pressable: "button",

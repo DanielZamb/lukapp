@@ -22,6 +22,8 @@ type WriteMethod =
   | "insertOpeningMarker"
   | "insertCategory"
   | "restyleCategory"
+  | "updateCategory"
+  | "deleteCategory"
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
@@ -377,6 +379,20 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
       if (!doc) throw new AccountingError("category_not_found");
       return toCategory(doc);
     },
+    async updateCategory(categoryId, changes) {
+      const id = storedId<"userCategories">(categoryId);
+      await db.patch(id, changes);
+      const doc = await db.get(id);
+      if (!doc) throw new AccountingError("category_not_found");
+      return toCategory(doc);
+    },
+    async deleteCategory(categoryId, deletedAt) {
+      const id = storedId<"userCategories">(categoryId);
+      await db.patch(id, { deletedAt });
+      const defaults = await db.query("personalDefaults")
+        .filter((q) => q.eq(q.field("firstCategoryId"), id)).collect();
+      for (const row of defaults) await db.patch(row._id, { firstCategoryId: undefined });
+    },
     async insertWorkspace(workspace, ownerUserId) {
       const workspaceId = await db.insert("workspaces", workspace);
       await db.insert("workspaceMemberships", {
@@ -532,6 +548,8 @@ function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
     insertOpeningMarker: async () => unavailable("insertOpeningMarker"),
     insertCategory: async () => unavailable("insertCategory"),
     restyleCategory: async () => unavailable("restyleCategory"),
+    updateCategory: async () => unavailable("updateCategory"),
+    deleteCategory: async () => unavailable("deleteCategory"),
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),

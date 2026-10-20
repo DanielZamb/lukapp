@@ -6,16 +6,19 @@ import {
   type BottomSheetScrollViewMethods,
 } from "@gorhom/bottom-sheet";
 import { useAction, useQuery } from "convex/react";
-import type { FunctionArgs } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { Header, PrimaryButton, useTheme, useUi } from "../ui/core";
 import { font, radius, spacing } from "../ui/tokens";
 import { api } from "./api";
+import { DeferredAccountSetup } from "./setup/DeferredAccountSetup";
+import type { AccountSetupRequest } from "./categories/model";
 import { SetupCategories } from "./categories/SetupCategories";
 import { formatMoney } from "./money";
 import { TimeZonePicker } from "./TimeZonePicker";
@@ -35,15 +38,33 @@ import { SearchSheet, SetupBackdrop } from "./setup/SearchSheet";
 import { useSetupStyles } from "./setup/styles";
 
 type SetupRequest = FunctionArgs<typeof api.accounting.ensurePersonalDefaults>;
+type SetupSubmission = {
+  payload: SetupRequest;
+  summary: SetupSummary;
+  accounts: AccountSetupRequest[];
+};
+type SetupPhase =
+  | { kind: "editing" }
+  | { kind: "savingDefaults" | "retryDefaults"; submission: SetupSubmission }
+  | {
+      kind: "accounts";
+      result: FunctionReturnType<typeof api.accounting.ensurePersonalDefaults>;
+      summary: SetupSummary;
+      requests: AccountSetupRequest[];
+      index: number;
+    };
 const setupConflict = z.object({ code: z.literal("setup_conflict") });
 export function Setup({
   onComplete,
   onCancel,
+  subject,
 }: {
   onComplete: (summary: SetupSummary) => void;
   onCancel: () => void;
+  subject: string;
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const ui = useUi();
   const styles = useSetupStyles();
   const interact = useLocalEntryInteraction();
@@ -55,6 +76,8 @@ export function Setup({
     nature: "Expense",
   });
   const [categories, setCategories] = useState<SetupCategory[]>([]);
+  const [accountRequests, setAccountRequests] = useState<AccountSetupRequest[]>([]);
+  const [phase, setPhase] = useState<SetupPhase>({ kind: "editing" });
   const [currency, setCurrency] = useState("COP");
   const [currencyChosen, setCurrencyChosen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -67,10 +90,6 @@ export function Setup({
   const [error, setError] = useState("");
   const saving = useRef(false);
   const completed = useRef(false);
-  const request = useRef<{
-    payload: SetupRequest;
-    summary: SetupSummary;
-  } | null>(null);
   useEffect(() => {
     sheet.current?.present();
   }, []);
@@ -85,8 +104,9 @@ export function Setup({
   function advance(next: number) {
     setStage((current) => Math.max(current, next));
   }
-  const disabled = busy;
+  const disabled = busy || phase.kind !== "editing";
   function chooseCurrency(code: string) {
+    if (disabled || saving.current) return;
     interact();
     setCurrency(code);
     setCurrencyChosen(true);
@@ -102,11 +122,11 @@ export function Setup({
     /* Keep incomplete input editable. */
   }
   async function finish() {
-    if (saving.current) return;
+    if (saving.current || phase.kind === "accounts") return;
     interact();
     setError("");
+    let submission = phase.kind === "retryDefaults" ? phase.submission : null;
     try {
-      let submission = request.current;
       if (!submission) {
         if (!presets || !categories.length || !currencyChosen || consent === null)
           return;
@@ -120,6 +140,7 @@ export function Setup({
             purchaseAlertsConsent: consent,
             wantsBudgets,
           },
+          accounts: [...accountRequests],
           summary: {
             categories,
             currency,
@@ -131,28 +152,28 @@ export function Setup({
       }
       saving.current = true;
       setBusy(true);
-      request.current = submission;
+      setPhase({ kind: "savingDefaults", submission });
       const result = await ensure(submission.payload);
-      completed.current = true;
-      sheet.current?.dismiss();
-      onComplete({
-        ...submission.summary,
-        firstCategoryId: result.firstCategoryId,
-      });
+      const summary = { ...submission.summary, firstCategoryId: result.firstCategoryId };
+      if (submission.accounts.length)
+        setPhase({ kind: "accounts", result, summary, requests: submission.accounts, index: 0 });
+      else complete(summary);
     } catch (error) {
-      if (reportFailure(error)) return;
       if (
         error instanceof ConvexError &&
         setupConflict.safeParse(error.data).success
       ) {
-        request.current = null;
+        setPhase({ kind: "editing" });
+        if (reportFailure(error)) return;
         setError(
           "Setup was already saved with different answers. You can edit your answers or cancel.",
         );
       } else {
+        setPhase(submission ? { kind: "retryDefaults", submission } : { kind: "editing" });
+        if (reportFailure(error)) return;
         setError(
-          request.current
-            ? "Setup could not be confirmed. Retry with the same answers."
+          submission
+            ? "Setup could not be confirmed. Retry with the same answers. Your submitted answers are read-only until setup is confirmed."
             : error instanceof Error
               ? error.message
               : "Setup could not finish.",
@@ -163,10 +184,21 @@ export function Setup({
       setBusy(false);
     }
   }
+  function complete(summary: SetupSummary) {
+    completed.current = true;
+    sheet.current?.dismiss();
+    onComplete(summary);
+  }
+  function nextAccount() {
+    if (phase.kind !== "accounts") return;
+    if (phase.index + 1 >= phase.requests.length) complete(phase.summary);
+    else setPhase({ ...phase, index: phase.index + 1 });
+  }
   return (
     <>
       <BottomSheetModal
         ref={sheet}
+        topInset={insets.top}
         snapPoints={["96%"]}
         enableDynamicSizing={false}
         enablePanDownToClose={!disabled}
@@ -174,10 +206,9 @@ export function Setup({
         backdropComponent={disabled ? undefined : SetupBackdrop}
         backgroundStyle={{ backgroundColor: theme.background }}
         onDismiss={() => {
-          if (!completed.current && !saving.current) {
-            request.current = null;
-            onCancel();
-          }
+          if (completed.current) return;
+          if (!saving.current && phase.kind === "editing") onCancel();
+          else sheet.current?.present();
         }}
       >
         <BottomSheetScrollView
@@ -199,6 +230,7 @@ export function Setup({
               accessibilityState={{ disabled }}
               style={styles.icon}
               onPress={() => {
+                if (disabled || saving.current) return;
                 interact();
                 sheet.current?.dismiss();
               }}
@@ -206,14 +238,27 @@ export function Setup({
               <Ionicons name="close" size={22} color={theme.foreground} />
             </Pressable>
           </View>
+          {phase.kind === "accounts" ? <View style={styles.board}>
+            <Text style={ui.title}>Basic setup has been saved</Text>
+            <Text style={ui.muted}>Add the places you chose, or explicitly add them later.</Text>
+            {phase.requests.slice(phase.index, phase.index + 1).map((accountRequest) => <DeferredAccountSetup
+              key={phase.index} request={accountRequest} subject={subject}
+              workspaceId={phase.result.workspace.id} profileId={phase.result.financialAccountProfile.id}
+              currency={phase.summary.currency} timeZone={phase.result.workspace.timeZone} onDone={nextAccount} />)}
+          </View> : <>
           <SetupCategories
             selections={categories}
             disabled={disabled}
+            onAccountSetup={(request) => {
+              if (!disabled && !saving.current) setAccountRequests((current) => [...current, request]);
+            }}
             onChange={(next) => {
+              if (disabled || saving.current) return;
               setCategories(next);
               if (next.length) advance(2);
             }}
           />
+          {!!accountRequests.length && <Text style={ui.muted}>{accountRequests.map(({ name }) => name).join(", ")} will be added after basic setup. Do not include those balances in My money. These unsaved requests stay only in this setup session.</Text>}
           {stage >= 2 && (
             <View style={styles.board}>
               <View style={styles.row}>
@@ -249,6 +294,7 @@ export function Setup({
                   accessibilityLabel="More currencies"
                   disabled={disabled}
                   onPress={() => {
+                    if (disabled || saving.current) return;
                     interact();
                     setCurrencyOpen(true);
                   }}
@@ -271,6 +317,7 @@ export function Setup({
                 value={timeZone}
                 disabled={disabled}
                 onChange={(next) => {
+                  if (disabled || saving.current) return;
                   interact();
                   setTimeZone(next);
                 }}
@@ -305,6 +352,7 @@ export function Setup({
                     }}
                     disabled={disabled}
                     onPress={() => {
+                      if (disabled || saving.current) return;
                       interact();
                       setConsent(option.value);
                       advance(4);
@@ -343,6 +391,7 @@ export function Setup({
                   placeholderTextColor={theme.mutedForeground}
                   editable={!disabled}
                   onChangeText={(value) => {
+                    if (disabled || saving.current) return;
                     interact();
                     setStarting(value);
                   }}
@@ -370,7 +419,7 @@ export function Setup({
                 label="Start tracking"
                 trailingIcon="checkmark"
                 pending={busy}
-                disabled={!request.current && (!categories.length || !presets)}
+                disabled={phase.kind === "editing" && (!categories.length || !presets)}
                 onPress={() => void finish()}
               />
               {!categories.length && (
@@ -388,6 +437,7 @@ export function Setup({
                 accessibilityState={{ selected: wantsBudgets, disabled }}
                 disabled={disabled}
                 onPress={() => {
+                  if (disabled || saving.current) return;
                   interact();
                   setWantsBudgets((value) => !value);
                 }}
@@ -414,9 +464,10 @@ export function Setup({
               </Pressable>
             </>
           )}
+          </>}
         </BottomSheetScrollView>
       </BottomSheetModal>
-      {currencyOpen && (
+      {currencyOpen && !disabled && (
         <SearchSheet
           label="Search currencies"
           placeholder="Search by code or name"

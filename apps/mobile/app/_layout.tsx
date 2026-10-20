@@ -13,7 +13,8 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { ConvexReactClient, useConvexAuth, useQuery } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Stack, type ErrorBoundaryProps } from "expo-router";
-import { useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
+import * as SplashScreen from "expo-splash-screen";
 import { ActivityIndicator, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -27,13 +28,14 @@ import {
   PrimaryButton,
   Screen,
   SecondaryButton,
-  ThemeProvider,
+  ResponsiveThemeProvider as ThemeProvider,
   useUi,
 } from "../src/ui/core";
 
 const url = process.env.EXPO_PUBLIC_CONVEX_URL;
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const convex = url ? new ConvexReactClient(url) : null;
+void SplashScreen.preventAutoHideAsync();
 
 function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
   const ui = useUi();
@@ -127,6 +129,7 @@ function Admission() {
       <Stack.Screen name="budget" />
       <Stack.Screen name="recovery" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="categories" />
       <Stack.Screen name="oauth-callback" />
     </Stack>
     </DeviceAdmissionGate>
@@ -140,6 +143,9 @@ export default function Layout() {
     Geist_700Bold,
     Geist_800ExtraBold,
   });
+  useEffect(() => {
+    if (loaded || error || !convex || !publishableKey) void SplashScreen.hideAsync();
+  }, [loaded, error]);
   if (!convex || !publishableKey)
     return (
       <SafeAreaProvider>

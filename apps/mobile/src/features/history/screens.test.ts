@@ -17,6 +17,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
 }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   FlatList: (props: {

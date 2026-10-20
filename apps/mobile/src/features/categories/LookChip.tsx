@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import { useTheme } from "../../ui/core";
+import { useTheme, useThemeMode } from "../../ui/core";
 import { useSetupStyles } from "../setup/styles";
 import type { SetupCategory } from "../setup/model";
 import { categoryColor } from "./looks";
@@ -10,8 +10,9 @@ export function LookChip({
   category: Pick<SetupCategory, "name" | "style">;
 }) {
   const theme = useTheme();
+  const mode = useThemeMode();
   const styles = useSetupStyles();
-  const color = categoryColor(category.style) ?? theme.primary;
+  const color = categoryColor(category.style, mode) ?? theme.primary;
   return (
     <View
       style={[

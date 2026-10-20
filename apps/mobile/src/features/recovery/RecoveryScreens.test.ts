@@ -8,6 +8,7 @@ import type { RecoveryCandidate, RecoveryPlace, RecoveryPlanView } from "./model
 import { RecoveryCandidates, RecoveryDraft, RecoveryMoveScreen, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
 
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput",
   View: "View", ScrollView: "ScrollView",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1, absoluteFillObject: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 } },

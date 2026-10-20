@@ -8,11 +8,6 @@ export function compactAmount(amount: number) {
   return `${sign}${body}${scale === 1_000_000 ? "M" : "K"}`;
 }
 
-export function currencySymbol(currency: string) {
-  return new Intl.NumberFormat("es-CO", { style: "currency", currency, currencyDisplay: "narrowSymbol" })
-    .formatToParts(0).find((part) => part.type === "currency")?.value ?? currency;
-}
-
 export function symbolAmount(minorUnits: number, symbol: string, mode: "compact" | "grouped") {
   const absolute = Math.abs(minorUnits) / 100;
   const body = mode === "compact" ? compactAmount(absolute) : absolute.toLocaleString("es-CO");

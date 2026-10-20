@@ -10,7 +10,7 @@ import { ScrollView as GestureScrollView } from "react-native-gesture-handler";
 import type { CategoryStyle } from "./model";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }) }));
 vi.mock("react-native-gesture-handler", () => ({ ScrollView: "gesture-scroll" }));
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "sheet",
@@ -37,6 +37,7 @@ afterEach(async () => {
 function props(overrides: Partial<CategorySheetProps> = {}): CategorySheetProps {
   return {
     sheetRef: createRef<BottomSheetModal>(), search: "", options: [], editor: null,
+    answer: null, suggested: null, allowed: ["spend", "receive", "stillMine", "payDebt"], onAnswer: vi.fn(),
     busy: false, error: "", canConfirm: false,
     onSearch: vi.fn(), onSelect: vi.fn(), onCreate: vi.fn(), onName: vi.fn(),
     onStyle: vi.fn(), onConfirm: vi.fn(), onDismiss: vi.fn(), ...overrides,
@@ -58,6 +59,8 @@ test("the category sheet uses sticky search, selectable emoji discs and an Add y
   ] });
   const tree = await render(value);
   expect(tree.findByType(BottomSheetModal).props.snapPoints).toEqual(["70%"]);
+  expect(tree.findByType(BottomSheetModal).props.topInset).toBe(59);
+  expect(tree.findByType(BottomSheetScrollView).props.accessibilityViewIsModal).toBe(true);
   expect(tree.findByType(BottomSheetModal).props.enablePanDownToClose).toBe(true);
   expect(tree.findByType(BottomSheetScrollView).props.stickyHeaderIndices).toEqual([0]);
   const input = tree.findByType("input");
@@ -86,10 +89,10 @@ test.each([
 });
 
 test("custom creation previews the name and look, offers 28 colors and accepts a keyboard emoji", async () => {
-  const value = props({ editor: { kind: "custom", name: "", style: { emoji: "✨", tone: "primary", color: "h270" } } });
+  const value = props({ editor: { kind: "custom", answer: null, name: "", style: { emoji: "✨", tone: "primary", color: "h270" } } });
   const tree = await render(value);
   expect(text()).toContain("Your own");
-  expect(text()).not.toContain("What happens to the money?");
+  expect(text()).toContain("What happens to the money?");
   expect(tree.findByType("input").props.placeholder).toBe("Name it your way");
   const emojis = tree.findAllByType("button").filter((node) => node.props.accessibilityLabel?.startsWith("Emoji "));
   expect(emojis.map((node) => node.props.accessibilityLabel)).toEqual(["Emoji 🛒", "Emoji 🍔", "Emoji 🚌", "Emoji 🏠", "Emoji 💊", "Emoji 🎮", "Emoji 🛍️", "Emoji ✨"]);
@@ -105,7 +108,7 @@ test("custom creation previews the name and look, offers 28 colors and accepts a
   expect(value.onStyle).toHaveBeenLastCalledWith({ emoji: "👩🏽‍💻", tone: "primary", color: "h270" });
   const submit = tree.findAllByType("button").find((node) => node.props.accessibilityLabel === "Add category");
   expect(submit?.props.disabled).toBe(true);
-  await act(async () => root?.update(createElement(CategorySheet, { ...value, canConfirm: true, editor: { kind: "custom", name: "Weekend", style: { emoji: "🎮", tone: "primary", color: "olive" } } })));
+  await act(async () => root?.update(createElement(CategorySheet, { ...value, canConfirm: true, editor: { kind: "custom", answer: null, name: "Weekend", style: { emoji: "🎮", tone: "primary", color: "olive" } } })));
   expect(text()).toContain("Weekend");
   expect(tree.findAllByType("button").find((node) => node.props.accessibilityLabel === "Add category")?.props.accessibilityState.disabled).toBe(false);
 });
@@ -121,7 +124,7 @@ test("the palette uses a sheet-compatible horizontal scroller and previews its l
   function Harness() {
     const [style, setStyle] = useState<CategoryStyle>({ emoji: "🍔", tone: "primary", color: "h0" });
     return createElement(CategorySheet, {
-      ...value, editor: { kind: "custom", name: "Dining", style }, onStyle: setStyle,
+      ...value, editor: { kind: "custom", answer: null, name: "Dining", style }, onStyle: setStyle,
     });
   }
   await act(async () => { root = create(createElement(Harness)); });
@@ -142,4 +145,19 @@ test("the palette uses a sheet-compatible horizontal scroller and previews its l
   expect(preview?.findAllByType("text").map((node) => node.children.join(""))).toEqual(["🍔", "Dining"]);
   expect(tree.findAllByType("button").find((node) => node.props.accessibilityLabel === "Color olive")?.props.accessibilityState.selected).toBe(true);
   expect(value.onConfirm).not.toHaveBeenCalled();
+});
+
+
+test("suggested nature is visible and the question permits an override", async () => {
+  const value = props({ editor: { kind: "custom", answer: null, name: "Savings", style: { emoji: "🏦", tone: "primary" } },
+    answer: "stillMine", suggested: "stillMine", allowed: ["spend", "stillMine", "payDebt"] });
+  const tree = await render(value);
+  expect(text()).toContain("Suggested from the name. You can change it.");
+  const choices = tree.findAllByType("button").filter((node) => node.props.accessibilityRole === "radio" && value.allowed.length && !node.props.accessibilityLabel?.startsWith("Color "));
+  const selected = choices.find((node) => node.props.accessibilityLabel === "It is still mine");
+  expect(selected?.props.accessibilityState.checked).toBe(true);
+  const spend = choices.find((node) => node.props.accessibilityLabel === "I spend it");
+  await act(async () => spend?.props.onPress());
+  expect(value.onAnswer).toHaveBeenCalledWith("spend");
+  expect(choices.some((node) => node.props.accessibilityLabel === "I receive it")).toBe(false);
 });

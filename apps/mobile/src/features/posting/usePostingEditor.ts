@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
 import { formatMoney, parseMoney } from "../money";
 import { defaultAccountingDate } from "../timeZones";
+import type { AccountSetupRequest } from "../categories/model";
 import type { TransactionCategories } from "../categories/transactionSelection";
 import type { PendingPosting, PlaceKind } from "./pendingPostingSchema";
 import type {
@@ -10,6 +11,7 @@ import type {
   LocalEntryDraftsPort,
   LocalEntryFacts,
 } from "../localEntryDrafts";
+import { pendingExpenseSchema } from "../pendingExpenseSchema";
 import { LocalEntryDraftGoneError } from "../localEntryDraftErrors";
 import type { EntryType } from "./PostingForm";
 import type {
@@ -49,13 +51,13 @@ export type PostingTransport = {
 type Account = {
   workspaceId: string;
   financialAccountProfileId: string;
-  currency: "COP" | "USD";
+  currency: string;
   timeZone: string;
 };
 export type PlaceDraft = {
   name: string;
   emoji?: string;
-  productKind: PlaceKind;
+  productKind: PlaceKind | null;
   amount: string;
   date: string;
   target?: Extract<PendingPosting, { kind: "setup" }>["target"];
@@ -98,6 +100,7 @@ export function usePostingEditor(
   const [entryType, setEntryType] = useState<EntryType>("normal");
   const [profileId, setProfileId] = useState(account.financialAccountProfileId);
   const [destinationId, setDestinationId] = useState<string | null>(null);
+  const [transferReviewRequired, setTransferReviewRequired] = useState(false);
   const [setup, setSetup] = useState<PlaceDraft | null>(null);
   const [pending, setPending] = useState<PendingPosting | null>(null);
   const [draftId, setDraftId] = useState<LocalEntryDraftId | undefined>();
@@ -179,6 +182,7 @@ export function usePostingEditor(
     setDescription(facts.description);
     setDate(facts.accountingDate);
     setEntryType(facts.entryType);
+    setTransferReviewRequired(facts.entryType === "transfer");
     setProfileId(facts.profileId);
     setDestinationId(facts.destinationId);
     setCategories({
@@ -218,6 +222,7 @@ export function usePostingEditor(
     setEntryType("normal");
     setProfileId(account.financialAccountProfileId);
     setDestinationId(null);
+    setTransferReviewRequired(false);
     setDraftId(undefined);
     appliedDraft.current = undefined;
     setPosted(null);
@@ -228,7 +233,7 @@ export function usePostingEditor(
       direction,
       description: description.trim(),
       amount: {
-        currency: account.currency,
+        currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
         minorUnits: Math.abs(parseMoney(amount)),
       },
       accountingDate: date,
@@ -240,7 +245,7 @@ export function usePostingEditor(
   function snapshotFacts(): LocalEntryFacts {
     return {
       workspaceId: account.workspaceId,
-      currency: account.currency,
+      currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
       entryType: entryType === "transfer" ? "transfer" : "normal",
       amountText: amount,
       accountingDate: date,
@@ -335,11 +340,12 @@ export function usePostingEditor(
     (entryType === "initial" ? minorUnits >= 0 : minorUnits !== 0);
   const validTransfer =
     entryType !== "transfer" ||
-    (!!destinationId && destinationId !== profileId);
+    (!!destinationId && destinationId !== profileId && !transferReviewRequired);
   const direction: "in" | "out" =
     minorUnits !== null && minorUnits > 0 ? "in" : "out";
   function buildEntry(): PendingPosting {
-    if (setup)
+    if (setup) {
+      if (!setup.productKind) throw new Error("Choose Credit card or Loan");
       return {
         kind: "setup",
         ...(setup.target ? { target: setup.target } : {}),
@@ -356,10 +362,11 @@ export function usePostingEditor(
           idempotencyKey: transport.newKey(),
         },
       };
+    }
     const payload = {
       workspaceId: account.workspaceId,
       amount: {
-        currency: account.currency,
+        currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
         minorUnits: Math.abs(parseMoney(amount)),
       },
       accountingDate: date,
@@ -402,7 +409,7 @@ export function usePostingEditor(
   }
   let setupValid = false;
   try {
-    setupValid = !!setup?.name.trim() && parseMoney(setup.amount) >= 0;
+    setupValid = !!setup?.name.trim() && setup.productKind !== null && parseMoney(setup.amount) >= 0;
   } catch {
     /* Keep incomplete setup editable. */
   }
@@ -512,6 +519,7 @@ export function usePostingEditor(
           setProfileId(saved.command.target.sourceProfileId);
           setDestinationId(receipt.financialAccountProfileId);
           setEntryType("transfer");
+          setTransferReviewRequired(true);
         } else setProfileId(receipt.financialAccountProfileId);
         setSetupPosted(receipt);
         return;
@@ -541,7 +549,7 @@ export function usePostingEditor(
           setPosted({
             description: description.trim() || "Entry",
             amount: {
-              currency: account.currency,
+              currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
               minorUnits:
                 (direction === "out" ? -1 : 1) * Math.abs(minorUnits ?? 0),
             },
@@ -646,9 +654,39 @@ export function usePostingEditor(
     setDestinationId: (value: string) => {
       if (canEdit()) setDestinationId(value);
     },
+    transferReviewRequired,
+    swapTransferPlaces: () => {
+      if (canEdit() && entryType === "transfer" && !setup && destinationId && destinationId !== profileId) {
+        setProfileId(destinationId);
+        setDestinationId(profileId);
+        setTransferReviewRequired(true);
+      }
+    },
+    confirmTransferReview: () => {
+      if (canEdit() && entryType === "transfer" && destinationId && destinationId !== profileId)
+        setTransferReviewRequired(false);
+    },
+    beginAccountSetup: (request: AccountSetupRequest) => {
+      if (!canEdit() || isolate || keeping || opLock.current) return false;
+      setCategories({ ids: [], primaryId: null });
+      setEntryType("transfer");
+      setDestinationId(null);
+      setTransferReviewRequired(true);
+      setSetupPosted(null);
+      setSetup({
+        name: request.name,
+        emoji: request.style.emoji,
+        productKind: request.answer === "payDebt" ? null : "bankAccount",
+        amount: "0",
+        date: defaultAccountingDate(account.timeZone),
+        target: { kind: "destination", sourceProfileId: profileId },
+      });
+      setError("");
+      return true;
+    },
     setup,
     setSetup: (value: PlaceDraft | null) => {
-      if (canEdit() && !intake) { setSetupPosted(null); setSetup(value); }
+      if (canEdit() && !isolate) { setSetupPosted(null); setSetup(value); }
     },
     direction,
     categories,

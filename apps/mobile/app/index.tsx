@@ -19,6 +19,7 @@ import { budgetAttention } from "../src/features/attention/model";
 import { useInboxCount } from "../src/features/useInboxCount";
 import { Header, PrimaryButton, Screen, useTheme, useUi } from "../src/ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../src/ui/tokens";
+import { BrandLogo } from "../src/ui/Brand";
 
 function Home({
   defaults,
@@ -52,7 +53,10 @@ function Home({
   return (
     <Screen contentStyle={{ gap: spacing.xl, paddingTop: spacing.md }}>
       <View style={styles.header}>
-        <Text style={[ui.label, { flex: 1 }]}>THIS MONTH</Text>
+        <View style={{ flex: 1, gap: spacing.sm }}>
+          <BrandLogo width={104} />
+          <Text style={ui.label}>THIS MONTH</Text>
+        </View>
         {level === 1 && (
           <Pressable
             accessibilityRole="button"
@@ -198,10 +202,10 @@ function createStyles(theme: Theme, ui: ReturnType<typeof useUi>) {
   tileTitle: { color: theme.foreground, fontSize: fontSize.action, fontFamily: font.bold },
   primaryText: { color: theme.primaryForeground },
   primaryDetail: { color: theme.primaryForeground, fontSize: fontSize.label, fontFamily: font.medium },
-  badge: { minWidth: 26, height: 26, borderRadius: radius.full, backgroundColor: theme.primaryForeground,
+  badge: { minWidth: 26, minHeight: 26, borderRadius: radius.full, backgroundColor: theme.primaryForeground,
     alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.sm },
   badgeText: { color: theme.primary, fontFamily: font.bold, fontSize: fontSize.label },
-  bellBadge: { position: "absolute", top: -2, right: -2, minWidth: 20, height: 20,
+  bellBadge: { position: "absolute", top: -2, right: -2, minWidth: 20, minHeight: 20,
     paddingHorizontal: 5, borderRadius: radius.full, backgroundColor: theme.warning,
     borderWidth: 2, borderColor: theme.background, alignItems: "center", justifyContent: "center" },
   bellBadgeText: { color: theme.background, fontSize: 11, fontFamily: font.bold },
@@ -265,6 +269,7 @@ function ReadyIndex({
     return (
       <Screen>
         <Setup
+          subject={userId}
           onComplete={(summary) => setView({ kind: "complete", summary })}
           onCancel={() => setView({ kind: "home" })}
         />

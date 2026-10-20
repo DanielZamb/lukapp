@@ -1,8 +1,9 @@
 import * as React from "react";
-import { createElement } from "react";
+import { createElement, useEffect } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { ActionTile, Field, ListGroup, ListRow } from "./core";
+import { ActionTile, Choice, Field, ListGroup, ListRow, useSetThemeMode } from "./core";
+import { themes, type ThemeMode } from "./tokens";
 import { withThemeProvider } from "./testTheme";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
@@ -116,4 +117,18 @@ test("primary ActionTile detail text uses full opacity on primaryForeground", as
     ? Object.assign({}, ...style.filter(Boolean))
     : style;
   expect(flatStyle?.opacity).toBeUndefined();
+});
+
+test.each(["light", "dark"] as const)("Choice preserves its selected and disabled presentation in %s mode", async (mode: ThemeMode) => {
+  function Harness() {
+    const setMode = useSetThemeMode();
+    useEffect(() => setMode(mode), [setMode]);
+    return createElement(Choice, { label: "I spend it", selected: true, disabled: true, onPress: vi.fn() });
+  }
+  await act(async () => { root = create(withThemeProvider(createElement(Harness))); });
+  const button = root?.root.findByType("button");
+  expect(button?.props.accessibilityState).toEqual({ checked: true, disabled: true });
+  expect(button?.props.disabled).toBe(true);
+  const style = Object.assign({}, ...button?.props.style.filter(Boolean));
+  expect(style).toMatchObject({ backgroundColor: themes[mode].secondary, borderColor: themes[mode].primary, minHeight: 76, opacity: 0.45 });
 });

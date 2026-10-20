@@ -1,4 +1,6 @@
 import type { Theme } from "../../ui/tokens";
+import { useReadableLayout } from "../../ui/themeContext";
+import type { ReadableLayout } from "../../ui/layout";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../ui/core";
@@ -11,7 +13,8 @@ export function CapitalFlow({ outMinorUnits, inMinorUnits, symbol }: {
   outMinorUnits: number; inMinorUnits: number; symbol: string;
 }) {
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   const [focus, setFocus] = useState<Focus | null>(null);
   const net = inMinorUnits - outMinorUnits;
   function amount(id: Focus, label: string, value: number, color: string) {
@@ -42,12 +45,12 @@ export function CapitalFlow({ outMinorUnits, inMinorUnits, symbol }: {
   );
 }
 
-function createStyles(theme: Theme) {
+function createStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
   wrap: { gap: spacing.sm, alignSelf: "stretch" },
   netBlock: { gap: 2, minHeight: touchTarget },
-  pair: { flexDirection: "row", alignItems: "flex-end", alignSelf: "stretch", gap: spacing.lg },
-  side: { flex: 1, minWidth: 0, gap: 2, minHeight: touchTarget },
+  pair: { flexDirection: layout.reflow ? "column" : "row", alignItems: layout.reflow ? "stretch" : "flex-end", alignSelf: "stretch", gap: spacing.lg },
+  side: { flex: layout.reflow ? 0 : 1, minWidth: 0, gap: 2, minHeight: touchTarget },
   muted: { color: theme.mutedForeground, fontSize: 14, lineHeight: 20, fontFamily: font.regular },
   amount: { fontSize: 22, lineHeight: 26, fontFamily: font.extrabold, letterSpacing: -0.4 },
   large: { fontSize: 36, lineHeight: 40, fontFamily: font.extrabold, letterSpacing: -0.8 },

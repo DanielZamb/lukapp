@@ -8,6 +8,7 @@ import { OverviewScreen } from "./OverviewScreen";
 import type { MonthOverview } from "./model";
 
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "spinner", Pressable: "button", Text: "text", View: "view", ScrollView: "scroll",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
 }));
@@ -48,6 +49,23 @@ async function render(value: MonthOverview | undefined = data) {
 }
 function bars() { return screen().findAll((node) => node.type === "view" && node.props.accessibilityRole === "progressbar"); }
 function percentages() { return bars().map((node) => node.props.accessibilityValue.now); }
+
+test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["AED", "AED "]])("shows posted spending and opens history for %s without formatToParts", async (currency, symbol) => {
+  const formatToParts = Object.getOwnPropertyDescriptor(Intl.NumberFormat.prototype, "formatToParts");
+  Reflect.deleteProperty(Intl.NumberFormat.prototype, "formatToParts");
+  try {
+    const callbacks = await render({
+      currency, outMinorUnits: 1_000_000, inMinorUnits: 0,
+      categories: [{ id: "food", name: "Food", style: { emoji: "🍔", tone: "warning" }, spendMinorUnits: 1_000_000, limitMinorUnits: null }],
+    });
+    expect(texts(screen())).toEqual(expect.arrayContaining(["Net", `−${symbol}10K`, "Out", `${symbol}10K`, "In", `${symbol}0`]));
+    expect(texts(button("Food"))).toEqual(["🍔", "Food", `${symbol}10.000`]);
+    await press("Go to tx history");
+    expect(callbacks.onHistory).toHaveBeenCalledOnce();
+  } finally {
+    if (formatToParts) Object.defineProperty(Intl.NumberFormat.prototype, "formatToParts", formatToParts);
+  }
+});
 
 test.each([
   ["Net", "−$1.000.000,00"], ["Out", "$2.500.000,00"], ["In", "$1.500.000,00"],

@@ -34,6 +34,7 @@ vi.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), router: { repl
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   Text: "Text", View: "View", Pressable: "Button", ScrollView: "ScrollView", TextInput: "Input", ActivityIndicator: "Spinner",
   Platform: { OS: "ios" }, Keyboard: { dismiss: vi.fn() }, StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
 }));

@@ -101,12 +101,18 @@ async function assertLinkedRecords(
   workspaceId: string,
   draft: JournalEntryDraft,
 ): Promise<void> {
+  const reversed = draft.reversesEntryId === undefined ? undefined : await store.getJournalEntry(draft.reversesEntryId);
+  if (draft.reversesEntryId !== undefined && (!reversed || reversed.workspaceId !== workspaceId))
+    throw new AccountingError("journal_entry_not_found");
+  const reversingCategoryIds = new Set(reversed?.lines.flatMap(requireCategoryAssignments));
   for (const line of draft.lines) {
     for (const id of requireCategoryAssignments(line)) {
       const category = await store.getCategory(id);
       if (!category || category.workspaceId !== workspaceId) {
         throw new AccountingError("category_not_found");
       }
+      if (category.deletedAt !== undefined && !reversingCategoryIds.has(id))
+        throw new AccountingError("category_not_found");
       if (!category.nature) throw new AccountingError("category_nature_required");
     }
   }
@@ -114,12 +120,6 @@ async function assertLinkedRecords(
     const profile = await store.getProfile(draft.financialAccountProfileId);
     if (!profile || profile.workspaceId !== workspaceId) {
       throw new AccountingError("financial_account_profile_not_found");
-    }
-  }
-  if (draft.reversesEntryId !== undefined) {
-    const reversed = await store.getJournalEntry(draft.reversesEntryId);
-    if (!reversed || reversed.workspaceId !== workspaceId) {
-      throw new AccountingError("journal_entry_not_found");
     }
   }
 }

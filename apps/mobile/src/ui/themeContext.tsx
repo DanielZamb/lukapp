@@ -8,6 +8,8 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
+import { useWindowDimensions } from "react-native";
+import { defaultLayout, readableLayout, type ReadableLayout } from "./layout";
 import { themes, type Theme, type ThemeMode } from "./tokens";
 import { createCoreStyles, createUiStyles, type CoreStyles, type UiStyles } from "./styles";
 import { readThemeMode, writeThemeMode } from "./themeModeStorage";
@@ -17,6 +19,7 @@ type ThemeContextValue = {
   theme: Theme;
   ui: UiStyles;
   styles: CoreStyles;
+  layout: ReadableLayout;
   setMode: (mode: ThemeMode) => void;
 };
 
@@ -28,10 +31,17 @@ const fallbackBundle: ThemeContextValue = {
   theme: fallbackTheme,
   ui: createUiStyles(fallbackTheme),
   styles: createCoreStyles(fallbackTheme),
+  layout: defaultLayout,
   setMode: () => {},
 };
 
-export function ThemeProvider({ children }: PropsWithChildren) {
+export function ResponsiveThemeProvider({ children }: PropsWithChildren) {
+  const { width, fontScale } = useWindowDimensions();
+  const layout = useMemo(() => readableLayout({ width, fontScale }), [width, fontScale]);
+  return <ThemeProvider layout={layout}>{children}</ThemeProvider>;
+}
+
+export function ThemeProvider({ children, layout = defaultLayout }: PropsWithChildren<{ layout?: ReadableLayout }>) {
   const [mode, setModeState] = useState<ThemeMode>("light");
   const userChoseMode = useRef(false);
   useEffect(() => {
@@ -45,11 +55,11 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     void writeThemeMode(next);
   }, []);
   const theme = themes[mode];
-  const ui = useMemo(() => createUiStyles(theme), [theme]);
-  const styles = useMemo(() => createCoreStyles(theme), [theme]);
+  const ui = useMemo(() => createUiStyles(theme, layout), [theme, layout]);
+  const styles = useMemo(() => createCoreStyles(theme, layout), [theme, layout]);
   const value = useMemo(
-    () => ({ mode, theme, ui, styles, setMode }),
-    [mode, theme, ui, styles, setMode],
+    () => ({ mode, theme, ui, styles, layout, setMode }),
+    [mode, theme, ui, styles, layout, setMode],
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
@@ -64,6 +74,10 @@ export function useTheme() {
 
 export function useUi() {
   return useThemeContext().ui;
+}
+
+export function useReadableLayout() {
+  return useThemeContext().layout;
 }
 
 export function useThemeMode() {

@@ -1,4 +1,5 @@
 import type { Theme } from "../../ui/tokens";
+import { useReadableLayout } from "../../ui/themeContext";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -26,6 +27,7 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
   onBack: () => void;
 }) {
   const ui = useUi();
+  const layout = useReadableLayout();
   const theme = useTheme();
   const styles = useMemo(() => historyScreenStyles(theme), [theme]);
   const [query, setQuery] = useState<HistoryQuery>(() => ({ ...emptyQuery, profileIds: initialProfileId ? [initialProfileId] : [] }));
@@ -51,7 +53,7 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
       data={loading ? [] : matched}
       keyExtractor={(row) => row.id}
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ padding: spacing.xxl, flexGrow: 1 }}
+      contentContainerStyle={{ padding: layout.pagePadding, flexGrow: 1 }}
       ListHeaderComponent={<View style={styles.headerContent}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel="Go back" hitSlop={8} onPress={onBack}
@@ -104,7 +106,7 @@ function historyScreenStyles(theme: Theme) {
       paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: theme.ring,
       backgroundColor: theme.secondary,
     },
-    count: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
+    count: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
     muted: { fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: theme.mutedForeground },
     clear: { minHeight: 32, justifyContent: "center" },
     clearText: { fontFamily: font.bold, fontSize: 14, color: theme.primary },

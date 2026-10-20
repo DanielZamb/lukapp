@@ -1,4 +1,5 @@
 import type {
+  FlowAnswer,
   CategoryPreset,
   CategorySelection,
   CategoryStyle,
@@ -8,8 +9,7 @@ import { parseMoney } from "../money";
 export type SetupCategory = {
   name: string;
   style: CategoryStyle;
-  source: "starter" | "custom";
-};
+} & ({ source: "starter" } | { source: "custom"; answer: FlowAnswer });
 export type SetupSummary = {
   categories: SetupCategory[];
   currency: string;
@@ -32,7 +32,7 @@ export function setupSelections(
       : {
           kind: "custom",
           name: category.name,
-          answer: "spend",
+          answer: category.source === "custom" ? category.answer : "spend",
           style: category.style,
         };
   });

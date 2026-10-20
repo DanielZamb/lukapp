@@ -15,12 +15,15 @@ export async function categoryPostingCode(
   workspace: StoredWorkspace,
   selection: CategoryAssignments,
   use: "expense" | "income",
+  allowDeleted = false,
 ) {
   const ids = requireCategoryAssignments(selection);
   const codes = new Map<string, string>();
   for (const id of ids) {
     const category = await store.getCategory(id);
     if (!category || category.workspaceId !== workspace.id)
+      throw new AccountingError("category_not_found");
+    if (category.deletedAt !== undefined && !allowDeleted)
       throw new AccountingError("category_not_found");
     if (!category.nature) throw new AccountingError("category_nature_required");
     if (category.nature !== (use === "expense" ? "Expense" : "Income"))

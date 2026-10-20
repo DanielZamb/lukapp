@@ -74,9 +74,9 @@ const submitted = vi.fn();
 const closes: Array<() => void> = [];
 let root: ReactTestRenderer | undefined;
 
-function Setup() {
+function Setup({ initialValue = initial }: { initialValue?: PlaceDraft }) {
   const sheet = useRef<BottomSheetModal>(null);
-  const [value, setValue] = useState<PlaceDraft | null>(initial);
+  const [value, setValue] = useState<PlaceDraft | null>(initialValue);
   useEffect(() => { sheet.current?.present(); }, []);
   return createElement(AccountSetupForm, {
     sheetRef: sheet, value, currency: "COP", editable: true, busy: false,
@@ -261,4 +261,22 @@ test.each(["light", "dark"] as const)("Look has circular themed choices and cust
   const input = screen().findByProps({ accessibilityLabel: "Custom emoji" });
   expect(input.props.placeholder).toBe("Or type your own");
   expect(input.props.style).toMatchObject({ backgroundColor: themes[mode].secondary, color: themes[mode].foreground });
+});
+
+
+test("debt setup starts without a chosen kind, offers both products and asks what is owed", async () => {
+  await act(async () => {
+    root = create(createElement(BottomSheetModalProvider, null,
+      createElement(Setup, { initialValue: { ...initial, name: "Debt", productKind: null, amount: "0" } })));
+  });
+  expect(button("Credit card").props.accessibilityState.checked).toBe(false);
+  expect(button("Loan").props.accessibilityState.checked).toBe(false);
+  expect(screen().findAll((node) => node.props.accessibilityLabel === "Checking")).toHaveLength(0);
+  expect(screen().findAll((node) => node.props.accessibilityLabel === "Balance today")).toHaveLength(0);
+  expect(screen().findByProps({ accessibilityLabel: "How much do you still owe?" }).props.value).toBe("0");
+  await act(async () => button("Loan").props.onPress());
+  expect(screen().findByType(AccountSetupForm).props.value.productKind).toBe("loan");
+  await act(async () => button("Credit card").props.onPress());
+  expect(screen().findByType(AccountSetupForm).props.value.productKind).toBe("creditCard");
+  expect(submitted).not.toHaveBeenCalled();
 });

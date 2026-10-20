@@ -45,6 +45,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "Sheet", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
 }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput", View: "View", ScrollView: "ScrollView",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
 }));

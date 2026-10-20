@@ -29,6 +29,7 @@ export function budgetReadStore(ctx: Pick<QueryCtx, "db">, workspaceId: string, 
     listRevisions: async () => (await ctx.db.query("budgetLimitRevisions")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", id)).collect()).map(revisionView),
     listCategories: async () => (await accounting.listCategories(workspaceId))
+      .filter((category) => category.deletedAt === undefined)
       .map((category) => ({ id: category.id, name: category.name, emoji: category.style.emoji, nature: category.nature })),
     categoryConsumption: (month) => categoryTotals(accounting, { actor, workspaceId, month }),
   };

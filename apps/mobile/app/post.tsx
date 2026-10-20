@@ -10,7 +10,7 @@ import {
 import { useAction, useConvex, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Keyboard, Platform, Text } from "react-native";
+import { ActivityIndicator, BackHandler, Keyboard, Platform, Text, View } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate, parseMoney } from "../src/features/money";
@@ -21,7 +21,7 @@ import {
   type PostingBudgetImpact,
 } from "../src/features/budget/postingImpact";
 import { defaultAccountingDate } from "../src/features/timeZones";
-import { Header, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
+import { PrimaryButton, Header, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
 import { BatchNativeStack, batchRowFor } from "../src/features/posting/BatchNativeStack";
@@ -205,7 +205,7 @@ function PostMoney({
   const categoryEnabled = editor.entryType !== "initial";
   const categoryValid =
     !categoryEnabled ||
-    (editor.categories.ids.length > 0 &&
+    ((editor.entryType === "transfer" || editor.categories.ids.length > 0) &&
       canPostCategories(editor.categories, categories));
   const placesValid =
     !!profile &&
@@ -352,7 +352,10 @@ function PostMoney({
             void saveToBatch();
             return;
           }
-          if (impact || !editor.canSubmit || setup) return;
+          if (
+            impact || !editor.canSubmit || setup ||
+            (!editor.pending && (!categoryValid || !placesValid))
+          ) return;
           if (needsBudgetCheck) {
             if (!budget) return;
             const hits = postingBudgetImpact({
@@ -370,6 +373,15 @@ function PostMoney({
         }}
         onDone={() => router.back()}
       />
+      {editor.transferReviewRequired && !setup && (
+        <View style={ui.section}>
+          <Text style={ui.body}>Review From and To. This transfer moves money from {profile?.name ?? "the source"} to {destination?.name ?? "the destination"}. Your entered sign is unchanged.</Text>
+          <SecondaryButton label="Swap From and To" disabled={!editor.editable || !placesValid || !editor.destinationId || editor.destinationId === editor.profileId}
+            onPress={editor.swapTransferPlaces} />
+          <PrimaryButton label="Confirm From and To" disabled={!editor.editable || !placesValid || !editor.destinationId || editor.destinationId === editor.profileId}
+            onPress={editor.confirmTransferReview} />
+        </View>
+      )}
       {categoryEnabled && (
         <CategoryPicker
           key={editor.direction}
@@ -377,6 +389,7 @@ function PostMoney({
           workspaceId={workspace.id}
           value={editor.categories}
           onChange={editor.setCategories}
+          onAccountSetup={editor.beginAccountSetup}
           visible={categoryVisible && editor.editable}
           onClose={() => setCategoryVisible(false)}
         />
@@ -436,7 +449,10 @@ function PostMoney({
         canSubmit={editor.canSubmit}
         onChange={(value) => interaction(() => editor.setSetup(value))}
         onSubmit={() => void editor.submit()}
-        onDismiss={() => editor.setSetup(null)}
+        onDismiss={() => {
+          setupPresented.current = false;
+          editor.setSetup(null);
+        }}
       />
       <BottomSheetModal
         ref={dateSheet}

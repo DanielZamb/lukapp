@@ -7,7 +7,7 @@ export async function listUserCategories(
   input: { actor: Actor; workspaceId: string },
 ) {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
-  return (await store.listCategories(input.workspaceId)).sort((a, b) =>
+  return (await store.listCategories(input.workspaceId)).filter((category) => category.deletedAt === undefined).sort((a, b) =>
     a.name.localeCompare(b.name),
   ).map((category) => ({
     ...category,

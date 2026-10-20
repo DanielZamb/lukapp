@@ -4,6 +4,7 @@ import { router, Redirect } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
+import { BrandLogo } from "../src/ui/Brand";
 import {
   AppearanceToggle,
   Header,
@@ -54,14 +55,18 @@ function SettingsContent({
           onPress={() => router.push("/overview")}
         />
         <ListRow
-          title="Manual drafts"
+          title="Categories"
           detail={categories ? draftCategories : undefined}
           icon="pricetag-outline"
+          onPress={() => router.push("./categories")}
           isLast
         />
       </ListGroup>
       {!profiles || !categories ? <ActivityIndicator /> : null}
       <SecondaryButton label="Sign out" onPress={() => void signOut()} />
+      <View style={{ alignItems: "center", paddingTop: 24 }}>
+        <BrandLogo width={112} />
+      </View>
     </Screen>
   );
 }

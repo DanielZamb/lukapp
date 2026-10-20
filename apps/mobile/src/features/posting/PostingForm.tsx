@@ -11,6 +11,8 @@ import {
   View,
 } from "react-native";
 import type { Theme } from "../../ui/tokens";
+import { useReadableLayout } from "../../ui/themeContext";
+import type { ReadableLayout } from "../../ui/layout";
 import { Header, ListGroup, ListRow, PrimaryButton, Screen, useUi, useTheme } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 
@@ -50,7 +52,7 @@ export type PostingFormProps = {
   saveToBatch?: boolean;
 };
 
-function postingFormStyles(theme: Theme) {
+function postingFormStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
     rowTitle: { fontFamily: font.bold },
     rowValue: { fontFamily: font.semibold },
@@ -62,6 +64,7 @@ function postingFormStyles(theme: Theme) {
       alignItems: "center",
       gap: spacing.md,
       paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
       borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: theme.border,
@@ -111,8 +114,8 @@ function postingFormStyles(theme: Theme) {
       color: theme.foreground,
     },
     amountRow: {
-      flexDirection: "row",
-      alignItems: "center",
+      flexDirection: layout.reflow ? "column" : "row",
+      alignItems: layout.reflow ? "stretch" : "center",
       gap: spacing.sm,
       minHeight: 72,
     },
@@ -122,7 +125,7 @@ function postingFormStyles(theme: Theme) {
       color: theme.mutedForeground,
     },
     amount: {
-      flex: 1,
+      flex: layout.reflow ? 0 : 1,
       fontFamily: font.extrabold,
       fontSize: fontSize.hero,
       minHeight: 64,
@@ -130,6 +133,8 @@ function postingFormStyles(theme: Theme) {
     },
     types: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
     chip: {
+      maxWidth: "100%",
+      paddingVertical: spacing.sm,
       minHeight: touchTarget,
       justifyContent: "center",
       paddingHorizontal: spacing.lg,
@@ -139,6 +144,7 @@ function postingFormStyles(theme: Theme) {
       backgroundColor: theme.secondary,
     },
     chipText: {
+      flexShrink: 1,
       fontFamily: font.semibold,
       fontSize: (fontSize.label + fontSize.body) / 2,
       color: theme.foreground,
@@ -149,7 +155,8 @@ function postingFormStyles(theme: Theme) {
 export function PostingForm(props: PostingFormProps) {
   const ui = useUi();
   const theme = useTheme();
-  const styles = useMemo(() => postingFormStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => postingFormStyles(theme, layout), [theme, layout]);
   return (
     <Screen
       contentStyle={{ gap: spacing.xl }}

@@ -30,6 +30,7 @@ export async function createUserCategory(
       ? requireCategoryPreset(selection.presetId).name
       : selection.name.trim();
   if (!name) throw new AccountingError("name_required");
+  if (name.length > 80) throw new AccountingError("category_name_too_long");
   if (
     selection.kind === "custom" &&
     (selection.answer === "stillMine" || selection.answer === "payDebt")
@@ -78,7 +79,7 @@ export async function createUserCategory(
     style: selection.style,
   };
   const existing = (await store.listCategories(workspace.id)).find(
-    (c) => c.normalizedName === category.normalizedName,
+    (c) => c.deletedAt === undefined && c.normalizedName === category.normalizedName,
   );
   if (existing) {
     if (

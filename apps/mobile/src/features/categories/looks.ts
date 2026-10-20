@@ -54,6 +54,8 @@ export const starterCategories = [
     style: { emoji: "🧾", tone: "primary", color: "cool-gray" },
   },
   { name: "Family", style: { emoji: "👪", tone: "primary", color: "h195" } },
+  { name: "Education", style: { emoji: "📚", tone: "primary", color: "h240" } },
+  { name: "Pets", style: { emoji: "🐾", tone: "primary", color: "h15" } },
   {
     name: "Other",
     style: { emoji: "✨", tone: "primary", color: "warm-gray" },

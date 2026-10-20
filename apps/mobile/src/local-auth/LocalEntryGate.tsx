@@ -29,6 +29,7 @@ import {
   writeInstallMarker,
 } from "./nativeEntry";
 import { Header, PrimaryButton, SecondaryButton, Screen, useUi } from "../ui/core";
+import { BrandMark, BrandSplash } from "../ui/Brand";
 
 export function LocalEntryGate({
   children,
@@ -126,6 +127,7 @@ export function LocalEntryGate({
   }, [controller, lease, userId, sessionId]);
   if (state.kind === "sign-in")
     return <>{state.movedTo && <Text style={ui.body}>Access moved to {state.movedTo}</Text>}{renderSignIn(onSessionCreated)}</>;
+  if (state.kind === "checking") return <BrandSplash />;
   if (
     state.kind === "open" &&
     (!controller.isOpenFor(
@@ -175,6 +177,7 @@ export function LocalEntryGate({
     );
   return (
     <Screen>
+      <BrandMark />
       <Header
         title={
           state.kind === "revocation"
@@ -231,13 +234,11 @@ export function LocalEntryGate({
           device security and storage.
         </Text>
       )}
-      {(state.kind === "checking" || state.kind === "authenticating") && (
+      {state.kind === "authenticating" && (
         <>
           <ActivityIndicator />
           <Text style={ui.body}>
-            {state.kind === "authenticating"
-              ? "Confirming biometrics…"
-              : "Checking local protection…"}
+            Confirming biometrics…
           </Text>
         </>
       )}

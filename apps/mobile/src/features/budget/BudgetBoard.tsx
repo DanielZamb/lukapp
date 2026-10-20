@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { Theme } from "../../ui/tokens";
+import { useReadableLayout } from "../../ui/themeContext";
+import type { ReadableLayout } from "../../ui/layout";
 import { Header, PrimaryButton, Screen, SecondaryButton, useUi, useTheme } from "../../ui/core";
 import { font, fontSize, radius, spacing } from "../../ui/tokens";
 import { formatMoney } from "../money";
@@ -18,12 +20,12 @@ export type BudgetBoardProps = {
   onEdit: (jar: BudgetJar) => void;
 };
 
-function boardStyles(theme: Theme) {
+function boardStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
     page: { gap: spacing.xl, paddingTop: spacing.md },
     grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     jar: {
-      width: "48%", minHeight: 132, padding: spacing.md, borderRadius: radius.md,
+      width: layout.reflow ? "100%" : "48%", minHeight: 132, padding: spacing.md, borderRadius: radius.md,
       borderWidth: 2, overflow: "hidden", justifyContent: "flex-end", gap: spacing.xs,
     },
     fill: { position: "absolute", left: 0, right: 0, bottom: 0 },
@@ -37,7 +39,8 @@ function boardStyles(theme: Theme) {
 export function BudgetBoard(props: BudgetBoardProps) {
   const ui = useUi();
   const theme = useTheme();
-  const styles = useMemo(() => boardStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => boardStyles(theme, layout), [theme, layout]);
   const action = nextAction(props.jars, props.month);
   return (
     <Screen contentStyle={styles.page}>
@@ -57,7 +60,8 @@ export function BudgetBoard(props: BudgetBoardProps) {
 
 function Jar({ jar, currency, color, onPress }: { jar: BudgetJar; currency: string; color: string; onPress: () => void }) {
   const theme = useTheme();
-  const styles = useMemo(() => boardStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => boardStyles(theme, layout), [theme, layout]);
   const { over, amount, fill } = jarPresentation(jar);
   const value = formatMoney({ currency, minorUnits: amount });
   const limit = formatMoney({ currency, minorUnits: jar.limitMinorUnits });

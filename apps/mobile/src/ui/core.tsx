@@ -17,6 +17,7 @@ import {
   TextInput,
   View,
   ActivityIndicator,
+  KeyboardAvoidingView,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -27,6 +28,7 @@ import { useThemeContext } from "./themeContext";
 
 export {
   ThemeProvider,
+  ResponsiveThemeProvider,
   useTheme,
   useThemeMode,
   useSetThemeMode,
@@ -50,15 +52,17 @@ export function Screen({
 }>) {
   const { ui } = useCore();
   return (
-    <SafeAreaView style={ui.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[ui.content, contentStyle]}
-      >
-        {children}
-      </ScrollView>
-      {footer}
-    </SafeAreaView>
+    <KeyboardAvoidingView style={ui.screen} behavior="height">
+      <SafeAreaView style={ui.screen}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[ui.content, contentStyle]}
+        >
+          {children}
+        </ScrollView>
+        {footer}
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -88,7 +92,7 @@ export function Header({
           <Ionicons name="chevron-back" size={24} color={theme.foreground} />
         </Pressable>
       )}
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
         {eyebrow && <Text style={ui.label}>{eyebrow}</Text>}
         {title ? (
           <Text accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
@@ -156,7 +160,8 @@ export function SecondaryButton({
   onPress,
   disabled,
   accessibilityLabel,
-}: ButtonProps) {
+  tone,
+}: ButtonProps & { tone?: "danger" }) {
   const { styles } = useCore();
   return (
     <Pressable
@@ -167,11 +172,12 @@ export function SecondaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.secondaryButton,
+        tone === "danger" && styles.secondaryButtonDanger,
         disabled && styles.buttonDisabled,
         pressed && !disabled && styles.buttonPressed,
       ]}
     >
-      <Text style={styles.secondaryButtonLabel}>{label}</Text>
+      <Text style={[styles.secondaryButtonLabel, tone === "danger" && styles.secondaryButtonLabelDanger]}>{label}</Text>
     </Pressable>
   );
 }
@@ -267,13 +273,15 @@ export function ListRow({
           <Ionicons name={icon} size={20} color={tone ? theme[tone] : theme.foreground} />
         </View>
       )}
-      <View style={styles.rowCopy}>
-        <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
-        {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+      <View style={styles.rowContent}>
+        <View style={styles.rowCopy}>
+          <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
+          {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+        </View>
+        {value ? (
+          <Text style={[styles.rowValue, tone && { color: theme[tone] }, valueStyle]}>{value}</Text>
+        ) : null}
       </View>
-      {value ? (
-        <Text style={[styles.rowValue, tone && { color: theme[tone] }, valueStyle]}>{value}</Text>
-      ) : null}
       {onPress ? (
         <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
       ) : null}
@@ -294,21 +302,26 @@ export function Choice({
   detail,
   selected,
   onPress,
+  disabled = false,
 }: {
   label: string;
   detail?: string;
   selected: boolean;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   const { theme, styles } = useCore();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
+      accessibilityLabel={label}
+      accessibilityState={{ checked: selected, disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={[
         styles.choice,
         selected && styles.choiceSelected,
+        disabled && styles.buttonDisabled,
       ]}
     >
       <View style={styles.rowCopy}>

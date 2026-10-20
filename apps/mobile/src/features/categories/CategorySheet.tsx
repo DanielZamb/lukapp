@@ -8,19 +8,24 @@ import { useMemo, useState, type RefObject } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { PickerSheet, usePickerSheetStyles } from "../../ui/PickerSheet";
-import { Choice, PrimaryButton, SecondaryButton, useTheme, useUi } from "../../ui/core";
+import { Choice, Field, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import { categoryColor, categoryPalette, emojiFrom, quickEmojis } from "./appearance";
-import type { CategoryEditor, CategoryOption, CategoryStyle } from "./model";
+import { NatureQuestion } from "./NatureQuestion";
+import type { NatureAnswer, CategoryEditor, CategoryOption, CategoryStyle, EditableCategory } from "./model";
 
 export type CategorySheetProps = {
   sheetRef: RefObject<BottomSheetModal | null>;
   search: string;
   options: CategoryOption[] | undefined;
-  editor: CategoryEditor | null;
+  editor: CategoryEditor | EditableCategory | null;
   busy: boolean;
   error: string;
   canConfirm: boolean;
+  answer: NatureAnswer | null;
+  suggested: NatureAnswer | null;
+  allowed: NatureAnswer[];
+  onAnswer: (answer: NatureAnswer) => void;
   onSearch: (value: string) => void;
   onSelect: (key: string) => void;
   onCreate: () => void;
@@ -36,16 +41,20 @@ export type CategorySheetProps = {
   onPrimary?: (id: string) => void;
   onDone?: () => void;
   onCreateEncompassing?: () => void;
+  onDelete?: () => void;
+  confirmingDelete?: boolean;
+  onCancelDelete?: () => void;
 };
 
-function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor: CategoryEditor }) {
+function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor: NonNullable<CategorySheetProps["editor"]> }) {
+  const mode = useThemeMode();
   const pickerSheetStyles = usePickerSheetStyles();
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const color = categoryColor(editor.style);
-  const name = editor.kind === "custom"
+  const color = categoryColor(editor.style, mode);
+  const name = editor.kind === "custom" || editor.kind === "edit"
     ? editor.name.trim() || "Your own"
     : editor.kind === "preset" ? editor.preset.name : editor.option.name;
   return (
@@ -56,8 +65,10 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
           <Text style={styles.previewName}>{name}</Text>
         </View>
       </View>
-      {editor.kind === "custom" && (
-        <BottomSheetTextInput
+      {(editor.kind === "custom" || editor.kind === "edit") && (
+        <Field
+          label="Category name"
+          InputComponent={BottomSheetTextInput}
           accessibilityLabel="Category name"
           value={editor.name}
           onChangeText={props.onName}
@@ -65,10 +76,15 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
           maxLength={80}
           placeholder="Name it your way"
           placeholderTextColor={theme.mutedForeground}
-          style={[ui.input, pickerSheetStyles.input, { minHeight: 56 }]}
+          style={[ui.input, pickerSheetStyles.input]}
           autoFocus
         />
       )}
+      {editor.kind === "custom" && <NatureQuestion answer={props.answer} suggested={props.suggested}
+        allowed={props.allowed} disabled={props.busy} onAnswer={props.onAnswer} />}
+      {editor.kind === "edit" && <Text style={ui.muted}>
+        {editor.category.nature === "Income" ? "Money in" : editor.category.nature === "Expense" ? "Money out" : "Money direction not set"}. Changing the name or look keeps the same money direction.
+      </Text>}
       <View style={styles.emojis}>
         {quickEmojis.map((emoji) => (
           <Pressable
@@ -123,9 +139,9 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
             accessibilityState={{ selected: editor.style.color === entry.id, disabled: props.busy }}
             disabled={props.busy}
             onPress={() => props.onStyle({ ...editor.style, color: entry.id })}
-            style={[styles.swatch, editor.style.color === entry.id && { borderColor: entry.light }]}
+            style={[styles.swatch, editor.style.color === entry.id && { borderColor: entry[mode] }]}
           >
-            <View style={[styles.swatchDot, { backgroundColor: entry.light }]} />
+            <View style={[styles.swatchDot, { backgroundColor: entry[mode] }]} />
           </Pressable>
         ))}
       </ScrollView>
@@ -133,15 +149,25 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
         <Text style={ui.muted}>This category will replace the three selected categories.</Text>
       )}
       <PrimaryButton
-        label={props.busy ? "Saving…" : editor.kind === "restyle" ? "Done" : "Add category"}
+        label={props.busy ? "Saving…" : editor.kind === "edit" ? "Save changes" : editor.kind === "restyle" ? "Done" : "Add category"}
         disabled={!props.canConfirm || props.busy}
         onPress={props.onConfirm}
       />
+      {editor.kind === "edit" && props.onDelete && <View style={ui.section}>
+        {props.confirmingDelete && <>
+          <Text style={ui.title}>Delete {editor.category.name}?</Text>
+          <Text style={ui.muted}>It will no longer appear when choosing categories. Existing entries and their amounts stay in your history.</Text>
+          <SecondaryButton label="Keep category" disabled={props.busy} onPress={() => props.onCancelDelete?.()} />
+        </>}
+        <SecondaryButton label={props.confirmingDelete ? "Confirm delete" : "Delete category"} tone="danger"
+          disabled={props.busy} onPress={props.onDelete} />
+      </View>}
     </View>
   );
 }
 
 export function CategorySheet(props: CategorySheetProps) {
+  const mode = useThemeMode();
   const pickerSheetStyles = usePickerSheetStyles();
   const ui = useUi();
   const theme = useTheme();
@@ -173,7 +199,7 @@ export function CategorySheet(props: CategorySheetProps) {
           {props.options === undefined ? (
             <Text style={ui.muted}>Loading categories…</Text>
           ) : props.options.length ? props.options.map((option) => {
-            const color = categoryColor(option.style);
+            const color = categoryColor(option.style, mode);
             return (
               <Pressable
                 key={option.key}
@@ -240,8 +266,8 @@ function createStyles(theme: Theme) {
     editor: { gap: spacing.lg, paddingTop: spacing.sm },
     previewRow: { flexDirection: "row" },
     previewEmoji: { fontSize: 17 },
-    previewName: { color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
-    preview: { minHeight: touchTarget, flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.full, borderWidth: 2 },
+    previewName: { flexShrink: 1, color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
+    preview: { maxWidth: "100%", minHeight: touchTarget, flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.full, borderWidth: 2 },
     emojis: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     emojiCell: { width: touchTarget, height: touchTarget, alignItems: "center", justifyContent: "center", borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary },
     emojiInput: { color: theme.foreground, fontSize: 22, textAlign: "center", padding: 0 },

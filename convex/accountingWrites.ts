@@ -9,6 +9,8 @@ import {
 import { createAccountingCore } from "../src/accounting";
 import { createUserCategory as createCategory } from "../src/accounting/commands/createUserCategory";
 import { restyleUserCategory as restyleCategory } from "../src/accounting/commands/restyleUserCategory";
+import { updateUserCategory as updateCategory } from "../src/accounting/commands/updateUserCategory";
+import { deleteUserCategory as deleteCategory } from "../src/accounting/commands/deleteUserCategory";
 import { ensurePersonalDefaults as ensureDefaults } from "./personalDefaults";
 import { convexStore } from "./store";
 import { run } from "./accountingErrors";
@@ -19,6 +21,8 @@ import {
   openingPosition,
   categoryCreation,
   categoryRestyle,
+  categoryUpdate,
+  categoryDelete,
   cashActivity,
   defaults,
   periodLock,
@@ -160,6 +164,25 @@ export const restyleUserCategory = internalMutation({
       permission: "category:manage",
     });
     return run(() => restyleCategory(convexStore(ctx.db), { ...args, actor }));
+  },
+});
+
+export const updateUserCategory = internalMutation({
+  args: { ...categoryUpdate, session: liveSession },
+  returns: userCategory,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "category:manage" });
+    return run(() => updateCategory(convexStore(ctx.db), { ...args, actor }));
+  },
+});
+
+export const deleteUserCategory = internalMutation({
+  args: { ...categoryDelete, session: liveSession },
+  returns: v.null(),
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "category:manage" });
+    await run(() => deleteCategory(convexStore(ctx.db), { now: () => new Date() }, { ...args, actor }));
+    return null;
   },
 });
 

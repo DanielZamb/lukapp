@@ -2,6 +2,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+vi.mock("../ui/Brand", () => ({ BrandLogo: "brand-logo", BrandMark: "brand-mark", BrandSplash: "brand-splash" }));
 import type { InstallMarker } from "./installMarker";
 import type { AppStateStatus } from "react-native";
 
@@ -57,7 +58,8 @@ vi.mock("convex/react", () => ({
 vi.mock("expo-constants", () => ({ default: { nativeAppVersion: "0.1.0" } }));
 vi.mock("expo-router", () => ({ usePathname: () => sdk.path }));
 vi.mock("react-native", () => ({
-  ActivityIndicator: "spinner", Text: "text", View: "view", TextInput: "input",
+  ActivityIndicator: "spinner", Text: "text", View: "view", TextInput: "input", ScrollView: "scroll", KeyboardAvoidingView: "keyboard-viewport",
+  useWindowDimensions: () => ({ width: 320, height: 693, fontScale: 1.3, scale: 3.375 }),
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   Platform: { get OS() { return sdk.platform; } },
   AppState: { currentState: "active", addEventListener: sdk.addEventListener },

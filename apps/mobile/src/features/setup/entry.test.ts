@@ -3,6 +3,7 @@ import * as React from "react";
 import { createElement, type ComponentProps } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
+vi.mock("../../ui/Brand", () => ({ BrandLogo: "brand-logo", BrandMark: "brand-mark", BrandSplash: "brand-splash" }));
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../api";
 import Index from "../../../app/index";
@@ -90,7 +91,7 @@ async function open() {
 function setup(): ComponentProps<typeof Setup> {
   if (!root) throw new Error("Entry is not mounted");
   const props = root.root.findByType(Setup).props;
-  return { onComplete: props.onComplete, onCancel: props.onCancel };
+  return { subject: props.subject, onComplete: props.onComplete, onCancel: props.onCancel };
 }
 function completion(): ComponentProps<typeof SetupCompletion> {
   if (!root) throw new Error("Entry is not mounted");

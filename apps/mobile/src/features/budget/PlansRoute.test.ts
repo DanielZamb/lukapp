@@ -24,6 +24,7 @@ vi.mock("convex/react", () => ({
   },
 }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", View: "View", ScrollView: "ScrollView",
   AppState: { addEventListener: () => ({ remove: () => {} }) },
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },

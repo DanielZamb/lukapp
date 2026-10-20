@@ -1,4 +1,4 @@
-import { theme } from "../../ui/core";
+import { themes, type ThemeMode } from "../../ui/tokens";
 import type { CategoryStyle } from "./model";
 
 function hslToHex(hue: number, saturation: number, lightness: number) {
@@ -26,8 +26,8 @@ export const categoryPalette = [
 
 export const quickEmojis = ["🛒", "🍔", "🚌", "🏠", "💊", "🎮", "🛍️", "✨"];
 
-export function categoryColor(style: CategoryStyle) {
-  return categoryPalette.find((entry) => entry.id === style.color)?.light ?? theme[style.tone];
+export function categoryColor(style: CategoryStyle, mode: ThemeMode = "light") {
+  return categoryPalette.find((entry) => entry.id === style.color)?.[mode] ?? themes[mode][style.tone];
 }
 
 export function emojiFrom(text: string) {

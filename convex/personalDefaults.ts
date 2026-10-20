@@ -59,8 +59,6 @@ export async function ensurePersonalDefaults(
   ) {
     throw new ConvexError({ code: "starting_amount_invalid" });
   }
-  if ((args.categories?.length ?? 0) > 12)
-    throw new ConvexError({ code: "setup_category_limit" });
   const purchaseAlertsConsent = args.purchaseAlertsConsent ?? false;
   const wantsBudgets = args.wantsBudgets ?? false;
   const categorySetupSignature = JSON.stringify(

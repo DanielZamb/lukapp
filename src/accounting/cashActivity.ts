@@ -42,11 +42,13 @@ export async function recordCashActivity(
   if (!profile || profile.workspaceId !== input.workspaceId) {
     throw new AccountingError("financial_account_profile_not_found");
   }
+  const prior = await store.findJournalEntryByIdempotencyKey(workspace.id, input.idempotencyKey);
   const categoryCode = await categoryPostingCode(
     store,
     workspace,
     input,
     treatment.counterpart,
+    prior !== undefined,
   );
   const categoryIds = requireCategoryAssignments(input);
   const categories = {

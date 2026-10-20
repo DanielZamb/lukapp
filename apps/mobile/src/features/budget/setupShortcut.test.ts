@@ -76,3 +76,10 @@ test("ordinary budget entry and an unavailable category do not auto-open an edit
   await open("not-in-this-workspace");
   expect(root?.root.findAllByType(BudgetEditorSheet)).toHaveLength(0);
 });
+
+
+test("a receive-first setup shortcut cannot target an Income category outside the Expense choices", async () => {
+  await open("custom-rent-income");
+  expect(root?.root.findAllByType(BudgetEditorSheet)).toHaveLength(0);
+  expect(root?.root.findAll((node) => String(node.type) === "board")).toHaveLength(1);
+});

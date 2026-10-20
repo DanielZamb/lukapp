@@ -29,6 +29,7 @@ export type UserCategory = {
   classification: CategoryClassification;
   defaultPostingAccountCode?: string;
   style: CategoryStyle;
+  deletedAt?: number;
 };
 export type CreateCategoryInput = {
   actor: Actor;

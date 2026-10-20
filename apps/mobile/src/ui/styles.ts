@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native";
+import { defaultLayout, type ReadableLayout } from "./layout";
 import {
   font,
   fontSize,
@@ -8,10 +9,10 @@ import {
   type Theme,
 } from "./tokens";
 
-export function createUiStyles(theme: Theme) {
+export function createUiStyles(theme: Theme, layout: ReadableLayout = defaultLayout) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.background },
-    content: { padding: spacing.xxl, gap: spacing.xxl, flexGrow: 1 },
+    content: { padding: layout.pagePadding, gap: spacing.xxl, flexGrow: 1 },
     title: {
       fontFamily: font.bold,
       fontSize: fontSize.title,
@@ -61,10 +62,11 @@ export function createUiStyles(theme: Theme) {
 
 export type UiStyles = ReturnType<typeof createUiStyles>;
 
-export function createCoreStyles(theme: Theme) {
+export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultLayout) {
   return StyleSheet.create({
     icon: {
       width: touchTarget,
+      flexShrink: 0,
       height: touchTarget,
       borderRadius: radius.full,
       backgroundColor: theme.secondary,
@@ -89,9 +91,11 @@ export function createCoreStyles(theme: Theme) {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      gap: spacing.md,
       backgroundColor: theme.primary,
     },
     primaryButtonLabel: {
+      flexShrink: 1,
       fontFamily: font.bold,
       fontSize: fontSize.action,
       color: theme.primaryForeground,
@@ -108,11 +112,14 @@ export function createCoreStyles(theme: Theme) {
       borderColor: theme.border,
     },
     secondaryButtonLabel: {
+      flexShrink: 1,
       fontFamily: font.semibold,
       fontSize: fontSize.body,
       color: theme.foreground,
       textAlign: "center",
     },
+    secondaryButtonDanger: { borderColor: theme.danger },
+    secondaryButtonLabelDanger: { color: theme.danger },
     field: { gap: spacing.sm },
     fieldLabel: {
       fontFamily: font.semibold,
@@ -167,6 +174,13 @@ export function createCoreStyles(theme: Theme) {
       borderColor: theme.border,
     },
     rowCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
+    rowContent: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: layout.reflow ? "column" : "row",
+      alignItems: layout.reflow ? "stretch" : "center",
+      gap: layout.reflow ? spacing.sm : spacing.md,
+    },
     rowTitle: {
       fontFamily: font.semibold,
       fontSize: fontSize.body,
@@ -180,12 +194,12 @@ export function createCoreStyles(theme: Theme) {
       color: theme.mutedForeground,
     },
     rowValue: {
-      maxWidth: "42%",
+      maxWidth: layout.reflow ? "100%" : "42%",
       fontFamily: font.semibold,
       fontSize: 14,
       lineHeight: 20,
       color: theme.foreground,
-      textAlign: "right",
+      textAlign: layout.reflow ? "left" : "right",
     },
     choice: {
       minHeight: 76,
@@ -200,7 +214,7 @@ export function createCoreStyles(theme: Theme) {
     },
     choiceSelected: { borderWidth: 2, borderColor: theme.primary },
     tile: {
-      width: "47%",
+      width: layout.reflow ? "100%" : "47%",
       minHeight: 156,
       justifyContent: "flex-end",
       padding: spacing.lg,
@@ -263,6 +277,7 @@ export function createCoreStyles(theme: Theme) {
       minHeight: touchTarget,
       flexDirection: "row",
       gap: spacing.sm,
+      padding: spacing.sm,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: radius.sm,
@@ -273,6 +288,7 @@ export function createCoreStyles(theme: Theme) {
       borderColor: theme.ring,
     },
     segmentText: {
+      flexShrink: 1,
       color: theme.foreground,
       fontSize: fontSize.body,
       fontFamily: font.medium,

@@ -15,6 +15,7 @@ import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({
   SafeAreaView: "safe-area",
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "sheet",
@@ -22,6 +23,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetTextInput: "input",
 }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   Text: "text",
   View: "view",
   Pressable: "button",

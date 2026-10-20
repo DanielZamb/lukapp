@@ -35,17 +35,24 @@ export function formatCopInput(raw: string): string {
   return decRaw === null ? `${sign}${grouped}` : `${sign}${grouped},${decRaw}`;
 }
 
-// The pilot supports COP and USD, both with two minor-unit digits.
-export function narrowCurrencySymbol(currency: string) {
+export function currencyDisplayPrefix(currency: string) {
   if (currency === "COP" || currency === "USD") return "$";
-  return currency;
+  const formatted = new Intl.NumberFormat("es-CO", {
+    style: "currency", currency, currencyDisplay: "narrowSymbol",
+    useGrouping: false, minimumFractionDigits: 0, maximumFractionDigits: 0,
+  }).format(0);
+  const [before = "", after, extra] = formatted.split("0");
+  const prefix = before.trim();
+  const suffix = after?.trim() ?? "";
+  const symbol = after !== undefined && extra === undefined && !(prefix && suffix)
+    ? prefix || suffix || currency : currency;
+  return /^[A-Z]{3}$/.test(symbol) ? `${symbol} ` : symbol;
 }
 
 function localeSeparators(locale: string): { group: string; decimal: string } {
   if (locale === "en-US") {
     return { group: ",", decimal: "." };
   }
-  // es-CO and the mobile default: dots group thousands, comma is decimal.
   return { group: ".", decimal: "," };
 }
 

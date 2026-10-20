@@ -8,12 +8,11 @@ import {
 } from "@gorhom/bottom-sheet";
 import type { ReactNode, RefObject } from "react";
 import { StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "./core";
+import { useReadableLayout } from "./themeContext";
+import type { ReadableLayout } from "./layout";
 import { font, radius, spacing, touchTarget } from "./tokens";
-
-function renderBackdrop(props: BottomSheetBackdropProps) {
-  return <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} />;
-}
 
 export function PickerSheet({
   sheetRef,
@@ -29,11 +28,14 @@ export function PickerSheet({
   children: ReactNode;
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const layout = useReadableLayout();
   const pickerSheetStyles = usePickerSheetStyles();
   return (
     <BottomSheetModal
       ref={sheetRef}
-      snapPoints={["70%"]}
+      topInset={insets.top}
+      snapPoints={[layout.reflow ? "92%" : "70%"]}
       enableDynamicSizing={false}
       enablePanDownToClose={!busy}
       enableContentPanningGesture={!busy}
@@ -41,12 +43,14 @@ export function PickerSheet({
       handleIndicatorStyle={{ backgroundColor: theme.ring }}
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
-      backdropComponent={renderBackdrop}
+      backdropComponent={(props: BottomSheetBackdropProps) => <BottomSheetBackdrop {...props}
+        appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={busy ? "none" : "close"} />}
       onDismiss={onDismiss}
     >
       <BottomSheetScrollView
+        accessibilityViewIsModal
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={pickerSheetStyles.content}
+        contentContainerStyle={[pickerSheetStyles.content, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.xxl }]}
         stickyHeaderIndices={stickyHeader ? [0] : undefined}
       >
         {children}
@@ -55,7 +59,7 @@ export function PickerSheet({
   );
 }
 
-function createPickerSheetStyles(theme: Theme) {
+function createPickerSheetStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
     surface: {
       backgroundColor: theme.background,
@@ -64,17 +68,18 @@ function createPickerSheetStyles(theme: Theme) {
       borderWidth: 1,
       borderColor: theme.border,
     },
-    content: { paddingHorizontal: spacing.xxl, paddingBottom: 44, gap: spacing.lg },
+    content: { paddingHorizontal: layout.pagePadding, paddingBottom: 44, gap: spacing.lg },
     title: { color: theme.foreground, fontSize: 28, lineHeight: 34, fontFamily: font.extrabold, letterSpacing: -0.6 },
     search: { backgroundColor: theme.background, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.md },
     input: { minHeight: touchTarget, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: theme.ring, backgroundColor: theme.secondary },
     row: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: spacing.lg, paddingVertical: spacing.sm },
-    rowName: { flex: 1, fontFamily: font.semibold },
+    rowName: { flex: 1, minWidth: 0, fontFamily: font.semibold },
     addDisc: { width: touchTarget, height: touchTarget, borderRadius: radius.full, borderWidth: 1, borderStyle: "dashed", borderColor: theme.border, backgroundColor: theme.secondary, alignItems: "center", justifyContent: "center" },
   });
 }
 
 export function usePickerSheetStyles() {
   const theme = useTheme();
-  return useMemo(() => createPickerSheetStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  return useMemo(() => createPickerSheetStyles(theme, layout), [theme, layout]);
 }
