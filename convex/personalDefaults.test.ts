@@ -347,3 +347,17 @@ test("more than twelve setup categories fails atomically", async () => {
     [],
   );
 });
+
+test("zero-balance setup rejects activity before its tracking date without creating an opening journal", async () => {
+  const t = await convexAccounting(modules);
+  const defaults = await t.action(api.accounting.ensurePersonalDefaults, {
+    functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota",
+  });
+  const payload = groceries(defaults.workspace.id, defaults.financialAccountProfile.id);
+  await expect(t.action(api.accounting.recordCashExpense, {
+    ...payload, accountingDate: "2026-09-23",
+  })).rejects.toMatchObject({ data: { code: "activity_before_opening" } });
+  expect(await t.query(api.accounting.listJournalEntries, { workspaceId: defaults.workspace.id })).toEqual([]);
+  await expect(t.action(api.accounting.recordCashExpense, payload)).resolves.toMatchObject({ accountingDate: "2026-09-24" });
+  expect(await t.run((ctx) => ctx.db.query("financialAccountOpenings").collect())).toHaveLength(1);
+});

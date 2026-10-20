@@ -95,6 +95,7 @@ test("detail shows category/primary, signed amount, confirmation and links witho
 
 function historyProps() { return {
   rows: undefined, scopedRows: undefined, total: undefined,
+  hasMore: false, loadingMore: false, onLoadMore: vi.fn(),
   categories: [{ id: "food", name: "Food", style: { emoji: "🥑", tone: "primary" } }],
   places: [{ id: "cash", name: "Daily" }], currentDate: "2026-10-18", currency: "COP",
   onEntry: vi.fn(), onBack: vi.fn(),

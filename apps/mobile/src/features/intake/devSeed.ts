@@ -45,7 +45,7 @@ export async function seedDiscardNotices(
 export function readySeedCandidate(input: {
   workspaceId: string;
   profileId: string;
-  currency: "COP" | "USD";
+  currency: string;
   seedId: string;
   categoryId: string | string[] | undefined;
   categories: readonly Pick<UserCategory, "id" | "workspaceId" | "nature">[] | undefined;

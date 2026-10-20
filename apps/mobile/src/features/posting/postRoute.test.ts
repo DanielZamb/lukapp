@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createElement, useImperativeHandle, useState, type ComponentProps } from "react";
 import type { PostingFormProps } from "./PostingForm";
+import { parsePendingPosting } from "./pendingPostingSchema";
 import type { CategorySheetProps } from "../categories/CategorySheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -27,7 +28,7 @@ const routeBack = vi.hoisted(() => vi.fn());
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
 const queryData = vi.hoisted(() => {
-  const state: { categories: Category[] } = { categories: [] };
+  const state: { categories: Category[]; currency: string } = { categories: [], currency: "COP" };
   return state;
 });
 const intakeActions = vi.hoisted(() => ({
@@ -73,7 +74,7 @@ vi.mock("../activity", () => ({
   usePersonalDefaults: () => ({
     workspace: {
       id: "workspace",
-      functionalCurrency: "COP",
+      functionalCurrency: queryData.currency,
       timeZone: "America/Bogota",
     },
     financialAccountProfile: { id: "daily", name: "My money" },
@@ -169,6 +170,7 @@ beforeEach(() => {
   form.sourceNote = undefined;
   form.props = undefined;
   queryData.categories = [];
+  queryData.currency = "COP";
   back.handler = undefined;
   vi.clearAllMocks();
   platform.os = "ios";
@@ -372,4 +374,23 @@ test("a Candidate passes From drafts without an application name", async () => {
     await Promise.resolve();
   });
   expect(form.sourceNote).toBe("From drafts");
+});
+
+test.each(["EUR", "MXN"])("posting preserves the %s workspace currency", async (currency) => {
+  queryData.currency = currency;
+  writes.save.mockImplementationOnce(async (command: unknown) => ({ id: "currency-draft", command: parsePendingPosting(command) }));
+  writes.post.mockResolvedValueOnce({ description: "Opening money", amount: { currency, minorUnits: 1250 } });
+  await mount();
+  await act(async () => {
+    formProps().onEntryType?.("initial");
+    formProps().onAmountChange("12,50");
+    formProps().onDescriptionChange("Opening money");
+  });
+  await act(async () => { formProps().onPost(); });
+  expect(writes.save).toHaveBeenCalledWith(expect.objectContaining({
+    kind: "opening", payload: expect.objectContaining({ amount: { currency, minorUnits: 1250 } }),
+  }), undefined);
+  expect(writes.post).toHaveBeenCalledWith(expect.objectContaining({
+    payload: expect.objectContaining({ amount: { currency, minorUnits: 1250 } }),
+  }));
 });

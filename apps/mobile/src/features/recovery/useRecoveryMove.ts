@@ -3,7 +3,8 @@ import { ConvexError } from "convex/values";
 import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import type { api } from "../api";
-import { localDate, parseMoney } from "../money";
+import { parseMoney } from "../money";
+import { defaultAccountingDate } from "../timeZones";
 import { recoveryMoney, type RecoveryPlace, type RecoveryPlanView } from "./model";
 
 type Request = FunctionArgs<typeof api.savingsRecovery.recordContribution>;
@@ -17,7 +18,7 @@ export type RecoveryMoveTransport = {
 const rejection = z.object({ kind: z.union([z.literal("recovery"), z.literal("accounting")]), code: z.string() });
 
 export function useRecoveryMove(
-  seed: { workspaceId: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
+  seed: { workspaceId: string; timeZone: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
   transport: RecoveryMoveTransport,
 ) {
   const defaultSource = seed.sources.find((place) => place.id !== seed.plan.destinationFinancialAccountProfileId)
@@ -55,7 +56,7 @@ export function useRecoveryMove(
         planId: seed.plan.id,
         sourceFinancialAccountProfileId: selected,
         amount: { currency: seed.plan.currency, minorUnits },
-        accountingDate: localDate(),
+        accountingDate: defaultAccountingDate(seed.timeZone),
         description: `Recovery: ${seed.plan.title}`,
         idempotencyKey: transport.newKey(),
       };

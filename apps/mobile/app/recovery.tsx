@@ -12,6 +12,7 @@ export default function RecoveryRoute() {
     ? <Recovery
         key={defaults.workspace.id}
         workspaceId={defaults.workspace.id}
+        timeZone={defaults.workspace.timeZone}
         onBack={() => router.back()}
         onViewPlans={() => navigation.dispatch(CommonActions.reset({ index: 1, routes: [{ name: "index" }, { name: "plans" }] }))}
         onHome={() => navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: "index" }] }))}

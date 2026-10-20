@@ -83,7 +83,7 @@ function PostMoney({
   const intake = useIntakeCandidates({
     subject,
     workspaceId: workspace.id,
-    currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
+    currency: workspace.functionalCurrency,
   });
   const confirmOne = useAction(api.notificationIntake.confirmOne);
   const [binding, setBinding] = useState<IntakeBinding | null>(null);
@@ -173,7 +173,7 @@ function PostMoney({
     {
       workspaceId: workspace.id,
       financialAccountProfileId: initialProfileId ?? defaultProfile.id,
-      currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
+      currency: workspace.functionalCurrency,
       timeZone: workspace.timeZone,
     },
     transport,

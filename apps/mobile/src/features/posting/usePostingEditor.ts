@@ -49,7 +49,7 @@ export type PostingTransport = {
 type Account = {
   workspaceId: string;
   financialAccountProfileId: string;
-  currency: "COP" | "USD";
+  currency: string;
   timeZone: string;
 };
 export type PlaceDraft = {
@@ -223,12 +223,12 @@ export function usePostingEditor(
     setPosted(null);
     setError("");
   }
-  function snapshotConfirmed(): IntakeSuggestion {
+  function snapshotConfirmed(binding: IntakeBinding): IntakeSuggestion {
     return {
       direction,
       description: description.trim(),
       amount: {
-        currency: account.currency,
+        currency: binding.suggestion.amount.currency,
         minorUnits: Math.abs(parseMoney(amount)),
       },
       accountingDate: date,
@@ -472,7 +472,7 @@ export function usePostingEditor(
         const receipt = await intake.confirm({
           workspaceId: account.workspaceId,
           candidateId: intake.id,
-          confirmed: snapshotConfirmed(),
+          confirmed: snapshotConfirmed(intake),
           suggestion: intake.suggestion,
           parserVersion: intake.parserVersion,
           consentVersion: intake.consentVersion,

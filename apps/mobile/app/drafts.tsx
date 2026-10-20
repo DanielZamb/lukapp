@@ -34,7 +34,7 @@ function Drafts({
   subject: string;
   workspaceId: string;
   currentPeriod: { year: number; month: number };
-  currency: "COP" | "USD";
+  currency: string;
   profileId: string;
   timeZone: string;
 }) {
@@ -118,7 +118,8 @@ function Drafts({
     handledSeed.current = actionKey;
     if (action.kind === "remove") void intake.consume(action.id);
     else if (candidate) void intake.accept(candidate);
-    else void intake.accept(seedCandidate(workspaceId, profileId, currency, action.id));
+    else if (currency === "COP" || currency === "USD")
+      void intake.accept(seedCandidate(workspaceId, profileId, currency, action.id));
   }, [seed, seedId, seedCategoryId, seedCategories, places, subject, workspaceId, profileId, currency, timeZone, intake.accept, intake.consume]);
   return (
     <DraftsScreen
@@ -196,7 +197,7 @@ export default function DraftsRoute() {
       subject={userId}
       workspaceId={defaults.workspace.id}
       currentPeriod={defaults.workspace.currentAccountingPeriod}
-      currency={defaults.workspace.functionalCurrency === "USD" ? "USD" : "COP"}
+      currency={defaults.workspace.functionalCurrency}
       profileId={defaults.financialAccountProfile.id}
       timeZone={defaults.workspace.timeZone}
     />

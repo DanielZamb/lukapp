@@ -1,3 +1,4 @@
+import { currencySchema } from "./currencySchema";
 import { z } from "zod";
 import * as SecureStore from "expo-secure-store";
 import {
@@ -21,7 +22,7 @@ export type LocalEntryStatus = "open" | "posting";
 export type PostableCommand = PendingPosting;
 export type LocalEntryFacts = {
   workspaceId: string;
-  currency: "COP" | "USD";
+  currency: string;
   entryType: "normal" | "transfer";
   amountText: string;
   accountingDate: string;
@@ -59,7 +60,7 @@ export type DraftListItem = {
 };
 export type SessionQuery = {
   workspaceId: string;
-  currency: "COP" | "USD";
+  currency: string;
   draftId?: LocalEntryDraftId;
 };
 export type RestoredSession =
@@ -99,7 +100,7 @@ const categoriesSchema = z
   });
 const factsSchema = z.object({
   workspaceId: z.string().min(1),
-  currency: z.enum(["COP", "USD"]),
+  currency: currencySchema,
   entryType: z.enum(["normal", "transfer"]),
   amountText: z.string(),
   accountingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

@@ -16,7 +16,7 @@ type InboxScreen = "inbox" | "warning" | "sources" | "month-close" | "discard";
 
 function candidateDetail(
   candidate: IntakeCandidate,
-  workspaceCurrency: "COP" | "USD",
+  workspaceCurrency: string,
   places: { id: string; name: string }[],
 ) {
   const mismatch = currencyMismatchReason(candidate.currency, workspaceCurrency);
@@ -65,7 +65,7 @@ export function DraftsScreen({
   wait: IntakeCandidate[];
   ready: IntakeCandidate[];
   readyTotal: number;
-  currency: "COP" | "USD";
+  currency: string;
   segment: InboxSegment;
   readyToShow: boolean;
   error: string;

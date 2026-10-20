@@ -13,10 +13,13 @@ import { Screen } from "../src/ui/core";
 function History({ workspaceId, profileId, timeZone, currency }: {
   workspaceId: string; profileId?: string; timeZone: string; currency: string;
 }) {
-  const [scopedProfileId, setScopedProfileId] = useState<string | undefined>();
+  const [scopedProfileId, setScopedProfileId] = useState<string | undefined>(profileId);
   const [entryId, setEntryId] = useState<string | null>(null);
-  const allRows = usePostedHistory(workspaceId);
-  const scopedRows = usePostedHistory(workspaceId, scopedProfileId, scopedProfileId !== undefined);
+  const all = usePostedHistory(workspaceId);
+  const allRows = all.rows;
+  const scoped = usePostedHistory(workspaceId, scopedProfileId, scopedProfileId !== undefined);
+  const scopedRows = scoped.rows;
+  const activePage = scopedProfileId !== undefined ? scoped : all;
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
   const { date } = useWorkspaceCalendar(timeZone);
@@ -24,7 +27,8 @@ function History({ workspaceId, profileId, timeZone, currency }: {
   const ready = categories !== undefined && places !== undefined && allRows !== undefined && scopedReady;
   return <><HistoryScreen rows={ready ? allRows : undefined}
     scopedRows={scopedProfileId !== undefined ? scopedRows : undefined}
-    total={allRows?.length} categories={categories ?? []} places={places ?? []} currentDate={date} currency={currency}
+    total={activePage.rows?.length} hasMore={activePage.hasMore}
+    loadingMore={activePage.loadingMore} onLoadMore={activePage.loadMore} categories={categories ?? []} places={places ?? []} currentDate={date} currency={currency}
     initialProfileId={profileId} onScopedProfileId={setScopedProfileId}
     onBack={() => router.back()}
     onEntry={setEntryId} />

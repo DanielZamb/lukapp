@@ -28,7 +28,7 @@ export default function MonthCloseRoute() {
       requestedPeriod={requestedPeriod}
       currentPeriod={current}
       subject={userId}
-      currency={defaults.workspace.functionalCurrency === "USD" ? "USD" : "COP"}
+      currency={defaults.workspace.functionalCurrency}
       onBack={() => router.back()}
       onReviewDrafts={() => router.replace("/drafts")}
       onAccountBalances={() => router.push("/overview")}

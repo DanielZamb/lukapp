@@ -1,15 +1,17 @@
 import { expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
-import { accountingFixture, fixtureIdentity, octNow } from "../src/accounting/convexHarness";
+import { accountingFixture, fixtureIdentity, septNow, octNow } from "../src/accounting/convexHarness";
 
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
 
 async function setup() {
   const fixture = await accountingFixture(modules);
   const { t } = fixture;
+  vi.setSystemTime(Date.UTC(2026, 8, 1, 12));
   const { workspace, financialAccountProfile } = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota",
   });
+  vi.setSystemTime(septNow);
   const savings = await t.action(api.accounting.createFinancialAccountProfile, {
     workspaceId: workspace.id, name: "Savings", productKind: "savingsAccount",
   });

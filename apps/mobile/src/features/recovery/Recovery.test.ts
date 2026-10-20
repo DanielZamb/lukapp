@@ -43,7 +43,7 @@ vi.mock("expo-router", async () => {
   const { useNavigation } = await import("@react-navigation/native");
   return { router: navigation, useNavigation, Redirect: "Redirect" };
 });
-vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { id: "workspace" } }) }));
+vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { id: "workspace", timeZone: "America/Bogota" } }) }));
 
 function TestNavigator({ children }: { children: React.ReactNode }) {
   const { state, descriptors, NavigationContent } = useNavigationBuilder(StackRouter, { children });
@@ -97,7 +97,7 @@ async function open(plans: typeof plan[] = [], route = false, origin = "plans") 
         createElement(Stack.Screen, { name: "plans", component: Empty }),
         createElement(Stack.Screen, { name: "recovery", children: () => route
           ? createElement(RecoveryRoute)
-          : createElement(Recovery, { workspaceId: "workspace", onBack, onViewPlans, onHome }) }),
+          : createElement(Recovery, { workspaceId: "workspace", timeZone: "America/Bogota", onBack, onViewPlans, onHome }) }),
       ),
     }));
   });

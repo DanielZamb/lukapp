@@ -37,7 +37,7 @@ export function MonthClose({
   requestedPeriod: ClosePeriod;
   currentPeriod: { year: number; month: number; status: PeriodStatus };
   subject: string;
-  currency: "COP" | "USD";
+  currency: string;
   onBack: () => void;
   onReviewDrafts: () => void;
   onAccountBalances: () => void;

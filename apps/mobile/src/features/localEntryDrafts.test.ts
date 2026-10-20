@@ -611,3 +611,12 @@ test("batch-owned posting drafts stay out of the one-entry session and survive o
   const kept = keepIn(rejected, { facts }, now, () => "another-draft");
   expect(removeIn(kept.document, begun.draft.id).postingBatches).toEqual({ workspace: batch });
 });
+
+test("a EUR local draft survives storage and restores only in the matching currency", () => {
+  const kept = keepIn(empty, { facts: { ...facts, currency: "EUR" } }, now, newId);
+  const parsed = parseLocalEntryDocument(JSON.parse(JSON.stringify(kept.document)), now);
+  expect(restoreFromDocument(parsed.document, { workspaceId: "workspace", currency: "EUR", draftId: kept.id }, now))
+    .toMatchObject({ kind: "open", draft: { facts: { currency: "EUR" } } });
+  expect(() => restoreFromDocument(parsed.document, { workspaceId: "workspace", currency: "COP", draftId: kept.id }, now))
+    .toThrow("Pending entry belongs to another workspace");
+});
