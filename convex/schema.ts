@@ -12,6 +12,17 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  ledgerAccountTotals: defineTable({
+    workspaceId: v.id("workspaces"),
+    ledgerAccountId: v.id("ledgerAccounts"),
+    period: v.string(),
+    debitMinorUnits: v.number(),
+    creditMinorUnits: v.number(),
+    firstActivityDate: v.optional(v.string()),
+  }).index("by_workspace_period_account", ["workspaceId", "period", "ledgerAccountId"]),
+  ledgerSummaryEntries: defineTable({
+    journalEntryId: v.id("journalEntries"),
+  }).index("by_entry", ["journalEntryId"]),
   financialAccountSetups: defineTable({
     workspaceId: v.id("workspaces"),
     idempotencyKey: v.string(),
@@ -127,6 +138,8 @@ export default defineSchema({
     functionalCurrency: v.string(),
     chartOfAccountsTemplate: v.string(),
     timeZone: v.optional(v.string()),
+    ledgerSummaryVersion: v.optional(v.literal(1)),
+    ledgerSummaryCursor: v.optional(v.union(v.string(), v.null())),
   }),
   workspaceMemberships: defineTable({
     workspaceId: v.id("workspaces"),

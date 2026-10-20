@@ -1,6 +1,5 @@
 import { normalBalance } from "../chartOfAccounts";
 import { AccountingError } from "../errors";
-import { totalsByAccount } from "../ledgerTotals";
 import { requireWorkspace } from "../membership";
 import type { AccountBalance, AccountingStore, Actor } from "../types";
 
@@ -9,13 +8,12 @@ export async function balances(
   input: { actor: Actor; workspaceId: string },
 ): Promise<AccountBalance[]> {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
-  const [profiles, accounts, entries] = await Promise.all([
+  const [profiles, accounts, totals] = await Promise.all([
     store.listProfiles(input.workspaceId),
     store.listLedgerAccounts(input.workspaceId),
-    store.listJournalEntries(input.workspaceId),
+    store.accountTotals(input.workspaceId),
   ]);
   const accountsById = new Map(accounts.map((account) => [account.id, account]));
-  const totals = totalsByAccount(entries);
   return profiles.map((profile) => {
     const ledgerAccount = accountsById.get(profile.postingAccountId);
     if (!ledgerAccount) {

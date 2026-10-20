@@ -2,6 +2,7 @@ import type { UserCategory } from "../src/accounting/categories/types";
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import { AccountingError } from "../src/accounting/errors";
 import { workspaceTimeZone } from "../src/accounting/timeZone";
+import { applyJournalSummary, readAccountTotals, readFirstActivityDate } from "./ledgerSummary";
 import type {
   AccountingPeriod,
   AccountingStore,
@@ -327,6 +328,20 @@ function readStore(db: ReadDb): ReadMethods {
       ]);
       return docs.map((doc) => toEntry(doc, lines));
     },
+    async recentJournalEntries(workspaceId) {
+      const docs = await db.query("journalEntries")
+        .withIndex("by_workspace_date", (q) => q.eq("workspaceId", storedId<"workspaces">(workspaceId)))
+        .order("desc").take(50);
+      return Promise.all(docs.map(async (doc) => {
+        const lines = await db.query("journalLines")
+          .withIndex("by_entry", (q) => q.eq("journalEntryId", doc._id)).collect();
+        return toEntry(doc, lines);
+      }));
+    },
+    accountTotals: (workspaceId, month) => readAccountTotals(db, storedId<"workspaces">(workspaceId), month),
+    firstActivityDate: (workspaceId, accountId) => readFirstActivityDate(
+      db, storedId<"workspaces">(workspaceId), storedId<"ledgerAccounts">(accountId),
+    ),
 
     async getAccountingPeriod(workspaceId, period) {
       const doc = await findAccountingPeriod(
@@ -378,7 +393,7 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
       return toCategory(doc);
     },
     async insertWorkspace(workspace, ownerUserId) {
-      const workspaceId = await db.insert("workspaces", workspace);
+      const workspaceId = await db.insert("workspaces", { ...workspace, ledgerSummaryVersion: 1 });
       await db.insert("workspaceMemberships", {
         workspaceId,
         userId: ownerUserId,
@@ -482,7 +497,9 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
             : {}),
         });
       }
-      return { ...entry, id: journalEntryId };
+      const stored = { ...entry, id: journalEntryId };
+      await applyJournalSummary(db, stored);
+      return stored;
     },
 
     async insertAccountingPeriod(workspaceId, period) {
