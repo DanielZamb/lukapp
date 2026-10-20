@@ -228,13 +228,13 @@ export function usePostingEditor(
     setPosted(null);
     setError("");
   }
-  function snapshotConfirmed(): IntakeSuggestion {
+  function snapshotConfirmed(binding: IntakeBinding): IntakeSuggestion {
     return {
       direction,
       description: description.trim(),
       amount: {
-        currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
-        minorUnits: Math.abs(parseMoney(amount)),
+        currency: binding.suggestion.amount.currency,
+        minorUnits: Math.abs(parseMoney(amount, "es-CO", account.currency)),
       },
       accountingDate: date,
       financialAccountProfileId: profileId,
@@ -331,7 +331,7 @@ export function usePostingEditor(
 
   let minorUnits: number | null = null;
   try {
-    minorUnits = parseMoney(amount);
+    minorUnits = parseMoney(amount, "es-CO", account.currency);
   } catch {
     /* Incomplete edits stay editable. */
   }
@@ -356,7 +356,7 @@ export function usePostingEditor(
           productKind: setup.productKind,
           amount: {
             currency: account.currency,
-            minorUnits: parseMoney(setup.amount),
+            minorUnits: parseMoney(setup.amount, "es-CO", account.currency),
           },
           accountingDate: setup.date,
           idempotencyKey: transport.newKey(),
@@ -366,8 +366,8 @@ export function usePostingEditor(
     const payload = {
       workspaceId: account.workspaceId,
       amount: {
-        currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
-        minorUnits: Math.abs(parseMoney(amount)),
+        currency: account.currency,
+        minorUnits: Math.abs(parseMoney(amount, "es-CO", account.currency)),
       },
       accountingDate: date,
       description: description.trim(),
@@ -409,7 +409,7 @@ export function usePostingEditor(
   }
   let setupValid = false;
   try {
-    setupValid = !!setup?.name.trim() && setup.productKind !== null && parseMoney(setup.amount) >= 0;
+    setupValid = !!setup?.name.trim() && setup.productKind !== null && parseMoney(setup.amount, "es-CO", account.currency) >= 0;
   } catch {
     /* Keep incomplete setup editable. */
   }
@@ -479,7 +479,7 @@ export function usePostingEditor(
         const receipt = await intake.confirm({
           workspaceId: account.workspaceId,
           candidateId: intake.id,
-          confirmed: snapshotConfirmed(),
+          confirmed: snapshotConfirmed(intake),
           suggestion: intake.suggestion,
           parserVersion: intake.parserVersion,
           consentVersion: intake.consentVersion,
@@ -621,7 +621,7 @@ export function usePostingEditor(
       if (canEdit()) {
         let nextDirection = direction;
         try {
-          nextDirection = parseMoney(value) > 0 ? "in" : "out";
+          nextDirection = parseMoney(value, "es-CO", account.currency) > 0 ? "in" : "out";
         } catch {
           /* Preserve the selection during incomplete edits. */
         }

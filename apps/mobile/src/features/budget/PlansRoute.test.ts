@@ -78,11 +78,11 @@ test("Plans matches the settled landing using the workspace month with separate 
   expect(textCopy(screen)).toContain("November budget");
 });
 
-test("Plans shows one recovery plan by title", async () => {
+test.each(["active", "suspended"] as const)("Plans shows only an active recovery plan by title, status=%s", async (status) => {
   state.recovery = {
     ...state.recovery!,
     plans: [{
-      id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
+      status, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
       destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
       installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
       currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
@@ -90,13 +90,14 @@ test("Plans shows one recovery plan by title", async () => {
   };
   await act(async () => { root = create(createElement(PlansRoute)); });
   if (!root) throw new Error("Plans not mounted");
-  expect(textCopy(root.root)).toContain("Emergency repair");
-  root.root.findByProps({ accessibilityLabel: "Savings recovery, Emergency repair" });
+  const detail = status === "active" ? "Emergency repair" : "Start from an expense";
+  expect(textCopy(root.root)).toContain(detail);
+  root.root.findByProps({ accessibilityLabel: `Savings recovery, ${detail}` });
 });
 
 test("Plans summarizes several recovery plans", async () => {
   const plan = {
-    id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
+    status: "active" as const, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
     installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
     currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
@@ -114,7 +115,7 @@ test.each([
   { activeCount: 2, detail: "2 plans" },
 ])("Plans excludes completed plans when $activeCount active plans remain", async ({ activeCount, detail }) => {
   const plan = {
-    id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
+    status: "active" as const, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
     installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
     currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,

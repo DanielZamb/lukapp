@@ -41,7 +41,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
     return () => { mounted.active = false; };
   }, []);
   let minorUnits = 0;
-  try { minorUnits = parseMoney(amount); } catch { /* Incomplete input stays editable. */ }
+  try { minorUnits = parseMoney(amount, "es-CO", seed.currency); } catch { /* Incomplete input stays editable. */ }
   const editable = !busy && !pending && !blocked;
   async function submit() {
     const mounted = lifetime.current;

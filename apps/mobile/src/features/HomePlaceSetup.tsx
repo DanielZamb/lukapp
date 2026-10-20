@@ -27,7 +27,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   const setupTransport = useMemo(() => ({ ...transport, load: () => transport.load(undefined, false) }), [transport]);
   const editor = usePostingEditor({
     workspaceId: workspace.id, financialAccountProfileId: financialAccountProfile.id,
-    currency: workspace.functionalCurrency === "USD" ? "USD" : "COP", timeZone: workspace.timeZone,
+    currency: workspace.functionalCurrency, timeZone: workspace.timeZone,
   }, setupTransport);
   const interact = useLocalEntryInteraction();
   const sheet = useRef<BottomSheetModal>(null);

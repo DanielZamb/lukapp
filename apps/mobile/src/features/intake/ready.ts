@@ -9,14 +9,14 @@ export function currencyMismatchReason(
 export function isReadyCandidate(
   candidate: {
     error?: string;
-    currency?: "COP" | "USD";
+    currency?: string;
     suggestion: {
       description: string;
       amountMinorUnits: number;
       financialAccountProfileId: string;
     };
   },
-  workspaceCurrency?: "COP" | "USD",
+  workspaceCurrency?: string,
 ) {
   return (
     !candidate.error &&

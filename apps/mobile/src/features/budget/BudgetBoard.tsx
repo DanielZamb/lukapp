@@ -77,7 +77,7 @@ function Jar({ jar, currency, color, onPress }: { jar: BudgetJar; currency: stri
       <Text style={styles.emoji}>{jar.category.emoji}</Text>
       <Text style={styles.name}>{jar.category.name}</Text>
       <Text style={[styles.amount, { color: over ? theme.danger : theme.foreground }]}>
-        {compactAmount(amount)} {over ? "over" : "left"}
+        {compactAmount(amount, currency)} {over ? "over" : "left"}
       </Text>
     </Pressable>
   );

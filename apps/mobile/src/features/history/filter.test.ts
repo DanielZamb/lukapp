@@ -271,3 +271,20 @@ test("sortHistory orders by date, absolute amount, place, and primary category",
     "bills",
   ]);
 });
+
+
+test("numeric search uses the row currency's major units", () => {
+  const yen = row({ id: "yen", title: "Receipt", date: today, amount: { currency: "JPY", minorUnits: 100 } });
+  expect(filterHistory([yen], { ...baseQuery(), search: "100" }, context)).toEqual([yen]);
+});
+
+
+test("multi-place filtering includes either side of a transfer once, without matching unrelated places", () => {
+  const transfer = {
+    ...row({ id: "transfer", date: today, title: "Move", financialAccountProfileId: "daily" }),
+    financialAccountProfileIds: ["daily", "savings"],
+  };
+  expect(filterHistory([transfer], { ...baseQuery(), profileIds: ["savings", "other"] }, context)).toEqual([transfer]);
+  expect(filterHistory([transfer], { ...baseQuery(), profileIds: ["daily", "savings"] }, context)).toEqual([transfer]);
+  expect(filterHistory([transfer], { ...baseQuery(), profileIds: ["other", "fourth"] }, context)).toEqual([]);
+});

@@ -1,3 +1,4 @@
+import { formatAmount, toMajorUnits } from "../money";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../api";
 import type { HistoryRow } from "./types";
@@ -14,21 +15,18 @@ export function historyDate(date: string, currentDate: string) {
 }
 
 export function historyAmount(amount: HistoryRow["amount"], signed = false) {
-  const digits = amount.minorUnits % 100 === 0 ? 0 : 2;
-  const body = (Math.abs(amount.minorUnits) / 100).toLocaleString("es-CO", {
-    minimumFractionDigits: digits, maximumFractionDigits: digits,
-  });
+  const body = formatAmount(Math.abs(amount.minorUnits), amount.currency, { hideZeroDecimals: true });
   const symbol = amount.currency === "COP" || amount.currency === "USD" ? "$" : `${amount.currency} `;
   return `${amount.minorUnits < 0 ? "−" : signed ? "+" : ""}${symbol}${body}`;
 }
 
-export function compactHistoryAmount(minorUnits: number) {
-  const amount = Math.abs(minorUnits) / 100;
+export function compactHistoryAmount(minorUnits: number, currency: string) {
+  const amount = toMajorUnits(Math.abs(minorUnits), currency);
   const sign = minorUnits < 0 ? "−" : "";
   const scale = amount >= 1_000_000 ? 1_000_000 : amount >= 1000 ? 1000 : 1;
   const value = amount / scale;
   const body = scale === 1 ? String(value) : value.toFixed(value >= 10 || value % 1 === 0 ? 0 : 1);
-  return `${sign}$${body}${scale === 1_000_000 ? "M" : scale === 1000 ? "K" : ""}`;
+  return `${sign}${currency === "COP" || currency === "USD" ? "$" : `${currency} `}${body}${scale === 1_000_000 ? "M" : scale === 1000 ? "K" : ""}`;
 }
 
 export function historyListRow(row: HistoryRow, categories: HistoryCategory[], places: HistoryPlace[], currentDate: string) {

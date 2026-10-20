@@ -9,8 +9,8 @@ import { fullAmount, symbolAmount } from "./amounts";
 
 type Focus = "net" | "out" | "in";
 
-export function CapitalFlow({ outMinorUnits, inMinorUnits, symbol }: {
-  outMinorUnits: number; inMinorUnits: number; symbol: string;
+export function CapitalFlow({ outMinorUnits, inMinorUnits, symbol, currency }: {
+  outMinorUnits: number; inMinorUnits: number; symbol: string; currency: string;
 }) {
   const theme = useTheme();
   const layout = useReadableLayout();
@@ -27,7 +27,7 @@ export function CapitalFlow({ outMinorUnits, inMinorUnits, symbol }: {
         <Text style={styles.muted}>{label}</Text>
         <Text style={[styles.amount, { color }, (id === "net" || focused) && styles.large]}
           numberOfLines={1} adjustsFontSizeToFit={focused} minimumFontScale={0.55}>
-          {focused ? fullAmount(value, symbol) : symbolAmount(value, symbol, "compact")}
+          {focused ? fullAmount(value, symbol, currency) : symbolAmount(value, symbol, "compact", currency)}
         </Text>
       </Pressable>
     );

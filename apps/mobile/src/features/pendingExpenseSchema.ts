@@ -1,3 +1,4 @@
+import { currencySchema } from "./currencySchema";
 import { z } from "zod";
 import type { FunctionArgs } from "convex/server";
 import { api } from "./api";
@@ -6,7 +7,7 @@ export const pendingExpenseSchema = z.object({
   workspaceId: z.string(),
   financialAccountProfileId: z.string(),
   amount: z.object({
-    currency: z.enum(["COP", "USD"]),
+    currency: currencySchema,
     minorUnits: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   }),
   accountingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

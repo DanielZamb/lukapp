@@ -83,7 +83,7 @@ function PostMoney({
   const intake = useIntakeCandidates({
     subject,
     workspaceId: workspace.id,
-    currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
+    currency: workspace.functionalCurrency,
   });
   const confirmOne = useAction(api.notificationIntake.confirmOne);
   const [binding, setBinding] = useState<IntakeBinding | null>(null);
@@ -173,7 +173,7 @@ function PostMoney({
     {
       workspaceId: workspace.id,
       financialAccountProfileId: initialProfileId ?? defaultProfile.id,
-      currency: workspace.functionalCurrency === "USD" ? "USD" : "COP",
+      currency: workspace.functionalCurrency,
       timeZone: workspace.timeZone,
     },
     transport,
@@ -247,12 +247,12 @@ function PostMoney({
         <ActivityIndicator />
       </Screen>
     );
+  const completeEntry = editor.description.trim().length > 0 && categoryValid && placesValid;
   const canQueue =
     editor.canSubmit &&
     !setup &&
     !impact &&
-    categoryValid &&
-    placesValid &&
+    completeEntry &&
     !editor.pending &&
     !candidateId;
   async function saveToBatch() {
@@ -312,10 +312,7 @@ function PostMoney({
               !impact &&
               (!needsBudgetCheck || budget !== undefined) &&
               editor.canSubmit &&
-              (editor.pending ||
-                (editor.description.trim().length > 0 &&
-                  categoryValid &&
-                  placesValid))
+              (editor.pending || completeEntry)
         }
         date={new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
           new Date(`${editor.date}T12:00:00`),
@@ -361,7 +358,7 @@ function PostMoney({
             const hits = postingBudgetImpact({
               jars: budget.jars,
               categoryIds: editor.categories.ids,
-              expenseMinorUnits: -parseMoney(editor.amount),
+              expenseMinorUnits: -parseMoney(editor.amount, "es-CO", workspace.functionalCurrency),
             });
             if (hits.length) {
               Keyboard.dismiss();
@@ -482,6 +479,7 @@ function PostMoney({
   );
   const impactSheet = impact && (
     <PostingImpactSheet
+          currency={workspace.functionalCurrency}
       {...impact}
       onReconsider={() => {
         setImpact(null);

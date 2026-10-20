@@ -7,6 +7,7 @@ export const suggestion = v.object({
   impliedAnnualRateBps: v.number(), premiumMinorUnits: v.number(), targetMinorUnits: v.number(),
 });
 export const plan = v.object({
+  status: v.union(v.literal("active"), v.literal("suspended")),
   id: v.string(), title: v.string(), sourceJournalEntryId: v.string(), sourceTitle: v.string(),
   destinationFinancialAccountProfileId: v.string(), destinationName: v.string(),
   principalMinorUnits: v.number(), installmentCount: v.number(), installmentMinorUnits: v.number(),

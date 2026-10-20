@@ -42,10 +42,10 @@ vi.mock("react-native", () => ({
     return { remove: () => { provider.hardwareBack = undefined; } };
   } },
   FlatList: (props: {
-    data: HistoryRow[]; ListHeaderComponent: ReactNode; ListEmptyComponent: ReactNode;
+    data: HistoryRow[]; ListHeaderComponent: ReactNode; ListFooterComponent: ReactNode; ListEmptyComponent: ReactNode;
     renderItem: (input: { item: HistoryRow; index: number }) => ReactNode;
   }) => createElement("list", null, props.ListHeaderComponent,
-    props.data.length ? props.data.map((item, index) => createElement("row", { key: item.id }, props.renderItem({ item, index }))) : props.ListEmptyComponent),
+    props.data.length ? props.data.map((item, index) => createElement("row", { key: item.id }, props.renderItem({ item, index }))) : props.ListEmptyComponent, props.ListFooterComponent),
 }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => ({ workspace: { id: "ws", timeZone: "America/Bogota", functionalCurrency: "COP" } }),
@@ -129,21 +129,29 @@ const linked = {
     amount: { currency: "COP", minorUnits: 150000 } },
 } satisfies EntryDetail;
 
-test("history loads all pages before reporting counts, and searches and opens the 101st posting", async () => {
+test("history shows the first page immediately, loads more on request, and opens the 101st posting", async () => {
   await act(async () => { root = create(createElement(HistoryRoute)); });
   provider.all = { results: rows.slice(0, 50), status: "CanLoadMore" };
   await act(async () => root?.update(createElement(HistoryRoute)));
+  expect(provider.loadAll).not.toHaveBeenCalled();
+  expect(text()).toContain("50 of 50 loaded");
+  expect(text()).not.toContain("Loading history…");
+  await act(async () => root?.root.findByType("input").props.onChangeText("older receipt"));
+  expect(text()).toContain("0 of 50 loaded");
+  await act(async () => button("Load more transactions").props.onPress());
   expect(provider.loadAll).toHaveBeenLastCalledWith(50);
-  expect(text()).toContain("Loading history…");
-  expect(text()).not.toContain("50 of");
   provider.all = { results: rows.slice(0, 50), status: "LoadingMore" };
   await act(async () => root?.update(createElement(HistoryRoute)));
+  expect(text()).toContain("0 of 50 loaded");
+  expect(button("Load more transactions").props.disabled).toBe(true);
   provider.all = { results: rows.slice(0, 100), status: "CanLoadMore" };
   await act(async () => root?.update(createElement(HistoryRoute)));
+  expect(provider.loadAll).toHaveBeenCalledTimes(1);
+  await act(async () => button("Load more transactions").props.onPress());
   expect(provider.loadAll).toHaveBeenCalledTimes(2);
   provider.all = { results: rows, status: "Exhausted" };
   await act(async () => root?.update(createElement(HistoryRoute)));
-  expect(text()).toContain("101 of 101");
+  expect(text()).toContain("1 of 101");
   await act(async () => root?.root.findByType("input").props.onChangeText("older receipt"));
   expect(text()).toContain("1 of 101");
   expect(text()).toContain("Net\n−$1.5K");
@@ -303,7 +311,7 @@ test("standalone entry callers keep the detail screen, reversal confirmation, li
   expect(provider.back).toHaveBeenCalledOnce();
 });
 
-test("place history counts against the full corpus, and clear removes both place and search", async () => {
+test("place history counts the loaded scope, and clear removes both place and search", async () => {
   provider.params = { profileId: "daily" };
   const corpus = rows.map((row, index) => ({ ...row, financialAccountProfileId: index === 100 ? "daily" : "other" }));
   provider.all = { results: corpus, status: "Exhausted" };
@@ -311,10 +319,10 @@ test("place history counts against the full corpus, and clear removes both place
   await act(async () => { root = create(createElement(HistoryRoute)); });
   await act(async () => root?.update(createElement(HistoryRoute)));
   expect(text()).toContain("ACROSS ALL PLACES\nTx history");
-  expect(text()).toContain("1 of 101");
+  expect(text()).toContain("1 of 1");
   expect(text()).not.toContain("Newer posting");
   await act(async () => root?.root.findByType("input").props.onChangeText("missing"));
-  expect(text()).toContain("0 of 101");
+  expect(text()).toContain("0 of 1");
   expect(text()).toContain("Nothing matches these filters. Clear them to see everything.");
   await act(async () => button("Clear filters").props.onPress());
   expect(text()).toContain("101 of 101");

@@ -1,3 +1,4 @@
+import { formatAmount, toMajorUnits } from "../money";
 export function compactAmount(amount: number) {
   const absolute = Math.abs(amount);
   const sign = amount < 0 ? "−" : "";
@@ -8,15 +9,13 @@ export function compactAmount(amount: number) {
   return `${sign}${body}${scale === 1_000_000 ? "M" : "K"}`;
 }
 
-export function symbolAmount(minorUnits: number, symbol: string, mode: "compact" | "grouped") {
-  const absolute = Math.abs(minorUnits) / 100;
-  const body = mode === "compact" ? compactAmount(absolute) : absolute.toLocaleString("es-CO");
+export function symbolAmount(minorUnits: number, symbol: string, mode: "compact" | "grouped", currency: string) {
+  const absolute = toMajorUnits(Math.abs(minorUnits), currency);
+  const body = mode === "compact" ? compactAmount(absolute) : formatAmount(Math.abs(minorUnits), currency, { hideZeroDecimals: true });
   return `${minorUnits < 0 ? "−" : ""}${symbol}${body}`;
 }
 
-export function fullAmount(minorUnits: number, symbol: string) {
-  const body = (Math.abs(minorUnits) / 100).toLocaleString("es-CO", {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  });
+export function fullAmount(minorUnits: number, symbol: string, currency: string) {
+  const body = formatAmount(Math.abs(minorUnits), currency);
   return `${minorUnits < 0 ? "−" : ""}${symbol}${body}`;
 }

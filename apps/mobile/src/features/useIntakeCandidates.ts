@@ -19,7 +19,7 @@ import { captureToCandidate, type NotificationSource } from "./intake/source";
 export function useIntakeCandidates(input: {
   subject: string;
   workspaceId: string;
-  currency: "COP" | "USD";
+  currency: string;
   source?: NotificationSource | null;
 }) {
   const lease = useLocalInputLease();

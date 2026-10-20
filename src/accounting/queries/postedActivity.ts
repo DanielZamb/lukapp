@@ -1,34 +1,32 @@
 import { balances } from "./balances";
 import { AccountingError } from "../errors";
 import { calendarDate } from "../timeZone";
-import { activityRow, profileNamesByPostingAccount } from "./activityRow";
+import { activityRow, profilesByPostingAccount } from "./activityRow";
 import { requireWorkspace } from "../membership";
 import { findActiveOpening } from "../openingControl";
 import { journalContext, toPostedJournalEntry } from "../views";
 import type { AccountingStore, Actor } from "../types";
 
+/** Home totals plus an optional preview of the latest 50 journal records. Use postedHistory for more rows. */
 export async function postedActivity(
   store: AccountingStore,
   input: { actor: Actor; workspaceId: string; month: string; includeRows?: boolean },
 ) {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
-  const [accounts, entries, context] = await Promise.all([
+  const [accounts, entries, context, monthTotals] = await Promise.all([
     balances(store, input),
-    store.listJournalEntries(input.workspaceId),
+    input.includeRows === false ? Promise.resolve([]) : store.recentJournalEntries(input.workspaceId),
     journalContext(store, workspace),
+    store.accountTotals(input.workspaceId, input.month),
   ]);
-  const monthSpendMinorUnits = entries
-    .filter((entry) => entry.accountingDate.slice(0, 7) === input.month)
-    .flatMap((entry) => entry.lines)
-    .filter((line) => context.accounts.get(line.ledgerAccountId)?.nature === "Expense")
-    .reduce((sum, line) => sum + line.debitMinorUnits - line.creditMinorUnits, 0);
-  const reversedBy = new Map(entries.flatMap((entry) =>
-    entry.reversesEntryId ? [[entry.reversesEntryId, entry.id] as const] : []));
+  const monthSpendMinorUnits = [...monthTotals]
+    .filter(([id]) => context.accounts.get(id)?.nature === "Expense")
+    .reduce((sum, [, totals]) => sum + totals.debitMinorUnits - totals.creditMinorUnits, 0);
   const rows = input.includeRows === false ? [] : await Promise.all(entries
     .filter((entry) => !entry.reversesEntryId)
     .sort((a, b) => b.accountingDate.localeCompare(a.accountingDate) || b.postedAt - a.postedAt || b.id.localeCompare(a.id))
     .map(async (stored) => {
-      const reversalId = reversedBy.get(stored.id);
+      const reversalId = (await store.findReversalOf(stored.id))?.id;
       const entry = await toPostedJournalEntry(store, context, stored, {
         replay: false,
         ...(reversalId ? { reversedByEntryId: reversalId } : {}),
@@ -37,7 +35,7 @@ export async function postedActivity(
       return activityRow(
         entry,
         profile?.postingAccountId,
-        profileNamesByPostingAccount(context.profiles.values()),
+        profilesByPostingAccount(context.profiles.values()),
       );
     }));
   return {

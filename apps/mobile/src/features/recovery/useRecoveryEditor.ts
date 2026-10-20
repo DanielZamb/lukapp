@@ -50,7 +50,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     return () => { mounted.active = false; };
   }, []);
   let minorUnits = 0;
-  try { minorUnits = parseMoney(amount); } catch { /* Incomplete amount stays editable. */ }
+  try { minorUnits = parseMoney(amount, "es-CO", seed.currency); } catch { /* Incomplete amount stays editable. */ }
   const suggestion = suggestionFor(seed.candidate.amountMinorUnits, installmentCount, minorUnits);
   const editable = !busy && !pending;
   async function submit() {

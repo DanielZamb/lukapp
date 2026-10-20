@@ -34,3 +34,12 @@ test("multi-category storage retains exact order and primary, and rejects invali
     { primaryUserCategoryId: "a" },
   ]) expect(pendingExpenseSchema.safeParse({ ...payload, ...selection }).success).toBe(false);
 });
+
+test.each(["EUR", "MXN", "JPY"])("stored postings retain %s through JSON storage", (currency) => {
+  const command = { ...payload, amount: { currency, minorUnits: 1250 } };
+  expect(pendingExpenseSchema.parse(JSON.parse(JSON.stringify(command)))).toEqual(command);
+});
+
+test.each(["", "eur", "ZZZ", "XAU"])("stored postings reject unsupported currency %s", (currency) => {
+  expect(pendingExpenseSchema.safeParse({ ...payload, amount: { currency, minorUnits: 1250 } }).success).toBe(false);
+});

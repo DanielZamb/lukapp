@@ -3,7 +3,7 @@ import type { Theme } from "../../ui/tokens";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Header, PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
-import { formatMoney, parseMoney } from "../money";
+import { formatAmount, formatMoney, minorUnitFactor, parseMoney } from "../money";
 import { jarPresentation, type BudgetCategory } from "./model";
 import type { useBudgetEditor } from "./useBudgetEditor";
 
@@ -17,8 +17,8 @@ type Props = Pick<ReturnType<typeof useBudgetEditor>,
   onBack: () => void;
 };
 
-export function limitSuggestions(spentMinorUnits: number) {
-  const step = 20_000_000;
+export function limitSuggestions(spentMinorUnits: number, currency: string) {
+  const step = 200_000 * minorUnitFactor(currency);
   const around = Math.max(step, Math.round(spentMinorUnits / step) * step);
   return [around - step, around, around + step, around + step * 2].filter((value) => value > 0);
 }
@@ -28,7 +28,7 @@ export function BudgetComposer(props: Props) {
   const ui = useUi();
   const styles = useMemo(() => createStyles(theme), [theme]);
   let limit = 0;
-  try { limit = parseMoney(props.amount); } catch { /* Incomplete input stays editable. */ }
+  try { limit = parseMoney(props.amount, "es-CO", props.currency); } catch { /* Incomplete input stays editable. */ }
   const { over, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
   const money = (minorUnits: number) => formatMoney({ currency: props.currency, minorUnits }, { hideZeroDecimals: true });
   return (
@@ -51,10 +51,10 @@ export function BudgetComposer(props: Props) {
         <Text style={styles.hint}>{over ? "This jar is already empty." : "What is still in the jar. Spent eats it."}</Text>
       </View>
       <View style={styles.suggestions}>
-        {limitSuggestions(props.spentMinorUnits).map((value) => (
+        {limitSuggestions(props.spentMinorUnits, props.currency).map((value) => (
           <Pressable key={value} accessibilityRole="button" accessibilityLabel={money(value)}
             accessibilityState={{ selected: limit === value, disabled: !props.editable }} disabled={!props.editable}
-            onPress={() => props.onAmount(new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(value / 100))}
+            onPress={() => props.onAmount(formatAmount(value, props.currency, { hideZeroDecimals: true }))}
             style={[styles.chip, limit === value && styles.selected]}>
             <Text style={styles.chipText}>{money(value)}</Text>
           </Pressable>

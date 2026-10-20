@@ -115,7 +115,7 @@ export function Setup({
   let formatted = "";
   try {
     formatted = formatMoney(
-      { currency, minorUnits: startingAmount(starting) },
+      { currency, minorUnits: startingAmount(starting, currency) },
       { hideZeroDecimals: true },
     );
   } catch {
@@ -130,7 +130,7 @@ export function Setup({
       if (!submission) {
         if (!presets || !categories.length || !currencyChosen || consent === null)
           return;
-        const startingMinorUnits = startingAmount(starting);
+        const startingMinorUnits = startingAmount(starting, currency);
         submission = {
           payload: {
             functionalCurrency: currency,

@@ -1,3 +1,4 @@
+import { currencyDisplayPrefix } from "../money";
 import { expect, test } from "vitest";
 import { compactAmount, fullAmount, symbolAmount } from "./amounts";
 
@@ -10,9 +11,17 @@ test.each([
 });
 
 test("symbol amounts convert minor units once and use es-CO grouping", () => {
-  expect(symbolAmount(123456789, "$", "compact")).toBe("$1.2M");
-  expect(symbolAmount(-10800000000, "$", "compact")).toBe("−$108M");
-  expect(symbolAmount(123456789, "$", "grouped")).toBe("$1.234.567,89");
-  expect(fullAmount(-123456789, "$")).toBe("−$1.234.567,89");
-  expect(fullAmount(0, "$")).toBe("$0,00");
+  expect(currencyDisplayPrefix("COP")).toBe("$");
+  expect(currencyDisplayPrefix("USD")).toBe("$");
+  expect(symbolAmount(123456789, "$", "compact", "COP")).toBe("$1.2M");
+  expect(symbolAmount(-10800000000, "$", "compact", "COP")).toBe("−$108M");
+  expect(symbolAmount(123456789, "$", "grouped", "COP")).toBe("$1.234.567,89");
+  expect(fullAmount(-123456789, "$", "COP")).toBe("−$1.234.567,89");
+  expect(fullAmount(0, "$", "COP")).toBe("$0,00");
+});
+
+
+test("overview uses the supplied currency precision in grouped and expanded totals", () => {
+  expect(symbolAmount(100, "¥", "grouped", "JPY")).toBe("¥100");
+  expect(fullAmount(1234, "BHD ", "BHD")).toBe("BHD 1,234");
 });

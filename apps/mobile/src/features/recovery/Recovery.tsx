@@ -36,8 +36,9 @@ type View =
     currency: string;
   };
 
-export function Recovery({ workspaceId, onBack, onViewPlans, onHome }: {
+export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }: {
   workspaceId: string;
+  timeZone: string;
   onBack: () => void;
   onViewPlans: () => void;
   onHome: () => void;
@@ -117,6 +118,7 @@ export function Recovery({ workspaceId, onBack, onViewPlans, onHome }: {
       <Move
         key={view.key}
         workspaceId={workspaceId}
+        timeZone={timeZone}
         plan={plan}
         sources={board.sources}
         onClose={() => setView({ name: "plan", id: plan.id })}
@@ -197,9 +199,10 @@ function Draft({
 }
 
 function Move({
-  workspaceId, plan, sources, onClose, onMoved,
+  workspaceId, timeZone, plan, sources, onClose, onMoved,
 }: {
   workspaceId: string;
+  timeZone: string;
   plan: Parameters<typeof useRecoveryMove>[0]["plan"];
   sources: Parameters<typeof useRecoveryMove>[0]["sources"];
   onClose: () => void;
@@ -208,7 +211,7 @@ function Move({
   const contribute = useAction(api.savingsRecovery.recordContribution);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
-  const move = useRecoveryMove({ workspaceId, plan, sources }, {
+  const move = useRecoveryMove({ workspaceId, timeZone, plan, sources }, {
     move: contribute, reportFailure, newKey: Crypto.randomUUID, onMoved,
   });
   const back = () => { if (move.canDismiss) onClose(); };

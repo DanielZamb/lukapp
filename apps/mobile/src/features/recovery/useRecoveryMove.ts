@@ -3,7 +3,8 @@ import { ConvexError } from "convex/values";
 import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import type { api } from "../api";
-import { localDate, parseMoney } from "../money";
+import { parseMoney } from "../money";
+import { defaultAccountingDate } from "../timeZones";
 import { recoveryMoney, type RecoveryPlace, type RecoveryPlanView } from "./model";
 
 type Request = FunctionArgs<typeof api.savingsRecovery.recordContribution>;
@@ -17,7 +18,7 @@ export type RecoveryMoveTransport = {
 const rejection = z.object({ kind: z.union([z.literal("recovery"), z.literal("accounting")]), code: z.string() });
 
 export function useRecoveryMove(
-  seed: { workspaceId: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
+  seed: { workspaceId: string; timeZone: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
   transport: RecoveryMoveTransport,
 ) {
   const defaultSource = seed.sources.find((place) => place.id !== seed.plan.destinationFinancialAccountProfileId)
@@ -36,10 +37,11 @@ export function useRecoveryMove(
     return () => { mounted.active = false; };
   }, []);
   let minorUnits = 0;
-  try { minorUnits = parseMoney(amount); } catch { /* Incomplete amount stays editable. */ }
+  try { minorUnits = parseMoney(amount, "es-CO", seed.plan.currency); } catch { /* Incomplete amount stays editable. */ }
   const editable = !busy && !pending;
   async function submit() {
     const mounted = lifetime.current;
+    if (!request.current && seed.plan.status === "suspended") return;
     const selected = request.current?.sourceFinancialAccountProfileId ?? sourceId;
     if (!mounted.active || submitting.current || !selected || (!request.current && minorUnits <= 0)) return;
     if (!request.current && selected === seed.plan.destinationFinancialAccountProfileId) {
@@ -55,7 +57,7 @@ export function useRecoveryMove(
         planId: seed.plan.id,
         sourceFinancialAccountProfileId: selected,
         amount: { currency: seed.plan.currency, minorUnits },
-        accountingDate: localDate(),
+        accountingDate: defaultAccountingDate(seed.timeZone),
         description: `Recovery: ${seed.plan.title}`,
         idempotencyKey: transport.newKey(),
       };
@@ -82,7 +84,7 @@ export function useRecoveryMove(
   const canEdit = () => lifetime.current.active && !submitting.current && !request.current;
   return {
     sourceId, amount, busy, pending, error, editable,
-    canSubmit: !busy && (pending || (!!sourceId && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
+    canSubmit: !busy && (pending || (seed.plan.status === "active" && !!sourceId && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
     canDismiss: !busy && !pending,
     onSource: (id: string) => { if (canEdit()) setSourceId(id); },
     onAmount: (value: string) => { if (canEdit()) setAmount(value); },

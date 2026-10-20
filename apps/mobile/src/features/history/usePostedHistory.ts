@@ -1,5 +1,4 @@
 import { usePaginatedQuery } from "convex/react";
-import { useEffect } from "react";
 import { api } from "../api";
 
 export function usePostedHistory(workspaceId: string, profileId?: string, enabled = true) {
@@ -10,9 +9,10 @@ export function usePostedHistory(workspaceId: string, profileId?: string, enable
       includeReversals: true,
     } : "skip", { initialNumItems: 50 });
 
-  useEffect(() => {
-    if (enabled && status === "CanLoadMore") loadMore(50);
-  }, [enabled, status, loadMore]);
-
-  return enabled && status === "Exhausted" ? results : undefined;
+  return {
+    rows: enabled && status !== "LoadingFirstPage" ? results : undefined,
+    hasMore: enabled && status !== "Exhausted",
+    loadingMore: status === "LoadingMore",
+    loadMore: () => { if (enabled && status === "CanLoadMore") loadMore(50); },
+  };
 }

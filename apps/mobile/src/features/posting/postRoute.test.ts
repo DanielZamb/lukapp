@@ -2,6 +2,8 @@ import * as React from "react";
 import { createElement, useImperativeHandle, useState, type ComponentProps } from "react";
 import type { PendingPosting } from "./pendingPostingSchema";
 import type { PostingFormProps } from "./PostingForm";
+import { BatchNativeStack } from "./BatchNativeStack";
+import { parsePendingPosting } from "./pendingPostingSchema";
 import type { CategorySheetProps } from "../categories/CategorySheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -23,13 +25,13 @@ const form = vi.hoisted(() => {
 });
 const picker = vi.hoisted(() => ({ present: vi.fn(), dismiss: vi.fn() }));
 const accountSheet = vi.hoisted(() => ({ present: vi.fn(), dismiss: vi.fn() }));
-const writes = vi.hoisted(() => ({ save: vi.fn(), post: vi.fn() }));
+const writes = vi.hoisted(() => ({ save: vi.fn(), post: vi.fn(), batchUpdate: vi.fn() }));
 const back = vi.hoisted(() => ({ handler: undefined as (() => boolean) | undefined }));
 const routeBack = vi.hoisted(() => vi.fn());
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
 const queryData = vi.hoisted(() => {
-  const state: { categories: Category[]; profiles: Array<{ id: string; name: string }> } = { categories: [], profiles: [] };
+  const state: { categories: Category[]; profiles: Array<{ id: string; name: string }>; currency: string } = { categories: [], profiles: [], currency: "COP" };
   return state;
 });
 const intakeActions = vi.hoisted(() => ({
@@ -69,12 +71,13 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetView: "sheet-view",
   BottomSheetScrollView: "sheet-scroll",
   BottomSheetTextInput: "input",
+  BottomSheetModalProvider: "sheet-provider",
 }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => ({
     workspace: {
       id: "workspace",
-      functionalCurrency: "COP",
+      functionalCurrency: queryData.currency,
       timeZone: "America/Bogota",
     },
     financialAccountProfile: { id: "daily", name: "My money" },
@@ -103,7 +106,7 @@ vi.mock("./usePostingTransport", () => {
 vi.mock("./postingBatchStorage", () => {
   const storage = {
     load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }),
-    update: vi.fn(),
+    update: writes.batchUpdate,
   };
   return { usePostingBatchStorage: () => storage };
 });
@@ -181,6 +184,7 @@ beforeEach(() => {
   form.props = undefined;
   queryData.categories = [];
   queryData.profiles = [{ id: "daily", name: "My money" }, { id: "wallet", name: "Wallet" }];
+  queryData.currency = "COP";
   back.handler = undefined;
   vi.clearAllMocks();
   platform.os = "ios";
@@ -248,9 +252,12 @@ test.each(["normal", "transfer"] satisfies Array<NonNullable<PostingFormProps["e
   },
 );
 
-test.each(["normal", "transfer", "initial"] satisfies Array<NonNullable<PostingFormProps["entryType"]>>)(
-  "%s requires a nonblank description before enabling Post",
-  async (entryType) => {
+test.each([
+  ["normal", "one"], ["transfer", "one"], ["initial", "one"],
+  ["normal", "batch"], ["transfer", "batch"], ["initial", "batch"],
+] satisfies [NonNullable<PostingFormProps["entryType"]>, "one" | "batch"][])(
+  "%s requires a nonblank description before enabling %s posting",
+  async (entryType, mode) => {
     queryData.categories = [{
       id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food",
       nature: "Expense", natureSource: "answered",
@@ -258,6 +265,11 @@ test.each(["normal", "transfer", "initial"] satisfies Array<NonNullable<PostingF
       style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
     }];
     await mount();
+    if (mode === "batch") {
+      await act(async () => { formProps().onBatch?.(); });
+      await act(async () => { root?.root.findByType(BatchNativeStack).props.onAdd(); });
+      expect(formProps().saveToBatch).toBe(true);
+    }
     await act(async () => {
       formProps().onEntryType?.(entryType);
       formProps().onAmountChange(entryType === "initial" ? "0" : "-1");
@@ -275,6 +287,8 @@ test.each(["normal", "transfer", "initial"] satisfies Array<NonNullable<PostingF
       await act(async () => sheet.props.onDone());
     }
     expect(formProps().canSubmit).toBe(false);
+    if (mode === "batch") await act(async () => { formProps().onPost(); });
+    expect(writes.batchUpdate).not.toHaveBeenCalled();
     await act(async () => formProps().onDescriptionChange(" \t\n "));
     expect(formProps().canSubmit).toBe(false);
     await act(async () => formProps().onDescriptionChange(" Lunch "));
@@ -494,4 +508,25 @@ test("incoming account creation offers an explicit swap with two-account picker 
     amount: { currency: "COP", minorUnits: 12500 }, accountingDate: expect.any(String), description: "From Savings", idempotencyKey: "key",
   } });
   expect(confirmOne).not.toHaveBeenCalled();
+});
+
+test.each([
+  ["EUR", "12,50", 1250], ["MXN", "12,50", 1250], ["JPY", "100", 100], ["BHD", "1,234", 1234],
+] satisfies [string, string, number][])("posting preserves the %s workspace currency and precision", async (currency, amount, minorUnits) => {
+  queryData.currency = currency;
+  writes.save.mockImplementationOnce(async (command: unknown) => ({ id: "currency-draft", command: parsePendingPosting(command) }));
+  writes.post.mockResolvedValueOnce({ description: "Opening money", amount: { currency, minorUnits } });
+  await mount();
+  await act(async () => {
+    formProps().onEntryType?.("initial");
+    formProps().onAmountChange(amount);
+    formProps().onDescriptionChange("Opening money");
+  });
+  await act(async () => { formProps().onPost(); });
+  expect(writes.save).toHaveBeenCalledWith(expect.objectContaining({
+    kind: "opening", payload: expect.objectContaining({ amount: { currency, minorUnits } }),
+  }), undefined);
+  expect(writes.post).toHaveBeenCalledWith(expect.objectContaining({
+    payload: expect.objectContaining({ amount: { currency, minorUnits } }),
+  }));
 });

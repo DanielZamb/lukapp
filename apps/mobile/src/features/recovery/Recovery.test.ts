@@ -44,7 +44,7 @@ vi.mock("expo-router", async () => {
   const { useNavigation } = await import("@react-navigation/native");
   return { router: navigation, useNavigation, Redirect: "Redirect" };
 });
-vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { id: "workspace" } }) }));
+vi.mock("../activity", () => ({ usePersonalDefaults: () => ({ workspace: { id: "workspace", timeZone: "America/Bogota" } }) }));
 
 function TestNavigator({ children }: { children: React.ReactNode }) {
   const { state, descriptors, NavigationContent } = useNavigationBuilder(StackRouter, { children });
@@ -59,6 +59,7 @@ const candidate = {
   amountMinorUnits: 48_000_000, financialAccountProfileId: "daily", placeName: "Daily account",
 };
 const plan = {
+  status: "active",
   id: "repair", title: "Emergency repair", sourceJournalEntryId: "expense-repair", sourceTitle: "Emergency repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 300_000_000, installmentCount: 10, installmentMinorUnits: 30_000_000,
@@ -98,7 +99,7 @@ async function open(plans: typeof plan[] = [], route = false, origin = "plans") 
         createElement(Stack.Screen, { name: "plans", component: Empty }),
         createElement(Stack.Screen, { name: "recovery", children: () => route
           ? createElement(RecoveryRoute)
-          : createElement(Recovery, { workspaceId: "workspace", onBack, onViewPlans, onHome }) }),
+          : createElement(Recovery, { workspaceId: "workspace", timeZone: "America/Bogota", onBack, onViewPlans, onHome }) }),
       ),
     }));
   });

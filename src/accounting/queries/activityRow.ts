@@ -17,23 +17,25 @@ function fallbackLabel(entry: PostedJournalEntry) {
   }
 }
 
-export function profileNamesByPostingAccount(
-  profiles: Iterable<{ postingAccountId: string; name: string }>,
+type ActivityProfile = { id: string; postingAccountId: string; name: string };
+
+export function profilesByPostingAccount(
+  profiles: Iterable<ActivityProfile>,
 ) {
   return new Map(
-    [...profiles].map((profile) => [profile.postingAccountId, profile.name]),
+    [...profiles].map((profile) => [profile.postingAccountId, profile]),
   );
 }
 
 function placesDetail(
   entry: PostedJournalEntry,
-  namesByLedgerAccountId?: ReadonlyMap<string, string>,
+  profilesByLedgerAccountId?: ReadonlyMap<string, ActivityProfile>,
 ) {
-  if (!namesByLedgerAccountId) return fallbackLabel(entry);
+  if (!profilesByLedgerAccountId) return fallbackLabel(entry);
   const named = (side: "debitMinorUnits" | "creditMinorUnits") =>
     entry.lines.flatMap((line) => {
       if (line[side] <= 0) return [];
-      const name = namesByLedgerAccountId.get(line.ledgerAccountId);
+      const name = profilesByLedgerAccountId.get(line.ledgerAccountId)?.name;
       return name ? [name] : [];
     });
   const from = named("creditMinorUnits");
@@ -46,7 +48,7 @@ function placesDetail(
 export function activityRow(
   entry: PostedJournalEntry,
   profilePostingAccountId?: string,
-  namesByLedgerAccountId?: ReadonlyMap<string, string>,
+  profilesByLedgerAccountId?: ReadonlyMap<string, ActivityProfile>,
 ) {
   const userCategories = entry.lines.flatMap((line) => line.userCategories);
   const primaryUserCategoryId = entry.lines.find(
@@ -59,7 +61,13 @@ export function activityRow(
     (sum, line) => sum + line.debitMinorUnits - line.creditMinorUnits,
     0,
   );
-  const label = placesDetail(entry, namesByLedgerAccountId);
+  const financialAccountProfileIds = profilesByLedgerAccountId
+    ? [...new Set(entry.lines.flatMap((line) => {
+        const profile = profilesByLedgerAccountId.get(line.ledgerAccountId);
+        return profile ? [profile.id] : [];
+      }))]
+    : undefined;
+  const label = placesDetail(entry, profilesByLedgerAccountId);
   const categoryDetail = userCategories
     .map((category) => category.name)
     .join(" · ");
@@ -72,6 +80,7 @@ export function activityRow(
     ...(entry.financialAccountProfileId
       ? { financialAccountProfileId: entry.financialAccountProfileId }
       : {}),
+    ...(financialAccountProfileIds ? { financialAccountProfileIds } : {}),
     title: entry.description || fallbackLabel(entry),
     date: entry.accountingDate,
     detail,

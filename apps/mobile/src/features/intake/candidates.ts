@@ -102,7 +102,7 @@ export function parseIntakeDocument(raw: unknown, now: number) {
 export function isPriorityCandidate(
   candidate: IntakeCandidate,
   now: number,
-  currency?: "COP" | "USD",
+  currency?: string,
 ) {
   return (
     !isReadyCandidate(candidate, currency) ||
@@ -161,7 +161,7 @@ export function viewInbox(
   document: IntakeDocument,
   workspaceId: string,
   now: number,
-  currency: "COP" | "USD",
+  currency: string,
 ) {
   const live = document.candidates.filter(
     (row) => row.expiresAt > now && row.workspaceId === workspaceId,

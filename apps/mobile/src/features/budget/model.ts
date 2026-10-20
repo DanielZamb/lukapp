@@ -1,3 +1,4 @@
+import { toMajorUnits } from "../money";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../api";
 
@@ -14,8 +15,11 @@ export function jarPresentation(jar: BudgetJar) {
   };
 }
 
-export function recoveryPlansRowDetail(plans: readonly { title: string; remainingMinorUnits: number }[]) {
-  const activePlans = plans.filter((plan) => plan.remainingMinorUnits > 0);
+export function recoveryPlansRowDetail(plans: readonly Pick<
+  FunctionReturnType<typeof api.savingsRecovery.evaluate>["plans"][number],
+  "title" | "remainingMinorUnits" | "status"
+>[]) {
+  const activePlans = plans.filter((plan) => plan.status === "active" && plan.remainingMinorUnits > 0);
   if (activePlans.length === 0) return "Start from an expense";
   if (activePlans.length === 1) return activePlans[0].title;
   return `${activePlans.length} plans`;
@@ -42,8 +46,8 @@ export function nextAction(jars: BudgetJar[], month: string): BudgetAction {
     : { kind: "add", label: `Set a ${name} limit` };
 }
 
-export function compactAmount(minorUnits: number) {
-  const amount = Math.abs(minorUnits) / 100;
+export function compactAmount(minorUnits: number, currency: string) {
+  const amount = toMajorUnits(Math.abs(minorUnits), currency);
   const sign = minorUnits < 0 ? "−" : "";
   if (amount >= 1_000_000) {
     const millions = amount / 1_000_000;

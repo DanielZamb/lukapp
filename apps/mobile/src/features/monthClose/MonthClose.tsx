@@ -17,6 +17,7 @@ import {
   type ClosePeriod,
   type PeriodStatus,
 } from "./model";
+import { countCandidatesInMonth } from "./pendingCandidates";
 import { useIntakeCandidates } from "../useIntakeCandidates";
 import { useMonthClose, type MonthCloseTransport } from "./useMonthClose";
 
@@ -37,7 +38,7 @@ export function MonthClose({
   requestedPeriod: ClosePeriod;
   currentPeriod: { year: number; month: number; status: PeriodStatus };
   subject: string;
-  currency: "COP" | "USD";
+  currency: string;
   onBack: () => void;
   onReviewDrafts: () => void;
   onAccountBalances: () => void;
@@ -81,7 +82,7 @@ export function MonthClose({
           period: requestedPeriod,
           periodStatus: periodStatusOf(requestedPeriod, currentPeriod),
           draftCount: drafts.monthCount,
-          candidateCount: intake.count,
+          candidateCount: countCandidatesInMonth([...intake.now, ...intake.wait], requestedPeriod),
         });
   const close = useMonthClose(workspaceId, readiness, transport);
   const title = `Complete ${monthLabel(requestedPeriod)}`;

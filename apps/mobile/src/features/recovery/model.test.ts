@@ -38,7 +38,7 @@ test("progress is recovered of the plan target, and the implied rate stays a per
   expect(formatRate(260)).toBe("2.6%");
   expect(formatRate(0)).toBe("0.0%");
   expect(progressCopy({
-    id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
+    status: "active", id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
     principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 230_000,
     impliedAnnualRateBps: 150, activationMonth: "2026-09", currency: "COP",

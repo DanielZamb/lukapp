@@ -32,34 +32,13 @@ export async function requireOpeningOnProfile(
   draft: Pick<JournalEntryDraft, "policy" | "accountingDate" | "idempotencyKey">,
 ) {
   const activeOpening = await findActiveOpening(store, workspaceId, profileId);
-  const profile = await store.getProfile(profileId);
-  if (!profile) return;
-  const entries = await store.listJournalEntries(workspaceId);
-  const reversed = new Set(
-    entries.flatMap((entry) =>
-      entry.reversesEntryId ? [entry.reversesEntryId] : [],
-    ),
-  );
-  const touches = (entry: (typeof entries)[number]) =>
-    entry.lines.some((line) => line.ledgerAccountId === profile.postingAccountId);
   if (isOpening(draft)) {
-    const journalOpening = entries.find(
-      (entry) => isOpening(entry) && !reversed.has(entry.id) && touches(entry),
-    );
-    if (
-      (activeOpening?.journalEntryId && activeOpening.idempotencyKey !== draft.idempotencyKey) ||
-      (journalOpening && journalOpening.idempotencyKey !== draft.idempotencyKey)
-    )
+    if (activeOpening?.journalEntryId && activeOpening.idempotencyKey !== draft.idempotencyKey)
       throw new AccountingError("opening_already_exists");
-    if (
-      entries.some(
-        (entry) =>
-          !isOpening(entry) &&
-          !entry.reversesEntryId &&
-          touches(entry) &&
-          entry.accountingDate < draft.accountingDate,
-      )
-    )
+    const profile = await store.getProfile(profileId);
+    if (!profile) return;
+    const firstActivity = await store.firstActivityDate(workspaceId, profile.postingAccountId);
+    if (firstActivity && firstActivity < draft.accountingDate)
       throw new AccountingError("opening_after_activity");
   } else if (
     activeOpening &&

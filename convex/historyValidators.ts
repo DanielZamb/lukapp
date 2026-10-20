@@ -4,6 +4,7 @@ import { money } from "./validators";
 export const activityRow = v.object({
   id: v.string(),
   financialAccountProfileId: v.optional(v.string()),
+  financialAccountProfileIds: v.optional(v.array(v.string())),
   title: v.string(),
   date: v.string(),
   detail: v.string(),

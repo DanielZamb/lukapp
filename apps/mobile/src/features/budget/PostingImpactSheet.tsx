@@ -1,3 +1,4 @@
+import { toMajorUnits } from "../money";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -11,11 +12,13 @@ import type { PostingBudgetImpact } from "./postingImpact";
 
 export function PostingImpactSheet({
   description,
+  currency,
   hits,
   onContinue,
   onReconsider,
 }: {
   description: string;
+  currency: string;
   hits: PostingBudgetImpact;
   onContinue: () => void;
   onReconsider: () => void;
@@ -43,7 +46,7 @@ export function PostingImpactSheet({
         <Header title={description || "Entry"} eyebrow="BUDGET WOULD CROSS" />
         {hits.map((hit, index) => (
           <Text key={`${hit.category.id}-${index}`} style={[index === 0 ? { fontSize: 36, fontFamily: font.extrabold } : ui.body, { color: theme.danger }]}>
-            {hit.category.name} {new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(hit.overMinorUnits / 100)} over
+            {hit.category.name} {new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(toMajorUnits(hit.overMinorUnits, currency))} over
           </Text>
         ))}
         <Text style={ui.muted}>Continue still posts. A budget does not block.</Text>

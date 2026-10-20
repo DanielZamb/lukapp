@@ -162,6 +162,29 @@ test("only an asset-to-asset transfer into the plan destination counts", async (
   await expect(s.contribute("xfer-card")).rejects.toMatchObject({ code: "source_must_be_asset" });
 });
 
+test("a reversed source cannot accept a new contribution or post a recovery transfer", async () => {
+  const s = memory();
+  const { plan } = await s.activate();
+  const transfer = s.transfer();
+  s.put({
+    id: "reverse-expense", workspaceId: "ws", policy: "reversal@1", description: "Correction",
+    accountingDate: "2026-09-19", amountMinorUnits: s.expense.amountMinorUnits,
+    reversesEntryId: s.expense.id,
+  });
+  await expect(s.contribute(transfer.id)).rejects.toMatchObject({ code: "expense_not_recoverable" });
+  let posts = 0;
+  await expect(recordRecoveryMove(s.store, async () => {
+    posts++;
+    return { id: transfer.id, amountMinorUnits: transfer.amountMinorUnits, accountingDate: transfer.accountingDate };
+  }, {
+    workspaceId: "ws", planId: plan.id, sourceFinancialAccountProfileId: "daily",
+    amount: { currency: "COP", minorUnits: 230_000 }, accountingDate: "2026-09-20",
+    description: "Recovery", idempotencyKey: "blocked-move", actorId: "owner", now: Date.UTC(2026, 8, 20),
+  })).rejects.toMatchObject({ code: "expense_not_recoverable" });
+  expect(posts).toBe(0);
+  expect(await s.store.listContributions()).toEqual([]);
+});
+
 test("a crash after the transfer posts retries the same pair under one key", async () => {
   const s = memory();
   await s.activate();

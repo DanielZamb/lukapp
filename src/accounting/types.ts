@@ -1,5 +1,6 @@
 import type { UserCategory } from "./categories/types";
 import type { CategoryAssignments } from "./categories/assignments";
+import type { AccountTotals } from "./ledgerTotals";
 
 export type Actor = {
   userId: string;
@@ -285,6 +286,9 @@ export type AccountingStore = {
   ): Promise<StoredJournalEntry | undefined>;
   findReversalOf(entryId: string): Promise<StoredJournalEntry | undefined>;
   listJournalEntries(workspaceId: string): Promise<StoredJournalEntry[]>;
+  recentJournalEntries(workspaceId: string): Promise<StoredJournalEntry[]>;
+  accountTotals(workspaceId: string, month?: string): Promise<Map<string, AccountTotals>>;
+  firstActivityDate(workspaceId: string, ledgerAccountId: string): Promise<string | undefined>;
   getAccountingPeriod(
     workspaceId: string,
     period: PeriodKey,

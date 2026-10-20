@@ -106,3 +106,14 @@ test.each(["", "0", "-1", "1,234", "90.071.992.547.409,92"])("invalid limit %s r
   expect(editor().amount).toBe("1,23");
   expect(editor().canSubmit).toBe(true);
 });
+
+
+test.each([["JPY", "100", 100], ["BHD", "1,234", 1234]] satisfies [string, string, number][])(
+  "a %s Budget saves the currency's exact minor units", async (currency, amount, minorUnits) => {
+    const api = transport();
+    const editor = await open(api, { ...seed, currency });
+    await act(async () => { editor().onCategory("food"); editor().onAmount(amount); });
+    await act(async () => { await editor().submit(); });
+    expect(api.save.mock.calls[0][0].limit).toEqual({ currency, minorUnits });
+  },
+);

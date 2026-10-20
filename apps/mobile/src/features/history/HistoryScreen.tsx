@@ -13,10 +13,13 @@ import { filterHistory, sortHistory, type HistoryQuery, type SortDir, type SortK
 import { capitalFlow, historyListRow, type HistoryCategory, type HistoryPlace } from "./listModel";
 import type { HistoryRow } from "./types";
 
-export function HistoryScreen({ rows, scopedRows, total, categories, places, currentDate, currency, initialProfileId, onScopedProfileId, onEntry, onBack }: {
+export function HistoryScreen({ rows, scopedRows, total, categories, places, currentDate, currency, initialProfileId, onScopedProfileId, hasMore, loadingMore, onLoadMore, onEntry, onBack }: {
   rows: HistoryRow[] | undefined;
   scopedRows: HistoryRow[] | undefined;
   total: number | undefined;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
   categories: HistoryCategory[];
   places: HistoryPlace[];
   currentDate: string;
@@ -65,6 +68,7 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
             <Text accessibilityRole="header" style={styles.title}>Tx history</Text>
           </View>
         </View>
+        {!loading && hasMore && <Text style={styles.muted}>Filters and totals cover loaded transactions.</Text>}
         {!loading && <CapitalFlow key={`${out}-${inn}`} out={out} inn={inn} currency={currency} />}
         <View style={styles.search}>
           <Ionicons name="search-outline" size={18} color={theme.mutedForeground} />
@@ -75,7 +79,7 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
         <HistoryFilters query={query} onQuery={setQuery} sort={sort} onSort={setSort}
           places={places} categories={categories} today={currentDate} />
         <View style={styles.count}>
-          <Text style={styles.muted}>{loading ? "Loading history…" : `${matched.length} of ${total}`}</Text>
+          <Text style={styles.muted}>{loading ? "Loading history…" : `${matched.length} of ${total}${hasMore ? " loaded" : ""}`}</Text>
           {filtered && <Pressable accessibilityRole="button" accessibilityLabel="Clear filters"
             onPress={() => setQuery(emptyQuery)} style={styles.clear}>
             <Text style={styles.clearText}>Clear filters</Text>
@@ -83,8 +87,15 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
         </View>
       </View>}
       renderItem={({ item, index }) => <HistoryListRow row={item} onEntry={onEntry} isFirst={index === 0} isLast={index === matched.length - 1} />}
+      ListFooterComponent={!loading && hasMore ? <Pressable accessibilityRole="button"
+        accessibilityLabel="Load more transactions" disabled={loadingMore} onPress={onLoadMore}
+        style={styles.loadMore}>
+        {loadingMore ? <ActivityIndicator accessibilityLabel="Loading more transactions" /> :
+          <Text style={styles.clearText}>Load more transactions</Text>}
+      </Pressable> : null}
       ListEmptyComponent={loading ? <ActivityIndicator accessibilityLabel="Loading activity" /> :
         <View style={styles.empty}><Text style={styles.muted}>{total === 0 ? "No posted activity yet." :
+          hasMore ? "No matches in the loaded transactions. Load more or clear filters." :
           "Nothing matches these filters. Clear them to see everything."}</Text></View>}
     />
   </SafeAreaView>;
@@ -109,6 +120,7 @@ function historyScreenStyles(theme: Theme) {
     count: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
     muted: { fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: theme.mutedForeground },
     clear: { minHeight: 32, justifyContent: "center" },
+    loadMore: { minHeight: touchTarget, alignItems: "center", justifyContent: "center", marginTop: spacing.lg },
     clearText: { fontFamily: font.bold, fontSize: 14, color: theme.primary },
     empty: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border },
     pressed: { opacity: 0.72 },
