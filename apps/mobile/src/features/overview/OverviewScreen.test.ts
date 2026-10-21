@@ -8,6 +8,7 @@ import { OverviewScreen } from "./OverviewScreen";
 import type { MonthOverview } from "./model";
 
 vi.mock("react-native", () => ({
+  Platform: { OS: "ios" },
   KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "spinner", Pressable: "button", Text: "text", View: "view", ScrollView: "scroll",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },

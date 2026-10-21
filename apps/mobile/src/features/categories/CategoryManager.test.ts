@@ -28,6 +28,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({ BottomSheetModal: "modal" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("react-native", () => ({
+  Platform: { OS: "ios" },
   KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "spinner", Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input",
   BackHandler: { addEventListener: () => ({ remove: () => {} }) },

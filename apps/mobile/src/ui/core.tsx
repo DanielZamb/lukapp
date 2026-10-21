@@ -18,6 +18,7 @@ import {
   View,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Platform,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -52,7 +53,7 @@ export function Screen({
 }>) {
   const { ui } = useCore();
   return (
-    <KeyboardAvoidingView style={ui.screen} behavior="height">
+    <KeyboardAvoidingView style={ui.screen} behavior="height" enabled={Platform.OS !== "android"}>
       <SafeAreaView style={ui.screen}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
