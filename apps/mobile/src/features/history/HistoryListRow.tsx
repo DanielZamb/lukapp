@@ -8,13 +8,13 @@ import { font, radius, spacing } from "../../ui/tokens";
 import type { HistoryListRow as Row } from "./listModel";
 
 export function HistoryListRow({ row, onEntry, isFirst, isLast }: {
-  row: Row; onEntry: (id: string) => void; isFirst: boolean; isLast: boolean;
+  row: Row; onEntry: (id: string, profileId?: string) => void; isFirst: boolean; isLast: boolean;
 }) {
   const theme = useTheme();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   return <Pressable accessibilityRole="button" accessibilityLabel={`${row.title}, ${row.amountLabel}`}
-    onPress={() => onEntry(row.id)}
+    onPress={() => row.transfer ? onEntry(row.id, row.financialAccountProfileId) : onEntry(row.id)}
     style={({ pressed }) => [styles.row, isFirst && styles.first, isLast && styles.last, pressed && styles.pressed]}>
     <View style={styles.copy}>
       <Text numberOfLines={layout.reflow ? undefined : 1} style={styles.title}>{row.title}</Text>

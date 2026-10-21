@@ -10,7 +10,7 @@ import { CapitalFlow } from "./CapitalFlow";
 import { HistoryListRow } from "./HistoryListRow";
 import { HistoryFilters } from "./HistoryFilters";
 import { filterHistory, sortHistory, type HistoryQuery, type SortDir, type SortKey } from "./filter";
-import { capitalFlow, historyListRow, type HistoryCategory, type HistoryPlace } from "./listModel";
+import { capitalFlow, historyListRow, historyMovements, type HistoryCategory, type HistoryPlace } from "./listModel";
 import type { HistoryRow } from "./types";
 
 export function HistoryScreen({ rows, scopedRows, total, categories, places, currentDate, currency, initialProfileId, onScopedProfileId, hasMore, loadingMore, onLoadMore, onEntry, onBack }: {
@@ -26,7 +26,7 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
   currency: string;
   initialProfileId?: string;
   onScopedProfileId?: (profileId: string | undefined) => void;
-  onEntry: (id: string) => void;
+  onEntry: (id: string, profileId?: string) => void;
   onBack: () => void;
 }) {
   const ui = useUi();
@@ -43,9 +43,11 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
     [query, singleProfileId],
   );
   const filterRows = singleProfileId !== undefined ? (scopedRows ?? []) : (rows ?? []);
-  const matched = useMemo(() => sortHistory(filterHistory(filterRows, filterQuery, { today: currentDate, profileNames }),
+  const movements = useMemo(() => historyMovements(filterRows, singleProfileId), [filterRows, singleProfileId]);
+  const movementTotal = total === undefined ? undefined : total + movements.length - filterRows.length;
+  const matched = useMemo(() => sortHistory(filterHistory(movements, filterQuery, { today: currentDate, profileNames }),
     sort.key, sort.dir, profileNames).map((row) => historyListRow(row, categories, places, currentDate)),
-    [filterRows, filterQuery, sort, profileNames, categories, places, currentDate]);
+    [movements, filterQuery, sort, profileNames, categories, places, currentDate]);
   const { out, inn } = capitalFlow(matched);
   const loading = rows === undefined || total === undefined ||
     (singleProfileId !== undefined && scopedRows === undefined);
@@ -54,7 +56,7 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
   return <SafeAreaView style={ui.screen}>
     <FlatList
       data={loading ? [] : matched}
-      keyExtractor={(row) => row.id}
+      keyExtractor={(row) => `${row.id}:${row.financialAccountProfileId ?? "all"}`}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: layout.pagePadding, flexGrow: 1 }}
       ListHeaderComponent={<View style={styles.headerContent}>
@@ -79,7 +81,7 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
         <HistoryFilters query={query} onQuery={setQuery} sort={sort} onSort={setSort}
           places={places} categories={categories} today={currentDate} />
         <View style={styles.count}>
-          <Text style={styles.muted}>{loading ? "Loading history…" : `${matched.length} of ${total}${hasMore ? " loaded" : ""}`}</Text>
+          <Text style={styles.muted}>{loading ? "Loading history…" : `${matched.length} of ${movementTotal}${hasMore ? " loaded" : ""}`}</Text>
           {filtered && <Pressable accessibilityRole="button" accessibilityLabel="Clear filters"
             onPress={() => setQuery(emptyQuery)} style={styles.clear}>
             <Text style={styles.clearText}>Clear filters</Text>

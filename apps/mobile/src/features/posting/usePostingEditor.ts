@@ -642,17 +642,24 @@ export function usePostingEditor(
     setEntryType: (value: EntryType) => {
       if (canEdit() && !intake) {
         setEntryType(value);
+        setTransferReviewRequired(value === "transfer" && destinationId !== null);
         setCategories({ ids: [], primaryId: null });
         setError("");
       }
     },
     profileId,
     setProfileId: (value: string) => {
-      if (canEdit()) setProfileId(value);
+      if (canEdit()) {
+        if (entryType === "transfer" && value !== profileId) setTransferReviewRequired(true);
+        setProfileId(value);
+      }
     },
     destinationId,
     setDestinationId: (value: string) => {
-      if (canEdit()) setDestinationId(value);
+      if (canEdit()) {
+        if (entryType === "transfer" && value !== destinationId) setTransferReviewRequired(true);
+        setDestinationId(value);
+      }
     },
     transferReviewRequired,
     swapTransferPlaces: () => {
@@ -665,6 +672,15 @@ export function usePostingEditor(
     confirmTransferReview: () => {
       if (canEdit() && entryType === "transfer" && destinationId && destinationId !== profileId)
         setTransferReviewRequired(false);
+    },
+    beginTransfer: () => {
+      if (!canEdit() || isolate || keeping || opLock.current) return false;
+      setCategories({ ids: [], primaryId: null });
+      setEntryType("transfer");
+      setDestinationId(null);
+      setTransferReviewRequired(true);
+      setError("");
+      return true;
     },
     beginAccountSetup: (request: AccountSetupRequest) => {
       if (!canEdit() || isolate || keeping || opLock.current) return false;

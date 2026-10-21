@@ -199,7 +199,7 @@ test("budget loading waits for an expense but does not change income, transfers 
   const { PlaceSheet } = await import("../posting/PlaceSheet");
   await act(async () => form().onDestination());
   await act(async () => root?.root.findByType(PlaceSheet).props.onSelect("card"));
-  await act(async () => root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null }));
+  await act(async () => form().transferReview?.onConfirm());
   await act(async () => form().onPost());
   expect(transport.post.mock.calls[1][0].kind).toBe("transfer");
   await act(async () => { form().onEntryType("initial"); form().onAmountChange("120.000,00"); });
@@ -219,6 +219,7 @@ test("saving the second place inside a tx stays in the form without LevelUnlocke
   if (budget) budget.jars = [];
   await open();
   await act(async () => root?.root.findByType(PlaceSheet).props.onAdd());
+  await act(async () => root?.root.findByType(PlaceSheet).props.onDismiss());
   const setup = root?.root.findByType(AccountSetupForm);
   await act(async () => setup?.props.onChange({ ...setup.props.value, name: "Travel" }));
   await act(async () => root?.root.findByType(AccountSetupForm).props.onSubmit());

@@ -27,22 +27,22 @@ export function profilesByPostingAccount(
   );
 }
 
-function placesDetail(
+function transferPlaces(
   entry: PostedJournalEntry,
   profilesByLedgerAccountId?: ReadonlyMap<string, ActivityProfile>,
 ) {
-  if (!profilesByLedgerAccountId) return fallbackLabel(entry);
+  if (!profilesByLedgerAccountId) return undefined;
   const named = (side: "debitMinorUnits" | "creditMinorUnits") =>
     entry.lines.flatMap((line) => {
       if (line[side] <= 0) return [];
-      const name = profilesByLedgerAccountId.get(line.ledgerAccountId)?.name;
-      return name ? [name] : [];
+      const profile = profilesByLedgerAccountId.get(line.ledgerAccountId);
+      return profile ? [{ id: profile.id, name: profile.name }] : [];
     });
   const from = named("creditMinorUnits");
   const to = named("debitMinorUnits");
-  return from.length && to.length
-    ? `${from.join(" · ")} → ${to.join(" · ")}`
-    : fallbackLabel(entry);
+  return from.length === 1 && to.length === 1
+    ? { from: from[0], to: to[0] }
+    : undefined;
 }
 
 export function activityRow(
@@ -67,7 +67,10 @@ export function activityRow(
         return profile ? [profile.id] : [];
       }))]
     : undefined;
-  const label = placesDetail(entry, profilesByLedgerAccountId);
+  const transfer = transferPlaces(entry, profilesByLedgerAccountId);
+  const label = transfer
+    ? `${transfer.from.name} → ${transfer.to.name}`
+    : fallbackLabel(entry);
   const categoryDetail = userCategories
     .map((category) => category.name)
     .join(" · ");
@@ -81,6 +84,7 @@ export function activityRow(
       ? { financialAccountProfileId: entry.financialAccountProfileId }
       : {}),
     ...(financialAccountProfileIds ? { financialAccountProfileIds } : {}),
+    ...(transfer ? { transfer } : {}),
     title: entry.description || fallbackLabel(entry),
     date: entry.accountingDate,
     detail,

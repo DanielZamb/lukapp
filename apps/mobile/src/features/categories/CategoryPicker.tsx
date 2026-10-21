@@ -19,11 +19,15 @@ export type CategoryPickerProps = {
 export function CategoryPicker({
   visible,
   onClose,
+  onAccountSetup,
   ...selection
 }: CategoryPickerProps) {
   const sheet = useRef<BottomSheetModal>(null);
   const presented = useRef(false);
-  const picker = useCategoryPicker({ kind: "posting", ...selection }, onClose);
+  const accountRequest = useRef<AccountSetupRequest | null>(null);
+  const picker = useCategoryPicker({ kind: "posting", ...selection,
+    onAccountSetup: onAccountSetup ? (request) => { accountRequest.current = request; return true; } : undefined,
+  }, onClose);
   const busy = picker.sheet.busy;
   useEffect(() => {
     if (Platform.OS !== "android" || !visible) return;
@@ -42,5 +46,8 @@ export function CategoryPicker({
   return <CategorySheet {...picker.sheet} sheetRef={sheet} onDismiss={() => {
     presented.current = false;
     picker.sheet.onDismiss();
+    const request = accountRequest.current;
+    accountRequest.current = null;
+    if (request) onAccountSetup?.(request);
   }} />;
 }

@@ -1,5 +1,6 @@
 import { useLocalEntryInteraction } from "../src/local-auth/interaction";
 import { CategoryPicker } from "../src/features/categories/CategoryPicker";
+import type { AccountSetupRequest } from "../src/features/categories/model";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -31,6 +32,7 @@ import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
 import {
   usePostingEditor,
   type IntakeBinding,
+  type PlaceDraft,
 } from "../src/features/posting/usePostingEditor";
 import { usePostingBatchStorage } from "../src/features/posting/postingBatchStorage";
 import { usePostingTransport } from "../src/features/posting/usePostingTransport";
@@ -75,6 +77,8 @@ function PostMoney({
   const placeSheet = useRef<BottomSheetModal>(null);
   const setupSheet = useRef<BottomSheetModal>(null);
   const setupPresented = useRef(false);
+  const destinationRequest = useRef<AccountSetupRequest | null>(null);
+  const setupAfterPicker = useRef<PlaceDraft | null>(null);
   const { workspace, financialAccountProfile: defaultProfile } = defaults;
   const drafts = useLocalEntryDrafts({
     subject,
@@ -202,7 +206,7 @@ function PostMoney({
     description: string;
     hits: PostingBudgetImpact;
   } | null>(null);
-  const categoryEnabled = editor.entryType !== "initial";
+  const categoryEnabled = editor.entryType === "normal";
   const categoryValid =
     !categoryEnabled ||
     ((editor.entryType === "transfer" || editor.categories.ids.length > 0) &&
@@ -248,6 +252,13 @@ function PostMoney({
       </Screen>
     );
   const completeEntry = editor.description.trim().length > 0 && categoryValid && placesValid;
+  const blockedReason = !editor.description.trim() ? "Add a description before posting."
+    : !profile ? "Choose the place this money moves from."
+    : editor.entryType === "transfer" && !destination ? "Choose where the money goes in To."
+    : editor.entryType === "transfer" && editor.transferReviewRequired ? "Confirm From and To before posting."
+    : !categoryValid ? "Choose a category and, if requested, its primary category."
+    : !editor.canSubmit ? "Enter a valid amount before posting."
+    : needsBudgetCheck && budget === undefined ? "Checking your budget…" : undefined;
   const canQueue =
     editor.canSubmit &&
     !setup &&
@@ -299,6 +310,13 @@ function PostMoney({
             .join(" · ") || "Pick"
         }
         categoryEnabled={categoryEnabled}
+        blockedReason={blockedReason}
+        transferReview={editor.entryType === "transfer" ? {
+          required: editor.transferReviewRequired,
+          canConfirm: placesValid && !!editor.destinationId && editor.destinationId !== editor.profileId,
+          onSwap: editor.swapTransferPlaces,
+          onConfirm: editor.confirmTransferReview,
+        } : undefined}
         categoryNeedsPrimary={
           categoryEnabled &&
           !!categories &&
@@ -370,15 +388,6 @@ function PostMoney({
         }}
         onDone={() => router.back()}
       />
-      {editor.transferReviewRequired && !setup && (
-        <View style={ui.section}>
-          <Text style={ui.body}>Review From and To. This transfer moves money from {profile?.name ?? "the source"} to {destination?.name ?? "the destination"}. Your entered sign is unchanged.</Text>
-          <SecondaryButton label="Swap From and To" disabled={!editor.editable || !placesValid || !editor.destinationId || editor.destinationId === editor.profileId}
-            onPress={editor.swapTransferPlaces} />
-          <PrimaryButton label="Confirm From and To" disabled={!editor.editable || !placesValid || !editor.destinationId || editor.destinationId === editor.profileId}
-            onPress={editor.confirmTransferReview} />
-        </View>
-      )}
       {categoryEnabled && (
         <CategoryPicker
           key={editor.direction}
@@ -386,7 +395,15 @@ function PostMoney({
           workspaceId={workspace.id}
           value={editor.categories}
           onChange={editor.setCategories}
-          onAccountSetup={editor.beginAccountSetup}
+          onAccountSetup={(request) => {
+            if (!editor.beginTransfer()) return false;
+            destinationRequest.current = request;
+            setPlaceTarget("destination");
+            setSearch("");
+            setPlacePickerOpen(true);
+            placeSheet.current?.present();
+            return true;
+          }}
           visible={categoryVisible && editor.editable}
           onClose={() => setCategoryVisible(false)}
         />
@@ -408,11 +425,18 @@ function PostMoney({
               : undefined
         }
         disabled={!editor.editable}
-        onDismiss={() => setPlacePickerOpen(false)}
+        onDismiss={() => {
+          setPlacePickerOpen(false);
+          destinationRequest.current = null;
+          const setup = setupAfterPicker.current;
+          setupAfterPicker.current = null;
+          if (setup) editor.setSetup(setup);
+        }}
         onSelect={(id) =>
           interaction(() => {
             if (placeTarget === "source") editor.setProfileId(id);
             else editor.setDestinationId(id);
+            destinationRequest.current = null;
             setPlacePickerOpen(false);
             placeSheet.current?.dismiss();
           })
@@ -420,18 +444,19 @@ function PostMoney({
         onAdd={() =>
           interaction(() => {
             setPlacePickerOpen(false);
-            placeSheet.current?.dismiss();
-            editor.setSetup({
-              name: "",
-              productKind: "bankAccount",
-              emoji: "💰",
+            const request = destinationRequest.current;
+            setupAfterPicker.current = {
+              name: request?.name ?? "",
+              productKind: request?.answer === "payDebt" ? null : "bankAccount",
+              emoji: request?.style.emoji ?? "💰",
               amount: "0",
               date: defaultAccountingDate(workspace.timeZone),
               target:
                 placeTarget === "destination"
                   ? { kind: "destination", sourceProfileId: editor.profileId }
                   : { kind: "source" },
-            });
+            };
+            placeSheet.current?.dismiss();
           })
         }
       />

@@ -162,6 +162,12 @@ test("transfer details match history for source, destination and stored scope, i
   expect(selected.map((row) => row.id).sort()).toEqual([original.id, correction.id].sort());
   for (const row of globalHistory.page) {
     expect(row).toMatchObject({ financialAccountProfileIds: expect.arrayContaining([daily.id, destination.id]) });
+    expect(row).toMatchObject({ transfer: {
+      from: { id: row.id === original.id ? daily.id : destination.id,
+        name: row.id === original.id ? "Daily" : "Destination" },
+      to: { id: row.id === original.id ? destination.id : daily.id,
+        name: row.id === original.id ? "Destination" : "Daily" },
+    } });
   }
   for (const [profileId, expected] of [[undefined, -2500], [daily.id, -2500], [destination.id, 2500]] as const) {
     const scope = { workspaceId: workspace.id, ...(profileId ? { financialAccountProfileId: profileId } : {}) };

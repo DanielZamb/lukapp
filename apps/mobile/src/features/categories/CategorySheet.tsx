@@ -149,7 +149,8 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
         <Text style={ui.muted}>This category will replace the three selected categories.</Text>
       )}
       <PrimaryButton
-        label={props.busy ? "Saving…" : editor.kind === "edit" ? "Save changes" : editor.kind === "restyle" ? "Done" : "Add category"}
+        label={props.busy ? "Saving…" : editor.kind === "edit" ? "Save changes" : editor.kind === "restyle" ? "Done"
+          : props.answer === "stillMine" || props.answer === "payDebt" ? "Choose a place" : "Add category"}
         disabled={!props.canConfirm || props.busy}
         onPress={props.onConfirm}
       />

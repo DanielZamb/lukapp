@@ -216,6 +216,8 @@ test("transfer requires different places, clears prior Normal categories and pre
     editor().setDate("2026-10-17");
     editor().setDescription("Pay card");
   });
+  expect(editor().canSubmit).toBe(false);
+  await act(async () => editor().confirmTransferReview());
   await act(async () => {
     await editor().submit();
   });
@@ -602,5 +604,32 @@ test("explicit swap reverses an incoming transfer and still requires separate co
   expect(api.post.mock.calls[1][0]).toEqual({ kind: "transfer", payload: {
     workspaceId: "workspace", sourceFinancialAccountProfileId: "new-card", destinationFinancialAccountProfileId: "bank",
     amount: { currency: "COP", minorUnits: 12500 }, accountingDate: "2026-10-17", description: "From Savings", idempotencyKey: "entry-2",
+  } });
+});
+
+test.each(["source", "destination"])("changing the confirmed transfer %s requires confirmation of the new pair", async (changed) => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-10");
+    editor().setEntryType("transfer");
+    editor().setDescription("Transfer");
+  });
+  await act(async () => editor().setDestinationId("savings"));
+  await act(async () => editor().confirmTransferReview());
+  expect(editor().canSubmit).toBe(true);
+  await act(async () => changed === "source" ? editor().setProfileId("wallet") : editor().setDestinationId("loan"));
+  expect(editor().transferReviewRequired).toBe(true);
+  expect(editor().canSubmit).toBe(false);
+  await act(async () => editor().submit());
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+  await act(async () => editor().confirmTransferReview());
+  await act(async () => editor().submit());
+  expect(api.post).toHaveBeenCalledOnce();
+  expect(api.post.mock.calls[0][0]).toMatchObject({ kind: "transfer", payload: {
+    sourceFinancialAccountProfileId: changed === "source" ? "wallet" : "bank",
+    destinationFinancialAccountProfileId: changed === "destination" ? "loan" : "savings",
+    amount: { minorUnits: 1000 },
   } });
 });

@@ -15,6 +15,7 @@ function History({ workspaceId, profileId, timeZone, currency }: {
 }) {
   const [scopedProfileId, setScopedProfileId] = useState<string | undefined>(profileId);
   const [entryId, setEntryId] = useState<string | null>(null);
+  const [entryProfileId, setEntryProfileId] = useState<string | undefined>(profileId);
   const all = usePostedHistory(workspaceId);
   const allRows = all.rows;
   const scoped = usePostedHistory(workspaceId, scopedProfileId, scopedProfileId !== undefined);
@@ -31,8 +32,8 @@ function History({ workspaceId, profileId, timeZone, currency }: {
     loadingMore={activePage.loadingMore} onLoadMore={activePage.loadMore} categories={categories ?? []} places={places ?? []} currentDate={date} currency={currency}
     initialProfileId={profileId} onScopedProfileId={setScopedProfileId}
     onBack={() => router.back()}
-    onEntry={setEntryId} />
-    {entryId && <EntryDetailSheet workspaceId={workspaceId} entryId={entryId} profileId={scopedProfileId} categories={categories ?? []}
+    onEntry={(id, movementProfileId) => { setEntryProfileId(movementProfileId ?? scopedProfileId); setEntryId(id); }} />
+    {entryId && <EntryDetailSheet workspaceId={workspaceId} entryId={entryId} profileId={entryProfileId} categories={categories ?? []}
       currentDate={date} onEntry={setEntryId} onClose={() => setEntryId(null)} />}
   </>;
 }

@@ -13,7 +13,7 @@ import {
 import type { Theme } from "../../ui/tokens";
 import { useReadableLayout } from "../../ui/themeContext";
 import type { ReadableLayout } from "../../ui/layout";
-import { Header, ListGroup, ListRow, PrimaryButton, Screen, useUi, useTheme } from "../../ui/core";
+import { Header, ListGroup, ListRow, PrimaryButton, SecondaryButton, Screen, useUi, useTheme } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export type EntryType = "normal" | "initial" | "transfer";
@@ -50,6 +50,13 @@ export type PostingFormProps = {
   batchCount?: number;
   onBatch?: () => void;
   saveToBatch?: boolean;
+  blockedReason?: string;
+  transferReview?: {
+    required: boolean;
+    canConfirm: boolean;
+    onSwap: () => void;
+    onConfirm: () => void;
+  };
 };
 
 function postingFormStyles(theme: Theme, layout: ReadableLayout) {
@@ -284,7 +291,7 @@ export function PostingForm(props: PostingFormProps) {
       </View>
       <ListGroup>
         <ListRow
-          title="Place"
+          title={props.entryType === "transfer" ? "From" : "Place"}
           titleStyle={styles.rowTitle}
           valueStyle={styles.rowValue}
           value={props.place}
@@ -299,7 +306,7 @@ export function PostingForm(props: PostingFormProps) {
             valueStyle={styles.rowValue}
           />
         )}
-        {props.entryType !== "initial" && (
+        {(props.entryType ?? "normal") === "normal" && (
           <ListRow
             title="Category"
             value={props.category}
@@ -320,6 +327,16 @@ export function PostingForm(props: PostingFormProps) {
           onPress={props.editable ? props.onDate : undefined}
         />
       </ListGroup>
+      {props.entryType === "transfer" && <View style={ui.section}>
+        <Text style={styles.detail}>Move money between places. To repay a loan, choose your existing loan in To. Transfers do not need a category.</Text>
+        {props.transferReview && <>
+          <SecondaryButton label="Swap From and To" disabled={!props.editable || !props.transferReview.canConfirm}
+            onPress={props.transferReview.onSwap} />
+          {props.transferReview.required && <PrimaryButton label="Confirm From and To"
+            disabled={!props.editable || !props.transferReview.canConfirm} onPress={props.transferReview.onConfirm} />}
+        </>}
+      </View>}
+      {!!props.blockedReason && !props.canSubmit && !props.pending && <Text style={styles.detail}>{props.blockedReason}</Text>}
       {props.categoryNeedsPrimary && (
         <Text style={styles.detail}>
           Open Category to choose which category is primary.

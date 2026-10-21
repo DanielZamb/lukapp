@@ -45,15 +45,19 @@ function EntryDetail({ workspaceId, entryId, profileId, categories, currentDate,
     </View>
     <View>
       <DetailRow label="When"><Text style={styles.value}>{historyDate(row.date, currentDate)}</Text></DetailRow>
-      <DetailRow label="Category">
+      {row.transfer && <>
+        <DetailRow label="From"><Text style={styles.value}>{row.transfer.from.name}</Text></DetailRow>
+        <DetailRow label="To"><Text style={styles.value}>{row.transfer.to.name}</Text></DetailRow>
+      </>}
+      {(!row.transfer || row.userCategories.length > 0) && <DetailRow label="Category">
         {row.userCategories.length ? row.userCategories.map((category) => {
           const emoji = categories.find((stored) => stored.id === category.id)?.style.emoji;
           return <Text key={category.id} style={styles.value}>
             {[emoji, category.name].filter(Boolean).join(" ")}{category.id === row.primaryUserCategoryId ? " · Primary" : ""}
           </Text>;
-        }) : <Text style={styles.value}>{moneyIn ? "💸 " : ""}{row.detail || "No category"}</Text>}
-      </DetailRow>
-      <DetailRow label="Place"><Text style={styles.value}>{entry.financialAccountProfileName ?? "No place"}</Text></DetailRow>
+        }) : <Text style={styles.value}>No category</Text>}
+      </DetailRow>}
+      {!row.transfer && <DetailRow label="Place"><Text style={styles.value}>{entry.financialAccountProfileName ?? "No place"}</Text></DetailRow>}
     </View>
     <Text style={[styles.footnote, styles.note]}>Posted entry · amounts in {row.amount.currency}</Text>
     <EntryReversal detail={detail} reversal={reversal.state} onEntry={onEntry}

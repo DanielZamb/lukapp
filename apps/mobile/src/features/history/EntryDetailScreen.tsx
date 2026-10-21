@@ -27,8 +27,12 @@ export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse
       </View>
       <ListGroup>
         <ListRow title="Date" value={detail.row.date} />
-        {entry?.financialAccountProfileName && <ListRow title="Account" value={entry.financialAccountProfileName} />}
-        <ListRow title="Category" detail={detail.row.userCategories.map((category) => category.name).join(" · ") || "No category"} />
+        {detail.row.transfer ? <>
+          <ListRow title="From" value={detail.row.transfer.from.name} />
+          <ListRow title="To" value={detail.row.transfer.to.name} />
+        </> : entry?.financialAccountProfileName && <ListRow title="Account" value={entry.financialAccountProfileName} />}
+        {(!detail.row.transfer || detail.row.userCategories.length > 0) &&
+          <ListRow title="Category" detail={detail.row.userCategories.map((category) => category.name).join(" · ") || "No category"} />}
         {primary && <ListRow title="Primary category" value={primary.name} />}
       </ListGroup>
       <EntryReversal detail={detail} reversal={reversal} onEntry={onEntry}
