@@ -298,6 +298,31 @@ test.each([
   },
 );
 
+test("a negative draft can choose income without closing the picker and posts the selected direction", async () => {
+  writes.save.mockImplementationOnce(async (command: PendingPosting) => ({ id: "income-saved", command }));
+  writes.post.mockResolvedValueOnce({ description: "Category first salary", amount: { currency: "COP", minorUnits: 12500 } });
+  const base: Category = {
+    id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food",
+    nature: "Expense", natureSource: "answered", classification: { kind: "fallback", version: "test" },
+    style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
+  };
+  queryData.categories = [base, { ...base, id: "salary", name: "Salary", normalizedName: "salary", nature: "Income", resolvedPostingAccountCode: "income" }];
+  await mount();
+  await act(async () => { formProps().onAmountChange("-125"); formProps().onDescriptionChange("Category first salary"); });
+  await act(async () => formProps().onCategory());
+  const sheet = () => {
+    if (!root) throw new Error("Post route is not mounted");
+    return root.root.find((node) => String(node.type) === "category-sheet");
+  };
+  expect(sheet().props.options.map((option: { key: string }) => option.key)).toEqual(["food", "salary"]);
+  await act(async () => sheet().props.onSelect("salary"));
+  expect(formProps()).toMatchObject({ amount: "+125", category: "F Salary", canSubmit: true });
+  expect(sheet().props.options.map((option: { key: string }) => option.key)).toEqual(["food", "salary"]);
+  await act(async () => sheet().props.onDone());
+  await act(async () => formProps().onPost());
+  expect(writes.post).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ kind: "income", payload: expect.objectContaining({ userCategoryIds: ["salary"], amount: { currency: "COP", minorUnits: 12500 } }) }));
+});
+
 test("Initial balance can enable Post without a category", async () => {
   await mount();
   await act(async () => {

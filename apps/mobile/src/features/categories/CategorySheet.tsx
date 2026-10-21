@@ -234,7 +234,7 @@ export function CategorySheet(props: CategorySheetProps) {
           {props.primaryOptions && (
             <View style={ui.section}>
               <Text style={ui.title}>Which category is primary?</Text>
-              <Text style={ui.muted}>Choose which best describes this expense. Each selected category still counts the full amount.</Text>
+              <Text style={ui.muted}>Choose which best describes this transaction. Each selected category still counts the full amount.</Text>
               {props.primaryOptions.map((option) => (
                 <Choice key={option.key} label={option.name}
                   selected={props.primaryId === option.key}

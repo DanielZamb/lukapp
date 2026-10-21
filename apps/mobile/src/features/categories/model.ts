@@ -15,6 +15,7 @@ export type CategoryStyle = CategorySelection["style"];
 export type Category = FunctionReturnType<
   typeof api.accounting.listUserCategories
 >[number];
+export type CategoryNature = NonNullable<Category["nature"]>;
 export type CategoryPreset = FunctionReturnType<
   typeof api.accounting.listCategoryPresets
 >[number];
