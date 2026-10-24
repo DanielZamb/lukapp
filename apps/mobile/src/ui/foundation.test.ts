@@ -193,3 +193,42 @@ test("existing controls use XXXL sizes, type and title caps", async () => {
   expect(title?.props.maxFontSizeMultiplier).toBe(1.25);
   expect(flat(title?.props.style).fontFamily).toBe(font.semibold);
 });
+
+
+test("XXXL Group counts rows inside fragments while preserving one shared title", async () => {
+  const tree = await render(h(Group, { title: "Today" }, h(React.Fragment, null,
+    h(ValueRow, { title: "One" }), h(ValueRow, { title: "Two" }), h(ValueRow, { title: "Three" }))));
+  const cards = tree.findAllByType("view").filter((node) => flat(node.props.style).overflow === "hidden");
+  expect(cards.map((card) => card.findAllByType(ValueRow).length)).toEqual([2, 1]);
+});
+
+test("managed Sheet allows form migrations to retain their existing closing actions", async () => {
+  const tree = await render(h(Sheet, { label: "Add place", closeLabel: false, scrollProps: { contentContainerStyle: { padding: 12 } } }, h("form-fields")), "default");
+  expect(tree.findAllByType("button")).toHaveLength(0);
+  expect(tree.find((node) => String(node.type) === "sheet-scroll").props.contentContainerStyle).toEqual({ padding: 12 });
+});
+
+test("page Back and close use the same dismissal while its footer remains on BottomSheetFooter", async () => {
+  const tree = await render(h(Sheet, { label: "Details", tall: true, footer: h("footer-action") }, h("body-content")));
+  expect([...native.back].at(-1)?.()).toBe(true);
+  expect(native.dismiss).toHaveBeenCalledOnce();
+  const modal = tree.find((node) => String(node.type) === "modal");
+  let footerRoot: ReactTestRenderer | undefined;
+  await act(async () => { footerRoot = create(modal.props.footerComponent({ animatedFooterPosition: {} })); });
+  expect(footerRoot?.root.find((node) => String(node.type) === "sheet-footer").props.bottomInset).toBe(16);
+  expect(footerRoot?.root.findAll((node) => String(node.type) === "footer-action")).toHaveLength(1);
+  await act(async () => footerRoot?.unmount());
+});
+
+test("busy page locks backdrop and close, then permits Back after retry", async () => {
+  const element = (busy: boolean) => h(ThemeProvider, { layout: readableLayout(metrics.xxxl) }, h(Sheet, { label: "Details", tall: true, busy }, h("body-content")));
+  await act(async () => { root = create(element(true)); });
+  const modal = root?.root.find((node) => String(node.type) === "modal");
+  expect(modal?.props.backdropComponent({}).props.pressBehavior).toBe("none");
+  expect(root?.root.findByType("button").props.disabled).toBe(true);
+  expect([...native.back].at(-1)?.()).toBe(true);
+  expect(native.dismiss).not.toHaveBeenCalled();
+  await act(async () => root?.update(element(false)));
+  expect([...native.back].at(-1)?.()).toBe(true);
+  expect(native.dismiss).toHaveBeenCalledOnce();
+});

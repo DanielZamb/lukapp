@@ -7,6 +7,7 @@ import type {
 } from "react";
 import {
   Children,
+  Fragment,
   createContext,
   useContext,
   cloneElement,
@@ -238,6 +239,15 @@ export function Field({
   );
 }
 
+function groupChildren(children: ReactNode, prefix = ""): ReactNode[] {
+  return Children.toArray(children).flatMap((child, index) => {
+    if (isValidElement<PropsWithChildren>(child) && child.type === Fragment) {
+      return groupChildren(child.props.children, `${prefix}${child.key ?? index}/`);
+    }
+    return isValidElement(child) ? [cloneElement(child, { key: `${prefix}${child.key ?? index}` })] : [child];
+  });
+}
+
 export function Group({ children, title }: PropsWithChildren<{ title?: string }>) {
   const { styles, layout } = useCore();
   const items = Children.toArray(children).filter(Boolean);
@@ -249,8 +259,9 @@ export function Group({ children, title }: PropsWithChildren<{ title?: string }>
     const card = <View style={styles.group}>{renderItems(items)}</View>;
     return title ? <View style={{ gap: spacing.md }}><StyledText variant="section" accessibilityRole="header">{title}</StyledText>{card}</View> : card;
   }
+  const rows = groupChildren(children);
   const chunks: ReactNode[][] = [];
-  for (let index = 0; index < items.length; index += 2) chunks.push(items.slice(index, index + 2));
+  for (let index = 0; index < rows.length; index += 2) chunks.push(rows.slice(index, index + 2));
   return <View style={{ gap: xxxl.spacing.betweenGroups }}>
     {title ? <StyledText variant="section" accessibilityRole="header">{title}</StyledText> : null}
     {chunks.map((chunk, index) => <View key={index} style={styles.group}>{renderItems(chunk)}</View>)}

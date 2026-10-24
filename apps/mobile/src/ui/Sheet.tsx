@@ -25,10 +25,11 @@ type ManagedBody = {
   label: string;
   tall?: boolean;
   footer?: ReactNode;
+  closeLabel?: string | false;
   stickyHeader?: boolean;
   scrollProps?: Omit<ComponentProps<typeof BottomSheetScrollView>, "children">;
 };
-type NativeBody = { body: "native"; label?: string; tall?: never; footer?: never; stickyHeader?: never; scrollProps?: never };
+type NativeBody = { body: "native"; label?: string; tall?: never; footer?: never; closeLabel?: never; stickyHeader?: never; scrollProps?: never };
 export type SheetProps = SharedSheetProps & (ManagedBody | NativeBody);
 
 export function sheetPresentation(tier: LayoutTier, tall = false) {
@@ -36,7 +37,7 @@ export function sheetPresentation(tier: LayoutTier, tall = false) {
 }
 
 export function Sheet(props: SheetProps) {
-  const { children, onClose, onDismiss, label, body = "scroll", sheetRef, presentOnMount = !sheetRef, busy = false, nativeModalProps, tall, footer, stickyHeader, scrollProps } = props;
+  const { children, onClose, onDismiss, label, body = "scroll", sheetRef, presentOnMount = !sheetRef, busy = false, nativeModalProps, tall, footer, closeLabel = "Close details", stickyHeader, scrollProps } = props;
   const theme = useTheme();
   const tier = useTier();
   const page = sheetPresentation(tier, tall) === "page";
@@ -89,7 +90,7 @@ export function Sheet(props: SheetProps) {
         {...(page && { enableFooterMarginAdjustment: true })}>
         {children}
         {!page && footer}
-        {!page && <SecondaryButton label="Close details" onPress={close} />}
+        {!page && closeLabel !== false && <SecondaryButton label={closeLabel} onPress={close} disabled={busy || undefined} />}
       </BottomSheetScrollView>
     </>}
   </SheetModal>;
