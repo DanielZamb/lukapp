@@ -53,6 +53,7 @@ export const connectingSlowMs = 8000;
 
 export function ConnectingProvider({ children }: PropsWithChildren) {
   const insets = useSafeAreaInsets();
+  const mode = useThemeMode();
   const clock = useSharedValue(0);
   const [motionPreference, setReducedMotion] = useState<boolean | null>(null);
   const reducedMotion = motionPreference !== false;
@@ -108,6 +109,7 @@ export function ConnectingProvider({ children }: PropsWithChildren) {
   }, []);
   const value = useMemo(() => ({ clock, reducedMotion, motionReady, insets, enter, leave, announceSlow }), [clock, reducedMotion, motionReady, insets, enter, leave, announceSlow]);
   return <ConnectionContext.Provider value={value}>
+    <StatusBar barStyle={active || mode === "dark" ? "light-content" : "dark-content"} />
     {children}
     <Text variant="body" accessibilityLiveRegion="polite" style={styles.hidden}>{announcement}</Text>
   </ConnectionContext.Provider>;
@@ -157,7 +159,6 @@ export function ConnectingScreen(props: ConnectingScreenProps) {
     backgroundColor: mode === "dark" ? "#21132f" : "#6d28d9",
     paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right,
   }]}>
-    <StatusBar barStyle="light-content" />
     <ScrollView contentContainerStyle={[styles.content, { paddingTop: large ? 48 : 84 }]}>
       <View accessibilityLabel="Lukapp is connecting" style={styles.signature}>
         <View accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"

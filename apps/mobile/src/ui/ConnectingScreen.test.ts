@@ -8,6 +8,7 @@ import { ConnectingHandover, ConnectingProvider, ConnectingScreen, connectingCop
 const native = vi.hoisted(() => ({
   reduced: false,
   platform: "android",
+  mode: "light",
   changeMotion: (_value: boolean) => {},
   frames: new Array<(frame: { timestamp: number }) => void>(),
   frameActive: vi.fn(), timing: vi.fn((value: number, _config: unknown) => value),
@@ -32,7 +33,7 @@ vi.mock("react-native-safe-area-context", async () => {
   return { SafeAreaInsetsContext: Insets, useSafeAreaInsets: () => useContext(Insets) };
 });
 vi.mock("./Brand", () => ({ ConnectingMark: "mark", ConnectingSignature: "signature" }));
-vi.mock("./core", () => ({ Text: "text", useThemeMode: () => "light", useTier: () => "default" }));
+vi.mock("./core", () => ({ Text: "text", useThemeMode: () => native.mode, useTier: () => "default" }));
 vi.mock("react-native-reanimated", () => ({
   ReduceMotion: { Never: "never" },
   default: { View: "animated-view" },
@@ -54,6 +55,7 @@ beforeEach(() => {
   vi.setSystemTime(0);
   native.reduced = false;
   native.platform = "android";
+  native.mode = "light";
   native.frames.length = 0;
   vi.clearAllMocks();
 });
@@ -217,6 +219,14 @@ test("cached first balances retain the outgoing cover and fade once", async () =
   expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(0);
   await act(async () => root.update(handover(true)));
   expect(native.timing).toHaveBeenCalledOnce();
+});
+test.each(["light", "dark"])("the connecting handover restores %s status-bar contrast", async mode => {
+  native.mode = mode;
+  await mount(handover(true));
+  expect(root.root.find(node => String(node.type) === "status-bar").props.barStyle).toBe("light-content");
+  await tick(320);
+  await tick(0);
+  expect(root.root.find(node => String(node.type) === "status-bar").props.barStyle).toBe(mode === "dark" ? "light-content" : "dark-content");
 });
 test("Reduce Motion reveals resolved balances with only a short opacity fade", async () => {
   native.reduced = true;
