@@ -29,6 +29,7 @@ import {
   Screen,
   SecondaryButton,
   ResponsiveThemeProvider as ThemeProvider,
+  SheetAccessibilityBoundary,
   useUi,
 } from "../src/ui/core";
 
@@ -167,7 +168,7 @@ export default function Layout() {
           >
             <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
               <BottomSheetModalProvider>
-                <Admission />
+                <SheetAccessibilityBoundary><Admission /></SheetAccessibilityBoundary>
               </BottomSheetModalProvider>
             </ConvexProviderWithClerk>
           </LocalEntryGate>

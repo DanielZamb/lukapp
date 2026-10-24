@@ -1,21 +1,22 @@
 import * as React from "react";
 import { createElement as h, createRef, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, expectTypeOf, test, vi } from "vitest";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { ActionTile, Choice, Columns, Field, Group, Header, ListGroup, ListRow, MoneyHero, PrimaryButton, SecondaryButton, Text, ValueRow } from "./core";
-import { Sheet, sheetPresentation } from "./Sheet";
+import { ActionTile, Choice, Columns, Field, Group, Header, ListGroup, ListRow, MoneyHero, PrimaryButton, SecondaryButton, SheetAccessibilityBoundary, Text, ValueRow, type ValueRowProps } from "./core";
+import { Sheet, sheetPresentation, type SheetProps } from "./Sheet";
 import { PickerSheet } from "./PickerSheet";
 import { ThemeProvider } from "./themeContext";
 import { readableLayout, type LayoutTier } from "./layout";
 import { controls, font, themes, xxxlFontScale } from "./tokens";
 import { textSpecs } from "./typography";
 
-const native = vi.hoisted(() => ({ present: vi.fn(), dismiss: vi.fn(), back: new Set<() => boolean>() }));
+const native = vi.hoisted(() => ({ present: vi.fn(), dismiss: vi.fn(), focus: vi.fn(), back: new Set<() => boolean>() }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
 vi.mock("react-native", () => ({
   Text: "text", View: "view", Pressable: "button", TextInput: "input", ActivityIndicator: "spinner",
+  AccessibilityInfo: { setAccessibilityFocus: native.focus }, findNodeHandle: () => 41,
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   BackHandler: { addEventListener: (_event: string, callback: () => boolean) => { native.back.add(callback); return { remove: () => native.back.delete(callback) }; } },
 }));
@@ -27,13 +28,13 @@ vi.mock("@gorhom/bottom-sheet", async () => {
   };
 });
 let root: ReactTestRenderer | undefined;
-beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); native.present.mockClear(); native.dismiss.mockClear(); });
+beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); native.present.mockClear(); native.dismiss.mockClear(); native.focus.mockClear(); });
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); expect(native.back.size).toBe(0); });
 const noop = () => {};
 const tiers: LayoutTier[] = ["default", "reflow", "xxxl"];
 const metrics = { default: { width: 390, fontScale: 1 }, reflow: { width: 290, fontScale: 1 }, xxxl: { width: 390, fontScale: 1.5 } };
 async function render(element: ReactElement, tier: LayoutTier = "xxxl") {
-  await act(async () => { root = create(h(ThemeProvider, { layout: readableLayout(metrics[tier]) }, element)); });
+  await act(async () => { root = create(h(ThemeProvider, { layout: readableLayout(metrics[tier]) }, element), { createNodeMock: () => ({}) }); });
   if (!root) throw new Error("Renderer was not created");
   return root.root;
 }
@@ -167,7 +168,7 @@ test("manual Sheet preserves native props, dismiss callbacks and busy Back handl
     nativeModalProps: { snapPoints: ["80%"], enableDynamicSizing: false, topInset: 40, keyboardBehavior: "interactive", onChange: change, stackBehavior: "push" } }, h("native-body")));
   expect(native.present).not.toHaveBeenCalled(); expect(native.back.size).toBe(0);
   const modal = tree.find((node) => String(node.type) === "modal");
-  expect(modal.props).toMatchObject({ snapPoints: ["80%"], topInset: 40, enablePanDownToClose: false, enableContentPanningGesture: false, stackBehavior: "push" });
+  expect(modal.props).toMatchObject({ snapPoints: ["80%"], topInset: 40, enablePanDownToClose: false, stackBehavior: "push" });
   expect(tree.findAll((node) => String(node.type) === "sheet-scroll")).toHaveLength(0);
   await act(async () => modal.props.onChange(0, 100, "provided"));
   expect(change).toHaveBeenCalledWith(0, 100, "provided");
@@ -224,11 +225,81 @@ test("busy page locks backdrop and close, then permits Back after retry", async 
   const element = (busy: boolean) => h(ThemeProvider, { layout: readableLayout(metrics.xxxl) }, h(Sheet, { label: "Details", tall: true, busy }, h("body-content")));
   await act(async () => { root = create(element(true)); });
   const modal = root?.root.find((node) => String(node.type) === "modal");
-  expect(modal?.props.backdropComponent({}).props.pressBehavior).toBe("none");
+  expect(modal?.props.backdropComponent({}).props).toMatchObject({ pointerEvents: "box-only", importantForAccessibility: "no-hide-descendants" });
   expect(root?.root.findByType("button").props.disabled).toBe(true);
   expect([...native.back].at(-1)?.()).toBe(true);
   expect(native.dismiss).not.toHaveBeenCalled();
   await act(async () => root?.update(element(false)));
   expect([...native.back].at(-1)?.()).toBe(true);
   expect(native.dismiss).toHaveBeenCalledOnce();
+});
+
+
+test("sheet presentation and legacy aliases reject conflicting public props", () => {
+  expectTypeOf<{ label: string; presentOnMount: false }>().not.toExtend<SheetProps>();
+  expectTypeOf<{ label: string; onClose: () => void; onDismiss: () => void }>().not.toExtend<SheetProps>();
+  expectTypeOf<{ title: string; meta: string; detail: string }>().not.toExtend<ValueRowProps>();
+});
+
+test("background accessibility is hidden only while a sheet is presented", async () => {
+  const tree = await render(h(React.Fragment, null,
+    h(SheetAccessibilityBoundary, null, h("main")),
+    h(Sheet, { label: "Details" }, h("body-content"))));
+  const boundary = tree.findByType(SheetAccessibilityBoundary).findByType("view");
+  expect(boundary.props).toMatchObject({ importantForAccessibility: "no-hide-descendants", accessibilityElementsHidden: true });
+  await act(async () => tree.find((node) => String(node.type) === "modal").props.onDismiss());
+  expect(boundary.props.importantForAccessibility).toBeUndefined();
+  expect(boundary.props.accessibilityElementsHidden).toBeUndefined();
+});
+
+test("ref plus mount presentation restores Back after dismiss and reopen", async () => {
+  const sheetRef = createRef<BottomSheetModal>();
+  const tree = await render(h(Sheet, { body: "native", sheetRef, presentOnMount: true, androidBack: true }, h("main")));
+  const modal = tree.find((node) => String(node.type) === "modal");
+  expect(native.present).toHaveBeenCalledOnce();
+  await act(async () => modal.props.onDismiss());
+  expect(native.back.size).toBe(0);
+  await act(async () => { sheetRef.current?.present(); modal.props.onChange(0, 100, "provided"); });
+  expect(native.present).toHaveBeenCalledTimes(2);
+  expect([...native.back].at(-1)?.()).toBe(true);
+  expect(native.dismiss).toHaveBeenCalledOnce();
+});
+
+test("busy preserves absent and custom backdrops plus independent content panning", async () => {
+  const CustomBackdrop = () => h("custom-backdrop");
+  const tree = await render(h(React.Fragment, null,
+    h(Sheet, { body: "native", busy: true, nativeModalProps: { enableContentPanningGesture: true } }, h("main")),
+    h(Sheet, { body: "native", busy: true, nativeModalProps: { backdropComponent: CustomBackdrop, enableContentPanningGesture: true } }, h("main"))));
+  const modals = tree.findAll((node) => String(node.type) === "modal");
+  expect(modals[0]?.props.backdropComponent).toBeUndefined();
+  expect(modals.map((modal) => modal.props.enableContentPanningGesture)).toEqual([true, true]);
+  const backdrop = modals[1]?.props.backdropComponent({});
+  expect(backdrop.props.pointerEvents).toBe("box-only");
+  expect(backdrop.props.children.type).toBe(CustomBackdrop);
+});
+
+test("tall page has one common modal boundary and an inset row separator", async () => {
+  const tree = await render(h(Sheet, { label: "Details", tall: true }, h(ValueRow, { title: "One", meta: "Date", value: "COP 20", icon: "heart", onPress: noop })));
+  const modal = tree.find((node) => String(node.type) === "modal");
+  expect(modal.props.containerComponent({ children: null }).props).toMatchObject({ accessibilityViewIsModal: true, importantForAccessibility: "yes" });
+  expect(tree.find((node) => String(node.type) === "sheet-scroll").props.accessibilityViewIsModal).toBeUndefined();
+  const row = tree.findByType(ValueRow).findByType("button");
+  expect(flat(row.props.style)).toMatchObject({ alignItems: "flex-start", borderBottomWidth: 0 });
+  const separator = row.findAllByType("view").find((node) => flat(node.props.style).position === "absolute");
+  expect(flat(separator?.props.style)).toMatchObject({ left: 20, right: 20, bottom: 0, height: 1 });
+});
+
+
+test("page title takes accessibility focus once for each presentation", async () => {
+  const tree = await render(h(Sheet, { label: "Details", tall: true }, h("main")));
+  const modal = tree.find((node) => String(node.type) === "modal");
+  const title = tree.findAllByType("text").find((node) => node.props.accessibilityRole === "header");
+  await act(async () => title?.props.onLayout());
+  expect(native.focus).not.toHaveBeenCalled();
+  await act(async () => modal.props.onChange(0, 100, "provided"));
+  expect(native.focus).toHaveBeenCalledWith(41);
+  await act(async () => { title?.props.onLayout(); modal.props.onChange(0, 100, "provided"); });
+  expect(native.focus).toHaveBeenCalledOnce();
+  await act(async () => { modal.props.onDismiss(); modal.props.onChange(0, 100, "provided"); });
+  expect(native.focus).toHaveBeenCalledTimes(2);
 });

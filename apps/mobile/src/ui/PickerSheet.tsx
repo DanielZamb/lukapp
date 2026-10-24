@@ -6,7 +6,7 @@ import {
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 import type { ReactNode, ComponentProps } from "react";
-import { SheetModal, type NativeSheetProps, type SheetRef } from "./SheetModal";
+import { SheetModal, type NativeSheetProps, type SheetPresentation } from "./SheetModal";
 import { StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "./core";
@@ -21,9 +21,7 @@ export function PickerSheet({
   onDismiss,
   children,
   presentOnMount, nativeModalProps, scrollProps, androidBack = false,
-}: {
-  sheetRef?: SheetRef;
-  presentOnMount?: boolean;
+}: SheetPresentation & {
   nativeModalProps?: NativeSheetProps;
   scrollProps?: Omit<ComponentProps<typeof BottomSheetScrollView>, "children">;
   androidBack?: boolean;
@@ -42,6 +40,7 @@ export function PickerSheet({
     <SheetModal
       sheetRef={modal}
       presentOnMount={presentOnMount ?? !sheetRef}
+      trackPresentation={!!sheetRef}
       busy={busy}
       androidBack={androidBack}
       topInset={insets.top}

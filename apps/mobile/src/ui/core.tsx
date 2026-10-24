@@ -31,6 +31,7 @@ import { font, fontSize, radius, spacing, themes, xxxl } from "./tokens";
 import { useThemeContext } from "./themeContext";
 import { Text as StyledText } from "./Text";
 import { textSpecs, textStyle, textTone, type TextTone } from "./typography";
+export { SheetAccessibilityBoundary } from "./SheetAccessibility";
 export { Text, type TextProps } from "./Text";
 export { type TextVariant, type TextTone } from "./typography";
 
@@ -272,8 +273,6 @@ export const ListGroup = Group;
 
 export type ValueRowProps = {
   title: string;
-  meta?: string;
-  detail?: string;
   value?: string;
   onPress?: () => void;
   icon?: ComponentProps<typeof Ionicons>["name"];
@@ -283,7 +282,7 @@ export type ValueRowProps = {
   tone?: TextTone;
   accessibilityLabel?: string;
   isLast?: boolean;
-};
+} & ({ meta?: string; detail?: never } | { detail?: string; meta?: never });
 
 export function ValueRow({
   title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast,
@@ -311,6 +310,7 @@ export function ValueRow({
         ) : null}
       </View>
       {onPress ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}
+      {large && !isLast ? <View pointerEvents="none" style={styles.rowDivider} /> : null}
     </>
   );
   const rowStyle = [styles.row, isLast && styles.rowLast];

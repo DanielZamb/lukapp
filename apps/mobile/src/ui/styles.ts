@@ -186,9 +186,10 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       paddingHorizontal: spacing.lg,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.border,
-      ...(large && { minHeight: layout.touchTarget, gap: xxxl.spacing.insideRow, paddingVertical: xxxl.spacing.rowVertical, paddingHorizontal: xxxl.spacing.rowHorizontal }),
+      ...(large && { minHeight: layout.touchTarget, alignItems: "flex-start", borderBottomWidth: 0, gap: xxxl.spacing.insideRow, paddingVertical: xxxl.spacing.rowVertical, paddingHorizontal: xxxl.spacing.rowHorizontal }),
     },
     rowLast: { borderBottomWidth: 0 },
+    rowDivider: { position: "absolute", left: xxxl.spacing.rowHorizontal, right: xxxl.spacing.rowHorizontal, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: theme.border },
     rowIcon: {
       width: 36,
       height: 36,

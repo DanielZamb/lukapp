@@ -12,6 +12,7 @@ import { useWindowDimensions } from "react-native";
 import { defaultLayout, readableLayout, type ReadableLayout } from "./layout";
 import { controls, themes, type Theme, type ThemeMode } from "./tokens";
 import { createCoreStyles, createUiStyles, type CoreStyles, type UiStyles } from "./styles";
+import { SheetAccessibilityProvider } from "./SheetAccessibility";
 import { readThemeMode, writeThemeMode } from "./themeModeStorage";
 
 type ThemeContextValue = {
@@ -61,7 +62,7 @@ export function ThemeProvider({ children, layout = defaultLayout }: PropsWithChi
     () => ({ mode, theme, ui, styles, layout, setMode }),
     [mode, theme, ui, styles, layout, setMode],
   );
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={value}><SheetAccessibilityProvider>{children}</SheetAccessibilityProvider></ThemeContext.Provider>;
 }
 
 export function useThemeContext() {

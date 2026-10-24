@@ -8,14 +8,13 @@ import { Text } from "./Text";
 import { useTier } from "./themeContext";
 import type { LayoutTier } from "./layout";
 import { radius, spacing, xxxl } from "./tokens";
-import { SheetModal, type NativeSheetProps, type SheetRef } from "./SheetModal";
+import { SheetModal, type NativeSheetProps, type SheetRef, type SheetPresentation } from "./SheetModal";
 
-type SharedSheetProps = PropsWithChildren<{
-  sheetRef?: SheetRef;
-  presentOnMount?: boolean;
-  onClose?: () => void;
-  onDismiss?: () => void;
+type DismissNotification = { onClose: () => void; onDismiss?: never } | { onDismiss?: () => void; onClose?: never };
+
+type SharedSheetProps = PropsWithChildren<SheetPresentation & DismissNotification & {
   busy?: boolean;
+  dismissible?: boolean;
   androidBack?: boolean;
   nativeModalProps?: NativeSheetProps;
 }>;
@@ -37,7 +36,7 @@ export function sheetPresentation(tier: LayoutTier, tall = false) {
 }
 
 export function Sheet(props: SheetProps) {
-  const { children, onClose, onDismiss, label, body = "scroll", sheetRef, presentOnMount = !sheetRef, busy = false, nativeModalProps, tall, footer, closeLabel = "Close details", stickyHeader, scrollProps } = props;
+  const { children, onClose, onDismiss, label, body = "scroll", sheetRef, presentOnMount = !sheetRef, busy = false, dismissible = true, nativeModalProps, tall, footer, closeLabel = "Close details", stickyHeader, scrollProps } = props;
   const theme = useTheme();
   const tier = useTier();
   const page = sheetPresentation(tier, tall) === "page";
@@ -45,12 +44,17 @@ export function Sheet(props: SheetProps) {
   const ownRef = useRef<import("@gorhom/bottom-sheet").BottomSheetModal>(null);
   const modal = sheetRef ?? ownRef;
   const title = useRef<NativeText>(null);
+  const readyToFocus = useRef(false);
+  const focused = useRef(false);
   const insets = useSafeAreaInsets();
-  const close = useCallback(() => { if (!busy) modal.current?.dismiss(); }, [busy, modal]);
+  const close = useCallback(() => { if (!busy && dismissible) modal.current?.dismiss(); }, [busy, dismissible, modal]);
   const focusTitle = useCallback(() => {
-    if (!page || !title.current) return;
+    if (!page || !readyToFocus.current || focused.current || !title.current) return;
     const tag = findNodeHandle(title.current);
-    if (tag !== null) AccessibilityInfo.setAccessibilityFocus(tag);
+    if (tag !== null) {
+      AccessibilityInfo.setAccessibilityFocus(tag);
+      focused.current = true;
+    }
   }, [page]);
   const renderFooter = useCallback((footerProps: BottomSheetFooterProps) => <BottomSheetFooter {...footerProps} bottomInset={insets.bottom}>
     <View style={[styles.footer, { backgroundColor: theme.background }]}>{footer}</View>
@@ -64,36 +68,46 @@ export function Sheet(props: SheetProps) {
     handleIndicatorStyle: { backgroundColor: theme.ring },
     backdropComponent: (backdropProps) => <BottomSheetBackdrop {...backdropProps} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={busy ? "none" : "close"} />,
   };
-  return <SheetModal {...defaults} {...nativeModalProps} sheetRef={modal} presentOnMount={presentOnMount}
-    busy={busy} androidBack={props.androidBack ?? body !== "native"}
+  return <SheetModal {...defaults} {...nativeModalProps} sheetRef={modal} presentOnMount={presentOnMount} trackPresentation={!!sheetRef}
+    busy={busy} dismissible={dismissible} androidBack={props.androidBack ?? body !== "native"}
     {...(tier === "xxxl" && body !== "native" && { backgroundStyle: [styles.surface, { borderTopLeftRadius: xxxl.radius.sheet, borderTopRightRadius: xxxl.radius.sheet }] })}
     {...(page && {
+      containerComponent: PageContainer,
       snapPoints: ["100%"], topInset: insets.top, enableDynamicSizing: false,
       enablePanDownToClose: false, handleComponent: null,
       keyboardBehavior: "interactive", keyboardBlurBehavior: "restore", android_keyboardInputMode: "adjustResize",
       footerComponent: footer ? renderFooter : undefined,
       androidBack: true,
-      onChange: (...args) => { nativeModalProps?.onChange?.(...args); if (args[0] >= 0) focusTitle(); },
+      onChange: (...args) => {
+        nativeModalProps?.onChange?.(...args);
+        readyToFocus.current = args[0] >= 0;
+        if (!readyToFocus.current) focused.current = false;
+        focusTitle();
+      },
     })}
-    onDismiss={() => { nativeModalProps?.onDismiss?.(); onClose?.(); onDismiss?.(); }}>
+    onDismiss={() => { readyToFocus.current = false; focused.current = false; nativeModalProps?.onDismiss?.(); onClose?.(); onDismiss?.(); }}>
     {body === "native" ? children : <>
-      {page && <View style={styles.titleRow} accessibilityViewIsModal importantForAccessibility="yes">
+      {page && <View style={styles.titleRow}>
         <Text ref={title} variant="section" accessibilityRole="header" style={{ flex: 1 }} onLayout={focusTitle}>{label}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} accessibilityState={{ disabled: busy }} disabled={busy} onPress={close} style={styles.close}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} accessibilityState={{ disabled: busy || !dismissible }} disabled={busy || !dismissible} onPress={close} style={styles.close}>
           <Text variant="action" accessible={false}>×</Text>
         </Pressable>
       </View>}
-      <BottomSheetScrollView accessibilityViewIsModal keyboardShouldPersistTaps="handled"
+      <BottomSheetScrollView accessibilityViewIsModal={page ? undefined : true} keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }, ...(page ? [{ paddingHorizontal: xxxl.spacing.pagePadding }] : [])]}
         {...scrollProps}
         {...(stickyHeader !== undefined && { stickyHeaderIndices: stickyHeader ? [0] : undefined })}
         {...(page && { enableFooterMarginAdjustment: true })}>
         {children}
         {!page && footer}
-        {!page && closeLabel !== false && <SecondaryButton label={closeLabel} onPress={close} disabled={busy || undefined} />}
+        {!page && closeLabel !== false && <SecondaryButton label={closeLabel} onPress={close} disabled={busy || !dismissible || undefined} />}
       </BottomSheetScrollView>
     </>}
   </SheetModal>;
+}
+
+function PageContainer({ children }: PropsWithChildren) {
+  return <View style={{ flex: 1 }} accessibilityViewIsModal importantForAccessibility="yes">{children}</View>;
 }
 
 function createStyles(theme: Theme) {
