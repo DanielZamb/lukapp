@@ -83,6 +83,8 @@ const actions = {
     categoryId: "foreign",
     style: { emoji: "🛒", tone: "primary" },
   },
+  updateUserCategory: { workspaceId: "foreign", categoryId: "foreign", name: "Changed", style: { emoji: "🛒", tone: "primary" } },
+  deleteUserCategory: { workspaceId: "foreign", categoryId: "foreign" },
 };
 afterEach(() => vi.unstubAllEnvs());
 

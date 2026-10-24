@@ -290,3 +290,23 @@ test("a definite accounting rejection fails the Candidate and never aborts a Dra
   expect(fail).toHaveBeenCalledWith("Locked Period");
   expect(api.abort).not.toHaveBeenCalled();
 });
+
+
+test("the account door explicitly refuses intake without changing its facts or writing", async () => {
+  const api = transport();
+  const binding = { id: "candidate-groceries", facts, suggestion, parserVersion: "parser@1", consentVersion: "consent@1",
+    confirm: vi.fn(), consume: vi.fn(), fail: vi.fn() };
+  const editor = await open(binding, api, { intakeRoute: true });
+  let accepted = true;
+  await act(async () => {
+    accepted = editor().beginAccountSetup({ name: "Savings", answer: "stillMine", style: { emoji: "🏦", tone: "primary" } });
+  });
+  expect(accepted).toBe(false);
+  expect(editor().setup).toBeNull();
+  expect(editor().entryType).toBe("normal");
+  expect(editor().amount).toBe(facts.amountText);
+  expect(editor().categories).toEqual(facts.categories);
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+  expect(binding.confirm).not.toHaveBeenCalled();
+});

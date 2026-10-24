@@ -61,6 +61,8 @@ export const categoryRestyle = {
   categoryId: v.string(),
   style: categoryStyle,
 };
+export const categoryUpdate = { ...categoryRestyle, name: v.string() };
+export const categoryDelete = { ...inWorkspace, categoryId: v.string() };
 export const defaults = v.object({
   workspace,
   financialAccountProfile,

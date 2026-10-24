@@ -12,11 +12,12 @@ import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import type { PlaceDraft } from "./usePostingEditor";
 import type { PlaceKind } from "./pendingPostingSchema";
 
-const kinds: Array<[PlaceKind, string]> = [
+const assetKinds: Array<[PlaceKind, string]> = [
   ["bankAccount", "Checking"],
   ["savingsAccount", "Savings"],
   ["cash", "Wallet"],
 ];
+const debtKinds: Array<[PlaceKind, string]> = [["creditCard", "Credit card"], ["loan", "Loan"]];
 const emojis = ["💰", "🏦", "👛", "💳", "🏠", "💼", "🪙", "🐷", "✨", "🚗"];
 
 export function AccountSetupForm(props: {
@@ -39,6 +40,9 @@ export function AccountSetupForm(props: {
   const [lookEmoji, setLookEmoji] = useState("💰");
   const [lookOpen, setLookOpen] = useState(false);
   const value = props.value;
+  const debt = value !== null && (value.productKind === null || value.productKind === "creditCard" || value.productKind === "loan");
+  const kinds = debt ? debtKinds : assetKinds;
+  const balanceLabel = debt ? "How much do you still owe?" : "Balance today";
   const hasValue = value !== null;
   useEffect(() => {
     if (Platform.OS !== "android" || !hasValue) return;
@@ -55,6 +59,7 @@ export function AccountSetupForm(props: {
     <>
       <BottomSheetModal
         ref={props.sheetRef}
+        stackBehavior="push"
         snapPoints={["80%"]}
         enableDynamicSizing={false}
         enablePanDownToClose={props.editable}
@@ -92,6 +97,7 @@ export function AccountSetupForm(props: {
                 {kinds.map(([productKind, label]) => (
                   <Pressable
                     key={productKind}
+                    accessibilityLabel={label}
                     accessibilityRole="radio"
                     accessibilityState={{
                       checked: value.productKind === productKind,
@@ -127,8 +133,8 @@ export function AccountSetupForm(props: {
               </Pressable>
             </View>
             <Field
-              label="Balance today"
-              accessibilityLabel="Balance today"
+              label={balanceLabel}
+              accessibilityLabel={balanceLabel}
               value={value.amount}
               editable={props.editable}
               keyboardType="numbers-and-punctuation"
@@ -246,6 +252,8 @@ function accountSetupStyles(theme: Theme) {
     label: { fontFamily: font.semibold, fontSize: 14, color: theme.foreground },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     chip: {
+      maxWidth: "100%",
+      paddingVertical: spacing.sm,
       minHeight: touchTarget,
       justifyContent: "center",
       paddingHorizontal: spacing.lg,

@@ -17,6 +17,7 @@ export const accountingErrorMessages = {
   category_nature_mismatch: "Category does not match the money direction",
   category_preset_unknown: "Category suggestion not found",
   category_name_conflict: "A category with this name already has a different classification",
+  category_name_too_long: "Use a category name of 80 characters or fewer",
   workspace_membership_required: "Workspace Membership required",
   functional_currency_invalid: "Functional Currency must be an active ISO 4217 currency code",
   currency_mismatch: "Amount must be in the Workspace Functional Currency",

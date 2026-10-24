@@ -1,4 +1,6 @@
 import type { Theme } from "../ui/tokens";
+import { useReadableLayout } from "../ui/themeContext";
+import type { ReadableLayout } from "../ui/layout";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
@@ -34,7 +36,8 @@ function CandidateRow({ title, detail, value, onPress, isLast }: {
   isLast?: boolean;
 }) {
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   return (
     <Pressable
       accessibilityRole="button"
@@ -42,11 +45,13 @@ function CandidateRow({ title, detail, value, onPress, isLast }: {
       onPress={onPress}
       style={[styles.candidateRow, isLast && styles.lastCandidateRow]}
     >
-      <View style={styles.candidateCopy}>
-        <Text style={styles.candidateTitle}>{title}</Text>
-        <Text style={styles.candidateDetail}>{detail}</Text>
+      <View style={styles.candidateContent}>
+        <View style={styles.candidateCopy}>
+          <Text style={styles.candidateTitle}>{title}</Text>
+          <Text style={styles.candidateDetail}>{detail}</Text>
+        </View>
+        <Text style={styles.candidateValue}>{value}</Text>
       </View>
-      <Text style={styles.candidateValue}>{value}</Text>
       <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
     </Pressable>
   );
@@ -83,7 +88,8 @@ export function DraftsScreen({
 }) {
   const theme = useTheme();
   const ui = useUi();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   const [screen, setScreen] = useState<InboxScreen>("inbox");
   const [warningViewed, setWarningViewed] = useState(false);
   const [dismissing, setDismissing] = useState(false);
@@ -248,7 +254,7 @@ export function DraftsScreen({
   );
 }
 
-function createStyles(theme: Theme) {
+function createStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
   candidateRow: {
     minHeight: 70,
@@ -261,12 +267,13 @@ function createStyles(theme: Theme) {
     borderBottomColor: theme.border,
   },
   lastCandidateRow: { borderBottomWidth: 0 },
+  candidateContent: { flex: 1, minWidth: 0, flexDirection: layout.reflow ? "column" : "row", alignItems: layout.reflow ? "stretch" : "center", gap: spacing.sm },
   candidateCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
   candidateTitle: { fontFamily: font.semibold, fontSize: fontSize.body, lineHeight: 22, color: theme.foreground },
   candidateDetail: { fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: theme.mutedForeground },
-  candidateValue: { maxWidth: "42%", fontFamily: font.semibold, fontSize: 14, lineHeight: 20, color: theme.foreground, textAlign: "right" },
+  candidateValue: { maxWidth: layout.reflow ? "100%" : "42%", fontFamily: font.semibold, fontSize: 14, lineHeight: 20, color: theme.foreground, textAlign: layout.reflow ? "left" : "right" },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  headerCopy: { flex: 1 },
+  headerCopy: { flex: 1, minWidth: 0 },
   sources: { minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.xs },
   hero: { gap: spacing.sm, paddingTop: spacing.lg, paddingBottom: spacing.xl },
   kickerRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
@@ -278,7 +285,7 @@ function createStyles(theme: Theme) {
   selectedSegment: { backgroundColor: theme.background, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
   segmentLabel: { color: theme.mutedForeground, fontSize: 13, fontFamily: font.medium, flexShrink: 1 },
   selectedLabel: { color: theme.foreground, fontFamily: font.bold },
-  badge: { minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: radius.full, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center" },
+  badge: { minWidth: 20, minHeight: 20, paddingHorizontal: 5, borderRadius: radius.full, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center" },
   badgeText: { color: theme.primaryForeground, fontSize: 11, fontFamily: font.bold },
   emptyList: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
   footer: { minHeight: touchTarget, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },

@@ -1,20 +1,23 @@
 import { StyleSheet } from "react-native";
 import { useMemo } from "react";
-import { useTheme } from "../../ui/themeContext";
+import { useReadableLayout, useTheme } from "../../ui/themeContext";
+import type { ReadableLayout } from "../../ui/layout";
 import type { Theme } from "../../ui/tokens";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export function useSetupStyles() {
   const theme = useTheme();
-  return useMemo(() => createSetupStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  return useMemo(() => createSetupStyles(theme, layout), [theme, layout]);
 }
 
-function createSetupStyles(theme: Theme) {
+function createSetupStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
-    page: { padding: spacing.xxl, gap: spacing.xxl, paddingBottom: 48 },
+    page: { padding: layout.pagePadding, gap: spacing.xxl, paddingBottom: 48 },
     board: { gap: spacing.md },
     row: {
       flexDirection: "row",
+      flexWrap: "wrap",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing.md,
@@ -22,16 +25,19 @@ function createSetupStyles(theme: Theme) {
     wrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     label: { fontFamily: font.semibold, fontSize: 14, color: theme.foreground },
     chipText: {
+      flexShrink: 1,
       fontFamily: font.semibold,
       fontSize: 14,
       color: theme.foreground,
     },
     chip: {
+      maxWidth: "100%",
       minHeight: touchTarget,
       flexDirection: "row",
       alignItems: "center",
       gap: spacing.sm,
       paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
       borderRadius: radius.full,
       borderWidth: 1,
       borderColor: theme.border,

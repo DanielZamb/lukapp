@@ -6,7 +6,8 @@ import {
 } from "@gorhom/bottom-sheet";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { PrimaryButton, useTheme, useUi } from "../../ui/core";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Field, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
 import { spacing, touchTarget } from "../../ui/tokens";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import type { SetupCategory } from "../setup/model";
@@ -19,7 +20,9 @@ import {
   fallbackLook,
   quickEmojis,
 } from "./looks";
-import { categoryNameKey } from "./model";
+import { NatureQuestion } from "./NatureQuestion";
+import { useNatureSuggestion } from "./useNatureSuggestion";
+import { categoryNameKey, type NatureAnswer, type AccountSetupRequest } from "./model";
 import { LookChip } from "./LookChip";
 
 export type RestyleTarget =
@@ -28,24 +31,31 @@ export type RestyleTarget =
 export function RestyleSheet({
   target,
   names,
-  full,
   onCommit,
+  onAccountSetup,
   onClose,
+  onDelete,
 }: {
   target: RestyleTarget;
   names: string[];
-  full: boolean;
   onCommit: (category: SetupCategory) => void;
   onClose: () => void;
+  onAccountSetup: (request: AccountSetupRequest) => void;
+  onDelete?: () => void;
 }) {
   const theme = useTheme();
+  const mode = useThemeMode();
+  const insets = useSafeAreaInsets();
   const ui = useUi();
   const styles = useSetupStyles();
   const sheet = useRef<BottomSheetModal>(null);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(target.kind === "edit" ? target.category.name : "");
   const [style, setStyle] = useState(
     target.kind === "edit" ? target.category.style : fallbackLook,
   );
+  const [override, setOverride] = useState<NatureAnswer | null>(null);
+  const nature = useNatureSuggestion(target.kind === "create" ? name : "");
+  const answer = override ?? nature.suggested;
   const [keyboard, setKeyboard] = useState(false);
   const interact = useLocalEntryInteraction();
   useEffect(() => {
@@ -53,17 +63,20 @@ export function RestyleSheet({
   }, []);
   const trimmed = name.trim();
   const duplicate = names.some(
-    (item) => categoryNameKey(item) === categoryNameKey(trimmed),
+    (item) => !(target.kind === "edit" && item === target.category.name) && categoryNameKey(item) === categoryNameKey(trimmed),
   );
-  const blocked = target.kind === "create" && (!trimmed || duplicate || full);
-  const color = categoryColor(style) ?? theme.primary;
+  const named = target.kind === "create" || target.category.source === "custom";
+  const blocked = named && (!trimmed || trimmed.length > 80 || duplicate || (target.kind === "create" && !answer));
+  const color = categoryColor(style, mode) ?? theme.primary;
   const preview = {
-    name: target.kind === "edit" ? target.category.name : trimmed || "Your own",
+    name: trimmed || "Your own",
     style,
   };
   return (
     <BottomSheetModal
       ref={sheet}
+      topInset={insets.top}
+      stackBehavior="push"
       enablePanDownToClose
       backdropComponent={SetupBackdrop}
       onDismiss={onClose}
@@ -78,20 +91,26 @@ export function RestyleSheet({
         <View style={{ alignItems: "flex-start" }}>
           <LookChip category={preview} />
         </View>
-        {target.kind === "create" && (
-          <BottomSheetTextInput
+        {named && (
+          <Field
+            label="Category name"
+            InputComponent={BottomSheetTextInput}
             accessibilityLabel="Category name"
             placeholder="Name it your way"
             placeholderTextColor={theme.mutedForeground}
             autoFocus
             value={name}
+            maxLength={80}
             style={styles.input}
             onChangeText={(value) => {
               interact();
               setName(value);
+              setOverride(null);
             }}
           />
         )}
+        {target.kind === "create" && <NatureQuestion answer={answer} suggested={nature.suggested}
+          allowed={nature.allowed} disabled={false} onAnswer={(value) => { interact(); setOverride(value); }} />}
         <View style={styles.wrap}>
           {quickEmojis.map((emoji) => (
             <Pressable
@@ -169,7 +188,7 @@ export function RestyleSheet({
                 borderRadius: touchTarget / 2,
                 borderWidth: 2,
                 borderColor:
-                  style.color === entry.id ? entry.light : "transparent",
+                  style.color === entry.id ? entry[mode] : "transparent",
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -179,7 +198,7 @@ export function RestyleSheet({
                   width: 28,
                   height: 28,
                   borderRadius: 14,
-                  backgroundColor: entry.light,
+                  backgroundColor: entry[mode],
                 }}
               />
             </Pressable>
@@ -191,14 +210,15 @@ export function RestyleSheet({
           disabled={blocked}
           onPress={() => {
             if (blocked) return;
-            onCommit(
-              target.kind === "edit"
-                ? { ...target.category, style }
-                : { name: trimmed, style, source: "custom" },
-            );
+            if (target.kind === "edit") onCommit({ ...target.category, name: trimmed, style });
+            else if (answer === "spend" || answer === "receive")
+              onCommit({ name: trimmed, style, source: "custom", answer });
+            else if (answer) onAccountSetup({ name: trimmed, style, answer });
             sheet.current?.dismiss();
           }}
         />
+        {target.kind === "edit" && target.category.source === "custom" && onDelete &&
+          <SecondaryButton label="Remove category" tone="danger" onPress={() => { interact(); onDelete(); sheet.current?.dismiss(); }} />}
       </BottomSheetScrollView>
     </BottomSheetModal>
   );

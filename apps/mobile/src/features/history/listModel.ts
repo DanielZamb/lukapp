@@ -7,6 +7,23 @@ export type HistoryCategory = Pick<FunctionReturnType<typeof api.accounting.list
 export type HistoryPlace = Pick<FunctionReturnType<typeof api.accounting.listFinancialAccountProfiles>[number], "id" | "name">;
 export type HistoryListRow = ReturnType<typeof historyListRow>;
 
+export function historyMovements(rows: HistoryRow[], profileId?: string): HistoryRow[] {
+  return rows.flatMap((row) => {
+    if (!row.transfer) return [row];
+    const magnitude = Math.abs(row.amount.minorUnits);
+    return [
+      { place: row.transfer.from, minorUnits: -magnitude },
+      { place: row.transfer.to, minorUnits: magnitude },
+    ].filter(({ place }) => !profileId || place.id === profileId)
+      .map(({ place, minorUnits }) => ({
+        ...row,
+        financialAccountProfileId: place.id,
+        financialAccountProfileIds: [place.id],
+        amount: { ...row.amount, minorUnits },
+      }));
+  });
+}
+
 export function historyDate(date: string, currentDate: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "long", day: "numeric", timeZone: "UTC",

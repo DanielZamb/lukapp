@@ -317,10 +317,9 @@ test("legacy setup stays readable and retryable without the additive preferences
   });
 });
 
-test("more than twelve setup categories fails atomically", async () => {
+test("setup persists more than twelve categories and an identical retry creates no duplicates", async () => {
   const t = await convexAccounting(modules);
-  await expect(
-    t.action(api.accounting.ensurePersonalDefaults, {
+  const args = {
       functionalCurrency: "COP",
       startingMinorUnits: 0,
       timeZone: "America/Bogota",
@@ -329,23 +328,24 @@ test("more than twelve setup categories fails atomically", async () => {
         (
           _,
           index,
-        ): NonNullable<
-          FunctionArgs<
-            typeof api.accounting.ensurePersonalDefaults
-          >["categories"]
-        >[number] => ({
+        ): Extract<NonNullable<FunctionArgs<typeof api.accounting.ensurePersonalDefaults>["categories"]>[number], { kind: "custom" }> => ({
           kind: "custom",
           name: `Category ${index}`,
           answer: "spend",
           style: { emoji: "✨", tone: "primary" },
         }),
       ),
-    }),
-  ).rejects.toMatchObject({ data: { code: "setup_category_limit" } });
-  expect(await t.query(api.accounting.personalDefaults, {})).toBeNull();
-  expect(await t.run((ctx) => ctx.db.query("workspaces").collect())).toEqual(
-    [],
-  );
+    };
+  const first = await t.action(api.accounting.ensurePersonalDefaults, args);
+  expect(await t.action(api.accounting.ensurePersonalDefaults, args)).toEqual(first);
+  expect(await t.query(api.accounting.personalDefaults, {})).toMatchObject({
+    workspace: { id: first.workspace.id },
+  });
+  const categories = await t.query(api.accounting.listUserCategories, { workspaceId: first.workspace.id });
+  expect(categories.map((category) => category.name).sort()).toEqual(args.categories.map((category) => category.name).sort());
+  expect(new Set(categories.map((category) => category.id)).size).toBe(13);
+  expect(await t.run((ctx) => ctx.db.query("workspaces").collect())).toHaveLength(1);
+  expect(await t.run((ctx) => ctx.db.query("journalEntries").collect())).toEqual([]);
 });
 
 test("zero-balance setup rejects activity before its tracking date without creating an opening journal", async () => {

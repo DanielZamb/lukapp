@@ -9,11 +9,6 @@ export function compactAmount(amount: number) {
   return `${sign}${body}${scale === 1_000_000 ? "M" : "K"}`;
 }
 
-export function currencySymbol(currency: string) {
-  return new Intl.NumberFormat("es-CO", { style: "currency", currency, currencyDisplay: "narrowSymbol" })
-    .formatToParts(0).find((part) => part.type === "currency")?.value ?? currency;
-}
-
 export function symbolAmount(minorUnits: number, symbol: string, mode: "compact" | "grouped", currency: string) {
   const absolute = toMajorUnits(Math.abs(minorUnits), currency);
   const body = mode === "compact" ? compactAmount(absolute) : formatAmount(Math.abs(minorUnits), currency, { hideZeroDecimals: true });

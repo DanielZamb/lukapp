@@ -1,15 +1,16 @@
 import type { Theme } from "../../ui/tokens";
 import { useMemo } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
+import { Header, PrimaryButton, SecondaryButton, Screen, useTheme, useUi } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import { remaining, remainingFill } from "../overview/model";
 import type { CategoryLookData } from "./model";
 
-export function CategoryLookScreen({ data, onBack, onSetLimit }: {
+export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
   data: CategoryLookData | null | undefined;
   onBack: () => void; onSetLimit: () => void;
+  onEdit?: () => void;
 }) {
   const ui = useUi();
   const theme = useTheme();
@@ -54,6 +55,7 @@ export function CategoryLookScreen({ data, onBack, onSetLimit }: {
           </View>
           <PrimaryButton label={data.limitMinorUnits === null ? "Keep this under a limit" : "Change this limit"}
             trailingIcon="flag-outline" onPress={onSetLimit} />
+          {onEdit && <SecondaryButton label="Edit category" onPress={onEdit} />}
         </>}
     </Screen>
   );

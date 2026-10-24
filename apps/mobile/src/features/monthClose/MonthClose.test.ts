@@ -62,6 +62,8 @@ vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () =>
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("react-native", () => ({
+  Platform: { OS: "ios" },
+  KeyboardAvoidingView: "keyboard-viewport",
   Text: "text", View: "view", Pressable: "button", ScrollView: "scroll",
   TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },

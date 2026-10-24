@@ -34,6 +34,7 @@ vi.mock("@gorhom/bottom-sheet", async () => {
 });
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   BackHandler: { addEventListener: (_event: string, callback: () => boolean) => {
@@ -289,7 +290,7 @@ test("sheet keeps fractional amounts and the uncategorized money-in fallback", a
   expect(text()).toContain("MONEY IN");
   expect(text()).toContain("+$1.500,25");
   expect(text()).toContain("When\nOctober 17, 2025");
-  expect(text()).toContain("Category\n💸 Income");
+  expect(text()).toContain("Category\nNo category");
   expect(text()).toContain("Place\nNo place");
   expect(text()).toContain("Posted entry · amounts in USD");
 });
@@ -357,11 +358,14 @@ test.each([
   const original: EntryDetail = {
     entry: { ...detail.entry, policy: "account-transfer@1", description: "Transfer", reversedByEntryId: "reversal" },
     row: { ...detail.row, title: "Transfer", userCategories: [], detail: "Daily → Family",
+      transfer: { from: { id: "daily", name: "Daily" }, to: { id: "family", name: "Family" } },
       amount: { currency: "COP", minorUnits: -2500 }, reversed: true },
   };
   const reversal: EntryDetail = {
     entry: { ...receipt, description: "Reversal: Transfer" },
-    row: { ...linked.row, title: "Reversal: Transfer", amount: { currency: "COP", minorUnits: 2500 } },
+    row: { ...linked.row, title: "Reversal: Transfer",
+      transfer: { from: { id: "family", name: "Family" }, to: { id: "daily", name: "Daily" } },
+      amount: { currency: "COP", minorUnits: 2500 } },
   };
   provider.details.set("100", original);
   provider.details.set("reversal", reversal);
@@ -391,7 +395,7 @@ test.each([
     else expect(hero?.props.style).not.toContainEqual({ color: "#6d28d9" });
     expect(provider.detailQuery).toHaveBeenLastCalledWith({
       workspaceId: "ws", journalEntryId: minorUnits === amount ? "100" : "reversal",
-      ...(profileId ? { financialAccountProfileId: profileId } : {}),
+      financialAccountProfileId: profileId ?? "daily",
     });
   }
   expectDirection(amount);
@@ -400,4 +404,25 @@ test.each([
   await act(async () => button("View original entry").props.onPress());
   expectDirection(amount);
   expect(provider.push).not.toHaveBeenCalled();
+});
+
+test("a recovery transfer shows its places as From and To, never as a category", async () => {
+  const transfer: EntryDetail = {
+    entry: { ...detail.entry, policy: "account-transfer@1", description: "Recovery: Repair" },
+    row: { ...detail.row, title: "Recovery: Repair", userCategories: [],
+      primaryUserCategoryId: undefined, detail: "My money → El guardado",
+      transfer: { from: { id: "daily", name: "My money" }, to: { id: "savings", name: "El guardado" } },
+      amount: { currency: "COP", minorUnits: -2500 } },
+  };
+  provider.details.set("100", transfer);
+  provider.all = { results: [transfer.row], status: "Exhausted" };
+  await act(async () => { root = create(createElement(HistoryRoute)); });
+  await act(async () => button("Recovery: Repair, −$25").props.onPress());
+  const sheet = root!.root.findByType(BottomSheetModal);
+  const labels = sheet.findAllByType("text").map((node) => node.children.join(""));
+  expect(labels).toContain("From");
+  expect(labels).toContain("To");
+  expect(labels).not.toContain("My money → El guardado");
+  expect(labels).not.toContain("Category");
+  expect(provider.post).not.toHaveBeenCalled();
 });

@@ -81,11 +81,12 @@ function createStyles(theme: Theme) {
     hint: { color: theme.mutedForeground, fontSize: fontSize.label, lineHeight: 16, fontFamily: font.regular },
     suggestions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     chip: {
+      maxWidth: "100%", paddingVertical: spacing.sm,
       minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.lg,
       borderRadius: radius.full, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary,
     },
     selected: { borderColor: theme.primary, borderWidth: 2 },
-    chipText: { color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
+    chipText: { flexShrink: 1, color: theme.foreground, fontSize: 14, fontFamily: font.semibold },
     spentChip: {
       alignSelf: "flex-start", minHeight: touchTarget, flexDirection: "row", alignItems: "center",
       gap: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.full, borderWidth: 2,

@@ -64,9 +64,11 @@ function createStyles(theme: Theme) {
       alignItems: "center",
       justifyContent: "center",
       gap: spacing.sm,
+      padding: spacing.sm,
     },
     active: { backgroundColor: theme.background },
     label: {
+      flexShrink: 1,
       fontFamily: font.medium,
       fontSize: 13,
       color: theme.mutedForeground,
@@ -74,7 +76,7 @@ function createStyles(theme: Theme) {
     activeLabel: { color: theme.foreground, fontFamily: font.bold },
     badge: {
       minWidth: 20,
-      height: 20,
+      minHeight: 20,
       paddingHorizontal: 5,
       borderRadius: radius.full,
       backgroundColor: theme.primary,

@@ -20,6 +20,8 @@ import {
   openingPosition,
   categoryCreation,
   categoryRestyle,
+  categoryUpdate,
+  categoryDelete,
   cashActivity,
   defaults,
   inWorkspace,
@@ -405,6 +407,24 @@ export const restyleUserCategory = action({
       ...args,
       session,
     });
+  },
+});
+
+export const updateUserCategory = action({
+  args: categoryUpdate,
+  returns: userCategory,
+  handler: async (ctx, args): Promise<Infer<typeof userCategory>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.updateUserCategory, { ...args, session });
+  },
+});
+
+export const deleteUserCategory = action({
+  args: categoryDelete,
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.deleteUserCategory, { ...args, session });
   },
 });
 

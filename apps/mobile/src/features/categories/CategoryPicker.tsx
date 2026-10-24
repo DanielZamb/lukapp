@@ -3,13 +3,14 @@ import { useEffect, useRef } from "react";
 import { BackHandler, Platform } from "react-native";
 import { CategorySheet } from "./CategorySheet";
 import { useCategoryPicker } from "./useCategoryPicker";
+import type { AccountSetupRequest, CategoryNature } from "./model";
 import type { TransactionCategories } from "./transactionSelection";
 
 export type CategoryPickerProps = {
   workspaceId: string;
-  direction?: "in" | "out";
+  onAccountSetup?: (request: AccountSetupRequest) => boolean;
   value: TransactionCategories;
-  onChange: (value: TransactionCategories) => void;
+  onChange: (value: TransactionCategories, nature: CategoryNature | null) => void;
   visible: boolean;
   onClose: () => void;
 };
@@ -17,11 +18,15 @@ export type CategoryPickerProps = {
 export function CategoryPicker({
   visible,
   onClose,
+  onAccountSetup,
   ...selection
 }: CategoryPickerProps) {
   const sheet = useRef<BottomSheetModal>(null);
   const presented = useRef(false);
-  const picker = useCategoryPicker({ kind: "posting", ...selection }, onClose);
+  const accountRequest = useRef<AccountSetupRequest | null>(null);
+  const picker = useCategoryPicker({ kind: "posting", ...selection,
+    onAccountSetup: onAccountSetup ? (request) => { accountRequest.current = request; return true; } : undefined,
+  }, onClose);
   const busy = picker.sheet.busy;
   useEffect(() => {
     if (Platform.OS !== "android" || !visible) return;
@@ -40,5 +45,8 @@ export function CategoryPicker({
   return <CategorySheet {...picker.sheet} sheetRef={sheet} onDismiss={() => {
     presented.current = false;
     picker.sheet.onDismiss();
+    const request = accountRequest.current;
+    accountRequest.current = null;
+    if (request) onAccountSetup?.(request);
   }} />;
 }

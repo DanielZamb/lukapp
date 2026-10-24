@@ -3,9 +3,14 @@ import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { useAction, useQuery } from "convex/react";
 import { useRef, useState } from "react";
 import { api } from "../api";
+import { useNatureSuggestion } from "./useNatureSuggestion";
 import { defaultCategoryStyle, selectionKey } from "./model";
 import { needsPrimary, toggleCategory, type TransactionCategories } from "./transactionSelection";
 import type {
+  AccountSetupRequest,
+  Category,
+  CategoryNature,
+  NatureAnswer,
   CategoryEditor,
   CategoryOption,
   CategoryPreset,
@@ -17,9 +22,9 @@ export type CategoryPickerMode =
   | {
       kind: "posting";
       workspaceId: string;
-      direction?: "in" | "out";
+      onAccountSetup?: (request: AccountSetupRequest) => boolean;
       value: TransactionCategories;
-      onChange: (value: TransactionCategories) => void;
+      onChange: (value: TransactionCategories, nature: CategoryNature | null) => void;
     }
   | {
       kind: "setup";
@@ -40,22 +45,22 @@ export function useCategoryPicker(
     api.accounting.listUserCategories,
     mode.kind === "posting" ? { workspaceId: mode.workspaceId } : "skip",
   );
-  const presets = useQuery(api.accounting.listCategoryPresets, {
-    nature: mode.kind === "posting" && mode.direction === "in" ? "Income" : "Expense",
-  });
+  const presets = useQuery(api.accounting.listCategoryPresets, mode.kind === "setup" ? { nature: "Expense" } : {});
   const create = useAction(api.accounting.createUserCategory);
   const restyle = useAction(api.accounting.restyleUserCategory);
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<CategoryEditor | null>(null);
+  const nature = useNatureSuggestion(editor?.kind === "custom" ? editor.name : "");
+  const answer = editor?.kind === "custom" ? editor.answer ?? nature.suggested : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [limitReached, setLimitReached] = useState(false);
   const [replaceSelection, setReplaceSelection] = useState(false);
   const saving = useRef(false);
-  const options: CategoryOption[] | undefined =
+  const knownOptions: CategoryOption[] | undefined =
     mode.kind === "posting"
       ? categories
-          ?.filter((c) => c.nature === (mode.direction === "in" ? "Income" : "Expense"))
+          ?.filter((c) => c.nature === "Income" || c.nature === "Expense")
           .map((c) => ({
             key: c.id,
             name: c.name,
@@ -71,6 +76,10 @@ export function useCategoryPicker(
           style: s.style,
           selected: true,
         }));
+  const options = mode.kind === "posting" && knownOptions && categories
+    ? [...knownOptions, ...mode.value.ids.filter((id) => !categories.some((category) => category.id === id))
+      .map((id) => ({ key: id, name: "Unavailable category", style: defaultCategoryStyle, selected: true }))]
+    : knownOptions;
   function back() {
     if (!saving.current) {
       setEditor(null);
@@ -78,13 +87,21 @@ export function useCategoryPicker(
       setReplaceSelection(false);
     }
   }
+  function togglePostingCategory(value: TransactionCategories, category: Pick<Category, "id" | "nature">) {
+    const switchingNature = !value.ids.includes(category.id) && categories?.some(
+      (selected) => value.ids.includes(selected.id) && selected.nature !== category.nature,
+    );
+    return toggleCategory(switchingNature ? { ids: [], primaryId: null } : value, category.id);
+  }
   function select(key: string) {
     if (saving.current) return;
     recordInteraction();
     if (mode.kind === "posting") {
-      const next = toggleCategory(mode.value, key);
+      const category = categories?.find((category) => category.id === key);
+      const next = category ? togglePostingCategory(mode.value, category) : toggleCategory(mode.value, key);
       if (!next) { setLimitReached(true); return; }
-      mode.onChange({ ...next, primaryId: needsPrimary(next.ids, categories ?? []) ? next.primaryId : null });
+      mode.onChange({ ...next, primaryId: needsPrimary(next.ids, categories ?? []) ? next.primaryId : null },
+        categories?.find((category) => next.ids.includes(category.id))?.nature ?? null);
       setLimitReached(false);
     } else
       mode.onChange(mode.selections.filter((s) => selectionKey(s) !== key));
@@ -106,11 +123,10 @@ export function useCategoryPicker(
   const existingNames = mode.kind === "posting"
     ? categories?.map((category) => category.name)
     : options?.map((option) => option.name);
-  const categoryCount = mode.kind === "posting" ? categories?.length : mode.selections.length;
   const canConfirm = !!editor && (editor.kind === "restyle" || (
-    existingNames !== undefined && categoryCount !== undefined && categoryCount < 12 &&
+    existingNames !== undefined &&
     (editor.kind === "preset" || (
-      !!editor.name.trim() && !existingNames.some((name) =>
+      !!editor.name.trim() && answer !== null && nature.allowed.includes(answer) && !existingNames.some((name) =>
         searchable(name.trim().replace(/\s+/g, " ")) === searchable(editor.name.trim().replace(/\s+/g, " ")),
       )
     ))
@@ -148,10 +164,20 @@ export function useCategoryPicker(
           style: editor.style,
         };
       else {
+        if (!answer) return;
+        if (answer === "stillMine" || answer === "payDebt") {
+          if (mode.kind !== "posting" || !mode.onAccountSetup?.({ name: editor.name.trim(), answer, style: editor.style })) {
+            setError("Account setup is unavailable here. Keep this editor open and add the place from Places.");
+            return;
+          }
+          setEditor(null);
+          onClose();
+          return;
+        }
         selection = {
           kind: "custom",
           name: editor.name.trim(),
-          answer: mode.kind === "posting" && mode.direction === "in" ? "receive" : "spend",
+          answer,
           style: editor.style,
         };
       }
@@ -165,9 +191,9 @@ export function useCategoryPicker(
             ? { ids: [result.category.id], primaryId: null }
             : mode.value.ids.includes(result.category.id)
               ? mode.value
-              : toggleCategory(mode.value, result.category.id);
+              : togglePostingCategory(mode.value, result.category);
           if (next) {
-            mode.onChange(next);
+            mode.onChange(next, result.category.nature ?? null);
             setLimitReached(false);
           } else setLimitReached(true);
           setEditor(null);
@@ -196,7 +222,7 @@ export function useCategoryPicker(
   function name(name: string) {
     recordInteraction();
     setEditor((current) =>
-      current?.kind === "custom" ? { ...current, name } : current,
+      current?.kind === "custom" ? { ...current, name, answer: null } : current,
     );
   }
   function style(style: CategoryStyle) {
@@ -217,6 +243,14 @@ export function useCategoryPicker(
       options: options?.filter((o) => includes(o.name)),
       presets: presets?.filter((p) => includes(p.name)),
       canConfirm,
+      answer,
+      suggested: nature.suggested,
+      allowed: nature.allowed,
+      onAnswer: (value: NatureAnswer) => {
+        if (saving.current || !nature.allowed.includes(value)) return;
+        recordInteraction();
+        setEditor((current) => current?.kind === "custom" ? { ...current, answer: value } : current);
+      },
       onSearch: (value: string) => {
         recordInteraction();
         setSearch(value);
@@ -230,6 +264,7 @@ export function useCategoryPicker(
         setEditor({
           kind: "custom",
           name: search,
+          answer: null,
           style: defaultCategoryStyle,
         });
         setError("");
@@ -244,7 +279,7 @@ export function useCategoryPicker(
       onCreateEncompassing: () => {
         recordInteraction();
         setReplaceSelection(true);
-        setEditor({ kind: "custom", name: search, style: defaultCategoryStyle });
+        setEditor({ kind: "custom", name: search, answer: null, style: defaultCategoryStyle });
         setError("");
       },
       primaryOptions: mode.kind === "posting" && categories && needsPrimary(mode.value.ids, categories)
@@ -254,13 +289,13 @@ export function useCategoryPicker(
       onPrimary: (id: string) => {
         recordInteraction();
         if (mode.kind === "posting" && mode.value.ids.includes(id))
-          mode.onChange({ ...mode.value, primaryId: id });
+          mode.onChange({ ...mode.value, primaryId: id }, categories?.find((category) => category.id === id)?.nature ?? null);
       },
       onDone: mode.kind === "posting" ? onClose : undefined,
       onNone:
         mode.kind === "posting"
           ? () => {
-              mode.onChange({ ids: [], primaryId: null });
+              mode.onChange({ ids: [], primaryId: null }, null);
               setLimitReached(false);
               onClose();
             }

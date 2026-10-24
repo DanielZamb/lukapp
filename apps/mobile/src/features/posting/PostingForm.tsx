@@ -11,7 +11,9 @@ import {
   View,
 } from "react-native";
 import type { Theme } from "../../ui/tokens";
-import { Header, ListGroup, ListRow, PrimaryButton, Screen, useUi, useTheme } from "../../ui/core";
+import { useReadableLayout } from "../../ui/themeContext";
+import type { ReadableLayout } from "../../ui/layout";
+import { Header, ListGroup, ListRow, PrimaryButton, SecondaryButton, Screen, useUi, useTheme } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export type EntryType = "normal" | "initial" | "transfer";
@@ -48,9 +50,16 @@ export type PostingFormProps = {
   batchCount?: number;
   onBatch?: () => void;
   saveToBatch?: boolean;
+  blockedReason?: string;
+  transferReview?: {
+    required: boolean;
+    canConfirm: boolean;
+    onSwap: () => void;
+    onConfirm: () => void;
+  };
 };
 
-function postingFormStyles(theme: Theme) {
+function postingFormStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
     rowTitle: { fontFamily: font.bold },
     rowValue: { fontFamily: font.semibold },
@@ -62,6 +71,7 @@ function postingFormStyles(theme: Theme) {
       alignItems: "center",
       gap: spacing.md,
       paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
       borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: theme.border,
@@ -111,8 +121,8 @@ function postingFormStyles(theme: Theme) {
       color: theme.foreground,
     },
     amountRow: {
-      flexDirection: "row",
-      alignItems: "center",
+      flexDirection: layout.reflow ? "column" : "row",
+      alignItems: layout.reflow ? "stretch" : "center",
       gap: spacing.sm,
       minHeight: 72,
     },
@@ -122,7 +132,7 @@ function postingFormStyles(theme: Theme) {
       color: theme.mutedForeground,
     },
     amount: {
-      flex: 1,
+      flex: layout.reflow ? 0 : 1,
       fontFamily: font.extrabold,
       fontSize: fontSize.hero,
       minHeight: 64,
@@ -130,6 +140,8 @@ function postingFormStyles(theme: Theme) {
     },
     types: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
     chip: {
+      maxWidth: "100%",
+      paddingVertical: spacing.sm,
       minHeight: touchTarget,
       justifyContent: "center",
       paddingHorizontal: spacing.lg,
@@ -139,6 +151,7 @@ function postingFormStyles(theme: Theme) {
       backgroundColor: theme.secondary,
     },
     chipText: {
+      flexShrink: 1,
       fontFamily: font.semibold,
       fontSize: (fontSize.label + fontSize.body) / 2,
       color: theme.foreground,
@@ -149,7 +162,8 @@ function postingFormStyles(theme: Theme) {
 export function PostingForm(props: PostingFormProps) {
   const ui = useUi();
   const theme = useTheme();
-  const styles = useMemo(() => postingFormStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => postingFormStyles(theme, layout), [theme, layout]);
   return (
     <Screen
       contentStyle={{ gap: spacing.xl }}
@@ -277,7 +291,7 @@ export function PostingForm(props: PostingFormProps) {
       </View>
       <ListGroup>
         <ListRow
-          title="Place"
+          title={props.entryType === "transfer" ? "From" : "Place"}
           titleStyle={styles.rowTitle}
           valueStyle={styles.rowValue}
           value={props.place}
@@ -292,7 +306,7 @@ export function PostingForm(props: PostingFormProps) {
             valueStyle={styles.rowValue}
           />
         )}
-        {props.entryType !== "initial" && (
+        {(props.entryType ?? "normal") === "normal" && (
           <ListRow
             title="Category"
             value={props.category}
@@ -313,6 +327,16 @@ export function PostingForm(props: PostingFormProps) {
           onPress={props.editable ? props.onDate : undefined}
         />
       </ListGroup>
+      {props.entryType === "transfer" && <View style={ui.section}>
+        <Text style={styles.detail}>Move money between places. To repay a loan, choose your existing loan in To. Transfers do not need a category.</Text>
+        {props.transferReview && <>
+          <SecondaryButton label="Swap From and To" disabled={!props.editable || !props.transferReview.canConfirm}
+            onPress={props.transferReview.onSwap} />
+          {props.transferReview.required && <PrimaryButton label="Confirm From and To"
+            disabled={!props.editable || !props.transferReview.canConfirm} onPress={props.transferReview.onConfirm} />}
+        </>}
+      </View>}
+      {!!props.blockedReason && !props.canSubmit && !props.pending && <Text style={styles.detail}>{props.blockedReason}</Text>}
       {props.categoryNeedsPrimary && (
         <Text style={styles.detail}>
           Open Category to choose which category is primary.

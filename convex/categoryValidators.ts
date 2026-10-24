@@ -53,6 +53,7 @@ export const categoryFields = {
     v.object({ kind: v.literal("fallback"), version: v.string() }),
   ),
   style: categoryStyle,
+  deletedAt: v.optional(v.number()),
 };
 export const userCategory = v.object({
   id: v.string(),

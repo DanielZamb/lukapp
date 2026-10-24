@@ -17,6 +17,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
 }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   FlatList: (props: {
@@ -166,6 +167,27 @@ test("search updates the count and capital flow, and figures toggle full precisi
   await act(async () => button("Clear filters").props.onPress());
   expect(text()).toContain("2 of 2");
   expect(text()).toContain("Groceries");
+});
+
+test("all-places history shows both transfer movements and nets to zero", async () => {
+  const transfer = { ...detail.row, id: "move", title: "Savings contribution",
+    userCategories: [], primaryUserCategoryId: undefined,
+    detail: "My money → El guardado", financialAccountProfileId: "cash",
+    financialAccountProfileIds: ["cash", "savings"],
+    transfer: { from: { id: "cash", name: "My money" }, to: { id: "savings", name: "El guardado" } },
+    amount: { currency: "COP", minorUnits: -6000000 },
+  };
+  const onEntry = vi.fn();
+  await act(async () => { root = create(createElement(HistoryScreen, {
+    ...historyProps(), rows: [transfer], total: 1, onEntry,
+    places: [{ id: "cash", name: "My money" }, { id: "savings", name: "El guardado" }],
+  })); });
+  expect(text()).toContain("2 of 2");
+  expect(text()).toContain("−$60.000");
+  expect(text()).toContain("+$60.000");
+  expect(text()).toContain("$0");
+  await act(async () => button("Savings contribution, +$60.000").props.onPress());
+  expect(onEntry).toHaveBeenCalledWith("move", "savings");
 });
 
 function choice(role: string, label: string) {

@@ -11,5 +11,6 @@ export default function CategoryLookRoute() {
   if (defaults === null) return <Redirect href="/" />;
   if (!categoryId) return <Redirect href="/overview" />;
   return <CategoryLook workspaceId={defaults.workspace.id} timeZone={defaults.workspace.timeZone}
-    categoryId={categoryId} onBack={() => router.back()} onSetLimit={() => router.push("/budget")} />;
+    categoryId={categoryId} onBack={() => router.back()} onSetLimit={() => router.push("/budget")}
+    onEdit={() => router.push({ pathname: "./categories", params: { categoryId } })} />;
 }

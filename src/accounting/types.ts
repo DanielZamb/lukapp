@@ -257,6 +257,8 @@ export type AccountingStore = {
     categoryId: string,
     style: UserCategory["style"],
   ): Promise<UserCategory>;
+  updateCategory(categoryId: string, changes: Pick<UserCategory, "name" | "normalizedName" | "style">): Promise<UserCategory>;
+  deleteCategory(categoryId: string, deletedAt: number): Promise<void>;
   insertWorkspace(
     workspace: Omit<StoredWorkspace, "id">,
     ownerUserId: string,

@@ -26,6 +26,7 @@ const transfer = pendingExpenseSchema
 const setup = opening
   .omit({ financialAccountProfileId: true, description: true })
   .extend({
+    amount: opening.shape.amount.extend({ currency: z.string().min(1) }),
     name: z.string().trim().min(1),
     emoji: z.string().trim().min(1).max(32).optional(),
     productKind: z.enum([

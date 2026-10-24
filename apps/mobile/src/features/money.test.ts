@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { formatMoneyInput, formatMoney, narrowCurrencySymbol, parseMoney } from "./money";
+import { formatMoneyInput, formatMoney, currencyDisplayPrefix, parseMoney } from "./money";
 
 test.each([
   ["-012500", "-12.500"],
@@ -73,8 +73,14 @@ test.each([
 ])("rejects malformed or unsafe input %s", (input) => {
   expect(() => parseMoney(input)).toThrow();
 });
-test.each(["COP", "USD"])("narrowCurrencySymbol uses $ for %s", (currency) => {
-  expect(narrowCurrencySymbol(currency)).toBe("$");
+test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["JPY", "¥"], ["AED", "AED "]])("currency %s has display prefix %s without formatToParts", (currency, expected) => {
+  const formatToParts = Object.getOwnPropertyDescriptor(Intl.NumberFormat.prototype, "formatToParts");
+  Reflect.deleteProperty(Intl.NumberFormat.prototype, "formatToParts");
+  try {
+    expect(currencyDisplayPrefix(currency)).toBe(expected);
+  } finally {
+    if (formatToParts) Object.defineProperty(Intl.NumberFormat.prototype, "formatToParts", formatToParts);
+  }
 });
 
 test("formats the ledger balance with its currency and two decimal digits", () => {

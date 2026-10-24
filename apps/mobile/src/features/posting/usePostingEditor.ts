@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
 import { formatMoney, parseMoney } from "../money";
 import { defaultAccountingDate } from "../timeZones";
+import type { AccountSetupRequest, CategoryNature } from "../categories/model";
 import type { TransactionCategories } from "../categories/transactionSelection";
 import type { PendingPosting, PlaceKind } from "./pendingPostingSchema";
 import type {
@@ -10,6 +11,7 @@ import type {
   LocalEntryDraftsPort,
   LocalEntryFacts,
 } from "../localEntryDrafts";
+import { pendingExpenseSchema } from "../pendingExpenseSchema";
 import { LocalEntryDraftGoneError } from "../localEntryDraftErrors";
 import type { EntryType } from "./PostingForm";
 import type {
@@ -55,7 +57,7 @@ type Account = {
 export type PlaceDraft = {
   name: string;
   emoji?: string;
-  productKind: PlaceKind;
+  productKind: PlaceKind | null;
   amount: string;
   date: string;
   target?: Extract<PendingPosting, { kind: "setup" }>["target"];
@@ -77,6 +79,10 @@ export type PostingDraftsSession = {
   intakeRoute?: boolean;
 };
 
+function categoryAmount(value: string, nature: CategoryNature) {
+  return `${nature === "Income" ? "+" : "-"}${value.replace(/^[+\-−]/, "")}`;
+}
+
 export function usePostingEditor(
   account: Account,
   transport: PostingTransport,
@@ -88,16 +94,24 @@ export function usePostingEditor(
   const isolate = session.intakeRoute === true || intake !== null;
   const [amount, setAmount] = useState("-");
   const [description, setDescription] = useState("");
-  const [categories, setCategories] = useState<TransactionCategories>({
-    ids: [],
-    primaryId: null,
+  const [classification, setClassification] = useState<{
+    value: TransactionCategories;
+    nature: CategoryNature | null;
+  }>({
+    value: { ids: [], primaryId: null },
+    nature: null,
   });
+  const categories = classification.value;
+  function setCategories(value: TransactionCategories, nature: CategoryNature | null = null) {
+    setClassification({ value, nature: value.ids.length ? nature : null });
+  }
   const [date, setDate] = useState(() =>
     defaultAccountingDate(account.timeZone),
   );
   const [entryType, setEntryType] = useState<EntryType>("normal");
   const [profileId, setProfileId] = useState(account.financialAccountProfileId);
   const [destinationId, setDestinationId] = useState<string | null>(null);
+  const [transferReviewRequired, setTransferReviewRequired] = useState(false);
   const [setup, setSetup] = useState<PlaceDraft | null>(null);
   const [pending, setPending] = useState<PendingPosting | null>(null);
   const [draftId, setDraftId] = useState<LocalEntryDraftId | undefined>();
@@ -172,19 +186,20 @@ export function usePostingEditor(
           value.payload.userCategoryIds ??
           (value.payload.userCategoryId ? [value.payload.userCategoryId] : []),
         primaryId: value.payload.primaryUserCategoryId ?? null,
-      });
+      }, value.kind === "income" ? "Income" : value.kind === "expense" ? "Expense" : null);
   }
   function hydrateFromFacts(facts: LocalEntryFacts) {
     setAmount(facts.amountText);
     setDescription(facts.description);
     setDate(facts.accountingDate);
     setEntryType(facts.entryType);
+    setTransferReviewRequired(facts.entryType === "transfer");
     setProfileId(facts.profileId);
     setDestinationId(facts.destinationId);
     setCategories({
       ids: [...facts.categories.ids],
       primaryId: facts.categories.primaryId,
-    });
+    }, facts.entryType === "normal" ? (/^[\-−]/.test(facts.amountText.trim()) ? "Expense" : "Income") : null);
     setSetup(null);
   }
   function assertSameWorkspace(draft: LocalEntryDraft) {
@@ -218,6 +233,7 @@ export function usePostingEditor(
     setEntryType("normal");
     setProfileId(account.financialAccountProfileId);
     setDestinationId(null);
+    setTransferReviewRequired(false);
     setDraftId(undefined);
     appliedDraft.current = undefined;
     setPosted(null);
@@ -240,7 +256,7 @@ export function usePostingEditor(
   function snapshotFacts(): LocalEntryFacts {
     return {
       workspaceId: account.workspaceId,
-      currency: account.currency,
+      currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
       entryType: entryType === "transfer" ? "transfer" : "normal",
       amountText: amount,
       accountingDate: date,
@@ -335,11 +351,12 @@ export function usePostingEditor(
     (entryType === "initial" ? minorUnits >= 0 : minorUnits !== 0);
   const validTransfer =
     entryType !== "transfer" ||
-    (!!destinationId && destinationId !== profileId);
+    (!!destinationId && destinationId !== profileId && !transferReviewRequired);
   const direction: "in" | "out" =
     minorUnits !== null && minorUnits > 0 ? "in" : "out";
   function buildEntry(): PendingPosting {
-    if (setup)
+    if (setup) {
+      if (!setup.productKind) throw new Error("Choose Credit card or Loan");
       return {
         kind: "setup",
         ...(setup.target ? { target: setup.target } : {}),
@@ -356,6 +373,7 @@ export function usePostingEditor(
           idempotencyKey: transport.newKey(),
         },
       };
+    }
     const payload = {
       workspaceId: account.workspaceId,
       amount: {
@@ -402,7 +420,7 @@ export function usePostingEditor(
   }
   let setupValid = false;
   try {
-    setupValid = !!setup?.name.trim() && parseMoney(setup.amount, "es-CO", account.currency) >= 0;
+    setupValid = !!setup?.name.trim() && setup.productKind !== null && parseMoney(setup.amount, "es-CO", account.currency) >= 0;
   } catch {
     /* Keep incomplete setup editable. */
   }
@@ -512,6 +530,7 @@ export function usePostingEditor(
           setProfileId(saved.command.target.sourceProfileId);
           setDestinationId(receipt.financialAccountProfileId);
           setEntryType("transfer");
+          setTransferReviewRequired(true);
         } else setProfileId(receipt.financialAccountProfileId);
         setSetupPosted(receipt);
         return;
@@ -541,7 +560,7 @@ export function usePostingEditor(
           setPosted({
             description: description.trim() || "Entry",
             amount: {
-              currency: account.currency,
+              currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
               minorUnits:
                 (direction === "out" ? -1 : 1) * Math.abs(minorUnits ?? 0),
             },
@@ -611,6 +630,10 @@ export function usePostingEditor(
     amount,
     setAmount: (value: string) => {
       if (canEdit()) {
+        if (entryType === "normal" && classification.nature) {
+          setAmount(categoryAmount(value, classification.nature));
+          return;
+        }
         let nextDirection = direction;
         try {
           nextDirection = parseMoney(value, "es-CO", account.currency) > 0 ? "in" : "out";
@@ -634,33 +657,82 @@ export function usePostingEditor(
     setEntryType: (value: EntryType) => {
       if (canEdit() && !intake) {
         setEntryType(value);
+        setTransferReviewRequired(value === "transfer" && destinationId !== null);
         setCategories({ ids: [], primaryId: null });
         setError("");
       }
     },
     profileId,
     setProfileId: (value: string) => {
-      if (canEdit()) setProfileId(value);
+      if (canEdit()) {
+        if (entryType === "transfer" && value !== profileId) setTransferReviewRequired(true);
+        setProfileId(value);
+      }
     },
     destinationId,
     setDestinationId: (value: string) => {
-      if (canEdit()) setDestinationId(value);
+      if (canEdit()) {
+        if (entryType === "transfer" && value !== destinationId) setTransferReviewRequired(true);
+        setDestinationId(value);
+      }
+    },
+    transferReviewRequired,
+    swapTransferPlaces: () => {
+      if (canEdit() && entryType === "transfer" && !setup && destinationId && destinationId !== profileId) {
+        setProfileId(destinationId);
+        setDestinationId(profileId);
+        setTransferReviewRequired(true);
+      }
+    },
+    confirmTransferReview: () => {
+      if (canEdit() && entryType === "transfer" && destinationId && destinationId !== profileId)
+        setTransferReviewRequired(false);
+    },
+    beginTransfer: () => {
+      if (!canEdit() || isolate || keeping || opLock.current) return false;
+      setCategories({ ids: [], primaryId: null });
+      setEntryType("transfer");
+      setDestinationId(null);
+      setTransferReviewRequired(true);
+      setError("");
+      return true;
+    },
+    beginAccountSetup: (request: AccountSetupRequest) => {
+      if (!canEdit() || isolate || keeping || opLock.current) return false;
+      setCategories({ ids: [], primaryId: null });
+      setEntryType("transfer");
+      setDestinationId(null);
+      setTransferReviewRequired(true);
+      setSetupPosted(null);
+      setSetup({
+        name: request.name,
+        emoji: request.style.emoji,
+        productKind: request.answer === "payDebt" ? null : "bankAccount",
+        amount: "0",
+        date: defaultAccountingDate(account.timeZone),
+        target: { kind: "destination", sourceProfileId: profileId },
+      });
+      setError("");
+      return true;
     },
     setup,
     setSetup: (value: PlaceDraft | null) => {
-      if (canEdit() && !intake) { setSetupPosted(null); setSetup(value); }
+      if (canEdit() && !isolate) { setSetupPosted(null); setSetup(value); }
     },
     direction,
     categories,
-    setCategories: (value: TransactionCategories) => {
+    setCategories: (value: TransactionCategories, nature: CategoryNature | null = null) => {
       if (
         canEdit() &&
         value.ids.length <= 3 &&
         new Set(value.ids).size === value.ids.length &&
         value.ids.every(Boolean) &&
         (!value.primaryId || value.ids.includes(value.primaryId))
-      )
-        setCategories({ ids: [...value.ids], primaryId: value.primaryId });
+      ) {
+        setCategories({ ids: [...value.ids], primaryId: value.primaryId }, nature);
+        if (entryType === "normal" && value.ids.length && nature)
+          setAmount(categoryAmount(amount, nature));
+      }
     },
     pending: !!pending,
     loading,

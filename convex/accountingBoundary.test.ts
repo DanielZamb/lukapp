@@ -52,6 +52,8 @@ function writeArgs(workspaceId = "foreign", profileId = "foreign") {
       selection: { kind: "preset", presetId: "groceries", style },
     },
     restyleUserCategory: { workspaceId, categoryId: "foreign", style },
+    updateUserCategory: { workspaceId, categoryId: "foreign", name: "Changed", style },
+    deleteUserCategory: { workspaceId, categoryId: "foreign" },
   };
 }
 function readArgs(workspaceId: string) {

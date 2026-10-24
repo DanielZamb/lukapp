@@ -157,6 +157,27 @@ for (const saved of entries) {
   });
 }
 
+test("a selected category controls the sign during selection and later amount edits", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => editor().setAmount("-1.250,00"));
+  await act(async () => editor().setCategories({ ids: ["salary"], primaryId: null }, "Income"));
+  expect(editor().amount).toBe("+1.250,00");
+  await act(async () => editor().setAmount("-27,50"));
+  expect(editor().amount).toBe("+27,50");
+  expect(editor().categories.ids).toEqual(["salary"]);
+  await act(async () => editor().setCategories({ ids: ["food"], primaryId: null }, "Expense"));
+  expect(editor().amount).toBe("-27,50");
+  await act(async () => editor().setAmount("+2.000,"));
+  expect(editor().amount).toBe("-2.000,");
+  expect(editor().categories.ids).toEqual(["food"]);
+  await act(async () => editor().setCategories({ ids: [], primaryId: null }, null));
+  await act(async () => editor().setAmount("+3"));
+  expect(editor().amount).toBe("+3");
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+});
+
 test("signed Normal uses income/expense and clears categories when direction changes", async () => {
   const api = transport();
   const editor = await open(api);
@@ -216,6 +237,8 @@ test("transfer requires different places, clears prior Normal categories and pre
     editor().setDate("2026-10-17");
     editor().setDescription("Pay card");
   });
+  expect(editor().canSubmit).toBe(false);
+  await act(async () => editor().confirmTransferReview());
   await act(async () => {
     await editor().submit();
   });
@@ -532,4 +555,102 @@ test("Transfer persists its selected categories through retry hydration", async 
     ids: ["travel"],
     primaryId: "travel",
   });
+});
+
+
+test.each(["+125,00", "-125,00"])("account door preserves %s and requires explicit transfer review after place creation", async (amount) => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount(amount);
+    editor().setDescription("Savings move");
+    editor().setDate("2026-10-17");
+    editor().setCategories({ ids: ["food"], primaryId: null });
+  });
+  await act(async () => { editor().beginAccountSetup({ name: "Rainy day", answer: "stillMine", style: { emoji: "🏦", tone: "primary" } }); });
+  expect(editor().entryType).toBe("transfer");
+  expect(editor().categories.ids).toEqual([]);
+  expect(editor().setup?.amount).toBe("0");
+  await act(async () => editor().submit());
+  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(editor().amount).toBe(amount);
+  expect(editor().description).toBe("Savings move");
+  expect(editor().date).toBe("2026-10-17");
+  expect(editor().profileId).toBe("bank");
+  expect(editor().destinationId).toBe("new-card");
+  expect(editor().canSubmit).toBe(false);
+  await act(async () => editor().submit());
+  expect(api.post).toHaveBeenCalledTimes(1);
+  await act(async () => editor().confirmTransferReview());
+  expect(editor().canSubmit).toBe(true);
+  await act(async () => editor().submit());
+  expect(api.post.mock.calls[1][0]).toMatchObject({ kind: "transfer", payload: {
+    sourceFinancialAccountProfileId: "bank", destinationFinancialAccountProfileId: "new-card", amount: { minorUnits: 12500 },
+  } });
+});
+
+test("debt requires a chosen product; cancellation leaves an incomplete transfer", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => editor().setAmount("-25"));
+  await act(async () => { editor().beginAccountSetup({ name: "Debt", answer: "payDebt", style: { emoji: "💳", tone: "primary" } }); });
+  expect(editor().setup?.productKind).toBeNull();
+  expect(editor().canSubmit).toBe(false);
+  await act(async () => editor().submit());
+  expect(api.save).not.toHaveBeenCalled();
+  await act(async () => editor().setSetup(null));
+  expect(editor().entryType).toBe("transfer");
+  expect(editor().destinationId).toBeNull();
+  expect(editor().amount).toBe("-25");
+  expect(editor().canSubmit).toBe(false);
+});
+
+
+test("explicit swap reverses an incoming transfer and still requires separate confirmation", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("+125,00");
+    editor().setDescription("From Savings");
+    editor().setDate("2026-10-17");
+  });
+  await act(async () => { editor().beginAccountSetup({ name: "Savings", answer: "stillMine", style: { emoji: "S", tone: "primary" } }); });
+  await act(async () => editor().submit());
+  await act(async () => editor().swapTransferPlaces());
+  expect(editor()).toMatchObject({ amount: "+125,00", description: "From Savings", date: "2026-10-17", profileId: "new-card", destinationId: "bank", transferReviewRequired: true, canSubmit: false });
+  await act(async () => editor().submit());
+  expect(api.post).toHaveBeenCalledOnce();
+  await act(async () => editor().confirmTransferReview());
+  await act(async () => editor().submit());
+  expect(api.post.mock.calls[1][0]).toEqual({ kind: "transfer", payload: {
+    workspaceId: "workspace", sourceFinancialAccountProfileId: "new-card", destinationFinancialAccountProfileId: "bank",
+    amount: { currency: "COP", minorUnits: 12500 }, accountingDate: "2026-10-17", description: "From Savings", idempotencyKey: "entry-2",
+  } });
+});
+
+test.each(["source", "destination"])("changing the confirmed transfer %s requires confirmation of the new pair", async (changed) => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount("-10");
+    editor().setEntryType("transfer");
+    editor().setDescription("Transfer");
+  });
+  await act(async () => editor().setDestinationId("savings"));
+  await act(async () => editor().confirmTransferReview());
+  expect(editor().canSubmit).toBe(true);
+  await act(async () => changed === "source" ? editor().setProfileId("wallet") : editor().setDestinationId("loan"));
+  expect(editor().transferReviewRequired).toBe(true);
+  expect(editor().canSubmit).toBe(false);
+  await act(async () => editor().submit());
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+  await act(async () => editor().confirmTransferReview());
+  await act(async () => editor().submit());
+  expect(api.post).toHaveBeenCalledOnce();
+  expect(api.post.mock.calls[0][0]).toMatchObject({ kind: "transfer", payload: {
+    sourceFinancialAccountProfileId: changed === "source" ? "wallet" : "bank",
+    destinationFinancialAccountProfileId: changed === "destination" ? "loan" : "savings",
+    amount: { minorUnits: 1000 },
+  } });
 });

@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-20T22:25:10.290218+00:00",
+  "sourceSnapshot": "f2e206227ec7fc08bb29ef70e5ff5f49209b91f1",
+  "tree": "27a8f15c5047d3dd96636949a52dd79e01720378",
+  "rootHead": "57d58acd5f802aefb3959a378e238e130da267c1",
+  "files": 437,
+  "ref": "refs/verification/category-ui-crud/2026-10-20",
+  "rootHeadAndIndexNotMoved": true,
+  "sharedProductWritten": false,
+  "previousSourceSnapshot": "f5315c37a03154b8f6066adce8bc6d92458592f7",
+  "sha256": {
+    "apps/mobile/app/post.tsx": "354890337ac6e25b7ff232ad9d7e88092e5d53ffca57e636629a9b0222a40646",
+    "apps/mobile/src/features/categories/CategoryPicker.tsx": "7675f6b42e85d2b4f0225886bf56c11fbc25defacb3cb19744481dae73e034d7",
+    "apps/mobile/src/features/categories/CategorySheet.tsx": "9d651a05c31444d859461f21a98c999d7eb4659c466619160c4af43a2b8ef26c",
+    "apps/mobile/src/features/categories/NatureQuestion.tsx": "93a98c322e120281158e344967526c5ee227af63f1707f26d32d6bdb1cc27c60",
+    "apps/mobile/src/features/categories/useCategoryPicker.ts": "48b0618f867a1db6b4f689dd1398ffecab9a55dea3bd5180a5e9ad0b2bf121af",
+    "apps/mobile/src/features/categories/useNatureSuggestion.ts": "6c15c16b736c20f5074f9b0b8b940d19b103e6d2ab2ed11dcb9c637e5527778a",
+    "apps/mobile/src/features/categories/model.ts": "cba51916fdc6d5885a14f3d9a4e6a3503d64ea9bb1dcaa35adc5bae26dea9674",
+    "apps/mobile/src/features/posting/AccountSetupForm.tsx": "518803acb517694639cd55280af01dc4da44a1d62686f7d6bc7f7cb0302b3ecc",
+    "apps/mobile/src/features/posting/usePostingEditor.ts": "6f96fd3f930ff95238b74621795b1dcba52032a7a3f1d0c28416e19b8bac9da3",
+    "apps/mobile/src/features/posting/usePostingTransport.ts": "266ae851cf72d822750c4f4f630830a2a0e60b61eeb463ccfe0817f8a0050561",
+    "apps/mobile/src/features/posting/pendingPostingSchema.ts": "6803f3a100fdb6c5be3bac960e4bb4fdcb7d82193f8d05d12746d98685dd1ba0",
+    "apps/mobile/src/ui/PickerSheet.tsx": "7a5769f7643956afe7090a50243f52a8795b81a5f4b5e804735c6107a70052bf",
+    "apps/mobile/src/features/categories/transactionSelection.ts": "f999d062ae1f50d6c62d5986b4a8ad268538eae107d47dd1dac23dc242fc585d",
+    "apps/mobile/src/features/money.ts": "4b70dd0bdbfddb2d7ad8ff2192b806a7f76fd140e0d50bd1bc37461f8c3652ae",
+    "apps/mobile/src/features/timeZones.ts": "5e4e013a921b0122961e145494bea9209e4c90a3d76edf027a02feea942be87c",
+    "apps/mobile/src/features/pendingExpenseSchema.ts": "5fd898ec679a670baf35d47d1a8208ec5741c6488497d6a192781c970b872efd",
+    "apps/mobile/src/ui/core.tsx": "dcae169524791e2935cd7754389d4c9865836b297a39fb1fe01f6bd60c94be1a",
+    "apps/mobile/src/ui/themeContext.tsx": "d5d62113600ff371bb72c4fc330797f2cf2c043e54979bbc75a1807c11f0a491",
+    "apps/mobile/src/ui/styles.ts": "4bad5e51b49aad00a1dd0f13e1e0b2ff58f946a505ade31c31c81cd8c1d679e1",
+    "apps/mobile/src/ui/tokens.ts": "21d0c9107ed64306f8fb1951cce90a3f262412302534a48aa23e0f777053cd4b",
+    "apps/mobile/src/features/categories/CategoryManager.tsx": "f9aac0102840ff564dcce1d605f4972823618a0074af0e3dad2e0e6ea65651af",
+    "apps/mobile/app/categories.tsx": "8331bc0d1bc1d40b2e9ba8644cfa50d3abd3d278edfa584a6d991d6c13ddf7d6",
+    "apps/mobile/src/features/setup/DeferredAccountSetup.tsx": "9c99cb50ab0743db197cede5440ea9fd506f5255ef93080ad21d398daac8aca1",
+    "apps/mobile/src/features/categories/appearance.ts": "a43469eb0e54eaacafd1d24227d28a4e3a458e0ef839720e2f96d9b08c51ed61",
+    "apps/mobile/src/ui/layout.ts": "b1d4dafa93e619cc153133c299e3ebdae33ef4e8512e36496681f2a2adac38e8"
+  },
+  "expectedFinding": "CATEGORY-UI-001",
+  "graphScopes": [
+    "posting account door",
+    "category management metadata CRUD and retained selection"
+  ]
+}

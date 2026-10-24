@@ -23,6 +23,8 @@ vi.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ categoryId: provider.categoryId }),
 }));
 vi.mock("react-native", () => ({
+  Platform: { OS: "ios" },
+  KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "spinner", Pressable: "button", Text: "text", View: "view", ScrollView: "scroll",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
 }));

@@ -2,6 +2,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+vi.mock("../ui/Brand", () => ({ BrandLogo: "brand-logo", BrandMark: "brand-mark", BrandSplash: "brand-splash" }));
 import Index from "../../app/index";
 import type { BudgetJar } from "./budget/model";
 
@@ -67,6 +68,8 @@ vi.mock("@gorhom/bottom-sheet", async () => {
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("react-native", () => ({
+  Platform: { OS: "ios" },
+  KeyboardAvoidingView: "keyboard-viewport",
   Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
 }));

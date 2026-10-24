@@ -15,6 +15,7 @@ import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({
   SafeAreaView: "safe-area",
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "sheet",
@@ -22,6 +23,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetTextInput: "input",
 }));
 vi.mock("react-native", () => ({
+  KeyboardAvoidingView: "keyboard-viewport",
   Text: "text",
   View: "view",
   Pressable: "button",
@@ -161,7 +163,7 @@ test("one entry follows the prototype order with an open description and one Pos
 
 test.each([
   ["normal", ["Place", "Category", "Date occurred"]],
-  ["transfer", ["Place", "To", "Category", "Date occurred"]],
+  ["transfer", ["From", "To", "Date occurred"]],
   ["initial", ["Place", "Date occurred"]],
 ] as const)("%s shows only its relevant rows", async (entryType, expected) => {
   await act(async () => {
@@ -354,4 +356,22 @@ test("a Candidate locks Transfer and Initial balance", async () => {
   ).toBe(true);
   expect(chips?.every((chip) => chip.props.onPress === undefined)).toBe(true);
   expect(onEntryType).not.toHaveBeenCalled();
+});
+
+test("transfer confirmation and its blocking reason are inside the posting screen", async () => {
+  const onConfirm = vi.fn();
+  const onSwap = vi.fn();
+  await act(async () => { root = create(createElement(PostingForm, {
+    ...emptyPostingForm, ...handlers, entryType: "transfer",
+    blockedReason: "Confirm From and To before posting.",
+    transferReview: { required: true, canConfirm: true, onConfirm, onSwap },
+  })); });
+  expect(text()).toContain("Transfers do not need a category.");
+  expect(text()).toContain("Confirm From and To before posting.");
+  expect(root!.root.findAllByType(ListRow).map((node) => node.props.title)).not.toContain("Category");
+  const scroll = root!.root.findByType(ScrollView);
+  await act(async () => scroll.findByProps({ accessibilityLabel: "Confirm From and To", accessibilityRole: "button" }).props.onPress());
+  await act(async () => scroll.findByProps({ accessibilityLabel: "Swap From and To", accessibilityRole: "button" }).props.onPress());
+  expect(onConfirm).toHaveBeenCalledOnce();
+  expect(onSwap).toHaveBeenCalledOnce();
 });

@@ -1,4 +1,6 @@
 import type { Theme } from "../../ui/tokens";
+import { useReadableLayout } from "../../ui/themeContext";
+import type { ReadableLayout } from "../../ui/layout";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
   BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput,
@@ -34,7 +36,8 @@ function toggle(ids: string[], id: string) {
 
 export function HistoryFilters(props: Props) {
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   const { query, sort, places, categories, today } = props;
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const place = places.find((place) => place.id === query.profileIds[0]);
@@ -63,7 +66,8 @@ function FilterChip({ label, active, icon, onPress }: {
   label: string; active: boolean; icon?: keyof typeof Ionicons.glyphMap; onPress: () => void;
 }) {
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active }}
     onPress={onPress} style={[styles.chip, active && styles.selected]}>
     {icon && <Ionicons name={icon} size={16} color={theme.foreground} />}
@@ -82,7 +86,8 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
 }) {
   const ui = useUi();
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const layout = useReadableLayout();
+  const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   const modal = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState("");
@@ -181,22 +186,23 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
   </BottomSheetModal>;
 }
 
-function createStyles(theme: Theme) {
+function createStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
     chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     chip: {
+      maxWidth: "100%",
       minHeight: touchTarget, flexDirection: "row", alignItems: "center", gap: spacing.sm,
       paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.full,
       borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary,
     },
     selected: { borderWidth: 2, borderColor: theme.primary },
-    chipText: { color: theme.foreground, fontFamily: font.semibold, fontSize: 14 },
+    chipText: { flexShrink: 1, color: theme.foreground, fontFamily: font.semibold, fontSize: 14 },
     emoji: { fontSize: 17 },
     surface: {
       backgroundColor: theme.background, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl,
       borderWidth: 1, borderColor: theme.border,
     },
-    body: { paddingHorizontal: spacing.xxl, paddingTop: spacing.sm, gap: spacing.md },
+    body: { paddingHorizontal: layout.pagePadding, paddingTop: spacing.sm, gap: spacing.md },
     searchHeader: { backgroundColor: theme.background, gap: spacing.md, paddingBottom: spacing.md },
     input: {
       minHeight: 56, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1,
@@ -207,8 +213,8 @@ function createStyles(theme: Theme) {
     sortState: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
     sortText: { color: theme.primary, fontFamily: font.bold, fontSize: 14 },
     fieldLabel: { color: theme.foreground, fontFamily: font.semibold, fontSize: 14 },
-    dateFields: { flexDirection: "row", gap: spacing.sm },
-    dateButton: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+    dateFields: { flexDirection: layout.reflow ? "column" : "row", gap: spacing.sm },
+    dateButton: { flex: layout.reflow ? 0 : 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
     pressed: { opacity: 0.72 },
   });
 }

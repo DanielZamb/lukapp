@@ -2,23 +2,26 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
-import { useTheme, useUi } from "../../ui/core";
+import { useTheme, useThemeMode, useUi } from "../../ui/core";
 import { useSetupStyles } from "../setup/styles";
 import type { SetupCategory } from "../setup/model";
-import type { CategoryStyle } from "./model";
+import type { AccountSetupRequest, CategoryStyle } from "./model";
 import { categoryColor, starterCategories } from "./looks";
 import { RestyleSheet, type RestyleTarget } from "./SetupRestyleSheet";
 
 export function SetupCategories({
   selections,
   onChange,
+  onAccountSetup,
   disabled,
 }: {
   selections: SetupCategory[];
   onChange: (selections: SetupCategory[]) => void;
   disabled: boolean;
+  onAccountSetup: (request: AccountSetupRequest) => void;
 }) {
   const theme = useTheme();
+  const mode = useThemeMode();
   const ui = useUi();
   const styles = useSetupStyles();
   const recordInteraction = useLocalEntryInteraction();
@@ -37,7 +40,7 @@ export function SetupCategories({
     else
       onChange(
         selections.map((item) =>
-          item.name === category.name ? category : item,
+          target?.kind === "edit" && item.name === target.category.name ? category : item,
         ),
       );
   }
@@ -45,7 +48,7 @@ export function SetupCategories({
     <View style={styles.board}>
       <View style={styles.row}>
         <Text style={styles.label}>Your categories</Text>
-        <Text style={ui.muted}>{selections.length} of 12</Text>
+        <Text style={ui.muted}>{selections.length} selected</Text>
       </View>
       <View style={styles.wrap}>
         {names.map((original) => {
@@ -56,13 +59,13 @@ export function SetupCategories({
           const selected = selections.some(
             (item) => item.name === category.name,
           );
-          const color = categoryColor(category.style) ?? theme.primary;
+          const color = categoryColor(category.style, mode) ?? theme.primary;
           return (
             <Pressable
               key={category.name}
               accessibilityRole="checkbox"
               accessibilityLabel={category.name}
-              accessibilityHint="Long press to restyle"
+              accessibilityHint="Long press to edit"
               accessibilityState={{ checked: selected, disabled }}
               disabled={disabled}
               onPress={() => {
@@ -71,8 +74,7 @@ export function SetupCategories({
                   onChange(
                     selections.filter((item) => item.name !== category.name),
                   );
-                else if (selections.length < 12)
-                  onChange([...selections, category]);
+                else onChange([...selections, category]);
               }}
               onLongPress={() => {
                 recordInteraction();
@@ -106,14 +108,18 @@ export function SetupCategories({
           <Text style={styles.chipText}>Your own</Text>
         </Pressable>
       </View>
-      <Text style={ui.muted}>Tap to pick. Hold one to restyle it.</Text>
+      <Text style={ui.muted}>Tap to pick. Hold one to edit it.</Text>
       {target && (
         <RestyleSheet
           target={target}
           names={names.map(({ name }) => name)}
-          full={selections.length >= 12}
           onCommit={commit}
+          onAccountSetup={onAccountSetup}
           onClose={() => setTarget(null)}
+          onDelete={target.kind === "edit" && target.category.source === "custom" ? () => {
+            recordInteraction();
+            onChange(selections.filter((item) => item.name !== target.category.name));
+          } : undefined}
         />
       )}
     </View>

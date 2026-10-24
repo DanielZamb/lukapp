@@ -14,7 +14,7 @@ export async function restyleUserCategory(
 ) {
   await requireWorkspace(store, input.workspaceId, input.actor);
   const category = await store.getCategory(input.categoryId);
-  if (!category || category.workspaceId !== input.workspaceId)
+  if (!category || category.workspaceId !== input.workspaceId || category.deletedAt !== undefined)
     throw new AccountingError("category_not_found");
   return store.restyleCategory(category.id, input.style);
 }
