@@ -6,14 +6,18 @@ import { ConnectingHandover, ConnectingProvider, ConnectingScreen, connectingCop
 
 const native = vi.hoisted(() => ({
   reduced: false,
+  platform: "android",
   changeMotion: (_value: boolean) => {},
   frames: new Array<(frame: { timestamp: number }) => void>(),
   frameActive: vi.fn(), timing: vi.fn((value: number, _config: unknown) => value),
+  announce: vi.fn(),
 }));
 vi.mock("react-native", () => ({
   View: "view", Text: "text", ScrollView: "scroll", Pressable: "button", StatusBar: "status-bar",
   StyleSheet: { create: (styles: unknown) => styles },
+  Platform: { get OS() { return native.platform; } },
   AccessibilityInfo: {
+    announceForAccessibilityWithOptions: native.announce,
     isReduceMotionEnabled: async () => native.reduced,
     addEventListener: (_event: string, callback: (value: boolean) => void) => {
       native.changeMotion = callback;
@@ -43,6 +47,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(0);
   native.reduced = false;
+  native.platform = "android";
   native.frames.length = 0;
   vi.clearAllMocks();
 });
@@ -153,6 +158,17 @@ test("Reduce Motion disables the clock and still updates status, including a set
   expect(native.frameActive).toHaveBeenLastCalledWith(true);
   await act(async () => native.changeMotion(true));
   expect(native.frameActive).toHaveBeenLastCalledWith(false);
+});
+test("VoiceOver queues each phase and slow status once across retry remounts", async () => {
+  native.platform = "ios";
+  await mount();
+  await act(async () => root.update(tree("device")));
+  await tick(8000);
+  await act(async () => root.update(tree("device", "retry")));
+  await tick(0);
+  expect(native.announce.mock.calls).toEqual([
+    ["Unlocking Lukapp…", { queue: true }], ["Checking this phone…", { queue: true }], ["Still connecting…", { queue: true }],
+  ]);
 });
 function handover(ready: boolean) {
   return createElement(ConnectingProvider, { children: createElement(ConnectingHandover, {

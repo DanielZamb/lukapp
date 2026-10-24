@@ -2,7 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState,
   type PropsWithChildren,
 } from "react";
-import { AccessibilityInfo, Pressable, ScrollView, StatusBar, StyleSheet, View } from "react-native";
+import { AccessibilityInfo, Platform, Pressable, ScrollView, StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { useAnimatedStyle, useFrameCallback, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import type { EntryState } from "../local-auth/entryController";
@@ -38,12 +38,13 @@ export function connectingPhase(snapshot: GateSnapshot): ConnectingPhase | null 
   }
 }
 
-type Timeline = { phase: ConnectingPhase | null; since: number; announced: Set<ConnectingPhase>; owners: Set<symbol> };
+type Timeline = { phase: ConnectingPhase | null; since: number; announced: Set<ConnectingPhase>; slowAnnounced: boolean; owners: Set<symbol> };
 type Connection = {
   clock: SharedValue<number>;
   reducedMotion: boolean;
   enter: (phase: ConnectingPhase, owner: symbol) => number;
   leave: (owner: symbol) => void;
+  announceSlow: (phase: ConnectingPhase) => void;
 };
 const ConnectionContext = createContext<Connection | null>(null);
 export const connectingSlowMs = 8000;
@@ -53,7 +54,7 @@ export function ConnectingProvider({ children }: PropsWithChildren) {
   const [reducedMotion, setReducedMotion] = useState(true);
   const [active, setActive] = useState(false);
   const [announcement, setAnnouncement] = useState("");
-  const timeline = useRef<Timeline>({ phase: null, since: 0, announced: new Set(), owners: new Set() });
+  const timeline = useRef<Timeline>({ phase: null, since: 0, announced: new Set(), slowAnnounced: false, owners: new Set() });
   const release = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frame = useFrameCallback(({ timestamp }) => { clock.value = timestamp; }, false);
   useEffect(() => {
@@ -75,10 +76,11 @@ export function ConnectingProvider({ children }: PropsWithChildren) {
     if (release.current) clearTimeout(release.current);
     const current = timeline.current;
     current.owners.add(owner);
-    if (current.phase !== phase) { current.phase = phase; current.since = Date.now(); }
+    if (current.phase !== phase) { current.phase = phase; current.since = Date.now(); current.slowAnnounced = false; }
     if (!current.announced.has(phase)) {
       current.announced.add(phase);
       setAnnouncement(connectingCopy[phase]);
+      if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(connectingCopy[phase], { queue: true });
     }
     setActive(true);
     return current.since;
@@ -87,12 +89,19 @@ export function ConnectingProvider({ children }: PropsWithChildren) {
     timeline.current.owners.delete(owner);
     if (timeline.current.owners.size) return;
     release.current = setTimeout(() => {
-      timeline.current = { phase: null, since: 0, announced: new Set(), owners: new Set() };
+      timeline.current = { phase: null, since: 0, announced: new Set(), slowAnnounced: false, owners: new Set() };
       setAnnouncement("");
       setActive(false);
     }, 0);
   }, []);
-  const value = useMemo(() => ({ clock, reducedMotion, enter, leave }), [clock, reducedMotion, enter, leave]);
+  const announceSlow = useCallback((phase: ConnectingPhase) => {
+    const current = timeline.current;
+    if (current.phase !== phase || current.slowAnnounced) return;
+    current.slowAnnounced = true;
+    setAnnouncement("Still connecting…");
+    if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions("Still connecting…", { queue: true });
+  }, []);
+  const value = useMemo(() => ({ clock, reducedMotion, enter, leave, announceSlow }), [clock, reducedMotion, enter, leave, announceSlow]);
   return <ConnectionContext.Provider value={value}>
     {children}
     <Text variant="body" accessibilityLiveRegion="polite" style={styles.hidden}>{announcement}</Text>
@@ -111,7 +120,7 @@ type ConnectingScreenProps =
   | ({ phase: "device" } & DeviceActions);
 
 export function ConnectingScreen(props: ConnectingScreenProps) {
-  const { clock, reducedMotion, enter, leave } = useConnection();
+  const { clock, reducedMotion, enter, leave, announceSlow } = useConnection();
   const mode = useThemeMode();
   const large = useTier() === "xxxl";
   const [slow, setSlow] = useState(false);
@@ -120,9 +129,10 @@ export function ConnectingScreen(props: ConnectingScreenProps) {
     const since = enter(props.phase, owner);
     const remaining = Math.max(0, connectingSlowMs - (Date.now() - since));
     setSlow(remaining === 0);
-    const timer = setTimeout(() => setSlow(true), remaining);
+    if (remaining === 0) announceSlow(props.phase);
+    const timer = setTimeout(() => { setSlow(true); announceSlow(props.phase); }, remaining);
     return () => { clearTimeout(timer); leave(owner); };
-  }, [props.phase, enter, leave]);
+  }, [props.phase, enter, leave, announceSlow]);
   const markStyle = useAnimatedStyle(() => {
     const breath = (1 - Math.cos(2 * Math.PI * (clock.value % 2800) / 2800)) / 2;
     return { transform: [{ scale: reducedMotion ? 1 : 1 + 0.035 * breath }] };
@@ -158,7 +168,7 @@ export function ConnectingScreen(props: ConnectingScreenProps) {
           </View>)}
         </View>
         <View style={styles.status}>
-          {slow && <Text variant="body" accessibilityLiveRegion="polite" style={styles.soft}>Still connecting…</Text>}
+          {slow && <Text variant="body" style={styles.soft}>Still connecting…</Text>}
           {slow && props.phase === "device" && <View style={styles.actions}>
             <Pressable accessibilityRole="button" accessibilityLabel="Check again" onPress={props.onCheckAgain}
               style={[styles.button, { minHeight: large ? 60 : 52 }]}>
