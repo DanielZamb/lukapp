@@ -6,6 +6,7 @@ export const themes = {
   light: {
     background: "#ffffff", // --background oklch(1 0 0)
     foreground: "#0a0a0a", // --foreground oklch(0.145 0 0)
+    primaryText: "#6d28d9",
     primary: "#6d28d9", // --primary oklch(0.491 0.27 292.581)
     primaryForeground: "#f5f3ff", // --primary-foreground oklch(0.969 0.016 293.756)
     secondary: "#f4f4f5", // --secondary oklch(0.967 0.001 286.375)
@@ -23,6 +24,7 @@ export const themes = {
     // Spec --primary oklch(0.432 0.232 292.759) = #5b21b6 sits at ~2.9:1
     // against the near-black background; the dark --sidebar-primary violet
     // reads clearly as a surface, so tiles use it instead.
+    primaryText: "#c4b5fd",
     primary: "#7c3aed", // 5.20:1 under primaryForeground, user-approved 2026-10-17
     primaryForeground: "#f5f3ff", // --primary-foreground oklch(0.969 0.016 293.756)
     secondary: "#27272a", // --secondary oklch(0.274 0.006 286.033)
@@ -79,3 +81,21 @@ export const fontSize = {
 
 // Fitts's Law guardrail for finger-operated controls.
 export const touchTarget = 48;
+
+export const xxxlFontScale = 1.3;
+
+const defaultControls = {
+  touchTarget,
+  primaryButton: 56,
+  secondaryButton: 48,
+  input: 56,
+  choiceRow: 76,
+};
+
+export const xxxl = {
+  controls: { touchTarget: 56, primaryButton: 68, secondaryButton: 60, input: 64, choiceRow: 72 },
+  spacing: { insideRow: 10, rowVertical: 24, rowHorizontal: 20, betweenGroups: 40, betweenSections: 48, pagePadding: 16 },
+  radius: { control: 18, rowIcon: 14, card: 24, sheet: 28 },
+};
+
+export const controls = { default: defaultControls, reflow: defaultControls, xxxl: xxxl.controls };

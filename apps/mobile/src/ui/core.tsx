@@ -7,6 +7,8 @@ import type {
 } from "react";
 import {
   Children,
+  createContext,
+  useContext,
   cloneElement,
   isValidElement,
 } from "react";
@@ -24,8 +26,12 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { font, fontSize, radius, spacing, themes, touchTarget } from "./tokens";
+import { font, fontSize, radius, spacing, themes, xxxl } from "./tokens";
 import { useThemeContext } from "./themeContext";
+import { Text as StyledText } from "./Text";
+import { textSpecs, textStyle, textTone, type TextTone } from "./typography";
+export { Text, type TextProps } from "./Text";
+export { type TextVariant, type TextTone } from "./typography";
 
 export {
   ThemeProvider,
@@ -34,6 +40,9 @@ export {
   useThemeMode,
   useSetThemeMode,
   useUi,
+  useTier,
+  useControls,
+  useReadableLayout,
 } from "./themeContext";
 
 /** Static light theme for tests that assert palette values without a provider. */
@@ -80,7 +89,7 @@ export function Header({
   onUser?: () => void;
   titleStyle?: StyleProp<TextStyle>;
 }) {
-  const { theme, ui, styles } = useCore();
+  const { theme, ui, styles, layout } = useCore();
   return (
     <View style={styles.header}>
       {onBack && (
@@ -96,7 +105,7 @@ export function Header({
       <View style={{ flex: 1, minWidth: 0 }}>
         {eyebrow && <Text style={ui.label}>{eyebrow}</Text>}
         {title ? (
-          <Text accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
+          <Text maxFontSizeMultiplier={textSpecs[layout.tier].screen.maxScale} accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
             {title}
           </Text>
         ) : null}
@@ -131,7 +140,7 @@ export function PrimaryButton({
   accessibilityLabel,
   trailingIcon = "arrow-forward",
 }: ButtonProps & { pending?: boolean }) {
-  const { theme, styles } = useCore();
+  const { theme, styles, layout } = useCore();
   const inactive = disabled || pending;
   return (
     <Pressable
@@ -146,7 +155,7 @@ export function PrimaryButton({
         pressed && !inactive && styles.buttonPressed,
       ]}
     >
-      <Text style={styles.primaryButtonLabel}>{label}</Text>
+      <Text maxFontSizeMultiplier={textSpecs[layout.tier].action.maxScale} style={styles.primaryButtonLabel}>{label}</Text>
       {pending ? (
         <ActivityIndicator color={theme.primaryForeground} />
       ) : (
@@ -163,7 +172,7 @@ export function SecondaryButton({
   accessibilityLabel,
   tone,
 }: ButtonProps & { tone?: "danger" }) {
-  const { styles } = useCore();
+  const { styles, layout } = useCore();
   return (
     <Pressable
       accessibilityRole="button"
@@ -178,7 +187,7 @@ export function SecondaryButton({
         pressed && !disabled && styles.buttonPressed,
       ]}
     >
-      <Text style={[styles.secondaryButtonLabel, tone === "danger" && styles.secondaryButtonLabelDanger]}>{label}</Text>
+      <Text maxFontSizeMultiplier={textSpecs[layout.tier].action.maxScale} style={[styles.secondaryButtonLabel, tone === "danger" && styles.secondaryButtonLabelDanger]}>{label}</Text>
     </Pressable>
   );
 }
@@ -229,73 +238,102 @@ export function Field({
   );
 }
 
-export function ListGroup({ children }: PropsWithChildren) {
-  const { styles } = useCore();
+export function Group({ children, title }: PropsWithChildren<{ title?: string }>) {
+  const { styles, layout } = useCore();
   const items = Children.toArray(children).filter(Boolean);
-  return (
-    <View style={styles.group}>
-      {items.map((child, index) =>
-        isValidElement(child)
-          ? cloneElement(child, { isLast: index === items.length - 1 } as ListRowProps)
-          : child,
-      )}
-    </View>
-  );
+  const renderItems = (rows: ReactNode[]) => rows.map((child, index) =>
+    isValidElement<{ isLast?: boolean }>(child)
+      ? cloneElement(child, { isLast: index === rows.length - 1 })
+      : child);
+  if (layout.tier !== "xxxl") {
+    const card = <View style={styles.group}>{renderItems(items)}</View>;
+    return title ? <View style={{ gap: spacing.md }}><StyledText variant="section" accessibilityRole="header">{title}</StyledText>{card}</View> : card;
+  }
+  const chunks: ReactNode[][] = [];
+  for (let index = 0; index < items.length; index += 2) chunks.push(items.slice(index, index + 2));
+  return <View style={{ gap: xxxl.spacing.betweenGroups }}>
+    {title ? <StyledText variant="section" accessibilityRole="header">{title}</StyledText> : null}
+    {chunks.map((chunk, index) => <View key={index} style={styles.group}>{renderItems(chunk)}</View>)}
+  </View>;
 }
 
-type ListRowProps = {
+export const ListGroup = Group;
+
+export type ValueRowProps = {
   title: string;
+  meta?: string;
   detail?: string;
   value?: string;
   onPress?: () => void;
   icon?: ComponentProps<typeof Ionicons>["name"];
+  leading?: ReactNode;
   titleStyle?: StyleProp<TextStyle>;
   valueStyle?: StyleProp<TextStyle>;
-  tone?: "positive" | "warning";
+  tone?: TextTone;
+  accessibilityLabel?: string;
   isLast?: boolean;
 };
 
-export function ListRow({
-  title,
-  detail,
-  value,
-  onPress,
-  icon,
-  titleStyle,
-  valueStyle,
-  tone,
-  isLast,
-}: ListRowProps) {
-  const { theme, styles } = useCore();
+export function ValueRow({
+  title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast,
+}: ValueRowProps) {
+  const { theme, styles, layout } = useCore();
+  const large = layout.tier === "xxxl";
+  const description = meta ?? detail;
+  const color = tone ? textTone(theme, tone) : theme.foreground;
   const content = (
     <>
-      {icon && (
+      {leading ?? (icon && (
         <View style={styles.rowIcon}>
-          <Ionicons name={icon} size={20} color={tone ? theme[tone] : theme.foreground} />
+          <Ionicons name={icon} size={20} color={color} />
         </View>
-      )}
+      ))}
       <View style={styles.rowContent}>
         <View style={styles.rowCopy}>
-          <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
-          {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+          {large ? <StyledText variant="rowTitle" style={titleStyle}>{title}</StyledText> : <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>}
+          {description ? large ? <StyledText variant="meta" tone="muted">{description}</StyledText> : <Text style={styles.rowDetail}>{description}</Text> : null}
         </View>
-        {value ? (
-          <Text style={[styles.rowValue, tone && { color: theme[tone] }, valueStyle]}>{value}</Text>
+        {value ? large ? (
+          <StyledText variant="money" tone={tone} style={valueStyle}>{value}</StyledText>
+        ) : (
+          <Text style={[styles.rowValue, tone && { color }, valueStyle]}>{value}</Text>
         ) : null}
       </View>
-      {onPress ? (
-        <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
-      ) : null}
+      {onPress ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}
     </>
   );
   const rowStyle = [styles.row, isLast && styles.rowLast];
   return onPress ? (
-    <Pressable accessibilityRole="button" onPress={onPress} style={rowStyle}>
-      {content}
-    </Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} style={rowStyle}>{content}</Pressable>
   ) : (
-    <View style={rowStyle}>{content}</View>
+    <View accessibilityLabel={accessibilityLabel} style={rowStyle}>{content}</View>
   );
+}
+
+export const ListRow = ValueRow;
+
+const ColumnsContext = createContext(false);
+
+export function Columns({ children }: PropsWithChildren) {
+  const { layout } = useCore();
+  return <ColumnsContext.Provider value={true}>
+    <View style={{ flexDirection: layout.tier === "default" ? "row" : "column", flexWrap: "wrap", justifyContent: "space-between", gap: spacing.lg }}>
+      {Children.toArray(children).map((child, index) => <View key={index} style={{ width: layout.tier === "default" ? "47%" : "100%" }}>{child}</View>)}
+    </View>
+  </ColumnsContext.Provider>;
+}
+
+export function MoneyHero({ currency, amount, negative = false, style }: {
+  currency: string; amount: string; negative?: boolean; style?: StyleProp<TextStyle>;
+}) {
+  const { ui, layout } = useCore();
+  const signedAmount = `${negative ? "−" : ""}${amount}`;
+  const label = `${negative ? "−" : ""}${currency} ${amount}`;
+  if (layout.tier !== "xxxl") return <Text accessibilityLabel={label} style={[ui.hero, style]} adjustsFontSizeToFit numberOfLines={1}>{label}</Text>;
+  return <View accessible accessibilityLabel={label} style={{ gap: xxxl.spacing.insideRow }}>
+    <StyledText accessible={false} variant="label">{currency}</StyledText>
+    <StyledText accessible={false} variant="hero" style={style}>{signedAmount}</StyledText>
+  </View>;
 }
 
 export function Choice({
@@ -311,7 +349,7 @@ export function Choice({
   onPress: () => void;
   disabled?: boolean;
 }) {
-  const { theme, styles } = useCore();
+  const { theme, styles, layout } = useCore();
   return (
     <Pressable
       accessibilityRole="radio"
@@ -326,7 +364,7 @@ export function Choice({
       ]}
     >
       <View style={styles.rowCopy}>
-        <Text style={styles.rowTitle}>{label}</Text>
+        <Text maxFontSizeMultiplier={textSpecs[layout.tier].rowTitle.maxScale} style={styles.rowTitle}>{label}</Text>
         {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
       </View>
       <Ionicons
@@ -379,7 +417,8 @@ export function ActionTile({
   icon: ComponentProps<typeof Ionicons>["name"];
   count?: number;
 }) {
-  const { theme, styles } = useCore();
+  const { theme, styles, layout } = useCore();
+  const inColumns = useContext(ColumnsContext);
   const color = primary ? theme.primaryForeground : theme.foreground;
   const content = (
     <>
@@ -396,6 +435,7 @@ export function ActionTile({
               fontSize: fontSize.label,
               fontFamily: font.bold,
               color: primary ? theme.primary : theme.background,
+              ...(layout.tier === "xxxl" && textStyle(layout.tier, "label")),
             }}
           >
             {count}
@@ -403,7 +443,7 @@ export function ActionTile({
         </View>
       ) : null}
       <View style={{ flex: 1 }} />
-      <Text style={{ fontSize: fontSize.title, fontFamily: font.bold, color }}>
+      <Text maxFontSizeMultiplier={textSpecs[layout.tier].section.maxScale} style={{ fontSize: fontSize.title, fontFamily: font.bold, color, ...(layout.tier === "xxxl" && textStyle(layout.tier, "section")) }}>
         {title}
       </Text>
       <Text
@@ -411,6 +451,7 @@ export function ActionTile({
           fontSize: fontSize.body,
           fontFamily: font.regular,
           color: primary ? theme.primaryForeground : theme.mutedForeground,
+          ...(layout.tier === "xxxl" && textStyle(layout.tier, "body")),
         }}
       >
         {detail}
@@ -419,6 +460,7 @@ export function ActionTile({
   );
   const style = [
     styles.tile,
+    ...(inColumns ? [{ width: "100%" } satisfies ViewStyle] : []),
     { backgroundColor: primary ? theme.primary : theme.secondary },
   ];
   const accessibilityLabel =

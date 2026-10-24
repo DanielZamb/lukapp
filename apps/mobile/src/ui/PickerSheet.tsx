@@ -1,18 +1,18 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { Theme } from "./tokens";
 import {
   BottomSheetBackdrop,
-  BottomSheetModal,
   BottomSheetScrollView,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
-import type { ReactNode, RefObject } from "react";
+import type { ReactNode, ComponentProps } from "react";
+import { SheetModal, type NativeSheetProps, type SheetRef } from "./SheetModal";
 import { StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "./core";
 import { useReadableLayout } from "./themeContext";
 import type { ReadableLayout } from "./layout";
-import { font, radius, spacing, touchTarget } from "./tokens";
+import { font, radius, spacing, touchTarget, xxxl } from "./tokens";
 
 export function PickerSheet({
   sheetRef,
@@ -20,20 +20,30 @@ export function PickerSheet({
   stickyHeader = true,
   onDismiss,
   children,
+  presentOnMount, nativeModalProps, scrollProps, androidBack = false,
 }: {
-  sheetRef: RefObject<BottomSheetModal | null>;
+  sheetRef?: SheetRef;
+  presentOnMount?: boolean;
+  nativeModalProps?: NativeSheetProps;
+  scrollProps?: Omit<ComponentProps<typeof BottomSheetScrollView>, "children">;
+  androidBack?: boolean;
   busy?: boolean;
   stickyHeader?: boolean;
   onDismiss?: () => void;
   children: ReactNode;
 }) {
+  const ownRef = useRef<import("@gorhom/bottom-sheet").BottomSheetModal>(null);
+  const modal = sheetRef ?? ownRef;
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const layout = useReadableLayout();
   const pickerSheetStyles = usePickerSheetStyles();
   return (
-    <BottomSheetModal
-      ref={sheetRef}
+    <SheetModal
+      sheetRef={modal}
+      presentOnMount={presentOnMount ?? !sheetRef}
+      busy={busy}
+      androidBack={androidBack}
       topInset={insets.top}
       snapPoints={[layout.reflow ? "92%" : "70%"]}
       enableDynamicSizing={false}
@@ -45,17 +55,19 @@ export function PickerSheet({
       keyboardBlurBehavior="restore"
       backdropComponent={(props: BottomSheetBackdropProps) => <BottomSheetBackdrop {...props}
         appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={busy ? "none" : "close"} />}
-      onDismiss={onDismiss}
+      {...nativeModalProps}
+      onDismiss={() => { nativeModalProps?.onDismiss?.(); onDismiss?.(); }}
     >
       <BottomSheetScrollView
         accessibilityViewIsModal
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[pickerSheetStyles.content, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.xxl }]}
         stickyHeaderIndices={stickyHeader ? [0] : undefined}
+        {...scrollProps}
       >
         {children}
       </BottomSheetScrollView>
-    </BottomSheetModal>
+    </SheetModal>
   );
 }
 
@@ -63,8 +75,8 @@ function createPickerSheetStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
     surface: {
       backgroundColor: theme.background,
-      borderTopLeftRadius: radius.xl,
-      borderTopRightRadius: radius.xl,
+      borderTopLeftRadius: layout.tier === "xxxl" ? xxxl.radius.sheet : radius.xl,
+      borderTopRightRadius: layout.tier === "xxxl" ? xxxl.radius.sheet : radius.xl,
       borderWidth: 1,
       borderColor: theme.border,
     },

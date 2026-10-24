@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useWindowDimensions } from "react-native";
 import { defaultLayout, readableLayout, type ReadableLayout } from "./layout";
-import { themes, type Theme, type ThemeMode } from "./tokens";
+import { controls, themes, type Theme, type ThemeMode } from "./tokens";
 import { createCoreStyles, createUiStyles, type CoreStyles, type UiStyles } from "./styles";
 import { readThemeMode, writeThemeMode } from "./themeModeStorage";
 
@@ -86,4 +86,12 @@ export function useThemeMode() {
 
 export function useSetThemeMode() {
   return useThemeContext().setMode;
+}
+
+export function useTier() {
+  return useReadableLayout().tier;
+}
+
+export function useControls() {
+  return controls[useTier()];
 }

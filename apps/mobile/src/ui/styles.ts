@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native";
+import { textStyle } from "./typography";
 import { defaultLayout, type ReadableLayout } from "./layout";
 import {
   font,
@@ -6,56 +7,66 @@ import {
   radius,
   spacing,
   touchTarget,
+  xxxl,
   type Theme,
 } from "./tokens";
 
 export function createUiStyles(theme: Theme, layout: ReadableLayout = defaultLayout) {
+  const large = layout.tier === "xxxl";
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.background },
-    content: { padding: layout.pagePadding, gap: spacing.xxl, flexGrow: 1 },
+    content: { padding: layout.pagePadding, gap: large ? xxxl.spacing.betweenSections : spacing.xxl, flexGrow: 1 },
     title: {
       fontFamily: font.bold,
       fontSize: fontSize.title,
       color: theme.foreground,
+      ...(large && { ...textStyle(layout.tier, "section") }),
     },
     body: {
       fontFamily: font.regular,
       fontSize: fontSize.body,
       color: theme.foreground,
+      ...(large && { ...textStyle(layout.tier, "body") }),
     },
     muted: {
       fontFamily: font.regular,
       fontSize: fontSize.body,
       color: theme.mutedForeground,
+      ...(large && { ...textStyle(layout.tier, "body") }),
     },
     label: {
       fontFamily: font.bold,
       fontSize: fontSize.label,
       color: theme.mutedForeground,
       letterSpacing: 1,
+      ...(large && { ...textStyle(layout.tier, "label") }),
     },
     hero: {
       fontFamily: font.extrabold,
       fontSize: fontSize.hero,
       lineHeight: 52,
       color: theme.foreground,
+      ...(large && { ...textStyle(layout.tier, "hero") }),
     },
     input: {
       minHeight: touchTarget,
       fontFamily: font.regular,
       fontSize: fontSize.body,
       color: theme.foreground,
+      ...(large && { ...textStyle(layout.tier, "body") }),
     },
     error: {
       fontFamily: font.regular,
       fontSize: fontSize.label,
       color: theme.danger,
+      ...(large && { ...textStyle(layout.tier, "label") }),
     },
     section: { gap: spacing.md },
     sectionHeading: {
       fontFamily: font.bold,
       fontSize: fontSize.title,
       color: theme.foreground,
+      ...(large && { ...textStyle(layout.tier, "section") }),
     },
   });
 }
@@ -63,6 +74,7 @@ export function createUiStyles(theme: Theme, layout: ReadableLayout = defaultLay
 export type UiStyles = ReturnType<typeof createUiStyles>;
 
 export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultLayout) {
+  const large = layout.tier === "xxxl";
   return StyleSheet.create({
     icon: {
       width: touchTarget,
@@ -72,6 +84,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       backgroundColor: theme.secondary,
       alignItems: "center",
       justifyContent: "center",
+      ...(large && { width: layout.touchTarget, height: layout.touchTarget }),
     },
     header: { flexDirection: "row", alignItems: "center", gap: spacing.md },
     headerTitle: {
@@ -80,6 +93,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       lineHeight: 37,
       letterSpacing: -0.7,
       color: theme.foreground,
+      ...(large && { ...textStyle(layout.tier, "screen") }),
     },
     buttonDisabled: { opacity: 0.45 },
     buttonPressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
@@ -93,12 +107,14 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       justifyContent: "space-between",
       gap: spacing.md,
       backgroundColor: theme.primary,
+      ...(large && { minHeight: xxxl.controls.primaryButton, borderRadius: xxxl.radius.control }),
     },
     primaryButtonLabel: {
       flexShrink: 1,
       fontFamily: font.bold,
       fontSize: fontSize.action,
       color: theme.primaryForeground,
+      ...(large && { ...textStyle(layout.tier, "action") }),
     },
     secondaryButton: {
       minHeight: touchTarget,
@@ -110,6 +126,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       backgroundColor: theme.background,
       borderWidth: 1,
       borderColor: theme.border,
+      ...(large && { minHeight: xxxl.controls.secondaryButton, borderRadius: xxxl.radius.control }),
     },
     secondaryButtonLabel: {
       flexShrink: 1,
@@ -117,14 +134,18 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       fontSize: fontSize.body,
       color: theme.foreground,
       textAlign: "center",
+      ...(large && { ...textStyle(layout.tier, "action") }),
     },
     secondaryButtonDanger: { borderColor: theme.danger },
     secondaryButtonLabelDanger: { color: theme.danger },
-    field: { gap: spacing.sm },
+    field: { gap: spacing.sm,
+      ...(large && { gap: xxxl.spacing.insideRow }),
+    },
     fieldLabel: {
       fontFamily: font.semibold,
       fontSize: 14,
       color: theme.foreground,
+      ...(large && { ...textStyle(layout.tier, "label") }),
     },
     fieldInput: {
       minHeight: 56,
@@ -138,12 +159,15 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       paddingVertical: spacing.md,
       fontFamily: font.regular,
       fontSize: fontSize.body,
+      ...(large && { ...textStyle(layout.tier, "body") }),
+      ...(large && { minHeight: xxxl.controls.input, borderRadius: xxxl.radius.control }),
     },
     fieldInputInvalid: { borderColor: theme.danger },
     fieldHelper: {
       fontFamily: font.regular,
       fontSize: fontSize.label,
       color: theme.mutedForeground,
+      ...(large && { ...textStyle(layout.tier, "meta") }),
     },
     group: {
       backgroundColor: theme.secondary,
@@ -151,6 +175,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       overflow: "hidden",
       borderWidth: 1,
       borderColor: theme.border,
+      ...(large && { borderRadius: xxxl.radius.card }),
     },
     row: {
       minHeight: 70,
@@ -161,6 +186,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       paddingHorizontal: spacing.lg,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.border,
+      ...(large && { minHeight: layout.touchTarget, gap: xxxl.spacing.insideRow, paddingVertical: xxxl.spacing.rowVertical, paddingHorizontal: xxxl.spacing.rowHorizontal }),
     },
     rowLast: { borderBottomWidth: 0 },
     rowIcon: {
@@ -172,26 +198,32 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       backgroundColor: theme.background,
       borderWidth: 1,
       borderColor: theme.border,
+      ...(large && { borderRadius: xxxl.radius.rowIcon }),
     },
-    rowCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
+    rowCopy: { flex: 1, gap: spacing.xs, minWidth: 0,
+      ...(large && { gap: xxxl.spacing.insideRow }),
+    },
     rowContent: {
       flex: 1,
       minWidth: 0,
       flexDirection: layout.reflow ? "column" : "row",
       alignItems: layout.reflow ? "stretch" : "center",
       gap: layout.reflow ? spacing.sm : spacing.md,
+      ...(large && { gap: xxxl.spacing.insideRow }),
     },
     rowTitle: {
       fontFamily: font.semibold,
       fontSize: fontSize.body,
       lineHeight: 22,
       color: theme.foreground,
+      ...(large && { ...textStyle(layout.tier, "rowTitle") }),
     },
     rowDetail: {
       fontFamily: font.regular,
       fontSize: 14,
       lineHeight: 20,
       color: theme.mutedForeground,
+      ...(large && { ...textStyle(layout.tier, "meta") }),
     },
     rowValue: {
       maxWidth: layout.reflow ? "100%" : "42%",
@@ -200,6 +232,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       lineHeight: 20,
       color: theme.foreground,
       textAlign: layout.reflow ? "left" : "right",
+      ...(large && { ...textStyle(layout.tier, "money") }),
     },
     choice: {
       minHeight: 76,
@@ -211,6 +244,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       padding: spacing.lg,
       gap: spacing.md,
       backgroundColor: theme.secondary,
+      ...(large && { minHeight: xxxl.controls.choiceRow, borderRadius: xxxl.radius.control, gap: xxxl.spacing.insideRow }),
     },
     choiceSelected: { borderWidth: 2, borderColor: theme.primary },
     tile: {
@@ -220,6 +254,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       padding: spacing.lg,
       borderRadius: radius.xl,
       gap: spacing.sm,
+      ...(large && { borderRadius: xxxl.radius.card, gap: xxxl.spacing.insideRow, minHeight: xxxl.controls.touchTarget, paddingVertical: xxxl.spacing.rowVertical, paddingHorizontal: xxxl.spacing.rowHorizontal }),
     },
     tileBadge: {
       position: "absolute",
@@ -257,6 +292,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       lineHeight: 36,
       color: theme.foreground,
       textAlign: "center",
+      ...(large && { ...textStyle(layout.tier, "detailName") }),
     },
     confirmDetail: {
       fontFamily: font.regular,
