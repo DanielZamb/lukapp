@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
 import { formatMoney, parseMoney } from "../money";
 import { defaultAccountingDate } from "../timeZones";
-import type { AccountSetupRequest } from "../categories/model";
+import type { AccountSetupRequest, CategoryNature } from "../categories/model";
 import type { TransactionCategories } from "../categories/transactionSelection";
 import type { PendingPosting, PlaceKind } from "./pendingPostingSchema";
 import type {
@@ -79,6 +79,10 @@ export type PostingDraftsSession = {
   intakeRoute?: boolean;
 };
 
+function categoryAmount(value: string, nature: CategoryNature) {
+  return `${nature === "Income" ? "+" : "-"}${value.replace(/^[+\-−]/, "")}`;
+}
+
 export function usePostingEditor(
   account: Account,
   transport: PostingTransport,
@@ -90,10 +94,17 @@ export function usePostingEditor(
   const isolate = session.intakeRoute === true || intake !== null;
   const [amount, setAmount] = useState("-");
   const [description, setDescription] = useState("");
-  const [categories, setCategories] = useState<TransactionCategories>({
-    ids: [],
-    primaryId: null,
+  const [classification, setClassification] = useState<{
+    value: TransactionCategories;
+    nature: CategoryNature | null;
+  }>({
+    value: { ids: [], primaryId: null },
+    nature: null,
   });
+  const categories = classification.value;
+  function setCategories(value: TransactionCategories, nature: CategoryNature | null = null) {
+    setClassification({ value, nature: value.ids.length ? nature : null });
+  }
   const [date, setDate] = useState(() =>
     defaultAccountingDate(account.timeZone),
   );
@@ -175,7 +186,7 @@ export function usePostingEditor(
           value.payload.userCategoryIds ??
           (value.payload.userCategoryId ? [value.payload.userCategoryId] : []),
         primaryId: value.payload.primaryUserCategoryId ?? null,
-      });
+      }, value.kind === "income" ? "Income" : value.kind === "expense" ? "Expense" : null);
   }
   function hydrateFromFacts(facts: LocalEntryFacts) {
     setAmount(facts.amountText);
@@ -188,7 +199,7 @@ export function usePostingEditor(
     setCategories({
       ids: [...facts.categories.ids],
       primaryId: facts.categories.primaryId,
-    });
+    }, facts.entryType === "normal" ? (/^[\-−]/.test(facts.amountText.trim()) ? "Expense" : "Income") : null);
     setSetup(null);
   }
   function assertSameWorkspace(draft: LocalEntryDraft) {
@@ -619,6 +630,10 @@ export function usePostingEditor(
     amount,
     setAmount: (value: string) => {
       if (canEdit()) {
+        if (entryType === "normal" && classification.nature) {
+          setAmount(categoryAmount(value, classification.nature));
+          return;
+        }
         let nextDirection = direction;
         try {
           nextDirection = parseMoney(value, "es-CO", account.currency) > 0 ? "in" : "out";
@@ -706,15 +721,18 @@ export function usePostingEditor(
     },
     direction,
     categories,
-    setCategories: (value: TransactionCategories) => {
+    setCategories: (value: TransactionCategories, nature: CategoryNature | null = null) => {
       if (
         canEdit() &&
         value.ids.length <= 3 &&
         new Set(value.ids).size === value.ids.length &&
         value.ids.every(Boolean) &&
         (!value.primaryId || value.ids.includes(value.primaryId))
-      )
-        setCategories({ ids: [...value.ids], primaryId: value.primaryId });
+      ) {
+        setCategories({ ids: [...value.ids], primaryId: value.primaryId }, nature);
+        if (entryType === "normal" && value.ids.length && nature)
+          setAmount(categoryAmount(amount, nature));
+      }
     },
     pending: !!pending,
     loading,

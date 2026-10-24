@@ -390,8 +390,6 @@ function PostMoney({
       />
       {categoryEnabled && (
         <CategoryPicker
-          key={editor.direction}
-          direction={editor.direction}
           workspaceId={workspace.id}
           value={editor.categories}
           onChange={editor.setCategories}

@@ -18,6 +18,7 @@ import { RecoveryMoveScreen } from "./RecoveryScreens";
 import RecoveryRoute from "../../../app/recovery";
 
 vi.mock("react-native", () => ({
+  Platform: { OS: "ios" },
   KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput",
   View: "View", ScrollView: "ScrollView",
