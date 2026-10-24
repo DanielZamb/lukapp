@@ -29,6 +29,7 @@ vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }))
 vi.mock("./Brand", () => ({ ConnectingMark: "mark", ConnectingSignature: "signature" }));
 vi.mock("./core", () => ({ Text: "text", useThemeMode: () => "light", useTier: () => "default" }));
 vi.mock("react-native-reanimated", () => ({
+  ReduceMotion: { Never: "never" },
   default: { View: "animated-view" },
   useSharedValue: (initial: number) => useRef({ value: initial }).current,
   useAnimatedStyle: (style: () => unknown) => style(),
@@ -182,7 +183,7 @@ test("first balances fade only the cover, retain Home, and do not replay on late
   await act(async () => root.update(handover(true)));
   expect(root.root.findByType("div")).toBe(home);
   expect(home.props.balance).toBe("COP 100");
-  expect(native.timing).toHaveBeenCalledExactlyOnceWith(0, { duration: 320 });
+  expect(native.timing).toHaveBeenCalledExactlyOnceWith(0, { duration: 320, reduceMotion: "never" });
   await tick(319);
   expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(1);
   await tick(1);
@@ -190,10 +191,25 @@ test("first balances fade only the cover, retain Home, and do not replay on late
   await act(async () => root.update(handover(false)));
   expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(0);
 });
-test("Reduce Motion reveals resolved balances without an animation", async () => {
+test("cached first balances retain the outgoing cover and fade once", async () => {
+  await mount(handover(true));
+  expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(1);
+  expect(native.timing).toHaveBeenCalledExactlyOnceWith(0, { duration: 320, reduceMotion: "never" });
+  await tick(319);
+  expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(1);
+  await tick(1);
+  expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(0);
+  await act(async () => root.update(handover(true)));
+  expect(native.timing).toHaveBeenCalledOnce();
+});
+test("Reduce Motion reveals resolved balances with only a short opacity fade", async () => {
   native.reduced = true;
   await mount(handover(false));
   await act(async () => root.update(handover(true)));
+  expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(1);
+  expect(native.timing).toHaveBeenCalledExactlyOnceWith(0, { duration: 150, reduceMotion: "never" });
+  await tick(149);
+  expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(1);
+  await tick(1);
   expect(root.root.findAllByType(ConnectingScreen)).toHaveLength(0);
-  expect(native.timing).not.toHaveBeenCalled();
 });

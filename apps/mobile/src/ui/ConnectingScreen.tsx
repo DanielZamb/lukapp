@@ -4,7 +4,7 @@ import {
 } from "react";
 import { AccessibilityInfo, Platform, Pressable, ScrollView, StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Animated, { useAnimatedStyle, useFrameCallback, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
+import Animated, { ReduceMotion, useAnimatedStyle, useFrameCallback, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import type { EntryState } from "../local-auth/entryController";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../features/api";
@@ -42,6 +42,7 @@ type Timeline = { phase: ConnectingPhase | null; since: number; announced: Set<C
 type Connection = {
   clock: SharedValue<number>;
   reducedMotion: boolean;
+  motionReady: boolean;
   enter: (phase: ConnectingPhase, owner: symbol) => number;
   leave: (owner: symbol) => void;
   announceSlow: (phase: ConnectingPhase) => void;
@@ -51,7 +52,9 @@ export const connectingSlowMs = 8000;
 
 export function ConnectingProvider({ children }: PropsWithChildren) {
   const clock = useSharedValue(0);
-  const [reducedMotion, setReducedMotion] = useState(true);
+  const [motionPreference, setReducedMotion] = useState<boolean | null>(null);
+  const reducedMotion = motionPreference !== false;
+  const motionReady = motionPreference !== null;
   const [active, setActive] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const timeline = useRef<Timeline>({ phase: null, since: 0, announced: new Set(), slowAnnounced: false, owners: new Set() });
@@ -101,7 +104,7 @@ export function ConnectingProvider({ children }: PropsWithChildren) {
     setAnnouncement("Still connecting…");
     if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions("Still connecting…", { queue: true });
   }, []);
-  const value = useMemo(() => ({ clock, reducedMotion, enter, leave, announceSlow }), [clock, reducedMotion, enter, leave, announceSlow]);
+  const value = useMemo(() => ({ clock, reducedMotion, motionReady, enter, leave, announceSlow }), [clock, reducedMotion, motionReady, enter, leave, announceSlow]);
   return <ConnectionContext.Provider value={value}>
     {children}
     <Text variant="body" accessibilityLiveRegion="polite" style={styles.hidden}>{announcement}</Text>
@@ -186,16 +189,16 @@ export function ConnectingScreen(props: ConnectingScreenProps) {
 }
 
 export function ConnectingHandover({ ready, children }: PropsWithChildren<{ ready: boolean }>) {
-  const { reducedMotion } = useConnection();
-  const [cover, setCover] = useState(!ready);
+  const { reducedMotion, motionReady } = useConnection();
+  const [cover, setCover] = useState(true);
   const opacity = useSharedValue(1);
   useEffect(() => {
-    if (!ready || !cover) return;
-    if (reducedMotion) { setCover(false); return; }
-    opacity.value = withTiming(0, { duration: 320 });
-    const timer = setTimeout(() => setCover(false), 320);
+    if (!ready || !cover || !motionReady) return;
+    const duration = reducedMotion ? 150 : 320;
+    opacity.value = withTiming(0, { duration, reduceMotion: ReduceMotion.Never });
+    const timer = setTimeout(() => setCover(false), duration);
     return () => clearTimeout(timer);
-  }, [ready, cover, reducedMotion, opacity]);
+  }, [ready, cover, reducedMotion, motionReady, opacity]);
   const fade = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return <View style={styles.fill}>
     <View style={styles.fill} pointerEvents={cover ? "none" : "auto"}
