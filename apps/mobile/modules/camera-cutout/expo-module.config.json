@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["CameraCutoutModule"] },
+  "android": { "modules": ["expo.modules.cameracutout.CameraCutoutModule"] }
+}
