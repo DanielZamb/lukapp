@@ -1,0 +1,72 @@
+{
+  "name": "overview-list-1.3",
+  "scale": "1.3",
+  "frames": [
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/00.png",
+      "offsetPx": 0,
+      "stepPx": 0,
+      "anchorSupport": 0
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/01.png",
+      "offsetPx": 1433,
+      "stepPx": 1433,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/02.png",
+      "offsetPx": 2875,
+      "stepPx": 1442,
+      "anchorSupport": 7
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/03.png",
+      "offsetPx": 4321,
+      "stepPx": 1446,
+      "anchorSupport": 8
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/04.png",
+      "offsetPx": 5740,
+      "stepPx": 1419,
+      "anchorSupport": 7
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/05.png",
+      "offsetPx": 7186,
+      "stepPx": 1446,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/06.png",
+      "offsetPx": 8618,
+      "stepPx": 1432,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/07.png",
+      "offsetPx": 9946,
+      "stepPx": 1328,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.3/08.png",
+      "offsetPx": 9946,
+      "stepPx": 0,
+      "anchorSupport": 0
+    }
+  ],
+  "driverFallbacks": 0,
+  "extentStatus": "bottom-detected",
+  "scrollViewportPx": {
+    "top": 99,
+    "height": 2079,
+    "width": 1080
+  },
+  "totalExtentPx": 12025,
+  "screenHeights": 5.78,
+  "reachableExtentPx": 12025,
+  "reachableScreenHeights": 5.78,
+  "obscuredTailPx": 0
+}

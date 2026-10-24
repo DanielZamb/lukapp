@@ -1,0 +1,77 @@
+{
+  "name": "overview-list-1.5",
+  "scale": "1.5",
+  "frames": [
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/00.png",
+      "offsetPx": 0,
+      "stepPx": 0,
+      "anchorSupport": 0
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/01.png",
+      "offsetPx": 1440,
+      "stepPx": 1440,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/02.png",
+      "offsetPx": 2872,
+      "stepPx": 1432,
+      "anchorSupport": 7
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/03.png",
+      "offsetPx": 4304,
+      "stepPx": 1432,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/04.png",
+      "offsetPx": 5735,
+      "stepPx": 1431,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/05.png",
+      "offsetPx": 7165,
+      "stepPx": 1430,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/06.png",
+      "offsetPx": 8610,
+      "stepPx": 1445,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/07.png",
+      "offsetPx": 10042,
+      "stepPx": 1432,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/08.png",
+      "offsetPx": 11488,
+      "stepPx": 1446,
+      "anchorSupport": 3
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-1.5/09.png",
+      "offsetPx": 11488,
+      "stepPx": 0,
+      "anchorSupport": 0
+    }
+  ],
+  "extentStatus": "bottom-detected",
+  "scrollViewportPx": {
+    "top": 99,
+    "height": 2079,
+    "width": 1080
+  },
+  "totalExtentPx": 13567,
+  "screenHeights": 6.53,
+  "reachableExtentPx": 13567,
+  "reachableScreenHeights": 6.53,
+  "obscuredTailPx": 0
+}

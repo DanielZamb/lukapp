@@ -1,0 +1,29 @@
+{
+  "name": "budget-2.0",
+  "scale": "2.0",
+  "frames": [
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/budget-2.0/00.png",
+      "offsetPx": 0,
+      "stepPx": 0,
+      "anchorSupport": 0
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/budget-2.0/01.png",
+      "offsetPx": 0,
+      "stepPx": 0,
+      "anchorSupport": 0
+    }
+  ],
+  "extentStatus": "bottom-detected",
+  "scrollViewportPx": {
+    "top": 99,
+    "height": 2079,
+    "width": 1080
+  },
+  "totalExtentPx": 2079,
+  "screenHeights": 1,
+  "reachableExtentPx": 2079,
+  "reachableScreenHeights": 1,
+  "obscuredTailPx": 0
+}

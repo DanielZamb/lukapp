@@ -1,0 +1,156 @@
+{
+  "name": "history-1.3",
+  "scale": "1.3",
+  "frames": [
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/00.png",
+      "offsetPx": 0,
+      "stepPx": 0,
+      "anchorSupport": 0
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/01.png",
+      "offsetPx": 1426,
+      "stepPx": 1426,
+      "anchorSupport": 8
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/02.png",
+      "offsetPx": 2858,
+      "stepPx": 1432,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/03.png",
+      "offsetPx": 4302,
+      "stepPx": 1444,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/04.png",
+      "offsetPx": 5748,
+      "stepPx": 1446,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/05.png",
+      "offsetPx": 7185,
+      "stepPx": 1437,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/06.png",
+      "offsetPx": 8615,
+      "stepPx": 1430,
+      "anchorSupport": 5
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/07.png",
+      "offsetPx": 10061,
+      "stepPx": 1446,
+      "anchorSupport": 5
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/08.png",
+      "offsetPx": 11485,
+      "stepPx": 1424,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/09.png",
+      "offsetPx": 12919,
+      "stepPx": 1434,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/10.png",
+      "offsetPx": 14350,
+      "stepPx": 1431,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/11.png",
+      "offsetPx": 15795,
+      "stepPx": 1445,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/12.png",
+      "offsetPx": 17225,
+      "stepPx": 1430,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/13.png",
+      "offsetPx": 18656,
+      "stepPx": 1431,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/14.png",
+      "offsetPx": 20087,
+      "stepPx": 1431,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/15.png",
+      "offsetPx": 21533,
+      "stepPx": 1446,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/16.png",
+      "offsetPx": 22969,
+      "stepPx": 1436,
+      "anchorSupport": 3
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/17.png",
+      "offsetPx": 24390,
+      "stepPx": 1421,
+      "anchorSupport": 2
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/18.png",
+      "offsetPx": 25814,
+      "stepPx": 1424,
+      "anchorSupport": 5
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/19.png",
+      "offsetPx": 27260,
+      "stepPx": 1446,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/20.png",
+      "offsetPx": 28692,
+      "stepPx": 1432,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/21.png",
+      "offsetPx": 29449,
+      "stepPx": 757,
+      "anchorSupport": 8
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/history-1.3/22.png",
+      "offsetPx": 29449,
+      "stepPx": 0,
+      "anchorSupport": 0
+    }
+  ],
+  "driverFallbacks": 0,
+  "extentStatus": "bottom-detected",
+  "scrollViewportPx": {
+    "top": 99,
+    "height": 2079,
+    "width": 1080
+  },
+  "totalExtentPx": 31528,
+  "screenHeights": 15.16,
+  "reachableExtentPx": 31528,
+  "reachableScreenHeights": 15.16,
+  "obscuredTailPx": 0
+}

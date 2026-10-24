@@ -1,0 +1,89 @@
+{
+  "name": "overview-list-2.0",
+  "scale": "2.0",
+  "frames": [
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/00.png",
+      "offsetPx": 0,
+      "stepPx": 0,
+      "anchorSupport": 0
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/01.png",
+      "offsetPx": 1430,
+      "stepPx": 1430,
+      "anchorSupport": 7
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/02.png",
+      "offsetPx": 2860,
+      "stepPx": 1430,
+      "anchorSupport": 5
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/03.png",
+      "offsetPx": 4293,
+      "stepPx": 1433,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/04.png",
+      "offsetPx": 5725,
+      "stepPx": 1432,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/05.png",
+      "offsetPx": 7157,
+      "stepPx": 1432,
+      "anchorSupport": 5
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/06.png",
+      "offsetPx": 8589,
+      "stepPx": 1432,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/07.png",
+      "offsetPx": 10021,
+      "stepPx": 1432,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/08.png",
+      "offsetPx": 11453,
+      "stepPx": 1432,
+      "anchorSupport": 5
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/09.png",
+      "offsetPx": 12885,
+      "stepPx": 1432,
+      "anchorSupport": 3
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/10.png",
+      "offsetPx": 13850,
+      "stepPx": 965,
+      "anchorSupport": 6
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/overview-list-2.0/11.png",
+      "offsetPx": 13850,
+      "stepPx": 0,
+      "anchorSupport": 0
+    }
+  ],
+  "extentStatus": "bottom-detected",
+  "scrollViewportPx": {
+    "top": 99,
+    "height": 2079,
+    "width": 1080
+  },
+  "totalExtentPx": 15929,
+  "screenHeights": 7.66,
+  "reachableExtentPx": 15929,
+  "reachableScreenHeights": 7.66,
+  "obscuredTailPx": 0
+}

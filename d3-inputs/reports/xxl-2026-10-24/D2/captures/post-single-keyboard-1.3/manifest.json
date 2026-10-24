@@ -1,0 +1,47 @@
+{
+  "name": "post-single-keyboard-1.3",
+  "scale": "1.3",
+  "frames": [
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/post-single-keyboard-1.3/00.png",
+      "offsetPx": 0,
+      "stepPx": 0,
+      "anchorSupport": 0
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/post-single-keyboard-1.3/01.png",
+      "offsetPx": 660,
+      "stepPx": 660,
+      "anchorSupport": 3
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/post-single-keyboard-1.3/02.png",
+      "offsetPx": 1313,
+      "stepPx": 653,
+      "anchorSupport": 4
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/post-single-keyboard-1.3/03.png",
+      "offsetPx": 1400,
+      "stepPx": 87,
+      "anchorSupport": 8
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/post-single-keyboard-1.3/04.png",
+      "offsetPx": 1400,
+      "stepPx": 0,
+      "anchorSupport": 0
+    }
+  ],
+  "extentStatus": "bottom-detected",
+  "scrollViewportPx": {
+    "top": 99,
+    "height": 1181,
+    "width": 1080
+  },
+  "totalExtentPx": 3479,
+  "screenHeights": 2.95,
+  "reachableExtentPx": 2581,
+  "reachableScreenHeights": 2.19,
+  "obscuredTailPx": 898
+}

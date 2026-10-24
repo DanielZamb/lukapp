@@ -1,0 +1,35 @@
+{
+  "name": "home-1.3",
+  "scale": "1.3",
+  "frames": [
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/home-1.3/00.png",
+      "offsetPx": 0,
+      "stepPx": 0,
+      "anchorSupport": 0
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/home-1.3/01.png",
+      "offsetPx": 167,
+      "stepPx": 167,
+      "anchorSupport": 18
+    },
+    {
+      "file": "/Users/zambamon/Work/finance-tracker-v2/reports/xxl-2026-10-24/D2/captures/home-1.3/02.png",
+      "offsetPx": 167,
+      "stepPx": 0,
+      "anchorSupport": 0
+    }
+  ],
+  "extentStatus": "bottom-detected",
+  "scrollViewportPx": {
+    "top": 99,
+    "height": 2079,
+    "width": 1080
+  },
+  "totalExtentPx": 2246,
+  "screenHeights": 1.08,
+  "reachableExtentPx": 2246,
+  "reachableScreenHeights": 1.08,
+  "obscuredTailPx": 0
+}
