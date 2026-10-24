@@ -1,3 +1,10 @@
+vi.mock("react-native-reanimated", () => ({ default: {} }));
+vi.mock("../ui/ConnectingScreen", async importOriginal => ({
+  ...await importOriginal<typeof import("../ui/ConnectingScreen")>(),
+  ConnectingScreen: "connecting-screen",
+  ConnectingHandover: ({ ready, children }: import("react").PropsWithChildren<{ ready: boolean }>) =>
+    ready ? children : createElement("connecting-screen", { phase: "data" }),
+}));
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";

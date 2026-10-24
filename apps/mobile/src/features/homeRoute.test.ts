@@ -1,3 +1,10 @@
+vi.mock("react-native-reanimated", () => ({ default: {} }));
+vi.mock("../ui/ConnectingScreen", async importOriginal => ({
+  ...await importOriginal<typeof import("../ui/ConnectingScreen")>(),
+  ConnectingScreen: "connecting-screen",
+  ConnectingHandover: ({ ready, children }: import("react").PropsWithChildren<{ ready: boolean }>) =>
+    ready ? children : createElement("connecting-screen", { phase: "data" }),
+}));
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -180,7 +187,7 @@ test("balance loading does not show a fake zero, while two places unlock before 
   state.budgetLoading = true;
   await render();
   expect(texts()).not.toContain("COP 0");
-  expect(root.root.findAll((node) => String(node.type) === "spinner")).toHaveLength(1);
+  expect(root.root.findAllByProps({ phase: "data" })).toHaveLength(1);
   state.balancesLoading = false;
   state.accounts = [{ minorUnits: 100 }, { minorUnits: 200 }];
   await act(async () => root.update(createElement(Index)));

@@ -5,7 +5,7 @@ import { useAuth } from "@clerk/expo";
 import { useQuery } from "convex/react";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { usePersonalDefaults, usePostedActivity } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { HomePlaceSetup } from "../src/features/HomePlaceSetup";
@@ -19,6 +19,7 @@ import { budgetAttention } from "../src/features/attention/model";
 import { useInboxCount } from "../src/features/useInboxCount";
 import { Header, PrimaryButton, Screen, useTheme, useUi } from "../src/ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../src/ui/tokens";
+import { ConnectingHandover, ConnectingScreen } from "../src/ui/ConnectingScreen";
 import { BrandLogo } from "../src/ui/Brand";
 
 function Home({
@@ -51,6 +52,7 @@ function Home({
     return sum;
   }, 0);
   return (
+    <ConnectingHandover ready={activity !== undefined}>
     <Screen contentStyle={{ gap: spacing.xl, paddingTop: spacing.md }}>
       <View style={styles.header}>
         <View style={{ flex: 1, gap: spacing.sm }}>
@@ -93,7 +95,7 @@ function Home({
             <Text adjustsFontSizeToFit numberOfLines={1} style={[ui.hero, styles.hero]}>
               {formatMoney({ currency, minorUnits: totalMinorUnits }, { hideZeroDecimals: true })}
             </Text>
-          ) : <ActivityIndicator accessibilityLabel="Loading balances" />}
+          ) : null}
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="See places"
           onPress={() => router.push("/places")} hitSlop={spacing.md}>
@@ -180,6 +182,7 @@ function Home({
       </BottomSheetModal>
       {placeOpen && <HomePlaceSetup defaults={defaults} subject={subject} unlocking={accountCount === 1 && level === 0} onClose={() => setPlaceOpen(false)} />}
     </Screen>
+    </ConnectingHandover>
   );
 }
 type EntryView =
@@ -234,9 +237,7 @@ export default function Index() {
   const { userId } = useAuth();
   if (defaults === undefined || !userId)
     return (
-      <Screen>
-        <ActivityIndicator />
-      </Screen>
+      <ConnectingScreen phase={userId ? "data" : "session"} />
     );
   return <ReadyIndex key={userId} defaults={defaults} userId={userId} />;
 }
