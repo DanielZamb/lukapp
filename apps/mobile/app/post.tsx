@@ -6,7 +6,6 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   BottomSheetModal,
   BottomSheetView,
-  BottomSheetModalProvider,
 } from "@gorhom/bottom-sheet";
 import { useAction, useConvex, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
@@ -23,6 +22,7 @@ import {
 } from "../src/features/budget/postingImpact";
 import { defaultAccountingDate } from "../src/features/timeZones";
 import { PrimaryButton, Header, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
+import { SheetProvider } from "../src/ui/SheetProvider";
 import { spacing } from "../src/ui/tokens";
 import { PostingForm } from "../src/features/posting/PostingForm";
 import { BatchNativeStack, batchRowFor } from "../src/features/posting/BatchNativeStack";
@@ -531,7 +531,7 @@ function PostMoney({
         batch={batch}
         currency={workspace.functionalCurrency}
         composing={composing}
-        compose={<BottomSheetModalProvider>{form}</BottomSheetModalProvider>}
+        compose={<SheetProvider>{form}</SheetProvider>}
         onCancel={closeCompose}
         onAdd={() => {
           editor.resetComposer();

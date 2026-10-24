@@ -3,7 +3,8 @@ import { createElement as h, createRef, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, expectTypeOf, test, vi } from "vitest";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { ActionTile, Choice, Columns, Field, Group, Header, ListGroup, ListRow, MoneyHero, PrimaryButton, SecondaryButton, SheetAccessibilityBoundary, Text, ValueRow, type ValueRowProps } from "./core";
+import { ActionTile, Choice, Columns, Field, Group, Header, ListGroup, ListRow, MoneyHero, PrimaryButton, SecondaryButton, Text, ValueRow, type ValueRowProps } from "./core";
+import { SheetProvider } from "./SheetProvider";
 import { Sheet, sheetPresentation, type SheetProps } from "./Sheet";
 import { PickerSheet } from "./PickerSheet";
 import { ThemeProvider } from "./themeContext";
@@ -24,6 +25,7 @@ vi.mock("@gorhom/bottom-sheet", async () => {
   const React = await import("react");
   return {
     BottomSheetModal: React.forwardRef((props, ref) => { React.useImperativeHandle(ref, () => ({ present: native.present, dismiss: native.dismiss })); return React.createElement("modal", props); }),
+    BottomSheetModalProvider: React.Fragment,
     BottomSheetScrollView: "sheet-scroll", BottomSheetBackdrop: "backdrop", BottomSheetFooter: "sheet-footer",
   };
 });
@@ -51,6 +53,13 @@ test("tier threshold and narrow-width reflow preserve legacy metrics below XXXL"
   expect(readableLayout({ width: 299, fontScale: 1 })).toEqual({ tier: "reflow", reflow: true, pagePadding: 16, touchTarget: 48 });
   expect(readableLayout({ width: 300, fontScale: 1 }).tier).toBe("default");
   expect(controls.xxxl).toEqual({ touchTarget: 56, primaryButton: 68, secondaryButton: 60, input: 64, choiceRow: 72 });
+});
+
+test.each([
+  [1.2999999523162842, "xxxl"], [1.149999976158142, "default"],
+  [1.3, "xxxl"], [1.5, "xxxl"], [1.29, "default"],
+] as const)("Android font scale %s selects %s", (fontScale, tier) => {
+  expect(readableLayout({ width: 390, fontScale }).tier).toBe(tier);
 });
 
 test("default and reflow named type preserve the audited values without caps", () => {
@@ -150,7 +159,7 @@ test.each(tiers.flatMap((tier) => [false, true].map((tall) => ({ tier, tall })))
   expect(modal.props.enablePanDownToClose).toBe(!page);
   expect(native.present).toHaveBeenCalledOnce();
   if (page) {
-    expect(modal.props).toMatchObject({ topInset: 24, handleComponent: null, android_keyboardInputMode: "adjustResize" });
+    expect(modal.props).toMatchObject({ topInset: 24, handleComponent: null, accessible: false, android_keyboardInputMode: "adjustPan" });
     expect(tree.findAll((node) => String(node.type) === "footer-action")).toHaveLength(0);
     expect(tree.find((node) => String(node.type) === "sheet-scroll").props.enableFooterMarginAdjustment).toBe(true);
     expect(modal.props.footerComponent).toBeTypeOf("function");
@@ -243,9 +252,9 @@ test("sheet presentation and legacy aliases reject conflicting public props", ()
 
 test("background accessibility is hidden only while a sheet is presented", async () => {
   const tree = await render(h(React.Fragment, null,
-    h(SheetAccessibilityBoundary, null, h("main")),
-    h(Sheet, { label: "Details" }, h("body-content"))));
-  const boundary = tree.findByType(SheetAccessibilityBoundary).findByType("view");
+    h(SheetProvider, null, h("main"),
+      h(Sheet, { label: "Details" }, h("body-content")))));
+  const boundary = tree.findByType(SheetProvider).findByType("view");
   expect(boundary.props).toMatchObject({ importantForAccessibility: "no-hide-descendants", accessibilityElementsHidden: true });
   await act(async () => tree.find((node) => String(node.type) === "modal").props.onDismiss());
   expect(boundary.props.importantForAccessibility).toBeUndefined();
@@ -281,7 +290,7 @@ test("busy preserves absent and custom backdrops plus independent content pannin
 test("tall page has one common modal boundary and an inset row separator", async () => {
   const tree = await render(h(Sheet, { label: "Details", tall: true }, h(ValueRow, { title: "One", meta: "Date", value: "COP 20", icon: "heart", onPress: noop })));
   const modal = tree.find((node) => String(node.type) === "modal");
-  expect(modal.props.containerComponent({ children: null }).props).toMatchObject({ accessibilityViewIsModal: true, importantForAccessibility: "yes" });
+  expect(modal.props.containerComponent({ children: null }).props).toMatchObject({ accessibilityViewIsModal: true, accessible: false, importantForAccessibility: "no", pointerEvents: "box-none", style: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 } });
   expect(tree.find((node) => String(node.type) === "sheet-scroll").props.accessibilityViewIsModal).toBeUndefined();
   const row = tree.findByType(ValueRow).findByType("button");
   expect(flat(row.props.style)).toMatchObject({ alignItems: "flex-start", borderBottomWidth: 0 });

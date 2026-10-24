@@ -31,7 +31,6 @@ import { font, fontSize, radius, spacing, themes, xxxl } from "./tokens";
 import { useThemeContext } from "./themeContext";
 import { Text as StyledText } from "./Text";
 import { textSpecs, textStyle, textTone, type TextTone } from "./typography";
-export { SheetAccessibilityBoundary } from "./SheetAccessibility";
 export { Text, type TextProps } from "./Text";
 export { type TextVariant, type TextTone } from "./typography";
 

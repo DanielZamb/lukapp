@@ -8,8 +8,8 @@ import {
   Geist_800ExtraBold,
 } from "@expo-google-fonts/geist";
 import { ClerkProvider, useAuth, useClerk } from "@clerk/expo";
+import { SheetProvider } from "../src/ui/SheetProvider";
 import { tokenCache } from "@clerk/expo/token-cache";
-import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { ConvexReactClient, useConvexAuth, useQuery } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Stack, type ErrorBoundaryProps } from "expo-router";
@@ -29,7 +29,6 @@ import {
   Screen,
   SecondaryButton,
   ResponsiveThemeProvider as ThemeProvider,
-  SheetAccessibilityBoundary,
   useUi,
 } from "../src/ui/core";
 
@@ -167,9 +166,9 @@ export default function Layout() {
             )}
           >
             <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-              <BottomSheetModalProvider>
-                <SheetAccessibilityBoundary><Admission /></SheetAccessibilityBoundary>
-              </BottomSheetModalProvider>
+              <SheetProvider>
+                <Admission />
+              </SheetProvider>
             </ConvexProviderWithClerk>
           </LocalEntryGate>
         </ClerkProvider>

@@ -72,10 +72,10 @@ export function Sheet(props: SheetProps) {
     busy={busy} dismissible={dismissible} androidBack={props.androidBack ?? body !== "native"}
     {...(tier === "xxxl" && body !== "native" && { backgroundStyle: [styles.surface, { borderTopLeftRadius: xxxl.radius.sheet, borderTopRightRadius: xxxl.radius.sheet }] })}
     {...(page && {
-      containerComponent: PageContainer,
+      containerComponent: PageContainer, accessible: false,
       snapPoints: ["100%"], topInset: insets.top, enableDynamicSizing: false,
       enablePanDownToClose: false, handleComponent: null,
-      keyboardBehavior: "interactive", keyboardBlurBehavior: "restore", android_keyboardInputMode: "adjustResize",
+      keyboardBehavior: "interactive", keyboardBlurBehavior: "restore", android_keyboardInputMode: "adjustPan",
       footerComponent: footer ? renderFooter : undefined,
       androidBack: true,
       onChange: (...args) => {
@@ -107,7 +107,7 @@ export function Sheet(props: SheetProps) {
 }
 
 function PageContainer({ children }: PropsWithChildren) {
-  return <View style={{ flex: 1 }} accessibilityViewIsModal importantForAccessibility="yes">{children}</View>;
+  return <View style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} pointerEvents="box-none" accessible={false} accessibilityViewIsModal importantForAccessibility="no">{children}</View>;
 }
 
 function createStyles(theme: Theme) {
