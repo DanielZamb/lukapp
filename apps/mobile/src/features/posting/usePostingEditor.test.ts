@@ -157,6 +157,27 @@ for (const saved of entries) {
   });
 }
 
+test("a selected category controls the sign during selection and later amount edits", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => editor().setAmount("-1.250,00"));
+  await act(async () => editor().setCategories({ ids: ["salary"], primaryId: null }, "Income"));
+  expect(editor().amount).toBe("+1.250,00");
+  await act(async () => editor().setAmount("-27,50"));
+  expect(editor().amount).toBe("+27,50");
+  expect(editor().categories.ids).toEqual(["salary"]);
+  await act(async () => editor().setCategories({ ids: ["food"], primaryId: null }, "Expense"));
+  expect(editor().amount).toBe("-27,50");
+  await act(async () => editor().setAmount("+2.000,"));
+  expect(editor().amount).toBe("-2.000,");
+  expect(editor().categories.ids).toEqual(["food"]);
+  await act(async () => editor().setCategories({ ids: [], primaryId: null }, null));
+  await act(async () => editor().setAmount("+3"));
+  expect(editor().amount).toBe("+3");
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+});
+
 test("signed Normal uses income/expense and clears categories when direction changes", async () => {
   const api = transport();
   const editor = await open(api);

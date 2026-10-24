@@ -121,7 +121,7 @@ function Harness() {
   const [selection, setSelection] = useState<TransactionCategories>({ ids: ["original"], primaryId: null });
   runtime.selection = selection;
   return createElement(React.Fragment, null, createElement(CategoriesRoute), createElement(CategoryPicker, {
-    visible: true, workspaceId: "workspace", direction: "out", value: selection, onChange: setSelection, onClose() {},
+    visible: true, workspaceId: "workspace", value: selection, onChange: setSelection, onClose() {},
   }));
 }
 function observation() {

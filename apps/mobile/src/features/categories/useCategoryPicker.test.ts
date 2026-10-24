@@ -7,13 +7,13 @@ import type { Category, CategoryPreset } from "./model";
 import type { TransactionCategories } from "./transactionSelection";
 import { canPostCategories } from "./transactionSelection";
 
-const provider = vi.hoisted(() => ({ categories: [] as Category[], create: vi.fn(), restyle: vi.fn(), suggestion: null as null | { name: string; direction: "in" | "out"; suggested: "spend" | "receive" | "stillMine" | "payDebt" | null }, account: vi.fn(() => true) }));
+const provider = vi.hoisted(() => ({ categories: [] as Category[], create: vi.fn(), restyle: vi.fn(), suggestion: null as null | { name: string; suggested: "spend" | "receive" | "stillMine" | "payDebt" | null }, account: vi.fn(() => true) }));
 vi.mock("convex/react", () => ({
   useQuery: (reference: Parameters<typeof getFunctionName>[0], args: { name?: string; direction?: string } | "skip") => {
     const name = getFunctionName(reference);
     if (name.endsWith(":listUserCategories")) return provider.categories;
     if (name.endsWith(":listCategoryPresets")) return [];
-    return args !== "skip" && args.name === provider.suggestion?.name && args.direction === provider.suggestion?.direction
+    return args !== "skip" && args.name === provider.suggestion?.name
       ? provider.suggestion : undefined;
   },
   useAction: (reference: Parameters<typeof getFunctionName>[0]) =>
@@ -22,19 +22,37 @@ vi.mock("convex/react", () => ({
 let root: ReactTestRenderer | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); vi.clearAllMocks(); provider.suggestion = null; provider.account.mockReturnValue(true); });
 
-function directionAnswer(allowed: string[]) { return allowed.includes("receive") ? "receive" : "spend"; }
 function category(id: string, code = "same"): Category {
   return { id, workspaceId: "workspace", name: id, normalizedName: id, nature: "Expense", natureSource: "answered",
     classification: { kind: "fallback", version: "test" }, style: { emoji: "🏷️", tone: "primary" }, resolvedPostingAccountCode: code };
 }
-async function open(categories: Category[], direction: "in" | "out" = "out") {
+
+test("posting shows both money directions and switches the selected group after choosing a category", async () => {
+  const salary = { ...category("salary"), nature: "Income" as const };
+  const picker = await open([category("food"), salary]);
+  expect(picker.sheet().options?.map((option) => option.key)).toEqual(["food", "salary"]);
+  await act(async () => picker.sheet().onSelect("food"));
+  await act(async () => picker.sheet().onSelect("salary"));
+  expect(picker.value()).toEqual({ ids: ["salary"], primaryId: null });
+  expect(picker.sheet().options?.map((option) => option.key)).toEqual(["food", "salary"]);
+  await act(async () => picker.sheet().onSelect("food"));
+  expect(picker.value()).toEqual({ ids: ["food"], primaryId: null });
+  await act(async () => picker.sheet().onCreate());
+  expect(picker.sheet().allowed).toEqual(["spend", "receive", "stillMine", "payDebt"]);
+  await act(async () => { picker.sheet().onName("Bonus"); picker.sheet().onAnswer("receive"); });
+  provider.create.mockResolvedValueOnce({ kind: "category", category: { ...category("bonus"), nature: "Income" } });
+  await act(async () => picker.sheet().onConfirm());
+  expect(picker.value()).toEqual({ ids: ["bonus"], primaryId: null });
+  expect(provider.create.mock.calls[0][0].selection.answer).toBe("receive");
+});
+async function open(categories: Category[]) {
   provider.categories = categories;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let value: TransactionCategories = { ids: [], primaryId: null };
   let picker: ReturnType<typeof useCategoryPicker> | undefined;
   const close = vi.fn();
   function Harness() {
-    picker = useCategoryPicker({ kind: "posting", workspaceId: "workspace", direction, value, onAccountSetup: provider.account,
+    picker = useCategoryPicker({ kind: "posting", workspaceId: "workspace", value, onAccountSetup: provider.account,
       onChange: (next) => { value = next; root?.update(createElement(Harness)); } }, close);
     return null;
   }
@@ -95,7 +113,7 @@ test("creating an encompassing category replaces the set only after explicit con
   await act(async () => picker.sheet().onCreateEncompassing());
   await act(async () => { picker.sheet().onName("Family weekend"); });
   expect(picker.value().ids).toEqual(["one", "two", "three"]);
-  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer(directionAnswer(picker.sheet().allowed)); });
+  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer("spend"); });
   provider.create.mockResolvedValueOnce({ kind: "category", category: category("encompassing") });
   await act(async () => picker.sheet().onConfirm());
   expect(picker.value()).toEqual({ ids: ["encompassing"], primaryId: null });
@@ -107,7 +125,7 @@ test("adding a preset uses the same sheet without replacing selected categories"
   await act(async () => picker.sheet().onSelect("family"));
   const preset: CategoryPreset = { id: "groceries", name: "Food", nature: "Expense" };
   await act(async () => picker.sheet().onPreset(preset));
-  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer(directionAnswer(picker.sheet().allowed)); });
+  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer("spend"); });
   provider.create.mockResolvedValueOnce({ kind: "category", category: category("new-food") });
   await act(async () => picker.sheet().onConfirm());
   expect(picker.value()).toEqual({ ids: ["family", "new-food"], primaryId: null });
@@ -126,11 +144,11 @@ test("posting waits for all selected classification details and an explicit prim
 
 test("income creation requires receive and preserves the selected answer", async () => {
   const salary = { ...category("salary"), nature: "Income" as const };
-  const picker = await open([category("food"), salary], "in");
-  expect(picker.sheet().options?.map((option) => option.key)).toEqual(["salary"]);
+  const picker = await open([category("food"), salary]);
+  expect(picker.sheet().options?.map((option) => option.key)).toEqual(["food", "salary"]);
   await act(async () => picker.sheet().onCreate());
   await act(async () => { picker.sheet().onName("Bonus"); });
-  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer(directionAnswer(picker.sheet().allowed)); });
+  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer("receive"); });
   provider.create.mockResolvedValueOnce({ kind: "category", category: { ...category("bonus"), nature: "Income" } });
   await act(async () => picker.sheet().onConfirm());
   expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: { kind: "custom", name: "Bonus", answer: "receive", style: { emoji: "✨", tone: "primary", color: "h270" } } });
@@ -149,7 +167,7 @@ test("custom creation selects the new category, persists its look and closes", a
   });
   await act(async () => picker.sheet().onAnswer("spend"));
   expect(picker.sheet().canConfirm).toBe(true);
-  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer(directionAnswer(picker.sheet().allowed)); });
+  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer("spend"); });
   provider.create.mockResolvedValueOnce({ kind: "category", category: category("weekend") });
   await act(async () => picker.sheet().onConfirm());
   expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: {
@@ -177,7 +195,7 @@ test.each([12, 43])("custom creation remains available with %i workspace categor
   await act(async () => picker.sheet().onCreate());
   await act(async () => picker.sheet().onAnswer("spend"));
   expect(picker.sheet().canConfirm).toBe(true);
-  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer(directionAnswer(picker.sheet().allowed)); });
+  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer("spend"); });
   provider.create.mockResolvedValueOnce({ kind: "category", category: category("new-category") });
   await act(async () => picker.sheet().onConfirm());
   expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: {
@@ -192,7 +210,7 @@ test.each([12, 43])("preset creation remains available with %i workspace categor
   await act(async () => picker.sheet().onPreset({ id: "groceries", name: "Food", nature: "Expense" }));
   await act(async () => picker.sheet().onAnswer("spend"));
   expect(picker.sheet().canConfirm).toBe(true);
-  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer(directionAnswer(picker.sheet().allowed)); });
+  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer("spend"); });
   provider.create.mockResolvedValueOnce({ kind: "category", category: category("new-food") });
   await act(async () => picker.sheet().onConfirm());
   expect(provider.create).toHaveBeenCalledWith({ workspaceId: "workspace", selection: {
@@ -209,7 +227,7 @@ test("Add your own at three explicitly replaces the set and selects the created 
   await act(async () => picker.sheet().onCreate());
   expect(picker.sheet().replacingSelection).toBe(true);
   await act(async () => picker.sheet().onName("Together"));
-  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer(directionAnswer(picker.sheet().allowed)); });
+  await act(async () => { if (picker.sheet().editor?.kind === "custom") picker.sheet().onAnswer("spend"); });
   provider.create.mockResolvedValueOnce({ kind: "category", category: category("together") });
   await act(async () => picker.sheet().onConfirm());
   expect(picker.value()).toEqual({ ids: ["together"], primaryId: null });
@@ -240,7 +258,7 @@ test("unknown custom names require an explicit allowed answer and reset it on re
   await act(async () => picker.sheet().onConfirm());
   expect(provider.create).not.toHaveBeenCalled();
   await act(async () => picker.sheet().onAnswer("receive"));
-  expect(picker.sheet().canConfirm).toBe(false);
+  expect(picker.sheet().canConfirm).toBe(true);
   await act(async () => picker.sheet().onAnswer("spend"));
   expect(picker.sheet().canConfirm).toBe(true);
   await act(async () => picker.sheet().onName("Another unknown"));
@@ -265,8 +283,8 @@ test.each(["stillMine", "payDebt"] as const)("%s routes to account setup without
 });
 
 
-test("the current name and direction receive a visible suggestion that can be overridden", async () => {
-  provider.suggestion = { name: "savings", direction: "out", suggested: "stillMine" };
+test("the current name receives a visible suggestion that can be overridden", async () => {
+  provider.suggestion = { name: "savings", suggested: "stillMine" };
   const picker = await open([]);
   await act(async () => picker.sheet().onCreate());
   await act(async () => picker.sheet().onName("  Sávings  "));

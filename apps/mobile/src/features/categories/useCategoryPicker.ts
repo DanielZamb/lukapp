@@ -8,6 +8,8 @@ import { defaultCategoryStyle, selectionKey } from "./model";
 import { needsPrimary, toggleCategory, type TransactionCategories } from "./transactionSelection";
 import type {
   AccountSetupRequest,
+  Category,
+  CategoryNature,
   NatureAnswer,
   CategoryEditor,
   CategoryOption,
@@ -20,10 +22,9 @@ export type CategoryPickerMode =
   | {
       kind: "posting";
       workspaceId: string;
-      direction?: "in" | "out";
       onAccountSetup?: (request: AccountSetupRequest) => boolean;
       value: TransactionCategories;
-      onChange: (value: TransactionCategories) => void;
+      onChange: (value: TransactionCategories, nature: CategoryNature | null) => void;
     }
   | {
       kind: "setup";
@@ -44,14 +45,12 @@ export function useCategoryPicker(
     api.accounting.listUserCategories,
     mode.kind === "posting" ? { workspaceId: mode.workspaceId } : "skip",
   );
-  const presets = useQuery(api.accounting.listCategoryPresets, {
-    nature: mode.kind === "posting" && mode.direction === "in" ? "Income" : "Expense",
-  });
+  const presets = useQuery(api.accounting.listCategoryPresets, mode.kind === "setup" ? { nature: "Expense" } : {});
   const create = useAction(api.accounting.createUserCategory);
   const restyle = useAction(api.accounting.restyleUserCategory);
   const [search, setSearch] = useState("");
   const [editor, setEditor] = useState<CategoryEditor | null>(null);
-  const nature = useNatureSuggestion(editor?.kind === "custom" ? editor.name : "", mode.kind === "posting" ? mode.direction : undefined);
+  const nature = useNatureSuggestion(editor?.kind === "custom" ? editor.name : "");
   const answer = editor?.kind === "custom" ? editor.answer ?? nature.suggested : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -61,7 +60,7 @@ export function useCategoryPicker(
   const knownOptions: CategoryOption[] | undefined =
     mode.kind === "posting"
       ? categories
-          ?.filter((c) => c.nature === (mode.direction === "in" ? "Income" : "Expense"))
+          ?.filter((c) => c.nature === "Income" || c.nature === "Expense")
           .map((c) => ({
             key: c.id,
             name: c.name,
@@ -88,13 +87,21 @@ export function useCategoryPicker(
       setReplaceSelection(false);
     }
   }
+  function togglePostingCategory(value: TransactionCategories, category: Pick<Category, "id" | "nature">) {
+    const switchingNature = !value.ids.includes(category.id) && categories?.some(
+      (selected) => value.ids.includes(selected.id) && selected.nature !== category.nature,
+    );
+    return toggleCategory(switchingNature ? { ids: [], primaryId: null } : value, category.id);
+  }
   function select(key: string) {
     if (saving.current) return;
     recordInteraction();
     if (mode.kind === "posting") {
-      const next = toggleCategory(mode.value, key);
+      const category = categories?.find((category) => category.id === key);
+      const next = category ? togglePostingCategory(mode.value, category) : toggleCategory(mode.value, key);
       if (!next) { setLimitReached(true); return; }
-      mode.onChange({ ...next, primaryId: needsPrimary(next.ids, categories ?? []) ? next.primaryId : null });
+      mode.onChange({ ...next, primaryId: needsPrimary(next.ids, categories ?? []) ? next.primaryId : null },
+        categories?.find((category) => next.ids.includes(category.id))?.nature ?? null);
       setLimitReached(false);
     } else
       mode.onChange(mode.selections.filter((s) => selectionKey(s) !== key));
@@ -184,9 +191,9 @@ export function useCategoryPicker(
             ? { ids: [result.category.id], primaryId: null }
             : mode.value.ids.includes(result.category.id)
               ? mode.value
-              : toggleCategory(mode.value, result.category.id);
+              : togglePostingCategory(mode.value, result.category);
           if (next) {
-            mode.onChange(next);
+            mode.onChange(next, result.category.nature ?? null);
             setLimitReached(false);
           } else setLimitReached(true);
           setEditor(null);
@@ -282,13 +289,13 @@ export function useCategoryPicker(
       onPrimary: (id: string) => {
         recordInteraction();
         if (mode.kind === "posting" && mode.value.ids.includes(id))
-          mode.onChange({ ...mode.value, primaryId: id });
+          mode.onChange({ ...mode.value, primaryId: id }, categories?.find((category) => category.id === id)?.nature ?? null);
       },
       onDone: mode.kind === "posting" ? onClose : undefined,
       onNone:
         mode.kind === "posting"
           ? () => {
-              mode.onChange({ ids: [], primaryId: null });
+              mode.onChange({ ids: [], primaryId: null }, null);
               setLimitReached(false);
               onClose();
             }
