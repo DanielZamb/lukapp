@@ -3,7 +3,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import { AccessibilityInfo, Platform, Pressable, ScrollView, StatusBar, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
 import Animated, { ReduceMotion, useAnimatedStyle, useFrameCallback, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import type { EntryState } from "../local-auth/entryController";
 import type { FunctionReturnType } from "convex/server";
@@ -43,6 +43,7 @@ type Connection = {
   clock: SharedValue<number>;
   reducedMotion: boolean;
   motionReady: boolean;
+  insets: EdgeInsets;
   enter: (phase: ConnectingPhase, owner: symbol) => number;
   leave: (owner: symbol) => void;
   announceSlow: (phase: ConnectingPhase) => void;
@@ -51,6 +52,7 @@ const ConnectionContext = createContext<Connection | null>(null);
 export const connectingSlowMs = 8000;
 
 export function ConnectingProvider({ children }: PropsWithChildren) {
+  const insets = useSafeAreaInsets();
   const clock = useSharedValue(0);
   const [motionPreference, setReducedMotion] = useState<boolean | null>(null);
   const reducedMotion = motionPreference !== false;
@@ -104,7 +106,7 @@ export function ConnectingProvider({ children }: PropsWithChildren) {
     setAnnouncement("Still connecting…");
     if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions("Still connecting…", { queue: true });
   }, []);
-  const value = useMemo(() => ({ clock, reducedMotion, motionReady, enter, leave, announceSlow }), [clock, reducedMotion, motionReady, enter, leave, announceSlow]);
+  const value = useMemo(() => ({ clock, reducedMotion, motionReady, insets, enter, leave, announceSlow }), [clock, reducedMotion, motionReady, insets, enter, leave, announceSlow]);
   return <ConnectionContext.Provider value={value}>
     {children}
     <Text variant="body" accessibilityLiveRegion="polite" style={styles.hidden}>{announcement}</Text>
@@ -123,7 +125,7 @@ type ConnectingScreenProps =
   | ({ phase: "device" } & DeviceActions);
 
 export function ConnectingScreen(props: ConnectingScreenProps) {
-  const { clock, reducedMotion, enter, leave, announceSlow } = useConnection();
+  const { clock, reducedMotion, insets, enter, leave, announceSlow } = useConnection();
   const mode = useThemeMode();
   const large = useTier() === "xxxl";
   const [slow, setSlow] = useState(false);
@@ -151,7 +153,10 @@ export function ConnectingScreen(props: ConnectingScreenProps) {
       transform: [{ scale: reducedMotion ? 1 : 0.6 + 0.9 * pulse }] };
   });
   const step = connectingPhases.indexOf(props.phase);
-  return <SafeAreaView style={[styles.screen, { backgroundColor: mode === "dark" ? "#21132f" : "#6d28d9" }]}>
+  return <View style={[styles.screen, {
+    backgroundColor: mode === "dark" ? "#21132f" : "#6d28d9",
+    paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right,
+  }]}>
     <StatusBar barStyle="light-content" />
     <ScrollView contentContainerStyle={[styles.content, { paddingTop: large ? 48 : 84 }]}>
       <View accessibilityLabel="Lukapp is connecting" style={styles.signature}>
@@ -185,7 +190,7 @@ export function ConnectingScreen(props: ConnectingScreenProps) {
         </View>
       </View>
     </ScrollView>
-  </SafeAreaView>;
+  </View>;
 }
 
 export function ConnectingHandover({ ready, children }: PropsWithChildren<{ ready: boolean }>) {

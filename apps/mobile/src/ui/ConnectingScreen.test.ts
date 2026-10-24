@@ -2,6 +2,7 @@ import * as React from "react";
 import { createElement, useMemo, useRef } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { SafeAreaInsetsContext } from "react-native-safe-area-context";
 import { ConnectingHandover, ConnectingProvider, ConnectingScreen, connectingCopy, connectingPhase } from "./ConnectingScreen";
 
 const native = vi.hoisted(() => ({
@@ -25,7 +26,11 @@ vi.mock("react-native", () => ({
     },
   },
 }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+vi.mock("react-native-safe-area-context", async () => {
+  const { createContext, useContext } = await import("react");
+  const Insets = createContext({ top: 52, bottom: 24, left: 0, right: 0 });
+  return { SafeAreaInsetsContext: Insets, useSafeAreaInsets: () => useContext(Insets) };
+});
 vi.mock("./Brand", () => ({ ConnectingMark: "mark", ConnectingSignature: "signature" }));
 vi.mock("./core", () => ({ Text: "text", useThemeMode: () => "light", useTier: () => "default" }));
 vi.mock("react-native-reanimated", () => ({
@@ -99,6 +104,17 @@ test("pending devices and unresolved initial balances derive their own phases", 
   expect(connectingPhase({ gate: "device", state: "waiting" })).toBe("device");
   expect(connectingPhase({ gate: "home", resolved: false })).toBe("data");
   expect(connectingPhase({ gate: "home", resolved: true })).toBe(null);
+});
+test("Home navigator insets cannot move the connecting signature between gates", async () => {
+  await mount(tree("session"));
+  const screen = () => root.root.findAllByType("view").find(node => Array.isArray(node.props.style) && node.props.style[1]?.backgroundColor);
+  expect(screen()?.props.style[1]).toMatchObject({ paddingTop: 52, paddingBottom: 24 });
+  await act(async () => root.update(createElement(ConnectingProvider, {
+    children: createElement(SafeAreaInsetsContext.Provider, { value: { top: 0, bottom: 0, left: 0, right: 0 },
+      children: createElement(ConnectingScreen, { phase: "data" }),
+    }),
+  })));
+  expect(screen()?.props.style[1]).toMatchObject({ paddingTop: 52, paddingBottom: 24 });
 });
 test("device slow copy and working actions appear at eight seconds", async () => {
   await mount(tree("device"));
