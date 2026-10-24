@@ -1,0 +1,322 @@
+<title>Lukapp XXXL Flows</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/*@FONTS@*/
+/*@page.css@*/
+/*@app.css@*/
+.flow { padding-block: 56px 8px; display: grid; gap: 20px; border-bottom: 1px solid var(--rule); }
+.step { display: grid; gap: 6px; padding-top: 18px; }
+.step h3 { font-size: 1.15rem; letter-spacing: -0.02em; }
+.step-note { font-size: 14px; color: var(--ink-2); max-width: 80ch; }
+.step-num { display: inline-grid; place-items: center; min-width: 26px; height: 26px; margin-right: 8px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+</style>
+
+<!--@SPRITE@-->
+
+<div class="wrap">
+  <header class="intro">
+    <span class="eyebrow">Lukapp · D4 design pass · XXXL tier only (fontScale ≥ 1.3)</span>
+    <h1>Every other screen, same Lukapp</h1>
+    <p class="lede">D3 settled the seven core screens. This pass takes the same decisions to every other screen: intake, alerts, budgets, savings recovery, month close, places, settings, categories, setup and access. Each flow is shown step by step at fontScale 2.0 in light and dark. The first step of each flow is also shown at 1.3.</p>
+    <p><span class="round-tag">Round 3</span>Nav eyebrows (the grey label above a screen title) are capped at 1.3, so they stay clearly smaller than the title. Sort and filter is one filter at a time, here and on D3's History.</p>
+    <p><span class="round-tag">Round 2</span>Your 28 comments are applied. Short status lines keep their 1.3 size at 2.0, space sets the hierarchy instead of cards and pills, options get the full width, context moves to the camera island, and Notification intake is rebuilt from the APK. See “Your comments” below for each one.</p>
+    <div class="rules">
+      <div class="check"><h3>Rows</h3><p>Category with its emoji, then the money on its own line, then one status line. Status lines keep their 1.3 size at 2.0 and stay on one line; the full text is in the screen-reader label and on the next screen.</p></div>
+      <div class="check"><h3>Space, not cards</h3><p>A tinted card only where you enter or decide a number (Post, Stay under, Move money, the History and Overview totals). Elsewhere the main number sits on the page and space sets it apart. No decorative pills.</p></div>
+      <div class="check"><h3>Options and actions</h3><p>Options get the full width, one per row, with a tick. The main action is pinned. Tall forms are pages; pickers and short decisions stay sheets.</p></div>
+      <div class="check"><h3>Context</h3><p>Facts you need while scrolling, like June's spending or a live category look, go in the camera island, or a docked pill without a centred cutout. Never a pill at the top of the page.</p></div>
+    </div>
+    <div class="facts" id="facts"></div>
+    <nav class="toc" aria-label="Flows" id="toc"></nav>
+  </header>
+  <main id="flows"></main>
+
+  <section class="panel" id="comments">
+    <span class="eyebrow">Round 2</span>
+    <h2>Your comments</h2>
+    <p>Every comment on round 1, with what changed. The threads are still open on the page; they weren't sent to Claude, so I couldn't reply on them.</p>
+    <div class="table-scroll"><table id="comment-table"></table></div>
+  </section>
+
+  <section class="panel" id="measurements">
+    <span class="eyebrow">Scroll length</span>
+    <h2>Screen-heights per step at 2.0</h2>
+    <p>Scroll content ÷ visible scroll area, measured in this page. HTML estimates. Today is D2's device measurement where a capture exists.</p>
+    <div class="table-scroll"><table id="measure-table"></table></div>
+  </section>
+
+  <section class="panel" id="audit">
+    <span class="eyebrow">window.audit()</span>
+    <h2>Checks on every D4 frame</h2>
+    <p>The D3 checks: overflow, clipped text, one-line status lines cut without their full text in the row's label, more than two items in a group, targets under 56 dp (primary 68, secondary 60, input 64), AA contrast in light and dark, and the hero rule.</p>
+    <div class="audit-grid" id="audit-grid"></div>
+    <div class="table-scroll"><table id="audit-table"></table></div>
+  </section>
+
+  <section class="panel" id="primitives">
+    <span class="eyebrow">For T0, on top of D3's list</span>
+    <h2>New primitives</h2>
+    <p>The same guarantee as D3: each one renders its XXXL treatment only when <code>tier === "xxxl"</code>, so the default tier stays pixel-identical.</p>
+    <div class="table-scroll"><table id="primitive-table"></table></div>
+  </section>
+
+  <section class="panel" id="decisions">
+    <span class="eyebrow">For the user</span>
+    <h2>Decisions</h2>
+    <ol class="decisions" id="decision-list"></ol>
+  </section>
+
+  <footer class="foot">
+    <p><b>Content.</b> Real where the captures have it: Ernesto, the 6 places (4 named), 33 categories, the balance, the 53 movements, and the empty Drafts, Budget and Settings states. Examples elsewhere, built from those movements and marked in each step: notification candidates, budget limits on June spending, a recovery plan for the largest June expense, and per-place balances that add up to the real total.</p>
+    <p><b>Sizing.</b> Same model as D3: Android 14 non-linear font scaling plus the <code>typography.ts</code> caps. Real S21 FE status bar, nav bar and keyboard. Every length is an estimate until it's checked on the phone.</p>
+    <p>Built by <code>design/xxl-visual/build.py</code> from <code>src/flows.html</code> and <code>src/flows.js</code>, with the D3 engine and styles.</p>
+  </footer>
+</div>
+
+<script>
+/*@ASSETS@*/
+/*@engine.js@*/
+/*@screens.js@*/
+/*@flows.js@*/
+
+const LAW = (slug, name) => `<a href="https://lawsofux.com/${slug}/" target="_blank" rel="noopener">${name}</a>`;
+const FLOWS = [
+  { id: "intake", title: "Drafts and candidates", changed: "Candidates leads with the ready total on the page, not in a card, and pins “Confirm 4 ready”. The warning is a quiet amber link. Each candidate has three lines: category, money, then one status line that starts with its state (Ready, or Pick a category in amber). Notification intake and Discarded keep one-line statuses.",
+    checks: { Accent: "The ready total and the pinned Confirm. Amber only for the warning link and candidates that need a decision.", Hierarchy: "1. Ready total. 2. What needs you now. 3. Intake and Discarded.", "Brand moment": "COP in violet above the total, as on every main amount.", Life: "Emoji categories, green money in, coloured state words." },
+    laws: `${LAW("zeigarnik-effect", "Zeigarnik")}: Now and Later show what's unfinished. ${LAW("von-restorff-effect", "Von Restorff")}: amber marks only what needs a human.`,
+    steps: [
+      { id: "candidates", title: "Candidates", note: "Example candidates shaped like bank notifications. The captured workspace had none." },
+      { id: "candidatesEmpty", title: "Review complete", capture: "drafts", note: "The real state on the phone. No card: a green state line, the heading and one sentence." },
+      { id: "reconciliation", title: "Before you use intake" },
+      { id: "discarded", title: "Discarded notifications" },
+      { id: "added", title: "Records added" },
+      { id: "intakeMonthClose", title: "Month Close warning" },
+    ] },
+  { id: "sources", title: "Notification intake (Android)", changed: "Rebuilt from the updated APK. Today it's one long scroll of paragraphs. The proposal splits it by task: a short disclosure step (three facts, a beta note, the full text one tap away, then the acknowledgement); a hub that leads with what's happening (“Not reading any app yet”), then the apps you read from, this phone's status, the inbox and diagnostics, and Turn off and wipe last; and adding an app in two steps (the app, then the place its alerts go to). The internal workspace ID is never shown.",
+    checks: { Accent: "Amber when nothing is being read, green when it works, red only for the error and Turn off and wipe.", Hierarchy: "1. What's happening. 2. The next action (Add an app, pinned). 3. Status, inbox, diagnostics.", "Brand moment": "Violet app and place tiles.", Life: "Letter tiles for apps, place emoji, coloured state words." },
+    laws: `${LAW("cognitive-load", "Cognitive load")}: one task per screen instead of seven sections. ${LAW("hicks-law", "Hick")}: likely bank apps first among 220. ${LAW("teslers-law", "Tesler")}: the app suggests the place.`,
+    steps: [
+      { id: "intakeDisclosure", title: "Before you turn it on", note: "The APK's four paragraphs become three front-loaded facts, a beta note and “Read the full disclosure”, so nothing in the legal text is lost." },
+      { id: "intakeHub", title: "Intake, nothing read yet", note: "The real state in the APK: access granted, listener connected, no apps, the error line. The workspace shows as “Personal · COP · Bogotá”, without the internal ID." },
+      { id: "intakeAddApp", title: "Add an app", note: "Likely bank apps first; search covers all 220." },
+      { id: "intakePlace", title: "Where its alerts go" },
+      { id: "intakeReading", title: "Intake, reading Nu", note: "Example state after adding Nu." },
+      { id: "intakeWipe", title: "Turn off and wipe" },
+    ] },
+  { id: "alerts", title: "Alerts", changed: "Over the limit, then Close to the limit. Each alert: category, the amount over in red, its jar, then “spent of limit” on one status line.",
+    checks: { Accent: "Red only for amounts over a limit.", Hierarchy: "1. What's over. 2. What's close. 3. The numbers behind each.", "Brand moment": "Category colours on the jars.", Life: "Emoji, jars that fill, a green state when all is clear." },
+    laws: `${LAW("selective-attention", "Selective attention")}: overs before nears.`,
+    steps: [{ id: "alerts", title: "Alerts", note: "Example limits on June spending." }, { id: "alertsEmpty", title: "Nothing crossed a line" }] },
+  { id: "plans", title: "Plans", changed: "Two destination rows with icon tiles, as on Home, with one-line statuses.",
+    checks: { Accent: "Violet flag for the budget, green trend for recovery.", Hierarchy: "1. This month's budget. 2. Recovery progress.", "Brand moment": "Same destination card as Home.", Life: "Icons and a live recovery status." },
+    laws: `${LAW("jakobs-law", "Jakob")}: the same destination rows as Home.`,
+    steps: [{ id: "plans", title: "Plans" }] },
+  { id: "budget", title: "Budgets", changed: "One column of budget rows (left or over, jar, “spent of limit” on one line). Setting a limit keeps its card, because “Stay under” is the number being decided. June's spending moves into the camera island, with a docked pill on phones without a centred cutout. Suggested limits are full-width options, one per row, three of them (a suggestion below what's already spent is dropped). Limit is on drops the pill: the emoji, name and amount, set apart by space.",
+    checks: { Accent: "The “Stay under” card, red for over, category colours for jars.", Hierarchy: "1. The limit being set. 2. The jar. 3. Suggestions.", "Brand moment": "Limit is on.", Life: "Jars in category colours, the island showing June's spending." },
+    laws: `${LAW("hicks-law", "Hick")}: three suggestions around last month. ${LAW("fittss-law", "Fitts")}: full-width targets. ${LAW("peak-end-rule", "Peak-end")}: Limit is on closes the task.`,
+    steps: [
+      { id: "budget", title: "Budget board", note: "Example limits on June's real spending." },
+      { id: "budgetEmpty", title: "No limits yet", capture: "budget", note: "The real state. The capture's button reads “Set a October limit”; the proposal fixes it." },
+      { id: "budgetChoose", title: "Choose a category" },
+      { id: "budgetCompose", title: "Set the limit, camera island", note: "The S21 FE has a centred punch-hole, so T8's camera island carries June's spending." },
+      { id: "budgetComposeDock", title: "Set the limit, docked pill", note: "Phones without a centred cutout: the context docks as a glass pill once the header scrolls away." },
+      { id: "budgetEdit", title: "Edit a limit", note: "A page at XXXL (ADR-0090). The over amount sits on the page, not in a card." },
+      { id: "budgetCross", title: "Budget would cross" },
+      { id: "limitOn", title: "Limit is on (level door)" },
+    ] },
+  { id: "recovery", title: "Savings recovery", changed: "Amounts sit on the page, set apart by space; only Move money keeps the card, because it's an input. Statuses are one line (“25% of $440.000”, “June 1 · Citas…”). Month choices and destinations are radio rows.",
+    checks: { Accent: "Green for money saved back, amber for what's due.", Hierarchy: "1. The amount. 2. The schedule or progress. 3. Where the money goes.", "Brand moment": "Moved: a green check and the amount.", Life: "Category emoji, place emoji, a green progress jar." },
+    laws: `${LAW("goal-gradient-effect", "Goal-gradient")}: progress and “to go” on every visit.`,
+    steps: [
+      { id: "recoveryList", title: "Plans", note: "Example plan: the largest June expense, over 4 months." },
+      { id: "recoveryPick", title: "Expenses to recover", note: "Real June expenses, largest first, one status line each." },
+      { id: "recoveryDraft", title: "Plan the recovery" },
+      { id: "recoveryPlan", title: "Active plan" },
+      { id: "recoveryMove", title: "Move money" },
+      { id: "recoveryMoved", title: "Moved" },
+    ] },
+  { id: "close", title: "Month close", changed: "June's spending on the page. Each check is two lines: its name, then one status line that leads with the state in colour (Done, Warns, Reviewed). The lock confirmation lists three facts instead of a paragraph.",
+    checks: { Accent: "Coloured state words. Amber only where something warns.", Hierarchy: "1. June spending. 2. The checklist. 3. Lock.", "Brand moment": "June is complete.", Life: "Icon tiles per check." },
+    laws: `${LAW("goal-gradient-effect", "Goal-gradient")}: visible check states.`,
+    steps: [{ id: "closeReview", title: "Review", note: "Example: June." }, { id: "closeConfirm", title: "Confirm" }, { id: "closeDone", title: "June is complete" }] },
+  { id: "places", title: "Places", changed: "Places opens on Home's band. Place rows: emoji and name, balance, then type on one line. A place's balance sits on the page with “Change look” under it. Add a place gives each type a full-width option with its emoji.",
+    checks: { Accent: "The band and violet place tiles. Red only for debt.", Hierarchy: "1. What you have now. 2. Each balance. 3. Its type.", "Brand moment": "The band, as on Home.", Life: "Place emoji." },
+    laws: `${LAW("jakobs-law", "Jakob")}: the same band and hero as Home.`,
+    steps: [
+      { id: "places", title: "Places", note: "The total is real; per-place balances are examples that add up to it." },
+      { id: "placeDetail", title: "A place" },
+      { id: "placeAdd", title: "Add a place", note: "Types as full-width options, one per row, with room to breathe." },
+      { id: "emojiSheet", title: "Pick a look" },
+      { id: "secondPlace", title: "A second place (level door)" },
+    ] },
+  { id: "settings", title: "Settings", changed: "Appearance switch, two destination rows with one-line statuses, Sign out set apart in red, the lockup last.",
+    checks: { Accent: "Violet tiles, red only for Sign out.", Hierarchy: "1. Appearance. 2. Finances and Categories. 3. Sign out.", "Brand moment": "Lockup at the end.", Life: "Sun and moon in the switch." },
+    laws: `${LAW("fittss-law", "Fitts")}: Sign out apart from navigation.`,
+    steps: [{ id: "settings", title: "User and workspace", capture: "settings" }] },
+  { id: "categories", title: "Categories", changed: "The edit page drops the preview pill: the look shows live in the camera island while you scroll through name, emoji and colour. The picker in Post gets a solid checkbox tick.",
+    checks: { Accent: "The category's own colour on the swatch, violet for selection.", Hierarchy: "1. Name. 2. Emoji and colour. 3. Direction, then delete.", "Brand moment": "Make them yours: the island updates live.", Life: "Emoji grid and colour swatches." },
+    laws: `${LAW("aesthetic-usability-effect", "Aesthetic-usability")}: a live preview that never scrolls away.`,
+    steps: [{ id: "categories", title: "Categories" }, { id: "categoryEdit", title: "Edit a category" }, { id: "categoryPicker", title: "Category picker in Post" }] },
+  { id: "setup", title: "Setup and first run", changed: "Setup is approved as is. The splash is a proposal only: it keeps the chosen look's halo, stroked wordmark, “Unlocking Lukapp…” status and footer, and scales the promise for XXXL. The chosen splash stays the one in design/connecting.",
+    checks: { Accent: "The splash's violet.", Hierarchy: "1. The mark. 2. The promise. 3. The status.", "Brand moment": "“Las lucas tienen un para qué.”", Life: "The halo." },
+    laws: `${LAW("doherty-threshold", "Doherty threshold")}: the status line says what's happening.`,
+    steps: [{ id: "splash", title: "Splash (proposal)" }, { id: "setup", title: "Where does your money go? (approved)" }, { id: "setupDone", title: "You're set" }] },
+  { id: "access", title: "Access and devices", changed: "The lock screen is approved as is. Device access unavailable is now a centred moment with a large red icon, a plain title (“This phone lost access”), a reassurance, and the two steps to fix it. Sign out is the pinned action, because it's the way back in.",
+    checks: { Accent: "Red only for the lost-access state.", Hierarchy: "1. What happened. 2. The two steps. 3. The action.", "Brand moment": "The lockup on the lock screen.", Life: "Numbered steps." },
+    laws: `${LAW("peak-end-rule", "Peak-end")}: a failure that says what to do next.`,
+    steps: [{ id: "locked", title: "Lukapp is locked (approved)" }, { id: "nameDevice", title: "Name this device" }, { id: "otherDevice", title: "Another phone uses Lukapp" }, { id: "accessError", title: "This phone lost access" }] },
+  { id: "filters", title: "History: sort and filter, one at a time", changed: "Chosen: one filter at a time. History shows the four filters (sort, places, categories, dates) as rows with their current value; each opens its own sheet with full-width options. Proposals A (one sheet) and C (a page) are dropped.",
+    checks: { Accent: "Violet only for the chosen option and the pinned Show.", Hierarchy: "1. What History is showing now. 2. One filter's options. 3. Show.", "Brand moment": "–", Life: "Icon tiles per filter." },
+    laws: `${LAW("hicks-law", "Hick")}: one choice at a time. ${LAW("cognitive-load", "Cognitive load")}: the current filters stay visible on History.`,
+    steps: [
+      { id: "filterB", title: "The filters on History" },
+      { id: "filterBDates", title: "One filter: Dates" },
+      { id: "filterBSort", title: "One filter: Sort" },
+    ] },
+  { id: "pieces", title: "Other pieces of the D3 screens", changed: "Reverse entry shows what will happen as two rows (Barbero stays, a reversal is added) and the net effect, $0, instead of a paragraph. Posted drops the pill.",
+    checks: { Accent: "Red for Reverse, green for the reversal amount.", Hierarchy: "1. The two entries. 2. Net effect. 3. The action.", "Brand moment": "Posted.", Life: "Category emoji." },
+    laws: `${LAW("peak-end-rule", "Peak-end")}: Reverse shows its result before you act.`,
+    steps: [{ id: "reverse", title: "Reverse entry" }, { id: "transfer", title: "Post a transfer" }, { id: "posted", title: "Posted" }] },
+];
+
+function figure(caption, phone) {
+  const fig = document.createElement("figure");
+  fig.innerHTML = `<figcaption>${caption}</figcaption>`;
+  fig.append(phone);
+  const meas = document.createElement("div");
+  meas.className = "meas";
+  fig.append(meas);
+  return fig;
+}
+
+function build() {
+  const main = document.getElementById("flows");
+  document.getElementById("toc").innerHTML = FLOWS.map((f) => `<a href="#${f.id}">${f.title}</a>`).join("");
+  for (const flow of FLOWS) {
+    const section = document.createElement("section");
+    section.className = "flow";
+    section.id = flow.id;
+    section.innerHTML = `<div class="screen-head"><span class="eyebrow">${flow.steps.length} ${flow.steps.length === 1 ? "screen" : "steps"}</span><h2>${flow.title}</h2><p class="changed">${flow.changed}</p></div>
+      <div class="checklist">${Object.entries(flow.checks).map(([k, v]) => `<div class="check"><h3>${k}</h3><p>${v}</p></div>`).join("")}</div>
+      <p class="laws">Laws of UX, as hypotheses to test: ${flow.laws}</p>`;
+    flow.steps.forEach((step, index) => {
+      const head = document.createElement("div");
+      head.className = "step";
+      head.innerHTML = `<h3><span class="step-num">${index + 1}</span>${step.title}</h3>${step.note ? `<p class="step-note">${step.note}</p>` : ""}`;
+      section.append(head);
+      const rail = document.createElement("div");
+      rail.className = "rail";
+      const row = document.createElement("div");
+      row.className = "row-scale";
+      if (step.capture) {
+        const cap = window.ASSETS.caps[`${step.capture}-2.0`];
+        const fig = figure(`<b>Today · 2.0<span class="tag">real S21 FE</span></b>D2 capture, light.`, capturePhone({ screen: step.capture, scale: "2.0" }));
+        if (cap) fig.querySelector(".meas").innerHTML = `<b>${cap.screenHeights.toFixed(2)}</b> screen-heights · measured on device`;
+        row.append(fig);
+      }
+      const frames = [["2.0", "light"], ["2.0", "dark"]];
+      if (index === 0) frames.push(["1.3", "light"]);
+      for (const [scale, mode] of frames) {
+        const view = STEPS[step.id]();
+        const phone = proposalPhone({ screen: `${flow.id}/${step.id}`, scale, mode, view });
+        phone.dataset.step = step.id;
+        phone.dataset.scrollTo = view.scrollTo || "";
+        row.append(figure(`<b>D4 · ${scale} · ${mode}<span class="tag">proposal</span></b>${view.sheet ? "Sheet." : "Scroll it."}`, phone));
+      }
+      rail.append(row);
+      section.append(rail);
+    });
+    main.append(section);
+  }
+}
+
+function finish() {
+  document.querySelectorAll('.phone[data-variant="d3"]').forEach((phone) => {
+    applyType(phone, phone.dataset.scale);
+    fitHeroes(phone, phone.dataset.scale);
+  });
+  const results = {};
+  document.querySelectorAll('.phone[data-variant="d3"]').forEach((phone) => {
+    const m = measure(phone);
+    const hero = phone.querySelector(".hero-num");
+    phone.closest("figure").querySelector(".meas").innerHTML = `<b>${m.screens.toFixed(2)}</b> screen-heights · HTML estimate · ${Math.round(m.content)} / ${Math.round(m.view)} dp${hero ? ` · hero ${hero.dataset.size} dp` : ""}`;
+    if (phone.dataset.scale === "2.0" && phone.classList.contains("light")) results[phone.dataset.screen] = m;
+    if (phone.dataset.scrollTo) { const scroll = phone.querySelector("[data-scroll]"); scroll.scrollTop = scroll.querySelector(phone.dataset.scrollTo).offsetTop - 64; }
+  });
+  document.getElementById("measure-table").innerHTML = `<thead><tr><th>Flow</th><th>Step</th><th>Today 2.0</th><th>D4 2.0</th></tr></thead><tbody>${FLOWS.flatMap((flow) => flow.steps.map((step) => {
+    const cap = step.capture && window.ASSETS.caps[`${step.capture}-2.0`];
+    const m = results[`${flow.id}/${step.id}`];
+    return `<tr><td>${flow.title}</td><td>${step.title}</td><td class="num">${cap ? cap.screenHeights.toFixed(2) : "–"}</td><td class="num">${m ? m.screens.toFixed(2) : "–"}</td></tr>`;
+  })).join("")}</tbody>`;
+  const result = window.audit();
+  document.getElementById("audit-grid").innerHTML = `<div class="fact"><b class="${result.pass ? "ok" : "bad"}">${result.pass ? "Pass" : "Issues"}</b><span>${result.phones} D4 frames</span></div>` +
+    Object.entries(result.summary).map(([check, n]) => `<div class="fact"><b class="${n ? "bad" : "ok"}">${n}</b><span>${check}</span></div>`).join("");
+  document.getElementById("audit-table").innerHTML = result.issues.length
+    ? `<thead><tr><th>Check</th><th>Frame</th><th>Element</th><th>Detail</th></tr></thead><tbody>${result.issues.slice(0, 80).map((i) => `<tr><td>${i.check}</td><td>${i.where}</td><td>${esc(i.text)}</td><td class="num">${i.detail}</td></tr>`).join("")}</tbody>` : "";
+  const steps = FLOWS.reduce((n, f) => n + f.steps.length, 0);
+  const sheets = FLOWS.flatMap((f) => f.steps).filter((s) => STEPS[s.id]().sheet).length;
+  document.getElementById("facts").innerHTML = [
+    [String(FLOWS.length), "flows, from intake to access"],
+    [String(steps), "steps, each in light and dark at 2.0"],
+    [String(sheets), "stay sheets: pickers and short decisions"],
+    [result.pass ? "Pass" : `${result.issues.length}`, `audit on ${result.phones} frames`],
+  ].map(([b, s]) => `<div class="fact"><b>${b}</b><span>${s}</span></div>`).join("");
+}
+
+const PRIMITIVES = [
+  ["Status text style", "Text variant=\"status\" (14 sp, cap 1.3, line 1.35); numberOfLines={1} in rows", "Short facts under a row or a heading. Capped at 1.3, so 2.0 reads like 1.3 and a status stays one line. Prose (explanations, legal copy) keeps body or meta and is never capped. In a row, a cut status keeps its full text in the row's accessibilityLabel and on the next screen (Apple's larger-text criteria allow this for list rows)."],
+  ["StatusLine", "state?: {label, tone, icon}, text", "One status line that can lead with a coloured state word and icon (Ready, Warns, Done, Connected). Replaces StatusBadge pills in rows."],
+  ["OptionList", "options: {label, leading?}[], value, onChange", "Full-width 60 dp options, one per row, 8 dp apart, a tick on the chosen one. Replaces chips for limits, place types, dates and sort at XXXL."],
+  ["HeroBlock", "label, amount, tone?, line?, extra?", "A main number on the page, no card: label, currency, the hero, then an optional jar or status. Use TintCard only when the number is being entered or decided."],
+  ["ContextIsland", "emoji, text, accessibilityLabel", "Context that stays visible while the page scrolls (spending while setting a limit, the live category look). Camera island on a centred cutout (T8); a docked glass pill otherwise."],
+  ["BudgetRow", "category, limitMinorUnits, consumptionMinorUnits, onPress", "Category line, left or over (red), a 14 dp jar, then “spent of limit” as a status. The default tier keeps the jar grid."],
+  ["ChoiceRow", "label, detail?, selected, kind: \"radio\" | \"checkbox\", leading?", "72 dp rows, two per card; the detail is a status line. The checkbox tick is a 2.6 stroke so it reads at small sizes."],
+  ["CenteredMoment", "icon, tone, title, body?, emoji?, amount?", "Confirmations, level doors and failures. Space, not pills, carries the hierarchy. Actions go in the ActionBar."],
+  ["SheetHeader", "title, eyebrow?, onClose", "56 dp title row with a 56 dp close button."],
+  ["EmojiGrid / SwatchGrid", "options, value, onChange, columns: 4", "56–60 dp targets; pickers, so the two-per-group rule doesn't apply."],
+];
+
+const DECISIONS = [
+  "<b>Status text capped at 1.3.</b> This relaxes “body text is never capped” for short status facts only. Prose stays uncapped. If you'd rather keep the rule absolute, status lines can wrap at full size instead, at the cost of the crowding you pointed out.",
+  "<b>Truncated status lines in rows.</b> One line, with the full text in the screen-reader label and on the next screen. Apple's larger-text criteria accept this for list rows.",
+  "<b>D3 rows.</b> D3's History, Batch and Overview rows still use a two-line grey description at meta size. Apply the new status style there too, so both pages match?",
+  "<b>Sign out leads on “This phone lost access”,</b> because it's the way back in. “Check again” is secondary.",
+  "<b>Three suggested limits instead of four.</b> The one below what's already spent is dropped, because that limit would start out over.",
+  "<b>Sort and filter:</b> one at a time (chosen). D3's History screen uses the same four filter rows.",
+  "<b>Notification intake on iOS</b> isn't drawn. The APK showed Android only; send the iOS screens and I'll add them.",
+  "<b>From round 1, still open:</b> Now/Later tabs on Candidates; Discarded inside intake; a budget category list sorted by last month's spending; Places' history shortcut moved into the place's page.",
+];
+
+const COMMENTS = [
+  ["Candidate rows (round 1)", "Too crowded: four children in one row.", "Three lines: category, money, then one status line that leads with the state (Ready, Pick a category)."],
+  ["Ready total, Nothing waiting, intake health", "Don't use cards to mark the main component everywhere.", "Cards removed. The total, the state and the health sit on the page; space and colour set the hierarchy."],
+  ["“Android listener · working”", "A status line should be one line.", "Status style capped at 1.3, one line: “Connected · not reading any app”."],
+  ["Discarded copy", "Research how to make long text work in little space.", "Front-loaded short sentences, one status line per item, details one tap away (Intuit, Apple's larger-text criteria). Applied to Discarded and the intake disclosure."],
+  ["Intake privacy facts", "Wait for the real intake content.", "Rebuilt from the APK screenshots: disclosure step, hub, add an app, choose a place, reading, turn off and wipe."],
+  ["Alerts and budget rows", "Good at 1.3, crowded at 2.0; shrink to keep one line.", "“$672.225 of $600.000” is now a one-line status at 1.3 size."],
+  ["Budget “Stay under”", "The right use of the card: it's the number that matters.", "Kept."],
+  ["Spending pill above “Stay under”", "Not the first thing; move it to the island or dock.", "June's spending is in the camera island; a docked-pill frame shows phones without a centred cutout."],
+  ["Suggested limits", "One column, room for the number.", "Full-width options, one per row, three of them."],
+  ["New limit options", "Use the whole width; vertical space is fine.", "Full-width options."],
+  ["Limit is on", "The pill doesn't need to be a pill.", "Emoji, name and amount set apart by space."],
+  ["Recovery rows", "Fix the spacing; smaller and one line.", "Status lines at 1.3 size, one line each."],
+  ["Month close checklist", "Lower the font, better spacing, less crowded.", "Two lines per check: name, then a one-line status led by the coloured state."],
+  ["Place types", "Give the buttons the whole column.", "Full-width options with each type's emoji."],
+  ["Edit category look", "Use the island or dock pattern.", "The live look is in the camera island while the form scrolls."],
+  ["Category picker", "Fix the icon.", "A solid 2.6-stroke tick in the checkbox."],
+  ["Splash", "Keep the existing splash elements; propose only.", "Marked as a proposal; it keeps the chosen splash's halo, stroked wordmark and “Unlocking Lukapp…” status."],
+  ["Setup", "Right on the money.", "Unchanged."],
+  ["Lock screen", "Go with this.", "Unchanged."],
+  ["Device access unavailable", "Make it more noticeable.", "A centred moment: large red icon, “This phone lost access”, two numbered steps, Sign out pinned."],
+  ["Sort and filter", "More proposals; the 2.0 view needs work.", "Three proposals: one sheet (A), one filter at a time (B, two frames), and a page with sections that open in place (C)."],
+  ["Reverse entry", "Another proposal; this one is messy.", "Two rows (Barbero stays, a reversal is added) and the net effect, $0."],
+];
+
+
+build();
+document.getElementById("primitive-table").innerHTML = `<thead><tr><th>Primitive</th><th>Props</th><th>XXXL behaviour</th></tr></thead><tbody>${PRIMITIVES.map(([a, b, c]) => `<tr><td><b>${a}</b></td><td><code>${esc(b)}</code></td><td>${c}</td></tr>`).join("")}</tbody>`;
+document.getElementById("decision-list").innerHTML = DECISIONS.map((d) => `<li>${d}</li>`).join("");
+document.getElementById("comment-table").innerHTML = `<thead><tr><th>Where</th><th>You said</th><th>Change</th></tr></thead><tbody>${COMMENTS.map(([a, b, c]) => `<tr><td>${a}</td><td>${b}</td><td>${c}</td></tr>`).join("")}</tbody>`;
+document.fonts.ready.then(() => requestAnimationFrame(finish));
+</script>

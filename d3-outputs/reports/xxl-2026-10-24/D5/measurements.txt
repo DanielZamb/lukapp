@@ -1,0 +1,36 @@
+Flow	Step	Today 2.0	D5 2.0
+Home	What do you want to do?	–	1.00
+Home	A category went over	1.26	1.85
+Home	Loading	–	1.17
+Post money	Pick a place	–	1.63
+Post money	Pick a date	–	1.00
+Post money	Add to batch	–	2.14
+Post money	Can't post yet	–	2.26
+Post money	Couldn't post	–	2.37
+Post money	Candidate is gone	–	1.00
+Categories while posting	Three is the most	–	1.69
+Categories while posting	Which one is primary?	–	1.00
+Categories while posting	One that covers them	–	1.12
+Categories while posting	Add your own	–	1.79
+Categories while posting	Delete a category	–	1.00
+Setup sheets	Currency	–	1.42
+Setup sheets	Time zone	–	1.42
+Setup sheets	Restyle a category	–	1.00
+Setup sheets	Basic setup is saved	–	1.06
+Setup sheets	Setup couldn't be confirmed	–	1.77
+This phone	Checking this phone	–	1.00
+This phone	Locked: biometrics only	–	1.00
+This phone	Sign in again	–	1.00
+This phone	Access moved	–	1.00
+This phone	Cleanup didn't finish	–	1.00
+This phone	Protection unavailable	–	1.00
+This phone	Build can't register	–	1.00
+States in screens already drawn	Overview, Bars	7.66	1.75
+States in screens already drawn	History, nothing matches	–	1.18
+States in screens already drawn	History, nothing posted	–	1.00
+States in screens already drawn	History, load more	–	1.00
+States in screens already drawn	A reversed entry	1.00	1.22
+States in screens already drawn	Recovery suspended	–	1.02
+States in screens already drawn	No savings place	–	1.19
+States in screens already drawn	Months don't match	–	1.00
+States in screens already drawn	Couldn't lock June	–	1.00

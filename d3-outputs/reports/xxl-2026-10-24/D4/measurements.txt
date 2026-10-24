@@ -1,0 +1,55 @@
+Flow	Step	Today 2.0	D4 2.0
+Drafts and candidates	Candidates	–	2.30
+Drafts and candidates	Review complete	1.17	1.05
+Drafts and candidates	Before you use intake	–	1.63
+Drafts and candidates	Discarded notifications	–	1.00
+Drafts and candidates	Records added	–	1.00
+Drafts and candidates	Month Close warning	–	1.00
+Notification intake (Android)	Before you turn it on	–	2.15
+Notification intake (Android)	Intake, nothing read yet	–	3.28
+Notification intake (Android)	Add an app	–	1.51
+Notification intake (Android)	Where its alerts go	–	1.68
+Notification intake (Android)	Intake, reading Nu	–	1.90
+Notification intake (Android)	Turn off and wipe	–	1.20
+Alerts	Alerts	–	1.09
+Alerts	Nothing crossed a line	–	1.00
+Plans	Plans	–	1.00
+Budgets	Budget board	–	2.02
+Budgets	No limits yet	1.00	1.00
+Budgets	Choose a category	–	1.60
+Budgets	Set the limit, camera island	–	1.40
+Budgets	Set the limit, docked pill	–	1.37
+Budgets	Edit a limit	–	1.40
+Budgets	Budget would cross	–	1.00
+Budgets	Limit is on (level door)	–	1.00
+Savings recovery	Plans	–	1.00
+Savings recovery	Expenses to recover	–	1.49
+Savings recovery	Plan the recovery	–	2.73
+Savings recovery	Active plan	–	2.10
+Savings recovery	Move money	–	1.79
+Savings recovery	Moved	–	1.00
+Month close	Review	–	1.75
+Month close	Confirm	–	1.00
+Month close	June is complete	–	1.00
+Places	Places	–	1.97
+Places	A place	–	2.04
+Places	Add a place	–	1.78
+Places	Pick a look	–	1.00
+Places	A second place (level door)	–	1.00
+Settings	User and workspace	1.58	1.22
+Categories	Categories	–	1.86
+Categories	Edit a category	–	2.06
+Categories	Category picker in Post	–	1.48
+Setup and first run	Splash (proposal)	–	1.00
+Setup and first run	Where does your money go? (approved)	–	2.93
+Setup and first run	You're set	–	1.00
+Access and devices	Lukapp is locked (approved)	–	1.00
+Access and devices	Name this device	–	1.00
+Access and devices	Another phone uses Lukapp	–	1.40
+Access and devices	This phone lost access	–	1.19
+History: sort and filter, one at a time	The filters on History	–	1.04
+History: sort and filter, one at a time	One filter: Dates	–	1.03
+History: sort and filter, one at a time	One filter: Sort	–	1.06
+Other pieces of the D3 screens	Reverse entry	–	1.71
+Other pieces of the D3 screens	Post a transfer	–	2.22
+Other pieces of the D3 screens	Posted	–	1.00

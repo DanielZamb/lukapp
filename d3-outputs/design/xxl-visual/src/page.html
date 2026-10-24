@@ -1,0 +1,243 @@
+<title>Lukapp XXXL Visual Pass</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/*@FONTS@*/
+/*@page.css@*/
+/*@app.css@*/
+</style>
+
+<!--@SPRITE@-->
+
+<div class="wrap">
+  <header class="intro">
+    <span class="eyebrow">Lukapp · D3 design pass · XXXL tier only (fontScale ≥ 1.3)</span>
+    <h1>Big text, same Lukapp</h1>
+    <p class="lede">D2 made every XXXL screen fit. This pass gives them their character back. The money leads each screen and keeps its colour, violet marks the one thing to do, emoji tiles carry the categories, and Home opens on a brand band like the splash. D2's structure and spacing stay underneath.</p>
+    <p><span class="round-tag">Round 2 · chosen</span>Rows now lead with the category and its emoji, then the money. The description sits last in grey, two lines at most, with the full text in Entry details and the screen-reader label. Date headings fit one line. Home pins Post money at the bottom.</p>
+    <div class="facts" id="facts"></div>
+    <div class="toggle"><span>Descriptions in rows:</span><span class="opts" role="group" aria-label="Descriptions in rows">
+      <button type="button" id="desc-two" aria-pressed="true">Two lines (proposal)</button><button type="button" id="desc-full" aria-pressed="false">Full text</button></span>
+      <span>Switching re-measures every frame and re-runs the audit.</span></div>
+    <nav class="toc" aria-label="Screens" id="toc"></nav>
+  </header>
+  <main id="screens"></main>
+
+  <section class="panel" id="measurements">
+    <span class="eyebrow">Scroll length</span>
+    <h2>Screen-heights, today against D3</h2>
+    <p>Today is D2's measurement on the real S21 FE. D3 is measured in this page: scroll content ÷ visible scroll area, the same definition D2's capture manifests use. It's an HTML estimate.</p>
+    <div class="table-scroll"><table id="measure-table"></table></div>
+  </section>
+
+  <section class="panel" id="audit">
+    <span class="eyebrow">window.audit()</span>
+    <h2>Checks on every D3 frame</h2>
+    <p>Overflow past the 320 dp screen, clipped text, descriptions cut to two lines without the full text in the row's screen-reader label, more than two items in a group, targets under 56 dp (primary 68, secondary 60, input 64), WCAG AA text contrast in light and dark, and the hero rule (never below today's size, never row-money size). Run <code>audit()</code> in the console for the full list.</p>
+    <div class="audit-grid" id="audit-grid"></div>
+    <div class="table-scroll"><table id="audit-table"></table></div>
+  </section>
+
+  <section class="panel" id="primitives">
+    <span class="eyebrow">For the T0 follow-up</span>
+    <h2>Primitives the screens need</h2>
+    <p>Each one renders its XXXL treatment only when <code>tier === "xxxl"</code>. In the default and reflow tiers it returns the component the screen renders today, so default pixels stay identical and <code>defaultTier.test.ts</code> keeps passing unchanged.</p>
+    <div class="table-scroll"><table id="primitive-table"></table></div>
+  </section>
+
+  <section class="panel" id="decisions">
+    <span class="eyebrow">For the user</span>
+    <h2>Decisions</h2>
+    <ol class="decisions" id="decision-list"></ol>
+  </section>
+
+  <footer class="foot">
+    <p><b>How text is sized.</b> The S21 FE runs Android 14's non-linear font scaling, and D2's captures confirm it (a 44 sp hero line measures 52.1 dp at 2.0; the AOSP curve gives 52.0). Text here follows that curve, and React Native's <code>maxFontSizeMultiplier</code> caps from <code>typography.ts</code>, which scale linearly by the cap when the system scale is larger. Browser and native text layout still differ, so every length here is an estimate until it's checked on the phone.</p>
+    <p><b>Content.</b> Real data from D2's S21 FE captures (balance, 53 movements, 33 categories, Barbero entry). October has no spending yet, so Overview and Category look show June, summed from the captured movements. Category colours are assumed from the app's 28-colour palette. The status bar, nav bar and keyboard are crops of the real captures; their dark versions are inverted crops.</p>
+    <p>Sources: <code>reports/xxl-2026-10-24/D3-visual-pass.md</code>, D2 <code>audit.md</code> and <code>recommendation.md</code>, <code>design/xxxl-system/XXXL-DESIGN.md</code>, <code>apps/mobile/src/ui/tokens.ts</code> and <code>typography.ts</code>. Built by <code>design/xxl-visual/build.py</code>.</p>
+  </footer>
+</div>
+
+<script>
+/*@ASSETS@*/
+/*@engine.js@*/
+/*@screens.js@*/
+
+const LAW = (slug, name) => `<a href="https://lawsofux.com/${slug}/" target="_blank" rel="noopener">${name}</a>`;
+const PLAN = [
+  { id: "home", title: "Home", capture: "home", changed: "The brand header comes back (lockup, bell, profile) inside a violet band with the curled-L watermark from the splash. The balance gets its full hero size on its own line under COP. Round 2: Post money is pinned at the bottom in an ActionBar, so posting is always one labelled tap away. Tapping the balance still opens “What do you want to do?”. Drafts keeps its violet tile, and Overview and Plans keep their icon tiles.",
+    checks: { Accent: "Two violets with two jobs. The pinned Post money is the screen's one primary button. The Drafts tile is the one solid content surface, and the white band keeps them apart.", Hierarchy: "1. The balance, ~46 dp against ~35 dp today. 2. Post money, always in the same place. 3. Drafts. 4. Overview and Plans.", "Brand moment": "Lockup, bell and profile sit in the band. Its tint and the faint curled L echo the splash, and the dark band uses the splash's night colour #21132f.", Life: "COP in violet, a wallet chip for “Across 6 places”, icon tiles on destinations." },
+    laws: `${LAW("fittss-law", "Fitts")}: a full-width 68 dp target that never moves and sits in thumb reach. ${LAW("jakobs-law", "Jakob's law")}: a labelled bottom action beats a hidden tap on a number. ${LAW("von-restorff-effect", "Von Restorff")}: one primary button per screen. Test whether the dad finds posting without help.` },
+  { id: "history", title: "History", capture: "history", changed: "Money comes first, in a tinted Net card at screen-title size with Out and In under it, In in green. Search follows, then the four filters as rows (Sort, Places, Categories, Dates); each opens its own sheet, one filter at a time. Round 2: each date heading is one line, the date with the day's net, plus the place when the whole day shares it. Each movement leads with its category and emoji, then the amount on its own coloured line, then the description in grey, two lines at most.",
+    checks: { Accent: "The tinted Net card and green incoming money. Controls are neutral so they read as tools, not content.", Hierarchy: "1. Net −$3.1M. 2. Date and day net. 3. Category, then amount, then the grey description.", "Brand moment": "The same violet tint as Home's band and Post's amount card, so totals always look like this.", Life: "Category emoji in category-coloured tiles beside the category name, swap tiles for transfers, colour in the money." },
+    laws: `${LAW("selective-attention", "Selective attention")}: the money before the tools. ${LAW("chunking", "Chunking")} and ${LAW("law-of-common-region", "Common region")}: days and pairs. ${LAW("cognitive-load", "Cognitive load")}: a short, repeated label (the category) is faster to scan than free text that wraps differently on every row.` },
+  { id: "post", title: "Post, keyboard open", capture: "post-single-keyboard", keyboard: true, changed: "The amount is the moment again. It sits in a focused violet card at hero size with a caret, and a line says which way the money moves. One and Batch are a real segmented control. The entry types stay visible, two per row with a check. Place, category and date get tiles. Post is pinned above the real keyboard.",
+    checks: { Accent: "The focus ring on the amount card, and the pinned violet Post.", Hierarchy: "1. −32.050 at hero size. 2. Post. 3. Entry type, description, details.", "Brand moment": "Same tint card as History's Net. Posting looks like the money it creates.", Life: "Emoji tiles for 💟 Nu cajita and 🚌 Transporte, an arrow on the direction line, a check on the chosen type." },
+    laws: `${LAW("fittss-law", "Fitts")}: Post is always reachable above the keyboard. ${LAW("hicks-law", "Hick")}: three types, visible and paired, nothing hidden. ${LAW("jakobs-law", "Jakob")}: a segmented control reads as a mode switch, stacked grey buttons read as a menu. ${LAW("peak-end-rule", "Peak-end")}: the amount is the peak of the task.`,
+    note: "Today's capture is the empty form (−0). The proposal shows the same form filled with the first captured movement." },
+  { id: "batch", title: "Post, batch", capture: "post-batch-closed", changed: "The batch net leads at hero size in the same tinted card as single Post, with the count on the Batch tab. Round 2: drafts use the History row (category and emoji, amount with a 56 dp remove button, grey description), and the shared place moves to the section heading. “Not posted yet” replaces the three-line note. Post 3 and Add one are pinned.",
+    checks: { Accent: "Count badge on the Batch tab and the pinned Post 3.", Hierarchy: "1. Net −59.750. 2. Each draft's category and amount. 3. Add one.", "Brand moment": "One amount-card language for single and batch.", Life: "Emoji tiles beside each category, money on its own line." },
+    laws: `${LAW("goal-gradient-effect", "Goal-gradient")}: “Post 3” and the tab badge show how close the batch is. ${LAW("zeigarnik-effect", "Zeigarnik")}: “Held on this device” says what is unfinished.`,
+    note: "Today's capture is the empty batch. The proposal shows three captured movements queued." },
+  { id: "overview", title: "Overview", capture: "overview-list", changed: "Net, Out and In move into the same tinted card as History. Go to tx history drops from the primary violet to a secondary row, so the categories lead. The top categories use the same row as History (emoji and name, amount, then a share bar in their colour), then View all 33.",
+    checks: { Accent: "The Net card and List selected in violet. Nothing else on screen uses the primary fill.", Hierarchy: "1. Net and Out. 2. Top four categories. 3. View all 33.", "Brand moment": "Shared summary card with History.", Life: "Emoji coins, category-coloured share bars (length carries the meaning, colour is secondary), money on its own line." },
+    laws: `${LAW("von-restorff-effect", "Von Restorff")}: the history link no longer outshouts the content. ${LAW("millers-law", "Miller")} and ${LAW("chunking", "Chunking")}: two pairs, then a counted View all.`,
+    note: "Shown with June spending, because October is empty. The real October state would show $0 rows in the same layout." },
+  { id: "entry", title: "Entry details", capture: "entry-details", island: true, changed: "Entry details becomes a page at XXXL. The amount gets the hero rule (−80.000 under COP), with MONEY OUT and a green Posted badge. Facts become labelled tiles. Reverse entry sits in a danger tint, apart from Close details in the pinned footer. Nothing sticky at the top leaves the camera island room.",
+    checks: { Accent: "Green Posted badge, red-tinted Reverse entry set apart from Close.", Hierarchy: "1. −80.000. 2. Barbero. 3. When, category, place.", "Brand moment": "COP in violet above the hero, the same as every main amount.", Life: "💆 Personal Care tile, direction tile, calendar and wallet tiles." },
+    laws: `${LAW("law-of-proximity", "Proximity")}: labels above values. ${LAW("fittss-law", "Fitts")}: both actions pinned at full width. ${LAW("peak-end-rule", "Peak-end")}: the result is stated plainly before any action.` },
+  { id: "category", title: "Category look", capture: "category-look", island: true, changed: "The category's own colour tints the look card, with a large emoji tile and the June total at hero size. The repeated name chip and the unexplained 132 dp tail are gone. Recent rows lead with the date (every row shares the category), then the amount, then the grey description. Recent shows two, then View all 6 in History. Set a limit and Edit category are pinned.",
+    checks: { Accent: "The category colour, not violet, tints the summary. Violet stays on the one primary action.", Hierarchy: "1. COP 672.225. 2. Share of June's spending. 3. Recent.", "Brand moment": "Hero rule and pinned primary, as on every detail page.", Life: "🍔 at 64 dp, category colour, money on its own line." },
+    laws: `${LAW("law-of-common-region", "Common region")}: one tinted card is the summary. ${LAW("selective-attention", "Selective attention")}: the total first, history second.`,
+    note: "Shown with June's Comida, because October's Arriendo has no spending yet." },
+];
+const VIEW = { home: "home", history: "history", "post-single-keyboard": "post", "post-batch-closed": "batch", "overview-list": "overview", "entry-details": "entry", "category-look": "category" };
+
+function figure(caption, phone, measureText) {
+  const fig = document.createElement("figure");
+  fig.innerHTML = `<figcaption>${caption}</figcaption>`;
+  fig.append(phone);
+  const meas = document.createElement("div");
+  meas.className = "meas";
+  meas.innerHTML = measureText || "";
+  fig.append(meas);
+  return fig;
+}
+
+function build() {
+  const main = document.getElementById("screens");
+  document.getElementById("toc").innerHTML = PLAN.map((s) => `<a href="#${s.id}">${s.title}</a>`).join("");
+  for (const plan of PLAN) {
+    const section = document.createElement("section");
+    section.className = "screen";
+    section.id = plan.id;
+    section.innerHTML = `<div class="screen-head"><span class="eyebrow">${plan.capture}</span><h2>${plan.title}</h2><p class="changed">${plan.changed}</p>
+      ${plan.note ? `<p class="laws">${plan.note}</p>` : ""}</div>
+      <div class="checklist">${Object.entries(plan.checks).map(([k, v]) => `<div class="check"><h3>${k}</h3><p>${v}</p></div>`).join("")}</div>
+      <p class="laws">Laws of UX, as hypotheses to test: ${plan.laws}</p>`;
+    for (const scale of ["1.3", "2.0"]) {
+      const rail = document.createElement("div");
+      rail.className = "rail";
+      const row = document.createElement("div");
+      row.className = "row-scale";
+      row.innerHTML = `<span class="scale-tag">fontScale ${scale}</span>`;
+      const cap = (window.ASSETS.caps || {})[`${plan.capture}-${scale}`];
+      row.append(figure(`<b>Today<span class="tag">real S21 FE</span></b>D2 capture, light. Scroll it.`, capturePhone({ screen: plan.capture, scale }),
+        cap ? `<b>${cap.screenHeights.toFixed(2)}</b> screen-heights${cap.reachable && cap.reachable !== cap.screenHeights ? `, ${cap.reachable.toFixed(2)} reachable` : ""} · measured on device` : ""));
+      const frames = ["light", "dark"].map((mode) => ({ mode, caption: mode, detail: "Scroll it." }));
+      if (plan.island && scale === "2.0") frames.push({ mode: "light", island: true, caption: "light · scrolled", detail: "Summary scrolled away, camera island shown (T8)." });
+      for (const extra of plan.extras || []) if (extra.scale === scale) frames.push(extra);
+      for (const frame of frames) {
+        const view = SCREENS[VIEW[plan.capture]](frame.opts);
+        if (frame.island) view.overlay = `<button class="island" aria-label="${view.pill.label}"><span class="em">${view.pill.emoji}</span><span class="cam" aria-hidden="true"></span><b>${view.pill.text}</b></button>`;
+        const phone = proposalPhone({ screen: plan.id, scale, mode: frame.mode, view });
+        if (frame.island) phone.dataset.island = "1";
+        if (frame.opts) phone.dataset.alternative = "1";
+        phone.dataset.scrollTo = view.scrollTo || "";
+        row.append(figure(`<b>D3 · ${frame.caption}<span class="tag">${frame.opts ? "alternative" : "proposal"}</span></b>${frame.detail}`, phone));
+      }
+      rail.append(row);
+      section.append(rail);
+    }
+    main.append(section);
+  }
+}
+
+function finish() {
+  document.querySelectorAll('.phone[data-variant="d3"]').forEach((phone) => {
+    applyType(phone, phone.dataset.scale);
+    fitHeroes(phone, phone.dataset.scale);
+  });
+  report();
+}
+
+// Measures every frame, fills the tables and re-runs the audit. Runs again
+// whenever the description toggle changes the rows.
+function report() {
+  const results = {};
+  document.querySelectorAll('.phone[data-variant="d3"]').forEach((phone) => {
+    const scale = phone.dataset.scale;
+    const scroll = phone.querySelector("[data-scroll]");
+    scroll.scrollTop = 0;
+    const m = measure(phone);
+    const hero = phone.querySelector(".hero-num");
+    const heroText = hero ? ` · hero ${hero.dataset.size} dp${hero.dataset.today ? ` (today ${hero.dataset.today})` : ""}` : "";
+    const meas = phone.closest("figure").querySelector(".meas");
+    meas.innerHTML = `<b>${m.screens.toFixed(2)}</b> screen-heights · HTML estimate · ${Math.round(m.content)} / ${Math.round(m.view)} dp${heroText}`;
+    if (phone.dataset.island) scroll.scrollTop = scroll.scrollHeight;
+    else if (phone.dataset.scrollTo) { const target = scroll.querySelector(phone.dataset.scrollTo); scroll.scrollTop = target.offsetTop - 8; }
+    if (!phone.dataset.island && !phone.dataset.alternative && phone.classList.contains("light")) results[`${phone.dataset.screen}-${scale}`] = { m, hero };
+  });
+  measurementTable(results);
+  auditPanel(window.audit());
+}
+
+function measurementTable(results) {
+  const rows = PLAN.map((plan) => {
+    const cells = ["1.3", "2.0"].map((scale) => {
+      const cap = (window.ASSETS.caps || {})[`${plan.capture}-${scale}`];
+      const d3 = results[`${plan.id}-${scale}`];
+      return `<td class="num">${cap ? cap.screenHeights.toFixed(2) : "–"}${cap && cap.reachable !== cap.screenHeights ? ` (${cap.reachable.toFixed(2)} reachable)` : ""}</td><td class="num">${d3 ? d3.m.screens.toFixed(2) : "–"}</td>`;
+    }).join("");
+    return `<tr><td>${plan.title}</td>${cells}</tr>`;
+  }).join("");
+  document.getElementById("measure-table").innerHTML = `<thead><tr><th>Screen</th><th>Today 1.3</th><th>D3 1.3</th><th>Today 2.0</th><th>D3 2.0</th></tr></thead><tbody>${rows}</tbody>`;
+  const home = results["home-2.0"], history = results["history-2.0"], overview = results["overview-2.0"];
+  document.getElementById("facts").innerHTML = [
+    [home && home.hero ? `${home.hero.dataset.size} dp` : "–", `Home balance at 2.0, one line. Today: ${home && home.hero ? home.hero.dataset.today : "–"} dp`],
+    [history ? history.m.screens.toFixed(1) : "–", "History screen-heights at 2.0, all 53 movements. Today: 22.5"],
+    ["Pinned", "Post stays above the real keyboard. Today it's covered at the scroll end"],
+    [overview ? overview.m.screens.toFixed(1) : "–", "Overview screen-heights at 2.0: two pairs, then View all 33. Today: 7.66"],
+  ].map(([b, s]) => `<div class="fact"><b>${b}</b><span>${s}</span></div>`).join("");
+}
+
+function auditPanel(result) {
+  document.getElementById("audit-grid").innerHTML = `<div class="fact"><b class="${result.pass ? "ok" : "bad"}">${result.pass ? "Pass" : "Issues"}</b><span>${result.phones} D3 frames</span></div>` +
+    Object.entries(result.summary).map(([check, n]) => `<div class="fact"><b class="${n ? "bad" : "ok"}">${n}</b><span>${check}</span></div>`).join("") +
+    `<div class="fact"><b>${result.truncated}</b><span>descriptions shortened to two lines, all with full text in the label</span></div>`;
+  document.getElementById("audit-table").innerHTML = result.issues.length
+    ? `<thead><tr><th>Check</th><th>Frame</th><th>Element</th><th>Detail</th></tr></thead><tbody>${result.issues.slice(0, 60).map((i) => `<tr><td>${i.check}</td><td>${i.where}</td><td>${esc(i.text)}</td><td class="num">${i.detail}</td></tr>`).join("")}</tbody>`
+    : "";
+}
+
+const PRIMITIVES = [
+  ["MoneyHero (long-value rule)", "currency, amount, negative?, tone?: \"default\" | \"positive\", floor?: number", "Currency on its own line in label type, primaryText. The number keeps the hero spec (44, cap 1.2). If it can't fit one line, it shrinks just enough to fit, never below floor (today's rendered size on that screen) and never to row-money size. If floor still overflows, it wraps at a group separator. Default tier: today's single-line Text, unchanged."],
+  ["BrandBand", "children, watermark?: boolean (default true)", "Home only. Full-bleed tint (#f3edfd light, splash night #21132f dark) under the status bar, holding the lockup, bell, profile, balance and places chip. Curled-L symbol at 9% (16% dark), decorative, hidden from screen readers. Default tier: renders children in today's header layout."],
+  ["TintCard", "tone: \"brand\" | \"category\", color?: CategoryStyle, focused?: boolean, children", "The summary surface: tint #f6f1fd and tint border #e6d9fa (dark #1b1328 and #36265a), 24 radius, 16 padding. Category tone mixes the category colour at 9%. Focused adds a 2 dp primary ring. Used by FlowSummary, the Post amount, the batch net, Category look."],
+  ["FlowSummary", "net, out, in, currency, scopeNote?", "TintCard with Net in screen type (positive tone when ≥ 0), then Out and In as a two-item group with direction tiles, In in positive. Replaces both CapitalFlow copies at XXXL. Default tier: the current CapitalFlow."],
+  ["EmojiTile / IconTile", "EmojiTile: emoji, style: CategoryStyle, size?: 48 | 64. IconTile: icon, tone: \"accent\" | \"neutral\" | \"positive\" | \"danger\"", "48 dp tile, 14 radius, colour at 15% with a 32% border. Emoji at 22 sp, cap 1.3, so it never outgrows the tile. Gives rows a leading mark without stealing more than 60 dp of text column."],
+  ["Money tone", "moneyTone(minorUnits) → TextTone", "In = positive, out = default, over a limit = danger. The sign stays in the text (− / +) so colour is never the only cue. XXXL only; see decision 1."],
+  ["DateSection", "date, summary?, children, sticky?", "Section-type date heading with a meta summary (place when shared, count, day net). 12 dp to the first card, 24 dp between its cards, 32 dp between dates. Shared facts move here from the rows."],
+  ["ChipSet", "options: {value, label}[], value, onChange, columns: 2", "Two chips per row, 56 dp; a long option spans the row. Selected = primary tint, 2 dp primary border and a check icon. Replaces the wrapping entry-type pills at XXXL."],
+  ["Segmented", "options: {value, label, icon?, badge?}[], value, onChange", "56 dp segments on a pill track. Selected = background surface with primaryText; badge for counts. One/Batch and List/Bars. Default tier: ComposeModeToggle and the Overview toggle as today."],
+  ["ActionBar (D2)", "primary: {label, onPress, disabled, pending}, secondary?, status?", "Pinned footer, 12/16 padding, above the real keyboard (adjustResize) and safe inset. Reserves its height in the scroller. Primary 68, secondary 60, stacked."],
+  ["DestinationRow", "icon, title, detail, onPress", "Icon tile and chevron on the top line, title and detail full width below, so a 28 dp meta line keeps the 256 dp column."],
+  ["ShareBar", "value: 0–1, color", "8 dp track in the category colour at 16%, fill in the colour. Decorative next to the money, which stays the readable value."],
+  ["StatusBadge", "tone: \"positive\" | \"warning\" | \"danger\", icon, label", "Pill with an icon and label, tone at 12%. Status only, never the only way to read a number."],
+  ["PreviewGroup (D2)", "items, renderItem, totalCount, previewGroups = 2, viewAllLabel, onViewAll", "Two pairs, then a counted ghost “View all 33 categories” / “View all 6 in History”."],
+];
+
+const DECISIONS = [
+  "<b>Direction.</b> Round 2 is the chosen version.",
+  "<b>Money in</b> is positive green at XXXL. Violet stays for brand and actions.",
+  "<b>Home</b> keeps the lockup, THIS MONTH, bell and profile in the band, with the curled-L watermark.",
+  "<b>Post money on Home</b> is pinned at the bottom in an ActionBar (68 dp, primary). Tapping the balance still opens “What do you want to do?”.",
+  "<b>Default tier.</b> The same discoverability fix goes in a separate ticket with its own default baseline. The XXXL work keeps the default tier identical.",
+  "<b>Descriptions</b> in rows are shortened to two lines. The category and amount are never cut. The full text is in the row's TalkBack label and in Entry details, and <code>audit()</code> enforces it. The toggle at the top still shows full text for comparison.",
+  "<b>Date headings</b> fit one line (date and day net). The place shows under the date when the whole day shares it, otherwise at the start of each row's grey line.",
+  "<b>Copy</b> as proposed, including “Set a limit”. <b>Category colours</b> as shown, read from each category's style in the app.",
+  "<b>Overview's history link</b> moves to a secondary row. <b>Entry details</b> becomes a page at XXXL with a pinned Reverse entry / Close details footer, leaving room for the camera island.",
+];
+
+build();
+document.getElementById("primitive-table").innerHTML = `<thead><tr><th>Primitive</th><th>Props</th><th>XXXL behaviour and default-tier guarantee</th></tr></thead><tbody>${PRIMITIVES.map(([a, b, c]) => `<tr><td><b>${a}</b></td><td><code>${esc(b)}</code></td><td>${c}</td></tr>`).join("")}</tbody>`;
+document.getElementById("decision-list").innerHTML = DECISIONS.map((d) => `<li>${d}</li>`).join("");
+document.fonts.ready.then(() => requestAnimationFrame(finish));
+for (const [id, full] of [["desc-two", false], ["desc-full", true]]) {
+  document.getElementById(id).addEventListener("click", () => {
+    document.body.classList.toggle("full-desc", full);
+    document.getElementById("desc-two").setAttribute("aria-pressed", String(!full));
+    document.getElementById("desc-full").setAttribute("aria-pressed", String(full));
+    requestAnimationFrame(report);
+  });
+}
+</script>

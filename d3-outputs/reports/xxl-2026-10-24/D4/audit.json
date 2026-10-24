@@ -1,0 +1,16 @@
+{
+  "phones": 122,
+  "pass": true,
+  "summary": {
+    "overflow": 0,
+    "clipping": 0,
+    "truncation": 0,
+    "items per group": 0,
+    "target": 0,
+    "contrast": 0,
+    "hero": 0,
+    "icon": 0
+  },
+  "truncated": 31,
+  "issues": []
+}

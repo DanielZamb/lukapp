@@ -1,0 +1,272 @@
+<title>Lukapp XXXL States</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/*@FONTS@*/
+/*@page.css@*/
+/*@app.css@*/
+.flow { padding-block: 56px 8px; display: grid; gap: 20px; border-bottom: 1px solid var(--rule); }
+.step { display: grid; gap: 6px; padding-top: 18px; }
+.step h3 { font-size: 1.15rem; letter-spacing: -0.02em; }
+.step-note { font-size: 14px; color: var(--ink-2); max-width: 80ch; }
+.step-num { display: inline-grid; place-items: center; min-width: 26px; height: 26px; margin-right: 8px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+</style>
+
+<!--@SPRITE@-->
+
+<div class="wrap">
+  <header class="intro">
+    <span class="eyebrow">Lukapp · D5 design pass · XXXL tier only (fontScale ≥ 1.3)</span>
+    <h1>The sheets and states in between</h1>
+    <p class="lede">D3 drew the seven core screens and D4 every other flow. D5 covers what was still missing: the sheets those screens open, the phone checks around sign-in, and the error, empty and loading states. Same rules, nothing new to learn. Each state is shown at fontScale 2.0 in light and dark; the first of each group is also shown at 1.3.</p>
+    <div class="rules">
+      <div class="check"><h3>Same system</h3><p>Rows are category, money, one status line. Status lines and eyebrows are capped at 1.3. Options get the full width. The main action is pinned.</p></div>
+      <div class="check"><h3>Sheets or pages</h3><p>Pickers (place, date, category, currency, time zone) and short confirmations stay sheets. Anything you type into at length is a page, with its context in the camera island.</p></div>
+      <div class="check"><h3>Errors say what's safe</h3><p>One red line that says what happened and that nothing is lost, then the retry as the pinned action. Amber for “not yet”, red only for “didn't work”.</p></div>
+      <div class="check"><h3>Copy</h3><p>The app's own strings, shortened where they ran past two lines at 2.0. Every change is listed under “Copy changes”.</p></div>
+    </div>
+    <div class="facts" id="facts"></div>
+    <nav class="toc" aria-label="Groups" id="toc"></nav>
+  </header>
+  <main id="flows"></main>
+
+  <section class="panel" id="copy">
+    <span class="eyebrow">For review</span>
+    <h2>Copy changes</h2>
+    <p>Where the proposal shortens the app's current wording. The meaning stays; the current text is what ships today.</p>
+    <div class="table-scroll"><table id="copy-table"></table></div>
+  </section>
+
+  <section class="panel" id="measurements">
+    <span class="eyebrow">Scroll length</span>
+    <h2>Screen-heights per state at 2.0</h2>
+    <p>Scroll content ÷ visible scroll area, measured in this page. HTML estimates. Today is D2's device measurement where a capture exists.</p>
+    <div class="table-scroll"><table id="measure-table"></table></div>
+  </section>
+
+  <section class="panel" id="audit">
+    <span class="eyebrow">window.audit()</span>
+    <h2>Checks on every D5 frame</h2>
+    <p>The D3 and D4 checks: overflow, clipped text, one-line status lines cut without their full text in the row's label, more than two items in a group, targets under 56 dp (primary 68, secondary 60, input 64), AA contrast in light and dark, the hero rule, and every icon resolving.</p>
+    <div class="audit-grid" id="audit-grid"></div>
+    <div class="table-scroll"><table id="audit-table"></table></div>
+  </section>
+
+  <section class="panel" id="primitives">
+    <span class="eyebrow">For T0, on top of D3 and D4</span>
+    <h2>New primitives</h2>
+    <p>Same guarantee: each one renders its XXXL treatment only when <code>tier === "xxxl"</code>, so the default tier stays pixel-identical.</p>
+    <div class="table-scroll"><table id="primitive-table"></table></div>
+  </section>
+
+  <section class="panel" id="decisions">
+    <span class="eyebrow">Round 1</span>
+    <h2>Decisions</h2>
+    <ol class="decisions" id="decision-list"></ol>
+  </section>
+
+  <footer class="foot">
+    <p><b>Content.</b> Real where the captures have it: the balance, the categories, the movements and the places. Examples elsewhere, marked in each state: the over-limit bell, the posting errors, the setup error, the access states.</p>
+    <p><b>Not drawn.</b> The native date picker (Android's own calendar opens from “Pick a date”) and sign-in, which Clerk draws. Notification intake on iOS waits for the iOS screens.</p>
+    <p><b>Sizing.</b> Same model as D3 and D4: Android 14 non-linear font scaling plus the <code>typography.ts</code> caps, the real S21 FE status bar, nav bar and keyboard. Every length is an estimate until it's checked on the phone.</p>
+    <p>Built by <code>design/xxl-visual/build.py</code> from <code>src/states.html</code> and <code>src/states.js</code>, with the D3 engine, the D4 building blocks and the shared styles.</p>
+  </footer>
+</div>
+
+<script>
+/*@ASSETS@*/
+/*@engine.js@*/
+/*@screens.js@*/
+/*@flows.js@*/
+/*@states.js@*/
+
+const LAW = (slug, name) => `<a href="https://lawsofux.com/${slug}/" target="_blank" rel="noopener">${name}</a>`;
+const FLOWS = [
+  { id: "home", title: "Home", changed: "The balance's “What do you want to do?” sheet becomes two full rows, Post money first. A category over its limit stays behind the bell: the bell gets an amber dot and opens Alerts. New users still go straight into setup. Loading keeps the band and shows quiet blocks in the shape of what's coming.",
+    checks: { Accent: "Violet for actions, an amber dot on the bell when something is over.", Hierarchy: "1. The balance. 2. What needs you. 3. Where to go.", "Brand moment": "The band and curled L, even while loading.", Life: "“Getting your lucas…” instead of a bare spinner." },
+    laws: `${LAW("hicks-law", "Hick")}: two actions, the common one first. ${LAW("doherty-threshold", "Doherty threshold")}: blocks in the final layout, so nothing jumps.`,
+    steps: [
+      { id: "homeActions", title: "What do you want to do?", note: "Opens from the balance. Post money is also pinned on Home, so this sheet is the second way in." },
+      { id: "homeAlert", title: "A category went over", capture: "home", note: "Behind the bell (your call). Example: Comida over its June limit. The dot clears once Alerts is opened." },
+      { id: "homeLoading", title: "Loading" },
+    ] },
+  { id: "post", title: "Post money", changed: "Place and date open as sheets with full-width options. Date is Today, Yesterday or Pick a date, which opens Android's calendar. The batch editor is the same form with “Add to batch” pinned. A blocked post says what's missing in place and disables Post. A failed post says it's saved, and the retry is pinned. A candidate that's gone says so plainly.",
+    checks: { Accent: "Violet for the chosen option, amber for “not yet”, red for “didn't work”.", Hierarchy: "1. The amount. 2. What's missing or what happened. 3. The action.", "Brand moment": "COP in violet above every amount.", Life: "Place and category emoji in the pickers." },
+    laws: `${LAW("hicks-law", "Hick")}: three date options cover nearly every entry. ${LAW("postels-law", "Postel")}: a failed post keeps every answer.`,
+    steps: [
+      { id: "placePicker", title: "Pick a place" },
+      { id: "datePicker", title: "Pick a date", note: "Pick a date opens the native calendar (not drawn)." },
+      { id: "batchEditor", title: "Add to batch" },
+      { id: "postBlocked", title: "Can't post yet" },
+      { id: "postRetry", title: "Couldn't post" },
+      { id: "candidateGone", title: "Candidate is gone" },
+    ] },
+  { id: "pickcat", title: "Categories while posting", changed: "At the limit of three, an amber line explains it in one sentence and offers the way out. Primary is a single-choice sheet. Making a category that covers them, or adding your own, is a page with the live look in the camera island. Delete is a short sheet with two facts and the choice.",
+    checks: { Accent: "Violet for selection, amber for the limit, red for Delete.", Hierarchy: "1. The categories. 2. The limit. 3. Done.", "Brand moment": "The live look in the island.", Life: "Emoji grids." },
+    laws: `${LAW("millers-law", "Miller")}: three categories at most, said once. ${LAW("aesthetic-usability-effect", "Aesthetic-usability")}: the look updates as you choose.`,
+    steps: [
+      { id: "pickerLimit", title: "Three is the most" },
+      { id: "primary", title: "Which one is primary?" },
+      { id: "encompassing", title: "One that covers them" },
+      { id: "categoryCreate", title: "Add your own" },
+      { id: "categoryDelete", title: "Delete a category" },
+    ] },
+  { id: "setupsheets", title: "Setup sheets", changed: "Currency and time zone are search sheets with full-width choices, the likely ones first. Restyle in setup is a sheet with the look in the island. When places are deferred, setup says what's saved and what's next. A setup error keeps the answers and pins the retry.",
+    checks: { Accent: "Violet for the chosen currency or zone, red for the error line.", Hierarchy: "1. Search. 2. The likely answer. 3. Done.", "Brand moment": "The saved state names the place you chose.", Life: "Category emoji in setup." },
+    laws: `${LAW("hicks-law", "Hick")}: the likely currency and zone first. ${LAW("teslers-law", "Tesler")}: the phone's zone is preselected.`,
+    steps: [
+      { id: "currencies", title: "Currency" },
+      { id: "timeZone", title: "Time zone" },
+      { id: "setupRestyle", title: "Restyle a category" },
+      { id: "setupSaved", title: "Basic setup is saved" },
+      { id: "setupError", title: "Setup couldn't be confirmed" },
+    ] },
+  { id: "access", title: "This phone", changed: "Sign-in is Clerk's and isn't redrawn. Every phone state is the D4 centred moment: an icon, a plain title, one sentence on what's safe, and one pinned action when there is one. Soft grey icons for “wait” or “check this phone”, red only when something failed.",
+    checks: { Accent: "Red only for cleanup failure. Violet for the lock and sign-in.", Hierarchy: "1. What's happening. 2. Whether your information is safe. 3. The action.", "Brand moment": "The lockup while checking.", Life: "A calm ring while waiting." },
+    laws: `${LAW("peak-end-rule", "Peak-end")}: every failure says what's safe. ${LAW("doherty-threshold", "Doherty threshold")}: waiting states say what they're doing.`,
+    steps: [
+      { id: "confirming", title: "Checking this phone" },
+      { id: "biometrics", title: "Locked: biometrics only" },
+      { id: "reauth", title: "Sign in again" },
+      { id: "accessMoved", title: "Access moved" },
+      { id: "cleanupFailed", title: "Cleanup didn't finish" },
+      { id: "protectionUnavailable", title: "Protection unavailable" },
+      { id: "unsupported", title: "Build can't register" },
+    ] },
+  { id: "states", title: "States in screens already drawn", changed: "Overview Bars: one row per category with its jar and share of June. History with no matches says what search covered and pins Clear filters; empty History pins Post money; the end of the list shows how many are loaded and Load more. A reversed entry says so under the amount. Recovery suspended and no savings place each get one amber line. Month close mismatch is a centred moment; a failed lock keeps the sheet with the retry.",
+    checks: { Accent: "Category colours on bars, amber for “not yet”, red for the failed lock.", Hierarchy: "1. The data or the gap. 2. Why. 3. The way forward.", "Brand moment": "–", Life: "Category jars in Bars." },
+    laws: `${LAW("goal-gradient-effect", "Goal-gradient")}: recovery progress stays visible when suspended.`,
+    steps: [
+      { id: "overviewBars", title: "Overview, Bars", capture: "overview-list", note: "Today's capture is the List view; Bars wasn't captured." },
+      { id: "historyNoMatch", title: "History, nothing matches" },
+      { id: "historyEmpty", title: "History, nothing posted" },
+      { id: "historyMore", title: "History, load more" },
+      { id: "entryReversed", title: "A reversed entry", capture: "entry-details" },
+      { id: "recoverySuspended", title: "Recovery suspended" },
+      { id: "recoveryNoSavings", title: "No savings place" },
+      { id: "closeMismatch", title: "Months don't match" },
+      { id: "closeFailed", title: "Couldn't lock June" },
+    ] },
+];
+
+function figure(caption, phone) {
+  const fig = document.createElement("figure");
+  fig.innerHTML = `<figcaption>${caption}</figcaption>`;
+  fig.append(phone);
+  const meas = document.createElement("div");
+  meas.className = "meas";
+  fig.append(meas);
+  return fig;
+}
+
+function build() {
+  const main = document.getElementById("flows");
+  document.getElementById("toc").innerHTML = FLOWS.map((f) => `<a href="#${f.id}">${f.title}</a>`).join("");
+  for (const flow of FLOWS) {
+    const section = document.createElement("section");
+    section.className = "flow";
+    section.id = flow.id;
+    section.innerHTML = `<div class="screen-head"><span class="eyebrow">${flow.steps.length} ${flow.steps.length === 1 ? "screen" : "steps"}</span><h2>${flow.title}</h2><p class="changed">${flow.changed}</p></div>
+      <div class="checklist">${Object.entries(flow.checks).map(([k, v]) => `<div class="check"><h3>${k}</h3><p>${v}</p></div>`).join("")}</div>
+      <p class="laws">Laws of UX, as hypotheses to test: ${flow.laws}</p>`;
+    flow.steps.forEach((step, index) => {
+      const head = document.createElement("div");
+      head.className = "step";
+      head.innerHTML = `<h3><span class="step-num">${index + 1}</span>${step.title}</h3>${step.note ? `<p class="step-note">${step.note}</p>` : ""}`;
+      section.append(head);
+      const rail = document.createElement("div");
+      rail.className = "rail";
+      const row = document.createElement("div");
+      row.className = "row-scale";
+      if (step.capture) {
+        const cap = window.ASSETS.caps[`${step.capture}-2.0`];
+        const fig = figure(`<b>Today · 2.0<span class="tag">real S21 FE</span></b>D2 capture, light.`, capturePhone({ screen: step.capture, scale: "2.0" }));
+        if (cap) fig.querySelector(".meas").innerHTML = `<b>${cap.screenHeights.toFixed(2)}</b> screen-heights · measured on device`;
+        row.append(fig);
+      }
+      const frames = [["2.0", "light"], ["2.0", "dark"]];
+      if (index === 0) frames.push(["1.3", "light"]);
+      for (const [scale, mode] of frames) {
+        const view = STATES[step.id]();
+        const phone = proposalPhone({ screen: `${flow.id}/${step.id}`, scale, mode, view });
+        phone.dataset.step = step.id;
+        phone.dataset.scrollTo = view.scrollTo || "";
+        row.append(figure(`<b>D5 · ${scale} · ${mode}<span class="tag">proposal</span></b>${view.sheet ? "Sheet." : "Scroll it."}`, phone));
+      }
+      rail.append(row);
+      section.append(rail);
+    });
+    main.append(section);
+  }
+}
+
+function finish() {
+  document.querySelectorAll('.phone[data-variant="d3"]').forEach((phone) => {
+    applyType(phone, phone.dataset.scale);
+    fitHeroes(phone, phone.dataset.scale);
+  });
+  const results = {};
+  document.querySelectorAll('.phone[data-variant="d3"]').forEach((phone) => {
+    const m = measure(phone);
+    const hero = phone.querySelector(".hero-num");
+    phone.closest("figure").querySelector(".meas").innerHTML = `<b>${m.screens.toFixed(2)}</b> screen-heights · HTML estimate · ${Math.round(m.content)} / ${Math.round(m.view)} dp${hero ? ` · hero ${hero.dataset.size} dp` : ""}`;
+    if (phone.dataset.scale === "2.0" && phone.classList.contains("light")) results[phone.dataset.screen] = m;
+    if (phone.dataset.scrollTo) { const scroll = phone.querySelector("[data-scroll]"); scroll.scrollTop = scroll.querySelector(phone.dataset.scrollTo).offsetTop - 64; }
+  });
+  document.getElementById("measure-table").innerHTML = `<thead><tr><th>Flow</th><th>Step</th><th>Today 2.0</th><th>D5 2.0</th></tr></thead><tbody>${FLOWS.flatMap((flow) => flow.steps.map((step) => {
+    const cap = step.capture && window.ASSETS.caps[`${step.capture}-2.0`];
+    const m = results[`${flow.id}/${step.id}`];
+    return `<tr><td>${flow.title}</td><td>${step.title}</td><td class="num">${cap ? cap.screenHeights.toFixed(2) : "–"}</td><td class="num">${m ? m.screens.toFixed(2) : "–"}</td></tr>`;
+  })).join("")}</tbody>`;
+  const result = window.audit();
+  document.getElementById("audit-grid").innerHTML = `<div class="fact"><b class="${result.pass ? "ok" : "bad"}">${result.pass ? "Pass" : "Issues"}</b><span>${result.phones} D5 frames</span></div>` +
+    Object.entries(result.summary).map(([check, n]) => `<div class="fact"><b class="${n ? "bad" : "ok"}">${n}</b><span>${check}</span></div>`).join("");
+  document.getElementById("audit-table").innerHTML = result.issues.length
+    ? `<thead><tr><th>Check</th><th>Frame</th><th>Element</th><th>Detail</th></tr></thead><tbody>${result.issues.slice(0, 80).map((i) => `<tr><td>${i.check}</td><td>${i.where}</td><td>${esc(i.text)}</td><td class="num">${i.detail}</td></tr>`).join("")}</tbody>` : "";
+  const steps = FLOWS.reduce((n, f) => n + f.steps.length, 0);
+  const sheets = FLOWS.flatMap((f) => f.steps).filter((s) => STATES[s.id]().sheet).length;
+  document.getElementById("facts").innerHTML = [
+    [String(FLOWS.length), "groups, from Home to access"],
+    [String(steps), "steps, each in light and dark at 2.0"],
+    [String(sheets), "are sheets: pickers and short decisions"],
+    [result.pass ? "Pass" : `${result.issues.length}`, `audit on ${result.phones} frames`],
+  ].map(([b, s]) => `<div class="fact"><b>${b}</b><span>${s}</span></div>`).join("");
+}
+
+const PRIMITIVES = [
+  ["ActionSheet", "title, eyebrow?, actions: {icon, label, status}[]", "Two full rows with icon tiles and a one-line status. Replaces the default tier's two-up action tiles at XXXL."],
+  ["AlertDot", "count", "An amber dot on Home's bell while a category is over its limit; the label says how many. Home itself stays as it is."],
+  ["InlineNotice", "tone: \"warn\" | \"danger\", text", "One line with an icon, in place, above what it's about. Warn reads in the text colour with an amber icon; danger is red. Never a card."],
+  ["Skeleton", "width, height", "Quiet blocks in the final layout while loading, so nothing jumps when data arrives. A status line names what's loading."],
+  ["CenteredMoment, soft tone", "icon, tone: \"soft\"", "D4's CenteredMoment with a grey icon for waiting and phone checks. Red stays for failure."],
+  ["SearchPicker", "placeholder, options, value, onChange", "A sheet with a 64 dp search field and choice rows, the likely answers first (currency, time zone, place)."],
+];
+
+const DECISIONS = [
+  "<b>Decided:</b> over-limit alerts stay behind the bell; Today / Yesterday / Pick a date; the copy changes; Post disabled until there's a description; new users go straight to setup; the category question keeps its four answers; sign-in stays Clerk's.",
+];
+
+const COPY = [
+  ["Post, failed", "This entry is saved for retry. Its answers stay fixed until posting is confirmed.", "Couldn't post yet. It's saved for retry, with these answers fixed until it posts."],
+  ["Post, missing candidate", "This Candidate is no longer on this device.", "This candidate is gone. It's no longer on this phone."],
+  ["Category limit", "Choose up to three categories. Remove one, or create a category that encompasses the concept.", "Three is the most. Remove one, or make one that covers them."],
+  ["Primary category", "Choose which best describes this transaction. Each selected category still counts the full amount.", "Each one still counts the full amount."],
+  ["Encompassing category", "This category will replace the three selected categories.", "Replaces Comida, Cofee and Snacks on this entry."],
+  ["Delete category", "It will no longer appear when choosing categories. Existing entries and their amounts stay in your history.", "It won't show when you pick. Your entries keep it."],
+  ["Setup saved", "Basic setup has been saved. Add the places you chose, or explicitly add them later.", "Basic setup is saved. Now add the place you chose, or add it later."],
+  ["Setup error", "Setup could not be confirmed. Retry with the same answers. Your submitted answers are read-only until setup is confirmed.", "Setup couldn't be confirmed. Retry with the same answers. Your answers stay fixed until setup is confirmed."],
+  ["Locked", "Use strong biometrics to open your financial information.", "Use your fingerprint or face. A PIN can't open Lukapp."],
+  ["Reauthentication", "Complete Clerk sign-in, then set up strong biometric re-entry. Device PIN and weak biometrics cannot unlock Lukapp.", "Then set up your fingerprint or face to open Lukapp."],
+  ["Revocation", "Removing local input and signing out…", "Removing Lukapp data from this phone and signing out…"],
+  ["Cleanup failure", "Local cleanup could not finish. Your information stays locked.", "Cleanup didn't finish. Your information stays locked on this phone."],
+  ["Protection unavailable", "Local protection unavailable. Your information stays locked. Close and reopen the app after checking device security and storage.", "Phone protection unavailable. Your information stays locked. Check this phone's security and storage, then close and reopen Lukapp."],
+  ["Month mismatch", "This device and the workspace do not agree on the current month yet.", "This phone and your workspace disagree on the current month."],
+  ["Failed close", "Could not confirm the close. Retry to lock the same month safely.", "Couldn't confirm the close. Retrying locks the same month safely."],
+];
+
+build();
+document.getElementById("primitive-table").innerHTML = `<thead><tr><th>Primitive</th><th>Props</th><th>XXXL behaviour</th></tr></thead><tbody>${PRIMITIVES.map(([a, b, c]) => `<tr><td><b>${a}</b></td><td><code>${esc(b)}</code></td><td>${c}</td></tr>`).join("")}</tbody>`;
+document.getElementById("decision-list").innerHTML = DECISIONS.map((d) => `<li>${d}</li>`).join("");
+document.getElementById("copy-table").innerHTML = `<thead><tr><th>Where</th><th>Today</th><th>Proposal</th></tr></thead><tbody>${COPY.map(([a, b, c]) => `<tr><td>${a}</td><td>${esc(b)}</td><td>${esc(c)}</td></tr>`).join("")}</tbody>`;
+document.fonts.ready.then(() => requestAnimationFrame(finish));
+</script>
