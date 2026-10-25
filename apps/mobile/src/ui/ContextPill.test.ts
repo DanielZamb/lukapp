@@ -70,6 +70,22 @@ test("a new identity reuses unchanged mounted summary geometry and resets suppre
   await act(async () => pills()[0].props.onPress());
   expect(native.back).toHaveBeenLastCalledWith({ y: 40, animated: true });
 });
+test("a covered host collects changed identity geometry before reactivation", async () => {
+  await mount();
+  await act(async () => root.root.findByType("summary").props.onLayout({ nativeEvent: { layout: { y: 40, height: 200 } } }));
+  await scroll(248);
+  await act(async () => root.update(createElement(ContextPillHost, {}, createElement(Consumer, { active: false }))));
+  await act(async () => root.update(createElement(ContextPillHost, {}, createElement(Consumer, { active: false, identity: "transport" }))));
+  await act(async () => root.root.findByType("summary").props.onLayout?.({ nativeEvent: { layout: { y: 120, height: 200 } } }));
+  expect(pills()).toHaveLength(0);
+  expect(vi.getTimerCount()).toBe(0);
+  await act(async () => root.update(createElement(ContextPillHost, {}, createElement(Consumer, { identity: "transport" }))));
+  expect(pills()).toHaveLength(0);
+  await scroll(328);
+  expect(pills()).toHaveLength(1);
+  await act(async () => pills()[0].props.onPress());
+  expect(native.back).toHaveBeenLastCalledWith({ y: 120, animated: true });
+});
 test("upward swipe stays hidden through more scrolling until the summary returns", async () => {
   await mount(); await layout(); await scroll(208);
   await act(async () => root.root.findAll(node => typeof node.props.onPanResponderRelease === "function")[0].props.onPanResponderRelease({ nativeEvent: { pageY: 12 } }, { dy: -20, y0: 42 }));

@@ -41,7 +41,8 @@ export function useContextPill({ identity, active, content, onBackToSummary }: {
 }): { summaryProps: Pick<ViewProps, "onLayout" | "collapsable">; scrollProps: Pick<ScrollViewProps, "onScroll" | "scrollEventThrottle"> } {
   const store = useContext(PillContext);
   const hookId = useId();
-  const enabled = pillEnabled(useTier(), active);
+  const tracking = pillEnabled(useTier(), true);
+  const enabled = tracking && active;
   const latest = useRef({ content, onBackToSummary });
   latest.current = { content, onBackToSummary };
   const geometry = useRef<{ summary: { y: number; height: number } | null; scrollY: number }>({ summary: null, scrollY: 0 });
@@ -62,24 +63,25 @@ export function useContextPill({ identity, active, content, onBackToSummary }: {
   useLayoutEffect(() => {
     if (!enabled || !store) return;
     model.registered = true;
+    observe();
     publish();
     return () => { model.registered = false; store.remove(model.id); };
-  }, [enabled, model, publish, store]);
+  }, [enabled, model, observe, publish, store]);
   useLayoutEffect(() => { publish(); }, [content, publish]);
   const onSummaryLayout = useCallback((event: LayoutChangeEvent) => {
-    if (!enabled) return;
+    if (!tracking) return;
     const { y, height } = event.nativeEvent.layout;
     geometry.current.summary = { y, height };
-    observe();
-  }, [enabled, model, observe]);
+    if (enabled) observe();
+  }, [enabled, observe, tracking]);
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!enabled) return;
+    if (!tracking) return;
     geometry.current.scrollY = event.nativeEvent.contentOffset.y;
-    observe();
-  }, [enabled, model, observe]);
+    if (enabled) observe();
+  }, [enabled, observe, tracking]);
   return {
-    summaryProps: enabled ? { onLayout: onSummaryLayout, collapsable: false } : {},
-    scrollProps: enabled ? { onScroll, scrollEventThrottle: 16 } : {},
+    summaryProps: tracking ? { onLayout: onSummaryLayout, collapsable: false } : {},
+    scrollProps: tracking ? { onScroll, scrollEventThrottle: 16 } : {},
   };
 }
 
