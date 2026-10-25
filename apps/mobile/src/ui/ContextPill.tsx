@@ -14,7 +14,7 @@ import { font } from "./tokens";
 export type { ContextPillContent } from "./contextPillModel";
 export type SummaryScrollTarget = { y: number; animated: boolean };
 type Entry = { key: string; content: ContextPillContent; visibility: PillVisibility; send: (event: PillEvent, animated?: boolean) => void };
-type SummaryModel = { id: symbol; visibility: PillVisibility; summary: { y: number; height: number } | null; scrollY: number; registered: boolean };
+type SummaryModel = { id: symbol; visibility: PillVisibility; registered: boolean };
 
 function createPillStore() {
   const entries = new Map<symbol, Entry>();
@@ -44,19 +44,19 @@ export function useContextPill({ identity, active, content, onBackToSummary }: {
   const enabled = pillEnabled(useTier(), active);
   const latest = useRef({ content, onBackToSummary });
   latest.current = { content, onBackToSummary };
-  const model = useMemo<SummaryModel>(() => ({ id: Symbol(identity), visibility: "summary",
-    summary: null, scrollY: 0, registered: false }), [identity]);
+  const geometry = useRef<{ summary: { y: number; height: number } | null; scrollY: number }>({ summary: null, scrollY: 0 });
+  const model = useMemo<SummaryModel>(() => ({ id: Symbol(identity), visibility: "summary", registered: false }), [identity]);
   const publish = useCallback(() => {
     if (!model.registered || !store) return;
     store.set(model.id, { key: hookId + identity, content: latest.current.content, visibility: model.visibility, send });
     function send(event: PillEvent, animated = true) {
       model.visibility = pillVisibility(model.visibility, event);
       publish();
-      if (event === "back") latest.current.onBackToSummary({ y: model.summary?.y ?? 0, animated });
+      if (event === "back") latest.current.onBackToSummary({ y: geometry.current.summary?.y ?? 0, animated });
     }
   }, [hookId, identity, model, store]);
   const observe = useCallback(() => {
-    const next = pillVisibility(model.visibility, summaryIsVisible(model.summary, model.scrollY) ? "summarySeen" : "summaryGone");
+    const next = pillVisibility(model.visibility, summaryIsVisible(geometry.current.summary, geometry.current.scrollY) ? "summarySeen" : "summaryGone");
     if (next !== model.visibility) { model.visibility = next; publish(); }
   }, [model, publish]);
   useLayoutEffect(() => {
@@ -69,12 +69,12 @@ export function useContextPill({ identity, active, content, onBackToSummary }: {
   const onSummaryLayout = useCallback((event: LayoutChangeEvent) => {
     if (!enabled) return;
     const { y, height } = event.nativeEvent.layout;
-    model.summary = { y, height };
+    geometry.current.summary = { y, height };
     observe();
   }, [enabled, model, observe]);
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!enabled) return;
-    model.scrollY = event.nativeEvent.contentOffset.y;
+    geometry.current.scrollY = event.nativeEvent.contentOffset.y;
     observe();
   }, [enabled, model, observe]);
   return {
@@ -191,10 +191,10 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
       top: progress.interpolate({ inputRange: [0, 1], outputRange: [top, top + (belowClose ? 56 : 0)] }),
       left: progress.interpolate({ inputRange: [0, 1], outputRange: [8, (width - dockWidth) / 2] }),
       width: progress.interpolate({ inputRange: [0, 1], outputRange: [width - 16, dockWidth] }) }]}>
-      <Glass blurTarget={blurTarget} darkContent={dark} reduceTransparency={a11y.reduceTransparency}
+      <Glass blurTarget={blurTarget} darkContent={dark} darkTintOpacity={expanded ? 0.9 : 0.74} reduceTransparency={a11y.reduceTransparency}
         style={{ borderRadius: expanded ? 38 : island ? placement.height / 2 : progress.interpolate({ inputRange: [0, 1], outputRange: [30, 26] }) }}>
         <View {...swipe.panHandlers}>
-        {island && expanded ? <View style={[styles.expanded, { paddingTop: expandedPaddingTop, backgroundColor: "rgba(0,0,0,0.2)" }]}>
+        {island && expanded ? <View style={[styles.expanded, { paddingTop: expandedPaddingTop }]}>
           <ScrollView style={{ flexGrow: 0, maxHeight: expandedBodyMax }} accessible={false} importantForAccessibility="no" showsVerticalScrollIndicator={false}>
           <View accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" pointerEvents="none">
             <View style={styles.expandedHeading}>{emoji("expanded")}<Text style={[styles.expandedName, { color: ink }]}>{entry.content.name}</Text></View>

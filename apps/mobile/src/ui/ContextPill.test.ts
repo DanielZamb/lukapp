@@ -56,6 +56,20 @@ test("observes scroll, hides during return, and re-arms only after seeing the su
   expect(pills()).toHaveLength(0);
   await scroll(180); await scroll(208); expect(pills()).toHaveLength(1);
 });
+test("a new identity reuses unchanged mounted summary geometry and resets suppression", async () => {
+  await mount();
+  await act(async () => root.root.findByType("summary").props.onLayout({ nativeEvent: { layout: { y: 40, height: 200 } } }));
+  await scroll(248);
+  await act(async () => pills()[0].props.onPress());
+  expect(pills()).toHaveLength(0);
+  await act(async () => root.update(createElement(ContextPillHost, {}, createElement(Consumer, { identity: "transport" }))));
+  expect(native.mounts).toBe(1);
+  await scroll(0);
+  await scroll(248);
+  expect(pills()).toHaveLength(1);
+  await act(async () => pills()[0].props.onPress());
+  expect(native.back).toHaveBeenLastCalledWith({ y: 40, animated: true });
+});
 test("upward swipe stays hidden through more scrolling until the summary returns", async () => {
   await mount(); await layout(); await scroll(208);
   await act(async () => root.root.findAll(node => typeof node.props.onPanResponderRelease === "function")[0].props.onPanResponderRelease({ nativeEvent: { pageY: 12 } }, { dy: -20, y0: 42 }));

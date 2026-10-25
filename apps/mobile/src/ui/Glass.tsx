@@ -32,25 +32,26 @@ export function usePillAccessibility() {
 export type GlassProps = PropsWithChildren<Animated.AnimatedProps<ViewProps> & {
   material?: GlassMaterial;
   darkContent?: boolean;
+  darkTintOpacity?: 0.74 | 0.9;
   reduceTransparency: boolean;
   blurTarget: RefObject<View | null>;
 }>;
 
-export function Glass({ children, material = "regular", darkContent = false, reduceTransparency, blurTarget, style, ...props }: GlassProps) {
+export function Glass({ children, material = "regular", darkContent = false, darkTintOpacity = 0.74, reduceTransparency, blurTarget, style, ...props }: GlassProps) {
   const selected = glassMaterial({ requested: material, darkContent, reduceTransparency });
   const dark = darkContent;
   const solid = dark ? "#141018" : "#f3eff8";
-  const tint = dark ? "rgba(12,8,18,0.78)" : "rgba(255,255,255,0.56)";
+  const tint = dark ? `rgba(12,8,18,${selected === "clear" ? 0.46 : darkTintOpacity})` : "rgba(255,255,255,0.56)";
   const liquid = Platform.OS === "ios" && isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
   return <Animated.View {...props} style={[styles.depth, style]}>
     <Animated.View style={[styles.clip, style]}>
       {selected === "solid" ? <View style={[StyleSheet.absoluteFill, { backgroundColor: solid }]} />
         : liquid ? <GlassView pointerEvents="none" style={StyleSheet.absoluteFill} glassEffectStyle={selected}
-          colorScheme={dark ? "dark" : "light"} tintColor={tint} />
+          colorScheme={dark ? "dark" : "light"} tintColor={dark ? undefined : tint} />
           : <BlurView pointerEvents="none" style={StyleSheet.absoluteFill} blurTarget={blurTarget}
             blurMethod="dimezisBlurView" intensity={25} tint={dark ? "dark" : "regular"} />}
-      {selected !== "solid" && !liquid && <View pointerEvents="none" style={[StyleSheet.absoluteFill,
-        { backgroundColor: tint, borderWidth: 1.3, borderColor: dark ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.8)" }]} />}
+      {selected !== "solid" && (!liquid || dark) && <View pointerEvents="none" style={[StyleSheet.absoluteFill,
+        { backgroundColor: tint, borderWidth: 1.3, borderColor: dark ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.8)" }]} />}
       {children}
     </Animated.View>
   </Animated.View>;
