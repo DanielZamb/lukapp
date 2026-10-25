@@ -15,6 +15,8 @@ const defaultText = {
   action: { fontFamily: font.bold, fontSize: 17 },
   meta: { fontFamily: font.regular, fontSize: 14, lineHeight: 20 },
   label: { fontFamily: font.bold, fontSize: 12, letterSpacing: 1 },
+  eyebrow: { fontFamily: font.bold, fontSize: 12, letterSpacing: 1 },
+  status: { fontFamily: font.regular, fontSize: 14, lineHeight: 20 },
 } satisfies Record<string, TextSpec>;
 
 export type TextVariant = keyof typeof defaultText;
@@ -31,6 +33,8 @@ const xxxlText = {
   action: { fontFamily: font.semibold, fontSize: 17, lineHeight: 17 * 1.25, letterSpacing: -0.015 * 17, maxScale: 1.4 },
   meta: { fontFamily: font.regular, fontSize: 14, lineHeight: 14 * 1.4, letterSpacing: 0 },
   label: { fontFamily: font.medium, fontSize: 12, lineHeight: 12 * 1.35, letterSpacing: 0 },
+  eyebrow: { fontFamily: font.medium, fontSize: 12, lineHeight: 12 * 1.35, letterSpacing: 0.04 * 12, maxScale: 1.3 },
+  status: { fontFamily: font.regular, fontSize: 14, lineHeight: 14 * 1.35, letterSpacing: 0, maxScale: 1.3 },
 } satisfies Record<TextVariant, TextSpec>;
 
 export const textSpecs: Record<LayoutTier, Record<TextVariant, TextSpec>> = {

@@ -94,7 +94,11 @@ const defaultControls = {
 
 export const xxxl = {
   controls: { touchTarget: 56, primaryButton: 68, secondaryButton: 60, input: 64, choiceRow: 72 },
-  spacing: { insideRow: 10, rowVertical: 24, rowHorizontal: 20, betweenGroups: 40, betweenSections: 48, pagePadding: 16 },
+  spacing: { insideRow: 8, rowVertical: 16, rowHorizontal: 16, betweenRows: 0, headingToContent: 12, headingToMeta: 4, betweenGroups: 24, betweenSections: 32, pagePadding: 16, pageTop: 12, pageBottom: 24, footerVertical: 12, footerHorizontal: 16, tileToCopy: 12, labelTileGap: 10, pairedCards: 12 },
+  colors: {
+    light: { tint: "#f6f1fd", tintBorder: "#e6d9fa", band: "#f7f2fe", bandBorder: "#e3d6fa", watermarkOpacity: 0.09, categoryMix: 0.06 },
+    dark: { tint: "#1b1328", tintBorder: "#36265a", band: "#21132f", bandBorder: "#3a2757", watermarkOpacity: 0.16, categoryMix: 0.10 },
+  },
   radius: { control: 18, rowIcon: 14, card: 24, sheet: 28 },
 };
 

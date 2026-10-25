@@ -15,7 +15,7 @@ export function createUiStyles(theme: Theme, layout: ReadableLayout = defaultLay
   const large = layout.tier === "xxxl";
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.background },
-    content: { padding: layout.pagePadding, gap: large ? xxxl.spacing.betweenSections : spacing.xxl, flexGrow: 1 },
+    content: { padding: layout.pagePadding, ...(large && { paddingTop: xxxl.spacing.pageTop, paddingBottom: xxxl.spacing.pageBottom }), gap: large ? xxxl.spacing.betweenSections : spacing.xxl, flexGrow: 1 },
     title: {
       fontFamily: font.bold,
       fontSize: fontSize.title,
@@ -84,7 +84,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       backgroundColor: theme.secondary,
       alignItems: "center",
       justifyContent: "center",
-      ...(large && { width: layout.touchTarget, height: layout.touchTarget }),
+      ...(large && { width: layout.touchTarget, height: layout.touchTarget, borderWidth: 1, borderColor: theme.border }),
     },
     header: { flexDirection: "row", alignItems: "center", gap: spacing.md },
     headerTitle: {
@@ -126,7 +126,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       backgroundColor: theme.background,
       borderWidth: 1,
       borderColor: theme.border,
-      ...(large && { minHeight: xxxl.controls.secondaryButton, borderRadius: xxxl.radius.control }),
+      ...(large && { minHeight: xxxl.controls.secondaryButton, borderRadius: xxxl.radius.control, backgroundColor: theme.secondary, paddingVertical: 12, flexDirection: "row", gap: 10 }),
     },
     secondaryButtonLabel: {
       flexShrink: 1,
@@ -136,7 +136,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       textAlign: "center",
       ...(large && { ...textStyle(layout.tier, "action") }),
     },
-    secondaryButtonDanger: { borderColor: theme.danger },
+    secondaryButtonDanger: { borderColor: theme.danger, ...(large && { backgroundColor: `${theme.danger}1a`, borderColor: `${theme.danger}4d` }) },
     secondaryButtonLabelDanger: { color: theme.danger },
     field: { gap: spacing.sm,
       ...(large && { gap: xxxl.spacing.insideRow }),
@@ -189,7 +189,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       ...(large && { minHeight: layout.touchTarget, alignItems: "flex-start", borderBottomWidth: 0, gap: xxxl.spacing.insideRow, paddingVertical: xxxl.spacing.rowVertical, paddingHorizontal: xxxl.spacing.rowHorizontal }),
     },
     rowLast: { borderBottomWidth: 0 },
-    rowDivider: { position: "absolute", left: xxxl.spacing.rowHorizontal, right: xxxl.spacing.rowHorizontal, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: theme.border },
+    rowDivider: { position: "absolute", left: xxxl.spacing.rowHorizontal, right: xxxl.spacing.rowHorizontal, bottom: 0, height: 1, backgroundColor: theme.border },
     rowIcon: {
       width: 36,
       height: 36,

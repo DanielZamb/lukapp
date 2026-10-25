@@ -16,6 +16,7 @@ const native = vi.hoisted(() => ({ present: vi.fn(), dismiss: vi.fn(), focus: vi
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
 vi.mock("react-native", () => ({
+  useWindowDimensions: () => ({ width: 320, height: 700, fontScale: 1.5 }),
   Text: "text", View: "view", Pressable: "button", TextInput: "input", ActivityIndicator: "spinner",
   AccessibilityInfo: { setAccessibilityFocus: native.focus }, findNodeHandle: () => 41,
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
@@ -71,6 +72,8 @@ test("default and reflow named type preserve the audited values without caps", (
     rowTitle: { fontFamily: font.semibold, fontSize: 16, lineHeight: 22 }, body: { fontFamily: font.regular, fontSize: 16 },
     action: { fontFamily: font.bold, fontSize: 17 }, meta: { fontFamily: font.regular, fontSize: 14, lineHeight: 20 },
     label: { fontFamily: font.bold, fontSize: 12, letterSpacing: 1 },
+    eyebrow: { fontFamily: font.bold, fontSize: 12, letterSpacing: 1 },
+    status: { fontFamily: font.regular, fontSize: 14, lineHeight: 20 },
   };
   expect(textSpecs.default).toEqual(expected);
   expect(textSpecs.reflow).toEqual(expected);
@@ -104,13 +107,12 @@ test.each(tiers)("Text body is uncapped in %s", async (tier) => {
 test("ValueRow stacks meta and money under its title at XXXL and aliases ListRow", async () => {
   const tree = await render(h(ValueRow, { title: "Groceries", meta: "Yesterday", value: "COP 20", icon: "heart", onPress: noop, accessibilityLabel: "Open Groceries" }));
   expect(ListRow).toBe(ValueRow); expect(ListGroup).toBe(Group);
-  expect(tree.findAllByType("text").map((node) => node.children.join(""))).toEqual(["Groceries", "Yesterday", "COP 20"]);
-  const column = tree.findAllByType("view").find((node) => flat(node.props.style).flexDirection === "column");
-  expect(column?.children).toHaveLength(2);
+  expect(tree.findAllByType("text").map((node) => node.children.join(""))).toEqual(["Groceries", "COP 20", "Yesterday"]);
+  expect(tree.findAllByType("text")[2]?.props.numberOfLines).toBe(2);
   const row = tree.findByType("button");
-  expect(flat(row.props.style)).toMatchObject({ paddingVertical: 24, paddingHorizontal: 20, gap: 10 });
-  expect(row.props.accessibilityLabel).toBe("Open Groceries");
-  const money = tree.findAllByType("text")[2];
+  expect(flat(row.props.style)).toMatchObject({ paddingVertical: 16, paddingHorizontal: 16, gap: 8 });
+  expect(row.props.accessibilityLabel).toBe("Open Groceries, COP 20, Yesterday");
+  const money = tree.findAllByType("text")[1];
   expect(flat(money.props.style).fontSize).toBe(18); expect(money.props.maxFontSizeMultiplier).toBe(1.5);
 });
 
@@ -123,7 +125,7 @@ test.each([1, 2, 3, 5])("Group splits %i rows into cards of at most two", async 
     expect(rows.map((row) => row.props.isLast)).toEqual(rows.length === 2 ? [false, true] : [true]);
   }
   expect(tree.findAllByType("text").filter((node) => node.children.join("") === "Today")).toHaveLength(1);
-  expect(tree.findAllByType("view").some((node) => flat(node.props.style).gap === 40)).toBe(true);
+  expect(tree.findAllByType("view").some((node) => flat(node.props.style).gap === 24)).toBe(true);
 });
 
 test.each(tiers)("Columns owns item widths and ActionTile fills its cell in %s", async (tier) => {
@@ -138,7 +140,7 @@ test.each(tiers)("MoneyHero keeps a combined accessible amount in %s", async (ti
   const tree = await render(h(MoneyHero, { currency: "COP", amount: "45.000", negative: true, style: { color: "red" } }), tier);
   const texts = tree.findAllByType("text");
   if (tier === "xxxl") {
-    expect(texts.map((text) => text.children.join(""))).toEqual(["COP", "−45.000"]);
+    expect(texts.map((text) => text.children.join(""))).toEqual(["COP", "−45.000", "−45.000", "−COP 45.000"]);
     expect(texts[1]?.props).toMatchObject({ maxFontSizeMultiplier: 1.2, accessible: false });
     expect(texts[1]?.props.adjustsFontSizeToFit).toBeUndefined();
     expect(tree.findByType("view").props).toMatchObject({ accessible: true, accessibilityLabel: "−COP 45.000" });
@@ -295,7 +297,7 @@ test("tall page has one common modal boundary and an inset row separator", async
   const row = tree.findByType(ValueRow).findByType("button");
   expect(flat(row.props.style)).toMatchObject({ alignItems: "flex-start", borderBottomWidth: 0 });
   const separator = row.findAllByType("view").find((node) => flat(node.props.style).position === "absolute");
-  expect(flat(separator?.props.style)).toMatchObject({ left: 20, right: 20, bottom: 0, height: 1 });
+  expect(flat(separator?.props.style)).toMatchObject({ left: 16, right: 16, bottom: 0, height: 1 });
 });
 
 

@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type {
   ComponentProps,
   ComponentType,
+  Ref,
   PropsWithChildren,
   ReactNode,
 } from "react";
@@ -30,6 +31,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { font, fontSize, radius, spacing, themes, xxxl } from "./tokens";
 import { useThemeContext } from "./themeContext";
 import { Text as StyledText } from "./Text";
+import { composeHandlers } from "./design";
 import { textSpecs, textStyle, textTone, type TextTone } from "./typography";
 export { Text, type TextProps } from "./Text";
 export { type TextVariant, type TextTone } from "./typography";
@@ -57,17 +59,26 @@ export function Screen({
   children,
   contentStyle,
   footer,
+  scrollRef,
+  scrollProps,
+  onScroll,
 }: PropsWithChildren<{
   contentStyle?: StyleProp<ViewStyle>;
   footer?: ReactNode;
+  scrollRef?: Ref<ScrollView>;
+  scrollProps?: Omit<ComponentProps<typeof ScrollView>, "children" | "ref">;
+  onScroll?: ComponentProps<typeof ScrollView>["onScroll"];
 }>) {
   const { ui } = useCore();
   return (
     <KeyboardAvoidingView style={ui.screen} behavior="height" enabled={Platform.OS !== "android"}>
       <SafeAreaView style={ui.screen}>
         <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[ui.content, contentStyle]}
+          {...(scrollRef && { ref: scrollRef })}
+          {...scrollProps}
+          {...(onScroll && { onScroll: composeHandlers(onScroll, scrollProps?.onScroll) })}
+          keyboardShouldPersistTaps={scrollProps?.keyboardShouldPersistTaps ?? "handled"}
+          contentContainerStyle={[ui.content, contentStyle, ...(scrollProps?.contentContainerStyle ? [scrollProps.contentContainerStyle] : [])]}
         >
           {children}
         </ScrollView>
@@ -104,7 +115,7 @@ export function Header({
         </Pressable>
       )}
       <View style={{ flex: 1, minWidth: 0 }}>
-        {eyebrow && <Text style={ui.label}>{eyebrow}</Text>}
+        {eyebrow && (layout.tier === "xxxl" ? <StyledText variant="eyebrow" tone="muted">{eyebrow}</StyledText> : <Text style={ui.label}>{eyebrow}</Text>)}
         {title ? (
           <Text maxFontSizeMultiplier={textSpecs[layout.tier].screen.maxScale} accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
             {title}
@@ -172,22 +183,27 @@ export function SecondaryButton({
   disabled,
   accessibilityLabel,
   tone,
-}: ButtonProps & { tone?: "danger" }) {
-  const { styles, layout } = useCore();
+  pending,
+  icon,
+}: ButtonProps & { tone?: "danger"; pending?: boolean; icon?: ComponentProps<typeof Ionicons>["name"] }) {
+  const { theme, styles, layout } = useCore();
+  const inactive = pending ? true : disabled;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ disabled: !!disabled }}
-      disabled={disabled}
+      accessibilityState={{ disabled: !!inactive, ...(pending !== undefined && { busy: !!pending }) }}
+      disabled={inactive}
       onPress={onPress}
       style={({ pressed }) => [
         styles.secondaryButton,
         tone === "danger" && styles.secondaryButtonDanger,
-        disabled && styles.buttonDisabled,
-        pressed && !disabled && styles.buttonPressed,
+        inactive && styles.buttonDisabled,
+        pressed && !inactive && styles.buttonPressed,
       ]}
     >
+      {layout.tier === "xxxl" && icon ? <Ionicons name={icon} size={22} color={tone === "danger" ? theme.danger : theme.foreground} /> : null}
+      {pending ? <ActivityIndicator color={tone === "danger" ? theme.danger : theme.foreground} /> : null}
       <Text maxFontSizeMultiplier={textSpecs[layout.tier].action.maxScale} style={[styles.secondaryButtonLabel, tone === "danger" && styles.secondaryButtonLabelDanger]}>{label}</Text>
     </Pressable>
   );
@@ -248,7 +264,7 @@ function groupChildren(children: ReactNode, prefix = ""): ReactNode[] {
   });
 }
 
-export function Group({ children, title }: PropsWithChildren<{ title?: string }>) {
+export function Group({ children, title, pairGap }: PropsWithChildren<{ title?: string; pairGap?: number }>) {
   const { styles, layout } = useCore();
   const items = Children.toArray(children).filter(Boolean);
   const renderItems = (rows: ReactNode[]) => rows.map((child, index) =>
@@ -262,7 +278,7 @@ export function Group({ children, title }: PropsWithChildren<{ title?: string }>
   const rows = groupChildren(children);
   const chunks: ReactNode[][] = [];
   for (let index = 0; index < rows.length; index += 2) chunks.push(rows.slice(index, index + 2));
-  return <View style={{ gap: xxxl.spacing.betweenGroups }}>
+  return <View style={{ gap: pairGap ?? xxxl.spacing.betweenGroups }}>
     {title ? <StyledText variant="section" accessibilityRole="header">{title}</StyledText> : null}
     {chunks.map((chunk, index) => <View key={index} style={styles.group}>{renderItems(chunk)}</View>)}
   </View>;
@@ -281,15 +297,40 @@ export type ValueRowProps = {
   tone?: TextTone;
   accessibilityLabel?: string;
   isLast?: boolean;
+  trailing?: ReactNode;
+  children?: ReactNode;
 } & ({ meta?: string; detail?: never } | { detail?: string; meta?: never });
 
 export function ValueRow({
-  title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast,
+  title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast, trailing, children,
 }: ValueRowProps) {
   const { theme, styles, layout } = useCore();
   const large = layout.tier === "xxxl";
   const description = meta ?? detail;
   const color = tone ? textTone(theme, tone) : theme.foreground;
+  if (large) {
+    const fullLabel = [accessibilityLabel ?? title, ...[value, description].filter(part => part && !accessibilityLabel?.includes(part))].filter(Boolean).join(", ");
+    const labelLine = <View style={{ flexDirection: "row", alignItems: "center", gap: xxxl.spacing.labelTileGap }}>
+      {leading ?? (icon ? <View style={styles.rowIcon}><Ionicons name={icon} size={18} color={color} /></View> : null)}
+      <StyledText variant="rowTitle" style={[{ flex: 1, minWidth: 0 }, titleStyle]}>{title}</StyledText>
+      {onPress ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}
+    </View>;
+    const content = <>
+      <View style={{ flex: 1, minWidth: 0, gap: xxxl.spacing.insideRow }}>
+        {labelLine}
+        {value || trailing ? <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          {value ? <StyledText variant="money" tone={tone} style={[{ flexShrink: 1 }, valueStyle]}>{value}</StyledText> : null}
+          {trailing}
+        </View> : null}
+        {description ? <StyledText variant="meta" tone="muted" numberOfLines={2} ellipsizeMode="tail">{description}</StyledText> : null}
+        {children}
+      </View>
+      {!isLast ? <View pointerEvents="none" style={styles.rowDivider} /> : null}
+    </>;
+    return onPress
+      ? <Pressable accessible accessibilityRole="button" accessibilityLabel={fullLabel} onPress={onPress} style={[styles.row, isLast && styles.rowLast]}>{content}</Pressable>
+      : <View accessible accessibilityLabel={fullLabel} style={[styles.row, isLast && styles.rowLast]}>{content}</View>;
+  }
   const content = (
     <>
       {leading ?? (icon && (
@@ -299,17 +340,12 @@ export function ValueRow({
       ))}
       <View style={styles.rowContent}>
         <View style={styles.rowCopy}>
-          {large ? <StyledText variant="rowTitle" style={titleStyle}>{title}</StyledText> : <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>}
-          {description ? large ? <StyledText variant="meta" tone="muted">{description}</StyledText> : <Text style={styles.rowDetail}>{description}</Text> : null}
+          <Text style={[styles.rowTitle, titleStyle]}>{title}</Text>
+          {description ? <Text style={styles.rowDetail}>{description}</Text> : null}
         </View>
-        {value ? large ? (
-          <StyledText variant="money" tone={tone} style={valueStyle}>{value}</StyledText>
-        ) : (
-          <Text style={[styles.rowValue, tone && { color }, valueStyle]}>{value}</Text>
-        ) : null}
+        {value ? <Text style={[styles.rowValue, tone && { color }, valueStyle]}>{value}</Text> : null}
       </View>
       {onPress ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}
-      {large && !isLast ? <View pointerEvents="none" style={styles.rowDivider} /> : null}
     </>
   );
   const rowStyle = [styles.row, isLast && styles.rowLast];
@@ -333,36 +369,39 @@ export function Columns({ children }: PropsWithChildren) {
   </ColumnsContext.Provider>;
 }
 
-export function MoneyHero({ currency, amount, negative = false, style }: {
-  currency: string; amount: string; negative?: boolean; style?: StyleProp<TextStyle>;
-}) {
-  const { ui, layout } = useCore();
-  const signedAmount = `${negative ? "−" : ""}${amount}`;
-  const label = `${negative ? "−" : ""}${currency} ${amount}`;
-  if (layout.tier !== "xxxl") return <Text accessibilityLabel={label} style={[ui.hero, style]} adjustsFontSizeToFit numberOfLines={1}>{label}</Text>;
-  return <View accessible accessibilityLabel={label} style={{ gap: xxxl.spacing.insideRow }}>
-    <StyledText accessible={false} variant="label">{currency}</StyledText>
-    <StyledText accessible={false} variant="hero" style={style}>{signedAmount}</StyledText>
-  </View>;
-}
+export { MoneyHero, type MoneyHeroProps } from "./MoneyHero";
+
+export type ChoiceProps = {
+  label: string; detail?: string; selected: boolean; onPress: () => void; disabled?: boolean;
+  kind?: "radio" | "checkbox"; leading?: ReactNode; presentation?: "grouped" | "option"; isLast?: boolean;
+};
 
 export function Choice({
   label,
   detail,
   selected,
   onPress,
-  disabled = false,
-}: {
-  label: string;
-  detail?: string;
-  selected: boolean;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
+  disabled = false, kind = "radio", leading, presentation = "grouped", isLast,
+}: ChoiceProps) {
   const { theme, styles, layout } = useCore();
+  if (layout.tier === "xxxl") {
+    const option = presentation === "option";
+    return <Pressable accessibilityRole={kind} accessibilityLabel={[label, detail].filter(Boolean).join(", ")}
+      accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onPress}
+      style={{ minHeight: option ? 60 : 72, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: option ? (selected ? 11 : 12) : 16, paddingHorizontal: option && selected ? 15 : 16,
+        ...(option ? { borderRadius: 18, borderWidth: selected ? 2 : 1, borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? `${theme.primary}17` : theme.secondary } : { borderBottomWidth: isLast ? 0 : 1, borderBottomColor: theme.border }), opacity: disabled ? 0.45 : 1 }}>
+      {leading}
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}><StyledText variant={option ? "action" : "rowTitle"} tone={option && selected ? "primary" : "default"}>{label}</StyledText>
+        {detail ? <StyledText variant="status" tone="muted" numberOfLines={1}>{detail}</StyledText> : null}</View>
+      {option ? (selected ? <Ionicons name="checkmark" size={22} color={theme.primaryText} /> : null)
+        : <View style={{ width: kind === "radio" ? 26 : 28, height: kind === "radio" ? 26 : 28, borderRadius: kind === "radio" ? 999 : 9, borderWidth: 2, borderColor: selected ? theme.primary : theme.ring, alignItems: "center", justifyContent: "center", backgroundColor: selected && kind === "checkbox" ? theme.primary : "transparent" }}>
+          {selected ? kind === "radio" ? <View style={{ width: 12, height: 12, borderRadius: 999, backgroundColor: theme.primary }} /> : <Ionicons name="checkmark" size={20} color={theme.primaryForeground} /> : null}
+        </View>}
+    </Pressable>;
+  }
   return (
     <Pressable
-      accessibilityRole="radio"
+      accessibilityRole={kind}
       accessibilityLabel={label}
       accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}
@@ -542,3 +581,19 @@ export function ConfirmationScreen({
     </Screen>
   );
 }
+
+export function ChoiceRow({ legacy, ...props }: ChoiceProps & { legacy?: ReactNode }) {
+  const { layout } = useCore();
+  if (layout.tier !== "xxxl") {
+    if (legacy !== undefined) return legacy;
+    if (props.kind === "checkbox" || props.presentation === "option") return null;
+  }
+  return <Choice {...props} />;
+}
+export { ActionBar, type ActionBarProps, type BarAction, type SecondaryBarAction } from "./ActionBar";
+export * from "./surfaces";
+export * from "./selection";
+export * from "./summaries";
+export * from "./feedback";
+export { SheetHeader } from "./SheetHeader";
+export { moneyTone } from "./design";

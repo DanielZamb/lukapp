@@ -1,10 +1,13 @@
 import type { Theme } from "./tokens";
 import { BottomSheetBackdrop, BottomSheetFooter, BottomSheetScrollView, type BottomSheetFooterProps } from "@gorhom/bottom-sheet";
 import { useMemo, useRef, useCallback, type PropsWithChildren, type ReactNode, type ComponentProps } from "react";
-import { AccessibilityInfo, findNodeHandle, Pressable, StyleSheet, View, Text as NativeText } from "react-native";
+import { AccessibilityInfo, findNodeHandle, StyleSheet, View, ScrollView, Text as NativeText } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SecondaryButton, useTheme } from "./core";
 import { Text } from "./Text";
+import { FooterFrame } from "./ActionBar";
+import { SheetHeader } from "./SheetHeader";
+import { composeHandlers } from "./design";
 import { useTier } from "./themeContext";
 import type { LayoutTier } from "./layout";
 import { radius, spacing, xxxl } from "./tokens";
@@ -26,9 +29,11 @@ type ManagedBody = {
   footer?: ReactNode;
   closeLabel?: string | false;
   stickyHeader?: boolean;
-  scrollProps?: Omit<ComponentProps<typeof BottomSheetScrollView>, "children">;
+  scrollProps?: Omit<ComponentProps<typeof BottomSheetScrollView>, "children" | "onScroll"> & Pick<ComponentProps<typeof ScrollView>, "onScroll" | "scrollEventThrottle">;
+  scrollRef?: ComponentProps<typeof BottomSheetScrollView>["ref"];
+  onScroll?: ComponentProps<typeof ScrollView>["onScroll"];
 };
-type NativeBody = { body: "native"; label?: string; tall?: never; footer?: never; closeLabel?: never; stickyHeader?: never; scrollProps?: never };
+type NativeBody = { body: "native"; label?: string; tall?: never; footer?: never; closeLabel?: never; stickyHeader?: never; scrollProps?: never; scrollRef?: never; onScroll?: never };
 export type SheetProps = SharedSheetProps & (ManagedBody | NativeBody);
 
 export function sheetPresentation(tier: LayoutTier, tall = false) {
@@ -36,7 +41,7 @@ export function sheetPresentation(tier: LayoutTier, tall = false) {
 }
 
 export function Sheet(props: SheetProps) {
-  const { children, onClose, onDismiss, label, body = "scroll", sheetRef, presentOnMount = !sheetRef, busy = false, dismissible = true, nativeModalProps, tall, footer, closeLabel = "Close details", stickyHeader, scrollProps } = props;
+  const { children, onClose, onDismiss, label, body = "scroll", sheetRef, presentOnMount = !sheetRef, busy = false, dismissible = true, nativeModalProps, tall, footer, closeLabel = "Close details", stickyHeader, scrollProps, scrollRef, onScroll } = props;
   const theme = useTheme();
   const tier = useTier();
   const page = sheetPresentation(tier, tall) === "page";
@@ -57,7 +62,7 @@ export function Sheet(props: SheetProps) {
     }
   }, [page]);
   const renderFooter = useCallback((footerProps: BottomSheetFooterProps) => <BottomSheetFooter {...footerProps} bottomInset={insets.bottom}>
-    <View style={[styles.footer, { backgroundColor: theme.background }]}>{footer}</View>
+    <FooterFrame>{footer}</FooterFrame>
   </BottomSheetFooter>, [footer, insets.bottom, styles, theme.background]);
 
   const defaults: NativeSheetProps = body === "native" ? {} : {
@@ -87,15 +92,12 @@ export function Sheet(props: SheetProps) {
     })}
     onDismiss={() => { readyToFocus.current = false; focused.current = false; nativeModalProps?.onDismiss?.(); onClose?.(); onDismiss?.(); }}>
     {body === "native" ? children : <>
-      {page && <View style={styles.titleRow}>
-        <Text ref={title} variant="section" accessibilityRole="header" style={{ flex: 1 }} onLayout={focusTitle}>{label}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Close ${label}`} accessibilityState={{ disabled: busy || !dismissible }} disabled={busy || !dismissible} onPress={close} style={styles.close}>
-          <Text variant="action" accessible={false}>×</Text>
-        </Pressable>
-      </View>}
+      {page && <View style={{ paddingLeft: 16 }}><SheetHeader title={label ?? ""} onClose={close} disabled={busy || !dismissible} titleProps={{ ref: title, onLayout: focusTitle }} /></View>}
       <BottomSheetScrollView accessibilityViewIsModal={page ? undefined : true} keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }, ...(page ? [{ paddingHorizontal: xxxl.spacing.pagePadding }] : [])]}
         {...scrollProps}
+        {...(scrollRef && { ref: scrollRef })}
+        {...(onScroll && { onScroll: composeHandlers(onScroll, scrollProps?.onScroll) })}
         {...(stickyHeader !== undefined && { stickyHeaderIndices: stickyHeader ? [0] : undefined })}
         {...(page && { enableFooterMarginAdjustment: true })}>
         {children}
@@ -117,8 +119,5 @@ function createStyles(theme: Theme) {
       borderWidth: 1, borderColor: theme.border,
     },
     body: { paddingHorizontal: spacing.xxl, paddingTop: spacing.sm, gap: spacing.md },
-    titleRow: { minHeight: xxxl.controls.touchTarget, flexDirection: "row", alignItems: "center", paddingLeft: spacing.lg },
-    close: { minWidth: xxxl.controls.touchTarget, minHeight: xxxl.controls.touchTarget, alignItems: "center", justifyContent: "center" },
-    footer: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: theme.border },
   });
 }
