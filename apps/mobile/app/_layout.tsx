@@ -9,6 +9,7 @@ import {
 } from "@expo-google-fonts/geist";
 import { ClerkProvider, useAuth, useClerk } from "@clerk/expo";
 import { SheetProvider } from "../src/ui/SheetProvider";
+import { ContextPillHost } from "../src/ui/ContextPill";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { ConvexReactClient, useConvexAuth, useQuery } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
@@ -152,9 +153,9 @@ export default function Layout() {
             )}
           >
             <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-              <SheetProvider>
+              <ContextPillHost><SheetProvider>
                 <Admission />
-              </SheetProvider>
+              </SheetProvider></ContextPillHost>
             </ConvexProviderWithClerk>
           </LocalEntryGate>
           </ConnectingProvider>
