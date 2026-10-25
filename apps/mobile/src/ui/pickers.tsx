@@ -17,7 +17,7 @@ export function ActionSheet({ title, eyebrow, actions, onClose, legacy = null }:
 }) {
   const { layout } = useThemeContext();
   if (layout.tier !== "xxxl") return legacy;
-  return <Sheet label={title} onClose={onClose} closeLabel={false}>
+  return <Sheet label={title} onClose={onClose} closeLabel={false} scrollProps={{ contentContainerStyle: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24, gap: 32 } }}>
     <SheetHeader title={title} eyebrow={eyebrow} onClose={onClose} />
     <Group pairGap={12}>{actions.map(action => <ValueRow key={action.label} title={action.label} leading={<IconTile icon={action.icon} size={36} />} onPress={action.onPress} accessibilityLabel={`${action.label}, ${action.status}`}><Text variant="status" tone="muted" numberOfLines={1}>{action.status}</Text></ValueRow>)}</Group>
   </Sheet>;
@@ -34,7 +34,7 @@ function LargeSearchPicker<V extends string>({ title, placeholder, options, valu
   const { theme } = useThemeContext();
   const [query, setQuery] = useState("");
   const filtered = options.filter(option => `${option.label} ${option.detail ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  return <PickerSheet onDismiss={onClose} stickyHeader={false}>
+  return <PickerSheet onDismiss={onClose} stickyHeader={false} scrollProps={{ contentContainerStyle: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24, gap: 32 } }}>
     <SheetHeader title={title} onClose={onClose} />
     <View style={{ minHeight: 64, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, borderColor: theme.ring, backgroundColor: theme.secondary }}>
       <Ionicons name="search-outline" size={22} color={theme.mutedForeground} />

@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { ReactNode } from "react";
-import { Pressable, Text as NativeText, View } from "react-native";
-import { Text } from "./Text";
+import { Pressable, View } from "react-native";
+import { EmojiText, Text } from "./Text";
 import { useThemeContext } from "./themeContext";
 import { alpha, mix, resolveColor, type DesignColor } from "./design";
 import { font } from "./tokens";
@@ -55,7 +55,7 @@ export function EmojiGrid({ options, value, onChange, columns = 4, legacy = null
   return <View accessibilityRole="radiogroup" style={{ gap: 8 }}>{Array.from({ length: Math.ceil(options.length / columns) }, (_, row) => <View key={row} style={{ flexDirection: "row", gap: 8 }}>
     {Array.from({ length: columns }, (_, column) => {
       const option = options[row * columns + column];
-      return option ? <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.value }} onPress={() => onChange(option.value)} style={{ flex: 1, minHeight: 60, minWidth: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: value === option.value ? mix(theme.primary, theme.background, 0.1) : theme.secondary, borderWidth: value === option.value ? 2 : 1, borderColor: value === option.value ? theme.primary : theme.border }}><NativeText maxFontSizeMultiplier={1.3} style={{ fontSize: 22, lineHeight: 26 }}>{option.value}</NativeText></Pressable> : <View key={column} style={{ flex: 1 }} />;
+      return option ? <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={option.label} accessibilityState={{ checked: value === option.value }} onPress={() => onChange(option.value)} style={{ flex: 1, minHeight: 60, minWidth: 56, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: value === option.value ? mix(theme.primary, theme.background, 0.1) : theme.secondary, borderWidth: value === option.value ? 2 : 1, borderColor: value === option.value ? theme.primary : theme.border }}><EmojiText size={22} lineHeight={26}>{option.value}</EmojiText></Pressable> : <View key={column} style={{ flex: 1 }} />;
     })}
   </View>)}</View>;
 }

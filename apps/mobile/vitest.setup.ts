@@ -9,3 +9,10 @@ vi.mock("expo-secure-store", () => ({
   canUseBiometricAuthentication: vi.fn(() => false),
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 0,
 }));
+
+vi.mock("react-native-reanimated", () => ({
+  KeyboardState: { UNKNOWN: 0 },
+  default: { View: "animated-view" },
+  useAnimatedKeyboard: () => ({ height: { value: 0 }, state: { value: 0 } }),
+  useAnimatedStyle: (style: () => unknown) => style(),
+}));

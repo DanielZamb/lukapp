@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { ComponentProps, PropsWithChildren, ReactNode } from "react";
-import { Image, Text as NativeText, View, type StyleProp, type ViewStyle } from "react-native";
-import { Text } from "./Text";
+import { Image, View, type StyleProp, type ViewStyle } from "react-native";
+import { EmojiText, Text } from "./Text";
 import { useThemeContext } from "./themeContext";
 import { alpha, mix, resolveColor, type DesignColor } from "./design";
 import { xxxl } from "./tokens";
@@ -32,7 +32,7 @@ export function EmojiTile({ emoji, color, size = 48, legacy = null }: { emoji: s
   if (layout.tier !== "xxxl") return legacy;
   const tint = resolveColor(color, mode);
   return <View accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={tileStyle(size, tint, theme.background)}>
-    <NativeText maxFontSizeMultiplier={1.3} style={{ fontSize: size === 36 ? 16 : size === 64 ? 30 : 22, lineHeight: size === 36 ? 20 : size === 64 ? 36 : 26 }}>{emoji}</NativeText>
+    <EmojiText size={size === 36 ? 16 : size === 64 ? 30 : 22} lineHeight={size === 36 ? 20 : size === 64 ? 36 : 26}>{emoji}</EmojiText>
   </View>;
 }
 function tileStyle(size: 36 | 48 | 64, color: string, background: string): ViewStyle {
@@ -63,6 +63,6 @@ export function LookChip({ emoji, color, label, legacy = null }: { emoji: string
   if (layout.tier !== "xxxl") return legacy;
   const tint = resolveColor(color, mode);
   return <View style={{ alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 10, minHeight: 56, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 999, backgroundColor: mix(tint, theme.background, 0.12), borderWidth: 2, borderColor: tint }}>
-    <NativeText maxFontSizeMultiplier={1.3} style={{ fontSize: 22 }}>{emoji}</NativeText><Text variant="rowTitle" style={{ flexShrink: 1 }}>{label}</Text>
+    <EmojiText size={22} lineHeight={26}>{emoji}</EmojiText><Text variant="rowTitle" style={{ flexShrink: 1 }}>{label}</Text>
   </View>;
 }

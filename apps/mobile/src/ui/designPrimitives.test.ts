@@ -5,20 +5,24 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { ActionBar, ActionTile, AlertDot, BrandBand, BudgetRow, CenteredMoment, ChipSet, Choice, ChoiceRow, DateSection, DestinationRow, EmojiGrid, EmojiTile, FlowSummary, Group, IconTile, InlineNotice, LookChip, MoneyHero, NoteCard, PreviewGroup, ProgressJar, Screen, Segmented, ShareBar, SheetHeader, Skeleton, Text, TintCard, ValueRow } from "./core";
 import { Sheet } from "./Sheet";
 import { ActionSheet, SearchPicker } from "./pickers";
+import { KeyboardFrame, keyboardOverlap } from "./KeyboardFrame";
 import { FooterFrame } from "./ActionBar";
-import { ThemeProvider } from "./themeContext";
+import { ResponsiveThemeProvider, ThemeProvider } from "./themeContext";
 import { readableLayout, type LayoutTier } from "./layout";
 import { amountGroups, composeHandlers, heroFit, mix, moneyTone } from "./design";
 import { chipRows } from "./selection";
+import { androidScaledSize } from "./nativeText";
 import { textSpecs } from "./typography";
 
 const native = vi.hoisted(() => ({ fontScale: 1.3, scroll: { scrollTo: vi.fn() } }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
-vi.mock("react-native", () => ({ Text: "text", View: "view", Image: "image", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner", KeyboardAvoidingView: "keyboard", Platform: { OS: "android" },
+vi.mock("react-native", () => ({ Text: "text", View: "view", Image: "image", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner", KeyboardAvoidingView: "keyboard", Platform: { OS: "android", Version: 37 },
   useWindowDimensions: () => ({ width: 320, height: 700, fontScale: native.fontScale }),
   AccessibilityInfo: { setAccessibilityFocus: vi.fn() }, findNodeHandle: () => 42,
-  BackHandler: { addEventListener: () => ({ remove() {} }) }, StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 } }));
+  Keyboard: { metrics: () => undefined, addListener: () => ({ remove() {} }) },
+  Dimensions: { get: () => ({ height: 700 }) },
+  BackHandler: { addEventListener: () => ({ remove() {} }) }, StyleSheet: { create: (value: unknown) => value, flatten: flat, hairlineWidth: 1 } }));
 vi.mock("@gorhom/bottom-sheet", () => ({ BottomSheetModal: "modal", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetFooter: "sheet-footer", BottomSheetBackdrop: "backdrop" }));
 let root: ReactTestRenderer | undefined;
 const noop = () => {};
@@ -82,7 +86,10 @@ test("ActionBar reserves the scroller through the Screen footer and leaves nativ
   const tree = await render(h(Screen, { footer: h(ActionBar, { primary: { label: "Post", onPress: noop }, secondary: { label: "Add one", onPress: noop }, status: h(InlineNotice, { tone: "warning", title: "Add a description to post" }) }) }, h("body")));
   expect(tree.find(node => String(node.type) === "scroll").findAllByType(FooterFrame)).toHaveLength(0);
   expect(tree.find(node => String(node.type) === "safe-area").findAllByType(FooterFrame)).toHaveLength(1);
-  expect(tree.find(node => String(node.type) === "keyboard").props).toMatchObject({ behavior: "height", enabled: false });
+  expect(tree.findAllByType(KeyboardFrame)).toHaveLength(1);
+  expect(keyboardOverlap(711, 425)).toBe(286);
+  expect(keyboardOverlap(425, 425)).toBe(0);
+  expect(keyboardOverlap(711, null)).toBe(0);
   expect(flat(tree.findByType(FooterFrame).findByType("view").props.style)).toMatchObject({ paddingVertical: 12, paddingHorizontal: 16, gap: 8 });
   expect(tree.findAllByType("button").map(node => flat(typeof node.props.style === "function" ? node.props.style({ pressed: false }) : node.props.style).minHeight)).toEqual([68, 60]);
 });
@@ -198,4 +205,15 @@ test.each(["default", "reflow"] as const)("counterpart and wrapper default ident
   await render(h(ActionTile, destination), tier); expect(stableTree()).toBe(tile);
   await act(async () => root?.unmount());
   await render(h(MoneyHero, { currency: "COP", amount: "56.526.163,06" }), tier); expect(stableTree()).toMatchSnapshot();
+});
+
+test("responsive Android provider applies the capped HTML target without disabling font scaling", async () => {
+  native.fontScale = 1.5;
+  await act(async () => { root = create(h(ResponsiveThemeProvider, null, h(Text, { variant: "hero" }, "80.000"))); });
+  const text = root?.root.findByType("text");
+  const style = flat(text?.props.style);
+  expect(text?.props.allowFontScaling).toBe(true);
+  expect(text?.props.maxFontSizeMultiplier).toBe(1.2);
+  expect(androidScaledSize(Number(style.fontSize), 1.5)).toBeCloseTo(52.8);
+  expect(androidScaledSize(Number(style.lineHeight), 1.5)).toBeCloseTo(54.912);
 });

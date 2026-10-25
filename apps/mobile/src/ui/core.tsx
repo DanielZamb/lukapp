@@ -31,7 +31,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { font, fontSize, radius, spacing, themes, xxxl } from "./tokens";
 import { useThemeContext } from "./themeContext";
 import { Text as StyledText } from "./Text";
-import { composeHandlers } from "./design";
+import { KeyboardFrame } from "./KeyboardFrame";
+import { composeHandlers, mix } from "./design";
 import { textSpecs, textStyle, textTone, type TextTone } from "./typography";
 export { Text, type TextProps } from "./Text";
 export { type TextVariant, type TextTone } from "./typography";
@@ -69,9 +70,8 @@ export function Screen({
   scrollProps?: Omit<ComponentProps<typeof ScrollView>, "children" | "ref">;
   onScroll?: ComponentProps<typeof ScrollView>["onScroll"];
 }>) {
-  const { ui } = useCore();
-  return (
-    <KeyboardAvoidingView style={ui.screen} behavior="height" enabled={Platform.OS !== "android"}>
+  const { ui, layout } = useCore();
+  const content = (
       <SafeAreaView style={ui.screen}>
         <ScrollView
           {...(scrollRef && { ref: scrollRef })}
@@ -84,8 +84,8 @@ export function Screen({
         </ScrollView>
         {footer}
       </SafeAreaView>
-    </KeyboardAvoidingView>
   );
+  return Platform.OS === "android" && layout.tier === "xxxl" ? <KeyboardFrame>{content}</KeyboardFrame> : <KeyboardAvoidingView style={ui.screen} behavior="height" enabled={Platform.OS !== "android"}>{content}</KeyboardAvoidingView>;
 }
 
 export function Header({
@@ -117,7 +117,7 @@ export function Header({
       <View style={{ flex: 1, minWidth: 0 }}>
         {eyebrow && (layout.tier === "xxxl" ? <StyledText variant="eyebrow" tone="muted">{eyebrow}</StyledText> : <Text style={ui.label}>{eyebrow}</Text>)}
         {title ? (
-          <Text maxFontSizeMultiplier={textSpecs[layout.tier].screen.maxScale} accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
+          layout.tier === "xxxl" ? <StyledText variant="screen" accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>{title}</StyledText> : <Text maxFontSizeMultiplier={textSpecs[layout.tier].screen.maxScale} accessibilityRole="header" style={[styles.headerTitle, titleStyle]}>
             {title}
           </Text>
         ) : null}
@@ -163,15 +163,15 @@ export function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.primaryButton,
-        inactive && styles.buttonDisabled,
+        inactive && (layout.tier === "xxxl" ? { backgroundColor: mix(theme.foreground, theme.background, 0.12), borderColor: "transparent" } : styles.buttonDisabled),
         pressed && !inactive && styles.buttonPressed,
       ]}
     >
-      <Text maxFontSizeMultiplier={textSpecs[layout.tier].action.maxScale} style={styles.primaryButtonLabel}>{label}</Text>
+      {layout.tier === "xxxl" ? <StyledText variant="action" style={[styles.primaryButtonLabel, inactive && { color: theme.mutedForeground }]}>{label}</StyledText> : <Text maxFontSizeMultiplier={textSpecs[layout.tier].action.maxScale} style={styles.primaryButtonLabel}>{label}</Text>}
       {pending ? (
-        <ActivityIndicator color={theme.primaryForeground} />
+        <ActivityIndicator color={layout.tier === "xxxl" && inactive ? theme.mutedForeground : theme.primaryForeground} />
       ) : (
-        <Ionicons name={trailingIcon} size={24} color={theme.primaryForeground} />
+        <Ionicons name={trailingIcon} size={24} color={layout.tier === "xxxl" && inactive ? theme.mutedForeground : theme.primaryForeground} />
       )}
     </Pressable>
   );
@@ -198,13 +198,13 @@ export function SecondaryButton({
       style={({ pressed }) => [
         styles.secondaryButton,
         tone === "danger" && styles.secondaryButtonDanger,
-        inactive && styles.buttonDisabled,
+        inactive && (layout.tier === "xxxl" ? { backgroundColor: mix(theme.foreground, theme.background, 0.12), borderColor: "transparent" } : styles.buttonDisabled),
         pressed && !inactive && styles.buttonPressed,
       ]}
     >
-      {layout.tier === "xxxl" && icon ? <Ionicons name={icon} size={22} color={tone === "danger" ? theme.danger : theme.foreground} /> : null}
-      {pending ? <ActivityIndicator color={tone === "danger" ? theme.danger : theme.foreground} /> : null}
-      <Text maxFontSizeMultiplier={textSpecs[layout.tier].action.maxScale} style={[styles.secondaryButtonLabel, tone === "danger" && styles.secondaryButtonLabelDanger]}>{label}</Text>
+      {layout.tier === "xxxl" && icon ? <Ionicons name={icon} size={22} color={layout.tier === "xxxl" && inactive ? theme.mutedForeground : tone === "danger" ? theme.danger : theme.foreground} /> : null}
+      {pending ? <ActivityIndicator color={layout.tier === "xxxl" && inactive ? theme.mutedForeground : tone === "danger" ? theme.danger : theme.foreground} /> : null}
+      {layout.tier === "xxxl" ? <StyledText variant="action" style={[styles.secondaryButtonLabel, tone === "danger" && styles.secondaryButtonLabelDanger, inactive && { color: theme.mutedForeground }]}>{label}</StyledText> : <Text maxFontSizeMultiplier={textSpecs[layout.tier].action.maxScale} style={[styles.secondaryButtonLabel, tone === "danger" && styles.secondaryButtonLabelDanger]}>{label}</Text>}
     </Pressable>
   );
 }
@@ -298,11 +298,12 @@ export type ValueRowProps = {
   accessibilityLabel?: string;
   isLast?: boolean;
   trailing?: ReactNode;
+  chevron?: boolean;
   children?: ReactNode;
 } & ({ meta?: string; detail?: never } | { detail?: string; meta?: never });
 
 export function ValueRow({
-  title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast, trailing, children,
+  title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast, trailing, children, chevron = true,
 }: ValueRowProps) {
   const { theme, styles, layout } = useCore();
   const large = layout.tier === "xxxl";
@@ -313,7 +314,7 @@ export function ValueRow({
     const labelLine = <View style={{ flexDirection: "row", alignItems: "center", gap: xxxl.spacing.labelTileGap }}>
       {leading ?? (icon ? <View style={styles.rowIcon}><Ionicons name={icon} size={18} color={color} /></View> : null)}
       <StyledText variant="rowTitle" style={[{ flex: 1, minWidth: 0 }, titleStyle]}>{title}</StyledText>
-      {onPress ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}
+      {onPress && chevron ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}
     </View>;
     const content = <>
       <View style={{ flex: 1, minWidth: 0, gap: xxxl.spacing.insideRow }}>

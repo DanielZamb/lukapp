@@ -46,7 +46,7 @@ export function CenteredMoment({ icon, tone = "primary", title, body, chip, amou
   if (layout.tier !== "xxxl") return legacy;
   const size = tone === "danger" ? 88 : 72;
   return <View style={{ flexGrow: 1, justifyContent: "center", alignItems: "stretch", gap: 32 }}>
-    <View accessible={false} style={{ alignSelf: "center", width: size, height: size, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: tone === "soft" ? theme.secondary : textTone(theme, tone), ...(tone === "soft" && { borderWidth: 1, borderColor: theme.border }) }}><Ionicons name={icon} size={tone === "danger" ? 44 : 34} color={tone === "soft" ? theme.foreground : tone === "positive" || tone === "danger" ? theme.background : theme.primaryForeground} /></View>
+    <View accessible={false} style={{ alignSelf: "center", width: size, height: size, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: tone === "soft" ? theme.secondary : tone === "primary" ? theme.primary : textTone(theme, tone), ...(tone === "soft" && { borderWidth: 1, borderColor: theme.border }) }}><Ionicons name={icon} size={tone === "danger" ? 44 : 34} color={tone === "soft" ? theme.foreground : tone === "positive" || tone === "danger" ? theme.background : theme.primaryForeground} /></View>
     <Text variant="screen" accessibilityRole="header" style={{ textAlign: "center" }}>{title}</Text>
     {amount ? <View style={{ alignItems: "center" }}>{amount}</View> : null}
     {chip}
