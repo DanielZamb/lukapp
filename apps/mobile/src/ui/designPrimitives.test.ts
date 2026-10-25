@@ -2,12 +2,12 @@ import * as React from "react";
 import { createElement as h, createRef, type ReactElement, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { ActionBar, ActionTile, AlertDot, BrandBand, BudgetRow, CenteredMoment, ChipSet, Choice, ChoiceRow, DateSection, DestinationRow, EmojiGrid, EmojiTile, FlowSummary, Group, IconTile, InlineNotice, LookChip, MoneyHero, NoteCard, PreviewGroup, ProgressJar, Screen, Segmented, ShareBar, SheetHeader, Skeleton, Text, TintCard, ValueRow } from "./core";
+import { ActionBar, ActionTile, AlertDot, AmountDirection, BrandBand, BrandBandChip, BudgetRow, CenteredMoment, ChipSet, Choice, ChoiceRow, DateSection, DestinationRow, EmojiGrid, EmojiTile, FlowSummary, Group, IconTile, InlineNotice, LookChip, MoneyHero, NoteCard, PreviewGroup, ProgressJar, Screen, Segmented, ShareBar, SheetHeader, Skeleton, Text, TintCard, ValueRow } from "./core";
 import { Sheet } from "./Sheet";
 import { ActionSheet, SearchPicker } from "./pickers";
 import { KeyboardFrame, keyboardOverlap } from "./KeyboardFrame";
 import { FooterFrame } from "./ActionBar";
-import { ResponsiveThemeProvider, ThemeProvider } from "./themeContext";
+import { ResponsiveThemeProvider, ThemeProvider, useSetThemeMode } from "./themeContext";
 import { readableLayout, type LayoutTier } from "./layout";
 import { amountGroups, composeHandlers, heroFit, mix, moneyTone } from "./design";
 import { chipRows } from "./selection";
@@ -173,7 +173,7 @@ test("managed Sheet forwards scroll ref and composes callbacks", async () => {
 });
 const newExamples = (legacy?: ReactNode): ReactElement[] => [
   h(ChoiceRow, { label: "Comida", kind: "checkbox", selected: true, onPress: noop, legacy }),
-  h(ActionBar, { primary: { label: "Post", onPress: noop }, legacy }), h(ActionSheet, { title: "Actions", actions: [], onClose: noop, legacy }), h(AlertDot, { count: 1, legacy }),
+  h(ActionBar, { primary: { label: "Post", onPress: noop }, legacy }), h(ActionSheet, { title: "Actions", actions: [], onClose: noop, legacy }), h(AlertDot, { count: 1, legacy }), h(AmountDirection, { direction: "out", legacy }), h(BrandBandChip, { label: "Across 6 places", onPress: noop, legacy }), h(BrandBand, { header: { logo: h("logo") }, hero: { label: "Balance", content: h("amount") }, legacy }),
   h(BudgetRow, { category: { label: "Comida", emoji: "🍔", color }, limitMinorUnits: 100, consumptionMinorUnits: 120, currency: "COP", legacy }),
   h(CenteredMoment, { icon: "checkmark", title: "Posted", legacy }), h(ChipSet, { options: [], value: "a", onChange: noop, legacy }), h(EmojiGrid, { options: [], value: "a", onChange: noop, legacy }), h(EmojiTile, { emoji: "🍔", color, legacy }),
   h(FlowSummary, { net: 0, out: 0, in: 0, currency: "COP", legacy }), h(IconTile, { icon: "add", legacy }), h(InlineNotice, { tone: "warning", title: "Wait", legacy }), h(LookChip, { emoji: "🍔", color, label: "Comida", legacy }),
@@ -216,4 +216,78 @@ test("responsive Android provider applies the capped HTML target without disabli
   expect(text?.props.maxFontSizeMultiplier).toBe(1.2);
   expect(androidScaledSize(Number(style.fontSize), 1.5)).toBeCloseTo(52.8);
   expect(androidScaledSize(Number(style.lineHeight), 1.5)).toBeCloseTo(54.912);
+});
+
+function ThemeMode({ mode, children }: { mode: "light" | "dark"; children: ReactNode }) {
+  const setMode = useSetThemeMode();
+  React.useEffect(() => setMode(mode), [mode, setMode]);
+  return children;
+}
+test("BrandBand slots preserve the 6/8/20 spacing and its chip uses a solid mix", async () => {
+  const tree = await render(h(ThemeMode, { mode: "dark", children: h(BrandBand, { watermark: false, header: { logo: h("logo"), eyebrow: "THIS MONTH" }, hero: { label: "What you have now", content: h("amount") }, chip: h(BrandBandChip, { label: "Across 6 places", onPress: noop }) }) }));
+  expect(flat(tree.find(node => String(node.type) === "logo").parent?.props.style).gap).toBe(6);
+  expect(flat(tree.find(node => String(node.type) === "amount").parent?.props.style).gap).toBe(8);
+  expect(flat(tree.findByType(BrandBand).findAllByType("view")[0]?.props.style).gap).toBe(20);
+  expect(flat(tree.findByType("button").props.style).backgroundColor).toBe(mix("#7c3aed", "#0a0a0a", 0.1));
+});
+test.each(["in", "out"] as const)("AmountDirection keeps the %s icon beside its complete label", async direction => {
+  const tree = await render(h(AmountDirection, { direction }));
+  expect(tree.findByType("view").props.accessibilityLabel).toBe(direction === "in" ? "Money in" : "Money out");
+  const icon = tree.find(node => String(node.type) === "icon");
+  expect(icon.props.name).toBe(direction === "in" ? "arrow-down" : "arrow-up");
+  expect(flat(icon.props.style).marginTop).toBe(3);
+  expect(flat(icon.parent?.props.style).gap).toBe(8);
+});
+test("PreviewGroup separates its heading by12 and its cards by24, with edge dividers", async () => {
+  const tree = await render(h(PreviewGroup<number>, { title: "Where it went", items: [1, 2, 3, 4], renderItem: item => h(ValueRow, { title: String(item), key: item }), totalCount: 4, viewAllLabel: String, onViewAll: noop }));
+  expect(tree.findAllByType("text").map(node => node.children.join(""))).toContain("Where it went");
+  expect(flat(tree.findByType(Group).findAllByType("view")[0]?.props.style).gap).toBe(12);
+  expect(tree.findAllByType("view").some(node => flat(node.props.style).gap === 24)).toBe(true);
+  const dividers = tree.findAllByType("view").filter(node => flat(node.props.style).position === "absolute");
+  expect(dividers).toHaveLength(2);
+  for (const divider of dividers) expect(flat(divider.props.style)).toMatchObject({ left: 0, right: 0 });
+});
+test("DestinationRow receives the same edge divider only before the last row", async () => {
+  const tree = await render(h(Group, null, h(DestinationRow, { icon: "pie-chart-outline", title: "Overview", detail: "By category" }), h(DestinationRow, { icon: "layers-outline", title: "Plans", detail: "Budget" })));
+  const rows = tree.findAllByType(DestinationRow);
+  expect(rows.map(row => row.props.isLast)).toEqual([false, true]);
+  expect(rows[0]?.findAllByType("view").filter(node => flat(node.props.style).position === "absolute")).toHaveLength(1);
+  expect(rows[1]?.findAllByType("view").filter(node => flat(node.props.style).position === "absolute")).toHaveLength(0);
+});
+test("MoneyHero centres currency over the number on request", async () => {
+  const tree = await render(h(MoneyHero, { currency: "COP", amount: "32.050", align: "center" }));
+  expect(flat(tree.findAllByType("text")[0]?.props.style).textAlign).toBe("center");
+  expect(tree.findAllByType("view").some(node => flat(node.props.style).justifyContent === "center")).toBe(true);
+});
+test("SearchPicker wraps its query placeholder and pins Done outside the scroller", async () => {
+  const footer = h(ActionBar, { primary: { label: "Done", icon: "checkmark", onPress: noop } });
+  const tree = await render(h(SearchPicker, { title: "Currency", eyebrow: "SETUP", placeholder: "Search by code or name", options: [{ value: "USD", label: "USD", detail: "US dollar" }], value: "USD", onChange: noop, onClose: noop, footer }));
+  expect(tree.findAllByType("text").map(node => node.children.join(""))).toContain("SETUP");
+  const input = tree.findByType("input");
+  expect(input.props).toMatchObject({ multiline: true, submitBehavior: "submit", returnKeyType: "search" });
+  await act(async () => input.props.onChangeText("US\nD"));
+  expect(input.props.value).toBe("US D");
+  const scroll = tree.find(node => String(node.type) === "sheet-scroll");
+  expect(scroll.props.enableFooterMarginAdjustment).toBe(true);
+  expect(scroll.findAllByType(ActionBar)).toHaveLength(0);
+  const pinned = tree.find(node => String(node.type) === "modal").props.footerComponent({ animatedFooterPosition: {} });
+  expect(pinned.props.bottomInset).toBe(16);
+  expect(pinned.props.children.props.children).toBe(footer);
+});
+test("tall Sheet insets both header edges and its body by16", async () => {
+  const tree = await render(h(Sheet, { label: "Add to batch", tall: true, closeLabel: false }, h("body")));
+  expect(flat(tree.findByType(SheetHeader).parent?.props.style)).toMatchObject({ paddingHorizontal: 16, paddingTop: 12 });
+  expect(flat(tree.find(node => String(node.type) === "sheet-scroll").props.contentContainerStyle)).toMatchObject({ paddingHorizontal: 16, paddingTop: 12 });
+});
+test.each(["light", "dark"] as const)("warning titles follow the live HTML in %s", async mode => {
+  const tree = await render(h(ThemeMode, { mode, children: h(React.Fragment, null, h(NoteCard, { tone: "warning", icon: "warning-outline", title: "A shortcut", body: "May miss activity" }), h(InlineNotice, { tone: "warning", title: "Three is the most" })) }));
+  const titles = tree.findAllByType("text").filter(node => ["A shortcut", "Three is the most"].includes(node.children.join("")));
+  expect(titles).toHaveLength(2);
+  for (const title of titles) expect(flat(title.props.style).color).toBe(mode === "light" ? "#9c5f06" : "#fbbf24");
+});
+test("dark ActionSheet uses the live HTML backdrop mix", async () => {
+  const tree = await render(h(ThemeMode, { mode: "dark", children: h(ActionSheet, { title: "What do you want to do?", actions: [], onClose: noop }) }));
+  const backdrop = tree.find(node => String(node.type) === "modal").props.backdropComponent({});
+  expect(backdrop.props.opacity).toBe(1);
+  expect(flat(backdrop.props.style).backgroundColor).toBe(mix("#0b0614", "#0a0a0a", 0.46));
 });

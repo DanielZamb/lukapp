@@ -92,9 +92,9 @@ export function Sheet(props: SheetProps) {
     })}
     onDismiss={() => { readyToFocus.current = false; focused.current = false; nativeModalProps?.onDismiss?.(); onClose?.(); onDismiss?.(); }}>
     {body === "native" ? children : <>
-      {page && <View style={{ paddingLeft: 16 }}><SheetHeader title={label ?? ""} onClose={close} disabled={busy || !dismissible} titleProps={{ ref: title, onLayout: focusTitle }} /></View>}
+      {page && <View style={{ paddingHorizontal: 16, paddingTop: 12 }}><SheetHeader title={label ?? ""} onClose={close} disabled={busy || !dismissible} titleProps={{ ref: title, onLayout: focusTitle }} /></View>}
       <BottomSheetScrollView accessibilityViewIsModal={page ? undefined : true} keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }, ...(page ? [{ paddingHorizontal: xxxl.spacing.pagePadding }] : [])]}
+        contentContainerStyle={page ? StyleSheet.flatten([styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl, paddingHorizontal: xxxl.spacing.pagePadding, paddingTop: 12 }]) : [styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }]}
         {...scrollProps}
         {...(scrollRef && { ref: scrollRef })}
         {...(onScroll && { onScroll: composeHandlers(onScroll, scrollProps?.onScroll) })}

@@ -45,24 +45,34 @@ export function DateSection({ date, net, place, children, legacy = null }: Props
     <Group pairGap={12}>{children}</Group>
   </View>;
 }
-export function DestinationRow({ icon, title, detail, onPress, legacy }: { icon: IconName; title: string; detail: string; onPress?: () => void; legacy?: ReactNode }) {
-  const { theme, layout } = useThemeContext();
+export function DestinationRow({ icon, title, detail, onPress, legacy, isLast }: { icon: IconName; title: string; detail: string; onPress?: () => void; legacy?: ReactNode; isLast?: boolean }) {
+  const { theme, layout, styles } = useThemeContext();
   if (layout.tier !== "xxxl") return legacy === undefined ? <ActionTile icon={icon} title={title} detail={detail} onPress={onPress} /> : legacy;
   const content = <>
     <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}><IconTile icon={icon} />{onPress ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}</View>
     <Text variant="rowTitle">{title}</Text><Text variant="meta" tone="muted">{detail}</Text>
+    {!isLast ? <View pointerEvents="none" style={styles.rowDivider} /> : null}
   </>;
   const style = { padding: 16, gap: 8, minHeight: 56 };
   return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${detail}`} onPress={onPress} style={style}>{content}</Pressable> : <View style={style}>{content}</View>;
 }
-export function PreviewGroup<T>({ items, renderItem, totalCount, viewAllLabel, onViewAll, legacy = null }: {
-  items: readonly T[]; renderItem: (item: T, index: number) => ReactNode; totalCount: number; viewAllLabel: (count: number) => string; onViewAll: () => void; legacy?: ReactNode;
+export function PreviewGroup<T>({ title, items, renderItem, totalCount, viewAllLabel, onViewAll, legacy = null }: {
+  title?: string; items: readonly T[]; renderItem: (item: T, index: number) => ReactNode; totalCount: number; viewAllLabel: (count: number) => string; onViewAll: () => void; legacy?: ReactNode;
 }) {
   const { layout } = useThemeContext();
   if (layout.tier !== "xxxl") return legacy;
   const preview = items.slice(0, 4);
-  return <View style={{ gap: 12 }}><Group pairGap={12}>{preview.map(renderItem)}</Group>
+  return <View style={{ gap: 12 }}><Group title={title} pairGap={xxxl.spacing.betweenGroups}>{preview.map(renderItem)}</Group>
     {totalCount > preview.length ? <Pressable accessibilityRole="button" accessibilityLabel={viewAllLabel(totalCount)} onPress={onViewAll} style={{ minHeight: 56, justifyContent: "center", alignItems: "center", paddingVertical: 12, paddingHorizontal: 20 }}><Text variant="action" tone="primary" style={{ textAlign: "center" }}>{viewAllLabel(totalCount)}</Text></Pressable> : null}
+  </View>;
+}
+export function AmountDirection({ direction, label, legacy = null }: { direction: "in" | "out"; label?: string; legacy?: ReactNode }) {
+  const { theme, layout } = useThemeContext();
+  if (layout.tier !== "xxxl") return legacy;
+  const copy = label ?? (direction === "out" ? "Money out" : "Money in");
+  return <View accessible accessibilityLabel={copy} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+    <Ionicons accessible={false} name={direction === "out" ? "arrow-up" : "arrow-down"} size={20} color={theme.mutedForeground} style={{ marginTop: 3 }} />
+    <Text variant="meta" tone="muted" style={{ flex: 1 }}>{copy}</Text>
   </View>;
 }
 export function BudgetRow({ category, limitMinorUnits, consumptionMinorUnits, currency, onPress, legacy = null, isLast }: {

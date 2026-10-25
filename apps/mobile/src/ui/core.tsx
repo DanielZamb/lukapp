@@ -278,10 +278,10 @@ export function Group({ children, title, pairGap }: PropsWithChildren<{ title?: 
   const rows = groupChildren(children);
   const chunks: ReactNode[][] = [];
   for (let index = 0; index < rows.length; index += 2) chunks.push(rows.slice(index, index + 2));
-  return <View style={{ gap: pairGap ?? xxxl.spacing.betweenGroups }}>
-    {title ? <StyledText variant="section" accessibilityRole="header">{title}</StyledText> : null}
+  const cards = <View style={{ gap: pairGap ?? xxxl.spacing.betweenGroups }}>
     {chunks.map((chunk, index) => <View key={index} style={styles.group}>{renderItems(chunk)}</View>)}
   </View>;
+  return title ? <View style={{ gap: xxxl.spacing.headingToContent }}><StyledText variant="section" accessibilityRole="header">{title}</StyledText>{cards}</View> : cards;
 }
 
 export const ListGroup = Group;

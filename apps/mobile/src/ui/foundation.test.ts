@@ -19,7 +19,7 @@ vi.mock("react-native", () => ({
   useWindowDimensions: () => ({ width: 320, height: 700, fontScale: 1.5 }),
   Text: "text", View: "view", Pressable: "button", TextInput: "input", ActivityIndicator: "spinner",
   AccessibilityInfo: { setAccessibilityFocus: native.focus }, findNodeHandle: () => 41,
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
+  StyleSheet: { create: (value: unknown) => value, flatten: flat, hairlineWidth: 1 },
   BackHandler: { addEventListener: (_event: string, callback: () => boolean) => { native.back.add(callback); return { remove: () => native.back.delete(callback) }; } },
 }));
 vi.mock("@gorhom/bottom-sheet", async () => {
@@ -289,7 +289,7 @@ test("busy preserves absent and custom backdrops plus independent content pannin
   expect(backdrop.props.children.type).toBe(CustomBackdrop);
 });
 
-test("tall page has one common modal boundary and an inset row separator", async () => {
+test("tall page has one common modal boundary and an edge-to-edge row separator", async () => {
   const tree = await render(h(Sheet, { label: "Details", tall: true }, h(ValueRow, { title: "One", meta: "Date", value: "COP 20", icon: "heart", onPress: noop })));
   const modal = tree.find((node) => String(node.type) === "modal");
   expect(modal.props.containerComponent({ children: null }).props).toMatchObject({ accessibilityViewIsModal: true, accessible: false, importantForAccessibility: "no", pointerEvents: "box-none", style: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 } });
@@ -297,7 +297,7 @@ test("tall page has one common modal boundary and an inset row separator", async
   const row = tree.findByType(ValueRow).findByType("button");
   expect(flat(row.props.style)).toMatchObject({ alignItems: "flex-start", borderBottomWidth: 0 });
   const separator = row.findAllByType("view").find((node) => flat(node.props.style).position === "absolute");
-  expect(flat(separator?.props.style)).toMatchObject({ left: 16, right: 16, bottom: 0, height: 1 });
+  expect(flat(separator?.props.style)).toMatchObject({ left: 0, right: 0, bottom: 0, height: 1 });
 });
 
 

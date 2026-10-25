@@ -8,7 +8,7 @@ import { amountGroups, heroFit } from "./design";
 
 export type MoneyHeroProps = {
   currency: string; amount: string; negative?: boolean; style?: StyleProp<TextStyle>;
-  tone?: TextTone; floor?: number; groupSeparator?: string;
+  tone?: TextTone; floor?: number; groupSeparator?: string; align?: "start" | "center";
 };
 export function MoneyHero({ currency, amount, negative = false, style, ...props }: MoneyHeroProps) {
   const { ui, layout } = useThemeContext();
@@ -20,7 +20,7 @@ function LargeMoneyHero(props: MoneyHeroProps) {
   const { fontScale } = useWindowDimensions();
   return <MeasuredMoneyHero key={`${props.currency}:${props.amount}:${props.negative}:${fontScale}`} {...props} fontScale={fontScale} />;
 }
-function MeasuredMoneyHero({ currency, amount, negative, style, tone, floor, groupSeparator = ".", fontScale }: MoneyHeroProps & { fontScale: number }) {
+function MeasuredMoneyHero({ currency, amount, negative, style, tone, floor, groupSeparator = ".", align = "start", fontScale }: MoneyHeroProps & { fontScale: number }) {
   const { ui } = useThemeContext();
   const [width, setWidth] = useState(0);
   const [numberLine, setNumberLine] = useState<TextLayoutLine>();
@@ -34,9 +34,9 @@ function MeasuredMoneyHero({ currency, amount, negative, style, tone, floor, gro
   const fit = width > 0 && numberLine ? heroFit({ available: width, measured: numberLine.width, target, floor: minimum }) : { size: target, wrap: false };
   const ratio = fit.size / target;
   const numberStyle: TextStyle = { fontSize: 44 * ratio, lineHeight: 44 * 1.04 * ratio, letterSpacing: -2.2 * ratio, fontVariant: ["tabular-nums"] };
-  return <View accessible accessibilityLabel={label} style={{ gap: xxxl.spacing.insideRow, minWidth: 0 }} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
-    <Text accessible={false} variant="label" tone="primary">{currency}</Text>
-    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+  return <View accessible accessibilityLabel={label} style={{ gap: xxxl.spacing.insideRow, minWidth: 0, ...(align === "center" && { alignSelf: "stretch" }) }} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+    <Text accessible={false} variant="label" tone="primary" style={align === "center" ? { textAlign: "center" } : undefined}>{currency}</Text>
+    <View style={{ flexDirection: "row", flexWrap: "wrap", ...(align === "center" && { justifyContent: "center" }) }}>
       {(fit.wrap ? amountGroups(signed, groupSeparator) : [signed]).map((part, index) => <Text key={`${signed}:${index}`} accessible={false} variant="hero" tone={tone} numberOfLines={1} style={[style, numberStyle]}>{part}</Text>)}
     </View>
     <View key={`${label}:${fontScale}`} pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: "absolute", opacity: 0, width: 10000 }}>

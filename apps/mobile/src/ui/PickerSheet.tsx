@@ -1,8 +1,10 @@
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import type { Theme } from "./tokens";
 import {
   BottomSheetBackdrop,
   BottomSheetScrollView,
+  BottomSheetFooter,
+  type BottomSheetFooterProps,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 import type { ReactNode, ComponentProps } from "react";
@@ -13,6 +15,7 @@ import { useTheme } from "./core";
 import { useReadableLayout } from "./themeContext";
 import type { ReadableLayout } from "./layout";
 import { font, radius, spacing, touchTarget, xxxl } from "./tokens";
+import { FooterFrame } from "./ActionBar";
 
 export function PickerSheet({
   sheetRef,
@@ -20,7 +23,7 @@ export function PickerSheet({
   stickyHeader = true,
   onDismiss,
   children,
-  presentOnMount, nativeModalProps, scrollProps, androidBack = false,
+  presentOnMount, nativeModalProps, scrollProps, androidBack = false, footer,
 }: SheetPresentation & {
   nativeModalProps?: NativeSheetProps;
   scrollProps?: Omit<ComponentProps<typeof BottomSheetScrollView>, "children">;
@@ -29,6 +32,7 @@ export function PickerSheet({
   stickyHeader?: boolean;
   onDismiss?: () => void;
   children: ReactNode;
+  footer?: ReactNode;
 }) {
   const ownRef = useRef<import("@gorhom/bottom-sheet").BottomSheetModal>(null);
   const modal = sheetRef ?? ownRef;
@@ -36,6 +40,7 @@ export function PickerSheet({
   const insets = useSafeAreaInsets();
   const layout = useReadableLayout();
   const pickerSheetStyles = usePickerSheetStyles();
+  const renderFooter = useCallback((props: BottomSheetFooterProps) => <BottomSheetFooter {...props} bottomInset={insets.bottom}><FooterFrame>{footer}</FooterFrame></BottomSheetFooter>, [footer, insets.bottom]);
   return (
     <SheetModal
       sheetRef={modal}
@@ -54,6 +59,7 @@ export function PickerSheet({
       keyboardBlurBehavior="restore"
       backdropComponent={(props: BottomSheetBackdropProps) => <BottomSheetBackdrop {...props}
         appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={busy ? "none" : "close"} />}
+      {...(footer && { footerComponent: renderFooter })}
       {...nativeModalProps}
       onDismiss={() => { nativeModalProps?.onDismiss?.(); onDismiss?.(); }}
     >
@@ -63,6 +69,7 @@ export function PickerSheet({
         contentContainerStyle={[pickerSheetStyles.content, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.xxl }]}
         stickyHeaderIndices={stickyHeader ? [0] : undefined}
         {...scrollProps}
+        {...(footer && { enableFooterMarginAdjustment: true })}
       >
         {children}
       </BottomSheetScrollView>

@@ -20,14 +20,14 @@ export function NoteCard({ tone, icon, title, body, onPress, legacy = null }: { 
   if (layout.tier !== "xxxl") return legacy;
   const color = tone === "neutral" ? theme.foreground : textTone(theme, tone);
   const style = { padding: 16, gap: 10, borderRadius: 24, borderWidth: 1, backgroundColor: tone === "neutral" ? theme.secondary : mix(color, theme.background, tone === "warning" ? 0.09 : 0.08), borderColor: tone === "neutral" ? theme.border : alpha(color, tone === "warning" ? 0.34 : 0.3) };
-  const children = <><View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><Ionicons name={icon} size={22} color={color} /><Text variant="rowTitle" style={{ flex: 1 }}>{title}</Text></View><Text variant="meta" tone="muted">{body}</Text></>;
+  const children = <><View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><Ionicons name={icon} size={22} color={color} /><Text variant="rowTitle" tone={tone === "neutral" ? "default" : tone} style={{ flex: 1 }}>{title}</Text></View><Text variant="meta" tone="muted">{body}</Text></>;
   return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${body}`} onPress={onPress} style={style}>{children}</Pressable> : <View style={style}>{children}</View>;
 }
 export function InlineNotice({ tone, title, detail, legacy = null }: { tone: "warning" | "danger"; title: string; detail?: string } & Legacy) {
   const { theme, layout } = useThemeContext();
   if (layout.tier !== "xxxl") return legacy;
   return <View accessibilityRole={tone === "danger" ? "alert" : undefined} accessibilityLiveRegion="polite" style={{ gap: 4 }}>
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}><Ionicons name={tone === "danger" ? "alert-circle" : "warning-outline"} size={22} color={textTone(theme, tone)} style={{ marginTop: 3 }} /><Text variant="rowTitle" tone={tone === "danger" ? "danger" : "default"} style={{ flex: 1 }}>{title}</Text></View>
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}><Ionicons name={tone === "danger" ? "alert-circle" : "warning-outline"} size={22} color={textTone(theme, tone)} style={{ marginTop: 3 }} /><Text variant="rowTitle" tone={tone} style={{ flex: 1 }}>{title}</Text></View>
     {detail ? <Text variant="meta" tone="muted" style={{ paddingLeft: 32 }}>{detail}</Text> : null}
   </View>;
 }
@@ -49,7 +49,6 @@ export function CenteredMoment({ icon, tone = "primary", title, body, chip, amou
     <View accessible={false} style={{ alignSelf: "center", width: size, height: size, borderRadius: 999, alignItems: "center", justifyContent: "center", backgroundColor: tone === "soft" ? theme.secondary : tone === "primary" ? theme.primary : textTone(theme, tone), ...(tone === "soft" && { borderWidth: 1, borderColor: theme.border }) }}><Ionicons name={icon} size={tone === "danger" ? 44 : 34} color={tone === "soft" ? theme.foreground : tone === "positive" || tone === "danger" ? theme.background : theme.primaryForeground} /></View>
     <Text variant="screen" accessibilityRole="header" style={{ textAlign: "center" }}>{title}</Text>
     {amount ? <View style={{ alignItems: "center" }}>{amount}</View> : null}
-    {chip}
-    {body ? <Text variant="body" tone="muted" style={{ textAlign: "center" }}>{body}</Text> : null}
+    {chip ? <View style={{ alignItems: "center", gap: 12 }}>{chip}{body ? <Text variant="body" tone="muted" style={{ textAlign: "center" }}>{body}</Text> : null}</View> : body ? <Text variant="body" tone="muted" style={{ textAlign: "center" }}>{body}</Text> : null}
   </View>;
 }

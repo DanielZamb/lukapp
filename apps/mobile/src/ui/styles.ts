@@ -189,7 +189,7 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       ...(large && { minHeight: layout.touchTarget, alignItems: "flex-start", borderBottomWidth: 0, gap: xxxl.spacing.insideRow, paddingVertical: xxxl.spacing.rowVertical, paddingHorizontal: xxxl.spacing.rowHorizontal }),
     },
     rowLast: { borderBottomWidth: 0 },
-    rowDivider: { position: "absolute", left: xxxl.spacing.rowHorizontal, right: xxxl.spacing.rowHorizontal, bottom: 0, height: 1, backgroundColor: theme.border },
+    rowDivider: { position: "absolute", left: 0, right: 0, bottom: 0, height: 1, backgroundColor: theme.border },
     rowIcon: {
       width: 36,
       height: 36,

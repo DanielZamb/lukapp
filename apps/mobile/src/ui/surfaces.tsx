@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { ComponentProps, PropsWithChildren, ReactNode } from "react";
-import { Image, View, type StyleProp, type ViewStyle } from "react-native";
+import { Image, Pressable, View, type StyleProp, type ViewStyle } from "react-native";
 import { EmojiText, Text } from "./Text";
 import { useThemeContext } from "./themeContext";
 import { alpha, mix, resolveColor, type DesignColor } from "./design";
@@ -9,14 +9,30 @@ import { textTone, type TextTone } from "./typography";
 
 export type IconName = ComponentProps<typeof Ionicons>["name"];
 type Legacy = { legacy?: ReactNode };
-export function BrandBand({ children, watermark = true }: PropsWithChildren<{ watermark?: boolean }>) {
+type BrandBandProps = { watermark?: boolean } & (
+  PropsWithChildren<{ header?: never; hero?: never; chip?: never; legacy?: never }> |
+  { children?: never; header: { logo: ReactNode; eyebrow?: string; actions?: ReactNode }; hero: { label: string; content: ReactNode }; chip?: ReactNode; legacy?: ReactNode }
+);
+export function BrandBand(props: BrandBandProps) {
+  const { watermark = true } = props;
   const { layout, mode, theme } = useThemeContext();
-  if (layout.tier !== "xxxl") return children;
+  if (layout.tier !== "xxxl") return props.header ? props.legacy ?? null : props.children;
   const colors = xxxl.colors[mode];
   return <View style={{ marginHorizontal: -16, marginTop: -12, paddingTop: 12, paddingHorizontal: 16, paddingBottom: 24, gap: 20, backgroundColor: colors.band, borderBottomWidth: 1, borderBottomColor: colors.bandBorder, overflow: "hidden" }}>
     {watermark ? <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: "absolute", right: -74, bottom: -64, width: 260, opacity: colors.watermarkOpacity }}><Image source={require("../../assets/brand/symbol-color.png")} resizeMode="contain" style={{ width: 260, height: 278, tintColor: theme.primaryText }} /></View> : null}
-    {children}
+    {props.header ? <>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{ flex: 1, minWidth: 0, gap: 6 }}>{props.header.logo}{props.header.eyebrow ? <Text variant="eyebrow" tone="muted">{props.header.eyebrow}</Text> : null}</View>{props.header.actions}</View>
+      <View style={{ gap: 8 }}><Text variant="meta" tone="muted">{props.hero.label}</Text>{props.hero.content}</View>
+      {props.chip}
+    </> : props.children}
   </View>;
+}
+export function BrandBandChip({ label, icon = "wallet-outline", onPress, legacy = null }: { label: string; icon?: IconName; onPress: () => void } & Legacy) {
+  const { theme, layout } = useThemeContext();
+  if (layout.tier !== "xxxl") return legacy;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 56, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, borderColor: alpha(theme.primary, 0.22), backgroundColor: mix(theme.primary, theme.background, 0.1) }}>
+    <Ionicons accessible={false} name={icon} size={22} color={theme.primaryText} /><Text variant="rowTitle" style={{ flex: 1 }}>{label}</Text><Ionicons accessible={false} name="chevron-forward" size={20} color={theme.primaryText} />
+  </Pressable>;
 }
 export type TintCardProps = PropsWithChildren<({ tone?: "brand"; color?: never } | { tone: "category"; color: DesignColor }) & { focused?: boolean; style?: StyleProp<ViewStyle> }>;
 export function TintCard({ children, tone = "brand", color, focused, style }: TintCardProps) {
