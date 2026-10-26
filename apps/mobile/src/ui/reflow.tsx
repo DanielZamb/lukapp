@@ -15,6 +15,7 @@ export function useReflowStyles() {
       ...((reflow ? reflowAlign : align) !== undefined && { alignItems: reflow ? reflowAlign : align }),
     }),
     flex: (normal: number, stacked: number): Pick<ViewStyle, "flex"> => ({ flex: reflow ? stacked : normal }),
+    width: (normal: ViewStyle["width"], stacked: ViewStyle["width"]): ViewStyle => ({ width: reflow ? stacked : normal }),
     trail: (normal: ViewStyle["maxWidth"] = "45%", stacked: ViewStyle["maxWidth"] = "100%"): ViewStyle => ({
       maxWidth: reflow ? stacked : normal, alignItems: reflow ? "flex-start" : "flex-end",
     }),

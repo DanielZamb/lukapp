@@ -2,13 +2,14 @@ import * as React from "react";
 import { createElement as h, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { Presentation, ReflowRow, ReflowItem, Text, TextInput, useTextPreset, useReflowStyles, FactRow, IconButton } from "./core";
+import { Presentation, ReflowRow, ReflowItem, Text, TextInput, useTextPreset, useReflowStyles, FactRow, IconButton, AmountField, Field, ValueRow, SecondaryButton, useNativeStackHeaderConfig, useNativeStackHeaderOptions } from "./core";
 import { ResponsiveThemeProvider, ThemeProvider } from "./themeContext";
 import { textPresets, textPresetSpec, type TextPreset } from "./textPresets";
 import { font } from "./tokens";
 import { readableLayout, type LayoutTier } from "./layout";
 import { Sheet } from "./Sheet";
-import { ActionSheet } from "./pickers";
+import { PickerSheet } from "./PickerSheet";
+import { ActionSheet, SearchPicker } from "./pickers";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
@@ -153,4 +154,178 @@ test.each(["ios", "android"])("custom host keeps TextInput scaling props and ren
   if (platform === "ios") expect(Number(flat(custom.props.style).fontSize) * Math.min(2, custom.props.maxFontSizeMultiplier)).toBe(27);
   native.platform.OS = "ios";
   native.platform.Version = 18;
+});
+
+test.each(["default", "reflow"] as const)("AmountField exactly preserves PostingForm amountRow at %s", async tier => {
+  const change = vi.fn();
+  const tree = await render(h(AmountField, { currency: "COP", legacyCurrency: "$", value: "-0", onChangeText: change, editable: true, placeholder: "-0", accessibilityLabel: "Signed amount", style: { color: "#000" } }), tier);
+  expect(flat(tree.findByType("view").props.style)).toEqual({ flexDirection: tier === "default" ? "row" : "column", alignItems: tier === "default" ? "center" : "stretch", gap: 8, minHeight: 72 });
+  expect(tree.findByType("text").children).toEqual(["$"]);
+  expect(flat(tree.findByType("text").props.style)).toEqual({ fontFamily: font.semibold, fontSize: 28, color: "#6e6e6e" });
+  const input = tree.findByType("input");
+  expect(flat(input.props.style)).toEqual({ fontFamily: font.extrabold, fontSize: 44, minHeight: 64, padding: 0, flex: tier === "default" ? 1 : 0, color: "#000" });
+  expect(input.props.value).toBe("-0"); expect(input.props.editable).toBe(true);
+  input.props.onChangeText("-1.000"); expect(change.mock.calls).toEqual([["-1.000"]]);
+});
+test("AmountField uses focused card, ISO currency, capped input, and transfer direction icon at XXXL", async () => {
+  const tree = await render(h(AmountField, { currency: "COP", legacyCurrency: "$", value: "10", directionLabel: "Moves between places" }), "xxxl");
+  const card = flat(tree.findByType("view").props.style);
+  expect(card).toMatchObject({ padding: 15, borderRadius: 24, gap: 12, borderWidth: 2 });
+  expect(tree.findAllByType("text").map(n => n.children.join(""))).toEqual(["COP", "Moves between places"]);
+  expect(tree.findByType("input").props.maxFontSizeMultiplier).toBe(1.2);
+  expect(tree.find(n => String(n.type) === "icon").props.name).toBe("swap-horizontal");
+});
+test.each(["default", "reflow", "xxxl"] as const)("description Field preserves legacy and owns its XXXL input at %s", async tier => {
+  const tree = await render(h(Field, { presentation: "description", label: "Description", value: "Taxi", onChangeText() {} }), tier);
+  expect(flat(tree.findByType("view").props.style)).toEqual({ gap: tier === "xxxl" ? 8 : 4 });
+  const label = tree.findByType("text"); const input = tree.findByType("input");
+  expect(input.props.multiline).toBe(true); expect(input.props.value).toBe("Taxi");
+  if (tier !== "xxxl") {
+    expect(flat(label.props.style)).toEqual({ fontFamily: font.semibold, fontSize: 14, color: "#6e6e6e" });
+    expect(flat(input.props.style)).toEqual({ fontFamily: font.regular, fontSize: 16, lineHeight: 24, minHeight: 44, padding: 0, color: "#0a0a0a" });
+  } else expect(flat(input.props.style)).toMatchObject({ minHeight: 64, padding: 16, borderWidth: 1, borderRadius: 18 });
+});
+test.each(["default", "reflow"] as const)("field ValueRow keeps its complete existing default tree at %s", async tier => {
+  const props = { title: "Place", value: "Cash", icon: "wallet-outline", onPress() {} } satisfies Parameters<typeof ValueRow>[0];
+  await render(h(ValueRow, props), tier); const before = JSON.stringify(root?.toJSON());
+  await act(async () => root?.unmount());
+  await render(h(ValueRow, { ...props, presentation: "field" }), tier);
+  expect(JSON.stringify(root?.toJSON())).toBe(before);
+});
+test("field ValueRow puts muted label above status and retains whole description in accessibility", async () => {
+  const tree = await render(h(ValueRow, { presentation: "field", title: "Place", value: "Cash", meta: "A whole explanation", icon: "wallet-outline", onPress() {} }), "xxxl");
+  const texts = tree.findAllByType("text");
+  expect(texts.map(n => n.children.join(""))).toEqual(["Place", "Cash", "A whole explanation"]);
+  expect(texts[1]?.props.maxFontSizeMultiplier).toBe(1.3);
+  expect(tree.findByType("button").props.accessibilityLabel).toBe("Place, Cash, A whole explanation");
+});
+test("tappable FactRow matches D4 option geometry and exposes one button", async () => {
+  const press = vi.fn(); const tree = await render(h(FactRow, { label: "Look", value: "Cash wallet green", emoji: "💰", actionLabel: "Change", onPress: press }), "xxxl");
+  const buttons = tree.findAllByType("button"); expect(buttons).toHaveLength(1);
+  expect(buttons[0]?.props.accessibilityLabel).toBe("Look, Cash wallet green, Change");
+  expect(flat(buttons[0]?.props.style)).toMatchObject({ minHeight: 60, gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 18 });
+  expect(buttons[0]?.findAllByType("text").map(n => n.children.join(""))).toEqual(["💰", "Cash wallet green", "Change"]);
+  buttons[0]?.props.onPress(); expect(press).toHaveBeenCalledTimes(1);
+});
+test("tappable FactRow returns the exact default SecondaryButton", async () => {
+  const legacy = h(SecondaryButton, { label: "Pick a look", onPress() {} });
+  await render(legacy); const before = JSON.stringify(root?.toJSON());
+  await act(async () => root?.unmount());
+  await render(h(FactRow, { label: "Look", value: "Cash", onPress() {}, actionLabel: "Change", legacy }));
+  expect(JSON.stringify(root?.toJSON())).toBe(before);
+});
+test.each(["default", "reflow", "xxxl"] as const)("native header helpers preserve configs and hide only XXXL at %s", async tier => {
+  const config = { hidden: false, title: "Batch" }; const options = { headerShown: true, title: "Home" };
+  function Consumer() { return h("headers", { config: useNativeStackHeaderConfig(config), options: useNativeStackHeaderOptions(options) }); }
+  const tree = await render(h(Consumer), tier); const result = tree.find(n => String(n.type) === "headers");
+  expect(result.props.config).toEqual({ hidden: tier === "xxxl", title: "Batch" });
+  expect(result.props.options).toEqual({ headerShown: tier !== "xxxl", title: "Home" });
+  if (tier !== "xxxl") { expect(result.props.config).toBe(config); expect(result.props.options).toBe(options); }
+});
+const pickerOptions = [{ value: "cop", label: "Colombian peso", detail: "COP" }, { value: "usd", label: "US dollar", detail: "USD" }];
+test("SearchPicker stages add intent before native dismissal and notifies actual presentation", async () => {
+  const calls: string[] = []; const ref = React.createRef<import("@gorhom/bottom-sheet").BottomSheetModal>();
+  native.dismiss.mockImplementation(() => { calls.push("dismiss requested"); });
+  const tree = await render(h(SearchPicker, { title: "Places", placeholder: "Search", value: "cop", options: pickerOptions, onChange() {}, onClose: () => calls.push("closed"), onDismiss: () => calls.push("dismissed"), onPresentedChange: shown => calls.push(`presented:${shown}`), sheetRef: ref, onAddRequest: () => calls.push("staged") }), "xxxl");
+  expect(native.present).not.toHaveBeenCalled();
+  const modal = tree.find(n => String(n.type) === "modal");
+  await act(async () => modal.props.onChange(0));
+  const add = tree.findAllByType("button").find(n => n.props.accessibilityLabel === "Add a place");
+  await act(async () => { add?.props.onPress(); add?.props.onPress(); });
+  expect(calls).toEqual(["presented:true", "staged", "dismiss requested"]);
+  await act(async () => modal.props.onDismiss());
+  expect(calls).toEqual(["presented:true", "staged", "dismiss requested", "presented:false", "closed", "dismissed"]);
+});
+test("SearchPicker deferred add fires only once after completed dismissal", async () => {
+  const calls: string[] = [];
+  const tree = await render(h(SearchPicker, { title: "Places", placeholder: "Search", value: "cop", options: pickerOptions, onChange() {}, onClose: () => calls.push("closed"), onAdd: () => calls.push("add") }), "xxxl");
+  const add = tree.findAllByType("button").find(n => n.props.accessibilityLabel === "Add a place");
+  await act(async () => add?.props.onPress()); expect(calls).toEqual([]);
+  const modal = tree.find(n => String(n.type) === "modal");
+  await act(async () => { modal.props.onDismiss(); modal.props.onDismiss(); });
+  expect(calls.filter(c => c === "add")).toEqual(["add"]);
+  expect(calls.slice(0, 2)).toEqual(["closed", "add"]);
+});
+test("SearchPicker controlled search filters options and busy blocks add, selection, close, and edits", async () => {
+  const search = vi.fn(); const add = vi.fn(); const change = vi.fn();
+  const tree = await render(h(SearchPicker, { title: "Places", placeholder: "Search", value: "cop", options: pickerOptions, onChange: change, onClose() {}, onAddRequest: add, busy: true, search: "USD", onSearchChange: search }), "xxxl");
+  const input = tree.findByType("input"); expect(input.props.value).toBe("USD"); expect(input.props.editable).toBe(false);
+  expect(tree.findAllByType("text").map(n => n.children.join(""))).not.toContain("Colombian peso");
+  expect(tree.findAllByType("text").map(n => n.children.join(""))).toContain("US dollar");
+  const modal = tree.find(n => String(n.type) === "modal"); expect(modal.props.enablePanDownToClose).toBe(false); expect(modal.props.enableHandlePanningGesture).toBe(false);
+  await act(async () => { input.props.onChangeText("COP"); for (const button of tree.findAllByType("button")) button.props.onPress?.(); });
+  expect(search).not.toHaveBeenCalled(); expect(change).not.toHaveBeenCalled(); expect(add).not.toHaveBeenCalled(); expect(native.dismiss).not.toHaveBeenCalled();
+});
+
+function visualTree() {
+  return JSON.stringify(root?.toJSON(), (key, value) => key === "onChange" ? undefined : typeof value === "function" ? "[callback]" : value);
+}
+async function switchTier(node: ReactElement, tier: LayoutTier) {
+  const layout = readableLayout({ width: tier === "reflow" ? 280 : 390, fontScale: tier === "xxxl" ? 1.5 : 1 });
+  await act(async () => root?.update(h(ThemeProvider, { layout }, node)));
+  if (!root) throw new Error("No renderer");
+  return root.root;
+}
+test.each(["default", "reflow"] as const)("managed Sheet legacy native body stays pixel-identical to native Sheet at %s", async tier => {
+  const body = h("sheet-scroll", { contentContainerStyle: { padding: 24, gap: 20 } }, h("text", { style: { fontSize: 16 } }, "Today's body"));
+  const nativeModalProps = { snapPoints: ["80%"], backgroundStyle: { backgroundColor: "#fff" }, enableDynamicSizing: false };
+  await render(h(Sheet, { body: "native", nativeModalProps, onClose() {} }, body), tier);
+  const before = visualTree(); await act(async () => root?.unmount());
+  await render(h(Sheet, { label: "Setup", tall: true, legacyBody: body, legacyNativeModalProps: nativeModalProps, onClose() {} }, h("xxxl-body")), tier);
+  expect(visualTree()).toBe(before);
+});
+test("iOS in-process tier changes keep one presented SheetModal and ref without re-presenting", async () => {
+  const ref = React.createRef<import("@gorhom/bottom-sheet").BottomSheetModal>(); const dismissed = vi.fn();
+  const node = h(Sheet, { label: "Setup", tall: true, sheetRef: ref, onDismiss: dismissed, legacyBody: h("legacy-native"), legacyFooter: h("legacy-footer"), footer: h("new-footer") }, h("xxxl-body"));
+  let tree = await render(node); const modal = tree.find(n => String(n.type) === "modal"); const handle = ref.current;
+  await act(async () => { ref.current?.present(); modal.props.onChange(0); });
+  expect(native.present).toHaveBeenCalledTimes(1);
+  for (const tier of ["xxxl", "reflow", "xxxl", "default"] as const) {
+    tree = await switchTier(node, tier);
+    expect(tree.find(n => String(n.type) === "modal")).toBe(modal);
+    expect(ref.current).toBe(handle);
+    expect(tree.findAll(n => String(n.type) === "legacy-native")).toHaveLength(tier === "xxxl" ? 0 : 1);
+    expect(tree.findAll(n => String(n.type) === "legacy-footer")).toHaveLength(tier === "xxxl" ? 0 : 1);
+    expect(tree.findAll(n => String(n.type) === "xxxl-body")).toHaveLength(tier === "xxxl" ? 1 : 0);
+  }
+  expect(native.present).toHaveBeenCalledTimes(1); expect(native.dismiss).not.toHaveBeenCalled(); expect(dismissed).not.toHaveBeenCalled();
+  await act(async () => { ref.current?.dismiss(); modal.props.onDismiss(); });
+  expect(native.dismiss).toHaveBeenCalledTimes(1); expect(dismissed).toHaveBeenCalledTimes(1);
+});
+test.each(["default", "reflow"] as const)("PickerSheet legacy scroll body preserves the original PickerSheet tree at %s", async tier => {
+  const body = h("view", { style: { gap: 16 } }, h("text", null, "Search places"), h("input", { value: "Cash" }));
+  await render(h(PickerSheet, null, body), tier); const before = visualTree(); await act(async () => root?.unmount());
+  await render(h(PickerSheet, { legacyBody: body, children: h("xxxl-options") }), tier); expect(visualTree()).toBe(before);
+});
+test("PickerSheet native legacy body has no extra scroller and retains one owner across tiers", async () => {
+  const ref = React.createRef<import("@gorhom/bottom-sheet").BottomSheetModal>(); const dismiss = vi.fn();
+  const node = h(PickerSheet, { sheetRef: ref, legacyBodyMode: "native", legacyBody: h("date-native"), legacyNativeModalProps: { snapPoints: ["50%"], backgroundStyle: { backgroundColor: "#123" } }, onDismiss: dismiss, children: h("new-dates") });
+  let tree = await render(node); const modal = tree.find(n => String(n.type) === "modal");
+  expect(tree.findAll(n => String(n.type) === "sheet-scroll")).toHaveLength(0); expect(modal.props.snapPoints).toEqual(["50%"]); expect(modal.props.backgroundStyle).toEqual({ backgroundColor: "#123" });
+  await act(async () => { ref.current?.present(); modal.props.onChange(0); });
+  tree = await switchTier(node, "xxxl"); expect(tree.find(n => String(n.type) === "modal")).toBe(modal); expect(tree.findAll(n => String(n.type) === "new-dates")).toHaveLength(1);
+  expect(native.present).toHaveBeenCalledTimes(1); expect(native.dismiss).not.toHaveBeenCalled(); expect(dismiss).not.toHaveBeenCalled();
+  await act(async () => modal.props.onDismiss()); expect(dismiss).toHaveBeenCalledTimes(1);
+});
+test("SearchPicker stable legacy body keeps external presentation and callbacks during mounted tier changes", async () => {
+  const ref = React.createRef<import("@gorhom/bottom-sheet").BottomSheetModal>(); const close = vi.fn(); const dismissed = vi.fn();
+  const node = h(SearchPicker, { title: "Places", placeholder: "Search places", options: pickerOptions, value: "cop", onChange() {}, onClose: close, onDismiss: dismissed, sheetRef: ref, legacyBody: h("legacy-place-picker") });
+  let tree = await render(node); const modal = tree.find(n => String(n.type) === "modal"); const handle = ref.current;
+  await act(async () => { ref.current?.present(); modal.props.onChange(0); });
+  for (const tier of ["xxxl", "reflow", "default", "xxxl"] as const) {
+    tree = await switchTier(node, tier); expect(tree.find(n => String(n.type) === "modal")).toBe(modal); expect(ref.current).toBe(handle);
+    expect(tree.findAll(n => String(n.type) === "legacy-place-picker")).toHaveLength(tier === "xxxl" ? 0 : 1);
+    expect(tree.findAllByType("input")).toHaveLength(tier === "xxxl" ? 1 : 0);
+  }
+  expect(native.present).toHaveBeenCalledTimes(1); expect(native.dismiss).not.toHaveBeenCalled(); expect(close).not.toHaveBeenCalled();
+  await act(async () => modal.props.onDismiss()); expect(close).toHaveBeenCalledTimes(1); expect(dismissed).toHaveBeenCalledTimes(1);
+});
+
+test("stable sheet owners deduplicate a dismissal callback forwarded through native and public slots", async () => {
+  const dismissed = vi.fn();
+  let tree = await render(h(Sheet, { label: "Setup", legacyBody: h("old-body"), legacyNativeModalProps: { onDismiss: dismissed }, onDismiss: dismissed }, h("new-body")));
+  await act(async () => tree.find(n => String(n.type) === "modal").props.onDismiss()); expect(dismissed).toHaveBeenCalledTimes(1);
+  await act(async () => root?.unmount()); dismissed.mockClear();
+  tree = await render(h(SearchPicker, { title: "Places", placeholder: "Search", value: "cop", options: pickerOptions, onChange() {}, onClose: dismissed, onDismiss: dismissed, legacyBody: h("old-picker"), legacyNativeModalProps: { onDismiss: dismissed } }));
+  await act(async () => tree.find(n => String(n.type) === "modal").props.onDismiss()); expect(dismissed).toHaveBeenCalledTimes(1);
 });

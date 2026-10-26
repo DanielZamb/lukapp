@@ -8,11 +8,20 @@ import { mix } from "./design";
 import { radius, touchTarget } from "./tokens";
 
 export type FactRowProps = {
-  label: string; value: string; leading?: ReactNode; icon?: IconName; emoji?: string; color?: string; isLast?: boolean; legacy?: ReactNode;
+  label: string; value: string; leading?: ReactNode; icon?: IconName; emoji?: string; color?: string; isLast?: boolean; legacy?: ReactNode; onPress?: () => void; actionLabel?: string;
 };
-export function FactRow({ label, value, leading, icon, emoji, color, isLast, legacy = null }: FactRowProps) {
+export function FactRow({ label, value, leading, icon, emoji, color, isLast, legacy = null, onPress, actionLabel }: FactRowProps) {
   const { layout, theme, styles } = useThemeContext();
   if (layout.tier !== "xxxl") return legacy;
+  if (onPress) return <View style={{ gap: 8 }}>
+    <Text variant="label" tone="muted">{label}</Text>
+    <Pressable accessible accessibilityRole="button" accessibilityLabel={[label, value, actionLabel].filter(Boolean).join(", ")} onPress={onPress}
+      style={{ minHeight: 60, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 18, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border }}>
+      {leading ?? (emoji ? <EmojiTile emoji={emoji} color={color ?? theme.primary} size={36} /> : icon ? <IconTile icon={icon} size={36} /> : null)}
+      <Text variant="action" style={{ flex: 1, minWidth: 0 }}>{value}</Text>
+      {actionLabel ? <Text variant="status" tone="primary" style={{ flexShrink: 1 }}>{actionLabel}</Text> : null}
+    </Pressable>
+  </View>;
   return <View accessible accessibilityLabel={`${label}, ${value}`} style={[styles.row, isLast && styles.rowLast, { flexDirection: "row", alignItems: "flex-start", gap: 12 }]}>
     <View style={{ alignSelf: "center" }}>{leading ?? (emoji ? <EmojiTile emoji={emoji} color={color ?? theme.primary} size={48} /> : icon ? <IconTile icon={icon} size={48} /> : null)}</View>
     <View style={{ flex: 1, minWidth: 0, gap: 8 }}><Text variant="meta" tone="muted">{label}</Text><Text variant="rowTitle">{value}</Text></View>

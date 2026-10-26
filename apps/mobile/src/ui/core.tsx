@@ -31,6 +31,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { font, fontSize, radius, spacing, themes, xxxl } from "./tokens";
 import { useThemeContext } from "./themeContext";
 import { Text as StyledText } from "./Text";
+import { TextInput as PresetTextInput } from "./TextInput";
+import { IconTile } from "./surfaces";
 import { KeyboardFrame } from "./KeyboardFrame";
 import { composeHandlers, mix } from "./design";
 import { textSpecs, textStyle, textTone, type TextTone } from "./typography";
@@ -211,6 +213,7 @@ export function SecondaryButton({
 
 type FieldProps = {
   label: string;
+  presentation?: "default" | "description";
   helperText?: string;
   error?: string;
   invalid?: boolean;
@@ -219,6 +222,7 @@ type FieldProps = {
 
 export function Field({
   label,
+  presentation = "default",
   helperText,
   error,
   invalid,
@@ -226,9 +230,20 @@ export function Field({
   style,
   ...inputProps
 }: FieldProps) {
-  const { theme, ui, styles } = useCore();
+  const { theme, ui, styles, layout } = useCore();
   const showError = invalid || !!error;
   const hint = error ?? helperText;
+  if (presentation === "description") {
+    const large = layout.tier === "xxxl";
+    return <View style={{ gap: large ? 8 : 4 }}>
+      <StyledText preset="fieldLabel" tone="muted">{label}</StyledText>
+      <PresetTextInput InputComponent={InputComponent} {...inputProps} preset="bodyCopy" multiline
+        accessibilityLabel={inputProps.accessibilityLabel ?? label}
+        placeholderTextColor={inputProps.placeholderTextColor ?? theme.mutedForeground}
+        style={[{ minHeight: large ? 64 : 44, padding: large ? 16 : 0, color: theme.foreground }, large && { borderRadius: 18, backgroundColor: theme.secondary, borderWidth: 1, borderColor: showError ? theme.danger : theme.ring }, style]} />
+      {hint ? <StyledText variant="meta" tone={error ? "danger" : "muted"} accessibilityRole={error ? "alert" : undefined}>{hint}</StyledText> : null}
+    </View>;
+  }
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -287,6 +302,7 @@ export function Group({ children, title, pairGap }: PropsWithChildren<{ title?: 
 export const ListGroup = Group;
 
 export type ValueRowProps = {
+  presentation?: "default" | "field";
   title: string;
   value?: string;
   onPress?: () => void;
@@ -304,7 +320,7 @@ export type ValueRowProps = {
 } & ({ meta?: string; detail?: never } | { detail?: string; meta?: never });
 
 export function ValueRow({
-  title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast, trailing, children, chevron = true, disabled,
+  title, meta, detail, value, onPress, icon, leading, presentation = "default", titleStyle, valueStyle, tone, accessibilityLabel, isLast, trailing, children, chevron = true, disabled,
 }: ValueRowProps) {
   const { theme, styles, layout } = useCore();
   const large = layout.tier === "xxxl";
@@ -312,6 +328,21 @@ export function ValueRow({
   const color = tone ? textTone(theme, tone) : theme.foreground;
   if (large) {
     const fullLabel = [accessibilityLabel ?? title, ...[value, description].filter(part => part && !accessibilityLabel?.includes(part))].filter(Boolean).join(", ");
+    if (presentation === "field") {
+      const content = <>
+        {leading ?? (icon ? <IconTile icon={icon} size={48} /> : null)}
+        <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+          <StyledText variant="meta" tone="muted" style={titleStyle}>{title}</StyledText>
+          {value ? <StyledText variant="status" tone={tone} style={valueStyle}>{value}</StyledText> : null}
+          {description ? <StyledText variant="meta" tone="muted" numberOfLines={2}>{description}</StyledText> : null}
+          {trailing}{children}
+        </View>
+        {onPress && chevron ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}
+        {!isLast ? <View pointerEvents="none" style={styles.rowDivider} /> : null}
+      </>;
+      return onPress ? <Pressable accessible accessibilityRole="button" accessibilityLabel={fullLabel} disabled={disabled} accessibilityState={{ disabled: !!disabled }} onPress={disabled ? undefined : onPress} style={[styles.row, isLast && styles.rowLast]}>{content}</Pressable>
+        : <View accessible accessibilityLabel={fullLabel} style={[styles.row, isLast && styles.rowLast]}>{content}</View>;
+    }
     const labelLine = <View style={{ flexDirection: "row", alignItems: "center", gap: xxxl.spacing.labelTileGap }}>
       {leading ?? (icon ? <View style={styles.rowIcon}><Ionicons name={icon} size={18} color={color} /></View> : null)}
       <StyledText variant="rowTitle" style={[{ flex: 1, minWidth: 0 }, titleStyle]}>{title}</StyledText>
@@ -604,3 +635,6 @@ export { Presentation, ReflowRow, ReflowItem, useReflowStyles } from "./reflow";
 export { FactRow, IconButton, type FactRowProps, type IconButtonProps } from "./adapters";
 export { TextInput, useTextPreset, type TextInputProps } from "./TextInput";
 export { type TextPreset } from "./textPresets";
+
+export { AmountField, type AmountFieldProps } from "./AmountField";
+export { useNativeStackHeaderOptions, useNativeStackHeaderConfig } from "./nativeStack";
