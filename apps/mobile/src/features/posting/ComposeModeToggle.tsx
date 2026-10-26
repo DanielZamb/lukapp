@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { Theme } from "../../ui/tokens";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useTheme } from "../../ui/core";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Segmented, Text, useTheme } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export function ComposeModeToggle({
@@ -18,32 +18,54 @@ export function ComposeModeToggle({
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
-    <View accessibilityRole="tablist" style={styles.track}>
-      {(["one", "batch"] as const).map((value) => (
-        <Pressable
-          key={value}
-          accessibilityRole="tab"
-          accessibilityLabel={
-            value === "one"
-              ? "One"
-              : count > 0
-                ? `Batch, ${count} waiting`
-                : "Batch"
-          }
-          accessibilityState={{ selected: value === mode, disabled }}
-          disabled={disabled}
-          onPress={() => onMode(value)}
-          style={[styles.segment, value === mode && styles.active]}
-        >
-          <Text style={[styles.label, value === mode && styles.activeLabel]}>{value === "one" ? "One" : "Batch"}</Text>
-          {value === "batch" && count > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.count}>{count}</Text>
-            </View>
-          )}
-        </Pressable>
-      ))}
-    </View>
+    <Segmented
+      options={[
+        { value: "one", label: "One", disabled },
+        {
+          value: "batch",
+          label: "Batch",
+          badge: count > 0 ? count : undefined,
+          disabled,
+        },
+      ]}
+      value={mode}
+      onChange={onMode}
+      legacy={
+        <View accessibilityRole="tablist" style={styles.track}>
+          {(["one", "batch"] as const).map((value) => (
+            <Pressable
+              key={value}
+              accessibilityRole="tab"
+              accessibilityLabel={
+                value === "one"
+                  ? "One"
+                  : count > 0
+                    ? `Batch, ${count} waiting`
+                    : "Batch"
+              }
+              accessibilityState={{ selected: value === mode, disabled }}
+              disabled={disabled}
+              onPress={() => onMode(value)}
+              style={[styles.segment, value === mode && styles.active]}
+            >
+              <Text
+                preset={value === mode ? "composeSelected" : "composeLabel"}
+                style={[styles.label, value === mode && styles.activeLabel]}
+              >
+                {value === "one" ? "One" : "Batch"}
+              </Text>
+              {value === "batch" && count > 0 && (
+                <View style={styles.badge}>
+                  <Text preset="badge" style={styles.count}>
+                    {count}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          ))}
+        </View>
+      }
+    />
   );
 }
 function createStyles(theme: Theme) {
@@ -70,7 +92,6 @@ function createStyles(theme: Theme) {
     label: {
       flexShrink: 1,
       fontFamily: font.medium,
-      fontSize: 13,
       color: theme.mutedForeground,
     },
     activeLabel: { color: theme.foreground, fontFamily: font.bold },
@@ -85,7 +106,6 @@ function createStyles(theme: Theme) {
     },
     count: {
       fontFamily: font.bold,
-      fontSize: 11,
       color: theme.primaryForeground,
     },
   });

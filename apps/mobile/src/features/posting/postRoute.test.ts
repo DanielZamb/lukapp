@@ -321,6 +321,14 @@ test("a negative draft can choose income without closing the picker and posts th
   await act(async () => sheet().props.onDone());
   await act(async () => formProps().onPost());
   expect(writes.post).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ kind: "income", payload: expect.objectContaining({ userCategoryIds: ["salary"], amount: { currency: "COP", minorUnits: 12500 } }) }));
+  expect(formProps().category).toBe("Pick");
+  expect(formProps().receipt).toMatchObject({
+    description: "Category first salary", amount: "125", minorUnits: 12500,
+    category: { name: "Salary", emoji: "F" },
+  });
+  await act(async () => formProps().onAnother?.());
+  expect(formProps()).toMatchObject({ posted: null, receipt: undefined, amount: "-", description: "" });
+  expect(writes.post).toHaveBeenCalledOnce();
 });
 
 test("Initial balance can enable Post without a category", async () => {

@@ -3,17 +3,27 @@ import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import type { AccountSetupRequest } from "../src/features/categories/model";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import {
-  BottomSheetModal,
-  BottomSheetView,
-} from "@gorhom/bottom-sheet";
+import { type BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { useAction, useConvex, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Keyboard, Platform, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  BackHandler,
+  Keyboard,
+  Platform,
+  View,
+} from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
-import { formatMoney, localDate, parseMoney } from "../src/features/money";
+import {
+  formatAmount,
+  formatMoney,
+  localDate,
+  parseMoney,
+} from "../src/features/money";
+import { categoryColor } from "../src/features/categories/appearance";
+import type { Category } from "../src/features/categories/model";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
@@ -21,11 +31,33 @@ import {
   type PostingBudgetImpact,
 } from "../src/features/budget/postingImpact";
 import { defaultAccountingDate } from "../src/features/timeZones";
-import { PrimaryButton, Header, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
+import {
+  ActionBar,
+  CenteredMoment,
+  ChoiceRow,
+  Header,
+  IconTile,
+  Presentation,
+  PrimaryButton,
+  Screen,
+  SecondaryButton,
+  SheetHeader,
+  Text,
+  useTheme,
+  useUi,
+} from "../src/ui/core";
 import { SheetProvider } from "../src/ui/SheetProvider";
+import { Sheet } from "../src/ui/Sheet";
+import { PickerSheet } from "../src/ui/PickerSheet";
 import { spacing } from "../src/ui/tokens";
-import { PostingForm } from "../src/features/posting/PostingForm";
-import { BatchNativeStack, batchRowFor } from "../src/features/posting/BatchNativeStack";
+import {
+  PostingForm,
+  postingDateOptions,
+} from "../src/features/posting/PostingForm";
+import {
+  BatchNativeStack,
+  batchRowFor,
+} from "../src/features/posting/BatchNativeStack";
 import { usePostingBatch } from "../src/features/posting/usePostingBatch";
 import { PlaceSheet } from "../src/features/posting/PlaceSheet";
 import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
@@ -67,6 +99,11 @@ function PostMoney({
   );
   const [placePickerOpen, setPlacePickerOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [receiptCategory, setReceiptCategory] = useState<Pick<
+    Category,
+    "name" | "style"
+  > | null>(null);
   const categories = useQuery(api.accounting.listUserCategories, {
     workspaceId: defaults.workspace.id,
   });
@@ -80,6 +117,7 @@ function PostMoney({
   const destinationRequest = useRef<AccountSetupRequest | null>(null);
   const setupAfterPicker = useRef<PlaceDraft | null>(null);
   const { workspace, financialAccountProfile: defaultProfile } = defaults;
+  const dateOptions = postingDateOptions(workspace.timeZone);
   const drafts = useLocalEntryDrafts({
     subject,
     workspaceId: workspace.id,
@@ -192,6 +230,10 @@ function PostMoney({
   const destination = profiles?.find(
     (place) => place.id === editor.destinationId,
   );
+  const selectedCategory = categories?.find(
+    (category) =>
+      category.id === (editor.categories.primaryId ?? editor.categories.ids[0]),
+  );
   const needsBudgetCheck =
     editor.entryType === "normal" &&
     editor.direction === "out" &&
@@ -238,12 +280,35 @@ function PostMoney({
       : undefined;
   if (candidateId && missingCandidate)
     return (
-      <Screen>
-        <Header title="Post money" onBack={() => router.back()} />
-        <Text accessibilityRole="alert" style={ui.error}>
-          This Candidate is no longer on this device.
-        </Text>
-      </Screen>
+      <Presentation
+        legacy={
+          <Screen>
+            <Header title="Post money" onBack={() => router.back()} />
+            <Text preset="caption" accessibilityRole="alert" style={ui.error}>
+              This Candidate is no longer on this device.
+            </Text>
+          </Screen>
+        }
+      >
+        <Screen
+          footer={
+            <ActionBar
+              primary={{
+                label: "Open Drafts",
+                icon: "arrow-forward",
+                onPress: () => router.replace("/drafts"),
+              }}
+            />
+          }
+        >
+          <CenteredMoment
+            icon="eye-off-outline"
+            tone="soft"
+            title="This candidate is gone"
+            body="It's no longer on this phone. Candidates expire after 15 days."
+          />
+        </Screen>
+      </Presentation>
     );
   if (candidateId && !binding)
     return (
@@ -251,14 +316,23 @@ function PostMoney({
         <ActivityIndicator />
       </Screen>
     );
-  const completeEntry = editor.description.trim().length > 0 && categoryValid && placesValid;
-  const blockedReason = !editor.description.trim() ? "Add a description before posting."
-    : !profile ? "Choose the place this money moves from."
-    : editor.entryType === "transfer" && !destination ? "Choose where the money goes in To."
-    : editor.entryType === "transfer" && editor.transferReviewRequired ? "Confirm From and To before posting."
-    : !categoryValid ? "Choose a category and, if requested, its primary category."
-    : !editor.canSubmit ? "Enter a valid amount before posting."
-    : needsBudgetCheck && budget === undefined ? "Checking your budget…" : undefined;
+  const completeEntry =
+    editor.description.trim().length > 0 && categoryValid && placesValid;
+  const blockedReason = !editor.description.trim()
+    ? "Add a description before posting."
+    : !profile
+      ? "Choose the place this money moves from."
+      : editor.entryType === "transfer" && !destination
+        ? "Choose where the money goes in To."
+        : editor.entryType === "transfer" && editor.transferReviewRequired
+          ? "Confirm From and To before posting."
+          : !categoryValid
+            ? "Choose a category and, if requested, its primary category."
+            : !editor.canSubmit
+              ? "Enter a valid amount before posting."
+              : needsBudgetCheck && budget === undefined
+                ? "Checking your budget…"
+                : undefined;
   const canQueue =
     editor.canSubmit &&
     !setup &&
@@ -292,6 +366,34 @@ function PostMoney({
         lockEntryType={editor.lockEntryType}
         currency={workspace.functionalCurrency}
         place={profile ? `${profile.emoji ?? "💰"} ${profile.name}` : "Pick"}
+        placeLook={
+          profile
+            ? { name: profile.name, emoji: profile.emoji ?? "💰" }
+            : undefined
+        }
+        destinationLook={
+          destination
+            ? { name: destination.name, emoji: destination.emoji ?? "💰" }
+            : undefined
+        }
+        categoryLook={
+          selectedCategory
+            ? {
+                name: editor.categories.ids
+                  .map(
+                    (id) =>
+                      categories?.find((category) => category.id === id)
+                        ?.name ?? "Saved category",
+                  )
+                  .join(" · "),
+                emoji: selectedCategory.style.emoji,
+                color: {
+                  light: categoryColor(selectedCategory.style),
+                  dark: categoryColor(selectedCategory.style, "dark"),
+                },
+              }
+            : undefined
+        }
         destination={
           destination
             ? `${destination.emoji ?? "💰"} ${destination.name}`
@@ -311,12 +413,19 @@ function PostMoney({
         }
         categoryEnabled={categoryEnabled}
         blockedReason={blockedReason}
-        transferReview={editor.entryType === "transfer" ? {
-          required: editor.transferReviewRequired,
-          canConfirm: placesValid && !!editor.destinationId && editor.destinationId !== editor.profileId,
-          onSwap: editor.swapTransferPlaces,
-          onConfirm: editor.confirmTransferReview,
-        } : undefined}
+        transferReview={
+          editor.entryType === "transfer"
+            ? {
+                required: editor.transferReviewRequired,
+                canConfirm:
+                  placesValid &&
+                  !!editor.destinationId &&
+                  editor.destinationId !== editor.profileId,
+                onSwap: editor.swapTransferPlaces,
+                onConfirm: editor.confirmTransferReview,
+              }
+            : undefined
+        }
         categoryNeedsPrimary={
           categoryEnabled &&
           !!categories &&
@@ -340,6 +449,30 @@ function PostMoney({
             ? `${editor.posted.description || "Entry"} · ${editor.posted.amount.minorUnits > 0 ? "+" : ""}${formatMoney(editor.posted.amount)}`
             : null
         }
+        receipt={
+          mode !== "batch" && editor.posted
+            ? {
+                description: editor.posted.description || "Entry",
+                minorUnits: editor.posted.amount.minorUnits,
+                amount: formatAmount(
+                  Math.abs(editor.posted.amount.minorUnits),
+                  editor.posted.amount.currency,
+                  { hideZeroDecimals: true },
+                ),
+                category: receiptCategory
+                  ? {
+                      name: receiptCategory.name,
+                      emoji: receiptCategory.style.emoji,
+                      color: {
+                        light: categoryColor(receiptCategory.style),
+                        dark: categoryColor(receiptCategory.style, "dark"),
+                      },
+                    }
+                  : undefined,
+              }
+            : undefined
+        }
+        onAnother={() => interaction(editor.resetComposer)}
         onAmountChange={(value) => interaction(() => editor.setAmount(value))}
         onDescriptionChange={(value) =>
           interaction(() => editor.setDescription(value))
@@ -368,15 +501,23 @@ function PostMoney({
             return;
           }
           if (
-            impact || !editor.canSubmit || setup ||
+            impact ||
+            !editor.canSubmit ||
+            setup ||
             (!editor.pending && (!categoryValid || !placesValid))
-          ) return;
+          )
+            return;
+          setReceiptCategory(selectedCategory ?? null);
           if (needsBudgetCheck) {
             if (!budget) return;
             const hits = postingBudgetImpact({
               jars: budget.jars,
               categoryIds: editor.categories.ids,
-              expenseMinorUnits: -parseMoney(editor.amount, "es-CO", workspace.functionalCurrency),
+              expenseMinorUnits: -parseMoney(
+                editor.amount,
+                "es-CO",
+                workspace.functionalCurrency,
+              ),
             });
             if (hits.length) {
               Keyboard.dismiss();
@@ -474,14 +615,93 @@ function PostMoney({
           editor.setSetup(null);
         }}
       />
-      <BottomSheetModal
-        ref={dateSheet}
-        backgroundStyle={{ backgroundColor: theme.background }}
-        snapPoints={["55%"]}
-        enableDynamicSizing={false}
+      <PickerSheet
+        sheetRef={dateSheet}
+        busy={!editor.editable}
+        stickyHeader={false}
+        onDismiss={() => setCalendarOpen(false)}
+        footer={
+          <ActionBar
+            primary={{
+              label: "Done",
+              icon: "checkmark",
+              onPress: () => dateSheet.current?.dismiss(),
+              disabled: !editor.editable,
+            }}
+          />
+        }
+        scrollProps={{
+          contentContainerStyle: {
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: 24,
+            gap: 32,
+          },
+        }}
+
+        legacyFooter={null}
+        legacyBody={
+          <>
+            <BottomSheetView style={{ padding: spacing.xxl, gap: spacing.xl }}>
+              <Header title="Date occurred" />
+              <DateTimePicker
+                value={new Date(`${editor.date}T12:00:00`)}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(_, selected) => {
+                  if (selected)
+                    interaction(() => editor.setDate(localDate(selected)));
+                  if (Platform.OS !== "ios") dateSheet.current?.dismiss();
+                }}
+              />
+              <SecondaryButton
+                label="Done"
+                onPress={() => dateSheet.current?.dismiss()}
+              />
+            </BottomSheetView>
+          </>
+        }
+        legacyNativeModalProps={{
+          backgroundStyle: { backgroundColor: theme.background },
+          snapPoints: ["55%"],
+          enableDynamicSizing: false,
+        }}
+        legacyBodyMode="native"
       >
-        <BottomSheetView style={{ padding: spacing.xxl, gap: spacing.xl }}>
-          <Header title="Date occurred" />
+        <SheetHeader
+          title="Date occurred"
+          eyebrow="POST MONEY"
+          onClose={() => dateSheet.current?.dismiss()}
+          disabled={!editor.editable}
+        />
+        <View style={{ gap: spacing.sm }}>
+          {dateOptions.map((option) => (
+            <ChoiceRow
+              key={option.value}
+              presentation="option"
+              label={option.label}
+              selected={editor.date === option.value}
+              disabled={!editor.editable}
+              onPress={() => interaction(() => editor.setDate(option.value))}
+            />
+          ))}
+          <ChoiceRow
+            presentation="option"
+            label="Pick a date"
+            leading={
+              <IconTile icon="calendar-outline" tone="neutral" size={36} />
+            }
+            selected={
+              !dateOptions.some((option) => editor.date === option.value)
+            }
+            disabled={!editor.editable}
+            onPress={() => setCalendarOpen(true)}
+          />
+        </View>
+        <Text variant="status" tone="muted">
+          Pick a date opens your phone's calendar.
+        </Text>
+        {calendarOpen && (
           <DateTimePicker
             value={new Date(`${editor.date}T12:00:00`)}
             mode="date"
@@ -489,20 +709,28 @@ function PostMoney({
             onChange={(_, selected) => {
               if (selected)
                 interaction(() => editor.setDate(localDate(selected)));
-              if (Platform.OS !== "ios") dateSheet.current?.dismiss();
+              if (Platform.OS !== "ios") {
+                setCalendarOpen(false);
+                dateSheet.current?.dismiss();
+              }
             }}
           />
-          <SecondaryButton
-            label="Done"
-            onPress={() => dateSheet.current?.dismiss()}
-          />
-        </BottomSheetView>
-      </BottomSheetModal>
+        )}
+      </PickerSheet>
     </>
   );
   const impactSheet = impact && (
     <PostingImpactSheet
-          currency={workspace.functionalCurrency}
+      currency={workspace.functionalCurrency}
+      categoryColors={Object.fromEntries(
+        (categories ?? []).map((category) => [
+          category.id,
+          {
+            light: categoryColor(category.style),
+            dark: categoryColor(category.style, "dark"),
+          },
+        ]),
+      )}
       {...impact}
       onReconsider={() => {
         setImpact(null);
