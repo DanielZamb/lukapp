@@ -7,7 +7,10 @@
     "orientation": "portrait",
     "ios": {
       "bundleIdentifier": "com.lukapp.u01.dev",
-      "buildNumber": "3"
+      "buildNumber": "3",
+      "infoPlist": {
+        "NSSupportsLiveActivities": true
+      }
     },
     "android": {
       "package": "com.lukapp.u01.dev",
@@ -55,7 +58,8 @@
           "faceIDPermission": "Use Face ID to unlock your financial information in Lukapp."
         }
       ],
-      "./plugins/with-entry-privacy.cjs"
+      "./plugins/with-entry-privacy.cjs",
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true

@@ -102,6 +102,7 @@ function Admission() {
     );
   return (
     <DeviceAdmissionGate>
+    <ContextPillHost admitted><SheetProvider>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="level-unlocked" options={{ gestureEnabled: false }} />
@@ -118,6 +119,7 @@ function Admission() {
       <Stack.Screen name="categories" />
       <Stack.Screen name="oauth-callback" />
     </Stack>
+    </SheetProvider></ContextPillHost>
     </DeviceAdmissionGate>
   );
 }
@@ -153,9 +155,7 @@ export default function Layout() {
             )}
           >
             <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-              <ContextPillHost><SheetProvider>
-                <Admission />
-              </SheetProvider></ContextPillHost>
+              <Admission />
             </ConvexProviderWithClerk>
           </LocalEntryGate>
           </ConnectingProvider>
