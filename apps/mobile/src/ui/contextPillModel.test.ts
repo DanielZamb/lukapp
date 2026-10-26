@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { dockDelay, dockShowsSuffix, glassMaterial, islandAmountFits, pillCopy, pillEnabled, pillPlacement, pillVisibility, summaryIsVisible } from "./contextPillModel";
+import { dockDelay, dockShowsSuffix, glassMaterial, islandAmountFits, pillCopy, pillEnabled, pillAppearance, compactTypography, pillHideReason, pillPresenceTransition, pillPlacement, pillVisibility, summaryIsVisible } from "./contextPillModel";
 
 describe("summary visibility", () => {
   test("shows only after the summary leaves, and a return suppresses intermediate scrolls", () => {
@@ -28,9 +28,9 @@ describe("summary visibility", () => {
 test("uses cutout height, preserves measured geometry, and rejects a tall narrow notch", () => {
   expect(pillPlacement({ kind: "none", rect: null })).toEqual({ kind: "peekDock" });
   const ios = { x: 133.5, y: 11, width: 126, height: 37 };
-  expect(pillPlacement({ kind: "island", rect: ios })).toEqual({ kind: "island", top: 8, height: 44, cutout: ios });
+  expect(pillPlacement({ kind: "island", rect: ios })).toEqual({ kind: "island", top: 8, height: 44, centerX: 196.5, centerY: 29.5, cutout: ios });
   const hole = { x: 142.2, y: 0, width: 43, height: 40.3 };
-  expect(pillPlacement({ kind: "centredPunchHole", rect: hole })).toEqual({ kind: "island", top: 0, height: 44, cutout: hole });
+  expect(pillPlacement({ kind: "centredPunchHole", rect: hole })).toEqual({ kind: "peekDock" });
   expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 80 } })).toEqual({ kind: "peekDock" });
   expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 41.01 } })).toEqual({ kind: "peekDock" });
 });
@@ -79,7 +79,60 @@ test("negative net spending from reversals retains its sign", () => {
 });
 
 test("compact island keeps at least18-point money and falls back when the camera leaves too little room", () => {
-  const shape = { fontScale: 2, windowWidth: 320, cutout: { x: 142, y: 0, width: 43, height: 40 } };
+  const shape = { height: 44, android: false, fontScale: 2, windowWidth: 320, cutout: { x: 142, y: 0, width: 43, height: 40 } };
   expect(islandAmountFits({ ...shape, measuredWidth: 120 })).toBe(true);
   expect(islandAmountFits({ ...shape, measuredWidth: 190 })).toBe(false);
+});
+
+test("S21 lens-derived island stays on screen and is centred on both axes", () => {
+  const rect = { x: 505 / 3.375, y: 0, width: 70 / 3.375, height: 99 / 3.375 };
+  const placement = pillPlacement({ kind: "centredPunchHole", rect });
+  expect(placement.kind).toBe("island");
+  if (placement.kind !== "island") throw new Error("Expected S21 island");
+  expect(placement.top).toBeCloseTo(6.5925925926);
+  expect(placement.centerX).toBe(160);
+  expect(placement.height).toBeCloseTo(24.7407407407);
+  expect(placement.top + placement.height / 2).toBeCloseTo(64 / 3.375);
+  expect(placement.height - rect.width).toBe(4);
+});
+test("falls back when a centred lens cannot keep two-point clearance on screen", () => {
+  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 150, y: 0, width: 20, height: 20 } })).toEqual({ kind: "peekDock" });
+  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 40 } })).toEqual({ kind: "peekDock" });
+});
+const modes: Array<"light" | "dark"> = ["light", "dark"];
+const forms: Array<"android" | "ios" | "peekDock"> = ["android", "ios", "peekDock"];
+for (const appTheme of modes) for (const form of forms) for (const reduceTransparency of [false, true]) {
+  test(`${appTheme} ${form} inverted surface with Reduce Transparency ${reduceTransparency}`, () => {
+    const appearance = pillAppearance(form === "peekDock" ? { appTheme, reduceTransparency, form }
+      : { appTheme, reduceTransparency, form: "island", platform: form, expanded: false });
+    expect(appearance).toMatchObject(appTheme === "light"
+      ? { dark: true, background: "#000000", ink: "#ffffff", muted: "#d4d4d8", positive: "#4ade80", danger: "#fca5a5" }
+      : { dark: false, background: "#ffffff", ink: "#141118", muted: "#3f3748", positive: "#064e3b", danger: "#7f1d1d" });
+    expect(appearance.material).toBe(form === "android" || reduceTransparency ? "solid" : "regular");
+    expect(appearance.tintOpacity).toBe(0.74);
+  });
+}
+test("compact cap fits the S21 visual and falls back below the sixteen-point floor", () => {
+  const fit = compactTypography({ height: 24.7407407407, fontScale: 1.5, android: true });
+  expect(fit.kind).toBe("fits");
+  if (fit.kind !== "fits") throw new Error("Expected compact fit");
+  expect(fit.multiplierCap).toBeCloseTo(1.1315199531);
+  expect(fit.minimumScale * 14.67 * fit.multiplierCap).toBeCloseTo(16);
+  expect(fit.tileSize).toBeCloseTo(20.7407407407);
+  expect(compactTypography({ height: 22, fontScale: 1.5, android: true })).toEqual({ kind: "fallback" });
+  expect(islandAmountFits({ height: 24.7407407407, android: true, fontScale: 1.5, windowWidth: 320, cutout: { x: 149.63, y: 0, width: 20.74, height: 29.33 }, measuredWidth: 200 })).toBe(false);
+});
+test("hide reasons choose reverse animation except for Back", () => {
+  expect(pillHideReason("summary")).toBe("scroll");
+  expect(pillHideReason("dismissed")).toBe("swipe");
+  expect(pillHideReason("returning")).toBe("back");
+  expect(pillPresenceTransition({ current: 1, visible: false, reason: "scroll", reduceMotion: false })).toEqual({ target: 0, duration: 180 });
+  expect(pillPresenceTransition({ current: 1, visible: false, reason: "swipe", reduceMotion: false })).toEqual({ target: 0, duration: 180 });
+  expect(pillPresenceTransition({ current: 1, visible: false, reason: "back", reduceMotion: false })).toEqual({ target: 0, duration: 0 });
+  expect(pillPresenceTransition({ current: 1, visible: false, reason: "scroll", reduceMotion: true })).toEqual({ target: 0, duration: 120 });
+});
+test("interrupted reversal retains current progress and cadence", () => {
+  expect(pillPresenceTransition({ current: 0.6, visible: false, reason: "scroll", reduceMotion: false })).toEqual({ target: 0, duration: 108 });
+  expect(pillPresenceTransition({ current: 0.25, visible: true, reason: "scroll", reduceMotion: false })).toEqual({ target: 1, duration: 135 });
+  expect(pillPresenceTransition({ current: 0.5, visible: true, reason: "scroll", reduceMotion: true })).toEqual({ target: 1, duration: 60 });
 });

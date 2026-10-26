@@ -9,20 +9,39 @@ vi.mock("react-native", () => ({
   Platform: { get OS() { return native.platform; } }, View: "view", Text: "text", Pressable: "button", ScrollView: "pill-scroll", StatusBar: "status",
   StyleSheet: { create: (value: unknown) => value, absoluteFill: {} },
   useWindowDimensions: () => ({ width: 320, height: 720, fontScale: 1.5 }),
-  PanResponder: { create: (handlers: unknown) => ({ panHandlers: handlers }) },
-  Animated: { View: "animated-view", Value: class {
-    value: number;
-    constructor(value: number) { this.value = value; }
-    interpolate({ outputRange }: { outputRange: number[] }) {
-      return { read: () => outputRange[0] + this.value * (outputRange[1] - outputRange[0]) };
-    }
-  }, timing: (value: { value: number }, config: { toValue: number }) => ({ start: () => { value.value = config.toValue; }, stop: () => {} }) },
-  Easing: { bezier: () => {} },
+
 }));
+vi.mock("react-native-reanimated", async () => {
+  const React = await import("react");
+  return {
+    default: { View: "animated-view", createAnimatedComponent: (component: unknown) => component },
+    useSharedValue: (value: number) => React.useRef({ value }).current,
+    useAnimatedStyle: (style: () => Record<string, unknown>) => new Proxy({}, { get: (_target, key) => style()[String(key)] }),
+    useAnimatedReaction: (prepare: () => unknown, react: (value: unknown) => void) => React.useEffect(() => { react(prepare()); }),
+    withTiming: (value: number, _options: unknown, complete?: (finished: boolean) => void) => { complete?.(true); return value; }, cancelAnimation: () => {},
+    interpolate: (value: number, inputs: number[], outputs: number[]) => {
+      const index = Math.min(inputs.length - 2, Math.max(0, inputs.findIndex(input => input >= value) - 1));
+      return outputs[index] + (value - inputs[index]) / (inputs[index + 1] - inputs[index]) * (outputs[index + 1] - outputs[index]);
+    },
+    Easing: { linear: () => {}, bezier: () => {}, out: () => {}, cubic: () => {} }, ReduceMotion: { Never: "never" },
+  };
+});
+vi.mock("react-native-worklets", () => ({ scheduleOnRN: (fn: (...args: unknown[]) => void, ...args: unknown[]) => fn(...args) }));
+vi.mock("react-native-gesture-handler", () => {
+  type Callback = (event: { translationY: number }, success?: boolean) => void;
+  const pan = () => {
+    const handlers: Record<string, Callback> = {};
+    const gesture = { handlers, enabled: () => gesture, activeOffsetY: () => gesture, failOffsetX: () => gesture,
+      onStart: (fn: Callback) => { handlers.start = fn; return gesture; }, onUpdate: (fn: Callback) => { handlers.update = fn; return gesture; },
+      onEnd: (fn: Callback) => { handlers.end = fn; return gesture; }, onFinalize: (fn: Callback) => { handlers.finalize = fn; return gesture; } };
+    return gesture;
+  };
+  return { Gesture: { Pan: pan }, GestureDetector: "gesture" };
+});
 vi.mock("expo-blur", () => ({ BlurTargetView: "blur-target" }));
 vi.mock("./Glass", () => ({ Glass: "glass", usePillAccessibility: () => ({ reduceMotion: native.motion, reduceTransparency: false, screenReader: native.reader, ready: true }) }));
 vi.mock("./themeContext", () => ({ useTier: () => native.tier, useThemeMode: () => "light" }));
-vi.mock("../device/cameraCutout", () => ({ useCameraCutout: () => { native.camera(); return native.island ? { kind: "centredPunchHole", rect: { x: 142, y: 0, width: 43, height: 40 } } : native.cutout; } }));
+vi.mock("../device/cameraCutout", () => ({ useCameraCutout: () => { native.camera(); return native.island ? { kind: "centredPunchHole", rect: { x: 150, y: 0, width: 20, height: 30 } } : native.cutout; } }));
 vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 40, bottom: 24 }) }));
 const content = { kind: "budget", name: "Food", emoji: "🥗", currency: "COP", limitMinor: 20000000, spentMinor: 12000000 } satisfies import("./contextPillModel").ContextPillContent;
 function Consumer({ active = true, identity = "food" }: { active?: boolean; identity?: string }) {
@@ -88,18 +107,21 @@ test("a covered host collects changed identity geometry before reactivation", as
 });
 test("upward swipe stays hidden through more scrolling until the summary returns", async () => {
   await mount(); await layout(); await scroll(208);
-  await act(async () => root.root.findAll(node => typeof node.props.onPanResponderRelease === "function")[0].props.onPanResponderRelease({ nativeEvent: { pageY: 12 } }, { dy: -20, y0: 42 }));
+  await act(async () => {
+    const handlers = root.root.findAll(node => String(node.type) === "gesture")[0].props.gesture.handlers;
+    handlers.start({ translationY: 0 }); handlers.update({ translationY: -30 }); handlers.end({ translationY: -30 });
+  });
   await scroll(400); expect(pills()).toHaveLength(0);
   await scroll(0); await scroll(208); expect(pills()).toHaveLength(1);
 });
 test.each([[false, 3000], [true, 1200]])("Reduce Motion %s docks at %i ms", async (motion, delay) => {
   native.motion = motion;
   await mount(); await layout(); await scroll(208);
-  expect(root.root.find(node => String(node.type) === "glass").props.style.borderRadius.read()).toBe(30);
+  expect(root.root.find(node => String(node.type) === "glass").props.style[1].borderRadius).toBe(30);
   await act(async () => { vi.advanceTimersByTime(delay - 1); });
-  expect(root.root.find(node => String(node.type) === "glass").props.style.borderRadius.read()).toBe(30);
+  expect(root.root.find(node => String(node.type) === "glass").props.style[1].borderRadius).toBe(30);
   await act(async () => { vi.advanceTimersByTime(1); });
-  expect(root.root.find(node => String(node.type) === "glass").props.style.borderRadius.read()).toBe(26);
+  expect(root.root.find(node => String(node.type) === "glass").props.style[1].borderRadius).toBe(26);
   expect(pills()).toHaveLength(1);
   await act(async () => pills()[0].props.onPress());
   expect(native.back).toHaveBeenCalledWith({ y: 0, animated: !motion });
@@ -145,7 +167,7 @@ test("expanded island has one Back button and bounded scrolling content", async 
   await act(async () => root.root.findAllByType("text").find(node => node.props.onTextLayout)?.props.onTextLayout({ nativeEvent: { lines: [{ width: 120 }] } }));
   await act(async () => pills()[0].props.onPress());
   expect(pills()).toHaveLength(1);
-  expect(root.root.find(node => String(node.type) === "pill-scroll").props.style.maxHeight).toBe(550);
+  expect(root.root.find(node => String(node.type) === "pill-scroll").props.style.maxHeight).toBe(560);
   expect(native.back).not.toHaveBeenCalled();
   await act(async () => pills()[0].props.onPress());
   expect(native.back).toHaveBeenCalledWith({ y: 0, animated: true });
@@ -157,4 +179,31 @@ test("screen-reader Back action does not advertise a collapsed expandable contro
   expect(pills()[0].props.accessibilityState).toBeUndefined();
   await act(async () => pills()[0].props.onPress());
   expect(native.back).toHaveBeenCalledWith({ y: 0, animated: true });
+});
+
+test("Android island mounts black and keeps the below-pill target out of both header-control lanes", async () => {
+  native.island = true;
+  await mount(); await layout(); await scroll(208);
+  await act(async () => root.root.findAllByType("text").find(node => node.props.onTextLayout)?.props.onTextLayout({ nativeEvent: { lines: [{ width: 120 }] } }));
+  expect(root.root.findAll(node => String(node.type) === "glass")).toHaveLength(0);
+  expect(pills()[0].props.hitSlop).toBeUndefined();
+  const extension = root.root.findAllByType("button").find(node => node.props.style?.top === 24);
+  expect(extension?.props.style).toEqual({ position: "absolute", top: 24, left: 48, width: 208, height: 20 });
+  expect(extension?.props.accessible).toBe(false);
+  await act(async () => extension?.props.onPress());
+  expect(text()).toContain("Back to summary");
+  expect(root.root.findAll(node => String(node.type) === "animated-view").some(node => Array.isArray(node.props.style) && node.props.style.some((style: { backgroundColor?: string } | undefined) => style?.backgroundColor === "#000000"))).toBe(true);
+});
+
+test("scroll visibility flips keep the same pill mounted and expose one action", async () => {
+  await mount(); await layout(); await scroll(208);
+  const pill = root.root.find(node => typeof node.type === "function" && node.type.name === "Pill");
+  expect(pills()).toHaveLength(1);
+  await scroll(0);
+  expect(pills()).toHaveLength(0);
+  expect(vi.getTimerCount()).toBe(0);
+  expect(root.root.find(node => typeof node.type === "function" && node.type.name === "Pill")).toBe(pill);
+  await scroll(208);
+  expect(pills()).toHaveLength(1);
+  expect(root.root.find(node => typeof node.type === "function" && node.type.name === "Pill")).toBe(pill);
 });
