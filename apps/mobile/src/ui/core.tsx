@@ -299,11 +299,12 @@ export type ValueRowProps = {
   isLast?: boolean;
   trailing?: ReactNode;
   chevron?: boolean;
+  disabled?: boolean;
   children?: ReactNode;
 } & ({ meta?: string; detail?: never } | { detail?: string; meta?: never });
 
 export function ValueRow({
-  title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast, trailing, children, chevron = true,
+  title, meta, detail, value, onPress, icon, leading, titleStyle, valueStyle, tone, accessibilityLabel, isLast, trailing, children, chevron = true, disabled,
 }: ValueRowProps) {
   const { theme, styles, layout } = useCore();
   const large = layout.tier === "xxxl";
@@ -329,7 +330,7 @@ export function ValueRow({
       {!isLast ? <View pointerEvents="none" style={styles.rowDivider} /> : null}
     </>;
     return onPress
-      ? <Pressable accessible accessibilityRole="button" accessibilityLabel={fullLabel} onPress={onPress} style={[styles.row, isLast && styles.rowLast]}>{content}</Pressable>
+      ? <Pressable accessible accessibilityRole="button" accessibilityLabel={fullLabel} {...(disabled !== undefined && { disabled, accessibilityState: { disabled } })} onPress={disabled ? undefined : onPress} style={[styles.row, isLast && styles.rowLast]}>{content}</Pressable>
       : <View accessible accessibilityLabel={fullLabel} style={[styles.row, isLast && styles.rowLast]}>{content}</View>;
   }
   const content = (
@@ -598,3 +599,8 @@ export * from "./summaries";
 export * from "./feedback";
 export { SheetHeader } from "./SheetHeader";
 export { moneyTone } from "./design";
+
+export { Presentation, ReflowRow, ReflowItem, useReflowStyles } from "./reflow";
+export { FactRow, IconButton, type FactRowProps, type IconButtonProps } from "./adapters";
+export { TextInput, useTextPreset, type TextInputProps } from "./TextInput";
+export { type TextPreset } from "./textPresets";

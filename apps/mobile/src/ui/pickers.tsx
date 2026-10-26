@@ -14,13 +14,13 @@ import { mix } from "./design";
 export { SheetHeader } from "./SheetHeader";
 
 export function ActionSheet({ title, eyebrow, actions, onClose, legacy = null }: {
-  title: string; eyebrow?: string; actions: readonly { icon: IconName; label: string; status: string; onPress: () => void }[]; onClose: () => void; legacy?: ReactNode;
+  title: string; eyebrow?: string; actions: readonly { icon: IconName; label: string; status: string; disabled?: boolean; onPress: () => void }[]; onClose: () => void; legacy?: ReactNode;
 }) {
   const { layout, theme } = useThemeContext();
   if (layout.tier !== "xxxl") return legacy;
   return <Sheet label={title} onClose={onClose} closeLabel={false} nativeModalProps={{ backdropComponent: props => <BottomSheetBackdrop {...props} opacity={1} style={{ backgroundColor: mix("#0b0614", theme.background, 0.46) }} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" /> }} scrollProps={{ contentContainerStyle: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24, gap: 32 } }}>
     <SheetHeader title={title} eyebrow={eyebrow} onClose={onClose} />
-    <Group pairGap={12}>{actions.map(action => <ValueRow key={action.label} title={action.label} leading={<IconTile icon={action.icon} size={36} />} onPress={action.onPress} accessibilityLabel={`${action.label}, ${action.status}`}><Text variant="status" tone="muted" numberOfLines={1}>{action.status}</Text></ValueRow>)}</Group>
+    <Group pairGap={12}>{actions.map(action => <ValueRow key={action.label} title={action.label} leading={<IconTile icon={action.icon} size={36} />} onPress={action.onPress} disabled={action.disabled} accessibilityLabel={`${action.label}, ${action.status}`}><Text variant="status" tone="muted" numberOfLines={1}>{action.status}</Text></ValueRow>)}</Group>
   </Sheet>;
 }
 export function SearchPicker<V extends string>({ title, eyebrow, placeholder, options, value, onChange, onClose, footer, legacy = null }: {

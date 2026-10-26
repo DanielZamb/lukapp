@@ -593,11 +593,13 @@ test.each([
 
 test.each([true, false])("foreground capability refresh switches the rendered pill from enabled=%s", async initiallyEnabled => {
   const f = fixture();
+  const bootstrapped = deferred<void>();
   const refreshed = deferred<unknown>();
   const getCapability = vi.fn().mockResolvedValueOnce({ supported: true, enabled: initiallyEnabled }).mockReturnValue(refreshed.promise);
   const onBack = vi.fn();
   ui.motion = false;
   ui.appStateListener.mockClear();
+  f.native.endAll.mockImplementation(() => bootstrapped.promise);
   ui.module = { ...f.native, getCapability, addListener: () => ({ remove() {} }) };
   function Consumer() {
     const props = useContextPill({ identity: "food", active: true, content: budget, onBackToSummary: onBack });
@@ -623,8 +625,11 @@ test.each([true, false])("foreground capability refresh switches the rendered pi
     await act(async () => {
       tree.root.findAllByType("text").find(node => node.props.onTextLayout)?.props.onTextLayout({ nativeEvent: { lines: [{ width: 120 }] } });
     });
+    expect(getCapability).not.toHaveBeenCalled();
+    await act(async () => { bootstrapped.resolve(); });
     await vi.waitFor(async () => {
       await act(async () => {});
+      expect(getCapability).toHaveBeenCalledTimes(1);
       expect(button()?.props.accessibilityLabel).toBe(initiallyEnabled
         ? "Show summary, Food, COP 80.000 left" : "Back to summary, Food, COP 80.000 left");
     });

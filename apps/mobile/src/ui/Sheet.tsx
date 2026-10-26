@@ -26,6 +26,7 @@ type ManagedBody = {
   body?: "scroll";
   label: string;
   tall?: boolean;
+  header?: false;
   footer?: ReactNode;
   closeLabel?: string | false;
   stickyHeader?: boolean;
@@ -33,7 +34,7 @@ type ManagedBody = {
   scrollRef?: ComponentProps<typeof BottomSheetScrollView>["ref"];
   onScroll?: ComponentProps<typeof ScrollView>["onScroll"];
 };
-type NativeBody = { body: "native"; label?: string; tall?: never; footer?: never; closeLabel?: never; stickyHeader?: never; scrollProps?: never; scrollRef?: never; onScroll?: never };
+type NativeBody = { body: "native"; label?: string; tall?: never; header?: never; footer?: never; closeLabel?: never; stickyHeader?: never; scrollProps?: never; scrollRef?: never; onScroll?: never };
 export type SheetProps = SharedSheetProps & (ManagedBody | NativeBody);
 
 export function sheetPresentation(tier: LayoutTier, tall = false) {
@@ -92,7 +93,8 @@ export function Sheet(props: SheetProps) {
     })}
     onDismiss={() => { readyToFocus.current = false; focused.current = false; nativeModalProps?.onDismiss?.(); onClose?.(); onDismiss?.(); }}>
     {body === "native" ? children : <>
-      {page && <View style={{ paddingHorizontal: 16, paddingTop: 12 }}><SheetHeader title={label ?? ""} onClose={close} disabled={busy || !dismissible} titleProps={{ ref: title, onLayout: focusTitle }} /></View>}
+      {page && props.header === false && <NativeText ref={title} onLayout={focusTitle} accessibilityRole="header" style={{ position: "absolute", left: -10000, width: 1, height: 1 }}>{label}</NativeText>}
+      {page && props.header !== false && <View style={{ paddingHorizontal: 16, paddingTop: 12 }}><SheetHeader title={label ?? ""} onClose={close} disabled={busy || !dismissible} titleProps={{ ref: title, onLayout: focusTitle }} /></View>}
       <BottomSheetScrollView accessibilityViewIsModal={page ? undefined : true} keyboardShouldPersistTaps="handled"
         contentContainerStyle={page ? StyleSheet.flatten([styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl, paddingHorizontal: xxxl.spacing.pagePadding, paddingTop: 12 }]) : [styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }]}
         {...scrollProps}
