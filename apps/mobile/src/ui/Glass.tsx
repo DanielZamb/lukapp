@@ -1,7 +1,8 @@
 import { BlurView } from "expo-blur";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
 import { useEffect, useState, type PropsWithChildren, type RefObject } from "react";
-import { AccessibilityInfo, Animated, Platform, StyleSheet, View, type ViewProps } from "react-native";
+import { AccessibilityInfo, Platform, StyleSheet, View, type ViewProps } from "react-native";
+import Animated from "react-native-reanimated";
 import { glassMaterial, type GlassMaterial } from "./contextPillModel";
 
 export function usePillAccessibility() {
@@ -29,32 +30,33 @@ export function usePillAccessibility() {
   return { reduceMotion: motion, reduceTransparency: transparency, screenReader, ready };
 }
 
-export type GlassProps = PropsWithChildren<Animated.AnimatedProps<ViewProps> & {
+export type GlassProps = PropsWithChildren<ViewProps & {
   material?: GlassMaterial;
   darkContent?: boolean;
-  darkTintOpacity?: 0.74 | 0.9;
+  tintOpacity?: 0.74 | 0.9;
+  backdropSize?: { width: number; height: number };
   reduceTransparency: boolean;
   blurTarget: RefObject<View | null>;
 }>;
 
-export function Glass({ children, material = "regular", darkContent = false, darkTintOpacity = 0.74, reduceTransparency, blurTarget, style, ...props }: GlassProps) {
+export function Glass({ children, material = "regular", darkContent = false, tintOpacity = 0.74, reduceTransparency, blurTarget, backdropSize, style, ...props }: GlassProps) {
   const selected = glassMaterial({ requested: material, darkContent, reduceTransparency });
   const dark = darkContent;
-  const solid = dark ? "#141018" : "#f3eff8";
-  const tint = dark ? `rgba(12,8,18,${selected === "clear" ? 0.46 : darkTintOpacity})` : "rgba(255,255,255,0.56)";
+  const solid = dark ? "#000000" : "#ffffff";
+  const tint = dark ? `rgba(12,8,18,${selected === "clear" ? 0.46 : tintOpacity})` : `rgba(255,255,255,${tintOpacity})`;
   const liquid = Platform.OS === "ios" && isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
-  return <Animated.View {...props} style={[styles.depth, style]}>
-    <Animated.View style={[styles.clip, style]}>
+  return <Animated.View {...props} style={[styles.clip, Platform.OS === "ios" && styles.depth, style,
+    selected !== "solid" && (Platform.OS === "android" || dark) && { borderWidth: Platform.OS === "ios" ? 1.3 : 1, borderColor: dark ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.8)" }]}>
+      <View pointerEvents="none" style={backdropSize ? { position: "absolute", top: 0, left: 0, ...backdropSize } : StyleSheet.absoluteFill}>
       {selected === "solid" ? <View style={[StyleSheet.absoluteFill, { backgroundColor: solid }]} />
         : liquid ? <GlassView pointerEvents="none" style={StyleSheet.absoluteFill} glassEffectStyle={selected}
           colorScheme={dark ? "dark" : "light"} tintColor={dark ? undefined : tint} />
           : <BlurView pointerEvents="none" style={StyleSheet.absoluteFill} blurTarget={blurTarget}
             blurMethod="dimezisBlurView" intensity={25} tint={dark ? "dark" : "regular"} />}
-      {selected !== "solid" && (!liquid || dark) && <View pointerEvents="none" style={[StyleSheet.absoluteFill,
-        { backgroundColor: tint, borderWidth: 1.3, borderColor: dark ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.8)" }]} />}
+      {selected !== "solid" && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />}
+      </View>
       {children}
-    </Animated.View>
-  </Animated.View>;
+    </Animated.View>;
 }
 
 const styles = StyleSheet.create({
