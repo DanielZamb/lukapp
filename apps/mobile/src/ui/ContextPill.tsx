@@ -13,11 +13,14 @@ import { dockDelay, dockShowsSuffix, islandAmountFits, pillCopy, pillEnabled, pi
   type ContextPillContent, type PillEvent, type PillVisibility } from "./contextPillModel";
 import { useThemeMode, useTier } from "./themeContext";
 import { font } from "./tokens";
+import { useContextIsland } from "./useContextIsland";
+import { nativeTransientIsland } from "./contextIslandConfig";
+import { islandExpansion } from "./contextIslandModel";
 
 export type { ContextPillContent } from "./contextPillModel";
 export type SummaryScrollTarget = { y: number; animated: boolean };
-type Entry = { key: string; content: ContextPillContent; visibility: PillVisibility; send: (event: PillEvent, animated?: boolean) => void };
-type SummaryModel = { id: symbol; visibility: PillVisibility; registered: boolean };
+type Entry = { key: string; cycle: number; content: ContextPillContent; visibility: PillVisibility; send: (event: PillEvent, animated?: boolean) => void };
+type SummaryModel = { id: symbol; cycle: number; visibility: PillVisibility; registered: boolean };
 
 function createPillStore() {
   const entries = new Map<symbol, Entry>();
@@ -49,10 +52,10 @@ export function useContextPill({ identity, active, content, onBackToSummary }: {
   const latest = useRef({ content, onBackToSummary });
   latest.current = { content, onBackToSummary };
   const geometry = useRef<{ summary: { y: number; height: number } | null; scrollY: number }>({ summary: null, scrollY: 0 });
-  const model = useMemo<SummaryModel>(() => ({ id: Symbol(identity), visibility: "summary", registered: false }), [identity]);
+  const model = useMemo<SummaryModel>(() => ({ id: Symbol(identity), cycle: 0, visibility: "summary", registered: false }), [identity]);
   const publish = useCallback(() => {
     if (!model.registered || !store) return;
-    store.set(model.id, { key: hookId + identity, content: latest.current.content, visibility: model.visibility, send });
+    store.set(model.id, { key: hookId + identity, cycle: model.cycle, content: latest.current.content, visibility: model.visibility, send });
     function send(event: PillEvent, animated = true) {
       model.visibility = pillVisibility(model.visibility, event);
       publish();
@@ -61,7 +64,7 @@ export function useContextPill({ identity, active, content, onBackToSummary }: {
   }, [hookId, identity, model, store]);
   const observe = useCallback(() => {
     const next = pillVisibility(model.visibility, summaryIsVisible(geometry.current.summary, geometry.current.scrollY) ? "summarySeen" : "summaryGone");
-    if (next !== model.visibility) { model.visibility = next; publish(); }
+    if (next !== model.visibility) { if (next === "summary") model.cycle++; model.visibility = next; publish(); }
   }, [model, publish]);
   useLayoutEffect(() => {
     if (!enabled || !store) return;
@@ -88,33 +91,42 @@ export function useContextPill({ identity, active, content, onBackToSummary }: {
   };
 }
 
-export function ContextPillHost({ children }: PropsWithChildren) {
+export function ContextPillHost({ children, admitted = false }: PropsWithChildren<{ admitted?: boolean }>) {
   const [store] = useState(createPillStore);
   const target = useRef<View>(null);
   const tier = useTier();
   const Background = Platform.OS === "android" && tier === "xxxl" ? BlurTargetView : View;
   return <PillContext.Provider value={store}><View style={styles.host}>
     <Background ref={target} style={styles.host}>{children}</Background>
-    {tier === "xxxl" && <ActiveHost store={store} target={target} />}
+    {tier === "xxxl" && <ActiveHost store={store} target={target} admitted={admitted} />}
   </View></PillContext.Provider>;
 }
 
-function ActiveHost({ store, target }: { store: ReturnType<typeof createPillStore>; target: RefObject<View | null> }) {
+function ActiveHost({ store, target, admitted }: { store: ReturnType<typeof createPillStore>; target: RefObject<View | null>; admitted: boolean }) {
   const cutout = useCameraCutout();
   const a11y = usePillAccessibility();
   const entry = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  return a11y.ready && entry
-    ? <Pill key={entry.key} entry={entry} blurTarget={target} cutout={cutout} a11y={a11y} /> : null;
+  if (!a11y.ready || !entry) return null;
+  return nativeTransientIsland && Platform.OS === "ios" && Number.parseFloat(String(Platform.Version)) >= 18 && cutout.kind === "island"
+    ? <NativePill entry={entry} blurTarget={target} cutout={cutout} a11y={a11y} admitted={admitted} />
+    : <Pill key={entry.key} entry={entry} blurTarget={target} cutout={cutout} a11y={a11y} />;
+}
+
+function NativePill({ admitted, ...props }: Parameters<typeof Pill>[0] & { admitted: boolean }) {
+  const native = useContextIsland(props.entry, admitted, props.a11y.reduceMotion);
+  return <Pill key={props.entry.key} {...props} native={native} />;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: RefObject<View | null>; cutout: ReturnType<typeof useCameraCutout>; a11y: ReturnType<typeof usePillAccessibility> }) {
+function Pill({ entry, blurTarget, cutout, a11y, native }: { entry: Entry; blurTarget: RefObject<View | null>; cutout: ReturnType<typeof useCameraCutout>; a11y: ReturnType<typeof usePillAccessibility>; native?: ReturnType<typeof useContextIsland> }) {
   const { width, height, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const copy = pillCopy(entry.content);
+  const nativeExpansion = islandExpansion({ platform: Platform.OS, iosVersion: Number.parseFloat(String(Platform.Version)),
+    tier: "xxxl", cutout, nativeTransientIsland, capability: { supported: !!native?.available, enabled: !!native?.available } }) === "native";
   const appTheme = useThemeMode();
-  const visible = entry.visibility === "visible";
+  const visible = entry.visibility === "visible" && !native?.hidden;
   const hideReason = pillHideReason(entry.visibility);
   const latestVisible = useRef(visible);
   latestVisible.current = visible;
@@ -240,7 +252,7 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
   const peekStyle = useAnimatedStyle(() => ({ opacity: interpolate(dock.value, [0, 0.35, 1], [1, 0, 0]) }));
   const dockStyle = useAnimatedStyle(() => ({ opacity: interpolate(dock.value, [0, 0.35, 1], [0, 0, 1]),
     transform: [{ translateY: (1 - dock.value) * 6 }] }));
-  const activate = () => { if (island && !a11y.screenReader) setExpanded(true); else back(); };
+  const activate = () => { if (nativeExpansion) native?.activate(); else if (island && !a11y.screenReader) setExpanded(true); else back(); };
   const emoji = (size: "compact" | "peek" | "expanded" | "dock") => <View style={[styles.tile, styles[`${size}Tile`],
     { backgroundColor: accents.tint }, size === "compact" && androidIsland && typography.kind === "fits" && { width: typography.tileSize, height: typography.tileSize, borderRadius: typography.tileSize / 2 }]}>
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 1, borderColor: accents.ink, borderRadius: size === "compact" && androidIsland && typography.kind === "fits" ? typography.tileSize / 2 : size === "dock" ? 18 : size === "expanded" ? 14 : 16 }]} />
@@ -276,10 +288,10 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
           reduceTransparency={a11y.reduceTransparency} style={[styles.surface, frameStyle]} />}
       <GestureDetector gesture={swipe.compact}><View pointerEvents="box-none" style={StyleSheet.absoluteFill}><AnimatedPressable pointerEvents={open || !visible ? "none" : "auto"} accessible={!open && visible}
         importantForAccessibility={open || !visible ? "no-hide-descendants" : "auto"}
-        accessibilityRole={open || !visible ? undefined : "button"} accessibilityLabel={copy.label}
+        accessibilityRole={open || !visible ? undefined : "button"} accessibilityLabel={nativeExpansion ? `Show summary, ${entry.content.name}, ${copy.line}` : copy.label}
         accessibilityState={island && !a11y.screenReader ? { expanded: false } : undefined}
-        accessibilityActions={[{ name: "activate", label: "Back to summary" }, { name: "dismiss", label: "Hide until summary is visible" }]}
-        onAccessibilityAction={event => event.nativeEvent.actionName === "dismiss" ? entry.send("swipeUp") : back()}
+        accessibilityActions={[{ name: "activate", label: nativeExpansion ? "Show summary" : "Back to summary" }, { name: "dismiss", label: "Hide until summary is visible" }]}
+        onAccessibilityAction={event => event.nativeEvent.actionName === "dismiss" ? entry.send("swipeUp") : nativeExpansion ? activate() : back()}
         onPress={activate}
         style={[styles.surface, frameStyle, island && compactStyle]}>
         <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">

@@ -25,7 +25,7 @@ docs/
 exports/
 scratch/
 design/
-CONTEXT*
+/CONTEXT*
 MIGRATION*
 skills-lock.json
 *.log

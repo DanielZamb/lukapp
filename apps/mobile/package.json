@@ -20,6 +20,7 @@
     }
   },
   "dependencies": {
+    "@bacons/apple-targets": "5.0.0",
     "@clerk/expo": "4.11.0",
     "@clerk/expo-native-components": "0.1.0",
     "@expo-google-fonts/geist": "0.4.2",

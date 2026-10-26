@@ -1,0 +1,17 @@
+Pod::Spec.new do |s|
+  s.name = 'ContextIsland'
+  s.version = '1.0.0'
+  s.summary = 'Foreground transient context island for Lukapp'
+  s.description = 'Admitted ActivityKit transient activities with public-only secondary presentations.'
+  s.license = { :type => 'Proprietary' }
+  s.author = 'Lukapp'
+  s.homepage = 'https://lukapp.app'
+  s.platforms = { :ios => '15.1' }
+  s.swift_version = '5.9'
+  s.source = { :git => '' }
+  s.static_framework = true
+  s.dependency 'ExpoModulesCore'
+  s.frameworks = 'ActivityKit', 'UIKit'
+  s.source_files = '*.swift'
+  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+end
