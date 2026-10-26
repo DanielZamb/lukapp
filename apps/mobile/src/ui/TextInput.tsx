@@ -4,11 +4,13 @@ import { useNativeTextMetrics, useTier } from "./themeContext";
 import { textPresetSpec, type TextPreset } from "./textPresets";
 import { cappedNativeStyle } from "./nativeText";
 
-export function useTextPreset(preset: TextPreset) {
+export function useTextPreset(preset: TextPreset, style?: ComponentPropsWithRef<typeof NativeTextInput>["style"]) {
   const tier = useTier();
   const metrics = useNativeTextMetrics();
-  const { maxScale, ...style } = textPresetSpec(tier, preset);
-  return { ...style, ...(tier === "xxxl" && metrics.nonlinearAndroid ? cappedNativeStyle(style, metrics.fontScale, maxScale) : {}) };
+  const { maxScale, ...base } = textPresetSpec(tier, preset);
+  const nativeStyle = tier === "xxxl" && metrics.nonlinearAndroid
+    ? cappedNativeStyle(StyleSheet.flatten([base, style]), metrics.fontScale, maxScale) : undefined;
+  return { allowFontScaling: true, maxFontSizeMultiplier: maxScale, style: [base, style, nativeStyle] };
 }
 
 export type TextInputProps = ComponentPropsWithRef<typeof NativeTextInput> & {
@@ -17,10 +19,6 @@ export type TextInputProps = ComponentPropsWithRef<typeof NativeTextInput> & {
 };
 
 export function TextInput({ preset, InputComponent = NativeTextInput, style, ...props }: TextInputProps) {
-  const tier = useTier();
-  const metrics = useNativeTextMetrics();
-  const { maxScale, ...base } = textPresetSpec(tier, preset);
-  const nativeStyle = tier === "xxxl" && metrics.nonlinearAndroid
-    ? cappedNativeStyle(StyleSheet.flatten([base, style]), metrics.fontScale, maxScale) : undefined;
-  return <InputComponent {...props} allowFontScaling maxFontSizeMultiplier={maxScale} style={[base, style, nativeStyle]} />;
+  const typography = useTextPreset(preset, style);
+  return <InputComponent {...props} {...typography} />;
 }

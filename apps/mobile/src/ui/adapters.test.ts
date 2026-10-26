@@ -2,8 +2,8 @@ import * as React from "react";
 import { createElement as h, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { Presentation, ReflowRow, ReflowItem, Text, TextInput, useReflowStyles, FactRow, IconButton } from "./core";
-import { ThemeProvider } from "./themeContext";
+import { Presentation, ReflowRow, ReflowItem, Text, TextInput, useTextPreset, useReflowStyles, FactRow, IconButton } from "./core";
+import { ResponsiveThemeProvider, ThemeProvider } from "./themeContext";
 import { textPresets, textPresetSpec, type TextPreset } from "./textPresets";
 import { font } from "./tokens";
 import { readableLayout, type LayoutTier } from "./layout";
@@ -12,8 +12,8 @@ import { ActionSheet } from "./pickers";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
-const native = vi.hoisted(() => ({ focus: vi.fn(), dismiss: vi.fn(), present: vi.fn() }));
-vi.mock("react-native", () => ({ Text: "text", View: "view", Pressable: "button", TextInput: "input", ScrollView: "scroll", ActivityIndicator: "spinner", KeyboardAvoidingView: "keyboard", Platform: { OS: "ios", Version: 18 },
+const native = vi.hoisted(() => ({ focus: vi.fn(), dismiss: vi.fn(), present: vi.fn(), platform: { OS: "ios", Version: 18 } }));
+vi.mock("react-native", () => ({ Text: "text", View: "view", Pressable: "button", TextInput: "input", ScrollView: "scroll", ActivityIndicator: "spinner", KeyboardAvoidingView: "keyboard", Platform: native.platform, useWindowDimensions: () => ({ width: 390, height: 800, fontScale: 2 }),
   AccessibilityInfo: { setAccessibilityFocus: native.focus }, findNodeHandle: () => 42,
   BackHandler: { addEventListener: () => ({ remove() {} }) },
   StyleSheet: { create: (x: unknown) => x, flatten: flat, hairlineWidth: 1 } }));
@@ -130,4 +130,27 @@ test("disabled ActionSheet action retains button semantics and cannot activate",
   const button = tree.findAllByType("button").find(n => n.props.accessibilityLabel === "Create a place, Loading");
   expect(button?.props.accessibilityState).toEqual({ disabled: true }); expect(button?.props.disabled).toBe(true);
   button?.props.onPress?.(); expect(press).not.toHaveBeenCalled();
+});
+
+test("IconButton preserves caller disabled state unless the explicit disabled prop overrides it", async () => {
+  let tree = await render(h(IconButton, { accessibilityLabel: "Unavailable", accessibilityState: { disabled: true, busy: true } }));
+  expect(tree.findByType("button").props.accessibilityState).toEqual({ disabled: true, busy: true });
+  await act(async () => root?.unmount());
+  tree = await render(h(IconButton, { accessibilityLabel: "Available", disabled: false, accessibilityState: { disabled: true, busy: true } }));
+  expect(tree.findByType("button").props.accessibilityState).toEqual({ disabled: false, busy: true });
+});
+test.each(["ios", "android"])("custom host keeps TextInput scaling props and rendered metrics on %s at scale 2", async platform => {
+  native.platform.OS = platform;
+  native.platform.Version = 37;
+  function CustomHost() { return h("custom-input", { ...useTextPreset("batchAmount") }); }
+  const tree = await render(h(ResponsiveThemeProvider, null, h(React.Fragment, null, h(TextInput, { preset: "batchAmount" }), h(CustomHost))));
+  const input = tree.findByType("input");
+  const custom = tree.find(n => String(n.type) === "custom-input");
+  expect(custom.props.allowFontScaling).toBe(true);
+  expect(custom.props.maxFontSizeMultiplier).toBe(1.5);
+  expect(flat(custom.props.style)).toEqual(flat(input.props.style));
+  expect(input.props.maxFontSizeMultiplier).toBe(custom.props.maxFontSizeMultiplier);
+  if (platform === "ios") expect(Number(flat(custom.props.style).fontSize) * Math.min(2, custom.props.maxFontSizeMultiplier)).toBe(27);
+  native.platform.OS = "ios";
+  native.platform.Version = 18;
 });

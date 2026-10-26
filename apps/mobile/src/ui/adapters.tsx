@@ -32,7 +32,7 @@ export function IconButton({ accessibilityLabel, icon, iconSize = 24, preset = "
     ...(preset === "brand" && { borderRadius: radius.full, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border }),
   };
   return <Pressable {...props} accessibilityRole="button" accessibilityLabel={accessibilityLabel}
-    {...(disabled !== undefined || accessibilityState ? { accessibilityState: { ...accessibilityState, disabled: !!disabled } } : {})}
+    {...(disabled !== undefined || accessibilityState ? { accessibilityState: { ...accessibilityState, ...(disabled !== undefined && { disabled: !!disabled }) } } : {})}
     disabled={disabled} style={state => [base, large && { width: 56, height: 56 }, large && preset === "brand" && { backgroundColor: mix(theme.primary, theme.background, 0.1), borderColor: mix(theme.primary, theme.background, 0.22) }, typeof style === "function" ? style(state) : style]}>
     <>{icon ? <Ionicons name={icon} size={iconSize} color={theme.foreground} /> : null}{children}</>
   </Pressable>;
