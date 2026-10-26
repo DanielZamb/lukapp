@@ -1,6 +1,7 @@
 import type { CameraCutout, CutoutRect } from "../device/cameraCutout";
 import type { LayoutTier } from "./layout";
 import { formatMoney } from "../features/money";
+import { themes } from "./tokens";
 
 type PillIdentity = { name: string; emoji: string; currency: string };
 export type ContextPillContent = PillIdentity & (
@@ -30,11 +31,13 @@ export type PillPlacement = { kind: "peekDock" } | {
   kind: "island"; top: number; height: number; centerX: number; centerY: number; cutout: CutoutRect;
 };
 
-export function pillPlacement(cutout: CameraCutout): PillPlacement {
+export function pillPlacement(cutout: CameraCutout, windowWidth: number): PillPlacement {
   if (cutout.kind === "none" || cutout.rect.height + 3 > 44) return { kind: "peekDock" };
   const rect = cutout.rect;
   const centerX = rect.x + rect.width / 2;
   if (cutout.kind === "island") return { kind: "island", top: Math.max(0, rect.y - 3), height: 44, centerX, centerY: rect.y + rect.height / 2, cutout: rect };
+  const halfWidth = (windowWidth - 16) / 2;
+  if (centerX - halfWidth < 0 || centerX + halfWidth > windowWidth) return { kind: "peekDock" };
   const diameter = Math.min(rect.width, rect.height);
   const centerY = rect.y + rect.height - diameter / 2;
   const height = diameter + 4;
@@ -49,14 +52,18 @@ type PillAppearanceInput = { appTheme: "light" | "dark"; reduceTransparency: boo
 );
 export function pillAppearance(input: PillAppearanceInput) {
   const dark = input.appTheme === "light";
+  const brand = themes[dark ? "dark" : "light"];
+  const accent = dark ? brand.primaryText : brand.primary;
   return {
     material: input.reduceTransparency || (input.form === "island" && input.platform === "android") ? "solid" : "regular",
     dark, background: dark ? "#000000" : "#ffffff",
     ink: dark ? "#ffffff" : "#141118", muted: dark ? "#d4d4d8" : "#3f3748",
     positive: dark ? "#4ade80" : "#064e3b", danger: dark ? "#fca5a5" : "#7f1d1d",
+    accents: { ink: accent, tint: `${accent}24`, buttonFill: brand.primary, buttonInk: brand.primaryForeground,
+      chevronBacking: dark ? "transparent" : brand.primaryForeground },
     tintOpacity: dark && input.form === "island" && input.expanded ? 0.9 : 0.74,
   } satisfies { material: "solid" | "regular"; dark: boolean; background: string; ink: string; muted: string;
-    positive: string; danger: string; tintOpacity: 0.74 | 0.9 };
+    positive: string; danger: string; accents: { ink: string; tint: string; buttonFill: string; buttonInk: string; chevronBacking: string }; tintOpacity: 0.74 | 0.9 };
 }
 
 export function compactTypography(input: { height: number; fontScale: number; android: boolean }): { kind: "fallback" } | { kind: "fits"; multiplierCap: number; minimumScale: number; tileSize: number } {

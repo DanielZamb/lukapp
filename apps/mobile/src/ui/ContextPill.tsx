@@ -120,7 +120,7 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
   latestVisible.current = visible;
   const [amountMeasure, setAmountMeasure] = useState<{ text: string; width: number } | null>(null);
   const measuredAmount = amountMeasure?.text === copy.amount ? amountMeasure.width : 0;
-  const geometry = pillPlacement(cutout);
+  const geometry = pillPlacement(cutout, width);
   const typography = compactTypography({ height: geometry.kind === "island" ? geometry.height : 44, fontScale, android: Platform.OS === "android" });
   const multiplierCap = typography.kind === "fits" ? typography.multiplierCap : 1.5;
   const placement: ReturnType<typeof pillPlacement> = geometry.kind === "island" && (typography.kind === "fallback" || (measuredAmount > 0
@@ -142,7 +142,8 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
   const [peekHeight, setPeekHeight] = useState(128);
   const [expandedHeight, setExpandedHeight] = useState(360);
   const presence = useSharedValue(0);
-  const presenceControl = useSharedValue({ visible, reason: hideReason, reduceMotion: a11y.reduceMotion });
+  const presentationGeneration = useRef(0);
+  const presenceControl = useSharedValue({ visible, reason: hideReason, reduceMotion: a11y.reduceMotion, generation: 0 });
   const gestureStart = useSharedValue(1);
   const dock = useSharedValue(0);
   const expansion = useSharedValue(0);
@@ -150,15 +151,15 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
   const appearance = pillAppearance(island ? { appTheme, reduceTransparency: a11y.reduceTransparency, form: "island", platform: Platform.OS === "android" ? "android" : "ios", expanded: open }
     : { appTheme, reduceTransparency: a11y.reduceTransparency, form: "peekDock" });
   const back = () => entry.send("back", !a11y.reduceMotion);
-  const resetPresentation = useCallback(() => {
-    if (!latestVisible.current) { setExpanded(false); setDocked(false); setSurfaceMounted(false); }
+  const resetPresentation = useCallback((generation: number) => {
+    if (generation === presentationGeneration.current && !latestVisible.current) { setExpanded(false); setDocked(false); setSurfaceMounted(false); }
   }, []);
   useLayoutEffect(() => { if (visible) setSurfaceMounted(true); }, [visible]);
-  useEffect(() => { presenceControl.value = { visible: visible && surfaceMounted, reason: hideReason, reduceMotion: a11y.reduceMotion }; }, [visible, surfaceMounted, hideReason, a11y.reduceMotion, presenceControl]);
+  useLayoutEffect(() => { presenceControl.value = { visible: visible && surfaceMounted, reason: hideReason, reduceMotion: a11y.reduceMotion, generation: ++presentationGeneration.current }; }, [visible, surfaceMounted, hideReason, a11y.reduceMotion, presenceControl]);
   useAnimatedReaction(() => presenceControl.value, control => {
     const plan = pillPresenceTransition({ current: presence.value, ...control });
     presence.value = withTiming(plan.target, { duration: plan.duration, easing: Easing.linear, reduceMotion: ReduceMotion.Never }, finished => {
-      if (finished && plan.target === 0) scheduleOnRN(resetPresentation);
+      if (finished && plan.target === 0) scheduleOnRN(resetPresentation, control.generation);
     });
   });
   useEffect(() => () => cancelAnimation(presence), [presence]);
@@ -183,7 +184,8 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
     const create = () => Gesture.Pan().enabled(visible).activeOffsetY([-6, 10000]).failOffsetX([-18, 18])
       .onStart(() => { gestureStart.value = presence.value; cancelAnimation(presence); })
       .onUpdate(event => { presence.value = Math.max(0, Math.min(1, gestureStart.value + Math.min(0, event.translationY) / compactHeight)); })
-      .onEnd(event => {
+      .onEnd((event, success) => {
+        if (!success || !presenceControl.value.visible) return;
         if (event.translationY < -Math.min(26, compactHeight / 2)) scheduleOnRN(dismiss);
         else {
           const plan = pillPresenceTransition({ current: presence.value, visible: true, reason: "swipe", reduceMotion: a11y.reduceMotion });
@@ -197,7 +199,7 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
       });
     return { compact: create(), expanded: create() };
   }, [visible, dismiss, a11y.reduceMotion, compactHeight, gestureStart, presence, presenceControl]);
-  const { ink, muted } = appearance;
+  const { ink, muted, accents } = appearance;
   const money = copy.tone === "positive" ? appearance.positive : copy.tone === "warning" ? appearance.danger : ink;
   const available = fullWidth - 100;
   const showSuffix = dockShowsSuffix({ textWidth: lineWidth, availableWidth: available });
@@ -240,14 +242,15 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
     transform: [{ translateY: (1 - dock.value) * 6 }] }));
   const activate = () => { if (island && !a11y.screenReader) setExpanded(true); else back(); };
   const emoji = (size: "compact" | "peek" | "expanded" | "dock") => <View style={[styles.tile, styles[`${size}Tile`],
-    { backgroundColor: appearance.dark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.06)" }, size === "compact" && androidIsland && typography.kind === "fits" && { width: typography.tileSize, height: typography.tileSize, borderRadius: typography.tileSize / 2 }]}>
+    { backgroundColor: accents.tint }, size === "compact" && androidIsland && typography.kind === "fits" && { width: typography.tileSize, height: typography.tileSize, borderRadius: typography.tileSize / 2 }]}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 1, borderColor: accents.ink, borderRadius: size === "compact" && androidIsland && typography.kind === "fits" ? typography.tileSize / 2 : size === "dock" ? 18 : size === "expanded" ? 14 : 16 }]} />
     <Text accessible={false} style={[styles.emoji, size === "peek" && styles.peekEmoji]} maxFontSizeMultiplier={size === "compact" ? multiplierCap : 1.5}>{entry.content.emoji}</Text>
   </View>;
   const full = <View onLayout={event => setPeekHeight(event.nativeEvent.layout.height)} style={[styles.peekRow, { width: fullWidth }]}>{emoji("peek")}<View style={styles.copy}>
     <Text style={[styles.name, { color: muted }]}>{entry.content.name}</Text>
     <Text style={[styles.value, { color: money }]} maxFontSizeMultiplier={1.5}>{copy.line}</Text>
     {copy.limit !== null && <><Text style={[styles.sub, { color: muted }]}>{copy.limit}</Text>
-      <View style={[styles.bar, { backgroundColor: appearance.dark ? "rgba(255,255,255,0.18)" : "rgba(109,40,217,0.16)" }]}><View style={[styles.fill, { backgroundColor: appearance.dark ? "#c4b5fd" : "#6d28d9", width: `${(copy.progress ?? 0) * 100}%` }]} /></View></>}
+      <View style={[styles.bar, { backgroundColor: accents.tint }]}><View style={[styles.fill, { backgroundColor: accents.ink, width: `${(copy.progress ?? 0) * 100}%` }]} /><View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 1, borderColor: accents.ink, borderRadius: 6 }]} /></View></>}
   </View></View>;
   const compact = island ? <View style={[styles.islandRow, { height: compactHeight }, androidIsland && { paddingHorizontal: 8 }]}>
     <View style={androidIsland ? styles.islandLane : { width: Math.max(32, placement.cutout.x - 8 - 7 - 6) }}>{emoji("compact")}</View>
@@ -256,7 +259,7 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
       minimumFontScale={typography.kind === "fits" ? typography.minimumScale : 1} maxFontSizeMultiplier={multiplierCap}>{copy.amount}</Text>
   </View> : <View style={[styles.dockRow, { width: dockWidth }]}>{emoji("dock")}
     <Text style={[styles.dockValue, { color: money, flexShrink: 1 }]} maxFontSizeMultiplier={1.5} numberOfLines={1}>
-      {showSuffix ? copy.line : copy.amount}</Text><View style={styles.chevron}><View style={[styles.chevronStroke, { borderColor: ink }]} /></View></View>;
+      {showSuffix ? copy.line : copy.amount}</Text><View style={[styles.chevron, { backgroundColor: accents.chevronBacking, borderRadius: 13, overflow: "hidden" }]}><View style={[styles.chevronStroke, { borderColor: accents.ink }]} /></View></View>;
   const measureMoney = <Text accessible={false} importantForAccessibility="no-hide-descendants" pointerEvents="none"
     style={[styles.measure, styles.islandMoney]} maxFontSizeMultiplier={multiplierCap}
     onTextLayout={event => setAmountMeasure({ text: copy.amount, width: event.nativeEvent.lines[0]?.width ?? 0 })}>{copy.amount}</Text>;
@@ -303,7 +306,7 @@ function Pill({ entry, blurTarget, cutout, a11y }: { entry: Entry; blurTarget: R
           accessibilityRole={open && visible ? "button" : undefined} accessibilityLabel={copy.label}
           accessibilityActions={[{ name: "dismiss", label: "Hide until summary is visible" }]}
           onAccessibilityAction={event => { if (event.nativeEvent.actionName === "dismiss") entry.send("swipeUp"); }}
-          onPress={back} style={[styles.backButton, { backgroundColor: appearance.dark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.06)" }]}><Text accessible={false} style={[styles.backText, { color: ink }]} maxFontSizeMultiplier={1.5}>Back to summary</Text><View style={styles.chevron}><View style={[styles.chevronStroke, { borderColor: ink }]} /></View></Pressable>
+          onPress={back} style={[styles.backButton, { backgroundColor: accents.buttonFill }]}><View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 1, borderColor: accents.ink, borderRadius: 30 }]} /><Text accessible={false} style={[styles.backText, { color: accents.buttonInk }]} maxFontSizeMultiplier={1.5}>Back to summary</Text><View style={styles.chevron}><View style={[styles.chevronStroke, { borderColor: accents.buttonInk }]} /></View></Pressable>
       </Animated.View>}
     </Animated.View>
     {!island && <Text accessible={false} pointerEvents="none" style={[styles.measure, styles.dockValue]} maxFontSizeMultiplier={1.5}
@@ -331,8 +334,8 @@ const styles = StyleSheet.create({
   name: { fontFamily: font.regular, fontSize: 14, lineHeight: 18.2 },
   value: { fontFamily: font.semibold, fontSize: 16, lineHeight: 20, letterSpacing: -0.48 },
   sub: { fontFamily: font.regular, fontSize: 12, lineHeight: 16.2 },
-  bar: { height: 6, borderRadius: 6, backgroundColor: "rgba(109,40,217,0.16)", overflow: "hidden", marginTop: 8 },
-  fill: { height: 6, backgroundColor: "#6d28d9" },
+  bar: { height: 6, borderRadius: 6, overflow: "hidden", marginTop: 8 },
+  fill: { height: 6 },
   islandRow: { flexDirection: "row", alignItems: "center", paddingLeft: 7, paddingRight: 10 },
   islandMoney: { fontFamily: font.semibold, fontSize: 14.67, lineHeight: 18.33, letterSpacing: -0.44, textAlign: "right" },
   dockRow: { minHeight: 52, paddingLeft: 8, paddingRight: 10, flexDirection: "row", gap: 10, alignItems: "center" },

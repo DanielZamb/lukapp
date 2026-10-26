@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { ContextPillHost, useContextPill } from "./ContextPill";
 
-const native = vi.hoisted(() => ({ tier: "xxxl", motion: false, platform: "android", mounts: 0, island: false, reader: false, cutout: { kind: "none", rect: null }, camera: vi.fn(), back: vi.fn() }));
+const native = vi.hoisted(() => ({ tier: "xxxl", theme: "light", motion: false, platform: "android", mounts: 0, island: false, reader: false, cutout: { kind: "none", rect: null }, camera: vi.fn(), back: vi.fn(), delayRN: false, callbacks: new Array<() => void>() }));
 vi.mock("react-native", () => ({
   Platform: { get OS() { return native.platform; } }, View: "view", Text: "text", Pressable: "button", ScrollView: "pill-scroll", StatusBar: "status",
   StyleSheet: { create: (value: unknown) => value, absoluteFill: {} },
@@ -26,7 +26,7 @@ vi.mock("react-native-reanimated", async () => {
     Easing: { linear: () => {}, bezier: () => {}, out: () => {}, cubic: () => {} }, ReduceMotion: { Never: "never" },
   };
 });
-vi.mock("react-native-worklets", () => ({ scheduleOnRN: (fn: (...args: unknown[]) => void, ...args: unknown[]) => fn(...args) }));
+vi.mock("react-native-worklets", () => ({ scheduleOnRN: (fn: (...args: unknown[]) => void, ...args: unknown[]) => { if (native.delayRN) native.callbacks.push(() => fn(...args)); else fn(...args); } }));
 vi.mock("react-native-gesture-handler", () => {
   type Callback = (event: { translationY: number }, success?: boolean) => void;
   const pan = () => {
@@ -40,7 +40,7 @@ vi.mock("react-native-gesture-handler", () => {
 });
 vi.mock("expo-blur", () => ({ BlurTargetView: "blur-target" }));
 vi.mock("./Glass", () => ({ Glass: "glass", usePillAccessibility: () => ({ reduceMotion: native.motion, reduceTransparency: false, screenReader: native.reader, ready: true }) }));
-vi.mock("./themeContext", () => ({ useTier: () => native.tier, useThemeMode: () => "light" }));
+vi.mock("./themeContext", () => ({ useTier: () => native.tier, useThemeMode: () => native.theme }));
 vi.mock("../device/cameraCutout", () => ({ useCameraCutout: () => { native.camera(); return native.island ? { kind: "centredPunchHole", rect: { x: 150, y: 0, width: 20, height: 30 } } : native.cutout; } }));
 vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 40, bottom: 24 }) }));
 const content = { kind: "budget", name: "Food", emoji: "🥗", currency: "COP", limitMinor: 20000000, spentMinor: 12000000 } satisfies import("./contextPillModel").ContextPillContent;
@@ -54,7 +54,8 @@ beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers();
-  native.tier = "xxxl"; native.motion = false; native.platform = "android"; native.mounts = 0; native.island = false; native.reader = false;
+  native.tier = "xxxl"; native.theme = "light"; native.motion = false; native.platform = "android"; native.mounts = 0; native.island = false; native.reader = false;
+  native.delayRN = false; native.callbacks.length = 0;
   vi.clearAllMocks();
 });
 afterEach(async () => { await act(async () => root?.unmount()); vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -109,7 +110,7 @@ test("upward swipe stays hidden through more scrolling until the summary returns
   await mount(); await layout(); await scroll(208);
   await act(async () => {
     const handlers = root.root.findAll(node => String(node.type) === "gesture")[0].props.gesture.handlers;
-    handlers.start({ translationY: 0 }); handlers.update({ translationY: -30 }); handlers.end({ translationY: -30 });
+    handlers.start({ translationY: 0 }); handlers.update({ translationY: -30 }); handlers.end({ translationY: -30 }, true);
   });
   await scroll(400); expect(pills()).toHaveLength(0);
   await scroll(0); await scroll(208); expect(pills()).toHaveLength(1);
@@ -206,4 +207,71 @@ test("scroll visibility flips keep the same pill mounted and expose one action",
   await scroll(208);
   expect(pills()).toHaveLength(1);
   expect(root.root.find(node => typeof node.type === "function" && node.type.name === "Pill")).toBe(pill);
+});
+
+
+test("stale queued exit cleanup cannot remove the glass in a later exit", async () => {
+  await mount(); await layout(); await scroll(208);
+  native.delayRN = true;
+  await scroll(0);
+  expect(native.callbacks).toHaveLength(1);
+  const stale = native.callbacks[0];
+  await scroll(208); await scroll(0);
+  const current = native.callbacks[1];
+  expect(current).toBeTypeOf("function");
+  await act(async () => stale());
+  expect(root.root.findAll(node => String(node.type) === "glass")).toHaveLength(1);
+  await act(async () => current());
+  expect(root.root.findAll(node => String(node.type) === "glass")).toHaveLength(0);
+});
+test("an active minus20-point island pan cancellation stays visible", async () => {
+  native.island = true;
+  await mount(); await layout(); await scroll(208);
+  await act(async () => root.root.findAllByType("text").find(node => node.props.onTextLayout)?.props.onTextLayout({ nativeEvent: { lines: [{ width: 120 }] } }));
+  const handlers = root.root.findAll(node => String(node.type) === "gesture")[0].props.gesture.handlers;
+  await act(async () => { handlers.start({ translationY: 0 }); handlers.update({ translationY: -20 }); handlers.end({ translationY: -20 }, false); });
+  await act(async () => handlers.finalize({ translationY: -20 }, false));
+  expect(pills()).toHaveLength(1);
+  expect(native.back).not.toHaveBeenCalled();
+});
+test("cancelled gesture callbacks cannot restore presence after the summary returns", async () => {
+  await mount(); await layout(); await scroll(208);
+  const handlers = root.root.findAll(node => String(node.type) === "gesture")[0].props.gesture.handlers;
+  await act(async () => { handlers.start({ translationY: 0 }); handlers.update({ translationY: -3 }); });
+  await scroll(0);
+  await act(async () => { handlers.end({ translationY: -3 }, true); handlers.finalize({ translationY: -3 }, false); });
+  const overlay = root.root.find(node => String(node.type) === "animated-view" && node.props.style?.[0]?.zIndex === 100);
+  expect(overlay.props.style[2].opacity).toBe(0);
+  expect(pills()).toHaveLength(0);
+});
+
+
+test.each([
+  ["light", "#c4b5fd", "#7c3aed", "#4ade80"],
+  ["dark", "#6d28d9", "#6d28d9", "#064e3b"],
+])("%s app renders violet accents and retains semantic budget money", async (theme, accent, buttonFill, positive) => {
+  native.theme = theme;
+  await mount(); await layout(); await scroll(208);
+  const values = root.root.findAllByType("text").filter(node => node.children.join("").includes("COP 80.000"));
+  expect(values.some(node => node.props.style.some((style: { color?: string }) => style.color === positive))).toBe(true);
+  expect(root.root.findAllByType("view").some(node => node.props.style?.some?.((style: { borderColor?: string }) => style.borderColor === accent))).toBe(true);
+  expect(root.root.findAllByType("view").some(node => node.props.style?.[0]?.height === 6 && node.props.style?.[1]?.backgroundColor === accent)).toBe(true);
+  expect(root.root.findAllByType("view").some(node => node.props.style?.[0]?.borderTopWidth === 1.9 && node.props.style?.[1]?.borderColor === accent)).toBe(true);
+  await act(async () => root.unmount());
+  native.island = true;
+  await mount(); await layout(); await scroll(208);
+  await act(async () => root.root.findAllByType("text").find(node => node.props.onTextLayout)?.props.onTextLayout({ nativeEvent: { lines: [{ width: 120 }] } }));
+  await act(async () => pills()[0].props.onPress());
+  expect(pills()[0].props.style[1].backgroundColor).toBe(buttonFill);
+  expect(root.root.findAllByType("text").find(node => node.children.join("") === "Back to summary")?.props.style[1].color).toBe("#f5f3ff");
+});
+
+
+test("finalize-only cancellation restores a still-visible pill", async () => {
+  await mount(); await layout(); await scroll(208);
+  const handlers = root.root.findAll(node => String(node.type) === "gesture")[0].props.gesture.handlers;
+  await act(async () => { handlers.start({ translationY: 0 }); handlers.update({ translationY: -10 }); handlers.finalize({ translationY: -10 }, false); });
+  const overlay = root.root.find(node => String(node.type) === "animated-view" && node.props.style?.[0]?.zIndex === 100);
+  expect(overlay.props.style[2].opacity).toBe(1);
+  expect(pills()).toHaveLength(1);
 });

@@ -26,13 +26,13 @@ describe("summary visibility", () => {
 });
 
 test("uses cutout height, preserves measured geometry, and rejects a tall narrow notch", () => {
-  expect(pillPlacement({ kind: "none", rect: null })).toEqual({ kind: "peekDock" });
+  expect(pillPlacement({ kind: "none", rect: null }, 320)).toEqual({ kind: "peekDock" });
   const ios = { x: 133.5, y: 11, width: 126, height: 37 };
-  expect(pillPlacement({ kind: "island", rect: ios })).toEqual({ kind: "island", top: 8, height: 44, centerX: 196.5, centerY: 29.5, cutout: ios });
+  expect(pillPlacement({ kind: "island", rect: ios }, 320)).toEqual({ kind: "island", top: 8, height: 44, centerX: 196.5, centerY: 29.5, cutout: ios });
   const hole = { x: 142.2, y: 0, width: 43, height: 40.3 };
-  expect(pillPlacement({ kind: "centredPunchHole", rect: hole })).toEqual({ kind: "peekDock" });
-  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 80 } })).toEqual({ kind: "peekDock" });
-  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 41.01 } })).toEqual({ kind: "peekDock" });
+  expect(pillPlacement({ kind: "centredPunchHole", rect: hole }, 320)).toEqual({ kind: "peekDock" });
+  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 80 } }, 320)).toEqual({ kind: "peekDock" });
+  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 41.01 } }, 320)).toEqual({ kind: "peekDock" });
 });
 
 test("docks after three seconds, or 1.2 seconds with Reduce Motion", () => {
@@ -86,7 +86,7 @@ test("compact island keeps at least18-point money and falls back when the camera
 
 test("S21 lens-derived island stays on screen and is centred on both axes", () => {
   const rect = { x: 505 / 3.375, y: 0, width: 70 / 3.375, height: 99 / 3.375 };
-  const placement = pillPlacement({ kind: "centredPunchHole", rect });
+  const placement = pillPlacement({ kind: "centredPunchHole", rect }, 320);
   expect(placement.kind).toBe("island");
   if (placement.kind !== "island") throw new Error("Expected S21 island");
   expect(placement.top).toBeCloseTo(6.5925925926);
@@ -96,8 +96,8 @@ test("S21 lens-derived island stays on screen and is centred on both axes", () =
   expect(placement.height - rect.width).toBe(4);
 });
 test("falls back when a centred lens cannot keep two-point clearance on screen", () => {
-  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 150, y: 0, width: 20, height: 20 } })).toEqual({ kind: "peekDock" });
-  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 40 } })).toEqual({ kind: "peekDock" });
+  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 150, y: 0, width: 20, height: 20 } }, 320)).toEqual({ kind: "peekDock" });
+  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 140, y: 0, width: 40, height: 40 } }, 320)).toEqual({ kind: "peekDock" });
 });
 const modes: Array<"light" | "dark"> = ["light", "dark"];
 const forms: Array<"android" | "ios" | "peekDock"> = ["android", "ios", "peekDock"];
@@ -108,6 +108,9 @@ for (const appTheme of modes) for (const form of forms) for (const reduceTranspa
     expect(appearance).toMatchObject(appTheme === "light"
       ? { dark: true, background: "#000000", ink: "#ffffff", muted: "#d4d4d8", positive: "#4ade80", danger: "#fca5a5" }
       : { dark: false, background: "#ffffff", ink: "#141118", muted: "#3f3748", positive: "#064e3b", danger: "#7f1d1d" });
+    expect(appearance.accents).toEqual(appTheme === "light"
+      ? { ink: "#c4b5fd", tint: "#c4b5fd24", buttonFill: "#7c3aed", buttonInk: "#f5f3ff", chevronBacking: "transparent" }
+      : { ink: "#6d28d9", tint: "#6d28d924", buttonFill: "#6d28d9", buttonInk: "#f5f3ff", chevronBacking: "#f5f3ff" });
     expect(appearance.material).toBe(form === "android" || reduceTransparency ? "solid" : "regular");
     expect(appearance.tintOpacity).toBe(0.74);
   });
@@ -135,4 +138,38 @@ test("interrupted reversal retains current progress and cadence", () => {
   expect(pillPresenceTransition({ current: 0.6, visible: false, reason: "scroll", reduceMotion: false })).toEqual({ target: 0, duration: 108 });
   expect(pillPresenceTransition({ current: 0.25, visible: true, reason: "scroll", reduceMotion: false })).toEqual({ target: 1, duration: 135 });
   expect(pillPresenceTransition({ current: 0.5, visible: true, reason: "scroll", reduceMotion: true })).toEqual({ target: 1, duration: 60 });
+});
+
+
+test("accepted offset cutouts fall back when the compact frame crosses either window edge", () => {
+  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 126, y: 0, width: 20, height: 30 } }, 320)).toEqual({ kind: "peekDock" });
+  expect(pillPlacement({ kind: "centredPunchHole", rect: { x: 174, y: 0, width: 20, height: 30 } }, 320)).toEqual({ kind: "peekDock" });
+});
+
+function rgb(hex: string) {
+  return [Number.parseInt(hex.slice(1, 3), 16), Number.parseInt(hex.slice(3, 5), 16), Number.parseInt(hex.slice(5, 7), 16)];
+}
+function contrast(a: number[], b: number[]) {
+  const luminance = (channels: number[]) => channels.map(value => value / 255)
+    .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+  return (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+}
+test.each([
+  ["light", 4.844605, 4.844605, 5.195681, 3.741993],
+  ["dark", 3.769508, 6.477880, 6.477880, 3.121668],
+] satisfies Array<["light" | "dark", number, number, number, number]>)("%s app accent contrast table meets text, icon and non-text thresholds", (appTheme, boundary, chevron, label, progress) => {
+  const appearance = pillAppearance({ appTheme, reduceTransparency: false, form: "peekDock" });
+  const accents = appearance.accents;
+  const background = appearance.dark ? [12, 8, 18].map(channel => channel * 0.74 + 255 * 0.26) : [188.7, 188.7, 188.7];
+  const alpha = Number.parseInt(accents.tint.slice(7, 9), 16) / 255;
+  const track = rgb(accents.tint).map((channel, index) => channel * alpha + background[index] * (1 - alpha));
+  const actual = [contrast(rgb(accents.ink), background),
+    contrast(rgb(accents.ink), accents.chevronBacking === "transparent" ? background : rgb(accents.chevronBacking)),
+    contrast(rgb(accents.buttonInk), rgb(accents.buttonFill)), contrast(rgb(accents.ink), track)];
+  [boundary, chevron, label, progress].forEach((expected, index) => expect(actual[index]).toBeCloseTo(expected, 5));
+  expect(actual[0]).toBeGreaterThanOrEqual(3);
+  expect(actual[1]).toBeGreaterThanOrEqual(4.5);
+  expect(actual[2]).toBeGreaterThanOrEqual(4.5);
+  expect(actual[3]).toBeGreaterThanOrEqual(3);
 });
