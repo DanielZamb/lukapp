@@ -21,6 +21,7 @@ export type IslandPhase = "idle" | "requesting" | "active" | "ending" | "blocked
 export class ContextIslandController {
   private owner: IslandOwner | null = null;
   private admitted = false;
+  private admissionGeneration = 0;
   private disposed = false;
   private run: Run | null = null;
   private ticket: Run | null = null;
@@ -48,12 +49,17 @@ export class ContextIslandController {
     return !this.disposed && this.admitted && this.sameOwner(this.owner, run) && this.owner?.visibility === "visible";
   }
   bind(owner: IslandOwner | null, admitted: boolean) {
+    if (this.disposed) return;
     const previous = this.owner;
     this.owner = owner;
     if (this.ticket && (!admitted || !this.sameOwner(owner, this.ticket) || owner?.visibility === "summary")) this.ticket = null;
     if (this.admitted !== admitted) {
       this.admitted = admitted;
-      if (admitted) this.enqueue(() => this.native.setAdmission(this.admitted && !this.disposed));
+      const generation = ++this.admissionGeneration;
+      if (admitted) this.enqueue(async () => {
+        if (this.disposed || generation !== this.admissionGeneration || !this.admitted) return;
+        await this.native.setAdmission(true);
+      });
       else void this.native.setAdmission(false).catch(() => { this.publish("blocked"); });
     }
     const run = this.run;
@@ -137,7 +143,9 @@ export class ContextIslandController {
     if (this.run === run) { this.run = null; this.publish("idle"); }
   }
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
+    this.admissionGeneration++;
     this.admitted = false;
     this.owner = null;
     this.ticket = null;

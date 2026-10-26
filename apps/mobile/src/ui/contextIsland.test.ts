@@ -475,6 +475,34 @@ describe("transient island controller with a deferred native transport", () => {
     }
   });
 
+  test("queued readmission from a disposed owner cannot revoke its active replacement", async () => {
+    const f = fixture();
+    await f.start();
+    f.bind({}, false);
+    f.bind({ visibility: "visible" }, true);
+    f.controller.dispose();
+    const replacement = new ContextIslandController(f.native, () => nextScope);
+    const send = vi.fn();
+    try {
+      replacement.bind({ key: "groceries", cycle: 0, content: entry, visibility: "visible", send }, true);
+      replacement.activate();
+      await flush();
+      f.requests[1].resolve({ scope: nextScope, state: "active", revision: 0 });
+      await replacement.settled();
+      expect(replacement.getSnapshot()).toBe("active");
+      f.requests[0].resolve({ scope, state: "active", revision: 0 });
+      await f.controller.settled();
+      expect(f.native.setAdmission.mock.calls).toEqual([[true], [false], [false], [true]]);
+      expect(f.native.end.mock.calls).toEqual([[scope]]);
+      expect(replacement.getSnapshot()).toBe("active");
+      expect(replacement.back(nextScope, true)).toBe(true);
+      expect(send.mock.calls).toEqual([["back", true]]);
+    } finally {
+      replacement.dispose();
+      await flush();
+    }
+  });
+
   test("an unadmitted or invisible owner cannot request an activity", async () => {
     const f = fixture();
     f.bind({}, false);

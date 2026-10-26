@@ -67,12 +67,6 @@ public final class ContextIslandModule: Module {
     Name("ContextIsland")
     Events("onActivityState")
 
-    OnCreate {
-      DispatchQueue.main.async {
-        if #available(iOS 18.0, *) { _ = self.controller() }
-      }
-    }
-
     AsyncFunction("getCapability") { () async -> [String: Bool] in
       guard #available(iOS 18.0, *) else { return ["supported": false, "enabled": false] }
       return await self.controller().capability()
