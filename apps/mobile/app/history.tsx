@@ -32,6 +32,7 @@ function History({ workspaceId, profileId, timeZone, currency }: {
     loadingMore={activePage.loadingMore} onLoadMore={activePage.loadMore} categories={categories ?? []} places={places ?? []} currentDate={date} currency={currency}
     initialProfileId={profileId} onScopedProfileId={setScopedProfileId}
     onBack={() => router.back()}
+    onPost={() => router.push("/post")}
     onEntry={(id, movementProfileId) => { setEntryProfileId(movementProfileId ?? scopedProfileId); setEntryId(id); }} />
     {entryId && <EntryDetailSheet workspaceId={workspaceId} entryId={entryId} profileId={entryProfileId} categories={categories ?? []}
       currentDate={date} onEntry={setEntryId} onClose={() => setEntryId(null)} />}

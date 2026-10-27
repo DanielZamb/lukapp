@@ -21,6 +21,8 @@ vi.mock("expo-router", () => ({
   router: { push: provider.push, back: provider.back }, Redirect: "redirect", useLocalSearchParams: () => provider.params,
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
+vi.mock("../../ui/ContextPill", () => ({ useContextPill: () => ({ summaryProps: {}, scrollProps: {} }) }));
+vi.mock("@react-navigation/native", () => ({ useIsFocused: () => true }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("@gorhom/bottom-sheet", async () => {
   const { forwardRef, useImperativeHandle, createElement } = await import("react");
@@ -262,6 +264,22 @@ test("sheet retries an uncertain reversal with the same correction identity", as
     { workspaceId: "ws", journalEntryId: "100", idempotencyKey: "mobile-reversal@1:ws:100" },
     { workspaceId: "ws", journalEntryId: "100", idempotencyKey: "mobile-reversal@1:ws:100" },
   ]);
+});
+
+test.each(["Close details", "native dismissal"])("default failed reversal permits leaving through %s while the failed hook has no cancel action", async (exit) => {
+  provider.post.mockRejectedValueOnce(new Error("Lost response"));
+  await openDetail();
+  await act(async () => button("Reverse entry").props.onPress());
+  await act(async () => button("Confirm reversal").props.onPress());
+  expect(text()).toContain("Could not confirm the reversal.");
+  expect(root?.root.findAllByType("button").some((node) => node.props.accessibilityLabel === "Keep entry")).toBe(false);
+  if (exit === "Close details") await act(async () => button("Close details").props.onPress());
+  else await act(async () => root?.root.findByType(BottomSheetModal).props.onDismiss());
+  expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
+  expect(provider.post).toHaveBeenCalledOnce();
+  await act(async () => button("Older receipt, −$1.500").props.onPress());
+  expect(button("Reverse entry")).toBeDefined();
+  expect(text()).not.toContain("Could not confirm the reversal.");
 });
 
 test("closing during submission fences the late receipt and reopening starts with fresh controls", async () => {

@@ -6,11 +6,16 @@ import { createElement, type ReactNode } from "react";
 import { ActivityIndicator } from "react-native";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { EntryDetailScreen } from "./EntryDetailScreen";
+import { EntryDetailScreen, entryPillContent } from "./EntryDetailScreen";
 import { HistoryScreen } from "./HistoryScreen";
 import type { EntryDetail, HistoryRow } from "./types";
+import { ThemeProvider } from "../../ui/themeContext";
+import { readableLayout } from "../../ui/layout";
+
+vi.mock("../../ui/KeyboardFrame", () => ({ KeyboardFrame: ({ children }: { children: ReactNode }) => children }));
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
+vi.mock("../../ui/ContextPill", () => ({ useContextPill: () => ({ summaryProps: {}, scrollProps: {} }) }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "sheet", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
@@ -52,6 +57,9 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 function text() { return root?.root.findAllByType("text").map((node) => node.children.join("")).join("\n") ?? ""; }
+function flatStyle(style: unknown): Record<string, unknown> {
+  return Array.isArray(style) ? Object.assign({}, ...style.map(flatStyle)) : style && typeof style === "object" ? style : {};
+}
 function button(label: string) {
   const found = root?.root.findAllByType("button").find((node) => node.props.accessibilityLabel === label);
   if (!found) throw new Error(`Missing button ${label}`);
@@ -61,6 +69,18 @@ function entryProps() { return {
   detail, reversal: { kind: "idle" } as const,
   onBack: vi.fn(), onEntry: vi.fn(), onReverse: vi.fn(), onCancel: vi.fn(), onConfirm: vi.fn(),
 }; }
+
+test("entry pill uses the primary category limit and consumption, otherwise the signed movement", () => {
+  const categories = [{ id: "food", name: "Food", style: { emoji: "🥑", tone: "primary" as const } }];
+  expect(entryPillContent(detail, categories)).toEqual({ kind: "entry", name: "Groceries", emoji: "🥑", currency: "COP", amountMinor: -150000 });
+  const budget = { month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true as const,
+    availableCategories: [], jars: [{ category: { id: "food", name: "Food", emoji: "🍲" }, revisionId: "limit",
+      limitMinorUnits: 500000, consumptionMinorUnits: 150000 }] };
+  expect(entryPillContent(detail, categories, budget)).toEqual({ kind: "budget", name: "Food", emoji: "🥑", currency: "COP",
+    limitMinor: 500000, spentMinor: 150000 });
+  expect(entryPillContent({ ...detail, row: { ...detail.row, primaryUserCategoryId: "family" } }, categories, budget))
+    .toEqual({ kind: "entry", name: "Groceries", emoji: "🧾", currency: "COP", amountMinor: -150000 });
+});
 
 test("detail shows category/primary, signed amount, confirmation and links without accounting codes", async () => {
   const props = entryProps();
@@ -142,7 +162,7 @@ test("history matches the prototype row, uses primary for money in, and navigate
   expect(text()).toContain("💸 Income");
   expect(text()).toContain("+$1.500,25");
   const amount = root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1.500,25");
-  expect(amount?.props.style).toContainEqual({ color: "#6d28d9" });
+  expect(flatStyle(amount?.props.style).color).toBe("#6d28d9");
 });
 
 test("search updates the count and capital flow, and figures toggle full precision", async () => {
@@ -331,4 +351,108 @@ test("date radios use workspace today, native custom dates override quick ranges
   expect(text()).toContain("3 of 3");
   expect(button("Dates").props.accessibilityState.selected).toBe(false);
   expect(root?.root.findAllByType(DateTimePicker)).toHaveLength(0);
+});
+
+function largeScreen(node: React.ReactElement) {
+  return createElement(ThemeProvider, { layout: readableLayout({ width: 320, fontScale: 1.5 }) }, node);
+}
+
+test("XXXL history groups shared and mixed dates, gives money its own line, and retains full descriptions", async () => {
+  const props = filterProps();
+  const rows = [
+    { ...detail.row, id: "shared-a", title: "A full description that remains available to the screen reader even when the visible description wraps past two lines", date: "2026-10-18", financialAccountProfileId: "cash" },
+    { ...detail.row, id: "shared-b", date: "2026-10-18", financialAccountProfileId: "cash" },
+    { ...detail.row, id: "mixed-a", date: "2026-10-17", financialAccountProfileId: "cash" },
+    { ...detail.row, id: "mixed-b", date: "2026-10-17", financialAccountProfileId: "bank", amount: { currency: "COP", minorUnits: 50000 } },
+  ];
+  await act(async () => { root = create(largeScreen(createElement(HistoryScreen, { ...props, rows, total: 4 }))); });
+  expect(text()).toContain("4 of 4 loaded");
+  expect(text()).not.toContain("Filters and totals cover");
+  expect(text()).toContain("October 18");
+  expect(text()).toContain("Daily · Groceries");
+  expect(text()).toContain("Bank · Groceries");
+  const movement = root?.root.findAllByType("button").find((node) => node.props.accessibilityLabel?.includes(rows[0].title));
+  expect(movement?.props.accessibilityLabel).toContain("Food, −$1.500");
+  const description = movement?.findAllByType("text").find((node) => node.children.join("") === rows[0].title);
+  expect(description?.props.numberOfLines).toBe(2);
+  await act(async () => movement?.props.onPress());
+  expect(props.onEntry).toHaveBeenCalledWith("shared-a");
+});
+
+test("XXXL opens one filter sheet at a time and retains multi-pick semantics", async () => {
+  await act(async () => { root = create(largeScreen(createElement(HistoryScreen, filterProps()))); });
+  for (const label of ["Sort, Newest first", "Places, All 2 places", "Categories, All 3", "Dates, All time"]) {
+    await act(async () => button(label).props.onPress());
+    expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(1);
+    expect(button("Show movements")).toBeDefined();
+    await closeSheet();
+    expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
+  }
+  await act(async () => button("Places, All 2 places").props.onPress());
+  await act(async () => choice("checkbox", "Daily").props.onPress());
+  expect(choice("checkbox", "Daily").props.accessibilityState.checked).toBe(true);
+  await act(async () => choice("checkbox", "Bank").props.onPress());
+  expect(text()).toContain("3 of 3 loaded");
+});
+
+test("XXXL no matches pins Clear filters and keeps Load more inside the scroller", async () => {
+  await act(async () => { root = create(largeScreen(createElement(HistoryScreen, { ...filterProps(), hasMore: true }))); });
+  await act(async () => search("missing"));
+  expect(text()).toContain("Nothing matches");
+  expect(button("Load more")).toBeDefined();
+  const scroller = root?.root.findByType("scroll");
+  expect(scroller?.findAllByType("button").some((node) => node.props.accessibilityLabel === "Clear filters")).toBe(false);
+  expect(scroller?.findAllByType("button").some((node) => node.props.accessibilityLabel === "Load more")).toBe(true);
+  await act(async () => button("Clear filters").props.onPress());
+  expect(text()).toContain("3 of 3 loaded");
+});
+
+test("XXXL details pins both actions and permits leaving a failed child confirmation", async () => {
+  const props = entryProps();
+  await act(async () => { root = create(largeScreen(createElement(EntryDetailScreen, props))); });
+  expect(text()).toContain("About this entry");
+  const scroller = root?.root.findByType("scroll");
+  expect(scroller?.findAllByType("button").some((node) => node.props.accessibilityLabel === "Reverse entry")).toBe(false);
+  expect(button("Close details")).toBeDefined();
+  await act(async () => root?.update(largeScreen(createElement(EntryDetailScreen, { ...props, reversal: { kind: "failed", message: "Try the same correction again." } }))));
+  expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(1);
+  await act(async () => button("Keep entry").props.onPress());
+  expect(props.onCancel).toHaveBeenCalledOnce();
+  expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
+  await act(async () => button("Close details").props.onPress());
+  expect(props.onBack).toHaveBeenCalledOnce();
+});
+
+function atScale(node: React.ReactElement, fontScale: number) {
+  return createElement(ThemeProvider, { layout: readableLayout({ width: 320, fontScale }) }, node);
+}
+
+test("changing the font tier retains the open filter, its search, and the selected query", async () => {
+  const props = filterProps();
+  await act(async () => { root = create(atScale(createElement(HistoryScreen, props), 1)); });
+  await act(async () => button("All categories").props.onPress());
+  await act(async () => choice("checkbox", "Family").props.onPress());
+  await act(async () => root?.root.findAllByType("input").find((node) => node.props.accessibilityLabel === "Search categories")?.props.onChangeText("Family"));
+  const modalOwner = root?.root.findByType(BottomSheetModal);
+  await act(async () => root?.update(atScale(createElement(HistoryScreen, props), 1.5)));
+  expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(1);
+  expect(root?.root.findByType(BottomSheetModal)).toBe(modalOwner);
+  expect(root?.root.findAllByType("input").find((node) => node.props.accessibilityLabel === "Search categories")?.props.value).toBe("Family");
+  expect(choice("checkbox", "Family").props.accessibilityState.checked).toBe(true);
+  await act(async () => root?.update(atScale(createElement(HistoryScreen, props), 1)));
+  expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(1);
+  expect(root?.root.findByType(BottomSheetModal)).toBe(modalOwner);
+  expect(root?.root.findAllByType("input").find((node) => node.props.accessibilityLabel === "Search categories")?.props.value).toBe("Family");
+});
+
+test("changing the font tier does not reopen a dismissed failed confirmation", async () => {
+  const props = { ...entryProps(), reversal: { kind: "failed" as const, message: "Retry the same correction." } };
+  await act(async () => { root = create(atScale(createElement(EntryDetailScreen, props), 1.5)); });
+  await act(async () => button("Keep entry").props.onPress());
+  expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
+  await act(async () => root?.update(atScale(createElement(EntryDetailScreen, props), 1)));
+  expect(button("Retry reversal")).toBeDefined();
+  await act(async () => root?.update(atScale(createElement(EntryDetailScreen, props), 1.5)));
+  expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
+  expect(button("Close details")).toBeDefined();
 });

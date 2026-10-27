@@ -55,7 +55,35 @@ export function historyListRow(row: HistoryRow, categories: HistoryCategory[], p
   const dateLabel = historyDate(row.date, currentDate);
   const subtitle = [dateLabel, `${emoji} ${categoryName}`.trim(), placeName].filter(Boolean).join(" · ") +
     (row.reversed ? " · Reversed" : "");
-  return { ...row, dateLabel, subtitle, placeName, amountLabel: historyAmount(row.amount, true) };
+  return { ...row, dateLabel, subtitle, placeName, categoryName, emoji,
+    categoryStyle: category?.style, amountLabel: historyAmount(row.amount, true) };
+}
+
+export function historyDateSections(rows: HistoryListRow[]) {
+  const days = new Map<string, { net: number; places: Set<string | undefined> }>();
+  for (const row of rows) {
+    const day = days.get(row.date) ?? { net: 0, places: new Set<string | undefined>() };
+    day.net += row.amount.minorUnits;
+    day.places.add(row.financialAccountProfileId);
+    days.set(row.date, day);
+  }
+  const sections: { date: string; dateLabel: string; net: number; place?: string; rows: HistoryListRow[] }[] = [];
+  for (const row of rows) {
+    const previous = sections[sections.length - 1];
+    if (previous?.date === row.date) {
+      previous.rows.push(row);
+    } else {
+      const day = days.get(row.date);
+      sections.push({ date: row.date, dateLabel: row.dateLabel, net: day?.net ?? 0,
+        place: day?.places.size === 1 && row.placeName ? row.placeName : undefined, rows: [row] });
+    }
+  }
+  return sections;
+}
+
+export function historyRowDescription(row: HistoryListRow, sharedPlace?: string) {
+  const description = row.transfer ? `${row.transfer.from.name} → ${row.transfer.to.name}` : row.title;
+  return [sharedPlace ? "" : row.placeName, description, row.reversed ? "Reversed" : ""].filter(Boolean).join(" · ");
 }
 
 export function capitalFlow(rows: HistoryRow[]) {
