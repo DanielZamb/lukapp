@@ -26,6 +26,10 @@ type ManagedBody = {
   body?: "scroll";
   label: string;
   tall?: boolean;
+  header?: false;
+  legacyBody?: ReactNode;
+  legacyFooter?: ReactNode;
+  legacyNativeModalProps?: NativeSheetProps;
   footer?: ReactNode;
   closeLabel?: string | false;
   stickyHeader?: boolean;
@@ -33,7 +37,7 @@ type ManagedBody = {
   scrollRef?: ComponentProps<typeof BottomSheetScrollView>["ref"];
   onScroll?: ComponentProps<typeof ScrollView>["onScroll"];
 };
-type NativeBody = { body: "native"; label?: string; tall?: never; footer?: never; closeLabel?: never; stickyHeader?: never; scrollProps?: never; scrollRef?: never; onScroll?: never };
+type NativeBody = { body: "native"; label?: string; tall?: never; header?: never; legacyBody?: never; legacyFooter?: never; legacyNativeModalProps?: never; footer?: never; closeLabel?: never; stickyHeader?: never; scrollProps?: never; scrollRef?: never; onScroll?: never };
 export type SheetProps = SharedSheetProps & (ManagedBody | NativeBody);
 
 export function sheetPresentation(tier: LayoutTier, tall = false) {
@@ -45,6 +49,9 @@ export function Sheet(props: SheetProps) {
   const theme = useTheme();
   const tier = useTier();
   const page = sheetPresentation(tier, tall) === "page";
+  const legacy = tier !== "xxxl" && props.legacyBody !== undefined;
+  const nativeBody = body === "native" || legacy;
+  const modalProps = legacy ? { ...nativeModalProps, ...props.legacyNativeModalProps } : nativeModalProps;
   const styles = useMemo(() => createStyles(theme), [theme]);
   const ownRef = useRef<import("@gorhom/bottom-sheet").BottomSheetModal>(null);
   const modal = sheetRef ?? ownRef;
@@ -65,7 +72,7 @@ export function Sheet(props: SheetProps) {
     <FooterFrame>{footer}</FooterFrame>
   </BottomSheetFooter>, [footer, insets.bottom, styles, theme.background]);
 
-  const defaults: NativeSheetProps = body === "native" ? {} : {
+  const defaults: NativeSheetProps = nativeBody ? {} : {
     accessibilityLabel: label,
     enablePanDownToClose: true,
     enableDynamicSizing: true,
@@ -73,9 +80,9 @@ export function Sheet(props: SheetProps) {
     handleIndicatorStyle: { backgroundColor: theme.ring },
     backdropComponent: (backdropProps) => <BottomSheetBackdrop {...backdropProps} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={busy ? "none" : "close"} />,
   };
-  return <SheetModal {...defaults} {...nativeModalProps} sheetRef={modal} presentOnMount={presentOnMount} trackPresentation={!!sheetRef}
-    busy={busy} dismissible={dismissible} androidBack={props.androidBack ?? body !== "native"}
-    {...(tier === "xxxl" && body !== "native" && { backgroundStyle: [styles.surface, { borderTopLeftRadius: xxxl.radius.sheet, borderTopRightRadius: xxxl.radius.sheet }] })}
+  return <SheetModal {...defaults} {...modalProps} sheetRef={modal} presentOnMount={presentOnMount} trackPresentation={!!sheetRef}
+    busy={busy} dismissible={dismissible} androidBack={props.androidBack ?? !nativeBody}
+    {...(tier === "xxxl" && !nativeBody && { backgroundStyle: [styles.surface, { borderTopLeftRadius: xxxl.radius.sheet, borderTopRightRadius: xxxl.radius.sheet }] })}
     {...(page && {
       containerComponent: PageContainer, accessible: false,
       snapPoints: ["100%"], topInset: insets.top, enableDynamicSizing: false,
@@ -83,16 +90,19 @@ export function Sheet(props: SheetProps) {
       keyboardBehavior: "interactive", keyboardBlurBehavior: "restore", android_keyboardInputMode: "adjustPan",
       footerComponent: footer ? renderFooter : undefined,
       androidBack: true,
+    })}
+    {...((page || props.legacyBody !== undefined) && {
       onChange: (...args) => {
-        nativeModalProps?.onChange?.(...args);
+        modalProps?.onChange?.(...args);
         readyToFocus.current = args[0] >= 0;
         if (!readyToFocus.current) focused.current = false;
         focusTitle();
       },
     })}
-    onDismiss={() => { readyToFocus.current = false; focused.current = false; nativeModalProps?.onDismiss?.(); onClose?.(); onDismiss?.(); }}>
-    {body === "native" ? children : <>
-      {page && <View style={{ paddingHorizontal: 16, paddingTop: 12 }}><SheetHeader title={label ?? ""} onClose={close} disabled={busy || !dismissible} titleProps={{ ref: title, onLayout: focusTitle }} /></View>}
+    onDismiss={() => { readyToFocus.current = false; focused.current = false; for (const notify of new Set([modalProps?.onDismiss, onClose, onDismiss])) notify?.(); }}>
+    {nativeBody ? legacy ? <>{props.legacyBody}{props.legacyFooter}</> : children : <>
+      {page && props.header === false && <NativeText ref={title} onLayout={focusTitle} accessibilityRole="header" style={{ position: "absolute", left: -10000, width: 1, height: 1 }}>{label}</NativeText>}
+      {page && props.header !== false && <View style={{ paddingHorizontal: 16, paddingTop: 12 }}><SheetHeader title={label ?? ""} onClose={close} disabled={busy || !dismissible} titleProps={{ ref: title, onLayout: focusTitle }} /></View>}
       <BottomSheetScrollView accessibilityViewIsModal={page ? undefined : true} keyboardShouldPersistTaps="handled"
         contentContainerStyle={page ? StyleSheet.flatten([styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl, paddingHorizontal: xxxl.spacing.pagePadding, paddingTop: 12 }]) : [styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }]}
         {...scrollProps}

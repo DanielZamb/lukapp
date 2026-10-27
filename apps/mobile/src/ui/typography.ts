@@ -52,3 +52,5 @@ export function textTone(theme: Theme, tone: TextTone) {
   const colors = { default: theme.foreground, muted: theme.mutedForeground, primary: theme.primaryText, positive: theme.positive, warning: theme.warning, danger: theme.danger };
   return colors[tone];
 }
+
+export type { TextPreset } from "./textPresets";

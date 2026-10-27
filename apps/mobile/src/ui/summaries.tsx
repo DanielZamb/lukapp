@@ -66,12 +66,12 @@ export function PreviewGroup<T>({ title, items, renderItem, totalCount, viewAllL
     {totalCount > preview.length ? <Pressable accessibilityRole="button" accessibilityLabel={viewAllLabel(totalCount)} onPress={onViewAll} style={{ minHeight: 56, justifyContent: "center", alignItems: "center", paddingVertical: 12, paddingHorizontal: 20 }}><Text variant="action" tone="primary" style={{ textAlign: "center" }}>{viewAllLabel(totalCount)}</Text></Pressable> : null}
   </View>;
 }
-export function AmountDirection({ direction, label, legacy = null }: { direction: "in" | "out"; label?: string; legacy?: ReactNode }) {
+export function AmountDirection({ direction, label, legacy = null }: { direction: "in" | "out" | "transfer"; label?: string; legacy?: ReactNode }) {
   const { theme, layout } = useThemeContext();
   if (layout.tier !== "xxxl") return legacy;
-  const copy = label ?? (direction === "out" ? "Money out" : "Money in");
+  const copy = label ?? (direction === "transfer" ? "Moves between places" : direction === "out" ? "Money out" : "Money in");
   return <View accessible accessibilityLabel={copy} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-    <Ionicons accessible={false} name={direction === "out" ? "arrow-up" : "arrow-down"} size={20} color={theme.mutedForeground} style={{ marginTop: 3 }} />
+    <Ionicons accessible={false} name={direction === "transfer" ? "swap-horizontal" : direction === "out" ? "arrow-up" : "arrow-down"} size={20} color={theme.mutedForeground} style={{ marginTop: 3 }} />
     <Text variant="meta" tone="muted" style={{ flex: 1 }}>{copy}</Text>
   </View>;
 }
