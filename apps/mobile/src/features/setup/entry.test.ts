@@ -41,6 +41,16 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetView: "view",
 }));
 vi.mock("../../ui/core", () => ({
+  ActionBar: () => null,
+  IconButton: "button",
+  AlertDot: () => null,
+  BrandBand: ({ legacy }: { legacy: React.ReactNode }) => legacy,
+  BrandBandChip: () => null,
+  DestinationRow: () => null,
+  MoneyHero: () => null,
+  Presentation: ({ legacy }: { legacy: React.ReactNode }) => legacy,
+  PreviewGroup: ({ legacy }: { legacy: React.ReactNode }) => legacy,
+  Text: "text",
   Screen: "screen",
   Header: "header",
   PrimaryButton: "button",
