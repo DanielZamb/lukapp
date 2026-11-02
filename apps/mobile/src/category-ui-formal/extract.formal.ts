@@ -435,7 +435,7 @@ test("extract finite committed-callback graph from production category/account-d
     if (nodes.length > 10_000) throw new Error("Extraction exceeded declared state cap");
   }
   await act(async () => root?.unmount()); root = undefined;
-  const out = resolve(process.env.CATEGORY_UI_FORMAL_OUT ?? ".orchestrator/runs/2026-10-20-category-ui-crud-formal/latest");
+  const out = resolve(process.env.CATEGORY_UI_FORMAL_OUT ?? "reports/formal-category-ui/latest");
   mkdirSync(out, { recursive: true });
   writeFileSync(resolve(out, "graph.json"), JSON.stringify({ maxDepth, nodes, edges, initial }, null, 2));
   const observations = nodes.map((node) => tla(rawObservation(node)));

@@ -326,7 +326,7 @@ test("extract management CRUD and retained-selection event graph", async () => {
     if (nodes.length > 10_000) throw new Error("CRUD state cap exceeded");
   }
   await act(async () => root?.unmount()); root = undefined;
-  const out = resolve(process.env.CATEGORY_UI_FORMAL_OUT ?? ".orchestrator/runs/2026-10-20-category-ui-crud-formal/latest"); mkdirSync(out, { recursive: true });
+  const out = resolve(process.env.CATEGORY_UI_FORMAL_OUT ?? "reports/formal-category-ui/latest"); mkdirSync(out, { recursive: true });
   writeFileSync(resolve(out, "crud-graph.json"), JSON.stringify({ maxDepth, nodes, edges, initial }, null, 2));
   writeFileSync(resolve(out, "RealCRUD.tla"), `---- MODULE RealCRUD ----\nInitialStates == {${initial.join(",")}}\nObservations == <<${nodes.map(node => tla(raw(node))).join(",\n")}>>\nEdges == {${edges.map(edge => `[from |-> ${edge.from}, to |-> ${edge.to}, event |-> ${JSON.stringify(edge.event)}]`).join(",\n")}}\n====\n`);
   const flags = ["request", "deletion", "frozen", "retry", "dismiss", "handoff", "recovery", "input"];

@@ -21,7 +21,7 @@ URL = f'https://{DEPLOYMENT}.convex.cloud'
 BACKUP_SHA = '7df1ece3a5969bd03422cf03ffb18e0cb9a3c6c6d9c96ce7c2056d2a335ccdeb'
 SCHEMA_SHA = '67a9859544a1200c035e92c47631623c2c682a5482e8008ab5cc6e6055b691be'
 TOMBSTONES_SHA = 'a8496f056c677b707ea2db1a6c39beb4ea55fad2c28eb185652b10d815bc5b69'
-RECEIPTS = Path('/Users/zambamon/Work/finance-tracker-v2/.orchestrator/runs/2026-10-17-frontend')
+RECEIPTS = ROOT / '.verification/legacy-transition'
 REMOVALS = {
     'personalWorkspaceOwners': 1, 'openingPositions': 1, 'mobileDevices': 1,
     'workspaceMemberships': 1, 'workspaces': 1, 'userCategories': 11,
@@ -166,7 +166,7 @@ def derive(before, tombstones):
 def load_sources(receipts):
     backup = read_json(receipts / 'deployment-backup.json')
     require(backup['deploymentUrl'] == URL and backup['sha256'] == BACKUP_SHA and backup['bytes'] == 41399, 'Backup receipt changed')
-    path = Path(backup['path'])
+    path = receipts / Path(backup['path']).name
     require(digest(path.read_bytes()) == BACKUP_SHA, 'Immutable backup hash mismatch')
     schema_bytes = (receipts / 'deployed-schema-before.json').read_bytes()
     require(digest(schema_bytes) == SCHEMA_SHA, 'Pinned schema receipt changed')

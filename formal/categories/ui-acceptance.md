@@ -8,7 +8,7 @@ the established account-setup handoff. Metadata updates preserve money direction
 and posting classification; accounting reclassification remains separate.
 
 The [initial audit](ui-adherence.md) is historical. The
-[implementation receipt](../../.orchestrator/runs/2026-10-20-category-crud/receipt.json)
+[implementation receipt](../../.verification/evidence/category-runtime/implementation.json)
 records current evidence and its limits.
 
 | Evidence | Result |
@@ -29,7 +29,7 @@ iOS test categories were deleted through the public app. Final active catalogs
 are empty for every user; all 60 entries, 120 lines, ledger accounts, financial
 profiles and budget revisions retain their original values. Production was untouched.
 
-The [iOS receipt](../../.orchestrator/runs/2026-10-20-category-crud/ios-round2/receipt.json)
+The [iOS receipt](../../.verification/evidence/category-runtime/ios.json)
 contains exact authenticated SDK inputs, persisted category IDs, screenshot hashes,
 build/install hashes and negative checks. Administrator table readbacks supplement
 the native interaction; they do not establish authentication. Used-budget deletion,
