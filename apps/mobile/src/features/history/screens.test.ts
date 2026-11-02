@@ -3,7 +3,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { createElement, type ReactNode } from "react";
-import { ActivityIndicator } from "react-native";
+import { ScrollView, ActivityIndicator } from "react-native";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { EntryDetailScreen, entryPillContent } from "./EntryDetailScreen";
@@ -18,10 +18,11 @@ vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("../../ui/ContextPill", () => ({ useContextPill: () => ({ summaryProps: {}, scrollProps: {} }) }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("@gorhom/bottom-sheet", () => ({
-  BottomSheetModal: "sheet", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
+  BottomSheetModal: ({ children, footerComponent }: { children?: ReactNode; footerComponent?: (props: object) => ReactNode }) => createElement("sheet", null, children, footerComponent?.({})), BottomSheetFooter: "sheet-footer", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
 }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }));
 vi.mock("react-native", () => ({
+  useWindowDimensions: () => ({ width: 320, height: 800, fontScale: 1.5, scale: 1 }),
   KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
@@ -58,7 +59,7 @@ afterEach(async () => {
 });
 function text() { return root?.root.findAllByType("text").map((node) => node.children.join("")).join("\n") ?? ""; }
 function flatStyle(style: unknown): Record<string, unknown> {
-  return Array.isArray(style) ? Object.assign({}, ...style.map(flatStyle)) : style && typeof style === "object" ? style : {};
+  return Array.isArray(style) ? Object.assign({}, ...style.map(flatStyle)) : style && typeof style === "object" ? Object.fromEntries(Object.entries(style)) : {};
 }
 function button(label: string) {
   const found = root?.root.findAllByType("button").find((node) => node.props.accessibilityLabel === label);
@@ -400,7 +401,7 @@ test("XXXL no matches pins Clear filters and keeps Load more inside the scroller
   await act(async () => search("missing"));
   expect(text()).toContain("Nothing matches");
   expect(button("Load more")).toBeDefined();
-  const scroller = root?.root.findByType("scroll");
+  const scroller = root?.root.findByType(ScrollView);
   expect(scroller?.findAllByType("button").some((node) => node.props.accessibilityLabel === "Clear filters")).toBe(false);
   expect(scroller?.findAllByType("button").some((node) => node.props.accessibilityLabel === "Load more")).toBe(true);
   await act(async () => button("Clear filters").props.onPress());
@@ -411,7 +412,7 @@ test("XXXL details pins both actions and permits leaving a failed child confirma
   const props = entryProps();
   await act(async () => { root = create(largeScreen(createElement(EntryDetailScreen, props))); });
   expect(text()).toContain("About this entry");
-  const scroller = root?.root.findByType("scroll");
+  const scroller = root?.root.findByType(ScrollView);
   expect(scroller?.findAllByType("button").some((node) => node.props.accessibilityLabel === "Reverse entry")).toBe(false);
   expect(button("Close details")).toBeDefined();
   await act(async () => root?.update(largeScreen(createElement(EntryDetailScreen, { ...props, reversal: { kind: "failed", message: "Try the same correction again." } }))));

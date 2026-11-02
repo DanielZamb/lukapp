@@ -9,7 +9,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useMemo, useState, type ComponentProps } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ActionBar, ChoiceRow, Group, IconTile, ListRow, Presentation, SheetHeader, Text, TextInput, useReflowStyles, useTheme, useUi } from "../../ui/core";
+import { ActionBar, ChoiceRow, Group, IconTile, ListRow, Presentation, SheetHeader, Text, useTextPreset, useReflowStyles, useTheme, useUi } from "../../ui/core";
 import { PickerSheet } from "../../ui/PickerSheet";
 import { radius, spacing, touchTarget } from "../../ui/tokens";
 import { dateRanges, sortDefaults, sortLabels, type HistoryQuery, type SortDir, type SortKey } from "./filter";
@@ -112,6 +112,7 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
   sheet: Sheet; onClose: () => void;
 }) {
   const ui = useUi();
+  const searchTypography = useTextPreset("body");
   const reflow = useReflowStyles();
   const theme = useTheme();
   const layout = useReadableLayout();
@@ -131,8 +132,8 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
       contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }]}>
       <View style={sheet === "categories" ? styles.searchHeader : undefined}>
         <Text variant="label" style={ui.label}>{sheet === "sort" ? "SORT BY" : sheet === "places" ? "PLACES" : sheet === "categories" ? "CATEGORIES" : "DATES"}</Text>
-        {sheet === "categories" && <TextInput preset="body" InputComponent={BottomSheetTextInput} accessibilityLabel="Search categories" placeholder="Search categories" value={search}
-          onChangeText={setSearch} placeholderTextColor={theme.mutedForeground} style={styles.input} />}
+        {sheet === "categories" && <BottomSheetTextInput {...searchTypography} accessibilityLabel="Search categories" placeholder="Search categories" value={search}
+          onChangeText={setSearch} placeholderTextColor={theme.mutedForeground} style={[searchTypography.style, styles.input]} />}
       </View>
       {sheet === "categories" ? <View style={styles.chips}>
           <Pressable accessibilityRole="checkbox" accessibilityLabel="All categories"
@@ -222,8 +223,8 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
         selected={place.id === null ? query.profileIds.length === 0 : query.profileIds.includes(place.id)}
         onPress={() => onQuery({ ...query, profileIds: place.id === null ? [] : toggle(query.profileIds, place.id) })} />)}
       {sheet === "categories" && <>
-        <TextInput preset="body" InputComponent={BottomSheetTextInput} accessibilityLabel="Search categories" placeholder="Search categories" value={search}
-          onChangeText={setSearch} placeholderTextColor={theme.mutedForeground} style={[styles.input, { minHeight: 64 }]} />
+        <BottomSheetTextInput {...searchTypography} accessibilityLabel="Search categories" placeholder="Search categories" value={search}
+          onChangeText={setSearch} placeholderTextColor={theme.mutedForeground} style={[searchTypography.style, styles.input, { minHeight: 64 }]} />
         <ChoiceRow kind="checkbox" presentation="option" label="All categories" selected={query.categoryIds.length === 0}
           onPress={() => onQuery({ ...query, categoryIds: [] })} />
         {matchedCategories.map((category) => <ChoiceRow key={category.id} kind="checkbox" presentation="option" label={category.name}

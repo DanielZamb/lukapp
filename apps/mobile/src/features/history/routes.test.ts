@@ -1,7 +1,7 @@
 import * as React from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { ActivityIndicator } from "react-native";
+import { ScrollView, ActivityIndicator } from "react-native";
 import { createElement, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -29,13 +29,14 @@ vi.mock("@gorhom/bottom-sheet", async () => {
   return {
     BottomSheetModal: forwardRef(({ children, onDismiss, ...props }: { children?: ReactNode; onDismiss: () => void }, ref) => {
       useImperativeHandle(ref, () => ({ present: provider.present, dismiss: () => { provider.dismiss(); onDismiss(); } }), [onDismiss]);
-      return createElement("sheet", { ...props, onDismiss }, children);
+      return createElement("sheet", { ...props, onDismiss }, children, "footerComponent" in props && typeof props.footerComponent === "function" ? props.footerComponent({}) : null);
     }),
-    BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
+    BottomSheetFooter: "sheet-footer", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
   };
 });
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }));
 vi.mock("react-native", () => ({
+  useWindowDimensions: () => ({ width: 320, height: 800, fontScale: 1.5, scale: 1 }),
   KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
@@ -100,6 +101,9 @@ afterEach(async () => {
   await act(async () => root?.unmount()); root = undefined;
   vi.unstubAllGlobals();
 });
+function flatStyle(style: unknown): Record<string, unknown> {
+  return Array.isArray(style) ? Object.assign({}, ...style.map(flatStyle)) : style && typeof style === "object" ? Object.fromEntries(Object.entries(style)) : {};
+}
 function text() { return root?.root.findAllByType("text").map((node) => node.children.join("")).join("\n") ?? ""; }
 function button(label: string) {
   const found = root?.root.findAllByType("button").find((node) => node.props.accessibilityLabel === label);
@@ -210,8 +214,8 @@ test("sheet loads detail and swaps original and reversal contents without pushin
   await act(async () => button("View reversal").props.onPress());
   expect(text()).toContain("MONEY IN");
   expect(text()).toContain("Reversal: Older receipt\n+$1.500\nReversal");
-  expect(root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1.500")?.props.style)
-    .toContainEqual({ color: "#6d28d9" });
+  expect(flatStyle(root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1.500")?.props.style).color)
+    .toBe("#6d28d9");
   expect(text()).not.toContain("View reversal");
   await act(async () => button("View original entry").props.onPress());
   expect(text()).toContain("MONEY OUT");
@@ -409,8 +413,8 @@ test.each([
     const hero = root?.root.findByType(BottomSheetModal).findAllByType("text")
       .find((node) => node.children.join("") === (positive ? "+$25" : "−$25"));
     expect(hero?.children.join("")).toBe(positive ? "+$25" : "−$25");
-    if (positive) expect(hero?.props.style).toContainEqual({ color: "#6d28d9" });
-    else expect(hero?.props.style).not.toContainEqual({ color: "#6d28d9" });
+    if (positive) expect(flatStyle(hero?.props.style).color).toBe("#6d28d9");
+    else expect(flatStyle(hero?.props.style).color).not.toBe("#6d28d9");
     expect(provider.detailQuery).toHaveBeenLastCalledWith({
       workspaceId: "ws", journalEntryId: minorUnits === amount ? "100" : "reversal",
       financialAccountProfileId: profileId ?? "daily",
