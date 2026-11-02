@@ -1,0 +1,31 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`date preserves the fdd9a85 default picker configuration in dark 1`] = `
+{
+  "hasBackdrop": false,
+  "props": {
+    "backgroundStyle": {
+      "backgroundColor": "#0a0a0a",
+    },
+    "enableDynamicSizing": false,
+    "snapPoints": [
+      "55%",
+    ],
+  },
+}
+`;
+
+exports[`date preserves the fdd9a85 default picker configuration in light 1`] = `
+{
+  "hasBackdrop": false,
+  "props": {
+    "backgroundStyle": {
+      "backgroundColor": "#ffffff",
+    },
+    "enableDynamicSizing": false,
+    "snapPoints": [
+      "55%",
+    ],
+  },
+}
+`;

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement, useImperativeHandle, useState, type ComponentProps } from "react";
+import { createElement, useEffect, useImperativeHandle, useState, type ComponentProps } from "react";
 import type { PendingPosting } from "./pendingPostingSchema";
 import type { PostingFormProps } from "./PostingForm";
 import { BatchNativeStack } from "./BatchNativeStack";
@@ -10,6 +10,10 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { seedCandidate } from "../intake/devSeed";
 import { getFunctionName } from "convex/server";
 import type { Category } from "../categories/model";
+import { ThemeProvider, useSetThemeMode } from "../../ui/themeContext";
+import type { ThemeMode } from "../../ui/tokens";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 vi.hoisted(() => {
   (globalThis as { __DEV__?: boolean }).__DEV__ = false;
@@ -110,7 +114,8 @@ vi.mock("./postingBatchStorage", () => {
   };
   return { usePostingBatchStorage: () => storage };
 });
-vi.mock("./PostingForm", () => ({
+vi.mock("./PostingForm", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./PostingForm")>(),
   PostingForm: (props: PostingFormProps) => {
     form.sourceNote = props.sourceNote;
     form.props = props;
@@ -150,7 +155,7 @@ vi.mock("./AccountSetupForm", () => ({
   },
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
 vi.mock("react-native-screens", () => ({
   ScreenStack: "stack",
   ScreenStackItem: "screen",
@@ -208,6 +213,31 @@ test("a new entry passes no source note", async () => {
   await mount();
   expect(form.sourceNote).toBeUndefined();
 });
+
+function Appearance({ mode }: { mode: ThemeMode }) {
+  const setMode = useSetThemeMode();
+  useEffect(() => setMode(mode), [mode, setMode]);
+  return createElement(PostRoute);
+}
+
+test.each(["light", "dark"] as const)(
+  "date preserves the fdd9a85 default picker configuration in %s",
+  async (mode) => {
+    await act(async () => {
+      root = create(createElement(ThemeProvider, null, createElement(Appearance, { mode })));
+    });
+    const modal = root!.root.findAllByType(BottomSheetModal).find((node) => node.findAllByType(DateTimePicker).length === 1)!;
+    const { children, ref, backdropComponent, ...props } = modal.props;
+    const configuration = Object.fromEntries(Object.entries(props).filter(([key, value]) => value !== undefined && typeof value !== "function" && !key.startsWith("on")));
+    expect({ props: configuration, hasBackdrop: typeof backdropComponent === "function" }).toMatchSnapshot();
+    expect(configuration).toEqual({
+      backgroundStyle: { backgroundColor: mode === "light" ? "#ffffff" : "#0a0a0a" },
+      snapPoints: ["55%"],
+      enableDynamicSizing: false,
+    });
+    expect(backdropComponent).toBeUndefined();
+  },
+);
 
 function formProps() {
   if (!form.props) throw new Error("Post form is not mounted");
@@ -321,6 +351,14 @@ test("a negative draft can choose income without closing the picker and posts th
   await act(async () => sheet().props.onDone());
   await act(async () => formProps().onPost());
   expect(writes.post).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ kind: "income", payload: expect.objectContaining({ userCategoryIds: ["salary"], amount: { currency: "COP", minorUnits: 12500 } }) }));
+  expect(formProps().category).toBe("Pick");
+  expect(formProps().receipt).toMatchObject({
+    description: "Category first salary", amount: "125", minorUnits: 12500,
+    category: { name: "Salary", emoji: "F" },
+  });
+  await act(async () => formProps().onAnother?.());
+  expect(formProps()).toMatchObject({ posted: null, receipt: undefined, amount: "-", description: "" });
+  expect(writes.post).toHaveBeenCalledOnce();
 });
 
 test("Initial balance can enable Post without a category", async () => {
