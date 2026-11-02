@@ -265,7 +265,7 @@ test.each(["light", "dark"] as const)("Look has circular themed choices and cust
   expect(choice).toMatchObject({ backgroundColor: themes[mode].secondary, borderColor: themes[mode].primary });
   const input = screen().findByProps({ accessibilityLabel: "Custom emoji" });
   expect(input.props.placeholder).toBe("Or type your own");
-  expect(input.props.style).toMatchObject({ backgroundColor: themes[mode].secondary, color: themes[mode].foreground });
+  expect(flat(input.props.style)).toMatchObject({ backgroundColor: themes[mode].secondary, color: themes[mode].foreground });
 });
 
 

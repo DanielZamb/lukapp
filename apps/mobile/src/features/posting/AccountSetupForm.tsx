@@ -25,7 +25,7 @@ import {
   SecondaryButton,
   SheetHeader,
   Text,
-  TextInput,
+  useTextPreset,
   useTheme,
   useUi,
 } from "../../ui/core";
@@ -74,6 +74,7 @@ export function AccountSetupForm(props: {
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => accountSetupStyles(theme), [theme]);
+  const customEmojiTypography = useTextPreset("nativeInput", styles.customEmojiInput);
   const lookSheet = useRef<BottomSheetModal>(null);
   const [lookEmoji, setLookEmoji] = useState("💰");
   const [lookOpen, setLookOpen] = useState(false);
@@ -402,9 +403,8 @@ export function AccountSetupForm(props: {
                     </Pressable>
                   ))}
                 </View>
-                <TextInput
-                  preset="nativeInput"
-                  InputComponent={BottomSheetTextInput}
+                <BottomSheetTextInput
+                  {...customEmojiTypography}
                   accessibilityLabel="Custom emoji"
                   autoFocus={focusedField === "emoji" || undefined}
                   onFocus={() => setFocusedField("emoji")}
@@ -416,7 +416,6 @@ export function AccountSetupForm(props: {
                   }}
                   placeholder="Or type your own"
                   placeholderTextColor={theme.mutedForeground}
-                  style={styles.customEmojiInput}
                 />
                 <PrimaryButton
                   label="Use this"

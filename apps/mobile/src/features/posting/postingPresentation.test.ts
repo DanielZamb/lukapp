@@ -10,6 +10,8 @@ import { ScrollView } from "react-native";
 import { ThemeProvider } from "../../ui/themeContext";
 import { readableLayout } from "../../ui/layout";
 
+const dimensions = vi.hoisted(() => ({ width: 320, height: 640, scale: 1, fontScale: 1.5 }));
+
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({
   SafeAreaView: "safe-area",
@@ -34,6 +36,7 @@ vi.mock("react-native", () => ({
   Pressable: "button",
   ScrollView: "scroll",
   TextInput: "input",
+  useWindowDimensions: () => dimensions,
   ActivityIndicator: "spinner",
   KeyboardAvoidingView: "keyboard",
   Platform: { OS: "ios" },
@@ -166,6 +169,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 async function show(element: ReactElement, fontScale = 1.5) {
+  dimensions.fontScale = fontScale;
   await act(async () => {
     mounted = create(
       createElement(
@@ -222,7 +226,7 @@ test.each([1.5, 2])(
       accessibilityRole: "button",
     });
     expect(post.props.disabled).toBe(true);
-    expect(flat(post.props.style).minHeight).toBe(68);
+    expect(flat(post.props.style({ pressed: false })).minHeight).toBe(68);
     expect(
       screen.findByProps({ accessibilityLabel: "Description" }).props.multiline,
     ).toBe(true);
@@ -393,7 +397,7 @@ test("the batch keeps full descriptions accessible while its actions stay outsid
     accessibilityRole: "button",
     accessibilityLabel: `Remove ${description}`,
   });
-  expect(flat(removeButton.props.style).minHeight).toBe(56);
+  expect(flat(removeButton.props.style({ pressed: false }))).toMatchObject({ width: 56, height: 56 });
   const stopPropagation = vi.fn();
   await act(async () => removeButton.props.onPress({ stopPropagation }));
   expect(stopPropagation).toHaveBeenCalledOnce();

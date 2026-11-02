@@ -156,7 +156,7 @@ const batch = (
   error: "",
   posted: null,
   keep: vi.fn(),
-  remove: noop,
+  remove: vi.fn(async () => true),
   postAll: vi.fn(),
 });
 const batchProps = {

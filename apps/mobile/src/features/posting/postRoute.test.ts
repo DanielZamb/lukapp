@@ -110,7 +110,8 @@ vi.mock("./postingBatchStorage", () => {
   };
   return { usePostingBatchStorage: () => storage };
 });
-vi.mock("./PostingForm", () => ({
+vi.mock("./PostingForm", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./PostingForm")>(),
   PostingForm: (props: PostingFormProps) => {
     form.sourceNote = props.sourceNote;
     form.props = props;
