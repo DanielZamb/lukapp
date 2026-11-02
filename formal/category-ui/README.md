@@ -34,8 +34,12 @@ The native layer and provider replies are substituted. Metadata responses are co
 
 The source is snapshot `f2e206227ec7fc08bb29ef70e5ff5f49209b91f1`, tree `27a8f15c5047d3dd96636949a52dd79e01720378`, 437 source blobs. Root HEAD/index were preserved. source-sync.json lists 25 covered production hashes. Every run also records exact verifier inputs, package/tool versions and source checks before/after extraction/TLC.
 
-Current evidence lives in `.orchestrator/runs/2026-10-20-category-ui-crud-formal/`. The earlier f531 run is historical and remains unedited; its old live verifier inputs were copied with matching hashes into the new run's legacy-f531-verifier archive before updating these files.
+Historical compact evidence lives in `.verification/evidence/category-ui/`. Exact earlier verifier versions and their preservation record are retained in `.verification/provenance/category-ui/`. The old `.orchestrator` locations are provenance only and need not exist. New reproduction output belongs in `reports/formal-category-ui/`; the earlier f531 finding remains historical.
 
 The generated [.agents/skills/verify-category-ui/SKILL.md](../../.agents/skills/verify-category-ui/SKILL.md) contains precise events, bounds, coverage, source-review rules, commands and failure interpretation. The new run's backend-binding.json confirms the 22 files covered by the existing verify-categories CRUD proof match this snapshot. Backend soft-delete/history/classification semantics and provider acceptance remain separate evidence in formal/categories, not conclusions of the controlled UI response driver.
 
 No product fix, shared-config change, deployment, reset, provider request, device or historical replay is part of this skill update. The original CATEGORY-UI-001 finding remains open. Use /maintain-formal-verification-skill for later sync work; because it is not installed here, the generated skill includes the manual procedure.
+
+## Ambient clock in historical output
+
+The relocation check retained the original accepted baseline in `.verification/evidence/category-ui/original-baseline.zip`. Its comparison record is `baseline-provenance.json` beside it. The maintained reproduction matched the original CRUD graph, counterexamples, and finding. Account-door graph differences were solely wall-clock-derived setup dates from 20 October to 23 October. Baseline/restored output still matched within the new run. Pin the clock before requiring exact historical graph bytes across calendar dates. This observation does not advance the source binding or expand the model domain.

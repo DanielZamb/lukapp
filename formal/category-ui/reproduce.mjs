@@ -8,7 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sync = JSON.parse(readFileSync(resolve(root, 'formal/category-ui/source-sync.json'), 'utf8'));
 const snapshot = sync.sourceSnapshot;
 const args = process.argv.slice(2);
-const out = resolve(root, args.includes('--out') ? args[args.indexOf('--out') + 1] : '.orchestrator/runs/2026-10-20-category-ui-crud-formal/snapshot-reproduction');
+const out = resolve(root, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'reports/formal-category-ui/snapshot-reproduction');
 mkdirSync(out, { recursive: true });
 const scratch = mkdtempSync(join(tmpdir(), 'category-ui-snapshot-'));
 let exit = 1;
@@ -33,9 +33,9 @@ try {
   cpSync(resolve(root, 'apps/mobile/src/category-ui-formal'), resolve(scratch, 'apps/mobile/src/category-ui-formal'), { recursive: true });
   symlinkSync(resolve(root, 'node_modules'), resolve(scratch, 'node_modules'), 'dir');
   symlinkSync(resolve(root, 'apps/mobile/node_modules'), resolve(scratch, 'apps/mobile/node_modules'), 'dir');
-  const tools = resolve(scratch, '.orchestrator/tools/tla/v1.7.4');
+  const tools = resolve(scratch, '.verification/tools/tla/v1.7.4');
   mkdirSync(tools, { recursive: true });
-  symlinkSync(resolve(root, '.orchestrator/tools/tla/v1.7.4/tla2tools.jar'), resolve(tools, 'tla2tools.jar'));
+  symlinkSync(resolve(root, '.verification/tools/tla/v1.7.4/tla2tools.jar'), resolve(tools, 'tla2tools.jar'));
   const invoke = (script, directory) => {
     const result = spawnSync(process.execPath, [resolve(scratch, 'formal/category-ui', script), '--out', resolve(out, directory)],
       { cwd: scratch, encoding: 'utf8', maxBuffer: 30_000_000, env: { ...process.env, CATEGORY_UI_GIT_ROOT: root, CATEGORY_UI_SOURCE_REF: snapshot } });

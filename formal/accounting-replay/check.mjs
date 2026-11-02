@@ -28,7 +28,7 @@ if (refFlag >= 0) {
   writeFileSync(resolve(out, "source-snapshot.json"), JSON.stringify({ requestedRef, sourceCommit, productSource: "git archive of this immutable commit", verificationSource: root, scratchRemoved: true, exitCode: result.status, error: result.error?.message ?? null }, null, 2) + "\n");
   process.exit(result.status ?? 2);
 }
-const jar = resolve(root, ".orchestrator/tools/tla/v1.7.4/tla2tools.jar");
+const jar = resolve(root, ".verification/tools/tla/v1.7.4/tla2tools.jar");
 const jarSha256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88";
 const hash = file => createHash("sha256").update(readFileSync(file)).digest("hex");
 const coveragePath = resolve(root, "formal/accounting-replay/coverage.json");
@@ -50,7 +50,7 @@ function run(command, argv, log, env = process.env) {
 }
 
 console.log("Extracting bounded transitions by executing the actual accounting code...");
-const corpus = run("python3", [".orchestrator/runs/2026-10-20-v1-replay/verify_inputs.py"], "corpus.log");
+const corpus = run("python3", [".verification/inputs/accounting-v1/verify_inputs.py"], "corpus.log");
 if (corpus.status !== 0) {
   process.stderr.write(readFileSync(resolve(out, "corpus.log")));
   process.exit(2);
