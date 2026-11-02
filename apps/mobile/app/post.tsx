@@ -665,6 +665,13 @@ function PostMoney({
           backgroundStyle: { backgroundColor: theme.background },
           snapPoints: ["55%"],
           enableDynamicSizing: false,
+          topInset: undefined,
+          handleIndicatorStyle: undefined,
+          backdropComponent: undefined,
+          enablePanDownToClose: undefined,
+          enableContentPanningGesture: undefined,
+          keyboardBehavior: undefined,
+          keyboardBlurBehavior: undefined,
         }}
         legacyBodyMode="native"
       >

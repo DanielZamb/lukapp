@@ -1,5 +1,45 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`Look preserves the fdd9a85 default picker configuration in dark 1`] = `
+{
+  "hasBackdrop": true,
+  "props": {
+    "backgroundStyle": {
+      "backgroundColor": "#0a0a0a",
+    },
+    "enableContentPanningGesture": true,
+    "enableDynamicSizing": false,
+    "enablePanDownToClose": true,
+    "keyboardBehavior": "interactive",
+    "keyboardBlurBehavior": "restore",
+    "snapPoints": [
+      "55%",
+    ],
+    "stackBehavior": "push",
+  },
+}
+`;
+
+exports[`Look preserves the fdd9a85 default picker configuration in light 1`] = `
+{
+  "hasBackdrop": true,
+  "props": {
+    "backgroundStyle": {
+      "backgroundColor": "#ffffff",
+    },
+    "enableContentPanningGesture": true,
+    "enableDynamicSizing": false,
+    "enablePanDownToClose": true,
+    "keyboardBehavior": "interactive",
+    "keyboardBlurBehavior": "restore",
+    "snapPoints": [
+      "55%",
+    ],
+    "stackBehavior": "push",
+  },
+}
+`;
+
 exports[`posting default native styles and copy stay identical in dark > add-to-batch 1`] = `
 {
   "children": [
@@ -6745,16 +6785,12 @@ exports[`posting default native styles and copy stay identical in dark > place-s
       "enableContentPanningGesture": true,
       "enableDynamicSizing": false,
       "enablePanDownToClose": true,
-      "handleIndicatorStyle": {
-        "backgroundColor": "#737373",
-      },
       "keyboardBehavior": "interactive",
       "keyboardBlurBehavior": "restore",
       "snapPoints": [
         "55%",
       ],
       "stackBehavior": "push",
-      "topInset": 24,
     },
     "type": "sheet",
   },
@@ -7698,16 +7734,12 @@ exports[`posting default native styles and copy stay identical in dark > place-s
       "enableDynamicSizing": false,
       "enableHandlePanningGesture": false,
       "enablePanDownToClose": false,
-      "handleIndicatorStyle": {
-        "backgroundColor": "#737373",
-      },
       "keyboardBehavior": "interactive",
       "keyboardBlurBehavior": "restore",
       "snapPoints": [
         "55%",
       ],
       "stackBehavior": "push",
-      "topInset": 24,
     },
     "type": "sheet",
   },
@@ -14459,16 +14491,12 @@ exports[`posting default native styles and copy stay identical in light > place-
       "enableContentPanningGesture": true,
       "enableDynamicSizing": false,
       "enablePanDownToClose": true,
-      "handleIndicatorStyle": {
-        "backgroundColor": "#8a8a8a",
-      },
       "keyboardBehavior": "interactive",
       "keyboardBlurBehavior": "restore",
       "snapPoints": [
         "55%",
       ],
       "stackBehavior": "push",
-      "topInset": 24,
     },
     "type": "sheet",
   },
@@ -15412,16 +15440,12 @@ exports[`posting default native styles and copy stay identical in light > place-
       "enableDynamicSizing": false,
       "enableHandlePanningGesture": false,
       "enablePanDownToClose": false,
-      "handleIndicatorStyle": {
-        "backgroundColor": "#8a8a8a",
-      },
       "keyboardBehavior": "interactive",
       "keyboardBlurBehavior": "restore",
       "snapPoints": [
         "55%",
       ],
       "stackBehavior": "push",
-      "topInset": 24,
     },
     "type": "sheet",
   },

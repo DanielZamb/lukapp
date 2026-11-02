@@ -19,7 +19,7 @@ import type { usePostingBatch, QueuedPosting } from "./usePostingBatch";
 import type { PlaceDraft } from "./usePostingEditor";
 import type { PostingBudgetImpact } from "../budget/postingImpact";
 import type { ThemeMode } from "../../ui/tokens";
-import type { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({
@@ -316,6 +316,22 @@ const examples: [string, () => ReactElement][] = [
       }),
   ],
 ];
+
+test.each(["light", "dark"] as const)(
+  "Look preserves the fdd9a85 default picker configuration in %s",
+  async (mode) => {
+    await act(async () => {
+      mounted = create(
+        h(ThemeProvider, null, h(Appearance, { mode }, h(AccountSetupForm, { ...setupProps, value: place }))),
+      );
+    });
+    const modal = mounted!.root.findAllByType(BottomSheetModal)[1];
+    const { children, backdropComponent, ...props } = modal.props;
+    expect({ props: effectiveTree(props), hasBackdrop: typeof backdropComponent === "function" }).toMatchSnapshot();
+    expect(props.topInset).toBeUndefined();
+    expect(props.handleIndicatorStyle).toBeUndefined();
+  },
+);
 
 test.each(["light", "dark"] as const)(
   "posting default native styles and copy stay identical in %s",

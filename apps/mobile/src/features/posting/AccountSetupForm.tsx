@@ -431,6 +431,8 @@ export function AccountSetupForm(props: {
           }
           legacyNativeModalProps={{
             stackBehavior: "push",
+            topInset: undefined,
+            handleIndicatorStyle: undefined,
             snapPoints: ["55%"],
             enableDynamicSizing: false,
             enablePanDownToClose: props.editable,
