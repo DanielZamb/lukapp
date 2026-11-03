@@ -80,7 +80,8 @@ exports[`existing Sheet callers retain their rendered contract in default > mana
     "handleIndicatorStyle": {
       "backgroundColor": "#737373"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -140,7 +141,8 @@ exports[`existing Sheet callers retain their rendered contract in default > mana
     "handleIndicatorStyle": {
       "backgroundColor": "#8a8a8a"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -250,7 +252,8 @@ exports[`existing Sheet callers retain their rendered contract in default > tall
     "handleIndicatorStyle": {
       "backgroundColor": "#737373"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -310,7 +313,8 @@ exports[`existing Sheet callers retain their rendered contract in default > tall
     "handleIndicatorStyle": {
       "backgroundColor": "#8a8a8a"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -426,7 +430,8 @@ exports[`existing Sheet callers retain their rendered contract in reflow > manag
     "handleIndicatorStyle": {
       "backgroundColor": "#737373"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -486,7 +491,8 @@ exports[`existing Sheet callers retain their rendered contract in reflow > manag
     "handleIndicatorStyle": {
       "backgroundColor": "#8a8a8a"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -596,7 +602,8 @@ exports[`existing Sheet callers retain their rendered contract in reflow > tall 
     "handleIndicatorStyle": {
       "backgroundColor": "#737373"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -656,7 +663,8 @@ exports[`existing Sheet callers retain their rendered contract in reflow > tall 
     "handleIndicatorStyle": {
       "backgroundColor": "#8a8a8a"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -986,7 +994,8 @@ exports[`existing Sheet callers retain their rendered contract in xxxl > managed
     "handleIndicatorStyle": {
       "backgroundColor": "#737373"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
@@ -1052,7 +1061,8 @@ exports[`existing Sheet callers retain their rendered contract in xxxl > managed
     "handleIndicatorStyle": {
       "backgroundColor": "#8a8a8a"
     },
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
