@@ -62,9 +62,37 @@ test("confirming a Candidate posts the ordinary expense and one Receipt", async 
   expect(first.replay).toBe(false);
   expect(second.replay).toBe(true);
   expect(second.receipt.id).toBe(first.receipt.id);
+  expect(second.receipt).toEqual(first.receipt);
+  expect(second.posted).toEqual({ ...first.posted, replay: true });
   expect(first.receipt.idempotencyKey).toBe("intake:candidate-groceries");
   expect(entries).toHaveLength(1);
   expect(entries[0]?.id).toBe(first.posted.id);
+  expect(await t.run((ctx) => ctx.db.query("notificationIntakeReceipts").collect())).toHaveLength(1);
+  expect(await t.run((ctx) => ctx.db.query("journalLines").collect())).toHaveLength(2);
+});
+
+test("changed confirmation facts for an accepted candidate conflict without changing the posting or receipt", async () => {
+  const t = await testdb();
+  const workspace = await createOwnedWorkspace(t);
+  const daily = await createDaily(t, workspace.id);
+  const original = item(workspace.id, daily.id, "sen-99-changed-amount");
+  original.confirmed = { ...original.confirmed, amount: { currency: "COP", minorUnits: 500_000 } };
+  const accepted = await t.action(api.notificationIntake.confirmOne, original);
+  const snapshot = () => t.run(async (ctx) => ({
+    receipts: await ctx.db.query("notificationIntakeReceipts").collect(),
+    entries: await ctx.db.query("journalEntries").collect(),
+    lines: await ctx.db.query("journalLines").collect(),
+    totals: await ctx.db.query("ledgerAccountTotals").collect(),
+    history: await ctx.db.query("journalEntryProfiles").collect(),
+  }));
+  const before = await snapshot();
+  await expect(t.action(api.notificationIntake.confirmOne, { ...original,
+    confirmed: { ...original.confirmed, amount: { currency: "COP", minorUnits: 45_000_000 } },
+  })).rejects.toMatchObject({ data: { kind: "intake", code: "candidate_confirmation_conflict",
+    message: "This notification was already confirmed with different details. Review the original entry." } });
+  expect(await snapshot()).toEqual(before);
+  expect(await t.action(api.notificationIntake.confirmOne, original))
+    .toEqual({ ...accepted, replay: true, posted: { ...accepted.posted, replay: true } });
 });
 
 test("a partial batch keeps only the failed Candidate", async () => {
