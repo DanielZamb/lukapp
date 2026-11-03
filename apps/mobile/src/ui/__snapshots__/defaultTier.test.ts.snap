@@ -1077,7 +1077,8 @@ exports[`default render tree stays identical in dark 1`] = `
       "handleIndicatorStyle": {
         "backgroundColor": "#737373"
       },
-      "backdropComponent": "[callback]"
+      "backdropComponent": "[callback]",
+      "onChange": "[callback]"
     },
     "children": [
       {
@@ -2336,7 +2337,8 @@ exports[`default render tree stays identical in light 1`] = `
       "handleIndicatorStyle": {
         "backgroundColor": "#8a8a8a"
       },
-      "backdropComponent": "[callback]"
+      "backdropComponent": "[callback]",
+      "onChange": "[callback]"
     },
     "children": [
       {

@@ -34,9 +34,9 @@ vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", us
 vi.mock("@gorhom/bottom-sheet", async () => {
   const { forwardRef, useImperativeHandle, createElement } = await import("react");
   return {
-    BottomSheetModal: forwardRef(({ children, onDismiss, ...props }: { children?: ReactNode; onDismiss: () => void }, ref) => {
-      useImperativeHandle(ref, () => ({ present: provider.present, dismiss: () => { provider.dismiss(); onDismiss(); } }), [onDismiss]);
-      return createElement("sheet", { ...props, onDismiss }, children, "footerComponent" in props && typeof props.footerComponent === "function" ? props.footerComponent({}) : null);
+    BottomSheetModal: forwardRef(({ children, onDismiss, onChange, ...props }: { children?: ReactNode; onDismiss: () => void; onChange?: (index: number) => void }, ref) => {
+      useImperativeHandle(ref, () => ({ present: () => { provider.present(); onChange?.(0); }, dismiss: () => { provider.dismiss(); onDismiss(); } }), [onDismiss]);
+      return createElement("sheet", { ...props, onDismiss, onChange }, children, "footerComponent" in props && typeof props.footerComponent === "function" ? props.footerComponent({}) : null);
     }),
     BottomSheetFooter: "sheet-footer", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
   };

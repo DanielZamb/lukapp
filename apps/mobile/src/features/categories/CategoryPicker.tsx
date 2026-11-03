@@ -1,6 +1,5 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useEffect, useRef } from "react";
-import { BackHandler, Platform } from "react-native";
 import { CategorySheet } from "./CategorySheet";
 import { useCategoryPicker } from "./useCategoryPicker";
 import type { AccountSetupRequest, CategoryNature } from "./model";
@@ -22,39 +21,21 @@ export function CategoryPicker({
   ...selection
 }: CategoryPickerProps) {
   const sheet = useRef<BottomSheetModal>(null);
-  const presentation = useRef<"hidden" | "opening" | "open" | "closing">("hidden");
+  const presented = useRef(false);
   const accountRequest = useRef<AccountSetupRequest | null>(null);
-  function close() {
-    const current = presentation.current;
-    if (current === "hidden" || current === "closing") return;
-    presentation.current = "closing";
-    if (current === "open") sheet.current?.dismiss();
-  }
   const picker = useCategoryPicker({ kind: "posting", ...selection,
     onAccountSetup: onAccountSetup ? (request) => { accountRequest.current = request; return true; } : undefined,
-  }, close);
-  const busy = picker.sheet.busy;
+  }, () => sheet.current?.dismiss());
   useEffect(() => {
-    if (Platform.OS !== "android" || !visible) return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (!busy) close();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [visible, busy]);
-  useEffect(() => {
-    if (visible && presentation.current === "hidden") {
-      presentation.current = "opening";
+    if (visible && !presented.current) {
+      presented.current = true;
       sheet.current?.present();
     }
-    else if (!visible) close();
+    else if (!visible && presented.current) sheet.current?.dismiss();
   }, [visible]);
-  return <CategorySheet {...picker.sheet} sheetRef={sheet} onPresented={() => {
-    if (presentation.current === "closing") sheet.current?.dismiss();
-    else if (presentation.current === "opening") presentation.current = "open";
-  }} onDismiss={() => {
-    if (presentation.current === "hidden") return;
-    presentation.current = "hidden";
+  return <CategorySheet {...picker.sheet} sheetRef={sheet} onDismiss={() => {
+    if (!presented.current) return;
+    presented.current = false;
     picker.sheet.onBack();
     onClose();
     const request = accountRequest.current;
