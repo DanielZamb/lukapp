@@ -10,8 +10,16 @@ export type SheetPresentation =
   | { sheetRef: SheetRef; presentOnMount?: boolean };
 
 type Presentation =
-  | { kind: "idle" | "hidden" | "opening" | "open" | "closing" }
-  | { kind: "waitingToClose"; args: Parameters<BottomSheetModal["dismiss"]> };
+  | { kind: "closed"; completed: boolean }
+  | { kind: "opening"; pendingClose: Parameters<BottomSheetModal["dismiss"]> | null }
+  | { kind: "open" }
+  | { kind: "closing" };
+
+type PresentationEvent =
+  | { type: "present"; args: Parameters<BottomSheetModal["present"]> }
+  | { type: "dismiss"; args: Parameters<BottomSheetModal["dismiss"]> }
+  | { type: "index"; args: Parameters<NonNullable<NativeSheetProps["onChange"]>> }
+  | { type: "dismissed" | "timeout" | "unmount" };
 
 export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androidBack, busy, dismissible = true,
   children, onDismiss, onChange, accessibilityLabel, enablePanDownToClose, enableDynamicSizing, backdropComponent: Backdrop, ...props
@@ -23,7 +31,7 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
   busy: boolean;
   dismissible?: boolean;
 }>) {
-  const [open, setOpen] = useState(presentOnMount);
+  const [phase, setPhase] = useState<Presentation>(presentOnMount ? { kind: "opening", pendingClose: null } : { kind: "closed", completed: false });
   const [nativeVersion, setNativeVersion] = useState(0);
   const version = useRef(0);
   const committedVersion = useRef(0);
@@ -33,7 +41,8 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
   const notifyDismiss = useRef(onDismiss);
   notifyDismiss.current = onDismiss;
   const native = useRef<BottomSheetModal>(null);
-  const presentation = useRef<Presentation>({ kind: "idle" });
+  const presentation = useRef(phase);
+  const open = phase.kind !== "closed";
   const backEnabled = useRef(androidBack);
   backEnabled.current = androidBack;
   const id = useRef(Symbol("sheet"));
@@ -45,12 +54,16 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
     if (recovery.current !== null) clearTimeout(recovery.current);
     recovery.current = null;
   }
+  function transition(next: Presentation) {
+    presentation.current = next;
+    if (mounted.current) setPhase(next);
+  }
   function settleClose() {
-    if (presentation.current.kind === "hidden") return;
-    presentation.current = { kind: "hidden" };
+    const current = presentation.current;
+    if (current.kind === "closed" && current.completed) return;
+    transition({ kind: "closed", completed: true });
     pendingPresent.current = null;
     cancelRecovery();
-    if (mounted.current) setOpen(false);
     notifyDismiss.current?.();
   }
   function recoverClose(args: Parameters<BottomSheetModal["dismiss"]>) {
@@ -59,37 +72,66 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
     native.current?.dismiss(...args);
     settleClose();
   }
+  function send(event: PresentationEvent): void {
+    const current = presentation.current;
+    switch (event.type) {
+      case "present":
+        if (!mounted.current) return;
+        if (backEnabled.current && (current.kind === "closing" || (current.kind === "opening" && current.pendingClose !== null))) return;
+        if (current.kind !== "open") transition({ kind: "opening", pendingClose: null });
+        if (version.current !== committedVersion.current) pendingPresent.current = event.args;
+        else native.current?.present(...event.args);
+        return;
+      case "dismiss":
+        if (!mounted.current) return;
+        if (backEnabled.current) {
+          if ((current.kind === "closed" && current.completed) || current.kind === "closing") return;
+          if (current.kind === "opening") {
+            if (current.pendingClose !== null) return;
+            transition({ kind: "opening", pendingClose: event.args });
+            recovery.current = setTimeout(() => send({ type: "timeout" }), 1000);
+            return;
+          }
+        }
+        transition({ kind: "closing" });
+        native.current?.dismiss(...event.args);
+        return;
+      case "index": {
+        if (event.args[0] >= 0) {
+          cancelRecovery();
+          if (current.kind === "opening" && current.pendingClose !== null) transition({ kind: "closing" });
+          else transition({ kind: "open" });
+        } else if (current.kind === "open") transition({ kind: "closed", completed: false });
+        onChange?.(...event.args);
+        if (event.args[0] >= 0 && current.kind === "opening" && current.pendingClose !== null) native.current?.dismiss(...current.pendingClose);
+        else if (event.args[0] === -1 && presentation.current.kind === "closing" && props.enableDismissOnClose === false) recoverClose([]);
+        return;
+      }
+      case "dismissed":
+        settleClose();
+        return;
+      case "timeout":
+        if (current.kind === "opening" && current.pendingClose !== null) recoverClose(current.pendingClose);
+        return;
+      case "unmount":
+        mounted.current = false;
+        pendingPresent.current = null;
+        cancelRecovery();
+        if (current.kind === "closing" || (current.kind === "opening" && current.pendingClose !== null)) settleClose();
+        return;
+    }
+    const unhandled: never = event;
+    return unhandled;
+  }
   useEffect(() => {
     mounted.current = true;
     return () => {
-      mounted.current = false;
-      pendingPresent.current = null;
-      if (presentation.current.kind === "waitingToClose" || presentation.current.kind === "closing") settleClose();
-      else cancelRecovery();
+      send({ type: "unmount" });
     };
   }, []);
   useImperativeHandle(sheetRef, () => ({
-    present: (...args) => {
-      const { kind } = presentation.current;
-      if (backEnabled.current && (kind === "waitingToClose" || kind === "closing")) return;
-      if (kind !== "open") presentation.current = { kind: "opening" };
-      setOpen(true);
-      if (version.current !== committedVersion.current) pendingPresent.current = args;
-      else native.current?.present(...args);
-    },
-    dismiss: (...args) => {
-      const { kind } = presentation.current;
-      if (backEnabled.current) {
-        if (kind === "hidden" || kind === "closing" || kind === "waitingToClose") return;
-        if (kind === "opening") {
-          presentation.current = { kind: "waitingToClose", args };
-          recovery.current = setTimeout(() => recoverClose(args), 1000);
-          return;
-        }
-      }
-      presentation.current = { kind: "closing" };
-      native.current?.dismiss(...args);
-    },
+    present: (...args) => send({ type: "present", args }),
+    dismiss: (...args) => send({ type: "dismiss", args }),
     snapToIndex: (...args) => native.current?.snapToIndex(...args),
     snapToPosition: (...args) => native.current?.snapToPosition(...args),
     expand: (...args) => native.current?.expand(...args),
@@ -106,7 +148,6 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
   useEffect(() => {
     if (presentOnMount) {
       sheetRef.current?.present();
-      setOpen(true);
     }
   }, [presentOnMount, sheetRef]);
   useEffect(() => {
@@ -130,21 +171,11 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
     enablePanDownToClose={locked ? false : enablePanDownToClose} enableDynamicSizing={enableDynamicSizing}
     onDismiss={() => {
       if (!mounted.current || nativeVersion !== version.current) return;
-      settleClose();
+      send({ type: "dismissed" });
     }} {...props} backdropComponent={backdropComponent}
     {...((androidBack || trackPresentation || onChange) && { onChange: (...args: Parameters<NonNullable<NativeSheetProps["onChange"]>>) => {
       if (!mounted.current || nativeVersion !== version.current) return;
-      const current = presentation.current;
-      if (args[0] >= 0) {
-        cancelRecovery();
-        if (current.kind === "waitingToClose") {
-          presentation.current = { kind: "closing" };
-        } else if (current.kind !== "closing") presentation.current = { kind: "open" };
-      }
-      setOpen(args[0] >= 0 || presentation.current.kind === "opening" || presentation.current.kind === "waitingToClose" || presentation.current.kind === "closing");
-      onChange?.(...args);
-      if (args[0] >= 0 && current.kind === "waitingToClose") native.current?.dismiss(...current.args);
-      else if (args[0] === -1 && presentation.current.kind === "closing" && props.enableDismissOnClose === false) recoverClose([]);
+      send({ type: "index", args });
     } })}
     {...(busy && { enableHandlePanningGesture: false })}>
     {children}
