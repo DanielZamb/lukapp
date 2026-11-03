@@ -24,7 +24,7 @@ class NotificationIntakeModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("NotificationIntake")
-    Constants("apiVersion" to 2, "diagnosticsEnabled" to BuildConfig.INTAKE_DIAGNOSTICS)
+    Constants("apiVersion" to 3, "diagnosticsEnabled" to BuildConfig.INTAKE_DIAGNOSTICS)
     Events("onChange")
     OnCreate { intake.repository.onChange = { sendEvent("onChange", it) } }
     OnDestroy { intake.repository.onChange = null }

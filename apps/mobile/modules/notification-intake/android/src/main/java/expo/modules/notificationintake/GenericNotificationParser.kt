@@ -6,17 +6,50 @@ internal object GenericNotificationParser {
   private val incoming = Regex("\\b(recibiste|recibido|recibida|recibio|abono|deposito|received|deposit|credited|refund|reembolso)\\b")
   private val outgoing = Regex("\\b(compra|compraste|pago|pagaste|retiro|debito|purchase|paid|payment|withdrawal|sent|enviaste)\\b")
 
+  /** Broad: any security-ish word. Used only to keep such words out of merchant names. */
   fun hasSecurityContent(text: String) = security.containsMatchIn(NotificationText.fold(text))
+
+  // Narrow: what gets a notification discarded before storage. A security word
+  // near a standalone code, or a code right after "token"/"code"/"clave"/"OTP".
+  // Bank footers ("Por su seguridad no comparta sus claves") and purchase
+  // authorization numbers are not codes.
+  private val codeWord = Regex("""(?<![\p{L}\p{N}])(otp|token|codigo|code|clave|contrasena|password|passcode|pin|verificacion|verification|one\s*-?\s*time\s*-?\s*code)(?![\p{L}\p{N}])""")
+  private val standaloneCode = Regex("""(?<![\p{L}\p{N}$*.,/:\-])(?:[0-9]{4,8}|(?=[A-Z0-9]*[0-9])(?=[A-Z0-9]*[A-Z])[A-Z0-9]{6,10})(?![\p{L}\p{N}/:\-]|[.,][0-9])""")
+  private val codeRightAfter = Regex("""^(?:[\p{Zs}\t]+(?:es|is))?[\p{Zs}\t:]+(?:[0-9]{4,10}|[A-Z0-9]{4,10})(?![\p{L}\p{N}])""")
+  // Card and account endings ("terminada en 4321") are numbers, not codes.
+  private val accountLead = Regex("""(termina\w*|ending|tarjeta|cuenta|card|account|cta|no\.)[\p{Zs}\t:]*(?:en|in)?[\p{Zs}\t:]*$""")
+  private val notASecret = Regex("""autoriza|aprobac|referencia|comprobante|transacc|factura|convenio|authoriz|approval|reference|receipt""")
+
+  /** Lowercase without accents, one character for one character, so offsets match the input. */
+  private fun foldInPlace(value: String) = String(CharArray(value.length) { index ->
+    java.text.Normalizer.normalize(value[index].toString(), java.text.Normalizer.Form.NFD)[0].lowercaseChar()
+  })
+
+  fun isSecurityCode(text: String): Boolean {
+    val normalized = NotificationText.normalize(text)
+    val folded = foldInPlace(normalized)
+    val codes = standaloneCode.findAll(normalized).filter { code ->
+      !accountLead.containsMatchIn(folded.substring(maxOf(0, code.range.first - 24), code.range.first))
+    }.toList()
+    for (word in codeWord.findAll(folded)) {
+      if (codeRightAfter.containsMatchIn(normalized.substring(word.range.last + 1))) return true
+      for (code in codes) {
+        val from = minOf(word.range.first, code.range.first); val to = maxOf(word.range.last, code.range.last)
+        if (to - from <= 48 && !notASecret.containsMatchIn(folded.substring(from, to + 1))) return true
+      }
+    }
+    return false
+  }
 
   fun parseFields(fields: NotificationFields): ParseResult {
     val inspected = NotificationText.inspected(fields)
-    if (inspected.any { hasSecurityContent(it) }) return ParseResult.Discard("security")
+    if (inspected.any { isSecurityCode(it) }) return ParseResult.Discard("security")
     if (inspected.any { it.length > 16_384 }) return ParseResult.Accepted(ParsedAmount(null, null, null), listOf("parse_input_too_large"))
     return parse(NotificationText.assemble(fields))
   }
 
   fun parse(text: String): ParseResult {
-    if (hasSecurityContent(text)) return ParseResult.Discard("security")
+    if (isSecurityCode(text)) return ParseResult.Discard("security")
     if (text.length > 16_384) return ParseResult.Accepted(ParsedAmount(null, null, null), listOf("parse_input_too_large"))
     val normalized = NotificationText.normalize(text)
     val money = MonetaryGrammar.read(normalized)

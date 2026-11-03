@@ -267,21 +267,50 @@ class IntakeRepositoryTest {
     val old = JSONObject(String(store.bytes!!)); old.put("schemaVersion", 1)
     val n = old.getJSONObject("native")
     n.getJSONArray("pending").objects().forEach { row ->
-      row.put("parserVersion", "generic-v1")
+      row.put("parserVersion", "generic-v1"); row.remove("text")
       val seen = n.getJSONArray("seen").objects().first { it.text("captureId") == row.text("captureId") }
       seen.put("digest", digest(canonical(row).toByteArray(Charsets.UTF_8)))
     }
     n.put("pending", JSONArray(n.getJSONArray("pending").objects().filter { it.text("captureId") != "old-acknowledged" }))
-    val retained = canonical(n); store.bytes = old.toString().toByteArray(Charsets.UTF_8)
+    val expectedNative = JSONObject(n.toString()).also { e -> e.getJSONArray("pending").objects().forEach { it.put("text", "") } }
+    val retained = canonical(expectedNative); store.bytes = old.toString().toByteArray(Charsets.UTF_8)
     val reopened = IntakeRepository(store) { now }
     assertEquals(n.text("epoch"), reopened.status(true).text("epoch"))
     val migrated = JSONObject(String(store.bytes!!))
-    assertEquals(2L, migrated.integer("schemaVersion")); assertEquals(retained, canonical(migrated.getJSONObject("native")))
+    assertEquals(3L, migrated.integer("schemaVersion")); assertEquals(retained, canonical(migrated.getJSONObject("native")))
     assertEquals(1L, migrated.integer("revision")); assertEquals("a".repeat(43), migrated.text("ownerScope"))
     val permit = reopened.permit("com.example.bank")!!
     for (id in listOf("old-pending", "old-acknowledged")) reopened.capture(permit, id, now, ParseResult.Accepted(ParsedAmount("out", 1200, "COP", "é".repeat(128))))
     assertEquals(1, reopened.list(obj("expectedEpoch" to permit.epoch, "limit" to 50)).getJSONArray("captures").length())
     assertTrue(reopened.status(true).isNull("gap"))
+  }
+  @Test fun notificationTextIsKeptOnlyUnderTheDisclosureThatSaysSo() {
+    configure(); val oldConsent = repository.permit("com.example.bank")!!
+    repository.capture(oldConsent, "before", now, ParseResult.Accepted(ParsedAmount("out", 100, null)), "Compraste $1.000 en CAFE")
+    assertEquals("", page().getJSONArray("captures").getJSONObject(0).text("text"))
+    repository.configure(obj("expectedEpoch" to epoch(), "mutationId" to UUID.randomUUID().toString(), "consentVersion" to "notification-disclosure@3",
+      "sources" to JSONArray(listOf(obj("packageName" to "com.example.bank", "sourceSelectionId" to "selection-1")))))
+    val permit = repository.permit("com.example.bank")!!
+    repository.capture(permit, "after", now, ParseResult.Accepted(ParsedAmount("out", 100, null)), "Nu\n" + "é".repeat(400))
+    val kept = page().getJSONArray("captures").objects().first { it.text("captureId") == "after" }.text("text")
+    // 3 bytes of "Nu\n" plus 2-byte characters: the cap lands on a whole character, one byte short.
+    assertEquals(TEXT_LIMIT_BYTES - 1, kept.toByteArray(Charsets.UTF_8).size); assertTrue(kept.startsWith("Nu\n"))
+  }
+  @Test fun reconsentingDoesNotReportAlreadySeenNotificationsAsChanged() {
+    configure(); capture("in-tray")
+    // Rewrite the stored replay marker exactly as the previous build wrote it: v2 row, consent included, no text.
+    val state = JSONObject(String(store.bytes!!)); val n = state.getJSONObject("native")
+    val row = JSONObject(n.getJSONArray("pending").getJSONObject(0).toString()).apply { remove("text"); put("parserVersion", "generic-v2"); put("consentVersion", "notification-disclosure@2") }
+    n.getJSONArray("seen").getJSONObject(0).put("digest", digest(canonical(row).toByteArray(Charsets.UTF_8)))
+    store.bytes = state.toString().toByteArray(Charsets.UTF_8)
+    val reopened = IntakeRepository(store) { now }
+    reopened.configure(obj("expectedEpoch" to reopened.status(true).text("epoch"), "mutationId" to UUID.randomUUID().toString(), "consentVersion" to "notification-disclosure@3",
+      "sources" to JSONArray(listOf(obj("packageName" to "com.example.bank", "sourceSelectionId" to "selection-1")))))
+    reopened.capture(reopened.permit("com.example.bank")!!, "in-tray", now, ParseResult.Accepted(ParsedAmount("out", 1200, "COP", "é".repeat(128))), "Compraste $12 en CAFE")
+    assertTrue(reopened.status(true).isNull("gap"))
+    // A capture whose content really changed is still reported.
+    reopened.capture(reopened.permit("com.example.bank")!!, "in-tray", now, ParseResult.Accepted(ParsedAmount("out", 9999, "COP")), "Compraste $99 en CAFE")
+    assertEquals("recovery", reopened.status(true).getJSONObject("gap").text("reason"))
   }
   @Test fun securityAlternativesAndOversizedSecurityNeverPersistPartialFacts() {
     configure(); val permit = repository.permit("com.example.bank")!!

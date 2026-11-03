@@ -18,8 +18,10 @@ class GenericNotificationParserTest {
     return result as ParseResult.Accepted
   }
   @Test fun securityDiscardsAndUncertainMoneyNeedsReview() {
-    for (text in listOf("OTP 123456 purchase $20", "Tu código de seguridad es 5678 COP 10", "Login USD 2"))
+    for (text in listOf("OTP 123456 purchase $20", "Tu código de seguridad es 5678 COP 10"))
       assertEquals(ParseResult.Discard("security"), GenericNotificationParser.parse(text))
+    // A security word without a code is not a code: it stays for review.
+    assertTrue(GenericNotificationParser.parse("Login USD 2") is ParseResult.Accepted)
     assertNull(unresolved("Paid $10 balance $20").amount.amountMinorUnits)
     assertNull(unresolved("$10 COP 20").amount.amountMinorUnits)
     assertNull(unresolved("abcUSD 20").amount.amountMinorUnits)
@@ -159,6 +161,24 @@ class GenericNotificationParserTest {
       assertNull(input, unresolved(input).amount.amountMinorUnits)
     assertNull(unresolved("Paid 10 MXN; USD").amount.amountMinorUnits)
     assertNull(unresolved("Paid 10 MXN at USD Cafe").amount.amountMinorUnits)
+  }
+  @Test fun onlyCodeShapedMessagesAreDiscarded() {
+    for (text in listOf("Bancolombia: Tu clave dinámica es 482913. No la compartas con nadie.",
+      "Tu código de verificación es 1234. Úsalo para confirmar tu pago de $30.000.", "Your PIN: 8841", "Usa el token A7K2Q9 para ingresar",
+      "OTP: 551204"))
+      assertTrue(text, GenericNotificationParser.isSecurityCode(text))
+    for (text in listOf("Davivienda le informa: Compra aprobada por $ 64.900 en EXITO CALLE 80. Por su seguridad no comparta sus claves.",
+      "Compraste $45.900 en TIENDA. Código de autorización 482913.", "Ingresa a la app con tu clave para ver el detalle de tu compra de $20.000",
+      "Compra con tarjeta terminada en 4321 el 02/11/2026 a las 20:15, codigo de comercio", "Bancolombia: Compraste $45.900,00 en RAPPI*RESTAURANTES con tu T.Cred *1234",
+      "Pagaste $89.900 a CLARO por PSE. Si no reconoces esta transacción llama al 018000931987"))
+      assertFalse(text, GenericNotificationParser.isSecurityCode(text))
+    assertTrue(GenericNotificationParser.parse("Davivienda le informa: Compra aprobada por $ 64.900. Por su seguridad no comparta sus claves.") is ParseResult.Accepted)
+  }
+  @Test fun keptTextJoinsTitleAndBodyAndCapsUtf8Bytes() {
+    assertEquals("Nu\nCompraste $18.500\nen STARBUCKS", NotificationText.retained(NotificationFields(title = "  Nu ", text = "Compraste   $18.500\n\n en STARBUCKS")))
+    val long = NotificationText.retained(NotificationFields(text = "é".repeat(400)))
+    assertEquals(TEXT_LIMIT_BYTES, long.toByteArray(Charsets.UTF_8).size); assertEquals("é".repeat(320), long)
+    assertEquals("ab", NotificationText.capUtf8("ab😀", 5))
   }
   @Test fun wireEncodingUsesCanonicalUnpaddedBase64Url() {
     assertEquals("Zm9vYmFy", WireBase64.encode("foobar".toByteArray()))

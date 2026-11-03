@@ -40,7 +40,7 @@ class IntakeListenerService : NotificationListenerService() {
         is ParseResult.Discard -> result
       }
       runtime.repository.diagnosticOutcome(permit, arrival, safe)
-      runtime.repository.capture(permit, id, time, safe)
+      runtime.repository.capture(permit, id, time, safe, NotificationText.retained(fields))
     } }
   }
   override fun onListenerDisconnected() {

@@ -39,7 +39,7 @@ class DiagnosticRepositoryTest {
     val permit = setup()
     val id = repository.recordArrival(permit, "capture", now) { snapshot() }
     assertNotNull(id)
-    val security = GenericNotificationParser.parse("Use code for verification")
+    val security = GenericNotificationParser.parse("Use code 482913 for verification")
     repository.diagnosticOutcome(permit, id, security); repository.capture(permit, "capture", now, security)
     val saved = repository.readDiagnostic(input(permit, id)) as JSONObject
     assertEquals("discarded", saved.getJSONObject("parser").text("outcome"))

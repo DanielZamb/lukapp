@@ -19,7 +19,7 @@ internal class IntakeRepository(private val storage: SnapshotStorage, private va
   private var connection = "unknown"
   @Volatile var onChange: ((Map<String, Any?>) -> Unit)? = null
 
-  private fun empty() = obj("schemaVersion" to 2, "native" to obj(
+  private fun empty() = obj("schemaVersion" to 3, "native" to obj(
     "epoch" to epoch(), "enabled" to false, "changeSequence" to 0, "sources" to JSONArray(),
     "consentVersion" to "", "consentAt" to 0, "pending" to JSONArray(), "seen" to JSONArray(),
     "notices" to JSONArray(), "gap" to null, "lastConnectedAt" to null, "mutation" to null),
@@ -38,8 +38,12 @@ internal class IntakeRepository(private val storage: SnapshotStorage, private va
         value as JSONObject
       }
       validate(state)
-      val migrated = state.integer("schemaVersion") == 1L
-      if (migrated) state.put("schemaVersion", 2)
+      // v1 → v2 allowed unresolved amounts; v2 → v3 adds the kept notification text (empty for old rows).
+      val migrated = state.integer("schemaVersion") < 3L
+      if (migrated) {
+        native(state).getJSONArray("pending").objects().forEach { it.put("text", "") }
+        state.put("schemaVersion", 3)
+      }
       val n = native(state)
       val before = n.getJSONArray("pending").length() + n.getJSONArray("seen").length()
       prune(state)
@@ -69,7 +73,7 @@ internal class IntakeRepository(private val storage: SnapshotStorage, private va
   }
   private fun validate(s: JSONObject) {
     fields(s, "schemaVersion", "native", "ownerScope", "revision", "value")
-    requireInput(s.integer("schemaVersion") in 1L..2L)
+    requireInput(s.integer("schemaVersion") in 1L..3L)
     val n = native(s)
     fields(n, "epoch", "enabled", "changeSequence", "sources", "consentVersion", "consentAt", "pending", "seen", "notices", "gap", "lastConnectedAt", "mutation")
     requireInput(Regex("[A-Za-z0-9_-]{22}").matches(n.text("epoch")))
@@ -117,12 +121,15 @@ internal class IntakeRepository(private val storage: SnapshotStorage, private va
     requireInput(pending.map { it.text("captureId") }.distinct().size == pending.size)
     val seenExpiry = seen.associate { it.text("captureId") to it.integer("expiresAt") }
     pending.forEach { c ->
-      fields(c, "captureId", "sourceSelectionId", "capturedAt", "expiresAt", "notificationAt", "direction", "amountMinorUnits", "currency", "description", "parserVersion", "consentVersion")
+      if (s.integer("schemaVersion") >= 3L) {
+        fields(c, "captureId", "sourceSelectionId", "capturedAt", "expiresAt", "notificationAt", "direction", "amountMinorUnits", "currency", "description", "parserVersion", "consentVersion", "text")
+        requireInput(c.text("text").toByteArray(Charsets.UTF_8).size <= TEXT_LIMIT_BYTES)
+      } else fields(c, "captureId", "sourceSelectionId", "capturedAt", "expiresAt", "notificationAt", "direction", "amountMinorUnits", "currency", "description", "parserVersion", "consentVersion")
       token(c.text("captureId")); token(c.text("sourceSelectionId")); token(c.text("parserVersion")); token(c.text("consentVersion"))
       requireInput(c.integer("expiresAt") == c.integer("capturedAt") + RETENTION)
       c.integer("notificationAt")
-      requireInput((s.integer("schemaVersion") == 2L && c.isNull("amountMinorUnits")) || c.integer("amountMinorUnits") > 0)
-      requireInput((s.integer("schemaVersion") == 2L && c.isNull("direction")) || c.text("direction") in listOf("in", "out"))
+      requireInput((s.integer("schemaVersion") >= 2L && c.isNull("amountMinorUnits")) || c.integer("amountMinorUnits") > 0)
+      requireInput((s.integer("schemaVersion") >= 2L && c.isNull("direction")) || c.text("direction") in listOf("in", "out"))
       requireInput(c.isNull("currency") || c.text("currency") in listOf("COP", "USD"))
       requireInput(c.text("description").toByteArray(Charsets.UTF_8).size <= 256)
       requireInput(seenExpiry[c.text("captureId")] == c.integer("expiresAt"))
@@ -243,7 +250,17 @@ internal class IntakeRepository(private val storage: SnapshotStorage, private va
     val source = n.getJSONArray("sources").objects().find { it.text("packageName") == pkg } ?: return@synchronized null
     CapturePermit(n.text("epoch"), pkg, source.text("sourceSelectionId"), n.text("consentVersion"), source.integer("since"))
   }
-  fun capture(permit: CapturePermit, id: String, notificationAt: Long, result: ParseResult) = synchronized(mutex) {
+  /** Replay identity: the capture's content without its consent, so re-consenting does not look like changed activity. */
+  private fun replayDigest(row: JSONObject) = digest(canonical(JSONObject(row.toString()).apply { remove("consentVersion") }).toByteArray(Charsets.UTF_8))
+  /** Every digest an earlier build could have stored for this same capture. */
+  private fun knownDigests(row: JSONObject, consent: String): Set<String> {
+    val withoutText = JSONObject(row.toString()).apply { remove("text") }
+    val legacy = listOf("generic-v1", "generic-v2").flatMap { parser -> (LEGACY_CONSENT_VERSIONS + consent).distinct().map { version ->
+      digest(canonical(JSONObject(withoutText.toString()).put("parserVersion", parser).put("consentVersion", version)).toByteArray(Charsets.UTF_8))
+    } }
+    return setOf(replayDigest(row), replayDigest(JSONObject(row.toString()).put("text", ""))) + legacy
+  }
+  fun capture(permit: CapturePermit, id: String, notificationAt: Long, result: ParseResult, text: String = "") = synchronized(mutex) {
     val s = copy(); val n = native(s)
     if (!n.getBoolean("enabled") || n.text("epoch") != permit.epoch || n.getJSONArray("sources").objects().none {
       it.text("packageName") == permit.packageName && it.text("sourceSelectionId") == permit.selection }) return@synchronized
@@ -253,14 +270,15 @@ internal class IntakeRepository(private val storage: SnapshotStorage, private va
     val parsed = (result as ParseResult.Accepted).amount
     val seen = n.getJSONArray("seen"); val existing = seen.objects().find { it.text("captureId") == id }
     val capturedAt = existing?.integer("expiresAt")?.minus(RETENTION) ?: now
+    // The notification text is kept only when the person agreed to a disclosure that says so.
+    val kept = if (permit.consent in TEXT_CONSENT_VERSIONS) NotificationText.capUtf8(text, TEXT_LIMIT_BYTES) else ""
     val row = obj("notificationAt" to notificationAt, "direction" to parsed.direction, "amountMinorUnits" to parsed.amountMinorUnits,
-      "currency" to parsed.currency, "description" to parsed.description, "parserVersion" to "generic-v2",
+      "currency" to parsed.currency, "description" to parsed.description, "parserVersion" to "generic-v3",
       "captureId" to token(id), "sourceSelectionId" to permit.selection, "capturedAt" to capturedAt,
-      "expiresAt" to capturedAt + RETENTION, "consentVersion" to permit.consent)
-    val hash = digest(canonical(row).toByteArray(Charsets.UTF_8))
+      "expiresAt" to capturedAt + RETENTION, "consentVersion" to permit.consent, "text" to kept)
+    val hash = replayDigest(row)
     if (existing != null) {
-      val legacyHash = digest(canonical(JSONObject(row.toString()).put("parserVersion", "generic-v1")).toByteArray(Charsets.UTF_8))
-      if (existing.text("digest") != hash && existing.text("digest") != legacyHash) { gap(n, "recovery"); bump(n); commit(s, "notice") }
+      if (existing.text("digest") !in knownDigests(row, permit.consent)) { gap(n, "recovery"); bump(n); commit(s, "notice") }
       return@synchronized
     }
     val pending = n.getJSONArray("pending")

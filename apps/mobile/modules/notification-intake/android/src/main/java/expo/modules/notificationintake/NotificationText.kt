@@ -11,6 +11,13 @@ internal data class NotificationFields(
   val subText: String? = null,
 )
 
+/** Kept per candidate. 512 pending captures × 640 B stays inside the native state budget. */
+internal const val TEXT_LIMIT_BYTES = 640
+/** Disclosures under which the person agreed that notification text is kept. */
+internal val TEXT_CONSENT_VERSIONS = setOf("notification-disclosure@3")
+/** Earlier consent strings, used only to recognise replay digests written before text was kept. */
+internal val LEGACY_CONSENT_VERSIONS = listOf("notification-disclosure@1", "notification-disclosure@2")
+
 internal object NotificationText {
   fun normalize(value: String): String {
     val compatible = Normalizer.normalize(value, Normalizer.Form.NFKC).replace("\r\n", "\n").replace('\r', '\n')
@@ -34,6 +41,23 @@ internal object NotificationText {
   fun singleLine(value: String) = normalize(value).trim().replace(Regex("""\s+"""), " ")
 
   fun inspected(fields: NotificationFields) = listOfNotNull(fields.title, fields.bigText, fields.text, fields.subText) + fields.textLines
+
+  /** What a candidate keeps of the notification: title and body, tidied, at most [limit] UTF-8 bytes. */
+  fun retained(fields: NotificationFields, limit: Int = TEXT_LIMIT_BYTES): String {
+    val lines = normalize(assemble(fields)).split('\n').map { it.trim().replace(Regex(" {2,}"), " ") }.filter { it.isNotEmpty() }
+    return capUtf8(lines.joinToString("\n"), limit)
+  }
+
+  fun capUtf8(value: String, limit: Int): String {
+    var bytes = 0
+    val result = StringBuilder()
+    for (code in value.codePoints().toArray()) {
+      val size = when { code <= 0x7f -> 1; code <= 0x7ff -> 2; code <= 0xffff -> 3; else -> 4 }
+      if (bytes + size > limit) break
+      bytes += size; result.appendCodePoint(code)
+    }
+    return result.toString()
+  }
 
   fun assemble(fields: NotificationFields): String {
     val body = listOfNotNull(fields.bigText, fields.text).firstOrNull { it.isNotBlank() }
