@@ -6,7 +6,7 @@ import vm from "node:vm";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { AlertDot, IconButton } from "./core";
+import { ActionBar, AlertDot, IconButton } from "./core";
 import { PickerSheet } from "./PickerSheet";
 import { Sheet, type SheetProps } from "./Sheet";
 import { ThemeProvider, useSetThemeMode } from "./themeContext";
@@ -17,7 +17,7 @@ import { CategorySheet, type CategorySheetProps } from "../features/categories/C
 import { HistoryFilters, HistoryFilterSheet, useHistoryFilterPresentation } from "../features/history/HistoryFilters";
 import type { HistoryQuery } from "../features/history/filter";
 
-const native = vi.hoisted(() => ({ bottom: 48, footerHeight: 156, back: new Set<() => boolean>(), present: vi.fn(), dismiss: vi.fn() }));
+const native = vi.hoisted(() => ({ platform: "android", bottom: 48, footerHeight: 156, back: new Set<() => boolean>(), present: vi.fn(), dismiss: vi.fn() }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: native.bottom, left: 0, right: 0 }) }));
 vi.mock("react-native-gesture-handler", () => ({ ScrollView: "gesture-scroll" }));
@@ -25,13 +25,18 @@ vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }
 vi.mock("@gorhom/bottom-sheet", async () => {
   const { createElement } = await import("react");
   return {
-    BottomSheetModal: ({ children, footerComponent, ...props }: React.PropsWithChildren<{ footerComponent?: (props: object) => React.ReactNode }>) => createElement("modal", props, children, footerComponent?.({ animatedFooterPosition: {} })),
+    BottomSheetModal: ({ children, footerComponent, containerComponent: Container, ...props }: React.PropsWithChildren<{
+      footerComponent?: (props: object) => React.ReactNode; containerComponent?: React.ComponentType<React.PropsWithChildren>;
+    }>) => {
+      const modal = createElement("modal", { ...props, ...(Container && { containerComponent: Container }) }, children, footerComponent?.({ animatedFooterPosition: {} }));
+      return Container ? createElement(Container, null, modal) : modal;
+    },
     BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetFooter: "sheet-footer", BottomSheetBackdrop: "backdrop",
   };
 });
 vi.mock("react-native", () => ({
   Text: "text", View: "view", Pressable: "button", TextInput: "input", ActivityIndicator: "spinner", ScrollView: "scroll",
-  Platform: { OS: "android", Version: 37 },
+  Platform: { get OS() { return native.platform; }, Version: 37 },
   AccessibilityInfo: { setAccessibilityFocus: vi.fn() }, findNodeHandle: () => 42,
   BackHandler: { addEventListener: (_name: string, callback: () => boolean) => { native.back.add(callback); return { remove: () => native.back.delete(callback) }; } },
   StyleSheet: { create: (value: unknown) => value, flatten: flat, hairlineWidth: 1 },
@@ -64,7 +69,7 @@ function MeasuredScroll({ style }: { style: unknown }) {
 }
 
 let root: ReactTestRenderer | undefined;
-beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); native.bottom = 48; native.footerHeight = 156; vi.clearAllMocks(); });
+beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); native.platform = "android"; native.bottom = 48; native.footerHeight = 156; vi.clearAllMocks(); });
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); expect(native.back.size).toBe(0); });
 function Mode({ mode }: { mode: ThemeMode }) { const setMode = useSetThemeMode(); useEffect(() => setMode(mode), [mode, setMode]); return null; }
 async function render(element: ReactElement, mode: ThemeMode = "light", tier: LayoutTier = "xxxl") {
@@ -103,7 +108,8 @@ test.each(["default", "reflow", "xxxl"] as const)("existing Sheet callers retain
 });
 
 test.each(["default", "reflow"] as const)("native presentation preserves the entire existing Sheet tree in %s", async tier => {
-  for (const mode of ["light", "dark"] as const) {
+  for (const platform of ["android", "ios"]) for (const mode of ["light", "dark"] as const) {
+    native.platform = platform;
     const props = { label: "Entry details", closeLabel: false, children: h("content"), footer: h("actions") } satisfies SheetProps;
     await render(h(Sheet, props), mode, tier);
     const previous = renderedSheet();
@@ -111,6 +117,47 @@ test.each(["default", "reflow"] as const)("native presentation preserves the ent
     await render(h(Sheet, { ...props, presentation: "native" }), mode, tier);
     expect(renderedSheet()).toBe(previous);
     await act(async () => root?.unmount());
+  }
+});
+
+test("iOS native presentation puts the scrolling facts and pinned actions in one ungrouped modal scope", async () => {
+  native.platform = "ios";
+  const reverse = vi.fn(), close = vi.fn();
+  const tree = await render(h(Sheet, { label: "Entry details", presentation: "native", closeLabel: false,
+    footer: h(ActionBar, { secondary: [{ label: "Reverse entry", onPress: reverse }, { label: "Close details", onPress: close }] }) }, h("facts")));
+  const content = scroll(tree);
+  expect(content.props.accessibilityViewIsModal).toBeUndefined();
+  const scopes = tree.findAllByType("view").filter(node => node.props.accessibilityViewIsModal === true);
+  expect(scopes).toHaveLength(1);
+  const scope = scopes[0];
+  if (!scope) throw new Error("Missing modal accessibility scope");
+  expect(scope.props.accessible).toBe(false);
+  expect(scope.find(node => String(node.type) === "facts")).toBe(content.find(node => String(node.type) === "facts"));
+  expect(modal(tree).props.accessible).toBe(false);
+  await act(async () => { button(scope, "Reverse entry").props.onPress(); button(scope, "Close details").props.onPress(); });
+  expect(reverse).toHaveBeenCalledOnce();
+  expect(close).toHaveBeenCalledOnce();
+});
+
+test("Android native presentation retains its rendered contract", async () => {
+  await render(h(Sheet, { label: "Entry details", presentation: "native", closeLabel: false, footer: h("actions") }, h("content")));
+  expect(renderedSheet()).toMatchSnapshot();
+});
+
+test.each(existingSheets)("iOS keeps the existing $name accessibility scope", async example => {
+  native.platform = "ios";
+  const tree = await render(h(Sheet, example.props));
+  if (example.name === "tall page") {
+    const scope = tree.findAllByType("view").find(node => node.props.accessibilityViewIsModal === true);
+    expect(scope?.props.accessible).toBe(false);
+    expect(scope?.find(node => String(node.type) === "content")).toBe(scroll(tree).find(node => String(node.type) === "content"));
+    expect(scroll(tree).props.accessibilityViewIsModal).toBeUndefined();
+  } else if (example.name === "native body") {
+    expect(modal(tree).findAll(node => String(node.type) === "native-content")).toHaveLength(1);
+    expect(modal(tree).props.containerComponent).toBeUndefined();
+  } else {
+    expect(scroll(tree).props.accessibilityViewIsModal).toBe(true);
+    expect(modal(tree).props.containerComponent).toBeUndefined();
   }
 });
 

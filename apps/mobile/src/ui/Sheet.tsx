@@ -1,7 +1,7 @@
 import type { Theme } from "./tokens";
 import { BottomSheetBackdrop, BottomSheetFooter, BottomSheetScrollView, type BottomSheetFooterProps } from "@gorhom/bottom-sheet";
 import { useMemo, useRef, useCallback, type PropsWithChildren, type ReactNode, type ComponentProps } from "react";
-import { AccessibilityInfo, findNodeHandle, StyleSheet, View, ScrollView, Text as NativeText } from "react-native";
+import { AccessibilityInfo, findNodeHandle, Platform, StyleSheet, View, ScrollView, Text as NativeText } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SecondaryButton, useTheme } from "./core";
 import { Text } from "./Text";
@@ -50,6 +50,7 @@ export function Sheet(props: SheetProps) {
   const legacy = tier !== "xxxl" && props.legacyBody !== undefined;
   const nativeBody = body === "native" || legacy;
   const nativeSheet = tier === "xxxl" && !nativeBody && props.presentation === "native";
+  const nativeModalScope = nativeSheet && Platform.OS === "ios";
   const page = sheetPresentation(tier, tall) === "page";
   const fixedFooter = page || nativeSheet;
   const modalProps = legacy ? { ...nativeModalProps, ...props.legacyNativeModalProps } : nativeModalProps;
@@ -85,9 +86,10 @@ export function Sheet(props: SheetProps) {
     busy={busy} dismissible={dismissible} androidBack={props.androidBack ?? !nativeBody}
     {...(tier === "xxxl" && !nativeBody && { backgroundStyle: [styles.surface, { borderTopLeftRadius: xxxl.radius.sheet, borderTopRightRadius: xxxl.radius.sheet }] })}
     {...(nativeSheet && { topInset: insets.top })}
+    {...(nativeModalScope && { containerComponent: ModalContainer, accessible: false })}
     {...(fixedFooter && { footerComponent: footer ? renderFooter : undefined })}
     {...(page && {
-      containerComponent: PageContainer, accessible: false,
+      containerComponent: ModalContainer, accessible: false,
       snapPoints: ["100%"], topInset: insets.top, enableDynamicSizing: false,
       enablePanDownToClose: false, handleComponent: null,
       keyboardBehavior: "interactive", keyboardBlurBehavior: "restore", android_keyboardInputMode: "adjustPan",
@@ -105,7 +107,7 @@ export function Sheet(props: SheetProps) {
     {nativeBody ? legacy ? <>{props.legacyBody}{props.legacyFooter}</> : children : <>
       {page && props.header === false && <NativeText ref={title} onLayout={focusTitle} accessibilityRole="header" style={{ position: "absolute", left: -10000, width: 1, height: 1 }}>{label}</NativeText>}
       {page && props.header !== false && <View style={{ paddingHorizontal: 16, paddingTop: 12 }}><SheetHeader title={label ?? ""} onClose={close} disabled={busy || !dismissible} titleProps={{ ref: title, onLayout: focusTitle }} /></View>}
-      <BottomSheetScrollView accessibilityViewIsModal={page ? undefined : true} keyboardShouldPersistTaps="handled"
+      <BottomSheetScrollView accessibilityViewIsModal={page || nativeModalScope ? undefined : true} keyboardShouldPersistTaps="handled"
         contentContainerStyle={fixedFooter ? StyleSheet.flatten([styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl, ...(page && { paddingHorizontal: xxxl.spacing.pagePadding, paddingTop: 12 }) }]) : [styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }]}
         {...scrollProps}
         {...(scrollRef && { ref: scrollRef })}
@@ -120,7 +122,7 @@ export function Sheet(props: SheetProps) {
   </SheetModal>;
 }
 
-function PageContainer({ children }: PropsWithChildren) {
+function ModalContainer({ children }: PropsWithChildren) {
   return <View style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} pointerEvents="box-none" accessible={false} accessibilityViewIsModal importantForAccessibility="no">{children}</View>;
 }
 
