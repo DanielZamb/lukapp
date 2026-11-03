@@ -1,3 +1,6 @@
+vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
+vi.mock("expo-crypto", () => ({ randomUUID: () => "00000000-0000-4000-8000-000000000001" }));
+vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
 import { beforeEach, expect, test, vi } from "vitest";
 
 const memory = vi.hoisted(() => new Map<string, string>());
@@ -16,19 +19,15 @@ import { clearLocalInput } from "../clearLocalInput";
 import { writeDocument, storageKey } from "../localEntryDrafts";
 import {
   INTAKE_CANDIDATE_TTL_MS,
-  acceptIn,
   clearIntakeCandidates,
-  consumeIn,
-  failIn,
   intakeStorageKey,
   isReadyCandidate,
-  mutateIntakeDocument,
   parseIntakeDocument,
   viewInbox,
-  writeIntakeDocument,
   type IntakeCandidate,
 } from "./candidates";
-import { captureToCandidate, memorySource } from "./source";
+import { acceptIn, consumeIn, failIn, mutateIntakeDocument, writeIntakeDocument } from "./legacy.testSupport";
+import { captureToCandidate, memorySource } from "./source.testSupport";
 
 const now = 1_700_000_000_000;
 
@@ -108,7 +107,7 @@ test("revocation wipe deletes Candidates without touching a missing Drafts key",
   expect(memory.has(intakeStorageKey("owner"))).toBe(false);
 });
 
-test("local-input wipe clears Drafts and Candidates for the subject", async () => {
+test("platform-unsupported local-input wipe clears legacy Drafts and Candidates for the subject", async () => {
   await writeDocument("owner", { v: 1, drafts: [] });
   await writeIntakeDocument("owner", {
     v: 1,

@@ -1,3 +1,5 @@
+vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
+vi.mock("expo-crypto", () => ({ randomUUID: () => "00000000-0000-4000-8000-000000000001" }));
 import * as React from "react";
 import { createElement, useImperativeHandle, useState, type ComponentProps } from "react";
 import type { PendingPosting } from "./pendingPostingSchema";
@@ -7,7 +9,8 @@ import { parsePendingPosting } from "./pendingPostingSchema";
 import type { CategorySheetProps } from "../categories/CategorySheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { seedCandidate } from "../intake/devSeed";
+import { mapping, fixture as intakeFixture } from "../intake/service.testSupport";
+import { emptyState, serializeState } from "../intake/durableState";
 import { getFunctionName } from "convex/server";
 import type { Category } from "../categories/model";
 
@@ -28,26 +31,27 @@ const accountSheet = vi.hoisted(() => ({ present: vi.fn(), dismiss: vi.fn() }));
 const writes = vi.hoisted(() => ({ save: vi.fn(), post: vi.fn(), batchUpdate: vi.fn() }));
 const back = vi.hoisted(() => ({ handler: undefined as (() => boolean) | undefined }));
 const routeBack = vi.hoisted(() => vi.fn());
+const navigation = vi.hoisted(() => {
+  const state: { beforeRemove?: (event: { preventDefault(): void; data: { action: { type: string } } }) => void } = {};
+  return { state, dispatch: vi.fn(), addListener: (_name: string, listener: NonNullable<typeof state.beforeRemove>) => {
+    state.beforeRemove = listener; return () => { state.beforeRemove = undefined; };
+  } };
+});
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
 const queryData = vi.hoisted(() => {
   const state: { categories: Category[]; profiles: Array<{ id: string; name: string }>; currency: string } = { categories: [], profiles: [], currency: "COP" };
   return state;
 });
-const intakeActions = vi.hoisted(() => ({
-  read: vi.fn(async (id: string) =>
-    id === "candidate-1"
-      ? seedCandidate("workspace", "daily", "COP")
-      : undefined,
-  ),
-  consume: vi.fn(),
-  fail: vi.fn(),
-}));
+let candidateService: ReturnType<typeof intakeFixture>["service"];
+const intakeActions = { get count() { return 1; }, get service() { return candidateService; } };
+
 
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
 vi.mock("expo-router", () => ({
   router: { back: routeBack, replace: vi.fn(), setParams: vi.fn() },
   Redirect: "redirect",
+  useNavigation: () => navigation,
   useLocalSearchParams: () => ({
     profileId: route.profileId,
     draftId: route.draftId,
@@ -189,7 +193,10 @@ beforeEach(() => {
   back.handler = undefined;
   vi.clearAllMocks();
   platform.os = "ios";
-  intakeActions.read.mockClear();
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  candidate.setLegacy(null);
+  candidateService = candidate.service;
 });
 afterEach(async () => {
   await act(async () => root?.unmount());
@@ -494,13 +501,20 @@ test("a local entry draft passes Draft on this device", async () => {
   expect(form.sourceNote).toBe("Draft on this device");
 });
 
-test("a Candidate passes From drafts without an application name", async () => {
-  route.candidateId = "candidate-1";
+test("a Candidate separates source and captured facts from its editable description", async () => {
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  await candidate.service.refresh();
+  candidateService = candidate.service;
+  route.candidateId = "capture-1";
   await mount();
   await act(async () => {
     await Promise.resolve();
   });
-  expect(form.sourceNote).toBe("From drafts");
+  expect(form.sourceNote).toContain("Source app.bank.");
+  expect(form.sourceNote).toContain("Captured ");
+  expect(form.sourceNote).toContain("Original amount 450 COP.");
+  expect(form.props?.description).toBe("Market");
 });
 
 
@@ -585,4 +599,42 @@ test.each([
   expect(writes.post).toHaveBeenCalledWith(expect.objectContaining({
     payload: expect.objectContaining({ amount: { currency, minorUnits } }),
   }));
+});
+
+
+test("Candidate navigation waits for persistent review before dispatching removal", async () => {
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  await candidate.service.refresh(); candidateService = candidate.service; route.candidateId = "capture-1";
+  await mount();
+  await act(async () => { form.props?.onDescriptionChange("Saved before leaving"); });
+  const preventDefault = vi.fn();
+  await act(async () => { navigation.state.beforeRemove?.({ preventDefault, data: { action: { type: "GO_BACK" } } }); });
+  expect(preventDefault).toHaveBeenCalledOnce(); expect(navigation.dispatch).toHaveBeenCalledWith({ type: "GO_BACK" });
+  expect(candidateService.read("capture-1")?.review.description).toBe("Saved before leaving");
+});
+
+
+test("a failed Candidate review write prevents navigation and retains the previous saved review", async () => {
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  await candidate.service.refresh(); candidateService = candidate.service; route.candidateId = "capture-1"; await mount();
+  candidate.failWrite();
+  await act(async () => { form.props?.onDescriptionChange("Unsaved edit"); });
+  const preventDefault = vi.fn();
+  await act(async () => { navigation.state.beforeRemove?.({ preventDefault, data: { action: { type: "GO_BACK" } } }); });
+  expect(preventDefault).toHaveBeenCalledOnce(); expect(navigation.dispatch).not.toHaveBeenCalled();
+  expect(candidateService.read("capture-1")?.review.description).toBe("Market");
+});
+
+test("SEN90-R1-02 Candidate removal waits for exact review write reconciliation after a lost response", async () => {
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  await candidate.service.refresh(); candidateService = candidate.service; route.candidateId = "capture-1"; await mount();
+  candidate.afterWrite(() => { candidate.afterWrite(() => {}); throw new Error("write response lost"); });
+  await act(async () => { form.props?.onDescriptionChange("Saved before removal"); });
+  await act(async () => { navigation.state.beforeRemove?.({ preventDefault: vi.fn(), data: { action: { type: "GO_BACK" } } }); });
+  expect(navigation.dispatch).toHaveBeenCalledWith({ type: "GO_BACK" });
+  expect(candidateService.read("capture-1")?.review.description).toBe("Saved before removal");
+  expect(candidateService.read("capture-1")?.recordRevision).toBe(1);
 });

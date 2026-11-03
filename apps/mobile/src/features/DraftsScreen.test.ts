@@ -108,6 +108,7 @@ function render(
     onContinueAfterConfirmation: vi.fn(),
     onSegment: vi.fn(),
     onBack: vi.fn(),
+    onSources: vi.fn(),
     onResumeDraft: vi.fn(),
     onOpenCandidate: vi.fn(),
     onConfirmReady: vi.fn(),
@@ -132,7 +133,7 @@ test("the inbox names the month when empty and waits for loading to finish", asy
   expect(text()).toContain("Candidates");
   expect(text()).toContain("NOTIFICATION INTAKE");
   expect(text()).toContain("Nothing waiting");
-  expect(text()).toContain("October is ready to close. Remaining local Candidates never block Month Close.");
+  expect(text()).toContain("Notifications from enabled sources become Candidates here for review. No Candidates are waiting; this does not confirm capture. Remaining local Candidates never block Month Close.");
   expect(text()).not.toContain("Preview Month Close warning");
   expect(root?.root.findAllByType("button").some((node) => node.props.accessibilityRole === "radio")).toBe(false);
 });
@@ -318,18 +319,12 @@ test("the Month Close preview counts Candidates, returns to review, and continue
   expect(onCompleteMonth).toHaveBeenCalledOnce();
 });
 
-test.each(["ios", "android"])("Sources shows only disclosure and honest %s health", async (platform) => {
-  platformState.os = platform;
-  await act(async () => { root = create(createElement(DraftsScreen, render())); });
+test("Sources opens the canonical intake setup through its navigation callback", async () => {
+  const onSources = vi.fn();
+  await act(async () => { root = create(createElement(DraftsScreen, render({ onSources }))); });
   await act(async () => button("Sources").props.onPress());
-  expect(text()).toContain("Your notifications stay on this device");
-  expect(text()).toContain("Candidates expire after 15 days. Raw notification text is never uploaded.");
-  expect(text()).toContain(platform === "ios" ? "IOS AUTOMATION" : "ANDROID LISTENER");
-  expect(text()).toContain("Waiting for a source");
-  expect(text()).toContain("Last health check · just now");
-  expect(text()).not.toMatch(/Listening|Bancolombia|Davivienda|Nequi|Choose allowed sources|Open Android settings/);
-  await act(async () => button("Back").props.onPress());
-  expect(text()).toContain("Candidates");
+  expect(onSources).toHaveBeenCalledOnce();
+  expect(text()).not.toContain("just now");
 });
 
 test("an empty segment explains that nothing is waiting later", async () => {

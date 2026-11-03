@@ -1,10 +1,11 @@
 import * as SecureStore from "expo-secure-store";
 import { z } from "zod";
+import type { LocalInputLease } from "../local-auth/localInput";
 
 export const DISCARD_NOTICE_TTL_MS = 15 * 24 * 60 * 60 * 1000;
 
 const noticeSchema = z.object({
-  reason: z.enum(["Missing amount or direction", "Security alert"]),
+  reason: z.enum(["Missing amount or direction", "Security alert", "Multiple amounts", "Ambiguous amount", "Queue full", "Conflicting capture"]),
   time: z.number().int().nonnegative(),
 });
 export type DiscardNotice = z.infer<typeof noticeSchema>;
@@ -39,7 +40,7 @@ async function readLiveNotices(subject: string): Promise<DiscardNotice[]> {
   const parsed: unknown = JSON.parse(raw);
   const notices = z.array(noticeSchema).parse(parsed);
   const now = Date.now();
-  const live = notices.filter((notice) => notice.time + DISCARD_NOTICE_TTL_MS > now);
+  const live = notices.filter((notice) => notice.time + DISCARD_NOTICE_TTL_MS > now).slice(-64);
   if (live.length === 0) await SecureStore.deleteItemAsync(discardNoticesStorageKey(subject));
   else if (JSON.stringify(live) !== raw) await writeDiscardNotices(subject, live);
   return live;
@@ -49,11 +50,12 @@ function writeDiscardNotices(subject: string, notices: DiscardNotice[]) {
   return SecureStore.setItemAsync(discardNoticesStorageKey(subject), JSON.stringify(notices));
 }
 
-export function addDiscardNotice(subject: string, input: DiscardNotice) {
+export function addDiscardNotice(lease: LocalInputLease, subject: string, input: DiscardNotice) {
+  if (lease.subject !== subject) return Promise.reject(new Error("Notice owner mismatch"));
   return withStore(subject, async () => {
     const notice = noticeSchema.parse(input);
     const notices = await readLiveNotices(subject);
     if (notice.time + DISCARD_NOTICE_TTL_MS <= Date.now()) return;
-    await writeDiscardNotices(subject, [...notices, notice]);
+    await lease.run(() => writeDiscardNotices(subject, [...notices, notice].slice(-64)));
   });
 }

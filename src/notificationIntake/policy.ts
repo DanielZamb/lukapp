@@ -1,4 +1,4 @@
-import type { IntakeSuggestion } from "./types";
+import type { IntakeEvidence } from "./types";
 
 export class IntakeError extends Error {
   constructor(readonly code: string) {
@@ -31,8 +31,8 @@ export function requireIntakeBatch(count: number) {
 }
 
 export function changedFields(
-  suggestion: IntakeSuggestion,
-  confirmed: IntakeSuggestion,
+  suggestion: IntakeEvidence,
+  confirmed: IntakeEvidence,
 ) {
   const names: string[] = [];
   if (suggestion.direction !== confirmed.direction) names.push("direction");
@@ -46,7 +46,10 @@ export function changedFields(
   if (suggestion.financialAccountProfileId !== confirmed.financialAccountProfileId)
     names.push("financialAccountProfileId");
   if (
-    suggestion.userCategoryIds.join("\0") !== confirmed.userCategoryIds.join("\0")
+    suggestion.userCategoryIds.length !== confirmed.userCategoryIds.length ||
+    suggestion.userCategoryIds.some(
+      (id, index) => id !== confirmed.userCategoryIds[index],
+    )
   )
     names.push("userCategoryIds");
   if (suggestion.primaryUserCategoryId !== confirmed.primaryUserCategoryId)

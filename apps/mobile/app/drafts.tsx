@@ -8,10 +8,8 @@ import { DraftsScreen, type InboxSegment } from "../src/features/DraftsScreen";
 import { monthLabel } from "../src/features/monthClose/model";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
-import { applyBatchResults, readyTotalMinorUnits } from "../src/features/intake/applyBatch";
-import { confirmReadyBatches, handleReadyBatchError } from "../src/features/intake/confirmReady";
-import { devSeedAction, readySeedCandidate, seedCandidate, seedDiscardNotices } from "../src/features/intake/devSeed";
-import { suggestionOf } from "../src/features/intake/facts";
+import { readyTotalMinorUnits } from "../src/features/intake/applyBatch";
+import { confirmReadyCandidates, handleReadyBatchError } from "../src/features/intake/confirmReady";
 import { api } from "../src/features/api";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import { clearDiscardNotices, DISCARD_NOTICE_TTL_MS, readDiscardNotices, type DiscardNotice } from "../src/features/localDiscardNotices";
@@ -38,12 +36,7 @@ function Drafts({
   profileId: string;
   timeZone: string;
 }) {
-  const { seed, seedId, seedCategoryId, segment: segmentParam } = useLocalSearchParams<{
-    seed?: string | string[];
-    seedId?: string | string[];
-    seedCategoryId?: string | string[];
-    segment?: string | string[];
-  }>();
+  const { segment: segmentParam } = useLocalSearchParams<{ segment?: string | string[] }>();
   const requestedSegment = Array.isArray(segmentParam) ? segmentParam[0] : segmentParam;
   const paramSegment = inboxSegmentFromParam(requestedSegment);
   const drafts = useLocalEntryDrafts({ subject, workspaceId });
@@ -71,10 +64,6 @@ function Drafts({
   }, [subject, discardRevision]);
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
-  const seedAction = devSeedAction(seed, seedId);
-  const seedCategories = useQuery(api.accounting.listUserCategories,
-    seedAction?.kind === "ready" && typeof seedCategoryId === "string" && seedCategoryId.trim()
-      ? { workspaceId } : "skip");
   const reportFailure = useDeviceAccessFailure();
   const listsLoaded =
     drafts.count !== null && (intake.count !== null || !!intake.error);
@@ -95,37 +84,15 @@ function Drafts({
   }, [paramSegment, listsLoaded, needsYouNowCount]);
   const [confirming, setConfirming] = useState(false);
   const [confirmedCount, setConfirmedCount] = useState<number | null>(null);
-  const handledSeed = useRef<string | null>(null);
   const period = { year: currentPeriod.year, month: currentPeriod.month };
-  useEffect(() => {
-    if (!__DEV__) return;
-    const action = devSeedAction(seed, seedId);
-    if (!action) return;
-    const actionKey = `${action.kind}:${action.id}`;
-    if (handledSeed.current === actionKey) return;
-    if (action.kind === "discard") {
-      handledSeed.current = actionKey;
-      void seedDiscardNotices(subject, action.id).then((notices) => {
-        if (notices) setDiscardRevision((revision) => revision + 1);
-      }).catch(() => { handledSeed.current = null; });
-      return;
-    }
-    const candidate = action.kind === "ready" ? readySeedCandidate({
-      workspaceId, profileId, currency, seedId: action.id,
-      categoryId: seedCategoryId, categories: seedCategories, timeZone,
-    }) : null;
-    if (action.kind === "ready" && (!candidate || !places?.some((place) => place.id === profileId))) return;
-    handledSeed.current = actionKey;
-    if (action.kind === "remove") void intake.consume(action.id);
-    else if (candidate) void intake.accept(candidate);
-    else if (currency === "COP" || currency === "USD")
-      void intake.accept(seedCandidate(workspaceId, profileId, currency, action.id));
-  }, [seed, seedId, seedCategoryId, seedCategories, places, subject, workspaceId, profileId, currency, timeZone, intake.accept, intake.consume]);
   return (
     <DraftsScreen
+      onSources={() => router.push("/intake")}
+      intakeWarning={intake.warning}
       drafts={drafts.items}
-      discardNotices={discardNotices}
+      discardNotices={[...discardNotices, ...intake.notices].slice(-64)}
       onDismissDiscardNotices={async () => {
+        await intake.dismissNotices();
         await clearDiscardNotices(subject);
         setDiscardNotices([]);
       }}
@@ -159,22 +126,8 @@ function Drafts({
           setConfirming(true);
           let addedCount = 0;
           try {
-            await confirmReadyBatches(
-              intake.ready.map((candidate) => ({
-                workspaceId,
-                candidateId: candidate.id,
-                confirmed: suggestionOf(candidate),
-                suggestion: suggestionOf(candidate),
-                parserVersion: candidate.parserVersion,
-                consentVersion: candidate.consentVersion,
-              })),
-              (items) => confirmCandidates({ workspaceId, items }),
-              (results) =>
-                applyBatchResults(results, async (id) => {
-                  await intake.consume(id);
-                  addedCount += 1;
-                }, intake.fail),
-            );
+            addedCount = await confirmReadyCandidates(intake.service, intake.ready,
+              (items) => confirmCandidates({ workspaceId, items }));
           } catch (error) {
             if (handleReadyBatchError(error, reportFailure, intake.refresh) === "wiped")
               addedCount = 0;

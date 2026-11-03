@@ -333,7 +333,7 @@ export function Setup({
                     value: true,
                     emoji: "🔔",
                     label: "Use them",
-                    detail: "Alerts become drafts you confirm",
+                    detail: "Alerts can become Candidates after device setup",
                   },
                   {
                     value: false,

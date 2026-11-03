@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text, View } from "react-native";
-import { PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
+import { PrimaryButton, SecondaryButton, Screen, useTheme, useUi } from "../../ui/core";
 import { font, spacing } from "../../ui/tokens";
 import { LookChip } from "../categories/LookChip";
 import { formatMoney } from "../money";
@@ -11,9 +11,11 @@ import { useSetupStyles } from "./styles";
 export function SetupCompletion({
   summary,
   onHome,
+  onNotificationSetup,
 }: {
   summary: SetupSummary;
   onHome: () => void;
+  onNotificationSetup: () => void;
 }) {
   const theme = useTheme();
   const ui = useUi();
@@ -64,10 +66,11 @@ export function SetupCompletion({
             : ""}
           .{" "}
           {summary.purchaseAlertsConsent
-            ? "Purchase alerts can become drafts."
+            ? "Purchase alerts can become Candidates after device setup. Device access and review are still required."
             : "You will add drafts yourself."}
           {summary.wantsBudgets ? " Budgets stay one door away." : ""}
         </Text>
+        {summary.purchaseAlertsConsent ? <SecondaryButton label="Set up notification intake" onPress={onNotificationSetup} /> : null}
         <PrimaryButton
           label="Go to home"
           trailingIcon="home-outline"

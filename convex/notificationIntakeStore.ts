@@ -8,13 +8,7 @@ function view({ _id, _creationTime, workspaceId, ...receipt }: Doc<"notification
     id: _id,
     workspaceId,
     ...receipt,
-    suggestion: {
-      ...receipt.suggestion,
-      amount: {
-        currency: receipt.suggestion.amount.currency === "USD" ? "USD" : "COP",
-        minorUnits: receipt.suggestion.amount.minorUnits,
-      },
-    },
+
   };
 }
 
@@ -30,26 +24,6 @@ export function intakeWriteStore(ctx: Pick<MutationCtx, "db">): IntakeStore {
         )
         .unique();
       return row ? view(row) : null;
-    },
-    readPosted: async (journalEntryId) => {
-      const id = ctx.db.normalizeId("journalEntries", journalEntryId);
-      if (!id) return null;
-      const entry = await ctx.db.get(id);
-      if (!entry) return null;
-      const workspace = await ctx.db.get(entry.workspaceId);
-      const lines = await ctx.db
-        .query("journalLines")
-        .withIndex("by_entry", (q) => q.eq("journalEntryId", id))
-        .collect();
-      return {
-        id: entry._id,
-        description: entry.description,
-        amount: {
-          currency: workspace?.functionalCurrency === "USD" ? "USD" : "COP",
-          minorUnits: lines.reduce((sum, line) => sum + line.debitMinorUnits, 0),
-        },
-        replay: true,
-      };
     },
     insertReceipt: async (receipt) => {
       const workspaceId = ctx.db.normalizeId("workspaces", receipt.workspaceId);

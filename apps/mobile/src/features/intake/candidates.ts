@@ -1,9 +1,5 @@
 import { z } from "zod";
 import * as SecureStore from "expo-secure-store";
-import {
-  runLocalInputWrite,
-  type LocalInputLease,
-} from "../../local-auth/localInput";
 import type { IntakeSuggestion } from "../../../../../src/notificationIntake/types";
 import { isReadyCandidate } from "./ready";
 
@@ -15,9 +11,9 @@ export const INTAKE_PRIORITY_MS = 3 * 24 * 60 * 60 * 1000;
 export type IntakeCandidateId = string;
 
 export type StoredSuggestion = {
-  direction: "in" | "out";
+  direction: "in" | "out" | null;
   description: string;
-  amountMinorUnits: number;
+  amountMinorUnits: number | null;
   accountingDate: string;
   financialAccountProfileId: string;
   userCategoryIds: string[];
@@ -31,6 +27,7 @@ export type IntakeCandidate = {
   workspaceId: string;
   currency: "COP" | "USD";
   suggestion: StoredSuggestion;
+  reviewAmountText?: string | null;
   parserVersion: string;
   consentVersion: string;
   error?: string;
@@ -78,23 +75,17 @@ export function clearIntakeCandidates(subject: string) {
 
 export async function readIntakeRaw(subject: string): Promise<unknown> {
   const raw = await SecureStore.getItemAsync(intakeStorageKey(subject));
-  return raw === null ? null : JSON.parse(raw);
+  if (raw === null) return null;
+  return documentSchema.parse(JSON.parse(raw));
 }
 
-export function writeIntakeDocument(subject: string, document: IntakeDocument) {
-  return SecureStore.setItemAsync(
-    intakeStorageKey(subject),
-    JSON.stringify(document),
-  );
-}
-
-export function parseIntakeDocument(raw: unknown, now: number) {
-  if (raw === null || raw === undefined)
-    return { document: { v: 1 as const, candidates: [] }, dirty: false };
+export function parseIntakeDocument(raw: unknown, now: number): { document: IntakeDocument; dirty: boolean } {
+  if (raw === null)
+    return { document: { v: 1, candidates: [] }, dirty: false };
   const document = documentSchema.parse(raw);
   const candidates = document.candidates.filter((row) => row.expiresAt > now);
   return {
-    document: { v: 1 as const, candidates },
+    document: { v: 1, candidates },
     dirty: candidates.length !== document.candidates.length,
   };
 }
@@ -110,7 +101,8 @@ export function isPriorityCandidate(
   );
 }
 
-export function suggestionOf(candidate: IntakeCandidate): IntakeSuggestion {
+export function reviewSuggestionOf(candidate: IntakeCandidate): IntakeSuggestion {
+  if (candidate.suggestion.direction === null || candidate.suggestion.amountMinorUnits === null) throw new Error("Resolve Candidate facts before confirmation");
   return {
     direction: candidate.suggestion.direction,
     description: candidate.suggestion.description,
@@ -122,38 +114,6 @@ export function suggestionOf(candidate: IntakeCandidate): IntakeSuggestion {
     financialAccountProfileId: candidate.suggestion.financialAccountProfileId,
     userCategoryIds: [...candidate.suggestion.userCategoryIds],
     primaryUserCategoryId: candidate.suggestion.primaryUserCategoryId,
-  };
-}
-
-export function acceptIn(
-  document: IntakeDocument,
-  candidate: IntakeCandidate,
-  now: number,
-) {
-  const candidates = document.candidates.filter((row) => row.expiresAt > now);
-  return {
-    v: 1 as const,
-    candidates: [...candidates.filter((row) => row.id !== candidate.id), candidate],
-  };
-}
-
-export function consumeIn(document: IntakeDocument, id: IntakeCandidateId) {
-  return {
-    v: 1 as const,
-    candidates: document.candidates.filter((row) => row.id !== id),
-  };
-}
-
-export function failIn(
-  document: IntakeDocument,
-  id: IntakeCandidateId,
-  error: string,
-) {
-  return {
-    v: 1 as const,
-    candidates: document.candidates.map((row) =>
-      row.id === id ? { ...row, error } : row,
-    ),
   };
 }
 
@@ -174,27 +134,4 @@ export function viewInbox(
     ready: live.filter((row) => isReadyCandidate(row, currency)),
     count: live.length,
   };
-}
-
-export async function mutateIntakeDocument<T>(
-  lease: LocalInputLease,
-  subject: string,
-  mutate: (
-    document: IntakeDocument,
-    now: number,
-    dirty: boolean,
-  ) => { document: IntakeDocument; result: T; write: boolean },
-): Promise<T> {
-  let completed = false;
-  let result!: T;
-  await runLocalInputWrite(lease, async () => {
-    const now = Date.now();
-    const parsed = parseIntakeDocument(await readIntakeRaw(subject), now);
-    const next = mutate(parsed.document, now, parsed.dirty);
-    if (next.write) await writeIntakeDocument(subject, next.document);
-    result = next.result;
-    completed = true;
-  });
-  if (!completed) throw new Error("Intake mutation did not complete");
-  return result;
 }

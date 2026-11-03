@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+group = 'expo.modules.notificationintake'
+version = '1.0.0'
+android {
+  namespace 'expo.modules.notificationintake'
+  buildFeatures { buildConfig true }
+  defaultConfig {
+    buildConfigField 'boolean', 'INTAKE_DIAGNOSTICS', 'false'
+  }
+  buildTypes {
+    debug { buildConfigField 'boolean', 'INTAKE_DIAGNOSTICS', 'true' }
+    release { buildConfigField 'boolean', 'INTAKE_DIAGNOSTICS', (project.findProperty('lukappIntakeDiagnostics') == 'beta' ? 'true' : 'false') }
+  }
+  defaultConfig { versionCode 1; versionName '1.0.0' }
+  testOptions { unitTests.returnDefaultValues = true }
+}
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20240303'
+}

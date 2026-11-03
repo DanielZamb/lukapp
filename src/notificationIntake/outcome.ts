@@ -1,4 +1,4 @@
-export function intakeConfirmOutcome(error: unknown): "consume" | "fail" | "retry" {
+export function intakeConfirmOutcome(error: unknown): "fail" | "retry" {
   const data =
     error !== null && typeof error === "object" && "data" in error
       ? error.data
@@ -10,7 +10,7 @@ export function intakeConfirmOutcome(error: unknown): "consume" | "fail" | "retr
     typeof data.code === "string"
       ? data.code
       : "";
-  if (code === "idempotency_key_conflict") return "consume";
+  if (code === "idempotency_key_conflict") return "fail";
   if (
     data !== null &&
     typeof data === "object" &&
