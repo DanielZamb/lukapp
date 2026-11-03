@@ -4,7 +4,7 @@ import { requiresLocalWipe } from "../../local-auth/accessFailure";
 import type { LocalEntryFacts } from "../localEntryDrafts";
 import type { IntakeBinding, PostingReceipt } from "../posting/usePostingEditor";
 import { parseMoney } from "../money";
-import { evidenceFor, projectCandidate, type ActiveCandidate } from "./durableState";
+import { evidenceFor, notificationOf, projectCandidate, type ActiveCandidate } from "./durableState";
 import { factsFromCandidate } from "./facts";
 import type { IntakeService } from "./service";
 
@@ -42,6 +42,7 @@ export function createCandidateBinding(input: {
     id: candidateId,
     facts: factsFromCandidate(projectCandidate(row())),
     reviewNote: row().origin.kind === "native" ? reviewNote(row()) : "Imported Candidate. Review all facts before posting.",
+    notification: notificationOf(row()),
     originalSuggestion: evidenceFor(row()),
     get frozen() { const current = service.read(candidateId); return !current || current.status.kind !== "review"; },
     persistReview,

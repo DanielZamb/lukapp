@@ -65,6 +65,8 @@ export type IntakeBinding = {
   id: string;
   facts: LocalEntryFacts;
   reviewNote?: string;
+  /** The kept notification text, shown beside the form. Never submitted. */
+  notification?: { text: string; packageName: string; at: number } | null;
   originalSuggestion: IntakeEvidence;
   readonly frozen: boolean;
   persistReview(facts: LocalEntryFacts): Promise<void>;

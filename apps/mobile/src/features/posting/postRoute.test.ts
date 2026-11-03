@@ -9,7 +9,7 @@ import { parsePendingPosting } from "./pendingPostingSchema";
 import type { CategorySheetProps } from "../categories/CategorySheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { mapping, fixture as intakeFixture } from "../intake/service.testSupport";
+import { capture, mapping, fixture as intakeFixture } from "../intake/service.testSupport";
 import { emptyState, serializeState } from "../intake/durableState";
 import { getFunctionName } from "convex/server";
 import type { Category } from "../categories/model";
@@ -637,4 +637,29 @@ test("SEN90-R1-02 Candidate removal waits for exact review write reconciliation 
   expect(navigation.dispatch).toHaveBeenCalledWith({ type: "GO_BACK" });
   expect(candidateService.read("capture-1")?.review.description).toBe("Saved before removal");
   expect(candidateService.read("capture-1")?.recordRevision).toBe(1);
+});
+
+test("a Candidate's kept notification is shown in Post, and tapping it fills the form and the saved review", async () => {
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  candidate.setPages([{ captures: [{ ...capture, direction: null, amountMinorUnits: null, currency: null, description: "",
+    text: "Compra por $32.000 en TIENDA D1. Saldo disponible: $1.250.300" }], nextCursor: null }]);
+  await candidate.service.refresh(); candidateService = candidate.service; route.candidateId = "capture-1"; await mount();
+  type Card = { props: { notification: { text: string }; onUseAmount(minor: number): void; onUseDescription(text: string): void } };
+  const card = () => form.props?.notification as unknown as Card;
+  expect(card().props.notification.text).toContain("TIENDA D1");
+  expect(form.props?.amount).toBe("−32.000,00"); expect(form.props?.description).toBe("TIENDA D1");
+  await act(async () => { card().props.onUseAmount(125_030_000); });
+  expect(form.props?.amount).toBe("-1.250.300");
+  await act(async () => { card().props.onUseDescription("Tienda de barrio"); });
+  expect(form.props?.description).toBe("Tienda de barrio");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(candidateService.read("capture-1")?.review).toMatchObject({ amountMinorUnits: 125_030_000, direction: "out", description: "Tienda de barrio" });
+});
+
+test("a Candidate without kept text keeps the plain source note", async () => {
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  await candidate.service.refresh(); candidateService = candidate.service; route.candidateId = "capture-1"; await mount();
+  expect(form.props?.notification).toBeUndefined(); expect(form.props?.sourceNote).toContain("Source app.bank");
 });

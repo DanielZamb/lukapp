@@ -39,6 +39,7 @@ import { usePostingTransport } from "../src/features/posting/usePostingTransport
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { createCandidateBinding } from "../src/features/intake/postingBinding";
+import { NotificationCard, signedAmountText } from "../src/features/intake/NotificationCard";
 import {
   canPostCategories,
   needsPrimary,
@@ -101,6 +102,16 @@ function PostMoney({
     setMissingCandidate(false);
     setBinding(createCandidateBinding({ service: intake.service, candidateId, workspaceId: workspace.id, dispatch: confirmOne }));
   }, [candidateId, confirmOne, intake.service, intake.count, binding?.id, workspace.id]);
+  const [appLabel, setAppLabel] = useState<string | undefined>();
+  const notificationPackage = binding?.notification?.packageName;
+  useEffect(() => {
+    if (!notificationPackage) return;
+    let current = true;
+    void intake.service.listSources().then((sources) => {
+      if (current) setAppLabel(sources.find((source) => source.packageName === notificationPackage)?.label);
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [intake.service, notificationPackage]);
   const transport = usePostingTransport(subject);
   const batchStorage = usePostingBatchStorage(subject, workspace.id);
   const convex = useConvex();
@@ -265,6 +276,18 @@ function PostMoney({
       <PostingForm
         {...editor}
         sourceNote={sourceNote}
+        notification={binding?.notification ? (
+          <NotificationCard
+            notification={binding.notification}
+            appLabel={appLabel}
+            currency={workspace.functionalCurrency}
+            amount={editor.amount}
+            editable={editor.editable}
+            onUseAmount={(minor) => interaction(() => editor.setAmount(
+              signedAmountText(minor, workspace.functionalCurrency, editor.amount, binding.originalSuggestion.direction)))}
+            onUseDescription={(text) => interaction(() => editor.setDescription(text))}
+          />
+        ) : undefined}
         batchCount={batch.queue.length}
         onBatch={
           !candidateId && !editor.pending && !setup
