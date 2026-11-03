@@ -3,7 +3,10 @@ import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type
 import { BackHandler, View } from "react-native";
 import { useSheetAccessibility } from "./SheetAccessibility";
 
-export type NativeSheetProps = Omit<BottomSheetModalProps, "children" | "ref">;
+export type NativeSheetProps = Omit<BottomSheetModalProps, "children" | "ref" | "enableDismissOnClose"> & {
+  /** Disabling native onDismiss completion with enableDismissOnClose:false is unsupported. */
+  enableDismissOnClose?: true;
+};
 export type SheetRef = RefObject<BottomSheetModal | null>;
 export type SheetPresentation =
   | { sheetRef?: never; presentOnMount?: true }
@@ -77,15 +80,16 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
     switch (event.type) {
       case "present":
         if (!mounted.current) return;
-        if (backEnabled.current && (current.kind === "closing" || (current.kind === "opening" && current.pendingClose !== null))) return;
-        if (current.kind !== "open") transition({ kind: "opening", pendingClose: null });
+        cancelRecovery();
+        if (current.kind === "closed" || current.kind === "opening") transition({ kind: "opening", pendingClose: null });
+        else transition({ kind: "open" });
         if (version.current !== committedVersion.current) pendingPresent.current = event.args;
         else native.current?.present(...event.args);
         return;
       case "dismiss":
         if (!mounted.current) return;
         if (backEnabled.current) {
-          if ((current.kind === "closed" && current.completed) || current.kind === "closing") return;
+          if (current.kind === "closed" && current.completed) return;
           if (current.kind === "opening") {
             if (current.pendingClose !== null) return;
             transition({ kind: "opening", pendingClose: event.args });
@@ -97,14 +101,13 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
         native.current?.dismiss(...event.args);
         return;
       case "index": {
-        if (event.args[0] >= 0) {
+        if (event.args[0] >= 0 && (current.kind === "opening" || (current.kind === "closed" && !current.completed))) {
           cancelRecovery();
           if (current.kind === "opening" && current.pendingClose !== null) transition({ kind: "closing" });
           else transition({ kind: "open" });
-        } else if (current.kind === "open") transition({ kind: "closed", completed: false });
+        }
         onChange?.(...event.args);
         if (event.args[0] >= 0 && current.kind === "opening" && current.pendingClose !== null) native.current?.dismiss(...current.pendingClose);
-        else if (event.args[0] === -1 && presentation.current.kind === "closing" && props.enableDismissOnClose === false) recoverClose([]);
         return;
       }
       case "dismissed":

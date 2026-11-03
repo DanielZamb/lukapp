@@ -37,11 +37,11 @@ function backgroundHidden() {
   return root!.root.findByType(SheetAccessibilityBoundary).findAllByType(View)[0].props.importantForAccessibility === "no-hide-descendants";
 }
 function dispatchBack() { return [...native.listeners].reverse().some((listener) => listener()); }
-function render({ busy = false, tracked = false, dismissed, presentOnMount = true, androidBack = true, enableDismissOnClose }:
-  { busy?: boolean; tracked?: boolean; dismissed: () => void; presentOnMount?: boolean; androidBack?: boolean; enableDismissOnClose?: boolean }) {
+function render({ busy = false, tracked = false, dismissed, presentOnMount = true, androidBack = true }:
+  { busy?: boolean; tracked?: boolean; dismissed: () => void; presentOnMount?: boolean; androidBack?: boolean }) {
   return createElement(SheetAccessibilityProvider, null,
     createElement(SheetAccessibilityBoundary, null, createElement(View, { testID: "background" })),
-    createElement(SheetModal, { sheetRef: ref, presentOnMount, trackPresentation: tracked, androidBack, busy, onDismiss: dismissed, enableDismissOnClose }, createElement(View)),
+    createElement(SheetModal, { sheetRef: ref, presentOnMount, trackPresentation: tracked, androidBack, busy, onDismiss: dismissed }, createElement(View)),
   );
 }
 let ref = createRef<BottomSheetModal>();
@@ -67,6 +67,7 @@ test.each([
   await act(async () => { secondBack = dispatchBack(); });
   expect({ beforeSecondBack, secondBack, backgroundBacks: backgroundBack.mock.calls.length, notifications: dismissed.mock.calls.length })
     .toEqual({ beforeSecondBack: { hidden: true, notifications: 0 }, secondBack: true, backgroundBacks: 0, notifications: 0 });
+  expect(native.dismiss).toHaveBeenCalledTimes(busy ? 1 : 2);
   await act(async () => modal().props.onDismiss());
   expect(dismissed).toHaveBeenCalledOnce();
   expect(backgroundHidden()).toBe(false);
@@ -83,35 +84,36 @@ type OrderingStep = {
 type Ordering = {
   name: string;
   reopenOnDismiss?: boolean;
-  enableDismissOnClose?: boolean;
   androidBack?: boolean;
   steps: OrderingStep[];
 };
 const orderings: Ordering[] = [
-  { name: "drag cancels closing and permits present and another Back", steps: [
+  { name: "same-detent drag cancellation without a callback permits another Back", steps: [
     { event: "present" }, { event: "ack" }, { event: "back", expect: { dismisses: 1 } },
-    { event: "ack", expect: { closes: 0, hidden: true, timers: 0 } },
-    { event: "present", expect: { presents: 2 } }, { event: "back", expect: { dismisses: 2, outerBacks: 0 } },
+    { event: "timer", expect: { closes: 0, hidden: true, timers: 0 } },
+    { event: "back", expect: { dismisses: 2, outerBacks: 0 } },
     { event: "negative", expect: { hidden: true } }, { event: "dismissed", expect: { closes: 1, hidden: false } },
     { event: "dismissed", expect: { closes: 1 } },
   ] },
-  { name: "drag cancels closing after a negative index", steps: [
+  { name: "delayed snap and negative callbacks cannot clear a pending close", steps: [
     { event: "present" }, { event: "ack" }, { event: "back" }, { event: "negative" },
-    { event: "ack", expect: { hidden: true, closes: 0 } }, { event: "back", expect: { dismisses: 2 } },
+    { event: "ack" }, { event: "negative", expect: { hidden: true, closes: 0 } },
+    { event: "timer", expect: { hidden: true, closes: 0, timers: 0 } },
+    { event: "back", expect: { dismisses: 2, outerBacks: 0 } },
     { event: "dismissed", expect: { closes: 1, hidden: false } },
   ] },
-  { name: "teardown after cancellation has no pending close", steps: [
+  { name: "teardown after a delayed snap callback settles the pending close", steps: [
     { event: "present" }, { event: "ack" }, { event: "back" }, { event: "ack" },
-    { event: "unmount", expect: { closes: 0, timers: 0 } }, { event: "oldDismissed", expect: { closes: 0 } },
+    { event: "unmount", expect: { closes: 1, timers: 0 } }, { event: "oldDismissed", expect: { closes: 1 } },
   ] },
   { name: "closing retains historical Back ownership until native dismissal", steps: [
     { event: "present" }, { event: "ack" }, { event: "back" }, { event: "negative" },
-    { event: "back", expect: { dismisses: 1, closes: 0, hidden: true, outerBacks: 0 } },
+    { event: "back", expect: { dismisses: 2, closes: 0, hidden: true, outerBacks: 0 } },
     { event: "dismissed", expect: { closes: 1, hidden: false } }, { event: "back", expect: { outerBacks: 1 } },
   ] },
   { name: "initial acknowledgement executes the queue and cancels recovery", steps: [
     { event: "present" }, { event: "back", expect: { dismisses: 0, timers: 1 } }, { event: "negative" },
-    { event: "present", expect: { presents: 1 } }, { event: "back", expect: { timers: 1 } },
+    { event: "back", expect: { timers: 1, dismisses: 0 } },
     { event: "timer", ms: 950 }, { event: "ack", expect: { dismisses: 1, timers: 0 } },
     { event: "timer", ms: 1000, expect: { closes: 0, hidden: true } },
     { event: "dismissed", expect: { closes: 1, hidden: false } },
@@ -131,21 +133,28 @@ const orderings: Ordering[] = [
     { event: "present" }, { event: "ack" }, { event: "back" }, { event: "unmount", expect: { closes: 1 } },
     { event: "oldDismissed", expect: { closes: 1 } },
   ] },
-  { name: "a minimized position releases ownership and reopening reacquires it", steps: [
-    { event: "present" }, { event: "ack" }, { event: "negative", expect: { hidden: false, closes: 0 } },
-    { event: "back", expect: { outerBacks: 1, dismisses: 0 } }, { event: "ack", expect: { hidden: true } },
-    { event: "back", expect: { dismisses: 1, outerBacks: 1 } }, { event: "dismissed", expect: { closes: 1 } },
+  { name: "present clears acknowledged close without needing a new index callback", steps: [
+    { event: "present" }, { event: "ack" }, { event: "back" }, { event: "negative" },
+    { event: "present", expect: { presents: 2, hidden: true, timers: 0 } },
+    { event: "back", expect: { dismisses: 2, timers: 0, outerBacks: 0 } },
+    { event: "dismissed", expect: { closes: 1, hidden: false } },
+  ] },
+  { name: "present clears a pending close before teardown", steps: [
+    { event: "present" }, { event: "ack" }, { event: "back" },
+    { event: "present", expect: { presents: 2, timers: 0 } }, { event: "unmount", expect: { closes: 0 } },
+    { event: "oldDismissed", expect: { closes: 0 } },
   ] },
   { name: "recovery callback presents the replacement", reopenOnDismiss: true, steps: [
     { event: "present" }, { event: "back" }, { event: "timer", expect: { closes: 1, presents: 2, hidden: true, replacement: true, presentedCurrent: true } },
     { event: "oldAck" }, { event: "oldDismissed", expect: { closes: 1 } },
     { event: "ack" }, { event: "back", expect: { dismisses: 2 } }, { event: "dismissed", expect: { closes: 2 } },
   ] },
-  { name: "native negative completes a close with auto-dismiss disabled", enableDismissOnClose: false, steps: [
-    { event: "present" }, { event: "ack" }, { event: "back" },
-    { event: "negative", expect: { closes: 1, hidden: false } }, { event: "oldDismissed", expect: { closes: 1 } },
-    { event: "present", expect: { presents: 2, hidden: true } }, { event: "ack" },
-    { event: "back" }, { event: "negative", expect: { closes: 2, hidden: false } },
+  { name: "present clears the never-ack close queue and its timer", steps: [
+    { event: "present" }, { event: "back", expect: { timers: 1 } },
+    { event: "present", expect: { presents: 2, timers: 0, closes: 0 } },
+    { event: "timer", expect: { closes: 0, replacement: false } },
+    { event: "ack", expect: { dismisses: 0 } }, { event: "back", expect: { dismisses: 1 } },
+    { event: "dismissed", expect: { closes: 1 } },
   ] },
   { name: "Back opt-out keeps immediate imperative dismissal", androidBack: false, steps: [
     { event: "present" }, { event: "dismiss", expect: { dismisses: 1, timers: 0 } },
@@ -153,13 +162,13 @@ const orderings: Ordering[] = [
   ] },
 ];
 
-test.each(orderings)("SEN-100 native presentation ordering: $name", async ({ steps, reopenOnDismiss, enableDismissOnClose, androidBack }) => {
+test.each(orderings)("SEN-100 presentation ordering: $name", async ({ steps, reopenOnDismiss, androidBack }) => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   ref = createRef<BottomSheetModal>();
   const outerBack = vi.fn(() => true);
   const outerSubscription = BackHandler.addEventListener("hardwareBackPress", outerBack);
   const dismissed = vi.fn(() => { if (reopenOnDismiss && dismissed.mock.calls.length === 1) ref.current?.present(); });
-  await act(async () => { root = create(render({ tracked: true, presentOnMount: false, dismissed, enableDismissOnClose, androidBack })); });
+  await act(async () => { root = create(render({ tracked: true, presentOnMount: false, dismissed, androidBack })); });
   const oldNative: NativeSheetProps = modal().props;
   const oldInstance = modal().props.instance;
   for (const step of steps) {
@@ -187,7 +196,7 @@ test.each(orderings)("SEN-100 native presentation ordering: $name", async ({ ste
   outerSubscription.remove();
 });
 
-test("SEN-98 parity: a negative index without a close releases a tracked sheet", async () => {
+test("post-ack index callbacks alone cannot release Back or background ownership", async () => {
   ref = createRef<BottomSheetModal>();
   const backgroundBack = vi.fn(() => true);
   const backgroundSubscription = BackHandler.addEventListener("hardwareBackPress", backgroundBack);
@@ -196,10 +205,10 @@ test("SEN-98 parity: a negative index without a close releases a tracked sheet",
   await act(async () => modal().props.onChange?.(0, 0, 0));
   expect(backgroundHidden()).toBe(true);
   await act(async () => modal().props.onChange(-1, 0, 0));
-  expect(backgroundHidden()).toBe(false);
+  expect(backgroundHidden()).toBe(true);
   await act(async () => { expect(dispatchBack()).toBe(true); });
-  expect(backgroundBack).toHaveBeenCalledOnce();
-  expect(native.dismiss).not.toHaveBeenCalled();
+  expect(backgroundBack).not.toHaveBeenCalled();
+  expect(native.dismiss).toHaveBeenCalledOnce();
   expect(dismissed).not.toHaveBeenCalled();
   backgroundSubscription.remove();
 });
