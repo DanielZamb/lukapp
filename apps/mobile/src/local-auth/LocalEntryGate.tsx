@@ -152,6 +152,7 @@ export function LocalEntryGate({
         onTouchMove={controller.interaction}
       >
         <View
+          collapsable={false}
           style={{ flex: 1, opacity: obscured ? 0 : 1 }}
           pointerEvents={obscured ? "none" : "auto"}
           importantForAccessibility={obscured ? "no-hide-descendants" : "auto"}
