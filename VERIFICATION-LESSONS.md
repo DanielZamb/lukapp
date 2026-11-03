@@ -71,6 +71,12 @@ A backfill must also coexist with new writes and retries. The inspected tests in
 
 ## User intent must survive the interface
 
+### Returning to a caller must not start another copy of its flow
+
+In notification intake source `1f346e5`, Candidates opened Sources with `router.push("/intake")`. Sources exposed two inbox controls through `onInbox`, which pushed `"/drafts"`. That allowed Candidates → Sources → Candidates → Sources to accumulate on the navigation stack. The user reported that Add an app began looping after taking this inbox detour, and that the direct path did not show the problem. [SEN-103](https://linear.app/sennkai-labs/issue/SEN-103/keep-source-setup-back-only-to-prevent-stacked-candidate-and-sources)
+
+Commit `c68477f` removed both forward inbox controls and the `onInbox` callback, leaving `onBack` as the return interface. Three regression assertions fail on the old source and pass on the corrected source; they cover the forbidden callback and controls while retaining Candidate data. This establishes the route correction. The exact native modal-loop mechanism was not independently isolated, and final physical-device navigation acceptance remained open in that receipt. Build, installation and local tests do not close it.
+
 ### Confirmation is a relationship between values
 
 The original `CATEGORY-UI-001` counterexample confirmed one transfer pair, changed an endpoint, then used the normal Post callback. The old source allowed the new, unconfirmed pair to be saved. No provider posting was performed by that local model. [S07](#s07)
