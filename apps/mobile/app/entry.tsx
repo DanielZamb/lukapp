@@ -12,11 +12,13 @@ import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 function Entry({ workspaceId, entryId, timeZone }: { workspaceId: string; entryId: string; timeZone: string }) {
   const { detail, reversal } = useEntryDetail(workspaceId, entryId);
   const active = useIsFocused();
-  const { month, date } = useWorkspaceCalendar(timeZone);
+  const { date } = useWorkspaceCalendar(timeZone);
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
-  const budget = useQuery(api.budget.evaluate, { workspaceId, month });
+  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
+  const month = detail?.row.date.slice(0, 7);
+  const budget = useQuery(api.budget.evaluate, month ? { workspaceId, month } : "skip");
   return <EntryDetailScreen detail={detail} reversal={reversal.state}
-    categories={categories} budget={budget} active={active} currentDate={date}
+    categories={categories} places={places} budget={budget} active={active} currentDate={date}
     onBack={() => router.back()}
     onEntry={(next) => router.push({ pathname: "/entry", params: { entryId: next } })}
     onReverse={reversal.request} onCancel={reversal.cancel} onConfirm={() => void reversal.confirm()} />;

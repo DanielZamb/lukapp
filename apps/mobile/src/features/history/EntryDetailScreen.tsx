@@ -3,7 +3,7 @@ import { ActivityIndicator, ScrollView, View } from "react-native";
 import { EmojiTile, FactRow, Group, Header, IconTile, ListGroup, ListRow, MoneyHero, Presentation, Screen, StatusBadge, Text, moneyTone, useTheme, useUi } from "../../ui/core";
 import { EntryDetailActions, EntryReversal, useEntryReversalPresentation } from "./EntryReversal";
 import { formatActivityAmount } from "./format";
-import type { EntryDetail } from "./types";
+import type { EntryDetail, EntryPlace } from "./types";
 import type { ReversalState } from "./useReversal";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../api";
@@ -11,19 +11,20 @@ import type { ContextPillContent } from "../../ui/contextPillModel";
 import { useContextPill } from "../../ui/ContextPill";
 import { historyDate, type HistoryCategory } from "./listModel";
 import { formatAmount } from "../money";
+import { accountEmoji } from "../places/model";
 
 export function entryPillContent(detail: EntryDetail, categories: HistoryCategory[], budget?: FunctionReturnType<typeof api.budget.evaluate>): ContextPillContent {
   const { row } = detail;
   const primary = row.userCategories.find((category) => category.id === row.primaryUserCategoryId) ?? row.userCategories[0];
   const category = categories.find((category) => category.id === primary?.id);
-  const jar = budget?.jars.find((jar) => jar.category.id === primary?.id);
+  const jar = budget?.month === row.date.slice(0, 7) ? budget.jars.find((jar) => jar.category.id === primary?.id) : undefined;
   if (jar) return { kind: "budget", name: jar.category.name, emoji: category?.style.emoji ?? jar.category.emoji,
     currency: budget?.currency ?? row.amount.currency, limitMinor: jar.limitMinorUnits, spentMinor: jar.consumptionMinorUnits };
   return { kind: "entry", name: row.title, emoji: category?.style.emoji ?? (row.transfer ? "↔️" : "🧾"),
     currency: row.amount.currency, amountMinor: row.amount.minorUnits };
 }
 
-export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse, onCancel, onConfirm, categories = [], budget, active = true, currentDate }: {
+export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse, onCancel, onConfirm, categories = [], places = [], budget, active = true, currentDate }: {
   detail: EntryDetail | undefined;
   reversal: ReversalState;
   onBack: () => void;
@@ -32,6 +33,7 @@ export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse
   onCancel: () => void;
   onConfirm: () => void;
   categories?: HistoryCategory[];
+  places?: EntryPlace[];
   budget?: FunctionReturnType<typeof api.budget.evaluate>;
   active?: boolean;
   currentDate?: string;
@@ -41,7 +43,7 @@ export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse
   const scrollRef = useRef<ScrollView>(null);
   const [covered, setCovered] = useState(false);
   const pill = useContextPill({
-    identity: `entry:${detail?.entry.id ?? "loading"}:${budget?.month ?? ""}`,
+    identity: `entry:${detail?.entry.id ?? "loading"}:${detail?.row.date.slice(0, 7) ?? ""}`,
     active: active && detail !== undefined && !covered,
     content: detail ? entryPillContent(detail, categories, budget) : { kind: "entry", name: "Entry", emoji: "🧾", currency: "", amountMinor: 0 },
     onBackToSummary: ({ y, animated }) => scrollRef.current?.scrollTo({ y, animated }),
@@ -75,7 +77,7 @@ export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse
       onEntry={onEntry} onReverse={onReverse} onConfirm={onConfirm} onClose={onBack} /> : undefined}>
       {!detail ? <ActivityIndicator accessibilityLabel="Loading entry" /> : <>
         <View {...pill.summaryProps}><EntrySummary detail={detail} reversal={reversal} /></View>
-        <EntryFacts detail={detail} categories={categories} currentDate={currentDate ?? detail.row.date} />
+        <EntryFacts detail={detail} categories={categories} places={places} currentDate={currentDate ?? detail.row.date} />
         <EntryReversal presentation={reversalPresentation} detail={detail} reversal={reversal} onEntry={onEntry} onReverse={onReverse}
           onCancel={onCancel} onConfirm={onConfirm} onChildSheetChange={setCovered} />
       </>}
@@ -100,14 +102,18 @@ export function EntrySummary({ detail, reversal }: { detail: EntryDetail; revers
   </View>;
 }
 
-export function EntryFacts({ detail, categories, currentDate }: { detail: EntryDetail; categories: HistoryCategory[]; currentDate: string }) {
+export function EntryFacts({ detail, categories, places = [], currentDate }: { detail: EntryDetail; categories: HistoryCategory[]; places?: EntryPlace[]; currentDate: string }) {
   const theme = useTheme();
   const { row, entry } = detail;
+  const placeEmoji = (id: string | undefined) => {
+    const place = places.find((place) => place.id === id);
+    return place ? accountEmoji(place) : "💰";
+  };
   return <Group title="About this entry" pairGap={12}>
     <FactRow label="When" value={historyDate(row.date, currentDate)} icon="calendar-outline" />
     {row.transfer && <>
-      <FactRow label="From" value={row.transfer.from.name} icon="wallet-outline" />
-      <FactRow label="To" value={row.transfer.to.name} icon="wallet-outline" />
+      <FactRow label="From" value={row.transfer.from.name} emoji={placeEmoji(row.transfer.from.id)} />
+      <FactRow label="To" value={row.transfer.to.name} emoji={placeEmoji(row.transfer.to.id)} />
     </>}
     {row.userCategories.map((category) => {
       const stored = categories.find((stored) => stored.id === category.id);
@@ -115,6 +121,6 @@ export function EntryFacts({ detail, categories, currentDate }: { detail: EntryD
         leading={<EmojiTile emoji={stored?.style.emoji ?? "🧾"} color={theme[stored?.style.tone ?? "mutedForeground"]} />} />;
     })}
     {!row.transfer && row.userCategories.length === 0 && <FactRow label="Category" value="No category" icon="pricetag-outline" />}
-    {!row.transfer && <FactRow label="Place" value={entry.financialAccountProfileName ?? "No place"} icon="wallet-outline" />}
+    {!row.transfer && <FactRow label="Place" value={entry.financialAccountProfileName ?? "No place"} emoji={placeEmoji(entry.financialAccountProfileId)} />}
   </Group>;
 }

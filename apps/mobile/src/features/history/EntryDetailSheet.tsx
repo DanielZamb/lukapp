@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { useIsFocused } from "@react-navigation/native";
-import type { BottomSheetScrollViewMethods } from "@gorhom/bottom-sheet";
+import type { BottomSheetModal, BottomSheetScrollViewMethods } from "@gorhom/bottom-sheet";
 import type { Theme } from "../../ui/tokens";
 import type { ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import { Presentation, Text, useTheme, useUi } from "../../ui/core";
+import { Presentation, SecondaryButton, Text, useTheme, useUi } from "../../ui/core";
 import { Sheet } from "../../ui/Sheet";
 import { spacing, touchTarget } from "../../ui/tokens";
 import { EntryDetailActions, EntryReversal, useEntryReversalPresentation } from "./EntryReversal";
@@ -14,12 +14,14 @@ import { useEntryDetail } from "./useEntryDetail";
 import { api } from "../api";
 import { useContextPill } from "../../ui/ContextPill";
 import { EntryFacts, EntrySummary, entryPillContent } from "./EntryDetailScreen";
+import type { EntryPlace } from "./types";
 
 type Props = {
   workspaceId: string;
   entryId: string;
   profileId?: string;
   categories: HistoryCategory[];
+  places: EntryPlace[];
   currentDate: string;
   onEntry: (id: string) => void;
   onClose: () => void;
@@ -28,25 +30,29 @@ type Props = {
 export function EntryDetailSheet(props: Props) {
   const data = useEntryDetail(props.workspaceId, props.entryId, props.profileId);
   const reversalPresentation = useEntryReversalPresentation(data.reversal.state);
-  const budget = useQuery(api.budget.evaluate, { workspaceId: props.workspaceId, month: props.currentDate.slice(0, 7) });
+  const month = data.detail?.row.date.slice(0, 7);
+  const budget = useQuery(api.budget.evaluate, month ? { workspaceId: props.workspaceId, month } : "skip");
   const focused = useIsFocused();
   const [presented, setPresented] = useState(false);
   const scrollRef = useRef<BottomSheetScrollViewMethods>(null);
+  const sheetRef = useRef<BottomSheetModal>(null);
+  const close = () => sheetRef.current?.dismiss();
   const [covered, setCovered] = useState(false);
   const pill = useContextPill({
-    identity: `history-entry:${props.workspaceId}:${props.entryId}:${props.profileId ?? "all"}:${props.currentDate.slice(0, 7)}`,
+    identity: `history-entry:${props.workspaceId}:${props.entryId}:${props.profileId ?? "all"}:${month ?? ""}`,
     active: focused && presented && !covered && data.detail !== undefined,
     content: data.detail ? entryPillContent(data.detail, props.categories, budget) : { kind: "entry", name: "Entry", emoji: "🧾", currency: "", amountMinor: 0 },
     onBackToSummary: ({ y, animated }) => scrollRef.current?.scrollTo({ y, animated }),
   });
-  return <Sheet label="Entry details" onClose={props.onClose} tall header={false} scrollRef={scrollRef} scrollProps={pill.scrollProps}
-    footer={data.detail ? <EntryDetailActions detail={data.detail} reversal={data.reversal.state} onEntry={props.onEntry}
-      onReverse={data.reversal.request} onConfirm={() => void data.reversal.confirm()} onClose={props.onClose} /> : undefined}
+  const closeButton = <SecondaryButton label="Close details" onPress={close} />;
+  return <Sheet label="Entry details" sheetRef={sheetRef} presentOnMount onClose={props.onClose} closeLabel={false} scrollRef={scrollRef} scrollProps={pill.scrollProps}
+    footer={<Presentation legacy={closeButton}>{data.detail ? <EntryDetailActions detail={data.detail} reversal={data.reversal.state} onEntry={props.onEntry}
+      onReverse={data.reversal.request} onConfirm={() => void data.reversal.confirm()} onClose={close} /> : closeButton}</Presentation>}
     nativeModalProps={{ onChange: (index) => setPresented(index >= 0) }}>
     <Presentation legacy={<EntryDetail key={props.entryId} {...props} {...data} reversalPresentation={reversalPresentation} summaryProps={pill.summaryProps} />}>
       {!data.detail ? <ActivityIndicator accessibilityLabel="Loading entry" /> : <>
         <View {...pill.summaryProps}><EntrySummary detail={data.detail} reversal={data.reversal.state} /></View>
-        <EntryFacts detail={data.detail} categories={props.categories} currentDate={props.currentDate} />
+        <EntryFacts detail={data.detail} categories={props.categories} places={props.places} currentDate={props.currentDate} />
         <EntryReversal presentation={reversalPresentation} detail={data.detail} reversal={data.reversal.state} onEntry={props.onEntry} onReverse={data.reversal.request}
           onCancel={data.reversal.cancel} onConfirm={() => void data.reversal.confirm()} onChildSheetChange={setCovered} />
       </>}

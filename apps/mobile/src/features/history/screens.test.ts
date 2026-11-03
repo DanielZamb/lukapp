@@ -79,6 +79,10 @@ test("entry pill uses the primary category limit and consumption, otherwise the 
       limitMinorUnits: 500000, consumptionMinorUnits: 150000 }] };
   expect(entryPillContent(detail, categories, budget)).toEqual({ kind: "budget", name: "Food", emoji: "🥑", currency: "COP",
     limitMinor: 500000, spentMinor: 150000 });
+  expect(entryPillContent(detail, categories, { ...budget, month: "2026-11" }))
+    .toEqual({ kind: "entry", name: "Groceries", emoji: "🥑", currency: "COP", amountMinor: -150000 });
+  expect(entryPillContent(detail, categories, { ...budget, jars: [] }))
+    .toEqual({ kind: "entry", name: "Groceries", emoji: "🥑", currency: "COP", amountMinor: -150000 });
   expect(entryPillContent({ ...detail, row: { ...detail.row, primaryUserCategoryId: "family" } }, categories, budget))
     .toEqual({ kind: "entry", name: "Groceries", emoji: "🧾", currency: "COP", amountMinor: -150000 });
 });
