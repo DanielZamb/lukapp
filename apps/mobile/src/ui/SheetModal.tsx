@@ -140,7 +140,7 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
           presentation.current = { kind: "closing" };
         } else if (current.kind !== "closing") presentation.current = { kind: "open" };
       }
-      setOpen(args[0] >= 0 || presentation.current.kind === "opening" || presentation.current.kind === "waitingToClose");
+      setOpen(args[0] >= 0 || presentation.current.kind === "opening" || presentation.current.kind === "waitingToClose" || presentation.current.kind === "closing");
       onChange?.(...args);
       if (args[0] >= 0 && current.kind === "waitingToClose") native.current?.dismiss(...current.args);
     } })}
