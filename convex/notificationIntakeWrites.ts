@@ -3,6 +3,8 @@ import { requireSubmission } from "./lib/deviceAuthorization";
 import { liveSession } from "./lib/securityValues";
 import { createAccountingCore } from "../src/accounting/core";
 import { confirmCandidate } from "../src/notificationIntake/confirmCandidate";
+import { AccountingError } from "../src/accounting/errors";
+import { IntakeError } from "../src/notificationIntake/policy";
 import { convexStore } from "./store";
 import { intakeWriteStore } from "./notificationIntakeStore";
 import { run } from "./accountingErrors";
@@ -24,9 +26,9 @@ export const confirmOne = internalMutation({
         confirmCandidate(
           intakeWriteStore(ctx),
           async (body) => {
-            const posted =
+            const posted = await (
               body.kind === "out"
-                ? await accounting.recordCashExpense({
+                ? accounting.recordCashExpense({
                     actor,
                     workspaceId: body.workspaceId,
                     financialAccountProfileId: body.financialAccountProfileId,
@@ -41,7 +43,7 @@ export const confirmOne = internalMutation({
                       ? { primaryUserCategoryId: body.primaryUserCategoryId }
                       : {}),
                   })
-                : await accounting.recordCashIncome({
+                : accounting.recordCashIncome({
                     actor,
                     workspaceId: body.workspaceId,
                     financialAccountProfileId: body.financialAccountProfileId,
@@ -55,7 +57,14 @@ export const confirmOne = internalMutation({
                     ...(body.primaryUserCategoryId
                       ? { primaryUserCategoryId: body.primaryUserCategoryId }
                       : {}),
-                  });
+                  })
+            ).catch((error: unknown) => {
+              if (error instanceof AccountingError && error.code === "idempotency_key_conflict") {
+                throw new IntakeError("candidate_confirmation_conflict",
+                  "This notification was already confirmed with different details. Review the original entry.");
+              }
+              throw error;
+            });
             return {
               id: posted.id,
               description: posted.description,

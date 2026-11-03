@@ -262,6 +262,23 @@ test("idempotency conflict consumes the Candidate; a timeout leaves it", async (
   expect(retryFail).not.toHaveBeenCalled();
 });
 
+test("a changed confirmation conflict retains the Candidate and shows failure without a success receipt", async () => {
+  const message = "This notification was already confirmed with different details. Review the original entry.";
+  const consume = vi.fn(async () => {});
+  const fail = vi.fn(async () => {});
+  const confirm = vi.fn(async () => {
+    throw new ConvexError({ kind: "intake", code: "candidate_confirmation_conflict", message });
+  });
+  const editor = await open({ id: "candidate-groceries", facts, suggestion,
+    parserVersion: "parser@1", consentVersion: "consent@1", confirm, consume, fail });
+  await act(async () => editor().setAmount("-450.000,00"));
+  await act(async () => editor().submit());
+  expect(consume).not.toHaveBeenCalled();
+  expect(fail).toHaveBeenCalledExactlyOnceWith(message);
+  expect(editor()).toMatchObject({ error: message, posted: null,
+    amount: "-450.000,00", description: "Groceries", profileId: "daily", date: "2026-10-17" });
+});
+
 test("a definite accounting rejection fails the Candidate and never aborts a Draft", async () => {
   const fail = vi.fn(async () => {});
   const api = transport();

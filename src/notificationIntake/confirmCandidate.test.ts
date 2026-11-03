@@ -33,10 +33,7 @@ function input(
   };
 }
 
-function store(
-  seed: IntakeReceipt[] = [],
-  postedById: Record<string, PostedIntakeEntry> = {},
-): IntakeStore {
+function store(seed: IntakeReceipt[] = []): IntakeStore {
   const rows = [...seed];
   return {
     findReceipt: async (workspaceId, idempotencyKey) =>
@@ -50,7 +47,6 @@ function store(
       rows.push(row);
       return row;
     },
-    readPosted: async (journalEntryId) => postedById[journalEntryId] ?? null,
   };
 }
 
@@ -90,11 +86,11 @@ test("retrying the same Candidate returns the Receipt and does not insert anothe
     amount: { currency: "COP", minorUnits: 126400 },
     replay: false,
   };
-  const receipts = store([], { "je-1": posted });
+  const receipts = store();
   let calls = 0;
   const post = async () => {
     calls += 1;
-    return posted;
+    return { ...posted, replay: calls > 1 };
   };
   const first = await confirmCandidate(receipts, post, {
     ...input(),
@@ -106,14 +102,14 @@ test("retrying the same Candidate returns the Receipt and does not insert anothe
     actorId: "owner",
     now: 2,
   });
-  expect(calls).toBe(1);
+  expect(calls).toBe(2);
   expect(second.replay).toBe(true);
   expect(second.posted).toEqual({ ...posted, replay: true });
   expect(second.receipt.id).toBe(first.receipt.id);
   expect(second.receipt.confirmedAt).toBe(1);
 });
 
-test("an existing Receipt is a replay and does not post again", async () => {
+test("an existing Receipt is returned only after validating the posting replay", async () => {
   const receipt: IntakeReceipt = {
     id: "receipt-1",
     workspaceId: "workspace",
@@ -134,14 +130,14 @@ test("an existing Receipt is a replay and does not post again", async () => {
   };
   const posts: string[] = [];
   const result = await confirmCandidate(
-    store([receipt], { "je-1": posted }),
+    store([receipt]),
     async (body) => {
       posts.push(body.idempotencyKey);
-      throw new Error("must not post when a Receipt already exists");
+      return { ...posted, replay: true };
     },
     { ...input(), actorId: "owner", now: 9 },
   );
-  expect(posts).toEqual([]);
+  expect(posts).toEqual([intakeKey("candidate-groceries")]);
   expect(result.replay).toBe(true);
   expect(result.receipt.id).toBe("receipt-1");
   expect(result.posted).toEqual({ ...posted, replay: true });
