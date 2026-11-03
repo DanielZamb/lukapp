@@ -53,6 +53,12 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
     if (mounted.current) setOpen(false);
     notifyDismiss.current?.();
   }
+  function recoverClose(args: Parameters<BottomSheetModal["dismiss"]>) {
+    version.current += 1;
+    setNativeVersion(version.current);
+    native.current?.dismiss(...args);
+    settleClose();
+  }
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -77,12 +83,7 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
         if (kind === "hidden" || kind === "closing" || kind === "waitingToClose") return;
         if (kind === "opening") {
           presentation.current = { kind: "waitingToClose", args };
-          recovery.current = setTimeout(() => {
-            version.current += 1;
-            setNativeVersion(version.current);
-            native.current?.dismiss(...args);
-            settleClose();
-          }, 1000);
+          recovery.current = setTimeout(() => recoverClose(args), 1000);
           return;
         }
       }
@@ -143,6 +144,7 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
       setOpen(args[0] >= 0 || presentation.current.kind === "opening" || presentation.current.kind === "waitingToClose" || presentation.current.kind === "closing");
       onChange?.(...args);
       if (args[0] >= 0 && current.kind === "waitingToClose") native.current?.dismiss(...current.args);
+      else if (args[0] === -1 && presentation.current.kind === "closing" && props.enableDismissOnClose === false) recoverClose([]);
     } })}
     {...(busy && { enableHandlePanningGesture: false })}>
     {children}

@@ -12,6 +12,9 @@ import type { HistoryQuery } from "./history/filter";
 import { Sheet } from "../ui/Sheet";
 import { PickerSheet } from "../ui/PickerSheet";
 import { SheetModal } from "../ui/SheetModal";
+import { SheetProvider } from "../ui/SheetProvider";
+import { SheetAccessibilityBoundary } from "../ui/SheetAccessibility";
+import { View } from "react-native";
 
 vi.mock("./posting/usePostingTransport", () => ({ usePostingTransport: () => { throw new Error("No deferred account request"); } }));
 vi.mock("convex/react", () => ({
@@ -244,4 +247,30 @@ test.each([1, 2.1])("a synchronous reopen from timeout dismissal reaches the rep
   await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); });
   expect(dismissed).toHaveBeenCalledOnce();
   expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
+});
+
+test.each([1, 2.1])("Back completes once without automatic native dismissal at fontScale %s", async (fontScale) => {
+  const ref = createRef<BottomSheetModal>();
+  const dismissed = vi.fn();
+  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(SheetProvider, null,
+    createElement(View, { testID: "background" }),
+    createElement(Sheet, { sheetRef: ref, presentOnMount: true, label: "Retained native sheet", nativeModalProps: { enableDismissOnClose: false }, onDismiss: dismissed }, createElement("text", null, "Caller body")),
+  ))); });
+  const hidden = () => root!.root.findByType(SheetAccessibilityBoundary).findAllByType(View)[0].props.importantForAccessibility === "no-hide-descendants";
+  await settle();
+  const oldModal = root!.root.findByType(BottomSheetModal).props;
+  expect(hidden()).toBe(true);
+  await back(); await settle();
+  expect(dismissed).toHaveBeenCalledOnce();
+  expect(hidden()).toBe(false);
+  expect(hardware.listeners).toHaveLength(0);
+  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(0);
+  await act(async () => ref.current?.present()); await settle();
+  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
+  await act(async () => { oldModal.onChange?.(-1, 0, 0); oldModal.onDismiss?.(); });
+  expect(dismissed).toHaveBeenCalledOnce();
+  expect(hidden()).toBe(true);
+  await back(); await settle();
+  expect(dismissed).toHaveBeenCalledTimes(2);
+  expect(hidden()).toBe(false);
 });
