@@ -1,6 +1,7 @@
 /* The one entry point that writes to the General Ledger. Commands build drafts; this recognizes them. */
 import { requireOpeningDate } from "./openingControl";
 import { AccountingError } from "./errors";
+import { requireRepaymentsWithinDebt } from "./debtRepayment";
 import { requireCategoryAssignments, sameCategoryAssignments } from "./categories/assignments";
 import { requireWorkspace } from "./membership";
 import { periodFromAccountingDate } from "./period";
@@ -11,6 +12,7 @@ import type {
   Actor,
   DraftJournalLine,
   JournalEntryDraft,
+  LedgerAccount,
   StoredJournalEntry,
 } from "./types";
 
@@ -40,9 +42,10 @@ export async function postJournalEntry(
     return { entry: existing, replay: true };
   }
   assertBalancedLines(draft.lines);
-  await assertPostingAccounts(store, input.workspaceId, draft.lines);
+  const accounts = await assertPostingAccounts(store, input.workspaceId, draft.lines);
   await assertLinkedRecords(store, input.workspaceId, draft);
   const period = periodFromAccountingDate(draft.accountingDate);
+  await requireRepaymentsWithinDebt(store, input.workspaceId, draft, accounts);
   await requireOpeningDate(store, input.workspaceId, draft);
   await requirePostablePeriod(store, input.workspaceId, draft.accountingDate);
   const entry = await store.insertJournalEntry({
@@ -86,13 +89,16 @@ async function assertPostingAccounts(
   store: AccountingStore,
   workspaceId: string,
   lines: DraftJournalLine[],
-): Promise<void> {
+): Promise<Map<string, LedgerAccount>> {
+  const accounts = new Map<string, LedgerAccount>();
   for (const line of lines) {
     const account = await store.getLedgerAccount(line.ledgerAccountId);
     if (!account || account.workspaceId !== workspaceId) {
       throw new AccountingError("ledger_account_not_found");
     }
+    accounts.set(account.id, account);
   }
+  return accounts;
 }
 
 /** A draft may only link to a profile or an entry in its own Workspace. */

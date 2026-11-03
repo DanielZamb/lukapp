@@ -320,6 +320,7 @@ test("new transfers reject same, missing and foreign profiles, invalid money/dat
       t.action(api.accounting.recordAccountTransfer, { ...args, ...patch }),
     ).rejects.toMatchObject({ data: { code } });
   expect(await read.entries()).toEqual([]);
+  await t.action(api.accounting.recordOpeningPosition, opening(workspaceId, card.id));
   const first = await t.action(api.accounting.recordAccountTransfer, args);
   for (const patch of [
     { description: "Changed" },
@@ -342,7 +343,7 @@ test("new transfers reject same, missing and foreign profiles, invalid money/dat
       idempotencyKey: "new-locked",
     }),
   ).rejects.toMatchObject({ data: { code: "locked_period" } });
-  expect(await read.entries()).toHaveLength(1);
+  expect(await read.entries()).toHaveLength(2);
 });
 
 test("atomic account setup converges on one profile/opening, including zero, and rejects conflicting or invalid retries", async () => {
@@ -683,6 +684,7 @@ test("place setup treats a missing emoji like an empty retry", async () => {
 
 test("Transfer retains category metadata without changing spending and rejects unknown categories", async () => {
   const { t, workspaceId, bank, card } = await fixture();
+  await t.action(api.accounting.recordOpeningPosition, opening(workspaceId, card.id));
   const category = await t.action(api.accounting.createUserCategory, {
     workspaceId,
     selection: {

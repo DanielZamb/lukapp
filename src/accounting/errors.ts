@@ -1,4 +1,5 @@
 export const accountingErrorMessages = {
+  repayment_exceeds_debt: "This payment exceeds the total debt still owed. Reduce the amount and try again.",
   ledger_summary_not_ready: "Ledger totals are being prepared. Try again after the migration completes",
   ledger_totals_out_of_range: "Ledger totals exceed the supported amount range",
   account_emoji_required: "Choose a look for this place",
