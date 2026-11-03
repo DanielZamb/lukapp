@@ -1,5 +1,93 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`Android native presentation retains its rendered contract 1`] = `
+"{
+  "type": "modal",
+  "props": {
+    "ref": {
+      "current": {
+        "present": "[callback]",
+        "dismiss": "[callback]"
+      }
+    },
+    "accessibilityLabel": "Entry details",
+    "enablePanDownToClose": true,
+    "enableDynamicSizing": true,
+    "onDismiss": "[callback]",
+    "backgroundStyle": [
+      {
+        "backgroundColor": "#ffffff",
+        "borderTopLeftRadius": 24,
+        "borderTopRightRadius": 24,
+        "borderWidth": 1,
+        "borderColor": "#e5e5e5"
+      },
+      {
+        "borderTopLeftRadius": 28,
+        "borderTopRightRadius": 28
+      }
+    ],
+    "handleIndicatorStyle": {
+      "backgroundColor": "#8a8a8a"
+    },
+    "topInset": 24,
+    "backdropComponent": "[callback]"
+  },
+  "children": [
+    {
+      "type": "sheet-scroll",
+      "props": {
+        "accessibilityViewIsModal": true,
+        "keyboardShouldPersistTaps": "handled",
+        "contentContainerStyle": {
+          "paddingHorizontal": 24,
+          "paddingTop": 8,
+          "gap": 12,
+          "paddingBottom": 68
+        },
+        "enableFooterMarginAdjustment": true
+      },
+      "children": [
+        {
+          "type": "content",
+          "props": {},
+          "children": null
+        }
+      ]
+    },
+    {
+      "type": "sheet-footer",
+      "props": {
+        "animatedFooterPosition": {},
+        "bottomInset": 48
+      },
+      "children": [
+        {
+          "type": "view",
+          "props": {
+            "style": {
+              "paddingHorizontal": 16,
+              "paddingVertical": 12,
+              "gap": 8,
+              "borderTopWidth": 1,
+              "borderTopColor": "#e5e5e5",
+              "backgroundColor": "#ffffff"
+            }
+          },
+          "children": [
+            {
+              "type": "actions",
+              "props": {},
+              "children": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}"
+`;
+
 exports[`existing Sheet callers retain their rendered contract in default > legacy body, dark 1`] = `
 "{
   "type": "modal",
@@ -1140,173 +1228,62 @@ exports[`existing Sheet callers retain their rendered contract in xxxl > native 
 
 exports[`existing Sheet callers retain their rendered contract in xxxl > tall page, dark 1`] = `
 "{
-  "type": "modal",
+  "type": "view",
   "props": {
-    "ref": {
-      "current": {
-        "present": "[callback]",
-        "dismiss": "[callback]"
-      }
+    "style": {
+      "position": "absolute",
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
     },
-    "accessibilityLabel": "Details",
-    "enablePanDownToClose": false,
-    "enableDynamicSizing": false,
-    "onDismiss": "[callback]",
-    "backgroundStyle": [
-      {
-        "backgroundColor": "#0a0a0a",
-        "borderTopLeftRadius": 24,
-        "borderTopRightRadius": 24,
-        "borderWidth": 1,
-        "borderColor": "rgba(255, 255, 255, 0.10)"
-      },
-      {
-        "borderTopLeftRadius": 28,
-        "borderTopRightRadius": 28
-      }
-    ],
-    "handleIndicatorStyle": {
-      "backgroundColor": "#737373"
-    },
-    "containerComponent": "[callback]",
+    "pointerEvents": "box-none",
     "accessible": false,
-    "snapPoints": [
-      "100%"
-    ],
-    "topInset": 24,
-    "handleComponent": null,
-    "keyboardBehavior": "interactive",
-    "keyboardBlurBehavior": "restore",
-    "android_keyboardInputMode": "adjustPan",
-    "backdropComponent": "[callback]",
-    "onChange": "[callback]"
+    "accessibilityViewIsModal": true,
+    "importantForAccessibility": "no"
   },
   "children": [
     {
-      "type": "view",
+      "type": "modal",
       "props": {
-        "style": {
-          "paddingHorizontal": 16,
-          "paddingTop": 12
-        }
-      },
-      "children": [
-        {
-          "type": "view",
-          "props": {
-            "style": {
-              "minHeight": 56,
-              "flexDirection": "row",
-              "alignItems": "flex-start",
-              "gap": 12
-            }
-          },
-          "children": [
-            {
-              "type": "view",
-              "props": {
-                "style": {
-                  "flex": 1,
-                  "minWidth": 0,
-                  "gap": 2,
-                  "paddingTop": 4
-                }
-              },
-              "children": [
-                {
-                  "type": "text",
-                  "props": {
-                    "ref": {
-                      "current": {
-                        "present": "[callback]",
-                        "dismiss": "[callback]"
-                      }
-                    },
-                    "onLayout": "[callback]",
-                    "accessibilityRole": "header",
-                    "allowFontScaling": true,
-                    "maxFontSizeMultiplier": 1.35,
-                    "style": [
-                      {
-                        "fontFamily": "Geist_600SemiBold",
-                        "fontSize": 20,
-                        "lineHeight": 25,
-                        "letterSpacing": -0.5
-                      },
-                      {
-                        "color": "#fafafa"
-                      },
-                      null
-                    ]
-                  },
-                  "children": [
-                    "Details"
-                  ]
-                }
-              ]
-            },
-            {
-              "type": "button",
-              "props": {
-                "accessibilityRole": "button",
-                "accessibilityLabel": "Close Details",
-                "accessibilityState": {
-                  "disabled": false
-                },
-                "disabled": false,
-                "onPress": "[callback]",
-                "style": {
-                  "width": 56,
-                  "height": 56,
-                  "borderRadius": 999,
-                  "alignItems": "center",
-                  "justifyContent": "center",
-                  "backgroundColor": "#27272a",
-                  "borderWidth": 1,
-                  "borderColor": "rgba(255, 255, 255, 0.10)"
-                }
-              },
-              "children": [
-                {
-                  "type": "icon",
-                  "props": {
-                    "name": "close",
-                    "size": 22,
-                    "color": "#fafafa"
-                  },
-                  "children": null
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "type": "sheet-scroll",
-      "props": {
-        "keyboardShouldPersistTaps": "handled",
-        "contentContainerStyle": {
-          "paddingHorizontal": 16,
-          "paddingTop": 12,
-          "gap": 12,
-          "paddingBottom": 68
+        "ref": {
+          "current": {
+            "present": "[callback]",
+            "dismiss": "[callback]"
+          }
         },
-        "enableFooterMarginAdjustment": true
-      },
-      "children": [
-        {
-          "type": "content",
-          "props": {},
-          "children": null
-        }
-      ]
-    },
-    {
-      "type": "sheet-footer",
-      "props": {
-        "animatedFooterPosition": {},
-        "bottomInset": 48
+        "accessibilityLabel": "Details",
+        "enablePanDownToClose": false,
+        "enableDynamicSizing": false,
+        "onDismiss": "[callback]",
+        "backgroundStyle": [
+          {
+            "backgroundColor": "#0a0a0a",
+            "borderTopLeftRadius": 24,
+            "borderTopRightRadius": 24,
+            "borderWidth": 1,
+            "borderColor": "rgba(255, 255, 255, 0.10)"
+          },
+          {
+            "borderTopLeftRadius": 28,
+            "borderTopRightRadius": 28
+          }
+        ],
+        "handleIndicatorStyle": {
+          "backgroundColor": "#737373"
+        },
+        "accessible": false,
+        "snapPoints": [
+          "100%"
+        ],
+        "topInset": 24,
+        "handleComponent": null,
+        "keyboardBehavior": "interactive",
+        "keyboardBlurBehavior": "restore",
+        "android_keyboardInputMode": "adjustPan",
+        "backdropComponent": "[callback]",
+        "onChange": "[callback]",
+        "containerComponent": "[callback]"
       },
       "children": [
         {
@@ -1314,18 +1291,147 @@ exports[`existing Sheet callers retain their rendered contract in xxxl > tall pa
           "props": {
             "style": {
               "paddingHorizontal": 16,
-              "paddingVertical": 12,
-              "gap": 8,
-              "borderTopWidth": 1,
-              "borderTopColor": "rgba(255, 255, 255, 0.10)",
-              "backgroundColor": "#0a0a0a"
+              "paddingTop": 12
             }
           },
           "children": [
             {
-              "type": "actions",
+              "type": "view",
+              "props": {
+                "style": {
+                  "minHeight": 56,
+                  "flexDirection": "row",
+                  "alignItems": "flex-start",
+                  "gap": 12
+                }
+              },
+              "children": [
+                {
+                  "type": "view",
+                  "props": {
+                    "style": {
+                      "flex": 1,
+                      "minWidth": 0,
+                      "gap": 2,
+                      "paddingTop": 4
+                    }
+                  },
+                  "children": [
+                    {
+                      "type": "text",
+                      "props": {
+                        "ref": {
+                          "current": {
+                            "present": "[callback]",
+                            "dismiss": "[callback]"
+                          }
+                        },
+                        "onLayout": "[callback]",
+                        "accessibilityRole": "header",
+                        "allowFontScaling": true,
+                        "maxFontSizeMultiplier": 1.35,
+                        "style": [
+                          {
+                            "fontFamily": "Geist_600SemiBold",
+                            "fontSize": 20,
+                            "lineHeight": 25,
+                            "letterSpacing": -0.5
+                          },
+                          {
+                            "color": "#fafafa"
+                          },
+                          null
+                        ]
+                      },
+                      "children": [
+                        "Details"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "button",
+                  "props": {
+                    "accessibilityRole": "button",
+                    "accessibilityLabel": "Close Details",
+                    "accessibilityState": {
+                      "disabled": false
+                    },
+                    "disabled": false,
+                    "onPress": "[callback]",
+                    "style": {
+                      "width": 56,
+                      "height": 56,
+                      "borderRadius": 999,
+                      "alignItems": "center",
+                      "justifyContent": "center",
+                      "backgroundColor": "#27272a",
+                      "borderWidth": 1,
+                      "borderColor": "rgba(255, 255, 255, 0.10)"
+                    }
+                  },
+                  "children": [
+                    {
+                      "type": "icon",
+                      "props": {
+                        "name": "close",
+                        "size": 22,
+                        "color": "#fafafa"
+                      },
+                      "children": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "sheet-scroll",
+          "props": {
+            "keyboardShouldPersistTaps": "handled",
+            "contentContainerStyle": {
+              "paddingHorizontal": 16,
+              "paddingTop": 12,
+              "gap": 12,
+              "paddingBottom": 68
+            },
+            "enableFooterMarginAdjustment": true
+          },
+          "children": [
+            {
+              "type": "content",
               "props": {},
               "children": null
+            }
+          ]
+        },
+        {
+          "type": "sheet-footer",
+          "props": {
+            "animatedFooterPosition": {},
+            "bottomInset": 48
+          },
+          "children": [
+            {
+              "type": "view",
+              "props": {
+                "style": {
+                  "paddingHorizontal": 16,
+                  "paddingVertical": 12,
+                  "gap": 8,
+                  "borderTopWidth": 1,
+                  "borderTopColor": "rgba(255, 255, 255, 0.10)",
+                  "backgroundColor": "#0a0a0a"
+                }
+              },
+              "children": [
+                {
+                  "type": "actions",
+                  "props": {},
+                  "children": null
+                }
+              ]
             }
           ]
         }
@@ -1337,173 +1443,62 @@ exports[`existing Sheet callers retain their rendered contract in xxxl > tall pa
 
 exports[`existing Sheet callers retain their rendered contract in xxxl > tall page, light 1`] = `
 "{
-  "type": "modal",
+  "type": "view",
   "props": {
-    "ref": {
-      "current": {
-        "present": "[callback]",
-        "dismiss": "[callback]"
-      }
+    "style": {
+      "position": "absolute",
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
     },
-    "accessibilityLabel": "Details",
-    "enablePanDownToClose": false,
-    "enableDynamicSizing": false,
-    "onDismiss": "[callback]",
-    "backgroundStyle": [
-      {
-        "backgroundColor": "#ffffff",
-        "borderTopLeftRadius": 24,
-        "borderTopRightRadius": 24,
-        "borderWidth": 1,
-        "borderColor": "#e5e5e5"
-      },
-      {
-        "borderTopLeftRadius": 28,
-        "borderTopRightRadius": 28
-      }
-    ],
-    "handleIndicatorStyle": {
-      "backgroundColor": "#8a8a8a"
-    },
-    "containerComponent": "[callback]",
+    "pointerEvents": "box-none",
     "accessible": false,
-    "snapPoints": [
-      "100%"
-    ],
-    "topInset": 24,
-    "handleComponent": null,
-    "keyboardBehavior": "interactive",
-    "keyboardBlurBehavior": "restore",
-    "android_keyboardInputMode": "adjustPan",
-    "backdropComponent": "[callback]",
-    "onChange": "[callback]"
+    "accessibilityViewIsModal": true,
+    "importantForAccessibility": "no"
   },
   "children": [
     {
-      "type": "view",
+      "type": "modal",
       "props": {
-        "style": {
-          "paddingHorizontal": 16,
-          "paddingTop": 12
-        }
-      },
-      "children": [
-        {
-          "type": "view",
-          "props": {
-            "style": {
-              "minHeight": 56,
-              "flexDirection": "row",
-              "alignItems": "flex-start",
-              "gap": 12
-            }
-          },
-          "children": [
-            {
-              "type": "view",
-              "props": {
-                "style": {
-                  "flex": 1,
-                  "minWidth": 0,
-                  "gap": 2,
-                  "paddingTop": 4
-                }
-              },
-              "children": [
-                {
-                  "type": "text",
-                  "props": {
-                    "ref": {
-                      "current": {
-                        "present": "[callback]",
-                        "dismiss": "[callback]"
-                      }
-                    },
-                    "onLayout": "[callback]",
-                    "accessibilityRole": "header",
-                    "allowFontScaling": true,
-                    "maxFontSizeMultiplier": 1.35,
-                    "style": [
-                      {
-                        "fontFamily": "Geist_600SemiBold",
-                        "fontSize": 20,
-                        "lineHeight": 25,
-                        "letterSpacing": -0.5
-                      },
-                      {
-                        "color": "#0a0a0a"
-                      },
-                      null
-                    ]
-                  },
-                  "children": [
-                    "Details"
-                  ]
-                }
-              ]
-            },
-            {
-              "type": "button",
-              "props": {
-                "accessibilityRole": "button",
-                "accessibilityLabel": "Close Details",
-                "accessibilityState": {
-                  "disabled": false
-                },
-                "disabled": false,
-                "onPress": "[callback]",
-                "style": {
-                  "width": 56,
-                  "height": 56,
-                  "borderRadius": 999,
-                  "alignItems": "center",
-                  "justifyContent": "center",
-                  "backgroundColor": "#f4f4f5",
-                  "borderWidth": 1,
-                  "borderColor": "#e5e5e5"
-                }
-              },
-              "children": [
-                {
-                  "type": "icon",
-                  "props": {
-                    "name": "close",
-                    "size": 22,
-                    "color": "#0a0a0a"
-                  },
-                  "children": null
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "type": "sheet-scroll",
-      "props": {
-        "keyboardShouldPersistTaps": "handled",
-        "contentContainerStyle": {
-          "paddingHorizontal": 16,
-          "paddingTop": 12,
-          "gap": 12,
-          "paddingBottom": 68
+        "ref": {
+          "current": {
+            "present": "[callback]",
+            "dismiss": "[callback]"
+          }
         },
-        "enableFooterMarginAdjustment": true
-      },
-      "children": [
-        {
-          "type": "content",
-          "props": {},
-          "children": null
-        }
-      ]
-    },
-    {
-      "type": "sheet-footer",
-      "props": {
-        "animatedFooterPosition": {},
-        "bottomInset": 48
+        "accessibilityLabel": "Details",
+        "enablePanDownToClose": false,
+        "enableDynamicSizing": false,
+        "onDismiss": "[callback]",
+        "backgroundStyle": [
+          {
+            "backgroundColor": "#ffffff",
+            "borderTopLeftRadius": 24,
+            "borderTopRightRadius": 24,
+            "borderWidth": 1,
+            "borderColor": "#e5e5e5"
+          },
+          {
+            "borderTopLeftRadius": 28,
+            "borderTopRightRadius": 28
+          }
+        ],
+        "handleIndicatorStyle": {
+          "backgroundColor": "#8a8a8a"
+        },
+        "accessible": false,
+        "snapPoints": [
+          "100%"
+        ],
+        "topInset": 24,
+        "handleComponent": null,
+        "keyboardBehavior": "interactive",
+        "keyboardBlurBehavior": "restore",
+        "android_keyboardInputMode": "adjustPan",
+        "backdropComponent": "[callback]",
+        "onChange": "[callback]",
+        "containerComponent": "[callback]"
       },
       "children": [
         {
@@ -1511,18 +1506,147 @@ exports[`existing Sheet callers retain their rendered contract in xxxl > tall pa
           "props": {
             "style": {
               "paddingHorizontal": 16,
-              "paddingVertical": 12,
-              "gap": 8,
-              "borderTopWidth": 1,
-              "borderTopColor": "#e5e5e5",
-              "backgroundColor": "#ffffff"
+              "paddingTop": 12
             }
           },
           "children": [
             {
-              "type": "actions",
+              "type": "view",
+              "props": {
+                "style": {
+                  "minHeight": 56,
+                  "flexDirection": "row",
+                  "alignItems": "flex-start",
+                  "gap": 12
+                }
+              },
+              "children": [
+                {
+                  "type": "view",
+                  "props": {
+                    "style": {
+                      "flex": 1,
+                      "minWidth": 0,
+                      "gap": 2,
+                      "paddingTop": 4
+                    }
+                  },
+                  "children": [
+                    {
+                      "type": "text",
+                      "props": {
+                        "ref": {
+                          "current": {
+                            "present": "[callback]",
+                            "dismiss": "[callback]"
+                          }
+                        },
+                        "onLayout": "[callback]",
+                        "accessibilityRole": "header",
+                        "allowFontScaling": true,
+                        "maxFontSizeMultiplier": 1.35,
+                        "style": [
+                          {
+                            "fontFamily": "Geist_600SemiBold",
+                            "fontSize": 20,
+                            "lineHeight": 25,
+                            "letterSpacing": -0.5
+                          },
+                          {
+                            "color": "#0a0a0a"
+                          },
+                          null
+                        ]
+                      },
+                      "children": [
+                        "Details"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "button",
+                  "props": {
+                    "accessibilityRole": "button",
+                    "accessibilityLabel": "Close Details",
+                    "accessibilityState": {
+                      "disabled": false
+                    },
+                    "disabled": false,
+                    "onPress": "[callback]",
+                    "style": {
+                      "width": 56,
+                      "height": 56,
+                      "borderRadius": 999,
+                      "alignItems": "center",
+                      "justifyContent": "center",
+                      "backgroundColor": "#f4f4f5",
+                      "borderWidth": 1,
+                      "borderColor": "#e5e5e5"
+                    }
+                  },
+                  "children": [
+                    {
+                      "type": "icon",
+                      "props": {
+                        "name": "close",
+                        "size": 22,
+                        "color": "#0a0a0a"
+                      },
+                      "children": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "sheet-scroll",
+          "props": {
+            "keyboardShouldPersistTaps": "handled",
+            "contentContainerStyle": {
+              "paddingHorizontal": 16,
+              "paddingTop": 12,
+              "gap": 12,
+              "paddingBottom": 68
+            },
+            "enableFooterMarginAdjustment": true
+          },
+          "children": [
+            {
+              "type": "content",
               "props": {},
               "children": null
+            }
+          ]
+        },
+        {
+          "type": "sheet-footer",
+          "props": {
+            "animatedFooterPosition": {},
+            "bottomInset": 48
+          },
+          "children": [
+            {
+              "type": "view",
+              "props": {
+                "style": {
+                  "paddingHorizontal": 16,
+                  "paddingVertical": 12,
+                  "gap": 8,
+                  "borderTopWidth": 1,
+                  "borderTopColor": "#e5e5e5",
+                  "backgroundColor": "#ffffff"
+                }
+              },
+              "children": [
+                {
+                  "type": "actions",
+                  "props": {},
+                  "children": null
+                }
+              ]
             }
           ]
         }
