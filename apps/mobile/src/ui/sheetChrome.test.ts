@@ -74,12 +74,30 @@ async function render(element: ReactElement, mode: ThemeMode = "light", tier: La
 function button(tree: ReactTestInstance, label: string) { return tree.findAllByType("button").find(node => node.props.accessibilityLabel === label) ?? (() => { throw new Error(`Missing action ${label}`); })(); }
 function modal(tree: ReactTestInstance) { return tree.find(node => String(node.type) === "modal"); }
 function scroll(tree: ReactTestInstance) { return tree.find(node => String(node.type) === "sheet-scroll"); }
+function styleNumber(style: unknown, property: string) {
+  const value = flat(style)[property];
+  if (typeof value !== "number") throw new Error(`Expected numeric ${property}`);
+  return value;
+}
 
-test.each(["light", "dark"] as const)("SEN-95 #1 unread indicator straddles the button corner in %s", async mode => {
+test.each(["light", "dark"] as const)("SEN-95 #1 unread indicator overlaps the bell's upper-right circular border in %s", async mode => {
   const open = vi.fn();
   const tree = await render(h(IconButton, { preset: "brand", accessibilityLabel: "Alerts, 3 unread", onPress: open }, h(AlertDot, { count: 3 })), mode);
   const dot = tree.findByType(AlertDot).findByType("view");
-  expect(dot.props.style).toMatchObject({ top: -8, right: -8, width: 16, height: 16 });
+  const bellStyle = button(tree, "Alerts, 3 unread").props.style({ pressed: false });
+  const bellWidth = styleNumber(bellStyle, "width"), bellHeight = styleNumber(bellStyle, "height");
+  const bellBorder = styleNumber(bellStyle, "borderWidth");
+  const bellRadius = Math.min(bellWidth, bellHeight) / 2;
+  const dotWidth = styleNumber(dot.props.style, "width"), dotHeight = styleNumber(dot.props.style, "height");
+  const centerX = bellWidth - bellBorder - styleNumber(dot.props.style, "right") - dotWidth / 2;
+  const centerY = bellBorder + styleNumber(dot.props.style, "top") + dotHeight / 2;
+  const distance = Math.hypot(centerX - bellWidth / 2, centerY - bellHeight / 2);
+  const paintedRadius = Math.min(dotWidth, dotHeight) / 2 - styleNumber(dot.props.style, "borderWidth");
+  expect(styleNumber(bellStyle, "borderRadius")).toBeGreaterThanOrEqual(bellRadius);
+  expect(centerX).toBeGreaterThan(bellWidth / 2);
+  expect(centerY).toBeLessThan(bellHeight / 2);
+  expect(distance - paintedRadius).toBeLessThan(bellRadius - bellBorder);
+  expect(distance + paintedRadius).toBeGreaterThan(bellRadius);
   expect(dot.props).toMatchObject({ accessible: false, accessibilityElementsHidden: true });
   await act(async () => button(tree, "Alerts, 3 unread").props.onPress());
   expect(open).toHaveBeenCalledOnce();
