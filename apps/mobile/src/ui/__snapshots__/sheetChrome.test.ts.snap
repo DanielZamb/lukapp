@@ -31,7 +31,8 @@ exports[`Android native presentation retains its rendered contract 1`] = `
       "backgroundColor": "#8a8a8a"
     },
     "topInset": 24,
-    "backdropComponent": "[callback]"
+    "backdropComponent": "[callback]",
+    "onChange": "[callback]"
   },
   "children": [
     {
