@@ -194,13 +194,17 @@ test("swipe cancellation returns once and each reopened editor starts fresh", as
   }
 });
 
-test("Android Back immediately after opening cannot leave a delayed picker above its caller", async () => {
+test("Android Back before acknowledgement is ignored and the next Back closes the picker once", async () => {
   android.os = "android";
   provider.close.mockClear();
   await act(async () => { root = create(createElement(Harness)); });
   await act(async () => root!.root.findByProps({ testID: "caller-draft" }).props.open());
   await act(async () => { expect(android.handler?.()).toBe(true); });
   await flushFrames();
+  await flushDismissals();
+  expect(root!.root.findAll((node) => node.props.testID === "category-options")).toHaveLength(1);
+  expect(provider.close).not.toHaveBeenCalled();
+  await act(async () => { expect(android.handler?.()).toBe(true); });
   await flushDismissals();
   expect(root!.root.findAll((node) => node.props.testID === "category-options")).toHaveLength(0);
   expect(provider.close).toHaveBeenCalledOnce();

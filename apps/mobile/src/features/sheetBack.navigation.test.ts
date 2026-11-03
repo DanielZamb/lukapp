@@ -1,6 +1,6 @@
 import * as React from "react";
-import { createElement, createRef, useEffect, useState } from "react";
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
+import { createElement, useEffect, useState } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { RestyleSheet } from "./categories/SetupRestyleSheet";
@@ -11,7 +11,6 @@ import { readableLayout } from "../ui/layout";
 import type { HistoryQuery } from "./history/filter";
 import { Sheet } from "../ui/Sheet";
 import { PickerSheet } from "../ui/PickerSheet";
-import { SheetModal } from "../ui/SheetModal";
 
 vi.mock("./posting/usePostingTransport", () => ({ usePostingTransport: () => { throw new Error("No deferred account request"); } }));
 vi.mock("convex/react", () => ({
@@ -43,11 +42,17 @@ vi.mock("@gorhom/bottom-sheet/src/components/bottomSheet", () => ({
     onChange: (...args: number[]) => void;
     onClose: () => void;
   }>, ref) {
-    const close = () => closes.push(() => {
-      props.onAnimate(0, -1, 0, 1000);
-      props.onChange(-1, 1000, 0);
-      props.onClose();
-    });
+    const forceClosing = React.useRef(false);
+    const close = () => {
+      if (forceClosing.current) return;
+      forceClosing.current = true;
+      closes.push(() => {
+        props.onAnimate(0, -1, 0, 1000);
+        props.onChange(-1, 1000, 0);
+        forceClosing.current = false;
+        props.onClose();
+      });
+    };
     React.useImperativeHandle(ref, () => ({ close, forceClose: close, snapToIndex() {} }));
     useEffect(() => { props.onChange(nativeEvents.acknowledge ? 0 : -1, 0, 0); }, []);
     return createElement("native-sheet", { onPanDown: close, onAcknowledge: () => props.onChange(0, 0, 0) }, props.children);
@@ -117,7 +122,7 @@ const flowCases = [
   { flow: "setup", fontScale: 1 }, { flow: "history", fontScale: 1 }, { flow: "sheet", fontScale: 1 }, { flow: "category", fontScale: 1 },
   { flow: "setup", fontScale: 2.1 }, { flow: "history", fontScale: 2.1 }, { flow: "sheet", fontScale: 2.1 }, { flow: "category", fontScale: 2.1 },
 ] as const;
-test.each(flowCases)("$flow at fontScale $fontScale closes once when Back precedes presentation and can reopen", async ({ flow, fontScale }) => {
+test.each(flowCases)("$flow at fontScale $fontScale ignores early Back then closes once on the next Back and can reopen", async ({ flow, fontScale }) => {
   await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
   const open = () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress();
   for (let iteration = 0; iteration < 3; iteration += 1) {
@@ -126,6 +131,9 @@ test.each(flowCases)("$flow at fontScale $fontScale closes once when Back preced
     await back();
     expect(closed).toHaveBeenCalledTimes(iteration);
     await settle();
+    expect(closed).toHaveBeenCalledTimes(iteration);
+    expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
+    await back(); await settle();
     expect(closed).toHaveBeenCalledTimes(iteration + 1);
     expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(0);
     expect(hardware.listeners).toHaveLength(0);
@@ -147,101 +155,39 @@ test("Back while busy does not queue dismissal, and repeated Back while closing 
   expect(close).toHaveBeenCalledOnce();
   expect(hardware.listeners).toHaveLength(0);
 });
-test("repeated Back before presentation queues one close", async () => {
-  await act(async () => { root = create(createElement(BottomSheetModalProvider, null, createElement(Harness, { flow: "history" }))); });
-  await act(async () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress());
-  await back(); await back(); await back();
-  expect(closed).not.toHaveBeenCalled();
-  await settle();
-  expect(closed).toHaveBeenCalledOnce();
-  expect(hardware.listeners).toHaveLength(0);
-});
-
-test.each(flowCases.flatMap((item) => [ { ...item, paintBeforeDeadline: false }, { ...item, paintBeforeDeadline: true } ]))("$flow at fontScale $fontScale recovers without acknowledgement, native paint=$paintBeforeDeadline", async ({ flow, fontScale, paintBeforeDeadline }) => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); nativeEvents.acknowledge = false;
-  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
-  const open = () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress();
-  await act(async () => open());
-  const oldModal = root!.root.findByType(BottomSheetModal).props;
-  await back();
-  if (paintBeforeDeadline) await settle();
-  await act(async () => { root!.root.findByType(SheetModal).props.sheetRef.current?.present(); });
-  await back();
-  await act(async () => { vi.advanceTimersByTime(999); });
-  expect(closed).not.toHaveBeenCalled();
-  await act(async () => { vi.advanceTimersByTime(1); });
-  await settle();
-  expect(closed).toHaveBeenCalledOnce();
-  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(0);
-  expect(hardware.listeners).toHaveLength(0);
-  nativeEvents.acknowledge = true;
-  await act(async () => open()); await settle();
-  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
-  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); });
-  expect(closed).toHaveBeenCalledOnce();
-  await back(); await settle();
-  expect(closed).toHaveBeenCalledTimes(2);
-});
-test.each(flowCases)("$flow at fontScale $fontScale settles a queued close once during teardown", async ({ flow, fontScale }) => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
-  await act(async () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress());
-  const oldModal = root!.root.findByType(BottomSheetModal).props;
-  await back();
-  expect(closed).not.toHaveBeenCalled();
-  await act(async () => root!.unmount()); root = undefined;
-  expect(closed).toHaveBeenCalledOnce();
-  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); vi.advanceTimersByTime(2000); });
-  await settle();
-  expect(closed).toHaveBeenCalledOnce();
-  expect(hardware.listeners).toHaveLength(0);
-});
-
-test.each(flowCases)("$flow at fontScale $fontScale cancels recovery at acknowledgement and waits for native dismissal", async ({ flow, fontScale }) => {
+test.each(flowCases)("$flow at fontScale $fontScale ignores repeated Back without acknowledgement", async ({ flow, fontScale }) => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); nativeEvents.acknowledge = false;
   await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
   await act(async () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress());
-  await back(); await settle();
+  await back(); await back(); await settle();
   const modal = root!.root.findByType(BottomSheetModal);
-  await act(async () => { vi.advanceTimersByTime(950); });
-  await act(async () => root!.root.find((node) => String(node.type) === "native-sheet").props.onAcknowledge());
-  expect(closes).toHaveLength(1);
-  await act(async () => { vi.advanceTimersByTime(550); });
+  await back();
+  await act(async () => { vi.advanceTimersByTime(10000); });
   expect(closed).not.toHaveBeenCalled();
-  expect(root!.root.findByType(BottomSheetModal)).toBe(modal);
+  expect(closes).toHaveLength(0);
   expect(vi.getTimerCount()).toBe(0);
-  await settle();
+  expect(root!.root.findByType(BottomSheetModal)).toBe(modal);
+  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
+  await act(async () => root!.root.find((node) => String(node.type) === "native-sheet").props.onAcknowledge());
+  expect(closes).toHaveLength(0);
+  await back(); await settle();
   expect(closed).toHaveBeenCalledOnce();
+  expect(hardware.listeners).toHaveLength(0);
 });
-test.each(flowCases)("$flow at fontScale $fontScale settles an acknowledged pending close during teardown", async ({ flow, fontScale }) => {
+
+test.each(flowCases.flatMap(item => [{ ...item, acknowledged: false }, { ...item, acknowledged: true }]))("$flow at fontScale $fontScale unmounts without a synthetic close, acknowledged=$acknowledged", async ({ flow, fontScale, acknowledged }) => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
   await act(async () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress());
-  await settle();
+  if (acknowledged) await settle();
   const oldModal = root!.root.findByType(BottomSheetModal).props;
   await back();
-  expect(closes).toHaveLength(1);
   expect(closed).not.toHaveBeenCalled();
   await act(async () => root!.unmount()); root = undefined;
-  expect(closed).toHaveBeenCalledOnce();
-  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); vi.advanceTimersByTime(2000); });
+  expect(closed).not.toHaveBeenCalled();
+  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); vi.advanceTimersByTime(10000); });
   await settle();
-  expect(closed).toHaveBeenCalledOnce();
+  expect(closed).not.toHaveBeenCalled();
+  expect(hardware.listeners).toHaveLength(0);
   expect(vi.getTimerCount()).toBe(0);
-});
-test.each([1, 2.1])("a synchronous reopen from timeout dismissal reaches the replacement at fontScale %s", async (fontScale) => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); nativeEvents.acknowledge = false;
-  const ref = createRef<BottomSheetModal>();
-  const dismissed = vi.fn(() => { nativeEvents.acknowledge = true; ref.current?.present(); });
-  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Sheet, { sheetRef: ref, presentOnMount: true, label: "Reopening sheet", onDismiss: dismissed }, createElement("text", null, "Caller body"))))); });
-  const oldModal = root!.root.findByType(BottomSheetModal).props;
-  await back(); await settle();
-  await act(async () => { vi.advanceTimersByTime(1000); });
-  await settle();
-  expect(dismissed).toHaveBeenCalledOnce();
-  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
-  expect(hardware.listeners).toHaveLength(1);
-  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); });
-  expect(dismissed).toHaveBeenCalledOnce();
-  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
 });
