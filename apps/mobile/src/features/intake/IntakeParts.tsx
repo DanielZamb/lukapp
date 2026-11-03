@@ -5,14 +5,18 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, type ComponentProps, type PropsWithChildren, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { SecondaryButton, useTheme } from "../../ui/core";
+import { SecondaryButton, useTheme, useThemeMode } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 export type Tone = "accent" | "positive" | "warning" | "danger" | "neutral";
 
-function toneColor(theme: Theme, tone: Tone) {
-  return tone === "accent" ? theme.primary : tone === "neutral" ? theme.foreground : theme[tone];
+// Violet text and icons on dark surfaces use the XXXL design's primaryText,
+// since the dark primary (#7c3aed) is a fill colour and reads too dark as text.
+const DARK_PRIMARY_TEXT = "#c4b5fd";
+
+function toneColor(theme: Theme, tone: Tone, dark = false) {
+  return tone === "accent" ? dark ? DARK_PRIMARY_TEXT : theme.primary : tone === "neutral" ? theme.foreground : theme[tone];
 }
 
 /** A translucent surface in the tone's colour. Tone colours are opaque hex. */
@@ -52,14 +56,15 @@ function createStyles(theme: Theme) {
 
 function useStyles() {
   const theme = useTheme();
-  return { theme, styles: useMemo(() => createStyles(theme), [theme]) };
+  const dark = useThemeMode() === "dark";
+  return { theme, dark, styles: useMemo(() => createStyles(theme), [theme]) };
 }
 
 export function IconTile({ icon, letter, tone = "neutral", large = false }: {
   icon?: IconName; letter?: string; tone?: Tone; large?: boolean;
 }) {
-  const { theme, styles } = useStyles();
-  const color = toneColor(theme, tone);
+  const { theme, dark, styles } = useStyles();
+  const color = toneColor(theme, tone, dark);
   return <View accessible={false} importantForAccessibility="no-hide-descendants"
     style={[styles.tile, large && styles.tileLarge, { backgroundColor: tint(theme, tone) }]}>
     {letter ? <Text style={[styles.letter, { color }]}>{letter}</Text>
@@ -80,14 +85,14 @@ export function FactRow({ icon, tone = "accent", title, detail }: { icon: IconNa
 }
 
 /** The page's main state: a large tile, a heading and one status line. */
-export function HeroState({ icon, tone, title, status, statusTone }: {
-  icon: IconName; tone: Tone; title: string; status?: string; statusTone?: Tone;
+export function HeroState({ icon, tone, title, status, statusTone, alert = false }: {
+  icon: IconName; tone: Tone; title: string; status?: string; statusTone?: Tone; alert?: boolean;
 }) {
-  const { theme, styles } = useStyles();
+  const { theme, dark, styles } = useStyles();
   return <View accessibilityLiveRegion="polite" style={styles.hero}>
     <IconTile icon={icon} tone={tone} large />
     <Text accessibilityRole="header" style={styles.heroTitle}>{title}</Text>
-    {status ? <Text style={[styles.detail, statusTone && { color: toneColor(theme, statusTone), fontFamily: font.semibold }]}>{status}</Text> : null}
+    {status ? <Text accessibilityRole={alert ? "alert" : undefined} style={[styles.detail, statusTone && { color: toneColor(theme, statusTone, dark), fontFamily: font.semibold }]}>{status}</Text> : null}
   </View>;
 }
 
@@ -105,16 +110,16 @@ export function Card({ children }: PropsWithChildren) {
 }
 
 /** A row inside a Card: tile, title, one status line, chevron when it opens something. */
-export function NavRow({ leading, title, status, statusTone, accessibilityLabel, onPress, disabled, last }: {
-  leading?: ReactNode; title: string; status?: string; statusTone?: Tone; accessibilityLabel: string;
+export function NavRow({ leading, title, status, statusTone, statusLines = 2, accessibilityLabel, onPress, disabled, last }: {
+  leading?: ReactNode; title: string; status?: string; statusTone?: Tone; statusLines?: number; accessibilityLabel: string;
   onPress?: () => void; disabled?: boolean; last?: boolean;
 }) {
-  const { theme, styles } = useStyles();
+  const { theme, dark, styles } = useStyles();
   const content = <>
     {leading}
     <View style={styles.copy}>
       <Text style={styles.title}>{title}</Text>
-      {status ? <Text numberOfLines={2} style={[styles.detail, statusTone && { color: toneColor(theme, statusTone) }]}>{status}</Text> : null}
+      {status ? <Text numberOfLines={statusLines} style={[styles.detail, statusTone && { color: toneColor(theme, statusTone, dark) }]}>{status}</Text> : null}
     </View>
     {onPress ? <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} /> : null}
   </>;
@@ -129,10 +134,10 @@ export function NoteCard({ tone, icon, title, body, action }: {
   tone: "warning" | "danger" | "accent"; icon: IconName; title: string; body?: string;
   action?: { label: string; onPress: () => void; disabled?: boolean; danger?: boolean };
 }) {
-  const { styles, theme } = useStyles();
+  const { styles, theme, dark } = useStyles();
   return <View accessibilityRole={tone === "accent" ? undefined : "alert"} style={[styles.note, { backgroundColor: tint(theme, tone) }]}>
     <View style={styles.fact}>
-      <Ionicons name={icon} size={22} color={toneColor(theme, tone)} />
+      <Ionicons name={icon} size={22} color={toneColor(theme, tone, dark)} />
       <View style={styles.copy}>
         <Text style={styles.title}>{title}</Text>
         {body ? <Text style={[styles.detail, { color: theme.foreground }]}>{body}</Text> : null}
@@ -170,10 +175,10 @@ export function CheckRow({ label, detail, accessibilityLabel, checked, disabled,
 }
 
 export function TextButton({ label, onPress, expanded }: { label: string; onPress: () => void; expanded?: boolean }) {
-  const { styles } = useStyles();
+  const { styles, theme, dark } = useStyles();
   return <Pressable accessibilityRole="button" accessibilityLabel={label}
     accessibilityState={expanded === undefined ? undefined : { expanded }} onPress={onPress} style={styles.ghost}>
-    <Text style={styles.ghostLabel}>{label}</Text>
+    <Text style={[styles.ghostLabel, { color: toneColor(theme, "accent", dark) }]}>{label}</Text>
   </Pressable>;
 }
 

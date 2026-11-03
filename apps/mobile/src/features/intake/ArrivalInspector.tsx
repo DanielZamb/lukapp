@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import { Header, PrimaryButton, Screen, SecondaryButton, useUi } from "../../ui/core";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
+import { Header, Screen, SecondaryButton, useTheme, useUi } from "../../ui/core";
+import { radius, spacing } from "../../ui/tokens";
 import { useIntakeService, useIntakeSnapshot } from "./IntakeProvider";
 import type { DiagnosticList, DiagnosticRecord } from "../../../modules/notification-intake";
+import { ActionBar, AlertLine, Card, FactRow, IconTile, Muted, NavRow, SectionHeading } from "./IntakeParts";
+
+const when = (time: number) => new Date(time).toLocaleString();
 
 export function ArrivalInspector({ onBack }: { onBack(): void }) {
   const ui = useUi();
+  const theme = useTheme();
   const service = useIntakeService();
   const snapshot = useIntakeSnapshot();
   const [list, setList] = useState<DiagnosticList | null>(null);
@@ -28,27 +33,49 @@ export function ArrivalInspector({ onBack }: { onBack(): void }) {
     catch { setDetail(null); setError("Diagnostic action unavailable. Unlock and refresh intake before retrying."); }
     finally { setBusy(false); }
   }
-  return <Screen>
-    <Header title="Arrival diagnostics" eyebrow="DEV / BETA ONLY · ON THIS DEVICE" onBack={onBack} />
-    {!enabled ? <Text style={ui.error}>Raw diagnostics are disabled in this native build.</Text> : <>
-      <Text style={ui.body}>Selected apps' original delivered contents, including security messages, are encrypted locally for up to 24 hours. Diagnostics never post money or upload contents. Field limits and unsupported values are marked in each snapshot.</Text>
-      <Text style={ui.muted}>Limits are 32 arrivals, 512 KiB per record and 4 MiB total. A full diagnostic store does not stop Candidate capture.</Text>
-      {error ? <Text accessibilityRole="alert" style={ui.error}>{error}</Text> : null}
-      {list ? <Text accessibilityLiveRegion="polite" style={ui.body}>{list.health.state} · {list.health.recordCount} records · {list.health.byteCount} bytes · {list.health.overflowCount} overflow · {list.health.errorCount} storage errors</Text> : <ActivityIndicator />}
-      <SecondaryButton label="Refresh arrivals" disabled={busy} onPress={() => { setDetail(null); setRevision((value) => value + 1); }} />
-      <SecondaryButton label="Clear all raw diagnostics" tone="danger" disabled={busy} onPress={() => { void perform(async () => { await service.clearDiagnostics(); setDetail(null); }); }} />
-      {detail ? <View style={ui.section}>
-        <Text style={ui.sectionHeading}>{detail.packageName}</Text>
-        <Text selectable style={ui.muted}>Capture {detail.captureId} · arrival {detail.id} · {new Date(detail.capturedAt).toLocaleString()}</Text>
-        <Text selectable style={ui.body}>{JSON.stringify(detail, null, 2)}</Text>
-        <SecondaryButton label="Delete this raw arrival" tone="danger" disabled={busy} onPress={() => { void perform(async () => { await service.deleteDiagnostic(detail.id); setDetail(null); }); }} />
-      </View> : list?.records.map((row) => <View key={row.id} style={ui.section}>
-        <Text style={ui.sectionHeading}>{row.packageName}</Text>
-        <Text selectable style={ui.muted}>Capture {row.captureId} · {new Date(row.capturedAt).toLocaleString()} · expires {new Date(row.expiresAt).toLocaleString()}</Text>
-        <Text style={ui.body}>{row.parser.outcome} · {row.parser.reasons.join(", ")}</Text>
-        <PrimaryButton label={`Inspect arrival ${row.id}`} disabled={busy} onPress={() => { void perform(async () => { setDetail(await service.readDiagnostic(row.id)); }); }} />
-        <SecondaryButton label={`Delete arrival ${row.id}`} tone="danger" disabled={busy} onPress={() => { void perform(async () => { await service.deleteDiagnostic(row.id); }); }} />
-      </View>)}
+
+  if (detail) return <Screen footer={<ActionBar>
+    <SecondaryButton label="Delete this raw arrival" tone="danger" disabled={busy}
+      onPress={() => { void perform(async () => { await service.deleteDiagnostic(detail.id); setDetail(null); }); }} />
+  </ActionBar>}>
+    <Header title={detail.packageName} eyebrow="RAW ARRIVAL" onBack={() => setDetail(null)} />
+    {error ? <AlertLine>{error}</AlertLine> : null}
+    <Muted>{`${detail.parser.outcome} · ${detail.parser.reasons.join(", ") || "no reasons"}`}</Muted>
+    <Text selectable style={ui.muted}>Capture {detail.captureId} · arrival {detail.id} · {when(detail.capturedAt)}</Text>
+    <View style={{ backgroundColor: theme.secondary, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, padding: spacing.lg }}>
+      <Text selectable style={[ui.body, { fontFamily: Platform.OS === "android" ? "monospace" : "Menlo", fontSize: 13, lineHeight: 19 }]}>
+        {JSON.stringify(detail, null, 2)}
+      </Text>
+    </View>
+  </Screen>;
+
+  return <Screen footer={enabled ? <ActionBar>
+    <SecondaryButton label="Refresh arrivals" disabled={busy} onPress={() => setRevision((value) => value + 1)} />
+    <SecondaryButton label="Clear all raw diagnostics" tone="danger" disabled={busy}
+      onPress={() => { void perform(async () => { await service.clearDiagnostics(); }); }} />
+  </ActionBar> : null}>
+    <Header title="Arrival diagnostics" eyebrow="BETA · ON THIS PHONE" onBack={onBack} />
+    {!enabled ? <AlertLine>Raw diagnostics are disabled in this native build.</AlertLine> : <>
+      <View style={{ gap: spacing.xl }}>
+        <FactRow icon="lock-closed-outline" title="Original text, encrypted for 24 hours"
+          detail="Includes security messages from the apps you chose. Never uploaded, and never posts money." />
+        <FactRow icon="layers-outline" tone="neutral" title="Up to 32 arrivals"
+          detail="512 KiB each, 4 MiB in total. A full store doesn't stop candidate capture." />
+      </View>
+      {error ? <AlertLine>{error}</AlertLine> : null}
+      <View style={ui.section}>
+        <SectionHeading title="Arrivals" meta={list
+          ? `${list.health.state} · ${list.health.recordCount} records · ${list.health.byteCount} bytes · ${list.health.overflowCount} overflow · ${list.health.errorCount} storage errors`
+          : undefined} />
+        {!list ? <ActivityIndicator accessibilityLabel="Loading arrivals" />
+          : !list.records.length ? <Muted>No arrivals stored right now.</Muted>
+          : <Card>{list.records.map((row, index) => <NavRow key={row.id} last={index === list.records.length - 1}
+              leading={<IconTile icon={row.parser.outcome === "normalized" ? "checkmark-circle" : row.parser.outcome === "discarded" ? "eye-off-outline" : "alert-circle"}
+                tone={row.parser.outcome === "normalized" ? "positive" : row.parser.outcome === "discarded" ? "neutral" : "warning"} />}
+              title={row.packageName} status={`${row.parser.outcome} · ${when(row.capturedAt)}`}
+              accessibilityLabel={`Inspect arrival ${row.id}`} disabled={busy}
+              onPress={() => { void perform(async () => { setDetail(await service.readDiagnostic(row.id)); }); }} />)}</Card>}
+      </View>
     </>}
   </Screen>;
 }

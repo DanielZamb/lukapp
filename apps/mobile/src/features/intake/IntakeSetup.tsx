@@ -2,25 +2,37 @@ import type { FunctionReturnType } from "convex/server";
 import { useConvex } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { Choice, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useUi } from "../../ui/core";
-import { touchTarget } from "../../ui/tokens";
+import { ActivityIndicator, Text, View } from "react-native";
+import { Choice, Header, PrimaryButton, Screen, SecondaryButton, useUi } from "../../ui/core";
+import { spacing } from "../../ui/tokens";
 import { api } from "../api";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
+import type { NativeStatus } from "../../../modules/notification-intake";
 import { useIntakeService, useIntakeSnapshot } from "./IntakeProvider";
 import type { SourceMapping } from "./durableState";
 import { IntakeSelectionPicker } from "./IntakeSelectionPicker";
 import { ArrivalInspector } from "./ArrivalInspector";
 import type { IntakeService } from "./service";
+import { ActionBar, AlertLine, Card, CheckRow, FactRow, HeroState, IconTile, Muted, NavRow, NoteCard, SectionHeading, TextButton, type Tone } from "./IntakeParts";
+import { appInitial, likelyBankApp, orderSources, productKindLabel, timeZoneCity } from "./appCatalog";
 
 export const INTAKE_DISCLOSURE_VERSION = "notification-disclosure@2";
+export const INTAKE_ACKNOWLEDGEMENT = "I've read the notification intake disclosure";
 type AccountCatalog =
   | { kind: "loading" }
   | { kind: "failed" }
   | { kind: "ready"; workspace: FunctionReturnType<typeof api.accounting.openWorkspace>;
       profiles: FunctionReturnType<typeof api.accounting.listFinancialAccountProfiles>;
       sources: Awaited<ReturnType<IntakeService["listSources"]>> };
-type SourceEditor = { kind: "closed" } | { kind: "mapping"; packageName: string; profileId: string | null };
+/** Where to go once the disclosure is acknowledged. */
+type Then = { kind: "hub" } | { kind: "addApp" } | { kind: "settings" } | { kind: "app"; packageName: string } | { kind: "place"; packageName: string };
+type Step =
+  | { kind: "hub" }
+  | { kind: "disclosure"; then: Then; entry: boolean }
+  | { kind: "app"; packageName: string }
+  | { kind: "place"; packageName: string; profileId: string | null }
+  | { kind: "wipe" }
+  | { kind: "inspect" };
 
 export function intakeActionError(error: unknown): string {
   const code = error !== null && typeof error === "object" && "code" in error ? error.code : null;
@@ -36,6 +48,16 @@ export function intakeActionError(error: unknown): string {
   return "Could not finish this action. The change is not confirmed. Refresh status and retry any pending operation.";
 }
 
+const NOTICE_LABELS: Record<NativeStatus["notices"][number]["kind"], string> = {
+  security: "Security messages skipped", ambiguous: "Unclear alerts", no_amount: "No amount found",
+  multiple_amounts: "Several amounts in one alert", overflow: "Too many alerts at once", conflict: "Conflicting captures",
+};
+const GAP_LABELS: Record<NonNullable<NativeStatus["gap"]>["reason"], string> = {
+  overflow: "Too many alerts arrived at once", storage: "Local storage failed", recovery: "Intake was recovering",
+};
+const when = (time: number) => new Date(time).toLocaleString();
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
 export function IntakeSetup({ workspaceId, onBack, onInbox }: {
   workspaceId: string; onBack(): void; onInbox(): void;
 }) {
@@ -47,10 +69,9 @@ export function IntakeSetup({ workspaceId, onBack, onInbox }: {
   const [catalog, setCatalog] = useState<AccountCatalog>({ kind: "loading" });
   const [revision, setRevision] = useState(0);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [readFull, setReadFull] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const [editor, setEditor] = useState<SourceEditor>({ kind: "closed" });
-  const [inspecting, setInspecting] = useState(false);
-  const [confirmWipe, setConfirmWipe] = useState(false);
+  const [step, setStep] = useState<Step | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const busy = useRef(false);
   const [error, setError] = useState("");
@@ -75,17 +96,19 @@ export function IntakeSetup({ workspaceId, onBack, onInbox }: {
     return () => { current = false; };
   }, [convex, service, workspaceId, supported, revision, reportFailure]);
 
-  async function perform(label: string, action: () => Promise<unknown>, refresh = true) {
-    if (busy.current) return;
+  async function perform(label: string, action: () => Promise<unknown>, refresh = true): Promise<boolean> {
+    if (busy.current) return false;
     busy.current = true;
     setPending(label);
     setError("");
     try {
       await action();
       if (refresh) await service.refresh();
+      return true;
     } catch (failure) {
       reportFailure(failure);
       setError(intakeActionError(failure));
+      return false;
     } finally {
       busy.current = false;
       setPending(null);
@@ -94,167 +117,295 @@ export function IntakeSetup({ workspaceId, onBack, onInbox }: {
 
   const active = snapshot.state.mappings.filter((mapping) => snapshot.state.activeSelectionIds.includes(mapping.sourceSelectionId));
   const blocked = pending !== null || !snapshot.loaded || !status || status.storageState !== "healthy" || snapshot.wipePending || snapshot.state.pendingConfigure !== null;
-  const canConfigure = !blocked && acknowledged && status?.access === "granted";
+  const canChange = !blocked && status?.access === "granted";
+  const canConfigure = canChange && acknowledged;
   const candidates = service.candidates();
+  const ready = catalog.kind === "ready" ? catalog : null;
+  // First visit with nothing set up opens on the disclosure; it stays until Continue or Back.
+  const firstRun = supported && snapshot.loaded && active.length === 0 && !blocked;
+  const current: Step = step ?? (firstRun ? { kind: "disclosure", then: { kind: "hub" }, entry: true } : { kind: "hub" });
+
+  const appLabel = (packageName: string) => ready?.sources.find((source) => source.packageName === packageName)?.label ?? packageName;
+  const accountName = (mapping: SourceMapping) => {
+    if (mapping.workspaceId !== workspaceId) return "another workspace";
+    if (!ready) return "…";
+    return ready.profiles.find((profile) => profile.id === mapping.financialAccountProfileId)?.name ?? "an unavailable place";
+  };
+  const accountMissing = (mapping: SourceMapping) => !!ready && mapping.workspaceId === workspaceId
+    && !ready.profiles.some((profile) => profile.id === mapping.financialAccountProfileId);
+  const appMissing = (mapping: SourceMapping) => !!ready && !ready.sources.some((source) => source.packageName === mapping.packageName);
+
+  function go(then: Then) {
+    if (then.kind === "settings") {
+      setStep({ kind: "hub" });
+      if (!blocked) void perform("Opening Android settings", () => service.openAccessSettings());
+    } else if (then.kind === "addApp") { setStep({ kind: "hub" }); setCatalogOpen(true); }
+    else if (then.kind === "place") setStep({ kind: "place", packageName: then.packageName, profileId: null });
+    else setStep(then);
+  }
+  /** Changes need the disclosure acknowledged in this visit; route through it first. */
+  function withAcknowledgement(then: Then) {
+    if (acknowledged) go(then);
+    else setStep({ kind: "disclosure", then, entry: false });
+  }
 
   async function configure(next: SourceMapping[]) {
     if (!canConfigure) throw new Error("Configuration blocked");
     const added = next.filter((mapping) => !snapshot.state.mappings.some((old) => old.sourceSelectionId === mapping.sourceSelectionId));
     if (next.length > 16 || snapshot.state.mappings.length + added.length > 64) throw new Error("CAPACITY_EXCEEDED");
     await service.configure(next, INTAKE_DISCLOSURE_VERSION);
-    setEditor({ kind: "closed" });
-    setCatalogOpen(false);
   }
 
-  if (inspecting) return <ArrivalInspector onBack={() => setInspecting(false)} />;
-  return (
-    <Screen>
-      <Header title="Notification intake" eyebrow="PRIVATE DEVICE SETUP" onBack={pending ? undefined : onBack} />
-      <View style={ui.section}>
-        <Text accessibilityRole="header" style={ui.sectionHeading}>Review before enabling</Text>
-        <Text style={ui.body}>Lukapp reads notifications only from apps you select. Normalized suggestions are encrypted on this device and expire 15 days after their first capture. {status?.diagnostics?.enabled ? "This dev/beta build also encrypts original delivered notification contents, including security messages, in a separate local diagnostic store for up to 24 hours. Nothing from that store is uploaded." : "Raw notification text is not retained."}</Text>
-        <Text style={ui.body}>Notifications may be missed or delayed. Reconcile with your accounts. Every Candidate requires review before financial posting.</Text>
-        <Text style={ui.muted}>Your saved purchase-alert preference does not grant device access. Acknowledging this disclosure does not enable capture.</Text>
-        <Pressable accessibilityRole="checkbox" accessibilityLabel="I acknowledge the notification intake disclosure"
-          accessibilityState={{ checked: acknowledged, disabled: pending !== null }} disabled={pending !== null}
-          style={{ minHeight: touchTarget, justifyContent: "center" }} onPress={() => setAcknowledged((value) => !value)}>
-          <Text style={ui.body}>{acknowledged ? "✓ " : "□ "}I acknowledge the notification intake disclosure</Text>
-        </Pressable>
+  const errors = <>
+    {error ? <AlertLine>{error}</AlertLine> : null}
+    {snapshot.error && snapshot.error !== "UNSUPPORTED" ? <AlertLine>{intakeActionError(new Error(snapshot.error))}</AlertLine> : null}
+  </>;
+  const pendingLine = pending ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{pending}…</Text> : null;
+
+  if (current.kind === "inspect") return <ArrivalInspector onBack={() => setStep({ kind: "hub" })} />;
+
+  if (current.kind === "disclosure") {
+    const diagnostics = status?.diagnostics?.enabled === true;
+    return <Screen footer={<ActionBar>
+      <PrimaryButton label="Continue" disabled={!acknowledged || pending !== null} onPress={() => { if (acknowledged) go(current.then); }} />
+    </ActionBar>}>
+      <Header title="Before you turn it on" eyebrow="NOTIFICATION INTAKE"
+        onBack={() => current.entry ? onBack() : setStep(current.then.kind === "app" ? current.then : { kind: "hub" })} />
+      <View style={{ gap: spacing.xl }}>
+        <FactRow icon="apps-outline" title="Only apps you choose" detail="Lukapp reads nothing else." />
+        <FactRow icon="lock-closed-outline" title="Stays on this phone" detail="Encrypted. Suggestions expire 15 days after capture." />
+        <FactRow icon="warning-outline" tone="warning" title="Can miss or delay alerts" detail="Every candidate needs your review before it's posted." />
       </View>
-      {error ? <Text accessibilityRole="alert" style={ui.error}>{error}</Text> : null}
-      {snapshot.error && snapshot.error !== "UNSUPPORTED" ? <Text accessibilityRole="alert" style={ui.error}>{intakeActionError(new Error(snapshot.error))}</Text> : null}
-      {!snapshot.status ? <ActivityIndicator accessibilityLabel="Observing notification access" /> : !status ? (
-        <Text accessibilityRole="alert" style={ui.error}>{"reason" in snapshot.status && (snapshot.status.reason === "native_module_missing" || snapshot.status.reason === "native_api_incompatible")
-          ? snapshot.status.reason === "native_api_incompatible" ? "Update the Android APK to notification intake API v2, then refresh status." : "Custom Android binary missing. Install a build with the notification intake module, then refresh status."
-          : "Notification intake is supported only in the custom Android app."}</Text>
-      ) : (
-        <>
-          {status.diagnostics?.enabled ? <View style={ui.section}>
-            <Text style={ui.sectionHeading}>Dev/beta arrival diagnostics</Text>
-            <Text style={ui.body}>{status.diagnostics.recordCount} records · {status.diagnostics.overflowCount} overflow · {status.diagnostics.errorCount} errors · {status.diagnostics.state}</Text>
-            <SecondaryButton label="Inspect raw arrivals on this device" disabled={blocked} onPress={() => setInspecting(true)} />
-          </View> : null}
-          <ListGroup>
-            <ListRow title="Notification access" value={status.access === "granted" ? "Granted" : "Not granted"} />
-            <ListRow title="Listener connection" value={status.connection === "connected" ? "Connected" : status.connection === "disconnected" ? "Disconnected" : "Unknown"} />
-            <ListRow title="Observed access and health" detail={new Date(status.checkedAt).toLocaleString()} />
-            <ListRow title="Last listener connection" detail={status.lastConnectedAt === null ? "No connection observed" : new Date(status.lastConnectedAt).toLocaleString()} />
-          </ListGroup>
-          {status.access !== "granted" ? <Text style={ui.body}>Grant Android notification access, then return here to select apps and accounts.</Text> : null}
-          {status.storageState !== "healthy" ? <Text accessibilityRole="alert" style={ui.error}>{status.storageState === "key_unavailable"
-            ? "Encryption key unavailable. Intake is blocked. Disable and wipe to recover; local Candidates will be deleted."
-            : "Encrypted storage is corrupt. Intake is blocked. Disable and wipe to recover; local Candidates will be deleted."}</Text> : null}
-          <SecondaryButton label="Open Android notification access settings" disabled={!acknowledged || blocked}
-            onPress={() => { if (acknowledged && !blocked) void perform("Opening settings", () => service.openAccessSettings()); }} />
-          {status.connection !== "connected" ? <>
-            <Text style={ui.body}>Access and listener connection are separate. If access is granted, retry the listener connection. Notifications may have been missed.</Text>
-            <SecondaryButton label="Retry listener connection" disabled={blocked || status.access !== "granted"}
-              onPress={() => { if (!blocked && status.access === "granted") void perform("Retrying connection", () => service.retryConnection()); }} />
-          </> : null}
-          {status.gap ? <View accessibilityLiveRegion="polite" style={ui.section}>
-            <Text style={ui.sectionHeading}>Activity may be missing</Text>
-            <Text style={ui.body}>{status.gap.reason} gap observed since {new Date(status.gap.since).toLocaleString()}. Rejected captures: {status.gap.rejectedCount}. Reconcile with your financial accounts. This warning does not block Month Close.</Text>
-          </View> : null}
-          {status.notices.length ? <View style={ui.section}>
-            <Text style={ui.sectionHeading}>Capture notices</Text>
-            <Text style={ui.muted}>These notices contain no notification text. Missed activity may need reconciliation.</Text>
-            {status.notices.map((notice) => <View key={notice.id}>
-              <Text style={ui.body}>{notice.kind} · {notice.count} · {new Date(notice.firstAt).toLocaleString()} to {new Date(notice.lastAt).toLocaleString()}</Text>
-              <SecondaryButton label={`Dismiss ${notice.kind} notice`} disabled={pending !== null || snapshot.wipePending}
-                onPress={() => { void perform("Dismissing notice", () => service.dismissNotices([notice.id])); }} />
-            </View>)}
-          </View> : null}
-          {snapshot.drain && (snapshot.drain.unresolved > 0 || snapshot.drain.conflicts > 0) ?
-            <Text accessibilityRole="alert" style={ui.error}>{snapshot.drain.unresolved} captures have unavailable mappings. {snapshot.drain.conflicts} captures conflict. Review sources and reconcile missed activity.</Text> : null}
-        </>
-      )}
-      <SecondaryButton label="Refresh status and accounts" disabled={pending !== null || snapshot.wipePending}
-        onPress={() => { setRevision((value) => value + 1); void perform("Refreshing status", () => service.refresh(), false); }} />
-      {snapshot.state.pendingConfigure ? <>
-        <Text accessibilityRole="alert" style={ui.error}>Source configuration is pending. Its outcome is not confirmed. Retry the saved configuration before changing sources.</Text>
-        <PrimaryButton label="Retry saved configuration" disabled={pending !== null || !acknowledged || snapshot.wipePending}
-          onPress={() => { if (acknowledged) void perform("Retrying configuration", () => service.retryConfigure()); }} />
-      </> : null}
-      {pending ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{pending}</Text> : null}
-      <View style={ui.section}>
-        <Text accessibilityRole="header" style={ui.sectionHeading}>Configured sources</Text>
-        <Text style={ui.body}>{active.length === 0 ? "No sources configured. Capture is not set up." : `${active.length} sources configured. ${status?.enabled ? "Capture enabled" : "Capture not observed as enabled"}. Configuration alone does not prove a notification was captured.`}</Text>
-        {active.map((mapping) => <View key={mapping.sourceSelectionId} style={ui.section}>
-          <Text style={ui.body}>{catalog.kind === "ready" ? catalog.sources.find((source) => source.packageName === mapping.packageName)?.label ?? mapping.packageName : mapping.packageName}</Text>
-          <Text style={ui.muted}>{mapping.packageName}</Text>
-          <Text style={ui.body}>Workspace {mapping.workspaceId} · Account {catalog.kind === "ready" && mapping.workspaceId === workspaceId
-            ? catalog.profiles.find((profile) => profile.id === mapping.financialAccountProfileId)?.name ?? `Unavailable (${mapping.financialAccountProfileId})`
-            : mapping.financialAccountProfileId} · {mapping.currency} · {mapping.timeZone}</Text>
-          {catalog.kind === "ready" && !catalog.sources.some((source) => source.packageName === mapping.packageName) ? <Text style={ui.error}>App unavailable in the installed catalog.</Text> : null}
-          <SecondaryButton label={`Change account for ${mapping.packageName}`} disabled={!canConfigure || catalog.kind !== "ready"}
-            onPress={() => { if (canConfigure) setEditor({ kind: "mapping", packageName: mapping.packageName, profileId: null }); }} />
-          <SecondaryButton label={`Remove ${mapping.packageName}`} disabled={!canConfigure}
-            onPress={() => { if (canConfigure) void perform("Removing source", () => configure(active.filter((source) => source.packageName !== mapping.packageName))); }} />
-        </View>)}
-        <Text style={ui.muted}>Removing a source stops future intake from that app. Previously captured Candidates and their saved mappings remain until expiry or explicit deletion.</Text>
-      </View>
-      {supported ? <View style={ui.section}>
-        <Text accessibilityRole="header" style={ui.sectionHeading}>Choose an installed app and account</Text>
-        {catalog.kind === "loading" ? <ActivityIndicator accessibilityLabel="Loading installed apps and admitted accounts" /> : catalog.kind === "failed" ?
-          <Text accessibilityRole="alert" style={ui.error}>Could not load installed apps or current account permissions. Refresh status and accounts to try again. No new source can be saved.</Text> : <>
-            <Text style={ui.body}>Current workspace {catalog.workspace.kind} · {catalog.workspace.id} · {catalog.workspace.functionalCurrency} · {catalog.workspace.timeZone}</Text>
-            <Text style={ui.muted}>Choose an account explicitly. Sources saved in other workspaces keep their saved identity unless you change or remove that app here.</Text>
-            {!catalog.profiles.length ? <Text style={ui.error}>No admitted Financial Account Profiles are available in this workspace.</Text> : null}
-            {!catalog.sources.length ? <Text style={ui.muted}>No installed notification source apps are available. Install your source app, then refresh.</Text> : null}
-            <Pressable accessibilityRole="button" accessibilityLabel="Add source" accessibilityState={{ expanded: catalogOpen, disabled: !canConfigure }}
-              accessibilityHint="Open a searchable list of installed apps" disabled={!canConfigure} style={{ minHeight: touchTarget, justifyContent: "center" }}
-              onPress={() => { if (canConfigure) { setEditor({ kind: "closed" }); setCatalogOpen((value) => !value); } }}>
-              <Text style={ui.body}>Add source · {catalog.sources.length} installed apps</Text>
-            </Pressable>
-            {catalogOpen ? <IntakeSelectionPicker title="Choose an app" searchLabel="Search apps by name or package"
-              options={catalog.sources.map((source) => ({ id: source.packageName, label: `Select ${source.label}`, detail: source.packageName }))}
-              selected={null} disabled={!canConfigure || !catalog.profiles.length} empty="No installed notification source apps are available. Refresh the catalog."
-              onClose={() => setCatalogOpen(false)} onSelect={(packageName) => { setCatalogOpen(false); setEditor({ kind: "mapping", packageName, profileId: null }); }} /> : null}
-            {editor.kind === "mapping" ? <IntakeSelectionPicker
-              title={`Account for ${catalog.sources.find((source) => source.packageName === editor.packageName)?.label ?? editor.packageName}`}
-              searchLabel="Search accounts" options={catalog.profiles.filter((profile) => profile.workspaceId === workspaceId).map((profile) => ({
-                id: profile.id, label: `${profile.name} · ${catalog.workspace.kind} · ${catalog.workspace.functionalCurrency}`, detail: `Workspace ${workspaceId} · Account ${profile.id}` }))}
-              selected={editor.profileId} disabled={!canConfigure} empty="No admitted accounts are available in this workspace."
-              onSelect={(profileId) => { if (canConfigure) setEditor({ ...editor, profileId }); }}
-              onClose={() => { if (!pending) setEditor({ kind: "closed" }); }}
-              footer={<View style={ui.section}>
-                <Text style={ui.body}>Selected app {editor.packageName}</Text>
-                <Text style={ui.body}>Selected account {catalog.profiles.find((profile) => profile.id === editor.profileId)?.name ?? "Choose an account"}</Text>
-              <PrimaryButton label="Save source and account" disabled={!canConfigure || editor.profileId === null} onPress={() => {
-                if (!canConfigure || editor.profileId === null) return;
-                const profile = catalog.profiles.find((profile) => profile.id === editor.profileId && profile.workspaceId === workspaceId);
-                const currency = catalog.workspace.functionalCurrency;
-                if (!profile || (currency !== "COP" && currency !== "USD")) { setError("Account or currency unavailable. Refresh accounts before saving."); return; }
-                const existing = active.find((mapping) => mapping.packageName === editor.packageName);
-                const same = existing && existing.workspaceId === workspaceId && existing.financialAccountProfileId === profile.id && existing.currency === currency && existing.timeZone === catalog.workspace.timeZone;
-                const mapping: SourceMapping = same ? existing : { sourceSelectionId: Crypto.randomUUID(), packageName: editor.packageName,
-                  workspaceId, financialAccountProfileId: profile.id, currency, timeZone: catalog.workspace.timeZone };
-                void perform("Saving source", () => configure([...active.filter((old) => old.packageName !== mapping.packageName), mapping]));
-              }} />
-                <SecondaryButton label="Choose another app" disabled={pending !== null} onPress={() => { setEditor({ kind: "closed" }); setCatalogOpen(true); }} />
-                <SecondaryButton label="Cancel account selection" disabled={pending !== null} onPress={() => setEditor({ kind: "closed" })} />
-              </View>} /> : null}
-          </>}
+      {diagnostics ? <View style={ui.section}>
+        <Text style={ui.label}>BETA BUILD</Text>
+        <Muted>This beta also keeps the original notification text, encrypted, for up to 24 hours. It's never uploaded.</Muted>
       </View> : null}
       <View style={ui.section}>
-        <Text style={ui.sectionHeading}>Capture and Candidates</Text>
-        <Text style={ui.body}>{candidates.length ? `${candidates.length} local Candidates await review across saved workspaces.` : "No Candidates observed. Notifications from enabled sources become Candidates here. Access or configuration alone does not confirm capture."}</Text>
-        {status ? <Text style={ui.muted}>{status.pendingCount} native captures pending at the observed health check.</Text> : null}
-        <PrimaryButton label="Open Candidate inbox" onPress={onInbox} disabled={pending !== null} />
+        <TextButton label={readFull ? "Hide the full disclosure" : "Read the full disclosure"} expanded={readFull} onPress={() => setReadFull((value) => !value)} />
+        {readFull ? <>
+          <Text style={ui.body}>Lukapp reads notifications only from apps you select. Normalized suggestions are encrypted on this device and expire 15 days after their first capture. {diagnostics ? "This dev/beta build also encrypts original delivered notification contents, including security messages, in a separate local diagnostic store for up to 24 hours. Nothing from that store is uploaded." : "Raw notification text is not retained."}</Text>
+          <Text style={ui.body}>Notifications may be missed or delayed. Reconcile with your accounts. Every Candidate requires review before financial posting.</Text>
+          <Text style={ui.muted}>Your saved purchase-alert preference does not grant device access. Acknowledging this disclosure does not enable capture.</Text>
+        </> : null}
       </View>
-      <View style={ui.section}>
-        <Text accessibilityRole="header" style={ui.sectionHeading}>Disable and delete local intake</Text>
-        {snapshot.wipePending ? <>
-          <Text accessibilityRole="alert" style={ui.error}>Wipe is pending. Intake remains blocked until the saved wipe finishes.</Text>
-          <PrimaryButton label="Retry pending wipe" disabled={pending !== null}
-            onPress={() => { void perform("Retrying wipe", () => service.retryPendingControl(), false); }} />
-        </> : confirmWipe ? <>
-          <Text style={ui.body}>Disable intake and delete all local notification Candidates, including saved review edits and pending submission commands, pending captures, source/account mappings, replay markers, intake consent configuration, capture notices, and all raw arrival diagnostics. Posted ledger entries and manual Drafts are kept. Android notification access is managed separately in system settings.</Text>
-          <SecondaryButton label="Disable intake and delete local Candidates" tone="danger" disabled={pending !== null}
-            onPress={() => { void perform("Wiping local intake", async () => { await service.disableAndWipe(); setConfirmWipe(false); setAcknowledged(false); }, false); }} />
-          <SecondaryButton label="Keep intake" disabled={pending !== null} onPress={() => setConfirmWipe(false)} />
-        </> : <SecondaryButton label="Disable and wipe intake…" tone="danger" disabled={pending !== null} onPress={() => setConfirmWipe(true)} />}
+      <Card>
+        <CheckRow label="I've read this" detail={status?.access === "granted" ? "Choosing apps is the next step" : "Allowing notification access is the next step"}
+          accessibilityLabel={INTAKE_ACKNOWLEDGEMENT} checked={acknowledged} disabled={pending !== null} onPress={() => setAcknowledged((value) => !value)} />
+      </Card>
+    </Screen>;
+  }
+
+  if (current.kind === "wipe") {
+    return <Screen footer={<ActionBar>
+      {pendingLine}
+      <SecondaryButton label="Turn off and wipe" tone="danger" disabled={pending !== null} onPress={() => {
+        void perform("Wiping local intake", async () => { await service.disableAndWipe(); setAcknowledged(false); }, false)
+          .then(() => setStep({ kind: "hub" }));
+      }} />
+      <SecondaryButton label="Keep it on" disabled={pending !== null} onPress={() => setStep({ kind: "hub" })} />
+    </ActionBar>}>
+      <Header title="Turn off and wipe?" eyebrow="NOTIFICATION INTAKE" onBack={pending ? undefined : () => setStep({ kind: "hub" })} />
+      {errors}
+      <View style={{ gap: spacing.xl }}>
+        <FactRow icon="notifications-off-outline" tone="danger" title="Stops reading every app"
+          detail="Android notification access is managed separately in system settings." />
+        <FactRow icon="trash-outline" tone="danger" title="Deletes what's on this phone"
+          detail="Candidates, including saved review edits and pending submission commands, pending captures, app-to-place choices, notices and raw arrival diagnostics." />
+        <FactRow icon="receipt-outline" tone="neutral" title="Posted entries stay" detail="Posted ledger entries and manual Drafts are kept." />
       </View>
-    </Screen>
-  );
+    </Screen>;
+  }
+
+  if (current.kind === "place") {
+    const label = appLabel(current.packageName);
+    const existing = active.find((mapping) => mapping.packageName === current.packageName);
+    const profiles = ready?.profiles.filter((profile) => profile.workspaceId === workspaceId) ?? [];
+    const leave = () => setStep(existing ? { kind: "app", packageName: existing.packageName } : { kind: "hub" });
+    const save = () => {
+      if (!canConfigure || !ready || current.profileId === null) return;
+      const profile = ready.profiles.find((row) => row.id === current.profileId && row.workspaceId === workspaceId);
+      const currency = ready.workspace.functionalCurrency;
+      if (!profile || (currency !== "COP" && currency !== "USD")) { setError("Account or currency unavailable. Refresh accounts before saving."); return; }
+      const same = existing && existing.workspaceId === workspaceId && existing.financialAccountProfileId === profile.id && existing.currency === currency && existing.timeZone === ready.workspace.timeZone;
+      const mapping: SourceMapping = same ? existing : { sourceSelectionId: Crypto.randomUUID(), packageName: current.packageName,
+        workspaceId, financialAccountProfileId: profile.id, currency, timeZone: ready.workspace.timeZone };
+      void perform("Saving", () => configure([...active.filter((old) => old.packageName !== mapping.packageName), mapping]))
+        .then((saved) => { if (saved || service.getSnapshot().state.pendingConfigure) setStep({ kind: "hub" }); });
+    };
+    return <Screen footer={<ActionBar>
+      {pendingLine}
+      <PrimaryButton label={existing ? "Save" : `Start reading ${label}`} trailingIcon="checkmark"
+        disabled={!canConfigure || current.profileId === null} pending={pending !== null} onPress={save} />
+      {existing ? null : <SecondaryButton label="Choose another app" disabled={pending !== null} onPress={() => { setStep({ kind: "hub" }); setCatalogOpen(true); }} />}
+    </ActionBar>}>
+      <Header title={`Where do ${label} alerts go?`} eyebrow={existing ? "CHANGE AN APP" : "ADD AN APP"} onBack={pending ? undefined : leave} />
+      {errors}
+      {ready ? <Muted>{`${ready.workspace.kind} · ${ready.workspace.functionalCurrency} · ${timeZoneCity(ready.workspace.timeZone)}`}</Muted> : null}
+      {!ready ? <ActivityIndicator accessibilityLabel="Loading places" />
+        : !profiles.length ? <AlertLine>No places in this workspace yet. Add one in My finances, then come back.</AlertLine>
+        : <View accessibilityRole="radiogroup" style={{ gap: spacing.sm }}>
+          {profiles.map((profile) => <Choice key={profile.id} label={profile.name} detail={productKindLabel(profile.productKind)}
+            selected={current.profileId === profile.id} disabled={!canConfigure}
+            onPress={() => { if (canConfigure) setStep({ ...current, profileId: profile.id }); }} />)}
+        </View>}
+      <Muted>{`You can change this later. Other workspaces keep their own place for ${label}.`}</Muted>
+    </Screen>;
+  }
+
+  // An app removed elsewhere falls back to the hub.
+  const mapping = current.kind === "app" ? active.find((row) => row.packageName === current.packageName) : undefined;
+  if (mapping) {
+    const label = appLabel(mapping.packageName);
+    return <Screen footer={<ActionBar>
+      {pendingLine}
+      <PrimaryButton label="Change where alerts go" disabled={!canChange || !ready}
+        onPress={() => withAcknowledgement({ kind: "place", packageName: mapping.packageName })} />
+      <SecondaryButton label={`Stop reading ${label}`} tone="danger" disabled={!canChange} onPress={() => {
+        if (!acknowledged) { withAcknowledgement({ kind: "app", packageName: mapping.packageName }); return; }
+        void perform("Removing app", () => configure(active.filter((row) => row.packageName !== mapping.packageName)))
+          .then((removed) => { if (removed || service.getSnapshot().state.pendingConfigure) setStep({ kind: "hub" }); });
+      }} />
+    </ActionBar>}>
+      <Header title={label} eyebrow="APPS YOU READ FROM" onBack={pending ? undefined : () => setStep({ kind: "hub" })} />
+      {errors}
+      {appMissing(mapping) ? <AlertLine>This app isn't installed anymore. Its alerts can't be read.</AlertLine> : null}
+      <Card>
+        <NavRow leading={<IconTile icon="wallet-outline" tone={accountMissing(mapping) ? "danger" : "accent"} />} title="Alerts go to"
+          status={accountName(mapping)} statusTone={accountMissing(mapping) ? "danger" : undefined}
+          accessibilityLabel={`Alerts go to ${accountName(mapping)}`} />
+        <NavRow last leading={<IconTile letter={appInitial(label)} tone="accent" />} title="App" status={mapping.packageName}
+          accessibilityLabel={`App package ${mapping.packageName}`} />
+      </Card>
+      {mapping.workspaceId !== workspaceId ? <Muted>Saved in another workspace. Changing it sends its alerts to this workspace instead.</Muted> : null}
+      <Muted>Stopping only affects new alerts. Candidates already captured, and the choices they were saved with, stay until they expire or you delete them.</Muted>
+    </Screen>;
+  }
+
+  // The hub.
+  const hero = !status ? null
+    : status.storageState !== "healthy" || snapshot.wipePending
+      ? { icon: "lock-closed-outline", tone: "danger", title: "Intake is blocked", status: "Nothing new is read until this is fixed." } as const
+    : snapshot.state.pendingConfigure
+      ? { icon: "hourglass-outline", tone: "warning", title: "Waiting on the last change", status: "Apps can't change until it's retried." } as const
+    : status.access !== "granted"
+      ? { icon: "notifications-outline", tone: "warning", title: "Allow notification access", status: "Android must let Lukapp read notifications before any app can be added." } as const
+    : status.connection !== "connected"
+      ? { icon: "pulse-outline", tone: "warning", title: "Listener isn't connected", status: "Alerts may be missed until it reconnects." } as const
+    : !active.length
+      ? { icon: "notifications-off-outline", tone: "warning", title: "Not reading any app yet", status: "Access and listener are ready" } as const
+      : { icon: "pulse-outline", tone: "positive", title: `Reading ${plural(active.length, "app")}`,
+          status: status.enabled ? "Working · listener connected" : "Capture not confirmed yet · refresh to check",
+          statusTone: (status.enabled ? "positive" : "warning") as Tone } as const;
+  const next = !status || blocked && pending === null ? null
+    : active.length ? { label: candidates.length ? `Open candidate inbox · ${candidates.length}` : "Open candidate inbox", icon: "arrow-forward" as const, onPress: onInbox }
+    // Setting up: acknowledge, then allow access, then add the first app.
+    : !acknowledged ? { label: "Review and turn on", icon: "arrow-forward" as const, onPress: () => withAcknowledgement({ kind: "hub" }) }
+    : status.access !== "granted" ? { label: "Allow notification access", icon: "arrow-forward" as const, onPress: () => go({ kind: "settings" }) }
+    : { label: "Add an app", icon: "add" as const, disabled: !canConfigure || !ready, onPress: () => setCatalogOpen(true) };
+  const unsupportedMessage = snapshot.status && !status && "reason" in snapshot.status
+    ? snapshot.status.reason === "native_api_incompatible" ? "Update the Android APK to notification intake API v2, then refresh status."
+      : snapshot.status.reason === "native_module_missing" ? "Custom Android binary missing. Install a build with the notification intake module, then refresh status."
+      : "Notification intake is supported only in the custom Android app."
+    : null;
+
+  return <Screen footer={next || pending ? <ActionBar>
+    {pendingLine}
+    {next ? <PrimaryButton label={next.label} trailingIcon={next.icon} disabled={pending !== null || ("disabled" in next && next.disabled)} onPress={next.onPress} /> : null}
+  </ActionBar> : null}>
+    <Header title="Notification intake" eyebrow="PURCHASE ALERTS" onBack={pending ? undefined : onBack} />
+    {errors}
+    {snapshot.wipePending ? <NoteCard tone="danger" icon="trash-outline" title="Wipe is pending"
+      body="Intake remains blocked until the saved wipe finishes."
+      action={{ label: "Retry pending wipe", disabled: pending !== null, onPress: () => { void perform("Retrying wipe", () => service.retryPendingControl(), false); } }} /> : null}
+    {status && status.storageState !== "healthy" && !snapshot.wipePending ? <NoteCard tone="danger" icon="lock-closed-outline"
+      title={status.storageState === "key_unavailable" ? "Encryption key unavailable" : "Encrypted storage is corrupt"}
+      body="Turn off and wipe to recover. Local candidates will be deleted."
+      action={{ label: "Turn off and wipe", danger: true, disabled: pending !== null, onPress: () => setStep({ kind: "wipe" }) }} /> : null}
+    {snapshot.state.pendingConfigure && !snapshot.wipePending ? <NoteCard tone="warning" icon="hourglass-outline" title="The last change didn't finish"
+      body="Its outcome isn't confirmed. Retry the saved change before changing apps."
+      action={{ label: "Retry saved configuration", disabled: pending !== null, onPress: () => {
+        if (!acknowledged) { withAcknowledgement({ kind: "hub" }); return; }
+        void perform("Retrying configuration", () => service.retryConfigure());
+      } }} /> : null}
+    {snapshot.drain && (snapshot.drain.unresolved > 0 || snapshot.drain.conflicts > 0)
+      ? <AlertLine>{`${snapshot.drain.unresolved} captures have unavailable mappings. ${snapshot.drain.conflicts} captures conflict. Review apps and reconcile missed activity.`}</AlertLine> : null}
+
+    {!snapshot.status ? <ActivityIndicator accessibilityLabel="Checking notification access" />
+      : unsupportedMessage ? <HeroState icon="notifications-off-outline" tone="warning" title="Not available here" status={unsupportedMessage} alert />
+      : hero ? <HeroState icon={hero.icon} tone={hero.tone} title={hero.title} status={hero.status} statusTone={"statusTone" in hero ? hero.statusTone : undefined} /> : null}
+
+    {status?.gap ? <NoteCard tone="warning" icon="warning-outline" title="Activity may be missing"
+      body={`${GAP_LABELS[status.gap.reason]} since ${when(status.gap.since)}. ${plural(status.gap.rejectedCount, "capture")} rejected. Reconcile with your accounts. This doesn't block Month Close.`} /> : null}
+
+    {status ? <View style={ui.section}>
+      <SectionHeading title="Apps you read from" meta={ready ? `${plural(ready.sources.length, "app")} on this phone` : undefined} />
+      {active.length ? <Card>
+        {active.map((mapping, index) => {
+          const label = appLabel(mapping.packageName);
+          const problem = appMissing(mapping) ? "Not installed" : accountMissing(mapping) ? "Place unavailable" : null;
+          const line = `${problem ? `${problem} · ` : ""}To ${accountName(mapping)}`;
+          return <NavRow key={mapping.sourceSelectionId} last={index === active.length - 1} leading={<IconTile letter={appInitial(label)} tone="accent" />}
+            title={label} status={line} statusTone={problem ? "danger" : undefined} accessibilityLabel={`${label}, ${line}`}
+            onPress={() => setStep({ kind: "app", packageName: mapping.packageName })} />;
+        })}
+      </Card> : <Muted>No apps yet. Choose the bank apps that send your purchase alerts.</Muted>}
+      {catalog.kind === "loading" ? <ActivityIndicator accessibilityLabel="Loading installed apps and places" />
+        : catalog.kind === "failed" ? <AlertLine>Couldn't load your apps or places. Refresh to try again. No app can be added until then.</AlertLine>
+        : !catalog.sources.length ? <Muted>No installed apps can send alerts. Install your bank app, then refresh.</Muted> : null}
+      {active.length ? <>
+        <SecondaryButton label="Add another app" disabled={!canChange || !ready} onPress={() => withAcknowledgement({ kind: "addApp" })} />
+        <Muted>Adding an app doesn't prove an alert was captured. Captured alerts show up in the candidate inbox.</Muted>
+      </> : null}
+    </View> : null}
+
+    {status ? <View style={ui.section}>
+      <SectionHeading title="This phone" />
+      <Card>
+        <NavRow leading={<IconTile icon="notifications-outline" tone={status.access === "granted" ? "positive" : "warning"} />}
+          title="Notification access" status={status.access === "granted" ? "Granted" : "Not granted"}
+          statusTone={status.access === "granted" ? "positive" : "warning"} accessibilityLabel={`Notification access, ${status.access === "granted" ? "Granted" : "Not granted"}`} />
+        <NavRow last leading={<IconTile icon="pulse-outline" tone={status.connection === "connected" ? "positive" : "warning"} />}
+          title="Listener" status={status.connection === "connected" ? "Connected" : status.connection === "disconnected" ? "Disconnected" : "Unknown"}
+          statusTone={status.connection === "connected" ? "positive" : "warning"}
+          accessibilityLabel={`Listener, ${status.connection === "connected" ? "Connected" : status.connection === "disconnected" ? "Disconnected" : "Unknown"}`} />
+      </Card>
+      <Muted>{`Checked ${when(status.checkedAt)} · ${status.lastConnectedAt === null ? "no connection seen yet" : `last connected ${when(status.lastConnectedAt)}`}`}</Muted>
+      {status.pendingCount > 0 ? <Muted>{`${plural(status.pendingCount, "capture")} waiting to be read.`}</Muted> : null}
+      {status.connection !== "connected" ? <SecondaryButton label="Retry listener connection" disabled={blocked || status.access !== "granted"}
+        onPress={() => { if (!blocked && status.access === "granted") void perform("Retrying connection", () => service.retryConnection()); }} /> : null}
+      <SecondaryButton label="Android notification settings" disabled={blocked} onPress={() => withAcknowledgement({ kind: "settings" })} />
+    </View> : null}
+
+    <SecondaryButton label="Refresh status" disabled={pending !== null || snapshot.wipePending}
+      onPress={() => { setRevision((value) => value + 1); void perform("Refreshing status", () => service.refresh(), false); }} />
+
+    {status?.notices.length ? <View style={ui.section}>
+      <SectionHeading title="Skipped alerts" meta="No notification text is kept for these. Missed activity may need reconciling." />
+      {status.notices.map((notice) => <View key={notice.id} style={{ gap: spacing.sm }}>
+        <FactRow icon="eye-off-outline" tone="neutral" title={NOTICE_LABELS[notice.kind]}
+          detail={`${plural(notice.count, "alert")} · ${when(notice.firstAt)} to ${when(notice.lastAt)}`} />
+        <SecondaryButton label="Dismiss" accessibilityLabel={`Dismiss ${notice.kind} notice`} disabled={pending !== null || snapshot.wipePending}
+          onPress={() => { void perform("Dismissing notice", () => service.dismissNotices([notice.id])); }} />
+      </View>)}
+    </View> : null}
+
+    <Card>
+      <NavRow leading={<IconTile icon="document-text-outline" />} title="Candidate inbox" last={!status?.diagnostics?.enabled}
+        status={candidates.length ? `${candidates.length} waiting · across saved workspaces` : "Nothing waiting"}
+        accessibilityLabel={`Candidate inbox, ${candidates.length ? `${candidates.length} waiting` : "nothing waiting"}`} disabled={pending !== null} onPress={onInbox} />
+      {status?.diagnostics?.enabled ? <NavRow last leading={<IconTile icon="pulse-outline" />} title="Beta diagnostics"
+        status={`${status.diagnostics.recordCount} records · ${status.diagnostics.overflowCount} overflow · ${status.diagnostics.errorCount} errors · ${status.diagnostics.state}`}
+        accessibilityLabel="Inspect raw arrivals on this device" disabled={blocked} onPress={() => setStep({ kind: "inspect" })} /> : null}
+    </Card>
+
+    {ready ? <Muted>{`${ready.workspace.kind} · ${ready.workspace.functionalCurrency} · ${timeZoneCity(ready.workspace.timeZone)}`}</Muted> : null}
+    {supported && !snapshot.wipePending ? <SecondaryButton label="Turn off and wipe" tone="danger" disabled={pending !== null} onPress={() => setStep({ kind: "wipe" })} /> : null}
+
+    {catalogOpen && ready ? <IntakeSelectionPicker title="Add an app" eyebrow={`${ready.sources.length} ON THIS PHONE`} searchLabel="Search apps"
+      options={orderSources(ready.sources).map((source) => ({ id: source.packageName, label: source.label, detail: source.packageName,
+        initial: appInitial(source.label), likely: likelyBankApp(source) }))}
+      disabled={!canConfigure} empty="No installed apps can send alerts. Install your bank app, then refresh."
+      onClose={() => setCatalogOpen(false)}
+      onSelect={(packageName) => { setCatalogOpen(false); setStep({ kind: "place", packageName, profileId: null }); }} /> : null}
+  </Screen>;
 }
