@@ -32,7 +32,7 @@ import { font, fontSize, radius, spacing, themes, xxxl } from "./tokens";
 import { useThemeContext } from "./themeContext";
 import { Text as StyledText } from "./Text";
 import { TextInput as PresetTextInput } from "./TextInput";
-import { IconTile } from "./surfaces";
+import { EmojiTile, IconTile } from "./surfaces";
 import { KeyboardFrame } from "./KeyboardFrame";
 import { composeHandlers, mix } from "./design";
 import { textSpecs, textStyle, textTone, type TextTone } from "./typography";
@@ -407,6 +407,7 @@ export { MoneyHero, type MoneyHeroProps } from "./MoneyHero";
 export type ChoiceProps = {
   label: string; detail?: string; selected: boolean; onPress: () => void; disabled?: boolean;
   kind?: "radio" | "checkbox"; leading?: ReactNode; presentation?: "grouped" | "option"; isLast?: boolean;
+  emoji?: string;
 };
 
 export function Choice({
@@ -414,7 +415,7 @@ export function Choice({
   detail,
   selected,
   onPress,
-  disabled = false, kind = "radio", leading, presentation = "grouped", isLast,
+  disabled = false, kind = "radio", leading, presentation = "grouped", isLast, emoji,
 }: ChoiceProps) {
   const { theme, styles, layout } = useCore();
   if (layout.tier === "xxxl") {
@@ -423,7 +424,7 @@ export function Choice({
       accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onPress}
       style={{ minHeight: option ? 60 : 72, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: option ? (selected ? 11 : 12) : 16, paddingHorizontal: option && selected ? 15 : 16,
         ...(option ? { borderRadius: 18, borderWidth: selected ? 2 : 1, borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? `${theme.primary}17` : theme.secondary } : { borderBottomWidth: isLast ? 0 : 1, borderBottomColor: theme.border }), opacity: disabled ? 0.45 : 1 }}>
-      {leading}
+      {leading ?? (emoji !== undefined ? <EmojiTile emoji={emoji.trim() || "✨"} color={theme.primary} size={36} /> : null)}
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}><StyledText variant={option ? "action" : "rowTitle"} tone={option && selected ? "primary" : "default"}>{label}</StyledText>
         {detail ? <StyledText variant="status" tone="muted" numberOfLines={1}>{detail}</StyledText> : null}</View>
       {option ? (selected ? <Ionicons name="checkmark" size={22} color={theme.primaryText} /> : null)

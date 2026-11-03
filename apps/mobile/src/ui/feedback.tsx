@@ -34,7 +34,7 @@ export function InlineNotice({ tone, title, detail, legacy = null }: { tone: "wa
 export function AlertDot({ count, legacy = null }: { count: number } & Legacy) {
   const { theme, layout, mode } = useThemeContext();
   if (layout.tier !== "xxxl" || count <= 0) return legacy;
-  return <View accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: "absolute", top: 7, right: 8, width: 16, height: 16, borderRadius: 999, borderWidth: 2, borderColor: mode === "light" ? "#f7f2fe" : "#21132f", backgroundColor: theme.warning }} />;
+  return <View accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: "absolute", top: -8, right: -8, width: 16, height: 16, borderRadius: 999, borderWidth: 2, borderColor: mode === "light" ? "#f7f2fe" : "#21132f", backgroundColor: theme.warning }} />;
 }
 export function Skeleton({ width, height, onBand = false, legacy = null }: { width: DimensionValue; height: number; onBand?: boolean } & Legacy) {
   const { theme, layout } = useThemeContext();

@@ -227,7 +227,7 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
           onChangeText={setSearch} placeholderTextColor={theme.mutedForeground} style={[searchTypography.style, styles.input, { minHeight: 64 }]} />
         <ChoiceRow kind="checkbox" presentation="option" label="All categories" selected={query.categoryIds.length === 0}
           onPress={() => onQuery({ ...query, categoryIds: [] })} />
-        {matchedCategories.map((category) => <ChoiceRow key={category.id} kind="checkbox" presentation="option" label={category.name}
+        {matchedCategories.map((category) => <ChoiceRow key={category.id} kind="checkbox" presentation="option" label={category.name} emoji={category.style.emoji}
           selected={query.categoryIds.includes(category.id)} onPress={() => onQuery({ ...query, categoryIds: toggle(query.categoryIds, category.id) })} />)}
         {matchedCategories.length === 0 && <Text variant="meta" tone="muted">{`No category matches "${search.trim()}".`}</Text>}
       </>}

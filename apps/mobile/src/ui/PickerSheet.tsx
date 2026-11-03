@@ -9,7 +9,7 @@ import {
 } from "@gorhom/bottom-sheet";
 import type { ReactNode, ComponentProps } from "react";
 import { SheetModal, type NativeSheetProps, type SheetPresentation } from "./SheetModal";
-import { StyleSheet } from "react-native";
+import { StyleSheet, type ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "./core";
 import { useReadableLayout } from "./themeContext";
@@ -26,7 +26,7 @@ export function PickerSheet({
   presentOnMount, nativeModalProps, scrollProps, androidBack = false, footer,
 }: SheetPresentation & {
   nativeModalProps?: NativeSheetProps;
-  scrollProps?: Omit<ComponentProps<typeof BottomSheetScrollView>, "children">;
+  scrollProps?: Omit<ComponentProps<typeof BottomSheetScrollView>, "children" | "contentContainerStyle"> & Pick<ComponentProps<typeof ScrollView>, "contentContainerStyle">;
   androidBack?: boolean;
   busy?: boolean;
   stickyHeader?: boolean;
@@ -44,11 +44,13 @@ export function PickerSheet({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const layout = useReadableLayout();
+  const large = layout.tier === "xxxl";
   const pickerSheetStyles = usePickerSheetStyles();
   const legacy = layout.tier !== "xxxl" && legacyBody !== undefined;
   const modalProps = legacy ? { ...nativeModalProps, ...legacyNativeModalProps } : nativeModalProps;
   const activeFooter = legacy ? legacyFooter : footer;
-  const renderFooter = useCallback((props: BottomSheetFooterProps) => <BottomSheetFooter {...props} bottomInset={insets.bottom}><FooterFrame>{activeFooter}</FooterFrame></BottomSheetFooter>, [activeFooter, insets.bottom]);
+  const renderFooter = useCallback((props: BottomSheetFooterProps) => <BottomSheetFooter {...props} bottomInset={large ? 0 : insets.bottom}><FooterFrame>{activeFooter}</FooterFrame></BottomSheetFooter>, [activeFooter, insets.bottom, large]);
+  const contentContainerStyle = [pickerSheetStyles.content, { paddingBottom: (large ? spacing.lg : Math.max(insets.bottom, spacing.lg)) + spacing.xxl }];
   return (
     <SheetModal
       sheetRef={modal}
@@ -69,14 +71,16 @@ export function PickerSheet({
         appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={busy ? "none" : "close"} />}
       {...(activeFooter && { footerComponent: renderFooter })}
       {...modalProps}
+      {...(large && { bottomInset: insets.bottom })}
       onDismiss={() => { for (const notify of new Set([modalProps?.onDismiss, onDismiss])) notify?.(); }}
     >
       {legacy && legacyBodyMode === "native" ? legacyBody : <BottomSheetScrollView
         accessibilityViewIsModal
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[pickerSheetStyles.content, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.xxl }]}
+        contentContainerStyle={contentContainerStyle}
         stickyHeaderIndices={stickyHeader ? [0] : undefined}
         {...(legacy ? legacyScrollProps : scrollProps)}
+        {...(large && { contentContainerStyle: StyleSheet.flatten([contentContainerStyle, scrollProps?.contentContainerStyle]) })}
         {...(activeFooter && { enableFooterMarginAdjustment: true })}
       >
         {legacy ? legacyBody : children}
