@@ -24,6 +24,12 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
   dismissible?: boolean;
 }>) {
   const [open, setOpen] = useState(presentOnMount);
+  const [nativeVersion, setNativeVersion] = useState(0);
+  const version = useRef(0);
+  const mounted = useRef(true);
+  const recovery = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notifyDismiss = useRef(onDismiss);
+  notifyDismiss.current = onDismiss;
   const native = useRef<BottomSheetModal>(null);
   const presentation = useRef<Presentation>({ kind: "idle" });
   const backEnabled = useRef(androidBack);
@@ -33,6 +39,21 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
   const locked = busy || !dismissible;
   const lock = useRef(locked);
   lock.current = locked;
+  function settleClose() {
+    if (presentation.current.kind === "hidden") return;
+    presentation.current = { kind: "hidden" };
+    if (recovery.current !== null) clearTimeout(recovery.current);
+    recovery.current = null;
+    if (mounted.current) setOpen(false);
+    notifyDismiss.current?.();
+  }
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (recovery.current !== null) settleClose();
+    };
+  }, []);
   useImperativeHandle(sheetRef, () => ({
     present: (...args) => {
       const { kind } = presentation.current;
@@ -47,6 +68,12 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
         if (kind === "hidden" || kind === "closing" || kind === "waitingToClose") return;
         if (kind === "opening") {
           presentation.current = { kind: "waitingToClose", args };
+          recovery.current = setTimeout(() => {
+            version.current += 1;
+            setNativeVersion(version.current);
+            native.current?.dismiss(...args);
+            settleClose();
+          }, 1000);
           return;
         }
       }
@@ -83,15 +110,14 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
     <View style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} pointerEvents="box-only" importantForAccessibility="no-hide-descendants">
       <Backdrop {...backdropProps} />
     </View> : Backdrop;
-  return <BottomSheetModal ref={native} accessibilityLabel={accessibilityLabel}
+  return <BottomSheetModal key={nativeVersion} ref={native} accessibilityLabel={accessibilityLabel}
     enablePanDownToClose={locked ? false : enablePanDownToClose} enableDynamicSizing={enableDynamicSizing}
     onDismiss={() => {
-      if (presentation.current.kind === "hidden") return;
-      presentation.current = { kind: "hidden" };
-      setOpen(false);
-      onDismiss?.();
+      if (!mounted.current || nativeVersion !== version.current) return;
+      settleClose();
     }} {...props} backdropComponent={backdropComponent}
     {...((androidBack || trackPresentation || onChange) && { onChange: (...args: Parameters<NonNullable<NativeSheetProps["onChange"]>>) => {
+      if (!mounted.current || nativeVersion !== version.current) return;
       const current = presentation.current;
       if (args[0] >= 0) {
         if (current.kind === "waitingToClose") {

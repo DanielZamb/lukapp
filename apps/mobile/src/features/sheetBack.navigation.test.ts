@@ -11,6 +11,7 @@ import { readableLayout } from "../ui/layout";
 import type { HistoryQuery } from "./history/filter";
 import { Sheet } from "../ui/Sheet";
 import { PickerSheet } from "../ui/PickerSheet";
+import { SheetModal } from "../ui/SheetModal";
 
 vi.mock("./posting/usePostingTransport", () => ({ usePostingTransport: () => { throw new Error("No deferred account request"); } }));
 vi.mock("convex/react", () => ({
@@ -35,6 +36,7 @@ vi.mock("@gorhom/bottom-sheet/src/contexts", async () => ({
   ...await vi.importActual("@gorhom/bottom-sheet/src/contexts/modal/external"),
 }));
 vi.mock("@gorhom/bottom-sheet/src/utilities", () => ({ print() {} }));
+const nativeEvents = vi.hoisted(() => ({ acknowledge: true }));
 vi.mock("@gorhom/bottom-sheet/src/components/bottomSheet", () => ({
   default: React.forwardRef(function NativeSheet(props: React.PropsWithChildren<{
     onAnimate: (...args: number[]) => void;
@@ -47,7 +49,7 @@ vi.mock("@gorhom/bottom-sheet/src/components/bottomSheet", () => ({
       props.onClose();
     });
     React.useImperativeHandle(ref, () => ({ close, forceClose: close, snapToIndex() {} }));
-    useEffect(() => { props.onChange(0, 0, 0); }, []);
+    useEffect(() => { props.onChange(nativeEvents.acknowledge ? 0 : -1, 0, 0); }, []);
     return createElement("native-sheet", { onPanDown: close }, props.children);
   }),
 }));
@@ -98,10 +100,10 @@ function Harness({ flow }: { flow: "setup" | "history" | "sheet" | "category" })
 }
 beforeEach(() => {
   vi.stubGlobal("React", React); vi.stubGlobal("__DEV__", false); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  frames = []; closes.length = 0; hardware.listeners = []; closed.mockClear();
+  frames = []; closes.length = 0; hardware.listeners = []; closed.mockClear(); nativeEvents.acknowledge = true;
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => frames.push(callback));
 });
-afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); });
 async function settle() {
   for (let turn = 0; turn < 6 && (frames.length || closes.length); turn += 1) {
     await act(async () => { const pending = frames; frames = []; pending.forEach((frame) => frame(0)); });
@@ -111,10 +113,11 @@ async function settle() {
 async function back() {
   await act(async () => { expect([...hardware.listeners].reverse().some((listener) => listener())).toBe(true); });
 }
-test.each([
+const flowCases = [
   { flow: "setup", fontScale: 1 }, { flow: "history", fontScale: 1 }, { flow: "sheet", fontScale: 1 }, { flow: "category", fontScale: 1 },
   { flow: "setup", fontScale: 2.1 }, { flow: "history", fontScale: 2.1 }, { flow: "sheet", fontScale: 2.1 }, { flow: "category", fontScale: 2.1 },
-] as const)("$flow at fontScale $fontScale closes once when Back precedes presentation and can reopen", async ({ flow, fontScale }) => {
+] as const;
+test.each(flowCases)("$flow at fontScale $fontScale closes once when Back precedes presentation and can reopen", async ({ flow, fontScale }) => {
   await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
   const open = () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress();
   for (let iteration = 0; iteration < 3; iteration += 1) {
@@ -149,6 +152,46 @@ test("repeated Back before presentation queues one close", async () => {
   await act(async () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress());
   await back(); await back(); await back();
   expect(closed).not.toHaveBeenCalled();
+  await settle();
+  expect(closed).toHaveBeenCalledOnce();
+  expect(hardware.listeners).toHaveLength(0);
+});
+
+test.each(flowCases.flatMap((item) => [ { ...item, paintBeforeDeadline: false }, { ...item, paintBeforeDeadline: true } ]))("$flow at fontScale $fontScale recovers without acknowledgement, native paint=$paintBeforeDeadline", async ({ flow, fontScale, paintBeforeDeadline }) => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); nativeEvents.acknowledge = false;
+  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
+  const open = () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress();
+  await act(async () => open());
+  const oldModal = root!.root.findByType(BottomSheetModal).props;
+  await back();
+  if (paintBeforeDeadline) await settle();
+  await act(async () => { root!.root.findByType(SheetModal).props.sheetRef.current?.present(); });
+  await back();
+  await act(async () => { vi.advanceTimersByTime(999); });
+  expect(closed).not.toHaveBeenCalled();
+  await act(async () => { vi.advanceTimersByTime(1); });
+  await settle();
+  expect(closed).toHaveBeenCalledOnce();
+  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(0);
+  expect(hardware.listeners).toHaveLength(0);
+  nativeEvents.acknowledge = true;
+  await act(async () => open()); await settle();
+  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
+  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); });
+  expect(closed).toHaveBeenCalledOnce();
+  await back(); await settle();
+  expect(closed).toHaveBeenCalledTimes(2);
+});
+test.each(flowCases)("$flow at fontScale $fontScale settles a queued close once during teardown", async ({ flow, fontScale }) => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
+  await act(async () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress());
+  const oldModal = root!.root.findByType(BottomSheetModal).props;
+  await back();
+  expect(closed).not.toHaveBeenCalled();
+  await act(async () => root!.unmount()); root = undefined;
+  expect(closed).toHaveBeenCalledOnce();
+  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); vi.advanceTimersByTime(2000); });
   await settle();
   expect(closed).toHaveBeenCalledOnce();
   expect(hardware.listeners).toHaveLength(0);
