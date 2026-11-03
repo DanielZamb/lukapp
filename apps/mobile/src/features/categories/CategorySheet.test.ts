@@ -19,6 +19,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetBackdrop: "backdrop",
 }));
 vi.mock("react-native", () => ({
+  BackHandler: { addEventListener: () => ({ remove() {} }) },
   Text: "text", View: "view", Pressable: "button", ScrollView: "scroll",
   TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
@@ -79,14 +80,6 @@ test("the category sheet uses sticky search, selectable emoji discs and an Add y
   expect(value.onCreate).toHaveBeenCalledOnce();
 });
 
-test("the category sheet acknowledges native presentation before a queued dismissal", async () => {
-  const onPresented = vi.fn();
-  const tree = await render(props({ onPresented }));
-  await act(async () => tree.findByType(BottomSheetModal).props.onChange(-1, 0, 0));
-  expect(onPresented).not.toHaveBeenCalled();
-  await act(async () => tree.findByType(BottomSheetModal).props.onChange(0, 0, 0));
-  expect(onPresented).toHaveBeenCalledOnce();
-});
 
 test.each([
   ["", "No categories yet."],

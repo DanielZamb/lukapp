@@ -5,12 +5,14 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { BottomSheetProps, BottomSheetModal } from "@gorhom/bottom-sheet";
 import type { CategorySheet } from "./CategorySheet";
 import { CategoryPicker } from "./CategoryPicker";
+import { SheetModal } from "../../ui/SheetModal";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { getFunctionName } from "convex/server";
 import type { TransactionCategories } from "./transactionSelection";
 
 const android = vi.hoisted<{ os: string; handler?: () => boolean }>(() => ({ os: "ios" }));
 vi.mock("react-native", () => ({
+  View: "view",
   Platform: { get OS() { return android.os; } },
   BackHandler: { addEventListener: (_event: string, handler: () => boolean) => {
     android.handler = handler;
@@ -53,13 +55,12 @@ vi.mock("convex/react", () => ({
 }));
 vi.mock("./useNatureSuggestion", () => ({ useNatureSuggestion: () => ({ suggested: null, allowed: ["spend", "receive", "stillMine", "payDebt"] }) }));
 vi.mock("./CategorySheet", async () => {
-  const { default: Modal } = await vi.importActual<{ default: typeof BottomSheetModal }>("@gorhom/bottom-sheet/src/components/bottomSheetModal/BottomSheetModal");
   return {
     CategorySheet: (props: ComponentProps<typeof CategorySheet>) => createElement(
-      Modal<never>,
+      SheetModal,
       {
-        ref: props.sheetRef, onDismiss: props.onDismiss,
-        onChange: (index: number) => { if (index >= 0) props.onPresented?.(); },
+        sheetRef: props.sheetRef, onDismiss: props.onDismiss,
+        presentOnMount: false, trackPresentation: true, androidBack: true, busy: props.busy,
         snapPoints: ["92%"], enableDynamicSizing: false,
         children: createElement("category-options", { ...props, testID: "category-options" }),
       },

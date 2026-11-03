@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement, useEffect, useImperativeHandle, useState, type ComponentProps } from "react";
+import { createElement, forwardRef, useEffect, useImperativeHandle, useState, type ComponentProps } from "react";
 import type { PendingPosting } from "./pendingPostingSchema";
 import type { PostingFormProps } from "./PostingForm";
 import { BatchNativeStack } from "./BatchNativeStack";
@@ -13,6 +13,7 @@ import type { Category } from "../categories/model";
 import { ThemeProvider, useSetThemeMode } from "../../ui/themeContext";
 import type { ThemeMode } from "../../ui/tokens";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { SheetModal, type NativeSheetProps } from "../../ui/SheetModal";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 vi.hoisted(() => {
@@ -73,7 +74,13 @@ vi.mock("convex/react", () => ({
 }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "picker" }));
 vi.mock("@gorhom/bottom-sheet", () => ({
-  BottomSheetModal: "sheet",
+  BottomSheetModal: forwardRef(function NativeModal({ children, ...props }: NativeSheetProps & { children?: React.ReactNode }, ref) {
+    useImperativeHandle(ref, () => ({
+      present: () => props.onChange?.(0, 0, 0),
+      dismiss: () => { props.onChange?.(-1, 0, 0); props.onDismiss?.(); },
+    }));
+    return createElement("sheet", props, children);
+  }),
   BottomSheetView: "sheet-view",
   BottomSheetScrollView: "sheet-scroll",
   BottomSheetTextInput: "input",
@@ -127,13 +134,10 @@ vi.mock("./PostingForm", async (importOriginal) => ({
 vi.mock("../categories/CategorySheet", () => ({
   CategorySheet: ({ sheetRef, ...props }: CategorySheetProps) => {
     const [visible, setVisible] = useState(false);
-    useImperativeHandle(sheetRef, () => ({
-      present: () => { setVisible(true); props.onPresented?.(); },
-      dismiss: () => { setVisible(false); props.onDismiss(); },
-      snapToIndex: vi.fn(), snapToPosition: vi.fn(), expand: vi.fn(),
-      collapse: vi.fn(), close: vi.fn(), forceClose: vi.fn(),
-    }));
-    return visible ? createElement("category-sheet", props) : null;
+    return createElement(SheetModal, { sheetRef, presentOnMount: false, trackPresentation: true, androidBack: true,
+      busy: props.busy, onDismiss: props.onDismiss, onChange: (index) => setVisible(index >= 0),
+      children: visible ? createElement("category-sheet", props) : null,
+    });
   },
 }));
 vi.mock("./PlaceSheet", async (importOriginal) => {

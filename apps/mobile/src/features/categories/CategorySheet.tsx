@@ -32,7 +32,6 @@ export type CategorySheetProps = {
   onName: (name: string) => void;
   onStyle: (style: CategoryStyle) => void;
   onConfirm: () => void;
-  onPresented?: () => void;
   onDismiss: () => void;
   selectionCount?: number;
   limitReached?: boolean;
@@ -178,8 +177,8 @@ export function CategorySheet(props: CategorySheetProps) {
     <PickerSheet
       sheetRef={props.sheetRef}
       busy={props.busy}
+      androidBack
       stickyHeader={!props.editor}
-      nativeModalProps={{ onChange: (index) => { if (index >= 0) props.onPresented?.(); } }}
       onDismiss={props.onDismiss}
     >
       {props.editor ? (

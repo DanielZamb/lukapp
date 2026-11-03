@@ -222,9 +222,10 @@ test("managed Sheet allows form migrations to retain their existing closing acti
 
 test("page Back and close use the same dismissal while its footer remains on BottomSheetFooter", async () => {
   const tree = await render(h(Sheet, { label: "Details", tall: true, footer: h("footer-action") }, h("body-content")));
+  const modal = tree.find((node) => String(node.type) === "modal");
+  await act(async () => modal.props.onChange(0, 0, 0));
   expect([...native.back].at(-1)?.()).toBe(true);
   expect(native.dismiss).toHaveBeenCalledOnce();
-  const modal = tree.find((node) => String(node.type) === "modal");
   let footerRoot: ReactTestRenderer | undefined;
   await act(async () => { footerRoot = create(modal.props.footerComponent({ animatedFooterPosition: {} })); });
   expect(footerRoot?.root.find((node) => String(node.type) === "sheet-footer").props.bottomInset).toBe(16);
@@ -240,6 +241,7 @@ test("busy page locks backdrop and close, then permits Back after retry", async 
   expect(root?.root.findByType("button").props.disabled).toBe(true);
   expect([...native.back].at(-1)?.()).toBe(true);
   expect(native.dismiss).not.toHaveBeenCalled();
+  await act(async () => modal?.props.onChange(0, 0, 0));
   await act(async () => root?.update(element(false)));
   expect([...native.back].at(-1)?.()).toBe(true);
   expect(native.dismiss).toHaveBeenCalledOnce();

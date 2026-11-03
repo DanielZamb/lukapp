@@ -196,6 +196,7 @@ test.each([false, true])("picker Back ownership remains opt-in, androidBack=%s",
   const tree = await render(h(PickerSheet, { ...(androidBack && { androidBack }), children: h("control") }));
   expect(native.back.size).toBe(androidBack ? 1 : 0);
   if (androidBack) {
+    await act(async () => modal(tree).props.onChange(0, 0, 0));
     expect([...native.back].at(-1)?.()).toBe(true);
     expect(native.dismiss).toHaveBeenCalledOnce();
   }
