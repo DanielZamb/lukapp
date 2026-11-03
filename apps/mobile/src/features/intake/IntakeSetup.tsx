@@ -58,8 +58,8 @@ const GAP_LABELS: Record<NonNullable<NativeStatus["gap"]>["reason"], string> = {
 const when = (time: number) => new Date(time).toLocaleString();
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
-  workspaceId: string; onBack(): void; onInbox(): void; onPrototype?(): void;
+export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
+  workspaceId: string; onBack(): void; onPrototype?(): void;
 }) {
   const ui = useUi();
   const service = useIntakeService();
@@ -119,7 +119,6 @@ export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
   const blocked = pending !== null || !snapshot.loaded || !status || status.storageState !== "healthy" || snapshot.wipePending || snapshot.state.pendingConfigure !== null;
   const canChange = !blocked && status?.access === "granted";
   const canConfigure = canChange && acknowledged;
-  const candidates = service.candidates();
   const ready = catalog.kind === "ready" ? catalog : null;
   // First visit with nothing set up opens on the disclosure; it stays until Continue or Back.
   const firstRun = supported && snapshot.loaded && active.length === 0 && !blocked;
@@ -301,8 +300,7 @@ export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
       : { icon: "pulse-outline", tone: "positive", title: `Reading ${plural(active.length, "app")}`,
           status: status.enabled ? "Working · listener connected" : "Capture not confirmed yet · refresh to check",
           statusTone: (status.enabled ? "positive" : "warning") as Tone } as const;
-  const next = !status || blocked && pending === null ? null
-    : active.length ? { label: candidates.length ? `Open candidate inbox · ${candidates.length}` : "Open candidate inbox", icon: "arrow-forward" as const, onPress: onInbox }
+  const next = !status || blocked && pending === null || active.length > 0 ? null
     // Setting up: acknowledge, then allow access, then add the first app.
     : !acknowledged ? { label: "Review and turn on", icon: "arrow-forward" as const, onPress: () => withAcknowledgement({ kind: "hub" }) }
     : status.access !== "granted" ? { label: "Allow notification access", icon: "arrow-forward" as const, onPress: () => go({ kind: "settings" }) }
@@ -398,18 +396,14 @@ export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
       </View>)}
     </View> : null}
 
-    <Card>
-      <NavRow leading={<IconTile icon="document-text-outline" />} title="Candidate inbox"
-        last={!status?.diagnostics?.enabled && !(onPrototype && typeof __DEV__ !== "undefined" && __DEV__)}
-        status={candidates.length ? `${candidates.length} waiting · across saved workspaces` : "Nothing waiting"}
-        accessibilityLabel={`Candidate inbox, ${candidates.length ? `${candidates.length} waiting` : "nothing waiting"}`} disabled={pending !== null} onPress={onInbox} />
+    {status?.diagnostics?.enabled || (onPrototype && typeof __DEV__ !== "undefined" && __DEV__) ? <Card>
       {onPrototype && (status?.diagnostics?.enabled || (typeof __DEV__ !== "undefined" && __DEV__)) ? <NavRow leading={<IconTile icon="sparkles-outline" tone="accent" />}
         title="Notification-first prototype" status="Start from the notification text" last={!status?.diagnostics?.enabled}
         accessibilityLabel="Open the notification-first prototype" disabled={pending !== null} onPress={onPrototype} /> : null}
       {status?.diagnostics?.enabled ? <NavRow last leading={<IconTile icon="pulse-outline" />} title="Beta diagnostics"
         status={`${status.diagnostics.recordCount} records · ${status.diagnostics.overflowCount} overflow · ${status.diagnostics.errorCount} errors · ${status.diagnostics.state}`}
         accessibilityLabel="Inspect raw arrivals on this device" disabled={blocked} onPress={() => setStep({ kind: "inspect" })} /> : null}
-    </Card>
+    </Card> : null}
 
     {ready ? <Muted>{`${ready.workspace.kind} · ${ready.workspace.functionalCurrency} · ${timeZoneCity(ready.workspace.timeZone)}`}</Muted> : null}
     {supported && !snapshot.wipePending ? <SecondaryButton label="Turn off and wipe" tone="danger" disabled={pending !== null} onPress={() => setStep({ kind: "wipe" })} /> : null}

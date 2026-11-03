@@ -33,7 +33,6 @@ let root: ReactTestRenderer | undefined;
 let f: ReturnType<typeof fixture>;
 let statusFields: Partial<NativeStatus>;
 let unsupported: UnsupportedStatus | null;
-const onInbox = vi.fn();
 const acknowledgement = INTAKE_ACKNOWLEDGEMENT;
 const workspace = { id: "workspace-1", kind: "Personal", functionalCurrency: "COP", timeZone: "America/Bogota",
   chartOfAccountsTemplate: "co-puc-personal@1", currentAccountingPeriod: { year: 2026, month: 10, status: "open" } };
@@ -44,7 +43,7 @@ const profiles = [
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  boundary.uuid = 0; boundary.report.mockClear(); onInbox.mockClear();
+  boundary.uuid = 0; boundary.report.mockClear();
   boundary.query.mockReset().mockImplementation(async (ref) => getFunctionName(ref) === "accounting:openWorkspace" ? workspace : profiles);
   statusFields = {}; unsupported = null;
   f = fixture(); f.setValue(serializeState(emptyState())); f.setPages([{ captures: [], nextCursor: null }]);
@@ -57,7 +56,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 function tree(service = f.service, workspaceId = "workspace-1") {
-  return createElement(IntakeContext.Provider, { value: service }, createElement(IntakeSetup, { workspaceId, onBack: vi.fn(), onInbox }));
+  return createElement(IntakeContext.Provider, { value: service }, createElement(IntakeSetup, { workspaceId, onBack: vi.fn() }));
 }
 async function mount() {
   await f.service.refresh().catch(() => {});
@@ -150,9 +149,8 @@ test("normal public account reads require an explicit place and save the service
   expect(configure.mock.calls[0]?.[0].consentVersion).toBe(INTAKE_DISCLOSURE_VERSION);
   expect(text()).toContain("Reading 1 app");
   expect(text()).toContain("Adding an app doesn't prove an alert was captured.");
-  expect(text()).toContain("Nothing waiting");
-  await press("Open candidate inbox"); expect(onInbox).toHaveBeenCalledOnce();
-  await press("Candidate inbox, nothing waiting"); expect(onInbox).toHaveBeenCalledTimes(2);
+  expect(has("Open candidate inbox")).toBe(false);
+  expect(has("Candidate inbox, nothing waiting")).toBe(false);
 });
 
 test("public permission failure is visible and refresh reloads current accounts", async () => {
@@ -258,7 +256,9 @@ test("source removal preserves a real-service Candidate and retired mapping; wip
   f.setValue(serializeState({ ...emptyState(), mappings: [mapping], activeSelectionIds: [mapping.sourceSelectionId] }));
   f.setPages([{ captures: [capture], nextCursor: null }]);
   await mount();
-  expect(button("Open candidate inbox · 1")).toBeDefined();
+  expect(has("Open candidate inbox · 1")).toBe(false);
+  expect(has("Candidate inbox, 1 waiting")).toBe(false);
+  expect(f.service.candidates().map((row) => row.id)).toEqual(["capture-1"]);
   await act(async () => { buttonStarting("Bank, To Daily money").props.onPress(); });
   expect(text()).toContain("Alerts go to");
   await press("Stop reading Bank");

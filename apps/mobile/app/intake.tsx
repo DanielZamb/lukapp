@@ -9,6 +9,6 @@ export default function IntakeRoute() {
   if (defaults === undefined) return <Screen><ActivityIndicator accessibilityLabel="Loading current workspace" /></Screen>;
   if (defaults === null) return <Redirect href="/" />;
   return <IntakeSetup key={defaults.workspace.id} workspaceId={defaults.workspace.id}
-    onBack={() => router.back()} onInbox={() => router.push("/drafts")}
+    onBack={() => router.back()}
     onPrototype={() => router.push("/intake-prototype")} />;
 }

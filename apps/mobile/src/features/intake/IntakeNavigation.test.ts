@@ -37,13 +37,13 @@ test("Settings opens the canonical intake route", async () => {
   expect(route.push).toHaveBeenCalledExactlyOnceWith("/intake");
 });
 
-test("the intake route binds the current workspace and opens the existing inbox", async () => {
+test("the source setup returns to its caller with Back and cannot push another inbox", async () => {
   await act(async () => { root = create(createElement(IntakeRoute)); });
   const setup = root?.root.findByType(IntakeSetup);
   expect(setup?.props.workspaceId).toBe("current-workspace");
-  await act(async () => setup?.props.onInbox());
+  expect(setup?.props.onInbox).toBeUndefined();
   await act(async () => setup?.props.onBack());
-  expect(route.push).toHaveBeenCalledExactlyOnceWith("/drafts"); expect(route.back).toHaveBeenCalledOnce();
+  expect(route.push).not.toHaveBeenCalled(); expect(route.back).toHaveBeenCalledOnce();
 });
 
 test("missing or loading defaults never invent a workspace", async () => {
