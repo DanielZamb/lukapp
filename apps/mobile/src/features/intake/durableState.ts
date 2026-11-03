@@ -2,6 +2,32 @@ import { z } from "zod";
 import { nativeCaptureSchema, type NativeCapture } from "../../../modules/notification-intake";
 import { calendarDate } from "../timeZones";
 import type { IntakeCandidate } from "./candidates";
+import { suggest } from "./suggest";
+
+/** Parser version recorded for candidates suggested from the kept notification text. */
+export const TEXT_SUGGESTION_VERSION = "suggest-v1";
+
+/**
+ * The starting values for a candidate. With the notification text, the
+ * suggestion comes from suggest.ts; without it (older consent or older APK),
+ * from the native parser's fields as before. A bare "$" takes the source
+ * mapping's currency, since the person chose that currency for this app.
+ */
+export function suggestionFor(capture: NativeCapture, mapping: SourceMapping) {
+  if (!capture.text) {
+    return { direction: capture.direction, description: capture.description, amountMinorUnits: capture.amountMinorUnits,
+      currency: capture.currency, parserVersion: capture.parserVersion };
+  }
+  const result = suggest({ text: capture.text });
+  const amount = result.sensitive ? null : result.amount;
+  return {
+    direction: result.direction?.value ?? null,
+    description: result.counterparty?.value ?? capture.description,
+    amountMinorUnits: amount?.minor ?? null,
+    currency: amount ? amount.currency ?? mapping.currency : null,
+    parserVersion: TEXT_SUGGESTION_VERSION,
+  };
+}
 
 const text = z.string().min(1).max(256);
 const integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -118,15 +144,18 @@ export function ingest(state: CandidateState, capture: NativeCapture, mapping: S
     return state;
   }
   const accountingDate = calendarDate(new Date(capture.notificationAt), mapping.timeZone);
-  const suggestion = { direction: capture.direction, description: capture.description, amountMinorUnits: capture.amountMinorUnits,
+  const { currency: suggestedCurrency, parserVersion, ...suggested } = suggestionFor(capture, mapping);
+  const suggestion = { ...suggested, description: suggested.description.slice(0, 1024),
     accountingDate, financialAccountProfileId: mapping.financialAccountProfileId, userCategoryIds: [], primaryUserCategoryId: null };
+  // Text with no amount ("Not money") has nothing to review in its currency yet.
+  const currencyKnown = suggestedCurrency !== null || (!!capture.text && suggested.amountMinorUnits === null);
   const row: ActiveCandidate = {
     id: capture.captureId, digest, expiresAt: capture.expiresAt, createdAt: capture.capturedAt, recordRevision: 0,
-    kind: "active", workspaceId: mapping.workspaceId, currency: capture.currency ?? mapping.currency,
-    origin: { kind: "native", capture, mapping, accountingDate }, originalSuggestion: { ...suggestion, currency: capture.currency }, review: suggestion, reviewAmountText: null,
-    parserVersion: capture.parserVersion, consentVersion: capture.consentVersion,
-    status: { kind: "review", currencyReviewed: capture.currency !== null,
-      ...(capture.currency === null ? { error: "Review unresolved currency" } : {}) },
+    kind: "active", workspaceId: mapping.workspaceId, currency: suggestedCurrency ?? mapping.currency,
+    origin: { kind: "native", capture, mapping, accountingDate }, originalSuggestion: { ...suggestion, currency: suggestedCurrency }, review: suggestion, reviewAmountText: null,
+    parserVersion, consentVersion: capture.consentVersion,
+    status: { kind: "review", currencyReviewed: currencyKnown,
+      ...(currencyKnown ? {} : { error: "Review unresolved currency" }) },
   };
   const next = { ...state, records: [...state.records, row] };
   serializeState(next);
@@ -135,8 +164,14 @@ export function ingest(state: CandidateState, capture: NativeCapture, mapping: S
 export function terminal(row: ActiveCandidate, reason: "confirmed" | "deleted"): CandidateRecord {
   return { kind: "terminal", id: row.id, digest: row.digest, recordRevision: row.recordRevision + 1, expiresAt: row.expiresAt, reason };
 }
+/** The kept notification, for showing the person where a suggestion came from. Never part of a confirmation. */
+export function notificationOf(row: ActiveCandidate): { text: string; packageName: string; at: number } | null {
+  if (row.origin.kind !== "native" || !row.origin.capture.text) return null;
+  return { text: row.origin.capture.text, packageName: row.origin.mapping.packageName, at: row.origin.capture.notificationAt };
+}
 export function projectCandidate(row: ActiveCandidate): IntakeCandidate {
-  return { id: row.id, createdAt: row.createdAt, expiresAt: row.expiresAt, workspaceId: row.workspaceId,
+  const notification = notificationOf(row);
+  return { id: row.id, createdAt: row.createdAt, expiresAt: row.expiresAt, workspaceId: row.workspaceId, ...(notification ? { notification } : {}),
     currency: row.currency, suggestion: row.review, reviewAmountText: row.reviewAmountText, parserVersion: row.parserVersion, consentVersion: row.consentVersion,
     ...(row.status.kind === "review" ? (row.status.error ? { error: row.status.error } : {}) : { error: "Confirmation pending. Open to retry." }) };
 }

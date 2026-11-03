@@ -31,6 +31,8 @@ export type IntakeCandidate = {
   parserVersion: string;
   consentVersion: string;
   error?: string;
+  /** The kept notification text, when the source was set up under disclosure v3. */
+  notification?: { text: string; packageName: string; at: number };
 };
 
 export type IntakeDocument = {

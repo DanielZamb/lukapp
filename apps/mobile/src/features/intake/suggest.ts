@@ -1,4 +1,4 @@
-// PROTOTYPE: a lenient, span-based suggestion for one notification.
+// A lenient, span-based suggestion for one notification.
 //
 // The native parser (GenericNotificationParser.kt) fails closed: anything it
 // cannot prove becomes "no amount", and a security-ish word discards the whole

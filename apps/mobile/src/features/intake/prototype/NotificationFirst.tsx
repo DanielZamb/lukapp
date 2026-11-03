@@ -19,8 +19,8 @@ import { IntakeContext } from "../IntakeProvider";
 import { ActionBar, AlertLine, Card, IconTile, Muted, NavRow, SectionHeading } from "../IntakeParts";
 import { appInitial, productKindLabel } from "../appCatalog";
 import { arrivalText } from "./arrivalText";
-import corpus from "./samples.json";
-import { pieces, suggest, type Direction, type Mention, type Suggestion } from "./suggest";
+import corpus from "../suggestSamples.json";
+import { pieces, suggest, type Direction, type Mention, type Suggestion } from "../suggest";
 
 type Arrival = {
   id: string; source: "phone" | "sample" | "pasted"; app: string; at: number; title: string; text: string;

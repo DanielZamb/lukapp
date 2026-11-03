@@ -71,7 +71,7 @@ beforeEach(() => {
   vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   boundary.subject = "owner"; boundary.admitted = true; boundary.deviceAdmitted = true; boundary.events.clear(); boundary.hints.clear(); boundary.memory.clear();
   counts = []; lease = new LocalInputLease("owner", "session"); f = fixture();
-  boundary.bridge = { apiVersion: 2, ...f.native, addListener: (_event: string, listener: (hint: unknown) => void) => {
+  boundary.bridge = { apiVersion: 3, ...f.native, addListener: (_event: string, listener: (hint: unknown) => void) => {
     boundary.hints.add(listener); return { remove: () => boundary.hints.delete(listener) };
   } };
 });
@@ -183,7 +183,7 @@ test("lock during an admitted ack prevents the next read stage", async () => {
   let release: (() => void) | undefined;
   const waiting = new Promise<void>((resolve) => { release = resolve; });
   let reads = 0; let ackStarted = false;
-  boundary.bridge = { apiVersion: 2, ...f.native,
+  boundary.bridge = { apiVersion: 3, ...f.native,
     addListener: () => ({ remove() {} }),
     readCandidateState: async (input: Parameters<typeof f.native.readCandidateState>[0]) => { reads += 1; return f.native.readCandidateState(input); },
     acknowledge: async (input: Parameters<typeof f.native.acknowledge>[0]) => {

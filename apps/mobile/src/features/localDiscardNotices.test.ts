@@ -1,5 +1,5 @@
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => ({
-  apiVersion: 2,
+  apiVersion: 3,
   getStatus: async () => ({ schemaVersion: 2, epoch: "a".repeat(22), enabled: false,
     access: "not_granted", connection: "disconnected", changeSequence: 0, pendingCount: 0, gap: null,
     lastConnectedAt: null, checkedAt: Date.now(), notices: [], storageState: "healthy" }),

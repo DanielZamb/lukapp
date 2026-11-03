@@ -303,7 +303,7 @@ export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
     : status.access !== "granted" ? { label: "Allow notification access", icon: "arrow-forward" as const, onPress: () => go({ kind: "settings" }) }
     : { label: "Add an app", icon: "add" as const, disabled: !canConfigure || !ready, onPress: () => setCatalogOpen(true) };
   const unsupportedMessage = snapshot.status && !status && "reason" in snapshot.status
-    ? snapshot.status.reason === "native_api_incompatible" ? "Update the Android APK to notification intake API v2, then refresh status."
+    ? snapshot.status.reason === "native_api_incompatible" ? "Update the Android APK to notification intake API v3, then refresh status."
       : snapshot.status.reason === "native_module_missing" ? "Custom Android binary missing. Install a build with the notification intake module, then refresh status."
       : "Notification intake is supported only in the custom Android app."
     : null;

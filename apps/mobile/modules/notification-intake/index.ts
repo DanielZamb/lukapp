@@ -31,6 +31,8 @@ export const nativeCaptureSchema = z.object({
   description: z.string().refine((s) => utf8Bytes(s) <= 256),
   parserVersion: id,
   consentVersion: id,
+  // The notification's title and body, kept under notification-disclosure@3 (API v3). Older captures have none.
+  text: z.string().refine((s) => utf8Bytes(s) <= 640).default(""),
 }).strict().refine((v) => v.expiresAt === v.capturedAt + 1_296_000_000);
 export type NativeCapture = z.infer<typeof nativeCaptureSchema>;
 const diagnosticHealthSchema = z.object({
@@ -97,10 +99,11 @@ interface NativeBridge {
   dismissNotices(input: z.infer<typeof dismissSchema>): Promise<void>;
   addListener(event: "onChange", callback: (hint: unknown) => void): { remove(): void };
 }
+export const NATIVE_API_VERSION = 3;
 const native = Platform.OS === "android" ? requireOptionalNativeModule<NativeBridge>("NotificationIntake") : null;
 function required(): NativeBridge {
   if (!native) throw Object.assign(new Error("Android custom native notification intake binary required"), { code: "UNSUPPORTED" });
-  if (native.apiVersion !== 2) throw Object.assign(new Error("Notification intake API v2 APK required"), { code: "UNSUPPORTED" });
+  if (native.apiVersion !== NATIVE_API_VERSION) throw Object.assign(new Error(`Notification intake API v${NATIVE_API_VERSION} APK required`), { code: "UNSUPPORTED" });
   return native;
 }
 function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -129,7 +132,7 @@ export const notificationIntake = {
   },
   async getStatus(): Promise<NativeStatus | UnsupportedStatus> {
     if (!native) return { supported: false, reason: Platform.OS === "android" ? "native_module_missing" : "platform" };
-    if (native.apiVersion !== 2) return { supported: false, reason: "native_api_incompatible" };
+    if (native.apiVersion !== NATIVE_API_VERSION) return { supported: false, reason: "native_api_incompatible" };
     return nativeStatusSchema.parse(await native.getStatus());
   },
   async listSources() { return z.array(z.object({ packageName, label: z.string() }).strict()).parse(await required().listSources()); },

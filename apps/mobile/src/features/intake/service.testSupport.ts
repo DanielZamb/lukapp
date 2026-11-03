@@ -11,7 +11,7 @@ export const mapping: SourceMapping = { sourceSelectionId: "selection-1", packag
   financialAccountProfileId: "account-1", currency: "COP", timeZone: "America/Bogota" };
 export const capture: NativeCapture = { captureId: "capture-1", sourceSelectionId: "selection-1", capturedAt: now - 100,
   expiresAt: now - 100 + 1_296_000_000, notificationAt: Date.parse("2026-10-24T02:00:00Z"), direction: "out",
-  amountMinorUnits: 45000, currency: "COP", description: "Market", parserVersion: "generic-v1", consentVersion: "v1" };
+  amountMinorUnits: 45000, currency: "COP", description: "Market", parserVersion: "generic-v1", consentVersion: "v1", text: "" };
 export const hash = async (value: string) => createHash("sha256").update(value).digest("hex");
 export function fixture() {
   let epoch = "a".repeat(22);

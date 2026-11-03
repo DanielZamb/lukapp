@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import corpus from "./samples.json";
+import corpus from "./suggestSamples.json";
 import { pieces, suggest } from "./suggest";
 
 type Expected = { minor: number | null; currency: string | null; direction: string | null; merchant: string | null; sensitive?: boolean };
