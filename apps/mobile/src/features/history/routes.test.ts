@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createRequire } from "node:module";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { ScrollView, ActivityIndicator } from "react-native";
@@ -17,6 +18,8 @@ const provider = vi.hoisted(() => ({
   details: new Map<string, EntryDetail>(), post: vi.fn<ReversalTransport["post"]>(),
   detailQuery: vi.fn(), present: vi.fn(), dismiss: vi.fn(), hardwareBack: undefined as (() => boolean) | undefined,
 }));
+vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
+vi.mock("../HomePlaceSetup", () => ({ HomePlaceSetup: "place-setup" }));
 vi.mock("expo-router", () => ({
   router: { push: provider.push, back: provider.back }, Redirect: "redirect", useLocalSearchParams: () => provider.params,
 }));
@@ -84,6 +87,12 @@ import HistoryRoute from "../../../app/history";
 import OverviewRoute from "../../../app/overview";
 import AccountRoute from "../../../app/account";
 import EntryRoute from "../../../app/entry";
+import PlacesRoute from "../../../app/places";
+
+const navigationRequire = createRequire(import.meta.url);
+const { StackRouter, StackActions, CommonActions }: Pick<typeof import("@react-navigation/native"), "StackRouter" | "StackActions" | "CommonActions"> = await import(
+  navigationRequire.resolve("@react-navigation/routers", { paths: [navigationRequire.resolve("@react-navigation/native")] }),
+);
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => {
@@ -95,6 +104,7 @@ beforeEach(() => {
   provider.details = new Map([["100", detail]]);
   provider.hardwareBack = undefined;
   vi.clearAllMocks();
+  provider.push.mockReset(); provider.back.mockReset();
   provider.post.mockReset().mockResolvedValue(receipt);
 });
 afterEach(async () => {
@@ -447,4 +457,70 @@ test("a recovery transfer shows its places as From and To, never as a category",
   expect(labels).not.toContain("My money → El guardado");
   expect(labels).not.toContain("Category");
   expect(provider.post).not.toHaveBeenCalled();
+});
+
+test("Android Back from a place filter keeps the history caller and selected place", async () => {
+  provider.params = { profileId: "daily" };
+  provider.all = { results: rows, status: "Exhausted" };
+  provider.place = { results: [rows[100]], status: "Exhausted" };
+  await act(async () => { root = create(createElement(HistoryRoute)); });
+  await act(async () => button("Daily").props.onPress());
+  expect(provider.hardwareBack).toBeDefined();
+  await act(async () => { expect(provider.hardwareBack?.()).toBe(true); });
+  expect(root!.root.findAllByType(BottomSheetModal)).toHaveLength(0);
+  expect(button("Daily").props.accessibilityState.selected).toBe(true);
+  expect(text()).toContain("1 of 1");
+  expect(provider.back).not.toHaveBeenCalled();
+  await act(async () => button("Go back").props.onPress());
+  expect(provider.back).toHaveBeenCalledOnce();
+});
+
+test.each(["receipt", "account"] as const)("Places %s path retains its scope through filter/detail dismissal and returns to its caller", async (path) => {
+  const stack = StackRouter({ initialRouteName: "places" });
+  const options = { routeNames: ["places", "account", "history"], routeParamList: {}, routeGetIdList: {} };
+  let state = stack.getInitialState(options);
+  provider.push.mockImplementation((href: { pathname: string; params: { profileId: string } }) => {
+    state = stack.getRehydratedState(stack.getStateForAction(state, StackActions.push(href.pathname.slice(1), href.params), options) ?? state, options);
+  });
+  provider.back.mockImplementation(() => { state = stack.getRehydratedState(stack.getStateForAction(state, CommonActions.goBack(), options) ?? state, options); });
+  async function showCurrent() {
+    const current = state.routes[state.index];
+    provider.params = current.params ?? {};
+    const Component = current.name === "places" ? PlacesRoute : current.name === "account" ? AccountRoute : HistoryRoute;
+    await act(async () => {
+      if (root) root.update(createElement(Component));
+      else root = create(createElement(Component));
+    });
+  }
+  provider.all = { results: rows, status: "Exhausted" };
+  provider.place = { results: [rows[100]], status: "Exhausted" };
+  await showCurrent();
+  await act(async () => button(path === "receipt" ? "Tx history for Daily" : "Daily").props.onPress());
+  await showCurrent();
+  if (path === "account") {
+    await act(async () => button("See in tx history").props.onPress());
+    await showCurrent();
+  }
+  expect(state.routes.map((route) => route.name)).toEqual(path === "receipt" ? ["places", "history"] : ["places", "account", "history"]);
+  expect(state.routes[state.index].params).toEqual({ profileId: "daily" });
+  expect(button("Daily").props.accessibilityState.selected).toBe(true);
+  expect(text()).toContain("1 of 1"); expect(text()).not.toContain("Newer posting");
+  await act(async () => button("Daily").props.onPress());
+  await act(async () => { expect(provider.hardwareBack?.()).toBe(true); });
+  await act(async () => button("Older receipt, −$1.500").props.onPress());
+  await act(async () => button("Close details").props.onPress());
+  expect(button("Daily").props.accessibilityState.selected).toBe(true);
+  expect(text()).toContain("1 of 1");
+  expect(state.routes[state.index].name).toBe("history");
+  expect(provider.back).not.toHaveBeenCalled();
+  await act(async () => button("Go back").props.onPress());
+  await showCurrent();
+  expect(state.routes[state.index].name).toBe(path === "receipt" ? "places" : "account");
+  expect(provider.back).toHaveBeenCalledOnce();
+  if (path === "account") {
+    expect(state.routes[state.index].params).toEqual({ profileId: "daily" });
+    await act(async () => button("Back").props.onPress());
+    await showCurrent();
+    expect(state.routes[state.index].name).toBe("places");
+  }
 });

@@ -34,6 +34,7 @@ const back = vi.hoisted(() => ({ handler: undefined as (() => boolean) | undefin
 const routeBack = vi.hoisted(() => vi.fn());
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
+const createCategory = vi.hoisted(() => vi.fn());
 const queryData = vi.hoisted(() => {
   const state: { categories: Category[]; profiles: Array<{ id: string; name: string }>; currency: string } = { categories: [], profiles: [], currency: "COP" };
   return state;
@@ -59,7 +60,8 @@ vi.mock("expo-router", () => ({
   }),
 }));
 vi.mock("convex/react", () => ({
-  useAction: () => confirmOne,
+  useAction: (reference: Parameters<typeof getFunctionName>[0]) =>
+    getFunctionName(reference).endsWith(":createUserCategory") ? createCategory : confirmOne,
   useConvex: () => ({ query: vi.fn() }),
   useQuery: (reference: Parameters<typeof getFunctionName>[0]) => {
     const name = getFunctionName(reference);
@@ -126,7 +128,7 @@ vi.mock("../categories/CategorySheet", () => ({
   CategorySheet: ({ sheetRef, ...props }: CategorySheetProps) => {
     const [visible, setVisible] = useState(false);
     useImperativeHandle(sheetRef, () => ({
-      present: () => setVisible(true),
+      present: () => { setVisible(true); props.onPresented?.(); },
       dismiss: () => { setVisible(false); props.onDismiss(); },
       snapToIndex: vi.fn(), snapToPosition: vi.fn(), expand: vi.fn(),
       collapse: vi.fn(), close: vi.fn(), forceClose: vi.fn(),
@@ -623,4 +625,43 @@ test.each([
   expect(writes.post).toHaveBeenCalledWith(expect.objectContaining({
     payload: expect.objectContaining({ amount: { currency, minorUnits } }),
   }));
+});
+
+test.each(["one", "batch"] as const)("category creation and cancellation preserve the actual %s posting draft", async (mode) => {
+  platform.os = "android";
+  queryData.categories = [{
+    id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food",
+    nature: "Expense", natureSource: "answered", classification: { kind: "fallback", version: "test" },
+    style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
+  }];
+  await mount();
+  if (mode === "batch") {
+    await act(async () => formProps().onBatch?.());
+    await act(async () => root!.root.findByType(BatchNativeStack).props.onAdd());
+  }
+  await act(async () => { formProps().onAmountChange("-7"); formProps().onDescriptionChange("Navigation lunch"); });
+  const date = formProps().date;
+  const sheet = () => root!.root.find((node) => String(node.type) === "category-sheet");
+  await act(async () => formProps().onCategory());
+  await act(async () => sheet().props.onSelect("food"));
+  await act(async () => sheet().props.onCreate());
+  await act(async () => sheet().props.onName("Unfinished category"));
+  await act(async () => { expect(back.handler?.()).toBe(true); });
+  expect(formProps()).toMatchObject({ amount: "-7", description: "Navigation lunch", date, category: "F Food" });
+  await act(async () => formProps().onCategory());
+  expect(sheet().props.editor).toBeNull();
+  await act(async () => sheet().props.onCreate());
+  await act(async () => sheet().props.onName("Lunch category"));
+  await act(async () => sheet().props.onAnswer("spend"));
+  const category = { ...queryData.categories[0], id: "lunch", name: "Lunch category" };
+  createCategory.mockResolvedValueOnce({ kind: "category", category });
+  await act(async () => { const confirm = sheet().props.onConfirm; confirm(); confirm(); });
+  expect(createCategory).toHaveBeenCalledOnce();
+  queryData.categories.push(category);
+  await act(async () => root!.update(createElement(PostRoute)));
+  expect(root!.root.findAll((node) => String(node.type) === "category-sheet")).toHaveLength(0);
+  expect(formProps()).toMatchObject({ amount: "-7", description: "Navigation lunch", date, category: "F Food · F Lunch category", canSubmit: true });
+  if (mode === "batch") expect(root!.root.findByType(BatchNativeStack).props.composing).toBe(true);
+  expect(routeBack).not.toHaveBeenCalled();
+  expect(writes.save).not.toHaveBeenCalled(); expect(writes.post).not.toHaveBeenCalled();
 });

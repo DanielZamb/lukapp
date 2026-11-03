@@ -22,29 +22,41 @@ export function CategoryPicker({
   ...selection
 }: CategoryPickerProps) {
   const sheet = useRef<BottomSheetModal>(null);
-  const presented = useRef(false);
+  const presentation = useRef<"hidden" | "opening" | "open" | "closing">("hidden");
   const accountRequest = useRef<AccountSetupRequest | null>(null);
+  function close() {
+    const current = presentation.current;
+    if (current === "hidden" || current === "closing") return;
+    presentation.current = "closing";
+    if (current === "open") sheet.current?.dismiss();
+  }
   const picker = useCategoryPicker({ kind: "posting", ...selection,
     onAccountSetup: onAccountSetup ? (request) => { accountRequest.current = request; return true; } : undefined,
-  }, onClose);
+  }, close);
   const busy = picker.sheet.busy;
   useEffect(() => {
     if (Platform.OS !== "android" || !visible) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (!busy) sheet.current?.dismiss();
+      if (!busy) close();
       return true;
     });
     return () => subscription.remove();
   }, [visible, busy]);
   useEffect(() => {
-    if (visible) sheet.current?.present();
-    // Dismissing Gorhom's never-presented modal blocks its first portal mount.
-    else if (presented.current) sheet.current?.dismiss();
-    presented.current = visible;
+    if (visible && presentation.current === "hidden") {
+      presentation.current = "opening";
+      sheet.current?.present();
+    }
+    else if (!visible) close();
   }, [visible]);
-  return <CategorySheet {...picker.sheet} sheetRef={sheet} onDismiss={() => {
-    presented.current = false;
-    picker.sheet.onDismiss();
+  return <CategorySheet {...picker.sheet} sheetRef={sheet} onPresented={() => {
+    if (presentation.current === "closing") sheet.current?.dismiss();
+    else if (presentation.current === "opening") presentation.current = "open";
+  }} onDismiss={() => {
+    if (presentation.current === "hidden") return;
+    presentation.current = "hidden";
+    picker.sheet.onBack();
+    onClose();
     const request = accountRequest.current;
     accountRequest.current = null;
     if (request) onAccountSetup?.(request);

@@ -47,7 +47,7 @@ vi.mock("@gorhom/bottom-sheet/src/components/bottomSheet", () => ({
   }),
 }));
 vi.mock("./useCategoryPicker", () => ({
-  useCategoryPicker: (_mode: unknown, onClose: () => void) => ({ sheet: { busy: android.busy, onDismiss: onClose } }),
+  useCategoryPicker: () => ({ sheet: { busy: android.busy, onBack: () => {} } }),
 }));
 vi.mock("./CategorySheet", async () => {
   const { default: Modal } = await vi.importActual<{ default: typeof BottomSheetModal }>("@gorhom/bottom-sheet/src/components/bottomSheetModal/BottomSheetModal");
@@ -56,6 +56,7 @@ vi.mock("./CategorySheet", async () => {
       Modal<never>,
       {
         ref: props.sheetRef, onDismiss: props.onDismiss,
+        onChange: (index: number) => { if (index >= 0) props.onPresented?.(); },
         snapPoints: ["92%"], enableDynamicSizing: false,
         children: createElement("category-options", { testID: "category-options" }, "Search categories"),
       },
