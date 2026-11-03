@@ -25,7 +25,7 @@ vi.mock("react-native", () => ({
   useWindowDimensions: () => ({ width: 320, height: 800, fontScale: 1.5, scale: 1 }),
   KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
+  StyleSheet: { create: (value: unknown) => value, flatten: flatStyle, hairlineWidth: 1 },
   FlatList: (props: {
     data: HistoryRow[]; ListHeaderComponent: ReactNode; ListFooterComponent: ReactNode; ListEmptyComponent: ReactNode;
     renderItem: (input: { item: HistoryRow; index: number }) => ReactNode;

@@ -271,7 +271,8 @@ test("SearchPicker wraps its query placeholder and pins Done outside the scrolle
   expect(scroll.props.enableFooterMarginAdjustment).toBe(true);
   expect(scroll.findAllByType(ActionBar)).toHaveLength(0);
   const pinned = tree.find(node => String(node.type) === "modal").props.footerComponent({ animatedFooterPosition: {} });
-  expect(pinned.props.bottomInset).toBe(16);
+  expect(tree.find(node => String(node.type) === "modal").props.bottomInset).toBe(16);
+  expect(pinned.props.bottomInset).toBe(0);
   expect(pinned.props.children.props.children).toBe(footer);
 });
 test("tall Sheet insets both header edges and its body by16", async () => {

@@ -51,7 +51,6 @@ export function PostingImpactSheet({
     <Sheet
       sheetRef={sheet}
       label="Budget would cross"
-      tall
       closeLabel={false}
       onDismiss={() => decide(onReconsider)}
       footer={
@@ -118,6 +117,7 @@ export function PostingImpactSheet({
         ),
       }}
     >
+      <Text variant="section" accessibilityRole="header">Budget would cross</Text>
       <Text variant="section">{description || "Entry"}</Text>
       <View style={{ gap: spacing.xxl }}>
         {hits.map((hit, index) => (
