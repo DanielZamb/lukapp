@@ -58,8 +58,8 @@ const GAP_LABELS: Record<NonNullable<NativeStatus["gap"]>["reason"], string> = {
 const when = (time: number) => new Date(time).toLocaleString();
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-export function IntakeSetup({ workspaceId, onBack, onInbox }: {
-  workspaceId: string; onBack(): void; onInbox(): void;
+export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
+  workspaceId: string; onBack(): void; onInbox(): void; onPrototype?(): void;
 }) {
   const ui = useUi();
   const service = useIntakeService();
@@ -390,9 +390,13 @@ export function IntakeSetup({ workspaceId, onBack, onInbox }: {
     </View> : null}
 
     <Card>
-      <NavRow leading={<IconTile icon="document-text-outline" />} title="Candidate inbox" last={!status?.diagnostics?.enabled}
+      <NavRow leading={<IconTile icon="document-text-outline" />} title="Candidate inbox"
+        last={!status?.diagnostics?.enabled && !(onPrototype && typeof __DEV__ !== "undefined" && __DEV__)}
         status={candidates.length ? `${candidates.length} waiting · across saved workspaces` : "Nothing waiting"}
         accessibilityLabel={`Candidate inbox, ${candidates.length ? `${candidates.length} waiting` : "nothing waiting"}`} disabled={pending !== null} onPress={onInbox} />
+      {onPrototype && (status?.diagnostics?.enabled || (typeof __DEV__ !== "undefined" && __DEV__)) ? <NavRow leading={<IconTile icon="sparkles-outline" tone="accent" />}
+        title="Notification-first prototype" status="Start from the notification text" last={!status?.diagnostics?.enabled}
+        accessibilityLabel="Open the notification-first prototype" disabled={pending !== null} onPress={onPrototype} /> : null}
       {status?.diagnostics?.enabled ? <NavRow last leading={<IconTile icon="pulse-outline" />} title="Beta diagnostics"
         status={`${status.diagnostics.recordCount} records · ${status.diagnostics.overflowCount} overflow · ${status.diagnostics.errorCount} errors · ${status.diagnostics.state}`}
         accessibilityLabel="Inspect raw arrivals on this device" disabled={blocked} onPress={() => setStep({ kind: "inspect" })} /> : null}

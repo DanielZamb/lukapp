@@ -124,6 +124,7 @@ function Admission() {
       <Stack.Screen name="post" />
       <Stack.Screen name="drafts" />
       <Stack.Screen name="intake" />
+      <Stack.Screen name="intake-prototype" />
       <Stack.Screen name="alerts" />
       <Stack.Screen name="month-close" />
       <Stack.Screen name="account" />
