@@ -8,6 +8,8 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { getFunctionName, type FunctionReference } from "convex/server";
 import type { EntryDetail, HistoryRow } from "./types";
 import type { ReversalTransport } from "./useReversal";
+import { ThemeProvider } from "../../ui/themeContext";
+import { readableLayout } from "../../ui/layout";
 
 const provider = vi.hoisted(() => ({
   params: {} as { profileId?: string; entryId?: string },
@@ -16,11 +18,13 @@ const provider = vi.hoisted(() => ({
   loadAll: vi.fn(), loadPlace: vi.fn(), push: vi.fn(), back: vi.fn(),
   details: new Map<string, EntryDetail>(), post: vi.fn<ReversalTransport["post"]>(),
   detailQuery: vi.fn(), present: vi.fn(), dismiss: vi.fn(), hardwareBack: undefined as (() => boolean) | undefined,
+  budgetQuery: vi.fn(), calendarDate: "2026-10-18",
 }));
 vi.mock("expo-router", () => ({
   router: { push: provider.push, back: provider.back }, Redirect: "redirect", useLocalSearchParams: () => provider.params,
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
+vi.mock("../../ui/KeyboardFrame", () => ({ KeyboardFrame: ({ children }: { children: ReactNode }) => children }));
 vi.mock("../../ui/ContextPill", () => ({ useContextPill: () => ({ summaryProps: {}, scrollProps: {} }) }));
 vi.mock("@react-navigation/native", () => ({ useIsFocused: () => true }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ bottom: 0 }) }));
@@ -39,7 +43,7 @@ vi.mock("react-native", () => ({
   useWindowDimensions: () => ({ width: 320, height: 800, fontScale: 1.5, scale: 1 }),
   KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
+  StyleSheet: { create: (value: unknown) => value, flatten: (value: unknown) => Array.isArray(value) ? Object.assign({}, ...value) : value, hairlineWidth: 1 },
   BackHandler: { addEventListener: (_event: string, callback: () => boolean) => {
     provider.hardwareBack = callback;
     return { remove: () => { provider.hardwareBack = undefined; } };
@@ -57,7 +61,7 @@ vi.mock("../activity", () => ({
     balance: { currency: "COP", minorUnits: 0 }, trackingFrom: "2026-10-01",
   }] }), useRecentActivity: () => ({ page: [] }),
 }));
-vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: "2026-10-18", month: "2026-10" }) }));
+vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: provider.calendarDate, month: provider.calendarDate.slice(0, 7) }) }));
 vi.mock("convex/react", () => ({
   usePaginatedQuery: (_query: unknown, args: "skip" | { financialAccountProfileId?: string }) => {
     if (args === "skip") return { results: [], status: "LoadingFirstPage", loadMore: provider.loadPlace };
@@ -65,9 +69,13 @@ vi.mock("convex/react", () => ({
   },
   useQuery: (query: FunctionReference<"query">, args: { journalEntryId?: string; financialAccountProfileId?: string }) => {
     if (getFunctionName(query) === "accounting:listJournalEntries") return [];
-    if (getFunctionName(query) === "budget:evaluate") return {
+    if (getFunctionName(query) === "accounting:listFinancialAccountProfiles") return [
+      { id: "daily", name: "Daily", emoji: "👛", productKind: "cash" },
+      { id: "family", name: "Family", emoji: "🐷", productKind: "savingsAccount" },
+    ];
+    if (getFunctionName(query) === "budget:evaluate") { provider.budgetQuery(args); return {
       month: "2026-10", currentMonth: "2026-10", currency: "COP", jars: [], availableCategories: [], totalsOverlap: true,
-    };
+    }; }
     if (args.journalEntryId) {
       provider.detailQuery(args);
       return provider.details.get(`${args.journalEntryId}:${args.financialAccountProfileId ?? "all"}`) ?? provider.details.get(args.journalEntryId);
@@ -94,6 +102,7 @@ beforeEach(() => {
   provider.place = { results: [], status: "LoadingFirstPage" };
   provider.details = new Map([["100", detail]]);
   provider.hardwareBack = undefined;
+  provider.calendarDate = "2026-10-18";
   vi.clearAllMocks();
   provider.post.mockReset().mockResolvedValue(receipt);
 });
@@ -447,4 +456,33 @@ test("a recovery transfer shows its places as From and To, never as a category",
   expect(labels).not.toContain("My money → El guardado");
   expect(labels).not.toContain("Category");
   expect(provider.post).not.toHaveBeenCalled();
+});
+
+test.each(["outgoing", "incoming"])("XXXL history passes place looks and the entry month from the %s transfer row", async direction => {
+  provider.calendarDate = "2026-11-02";
+  const transfer = { ...detail, row: { ...detail.row, userCategories: [], primaryUserCategoryId: undefined,
+    transfer: { from: { id: "daily", name: "Daily" }, to: { id: "family", name: "Family" } } } };
+  provider.details.set("100", transfer);
+  provider.all = { results: [transfer.row], status: "Exhausted" };
+  await act(async () => { root = create(createElement(ThemeProvider,
+    { layout: readableLayout({ width: 320, fontScale: 1.5 }) }, createElement(HistoryRoute))); });
+  const movement = root?.root.findAllByType("button").find(node =>
+    node.props.accessibilityLabel?.startsWith("Transfer,") && node.props.accessibilityLabel.includes(direction === "outgoing" ? "−" : "+"));
+  if (!movement) throw new Error(`Missing ${direction} transfer row`);
+  await act(async () => movement.props.onPress());
+  expect(provider.detailQuery).toHaveBeenLastCalledWith({ workspaceId: "ws", journalEntryId: "100", financialAccountProfileId: direction === "outgoing" ? "daily" : "family" });
+  for (const [label, name, emoji] of [["From", "Daily", "👛"], ["To", "Family", "🐷"]]) {
+    const fact = root?.root.findAllByType("view").find(node => node.props.accessibilityLabel === `${label}, ${name}`);
+    expect(fact?.findAllByType("text").map(node => node.children.join(""))).toEqual([emoji, label, name]);
+  }
+  expect(provider.budgetQuery).toHaveBeenLastCalledWith({ workspaceId: "ws", month: "2026-10" });
+  expect(root?.root.findByType(BottomSheetModal).props.enablePanDownToClose).toBe(true);
+});
+
+test("standalone entry queries its accounting month while the workspace calendar is later", async () => {
+  provider.params = { entryId: "100" };
+  provider.calendarDate = "2026-11-02";
+  await act(async () => { root = create(createElement(EntryRoute)); });
+  expect(text()).toContain("Older receipt");
+  expect(provider.budgetQuery).toHaveBeenLastCalledWith({ workspaceId: "ws", month: "2026-10" });
 });
