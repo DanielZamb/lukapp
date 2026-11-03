@@ -101,10 +101,12 @@ test("the disclosure comes first, gates OS settings and never configures or enab
   await mount();
   expect(text()).toContain("Before you turn it on");
   expect(text()).toContain("Only apps you choose");
-  expect(text()).not.toContain("Raw notification text is not retained.");
+  expect(text()).toContain("It's never uploaded.");
+  expect(text()).not.toContain("The notification text is never uploaded");
   await press("Read the full disclosure");
-  expect(text()).toContain("Raw notification text is not retained.");
-  expect(text()).toContain("expire 15 days after their first capture");
+  expect(text()).toContain("The notification text is never uploaded; only the values you confirm are posted.");
+  expect(text()).toContain("deleted 15 days after their first capture");
+  expect(text()).toContain("Notifications that look like security codes are not kept.");
   expect(text()).toContain("Every Candidate requires review before financial posting.");
   expect(button("Continue").props.accessibilityState.disabled).toBe(true);
   await press("Continue");
@@ -364,7 +366,6 @@ test("dev diagnostics disclosure and protected inspector show typed arrivals and
   await mount();
   expect(text()).toContain("BETA BUILD");
   await press("Read the full disclosure");
-  expect(text()).not.toContain("Raw notification text is not retained.");
   expect(text()).toContain("including security messages");
   await acknowledge();
   expect(text()).toContain("2 overflow");
@@ -375,4 +376,21 @@ test("dev diagnostics disclosure and protected inspector show typed arrivals and
   expect(text()).toContain("android.title"); expect(text()).toContain("Synthetic title");
   await press("Delete this raw arrival"); expect(remove).toHaveBeenCalledOnce(); expect(text()).not.toContain("Synthetic title");
   await press("Clear all raw diagnostics"); expect(clear).toHaveBeenCalledOnce();
+});
+
+test("sources saved under an older disclosure are offered the update, re-saved with the same mappings", async () => {
+  const configure = vi.spyOn(f.native, "configure");
+  f.setValue(serializeState({ ...emptyState(), mappings: [mapping], activeSelectionIds: [mapping.sourceSelectionId] }));
+  statusFields.consentVersion = "notification-disclosure@2";
+  await mount();
+  expect(text()).toContain("See each notification with its suggestion");
+  await press("Review the update");
+  expect(has(acknowledgement)).toBe(true); expect(configure).not.toHaveBeenCalled();
+  delete statusFields.consentVersion;
+  await press(acknowledgement); await press("Continue");
+  expect(configure).toHaveBeenCalledOnce();
+  expect(configure.mock.calls[0]?.[0]).toMatchObject({ consentVersion: INTAKE_DISCLOSURE_VERSION, sources: [{ packageName: "app.bank", sourceSelectionId: mapping.sourceSelectionId }] });
+  expect(f.state().mappings).toEqual([mapping]);
+  expect((await f.native.getStatus() as NativeStatus).consentVersion).toBe(INTAKE_DISCLOSURE_VERSION);
+  expect(text()).not.toContain("See each notification with its suggestion");
 });

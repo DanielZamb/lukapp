@@ -16,7 +16,7 @@ import type { IntakeService } from "./service";
 import { ActionBar, AlertLine, Card, CheckRow, FactRow, HeroState, IconTile, Muted, NavRow, NoteCard, SectionHeading, TextButton, type Tone } from "./IntakeParts";
 import { appInitial, likelyBankApp, orderSources, productKindLabel, timeZoneCity } from "./appCatalog";
 
-export const INTAKE_DISCLOSURE_VERSION = "notification-disclosure@2";
+export const INTAKE_DISCLOSURE_VERSION = "notification-disclosure@3";
 export const INTAKE_ACKNOWLEDGEMENT = "I've read the notification intake disclosure";
 type AccountCatalog =
   | { kind: "loading" }
@@ -25,7 +25,7 @@ type AccountCatalog =
       profiles: FunctionReturnType<typeof api.accounting.listFinancialAccountProfiles>;
       sources: Awaited<ReturnType<IntakeService["listSources"]>> };
 /** Where to go once the disclosure is acknowledged. */
-type Then = { kind: "hub" } | { kind: "addApp" } | { kind: "settings" } | { kind: "app"; packageName: string } | { kind: "place"; packageName: string };
+type Then = { kind: "hub" } | { kind: "addApp" } | { kind: "settings" } | { kind: "reconsent" } | { kind: "app"; packageName: string } | { kind: "place"; packageName: string };
 type Step =
   | { kind: "hub" }
   | { kind: "disclosure"; then: Then; entry: boolean }
@@ -140,6 +140,11 @@ export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
       setStep({ kind: "hub" });
       if (!blocked) void perform("Opening Android settings", () => service.openAccessSettings());
     } else if (then.kind === "addApp") { setStep({ kind: "hub" }); setCatalogOpen(true); }
+    else if (then.kind === "reconsent") {
+      // Same apps, same mappings, saved again under the current disclosure.
+      setStep({ kind: "hub" });
+      void perform("Saving", () => configure(active));
+    }
     else if (then.kind === "place") setStep({ kind: "place", packageName: then.packageName, profileId: null });
     else setStep(then);
   }
@@ -173,7 +178,7 @@ export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
         onBack={() => current.entry ? onBack() : setStep(current.then.kind === "app" ? current.then : { kind: "hub" })} />
       <View style={{ gap: spacing.xl }}>
         <FactRow icon="apps-outline" title="Only apps you choose" detail="Lukapp reads nothing else." />
-        <FactRow icon="lock-closed-outline" title="Stays on this phone" detail="Encrypted. Suggestions expire 15 days after capture." />
+        <FactRow icon="lock-closed-outline" title="Stays on this phone" detail="Each notification's text is kept with its suggestion, encrypted, and deleted after 15 days. It's never uploaded." />
         <FactRow icon="warning-outline" tone="warning" title="Can miss or delay alerts" detail="Every candidate needs your review before it's posted." />
       </View>
       {diagnostics ? <View style={ui.section}>
@@ -183,7 +188,7 @@ export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
       <View style={ui.section}>
         <TextButton label={readFull ? "Hide the full disclosure" : "Read the full disclosure"} expanded={readFull} onPress={() => setReadFull((value) => !value)} />
         {readFull ? <>
-          <Text style={ui.body}>Lukapp reads notifications only from apps you select. Normalized suggestions are encrypted on this device and expire 15 days after their first capture. {diagnostics ? "This dev/beta build also encrypts original delivered notification contents, including security messages, in a separate local diagnostic store for up to 24 hours. Nothing from that store is uploaded." : "Raw notification text is not retained."}</Text>
+          <Text style={ui.body}>Lukapp reads notifications only from apps you select. Each one becomes a Candidate that keeps the notification's title and text next to the suggested values, so you can see where they came from. Candidates are encrypted on this device and deleted 15 days after their first capture. The notification text is never uploaded; only the values you confirm are posted. Notifications that look like security codes are not kept.{diagnostics ? " This dev/beta build also encrypts original delivered notification contents, including security messages, in a separate local diagnostic store for up to 24 hours. Nothing from that store is uploaded." : ""}</Text>
           <Text style={ui.body}>Notifications may be missed or delayed. Reconcile with your accounts. Every Candidate requires review before financial posting.</Text>
           <Text style={ui.muted}>Your saved purchase-alert preference does not grant device access. Acknowledging this disclosure does not enable capture.</Text>
         </> : null}
@@ -327,6 +332,10 @@ export function IntakeSetup({ workspaceId, onBack, onInbox, onPrototype }: {
         if (!acknowledged) { withAcknowledgement({ kind: "hub" }); return; }
         void perform("Retrying configuration", () => service.retryConfigure());
       } }} /> : null}
+    {status && active.length > 0 && !blocked && status.consentVersion !== undefined && status.consentVersion !== INTAKE_DISCLOSURE_VERSION
+      ? <NoteCard tone="accent" icon="document-text-outline" title="See each notification with its suggestion"
+        body="Lukapp can now keep each notification's text with its candidate, encrypted on this phone for 15 days. Until you accept the updated disclosure, new candidates arrive without it."
+        action={{ label: "Review the update", disabled: pending !== null || !canChange, onPress: () => withAcknowledgement({ kind: "reconsent" }) }} /> : null}
     {snapshot.drain && (snapshot.drain.unresolved > 0 || snapshot.drain.conflicts > 0)
       ? <AlertLine>{`${snapshot.drain.unresolved} captures have unavailable mappings. ${snapshot.drain.conflicts} captures conflict. Review apps and reconcile missed activity.`}</AlertLine> : null}
 

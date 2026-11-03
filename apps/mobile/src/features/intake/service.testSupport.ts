@@ -32,7 +32,7 @@ export function fixture() {
   let pages: Array<{ captures: NativeCapture[]; nextCursor: string | null }> = [{ captures: [capture], nextCursor: null }];
   const events: string[] = [];
   const status = (): NativeStatus => ({ schemaVersion: 2, epoch, enabled, access: "granted", connection: "connected",
-    changeSequence: 1, pendingCount: 1, gap: null, lastConnectedAt: now, checkedAt: now, notices: [], storageState: "healthy" });
+    changeSequence: 1, pendingCount: 1, gap: null, lastConnectedAt: now, checkedAt: now, notices: [], storageState: "healthy", consentVersion: lastConfigure?.consentVersion ?? "" });
   let lastConfigure: Parameters<NotificationIntakeNative["configure"]>[0] | null = null;
   let configureLost = false;
   let mutationNumber = 0;

@@ -56,6 +56,8 @@ export const nativeStatusSchema = z.object({
   lastConnectedAt: integer.nullable(), checkedAt: integer,
   notices: z.array(z.object({ id, kind: z.enum(["security", "ambiguous", "no_amount", "multiple_amounts", "overflow", "conflict"]), count: integer, firstAt: integer, lastAt: integer }).strict()).max(64),
   storageState: z.enum(["healthy", "corrupt", "key_unavailable"]),
+  /** The disclosure the current sources were saved under ("" before any setup). API v3. */
+  consentVersion: z.string().max(64).optional(),
   diagnostics: diagnosticHealthSchema.nullable().optional(),
 }).strict();
 export type NativeStatus = z.infer<typeof nativeStatusSchema>;

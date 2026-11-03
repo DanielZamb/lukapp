@@ -188,13 +188,13 @@ internal class IntakeRepository(private val storage: SnapshotStorage, private va
     if (s == null) return@synchronized obj("schemaVersion" to 2, "epoch" to recoveryEpoch, "enabled" to false,
       "access" to if (access) "granted" else "not_granted", "connection" to connection,
       "changeSequence" to 0, "pendingCount" to 0, "gap" to obj("since" to failureAt, "reason" to "storage", "rejectedCount" to 0),
-      "lastConnectedAt" to null, "checkedAt" to checked, "notices" to JSONArray(), "storageState" to failure).put("diagnostics", diagnostics?.status() ?: JSONObject.NULL)
+      "lastConnectedAt" to null, "checkedAt" to checked, "notices" to JSONArray(), "storageState" to failure, "consentVersion" to "").put("diagnostics", diagnostics?.status() ?: JSONObject.NULL)
     val n = native(s)
     obj("schemaVersion" to 2, "epoch" to n.text("epoch"), "enabled" to n.getBoolean("enabled"),
       "access" to if (access) "granted" else "not_granted", "connection" to connection,
       "changeSequence" to n.integer("changeSequence"), "pendingCount" to n.getJSONArray("pending").objects().count { it.integer("expiresAt") > checked },
       "gap" to n.get("gap"), "lastConnectedAt" to n.get("lastConnectedAt"), "checkedAt" to checked,
-      "notices" to n.getJSONArray("notices"), "storageState" to "healthy").put("diagnostics", diagnostics?.status() ?: JSONObject.NULL)
+      "notices" to n.getJSONArray("notices"), "storageState" to "healthy", "consentVersion" to n.text("consentVersion")).put("diagnostics", diagnostics?.status() ?: JSONObject.NULL)
   }
   private fun retry(s: JSONObject, input: JSONObject, operation: String): JSONObject? {
     val id = input.text("mutationId")
