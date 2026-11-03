@@ -351,6 +351,20 @@ test("a failed post retains frozen answers and the retry action", async () => {
   expect(retry).toHaveBeenCalledOnce();
 });
 
+test.each([1, 1.5, 2.1])("a debt-cap rejection is an inline alert with editable facts at font scale %s", async (scale) => {
+  const message = "This payment exceeds the total debt still owed. Reduce the amount and try again.";
+  const screen = await show(createElement(PostingForm, {
+    ...emptyPostingForm, ...formHandlers, entryType: "transfer", amount: "-450.000,00",
+    description: "Pay card", place: "Bank", destination: "Card",
+    error: message, editable: true, canSubmit: true,
+  }), scale);
+  const alerts = screen.findAllByProps({ accessibilityRole: "alert" });
+  expect(alerts.some((alert) => alert.findAllByType("text")
+    .some((node) => node.children.join("").includes(message)) || alert.children.join("").includes(message))).toBe(true);
+  expect(screen.findByProps({ accessibilityLabel: "Signed amount" }).props.value).toBe("-450.000,00");
+  expect(screen.findByProps({ accessibilityLabel: "Signed amount" }).props.editable).toBe(true);
+});
+
 test("the batch keeps full descriptions accessible while its actions stay outside the scroller", async () => {
   const description =
     "A description long enough to take more than two lines at the largest system text size on a narrow phone";
