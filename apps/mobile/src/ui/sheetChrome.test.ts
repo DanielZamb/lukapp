@@ -8,6 +8,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { AlertDot, IconButton } from "./core";
 import { PickerSheet } from "./PickerSheet";
+import { Sheet, type SheetProps } from "./Sheet";
 import { ThemeProvider, useSetThemeMode } from "./themeContext";
 import { readableLayout, type LayoutTier } from "./layout";
 import type { ThemeMode } from "./tokens";
@@ -67,7 +68,7 @@ beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_EN
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); expect(native.back.size).toBe(0); });
 function Mode({ mode }: { mode: ThemeMode }) { const setMode = useSetThemeMode(); useEffect(() => setMode(mode), [mode, setMode]); return null; }
 async function render(element: ReactElement, mode: ThemeMode = "light", tier: LayoutTier = "xxxl") {
-  await act(async () => { root = create(h(ThemeProvider, { layout: readableLayout({ width: 320, fontScale: tier === "xxxl" ? 2 : 1 }) }, h(Mode, { mode }), element), { createNodeMock: () => ({ present: native.present, dismiss: native.dismiss }) }); });
+  await act(async () => { root = create(h(ThemeProvider, { layout: readableLayout({ width: tier === "reflow" ? 290 : 320, fontScale: tier === "xxxl" ? 2 : 1 }) }, h(Mode, { mode }), element), { createNodeMock: () => ({ present: native.present, dismiss: native.dismiss }) }); });
   if (!root) throw new Error("No renderer");
   return root.root;
 }
@@ -79,6 +80,56 @@ function styleNumber(style: unknown, property: string) {
   if (typeof value !== "number") throw new Error(`Expected numeric ${property}`);
   return value;
 }
+
+function renderedSheet() {
+  return JSON.stringify(root?.toJSON(), (key, value) => typeof value === "function" ? key === "style" ? value({ pressed: false }) : "[callback]" : value, 2);
+}
+
+const existingSheets = [
+  { name: "managed", props: { label: "Actions", closeLabel: false, children: h("content"), footer: h("actions") } },
+  { name: "tall page", props: { label: "Details", tall: true, closeLabel: false, children: h("content"), footer: h("actions") } },
+  { name: "native body", props: { body: "native", children: h("native-content"), nativeModalProps: { topInset: 72, enablePanDownToClose: true, enableDynamicSizing: false } } },
+  { name: "legacy body", props: { label: "Budget would cross", children: h("content"), footer: h("actions"), legacyBody: h("legacy-content"), legacyFooter: h("legacy-actions") } },
+] satisfies { name: string; props: SheetProps }[];
+
+test.each(["default", "reflow", "xxxl"] as const)("existing Sheet callers retain their rendered contract in %s", async tier => {
+  for (const example of existingSheets) {
+    for (const mode of ["light", "dark"] as const) {
+      await render(h(Sheet, example.props), mode, tier);
+      expect(renderedSheet()).toMatchSnapshot(`${example.name}, ${mode}`);
+      await act(async () => root?.unmount());
+    }
+  }
+});
+
+test.each(["default", "reflow"] as const)("native presentation preserves the entire existing Sheet tree in %s", async tier => {
+  for (const mode of ["light", "dark"] as const) {
+    const props = { label: "Entry details", closeLabel: false, children: h("content"), footer: h("actions") } satisfies SheetProps;
+    await render(h(Sheet, props), mode, tier);
+    const previous = renderedSheet();
+    await act(async () => root?.unmount());
+    await render(h(Sheet, { ...props, presentation: "native" }), mode, tier);
+    expect(renderedSheet()).toBe(previous);
+    await act(async () => root?.unmount());
+  }
+});
+
+test.each([0, 48])("native presentation reserves a changing measured footer above a %sdp bottom inset", async bottom => {
+  native.bottom = bottom;
+  const tree = await render(h(Sheet, { label: "Entry details", presentation: "native", closeLabel: false, footer: h("actions") }, h("content")));
+  expect(modal(tree).props).toMatchObject({ topInset: 24, enableDynamicSizing: true, enablePanDownToClose: true });
+  const content = scroll(tree);
+  expect(content.props.enableFooterMarginAdjustment).toBe(true);
+  expect(content.findAll(node => String(node.type) === "actions")).toHaveLength(0);
+  expect(tree.find(node => String(node.type) === "sheet-footer").props.bottomInset).toBe(bottom);
+  expect(tree.find(node => String(node.type) === "sheet-footer").findAll(node => String(node.type) === "actions")).toHaveLength(1);
+  const padded = content.props.contentContainerStyle;
+  await act(async () => { root?.update(h(MeasuredScroll, { style: padded })); });
+  expect(flat(root!.root.find(node => String(node.type) === "measured-scroll").props.style).paddingBottom).toBe(bottom === 0 ? 200 : 224);
+  native.footerHeight = 252;
+  await act(async () => { root?.update(h(MeasuredScroll, { style: padded })); });
+  expect(flat(root!.root.find(node => String(node.type) === "measured-scroll").props.style).paddingBottom).toBe(bottom === 0 ? 296 : 320);
+});
 
 test.each(["light", "dark"] as const)("SEN-95 #1 unread indicator overlaps the bell's upper-right circular border in %s", async mode => {
   const open = vi.fn();

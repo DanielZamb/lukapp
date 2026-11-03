@@ -45,7 +45,7 @@ export function EntryDetailSheet(props: Props) {
     onBackToSummary: ({ y, animated }) => scrollRef.current?.scrollTo({ y, animated }),
   });
   const closeButton = <SecondaryButton label="Close details" onPress={close} />;
-  return <Sheet label="Entry details" sheetRef={sheetRef} presentOnMount onClose={props.onClose} closeLabel={false} scrollRef={scrollRef} scrollProps={pill.scrollProps}
+  return <Sheet label="Entry details" presentation="native" sheetRef={sheetRef} presentOnMount onClose={props.onClose} closeLabel={false} scrollRef={scrollRef} scrollProps={pill.scrollProps}
     footer={<Presentation legacy={closeButton}>{data.detail ? <EntryDetailActions detail={data.detail} reversal={data.reversal.state} onEntry={props.onEntry}
       onReverse={data.reversal.request} onConfirm={() => void data.reversal.confirm()} onClose={close} /> : closeButton}</Presentation>}
     nativeModalProps={{ onChange: (index) => setPresented(index >= 0) }}>

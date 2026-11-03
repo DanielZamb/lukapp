@@ -13,13 +13,14 @@ import type { CameraCutout } from "../../device/cameraCutout";
 import type { EntryDetail, EntryPlace } from "./types";
 
 const native = vi.hoisted(() => ({
+  top: 40,
   focused: true, cutout: { kind: "none", rect: null } as CameraCutout,
   present: vi.fn(), dismiss: vi.fn(), closed: vi.fn(), scrollTo: vi.fn(), query: vi.fn(), post: vi.fn(),
   backHandlers: new Set<() => boolean>(), detail: undefined as EntryDetail | undefined,
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("@react-navigation/native", () => ({ useIsFocused: () => native.focused }));
-vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 40, bottom: 24 }) }));
+vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: native.top, bottom: 24 }) }));
 vi.mock("react-native", () => ({
   Platform: { OS: "android" }, View: "view", Text: "text", Pressable: "button", ScrollView: "scroll", StatusBar: "status", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, flatten: (value: unknown) => Array.isArray(value) ? Object.assign({}, ...value) : value, absoluteFill: {}, hairlineWidth: 1 },
@@ -113,6 +114,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   native.focused = true;
+  native.top = 40;
   native.cutout = { kind: "none", rect: null };
   native.detail = detail;
   native.backHandlers.clear();
@@ -213,6 +215,30 @@ test.each(["Close details", "Android Back"])("%s requests native dismissal befor
   expect(native.closed).toHaveBeenCalledOnce();
   expect(root.root.findAllByType(BottomSheetModal)).toHaveLength(0);
   expect(native.post).not.toHaveBeenCalled();
+});
+
+test("native details keeps Reverse and Close in a pinned footer outside the scrolling facts", async () => {
+  await mount();
+  const content = root.root.findByType(BottomSheetScrollView);
+  expect(content.findAllByType("button").map(node => node.props.accessibilityLabel)).toEqual([]);
+  const footer = root.root.find(node => String(node.type) === "footer");
+  expect(footer.findAllByType("button").map(node => node.props.accessibilityLabel)).toEqual(["Reverse entry", "Close details"]);
+  expect(content.props.enableFooterMarginAdjustment).toBe(true);
+  expect(root.root.findByType(BottomSheetModal).props.enableDynamicSizing).toBe(true);
+  await scroll(600);
+  await act(async () => button("Close details").props.onPress());
+  expect(native.dismiss).toHaveBeenCalledOnce();
+  expect(native.closed).not.toHaveBeenCalled();
+});
+
+test.each([0, 40, 64])("native details keeps its dynamic sheet below a %sdp top safe area", async top => {
+  native.top = top;
+  await mount();
+  const modal = root.root.findByType(BottomSheetModal);
+  expect(modal.props.topInset).toBe(top);
+  expect(modal.props.enableDynamicSizing).toBe(true);
+  expect(modal.props.enablePanDownToClose).toBe(true);
+  expect(modal.props.handleComponent).toBeUndefined();
 });
 
 test("the existing peek presentation docks after three seconds", async () => {
