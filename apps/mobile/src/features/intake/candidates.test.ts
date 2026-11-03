@@ -147,3 +147,14 @@ test("the source adapter writes captures locally and never invents Convex ids", 
   );
   expect(await source.pull()).toEqual([]);
 });
+
+test("kept notifications with no amount fold under Not money and leave the badge count", () => {
+  const notification = { text: "Nu\nAprovecha 30% de descuento", packageName: "com.nu.production", at: now };
+  const promo = candidate("promo", { notification, suggestion: { ...candidate("x").suggestion, amountMinorUnits: null, direction: null } });
+  const typed = candidate("typed", { notification, reviewAmountText: "-12.000", suggestion: { ...candidate("x").suggestion, amountMinorUnits: null } });
+  const old = candidate("old", { suggestion: { ...candidate("x").suggestion, amountMinorUnits: null } });
+  const inbox = viewInbox({ v: 1, candidates: [promo, typed, old, candidate("money")] }, "workspace", now, "COP");
+  expect(inbox.notMoney.map((row) => row.id)).toEqual(["promo"]);
+  expect([...inbox.now, ...inbox.wait].map((row) => row.id).sort()).toEqual(["money", "old", "typed"]);
+  expect(inbox.count).toBe(3);
+});

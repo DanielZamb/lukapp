@@ -99,6 +99,7 @@ function Drafts({
       now={intake.now}
       wait={intake.wait}
       ready={intake.ready}
+      notMoney={intake.notMoney}
       readyTotal={readyTotalMinorUnits(intake.ready)}
       currency={currency}
       segment={segment}

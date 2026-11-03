@@ -357,3 +357,20 @@ test("Confirm all Ready stays disabled without Ready Candidates or during confir
   await act(async () => { root?.update(createElement(DraftsScreen, render({ now: [candidate], ready: [candidate], confirming: true }))); });
   expect(button("Confirm all Ready").props.disabled).toBe(true);
 });
+
+test("Not money is folded, counted, and each row opens its Candidate", async () => {
+  const onOpenCandidate = vi.fn();
+  const promo: IntakeCandidate = { ...candidate, id: "promo", suggestion: { ...candidate.suggestion, amountMinorUnits: null, direction: null, description: "" },
+    notification: { text: "Nu\nAprovecha 30% de descuento este fin de semana", packageName: "com.nu.production", at: expiresAt } };
+  await act(async () => {
+    root = create(createElement(DraftsScreen, render({ notMoney: [promo], onOpenCandidate })));
+  });
+  expect(text()).toContain("Not money · 1");
+  expect(text()).not.toContain("Aprovecha 30%");
+  const fold = button("Not money, 1");
+  expect(fold.props.accessibilityState.expanded).toBe(false);
+  await act(async () => { fold.props.onPress(); });
+  expect(text()).toContain("Aprovecha 30% de descuento este fin de semana");
+  await act(async () => { button("Review Aprovecha 30% de descuento este fin de semana").props.onPress(); });
+  expect(onOpenCandidate).toHaveBeenCalledWith("promo");
+});

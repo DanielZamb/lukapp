@@ -61,8 +61,10 @@ export function DraftsScreen({
   drafts, now, wait, ready, readyTotal, currency, segment, readyToShow, error,
   confirming, month, places, confirmedCount, onContinueAfterConfirmation,
   onSegment, onBack, onResumeDraft, onOpenCandidate, onConfirmReady, onCompleteMonth,
-  discardNotices = [], onDismissDiscardNotices, onSources, intakeWarning,
+  discardNotices = [], onDismissDiscardNotices, onSources, intakeWarning, notMoney = [],
 }: {
+  /** Kept notifications with no amount in them; folded away under "Not money". */
+  notMoney?: IntakeCandidate[];
   onSources: () => void;
   intakeWarning?: string;
   discardNotices?: DiscardNotice[];
@@ -96,6 +98,7 @@ export function DraftsScreen({
   const [warningViewed, setWarningViewed] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [discardError, setDiscardError] = useState("");
+  const [showNotMoney, setShowNotMoney] = useState(false);
   const empty = drafts.length === 0 && now.length === 0 && wait.length === 0;
   const candidateRows = segment === "now" ? now : wait;
   const postingDrafts = drafts.filter((item) => item.status === "posting");
@@ -241,6 +244,29 @@ export function DraftsScreen({
           </ListGroup>
         </>
       )}
+      {readyToShow && notMoney.length > 0 ? (
+        <View style={ui.section}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Not money, ${notMoney.length}`} accessibilityState={{ expanded: showNotMoney }}
+            accessibilityHint="Notifications with no amount in them" onPress={() => setShowNotMoney((value) => !value)} style={styles.fold}>
+            <View style={styles.candidateCopy}>
+              <Text style={styles.candidateTitle}>Not money · {notMoney.length}</Text>
+              <Text style={styles.candidateDetail}>No amount in these notifications. They're deleted after 15 days.</Text>
+            </View>
+            <Ionicons name={showNotMoney ? "chevron-up" : "chevron-down"} size={20} color={theme.mutedForeground} />
+          </Pressable>
+          {showNotMoney ? (
+            <ListGroup>
+              {notMoney.map((candidate) => {
+                const lines = candidate.notification?.text.split("\n") ?? [];
+                const body = (lines.length > 1 ? lines.slice(1) : lines).join(" ");
+                return <CandidateRow key={candidate.id} title={body || "Notification"} value=""
+                  detail={`${lines.length > 1 ? `${lines[0]} · ` : ""}${new Date(candidate.notification?.at ?? candidate.createdAt).toLocaleDateString()}`}
+                  onPress={() => onOpenCandidate(candidate.id)} />;
+              })}
+            </ListGroup>
+          ) : null}
+        </View>
+      ) : null}
       {readyToShow && discardNotices.length > 0 ? <SecondaryButton label="Notifications discarded" onPress={() => setScreen("discard")} /> : null}
       {readyToShow && !empty ? (
         <>
@@ -267,6 +293,7 @@ function createStyles(theme: Theme, layout: ReadableLayout) {
     borderBottomColor: theme.border,
   },
   lastCandidateRow: { borderBottomWidth: 0 },
+  fold: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm },
   candidateContent: { flex: 1, minWidth: 0, flexDirection: layout.reflow ? "column" : "row", alignItems: layout.reflow ? "stretch" : "center", gap: spacing.sm },
   candidateCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
   candidateTitle: { fontFamily: font.semibold, fontSize: fontSize.body, lineHeight: 22, color: theme.foreground },

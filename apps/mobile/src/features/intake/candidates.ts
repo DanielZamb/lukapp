@@ -119,6 +119,16 @@ export function reviewSuggestionOf(candidate: IntakeCandidate): IntakeSuggestion
   };
 }
 
+/**
+ * "Not money": the notification was kept, nothing in it reads as an amount,
+ * and the person hasn't entered one. Such Candidates fold away in the inbox
+ * and don't count toward the badge. Older Candidates without kept text stay
+ * in the inbox, since the person can't see what they were.
+ */
+export function isNotMoney(row: IntakeCandidate) {
+  return !!row.notification && row.suggestion.amountMinorUnits === null && !row.reviewAmountText?.replace(/[-−+\s]/g, "");
+}
+
 export function viewInbox(
   document: IntakeDocument,
   workspaceId: string,
@@ -128,12 +138,14 @@ export function viewInbox(
   const live = document.candidates.filter(
     (row) => row.expiresAt > now && row.workspaceId === workspaceId,
   );
-  const nowRows = live.filter((row) => isPriorityCandidate(row, now, currency));
-  const waitRows = live.filter((row) => !isPriorityCandidate(row, now, currency));
+  const money = live.filter((row) => !isNotMoney(row));
+  const nowRows = money.filter((row) => isPriorityCandidate(row, now, currency));
+  const waitRows = money.filter((row) => !isPriorityCandidate(row, now, currency));
   return {
     now: nowRows,
     wait: waitRows,
-    ready: live.filter((row) => isReadyCandidate(row, currency)),
-    count: live.length,
+    ready: money.filter((row) => isReadyCandidate(row, currency)),
+    notMoney: live.filter(isNotMoney),
+    count: money.length,
   };
 }
