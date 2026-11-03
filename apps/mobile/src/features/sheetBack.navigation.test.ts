@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement, useEffect, useState } from "react";
+import { createElement, createRef, useEffect, useState } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -50,7 +50,7 @@ vi.mock("@gorhom/bottom-sheet/src/components/bottomSheet", () => ({
     });
     React.useImperativeHandle(ref, () => ({ close, forceClose: close, snapToIndex() {} }));
     useEffect(() => { props.onChange(nativeEvents.acknowledge ? 0 : -1, 0, 0); }, []);
-    return createElement("native-sheet", { onPanDown: close }, props.children);
+    return createElement("native-sheet", { onPanDown: close, onAcknowledge: () => props.onChange(0, 0, 0) }, props.children);
   }),
 }));
 vi.mock("@gorhom/bottom-sheet/src/components/bottomSheetHostingContainer", () => ({
@@ -195,4 +195,53 @@ test.each(flowCases)("$flow at fontScale $fontScale settles a queued close once 
   await settle();
   expect(closed).toHaveBeenCalledOnce();
   expect(hardware.listeners).toHaveLength(0);
+});
+
+test.each(flowCases)("$flow at fontScale $fontScale cancels recovery at acknowledgement and waits for native dismissal", async ({ flow, fontScale }) => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); nativeEvents.acknowledge = false;
+  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
+  await act(async () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress());
+  await back(); await settle();
+  const modal = root!.root.findByType(BottomSheetModal);
+  await act(async () => { vi.advanceTimersByTime(950); });
+  await act(async () => root!.root.find((node) => String(node.type) === "native-sheet").props.onAcknowledge());
+  expect(closes).toHaveLength(1);
+  await act(async () => { vi.advanceTimersByTime(550); });
+  expect(closed).not.toHaveBeenCalled();
+  expect(root!.root.findByType(BottomSheetModal)).toBe(modal);
+  expect(vi.getTimerCount()).toBe(0);
+  await settle();
+  expect(closed).toHaveBeenCalledOnce();
+});
+test.each(flowCases)("$flow at fontScale $fontScale settles an acknowledged pending close during teardown", async ({ flow, fontScale }) => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Harness, { flow })))); });
+  await act(async () => root!.root.findByProps({ accessibilityLabel: "Open child" }).props.onPress());
+  await settle();
+  const oldModal = root!.root.findByType(BottomSheetModal).props;
+  await back();
+  expect(closes).toHaveLength(1);
+  expect(closed).not.toHaveBeenCalled();
+  await act(async () => root!.unmount()); root = undefined;
+  expect(closed).toHaveBeenCalledOnce();
+  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); vi.advanceTimersByTime(2000); });
+  await settle();
+  expect(closed).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});
+test.each([1, 2.1])("a synchronous reopen from timeout dismissal reaches the replacement at fontScale %s", async (fontScale) => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); nativeEvents.acknowledge = false;
+  const ref = createRef<BottomSheetModal>();
+  const dismissed = vi.fn(() => { nativeEvents.acknowledge = true; ref.current?.present(); });
+  await act(async () => { root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 390, fontScale }) }, createElement(BottomSheetModalProvider, null, createElement(Sheet, { sheetRef: ref, presentOnMount: true, label: "Reopening sheet", onDismiss: dismissed }, createElement("text", null, "Caller body"))))); });
+  const oldModal = root!.root.findByType(BottomSheetModal).props;
+  await back(); await settle();
+  await act(async () => { vi.advanceTimersByTime(1000); });
+  await settle();
+  expect(dismissed).toHaveBeenCalledOnce();
+  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
+  expect(hardware.listeners).toHaveLength(1);
+  await act(async () => { oldModal.onChange?.(0, 0, 0); oldModal.onDismiss?.(); });
+  expect(dismissed).toHaveBeenCalledOnce();
+  expect(root!.root.findAll((node) => String(node.type) === "native-sheet")).toHaveLength(1);
 });

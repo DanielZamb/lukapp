@@ -1,5 +1,5 @@
 import { BottomSheetModal, type BottomSheetModalProps } from "@gorhom/bottom-sheet";
-import { useEffect, useImperativeHandle, useRef, useState, type PropsWithChildren, type RefObject } from "react";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type PropsWithChildren, type RefObject } from "react";
 import { BackHandler, View } from "react-native";
 import { useSheetAccessibility } from "./SheetAccessibility";
 
@@ -26,6 +26,8 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
   const [open, setOpen] = useState(presentOnMount);
   const [nativeVersion, setNativeVersion] = useState(0);
   const version = useRef(0);
+  const committedVersion = useRef(0);
+  const pendingPresent = useRef<Parameters<BottomSheetModal["present"]> | null>(null);
   const mounted = useRef(true);
   const recovery = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notifyDismiss = useRef(onDismiss);
@@ -39,11 +41,15 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
   const locked = busy || !dismissible;
   const lock = useRef(locked);
   lock.current = locked;
+  function cancelRecovery() {
+    if (recovery.current !== null) clearTimeout(recovery.current);
+    recovery.current = null;
+  }
   function settleClose() {
     if (presentation.current.kind === "hidden") return;
     presentation.current = { kind: "hidden" };
-    if (recovery.current !== null) clearTimeout(recovery.current);
-    recovery.current = null;
+    pendingPresent.current = null;
+    cancelRecovery();
     if (mounted.current) setOpen(false);
     notifyDismiss.current?.();
   }
@@ -51,7 +57,9 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
     mounted.current = true;
     return () => {
       mounted.current = false;
-      if (recovery.current !== null) settleClose();
+      pendingPresent.current = null;
+      if (presentation.current.kind === "waitingToClose" || presentation.current.kind === "closing") settleClose();
+      else cancelRecovery();
     };
   }, []);
   useImperativeHandle(sheetRef, () => ({
@@ -60,7 +68,8 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
       if (backEnabled.current && (kind === "waitingToClose" || kind === "closing")) return;
       if (kind !== "open") presentation.current = { kind: "opening" };
       setOpen(true);
-      native.current?.present(...args);
+      if (version.current !== committedVersion.current) pendingPresent.current = args;
+      else native.current?.present(...args);
     },
     dismiss: (...args) => {
       const { kind } = presentation.current;
@@ -87,6 +96,12 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
     close: (...args) => native.current?.close(...args),
     forceClose: (...args) => native.current?.forceClose(...args),
   }), [sheetRef]);
+  useLayoutEffect(() => {
+    committedVersion.current = nativeVersion;
+    const args = pendingPresent.current;
+    pendingPresent.current = null;
+    if (args !== null) native.current?.present(...args);
+  }, [nativeVersion]);
   useEffect(() => {
     if (presentOnMount) {
       sheetRef.current?.present();
@@ -120,6 +135,7 @@ export function SheetModal({ sheetRef, presentOnMount, trackPresentation, androi
       if (!mounted.current || nativeVersion !== version.current) return;
       const current = presentation.current;
       if (args[0] >= 0) {
+        cancelRecovery();
         if (current.kind === "waitingToClose") {
           presentation.current = { kind: "closing" };
         } else if (current.kind !== "closing") presentation.current = { kind: "open" };
