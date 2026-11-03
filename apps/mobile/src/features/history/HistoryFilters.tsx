@@ -210,7 +210,7 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
       </>}
     </BottomSheetScrollView>;
   const title = sheet === "sort" ? "Sort" : sheet === "places" ? "Places" : sheet === "categories" ? "Categories" : "Dates";
-  return <PickerSheet legacyBody={legacyBody} legacyBodyMode="native" legacyNativeModalProps={legacyNativeModalProps} onDismiss={onClose} stickyHeader={false} footer={<ActionBar primary={{ label: "Show movements", onPress: onClose, icon: "checkmark" }} />}>
+  return <PickerSheet androidBack legacyBody={legacyBody} legacyBodyMode="native" legacyNativeModalProps={legacyNativeModalProps} onDismiss={onClose} stickyHeader={false} footer={<ActionBar primary={{ label: "Show movements", onPress: onClose, icon: "checkmark" }} />}>
       <SheetHeader title={title} eyebrow="FILTER TX HISTORY" onClose={onClose} />
       {sheet === "sort" && <>
         {sortOptions.map(({ key, label }) => <ChoiceRow key={key} presentation="option" label={label}

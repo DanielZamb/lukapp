@@ -5,7 +5,7 @@ import {
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { BackHandler, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Field, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
 import { spacing, touchTarget } from "../../ui/tokens";
@@ -60,6 +60,14 @@ export function RestyleSheet({
   const interact = useLocalEntryInteraction();
   useEffect(() => {
     sheet.current?.present();
+  }, []);
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      sheet.current?.dismiss();
+      return true;
+    });
+    return () => subscription.remove();
   }, []);
   const trimmed = name.trim();
   const duplicate = names.some(

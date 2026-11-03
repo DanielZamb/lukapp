@@ -22,6 +22,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
 }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }));
 vi.mock("react-native", () => ({
+  BackHandler: { addEventListener: () => ({ remove() {} }) },
   useWindowDimensions: () => ({ width: 320, height: 800, fontScale: 1.5, scale: 1 }),
   KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
