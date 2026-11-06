@@ -5,7 +5,7 @@ import type { IntakeCandidate } from "./candidates";
 import { suggest } from "./suggest";
 
 /** Parser version recorded for candidates suggested from the kept notification text. */
-export const TEXT_SUGGESTION_VERSION = "suggest-v1";
+export const TEXT_SUGGESTION_VERSION = "suggest-v2";
 
 /**
  * The starting values for a candidate. With the notification text, the
@@ -147,7 +147,7 @@ export function ingest(state: CandidateState, capture: NativeCapture, mapping: S
   const { currency: suggestedCurrency, parserVersion, ...suggested } = suggestionFor(capture, mapping);
   const suggestion = { ...suggested, description: suggested.description.slice(0, 1024),
     accountingDate, financialAccountProfileId: mapping.financialAccountProfileId, userCategoryIds: [], primaryUserCategoryId: null };
-  // Text with no amount ("Not money") has nothing to review in its currency yet.
+  // Without a suggested amount there is no suggested currency to review yet.
   const currencyKnown = suggestedCurrency !== null || (!!capture.text && suggested.amountMinorUnits === null);
   const row: ActiveCandidate = {
     id: capture.captureId, digest, expiresAt: capture.expiresAt, createdAt: capture.capturedAt, recordRevision: 0,
@@ -166,7 +166,7 @@ export function terminal(row: ActiveCandidate, reason: "confirmed" | "deleted"):
 }
 /** The kept notification, for showing the person where a suggestion came from. Never part of a confirmation. */
 export function notificationOf(row: ActiveCandidate): { text: string; packageName: string; at: number } | null {
-  if (row.origin.kind !== "native" || !row.origin.capture.text) return null;
+  if (row.origin.kind !== "native") return null;
   return { text: row.origin.capture.text, packageName: row.origin.mapping.packageName, at: row.origin.capture.notificationAt };
 }
 export function projectCandidate(row: ActiveCandidate): IntakeCandidate {

@@ -50,6 +50,16 @@ test("several charge-like amounts ask the person to choose", () => {
   expect(result.confidence).toBe("check");
 });
 
+test("an explicit account receipt can omit the currency marker", () => {
+  const result = suggest({ text: "Recibiste 45,00 en tu cuenta\nTe llegó dinero de MARIA EJEMPLO con tu llave." });
+  expect(result.amount?.minor).toBe(4_500);
+  expect(result.direction?.value).toBe("in");
+  expect(result.counterparty?.value).toBe("MARIA EJEMPLO");
+  expect(result.amounts).toHaveLength(1);
+  expect(pieces(result).map((piece) => piece.text).join("")).toBe(result.text);
+  expect(suggest({ text: "Recibiste 2 notificaciones nuevas" }).amount).toBeNull();
+});
+
 test("pieces cover the text exactly once, in order", () => {
   for (const sample of corpus.samples) {
     const result = suggest(sample);

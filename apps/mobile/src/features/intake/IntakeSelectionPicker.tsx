@@ -11,8 +11,9 @@ export type PickerOption = { id: string; label: string; detail: string; initial:
 type Item = { kind: "heading"; id: string; title: string } | { kind: "option"; option: PickerOption };
 
 /** A full-height searchable list of choices. Picking one closes the list. */
-export function IntakeSelectionPicker({ title, eyebrow, searchLabel, options, disabled, empty, onSelect, onClose }: {
+export function IntakeSelectionPicker({ title, eyebrow, searchLabel, guidance, options, disabled, empty, onSelect, onClose }: {
   title: string; eyebrow?: string; searchLabel: string;
+  guidance?: string;
   options: PickerOption[]; disabled: boolean; empty: string;
   onSelect(id: string): void; onClose(): void;
 }) {
@@ -43,6 +44,7 @@ export function IntakeSelectionPicker({ title, eyebrow, searchLabel, options, di
             <Ionicons name="close" size={22} color={theme.foreground} />
           </Pressable>
         </View>
+        {guidance ? <Text style={ui.muted}>{guidance}</Text> : null}
         <Field label={searchLabel} accessibilityLabel={searchLabel} value={search} onChangeText={setSearch}
           placeholder="Search by name" autoCorrect={false} />
         {needle ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{items.count === 1 ? "1 result" : `${items.count} results`}</Text> : null}

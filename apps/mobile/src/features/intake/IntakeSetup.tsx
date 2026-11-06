@@ -18,6 +18,7 @@ import { appInitial, likelyBankApp, orderSources, productKindLabel, timeZoneCity
 
 export const INTAKE_DISCLOSURE_VERSION = "notification-disclosure@3";
 export const INTAKE_ACKNOWLEDGEMENT = "I've read the notification intake disclosure";
+const EMAIL_SOURCE_WARNING = "Bank emails are not bank-app notifications. Record email-only transactions manually. We strongly advise against selecting an email app: its notifications can expose private, unrelated messages.";
 type AccountCatalog =
   | { kind: "loading" }
   | { kind: "failed" }
@@ -179,6 +180,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
         <FactRow icon="apps-outline" title="Only apps you choose" detail="Lukapp reads nothing else." />
         <FactRow icon="lock-closed-outline" title="Stays on this phone" detail="Each notification's text is kept with its suggestion, encrypted, and deleted after 15 days. It's never uploaded." />
         <FactRow icon="warning-outline" tone="warning" title="Can miss or delay alerts" detail="Every candidate needs your review before it's posted." />
+        <FactRow icon="mail-outline" tone="warning" title="Keep email private" detail={EMAIL_SOURCE_WARNING} />
       </View>
       {diagnostics ? <View style={ui.section}>
         <Text style={ui.label}>BETA BUILD</Text>
@@ -346,6 +348,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
 
     {status ? <View style={ui.section}>
       <SectionHeading title="Apps you read from" meta={ready ? `${plural(ready.sources.length, "app")} on this phone` : undefined} />
+      <NoteCard tone="warning" icon="mail-outline" title="Bank sends email instead?" body={EMAIL_SOURCE_WARNING} />
       {active.length ? <Card>
         {active.map((mapping, index) => {
           const label = appLabel(mapping.packageName);
@@ -408,7 +411,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
     {ready ? <Muted>{`${ready.workspace.kind} · ${ready.workspace.functionalCurrency} · ${timeZoneCity(ready.workspace.timeZone)}`}</Muted> : null}
     {supported && !snapshot.wipePending ? <SecondaryButton label="Turn off and wipe" tone="danger" disabled={pending !== null} onPress={() => setStep({ kind: "wipe" })} /> : null}
 
-    {catalogOpen && ready ? <IntakeSelectionPicker title="Add an app" eyebrow={`${ready.sources.length} ON THIS PHONE`} searchLabel="Search apps"
+    {catalogOpen && ready ? <IntakeSelectionPicker title="Add an app" eyebrow={`${ready.sources.length} ON THIS PHONE`} searchLabel="Search apps" guidance={EMAIL_SOURCE_WARNING}
       options={orderSources(ready.sources).map((source) => ({ id: source.packageName, label: source.label, detail: source.packageName,
         initial: appInitial(source.label), likely: likelyBankApp(source) }))}
       disabled={!canConfigure} empty="No installed apps can send alerts. Install your bank app, then refresh."

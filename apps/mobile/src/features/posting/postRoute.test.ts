@@ -11,6 +11,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { capture, mapping, fixture as intakeFixture } from "../intake/service.testSupport";
 import { emptyState, serializeState } from "../intake/durableState";
+import { NotificationCard } from "../intake/NotificationCard";
 import { getFunctionName } from "convex/server";
 import type { Category } from "../categories/model";
 
@@ -657,9 +658,34 @@ test("a Candidate's kept notification is shown in Post, and tapping it fills the
   expect(candidateService.read("capture-1")?.review).toMatchObject({ amountMinorUnits: 125_030_000, direction: "out", description: "Tienda de barrio" });
 });
 
-test("a Candidate without kept text keeps the plain source note", async () => {
+test("a Candidate without kept text still shows its notification source and unavailable-text card", async () => {
   const candidate = intakeFixture();
   candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
   await candidate.service.refresh(); candidateService = candidate.service; route.candidateId = "capture-1"; await mount();
-  expect(form.props?.notification).toBeUndefined(); expect(form.props?.sourceNote).toContain("Source app.bank");
+  const card = form.props?.notification;
+  if (!React.isValidElement<ComponentProps<typeof NotificationCard>>(card)) throw new Error("Missing notification card");
+  expect(card.type).toBe(NotificationCard);
+  expect(card.props.notification).toEqual({ text: "", packageName: "app.bank", at: Date.parse("2026-10-24T02:00:00Z") });
+});
+
+test("an existing unresolved incoming Candidate shows its body and can use its unmarked amount without rewriting evidence", async () => {
+  const text = "Recibiste 45,00 en tu cuenta\nTe llegó dinero de MARIA EJEMPLO con tu llave.";
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  candidate.setPages([{ captures: [{ ...capture, text, consentVersion: "notification-disclosure@3" }], nextCursor: null }]);
+  await candidate.service.refresh();
+  candidate.setValue(serializeState({ ...candidate.state(), records: candidate.state().records.map((row) => row.kind !== "active" ? row : {
+    ...row, parserVersion: "suggest-v1", review: { ...row.review, amountMinorUnits: null, direction: null, description: "" },
+    originalSuggestion: { ...row.originalSuggestion, amountMinorUnits: null, direction: null, description: "", currency: null },
+  }) }));
+  await candidate.service.refresh(); candidateService = candidate.service; route.candidateId = "capture-1"; await mount();
+  const card = form.props?.notification;
+  if (!React.isValidElement<ComponentProps<typeof NotificationCard>>(card)) throw new Error("Missing notification card");
+  expect(card.props.notification.text).toBe(text);
+  expect(form.props?.amount).toBe("");
+  await act(async () => { card.props.onUseAmount(4_500); });
+  expect(form.props?.amount).toBe("45");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(candidateService.read("capture-1")?.review).toMatchObject({ amountMinorUnits: 4_500, direction: "in" });
+  expect(candidateService.read("capture-1")?.originalSuggestion.amountMinorUnits).toBeNull();
 });

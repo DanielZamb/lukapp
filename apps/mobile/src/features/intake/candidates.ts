@@ -2,6 +2,7 @@ import { z } from "zod";
 import * as SecureStore from "expo-secure-store";
 import type { IntakeSuggestion } from "../../../../../src/notificationIntake/types";
 import { isReadyCandidate } from "./ready";
+import { suggest } from "./suggest";
 
 export { isReadyCandidate };
 
@@ -119,14 +120,14 @@ export function reviewSuggestionOf(candidate: IntakeCandidate): IntakeSuggestion
   };
 }
 
-/**
- * "Not money": the notification was kept, nothing in it reads as an amount,
- * and the person hasn't entered one. Such Candidates fold away in the inbox
- * and don't count toward the badge. Older Candidates without kept text stay
- * in the inbox, since the person can't see what they were.
- */
-export function isNotMoney(row: IntakeCandidate) {
-  return !!row.notification && row.suggestion.amountMinorUnits === null && !row.reviewAmountText?.replace(/[-−+\s]/g, "");
+const APP_NOTICE = /\b(?:descuentos?|promoci[oó]n|promociones|ofertas?|discounts?|promotions?|offers?|inici[oó]\s+sesi[oó]n|ingreso exitoso a la app|signed in|logged in|login successful|seguridad digital|mantenga su celular seguro|security tips)\b/iu;
+const MONEY_ACTIVITY = /\b(?:dinero|plata|transfer\p{L}*|transacci\p{L}*|consign\p{L}*|abono|dep[oó]sito|reembolso|devoluci[oó]n|payment)\b/iu;
+
+export function isOtherNotification(row: IntakeCandidate) {
+  if (!row.notification?.text.trim() || row.error || row.suggestion.amountMinorUnits !== null || row.suggestion.direction !== null ||
+    row.reviewAmountText?.replace(/[-−+\s]/g, "") || MONEY_ACTIVITY.test(row.notification.text)) return false;
+  const suggestion = suggest({ text: row.notification.text });
+  return !suggestion.amount && !suggestion.direction && APP_NOTICE.test(row.notification.text);
 }
 
 export function viewInbox(
@@ -138,14 +139,14 @@ export function viewInbox(
   const live = document.candidates.filter(
     (row) => row.expiresAt > now && row.workspaceId === workspaceId,
   );
-  const money = live.filter((row) => !isNotMoney(row));
+  const money = live.filter((row) => !isOtherNotification(row));
   const nowRows = money.filter((row) => isPriorityCandidate(row, now, currency));
   const waitRows = money.filter((row) => !isPriorityCandidate(row, now, currency));
   return {
     now: nowRows,
     wait: waitRows,
     ready: money.filter((row) => isReadyCandidate(row, currency)),
-    notMoney: live.filter(isNotMoney),
+    otherNotifications: live.filter(isOtherNotification),
     count: money.length,
   };
 }

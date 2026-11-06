@@ -47,6 +47,7 @@ const words = (alternatives: string, flags = "giu") => new RegExp(`(?<![\\p{L}\\
 const REVERSAL = words("reverso|reversi[oó]n|devoluci[oó]n|reembolso|refund");
 const OUT = words("compraste|compra|pagaste|pag[oó]|pago|retiraste|retiro|transferiste|enviaste|env[ií]o|d[eé]bito|cargo|purchase|paid|payment|spent|sent|withdrawal");
 const IN = words("recibiste|recibido|recibida|te envi[oó]|te enviaron|te lleg[oó]|te llegaron|abono|consignaci[oó]n|dep[oó]sito|received|deposit|credited");
+const ACCOUNT_RECEIPT = new RegExp(`${words("recibiste|received").source}\\s+${NUMBER}(?=\\s+(?:en\\s+(?:tu|su)\\s+cuenta|in(?:to)?\\s+your\\s+account)\\b)`, "giu");
 
 const SECURITY_WORDS = words("otp|clave din[aá]mica|c[oó]digo|token|contrase[nñ]a|passcode|verification code|one[- ]time", "iu");
 const STANDALONE_CODE = /(?<![\d*.,$])\b\d{4,8}\b(?![.,]\d)/g;
@@ -103,6 +104,15 @@ function mentions(text: string): Mention[] {
     const before = text.slice(Math.max(0, start - 40), start);
     const role = BALANCE_CONTEXT.test(before) ? "balance" : CHARGE_CONTEXT.test(before) ? "charge" : "other";
     found.push({ start, end: start + raw.trimEnd().length, raw: raw.trimEnd(), minor, currency: currencyOf(codeBefore, codeAfter, bareCode), role });
+  }
+  for (const match of text.matchAll(ACCOUNT_RECEIPT)) {
+    const raw = match[1];
+    if (!raw) continue;
+    const start = match.index + match[0].lastIndexOf(raw);
+    const end = start + raw.length;
+    if (found.some((mention) => start < mention.end && end > mention.start)) continue;
+    const minor = toMinor(raw);
+    if (minor !== null) found.push({ start, end, raw, minor, currency: null, role: "charge" });
   }
   const rank = { charge: 0, other: 1, balance: 2 } as const;
   return found.sort((a, b) => rank[a.role] - rank[b.role] || a.start - b.start);

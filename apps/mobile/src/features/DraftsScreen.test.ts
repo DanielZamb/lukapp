@@ -358,16 +358,27 @@ test("Confirm all Ready stays disabled without Ready Candidates or during confir
   expect(button("Confirm all Ready").props.disabled).toBe(true);
 });
 
-test("Not money is folded, counted, and each row opens its Candidate", async () => {
+test("unresolved Candidates identify themselves with their original notification text", async () => {
+  const onOpenCandidate = vi.fn();
+  const body = "Recibiste 45,00 en tu cuenta\nTe llegó dinero de MARIA EJEMPLO con tu llave.";
+  const row: IntakeCandidate = { ...candidate, suggestion: { ...candidate.suggestion, description: "", amountMinorUnits: null, direction: "in" },
+    notification: { text: body, packageName: "com.nu.production", at: expiresAt } };
+  await act(async () => { root = create(createElement(DraftsScreen, render({ now: [row], onOpenCandidate }))); });
+  expect(text()).toContain(body);
+  await act(async () => { button(`Review ${body}`).props.onPress(); });
+  expect(onOpenCandidate).toHaveBeenCalledWith(candidate.id);
+});
+
+test("Other notifications is folded, counted, and each row opens its Candidate", async () => {
   const onOpenCandidate = vi.fn();
   const promo: IntakeCandidate = { ...candidate, id: "promo", suggestion: { ...candidate.suggestion, amountMinorUnits: null, direction: null, description: "" },
     notification: { text: "Nu\nAprovecha 30% de descuento este fin de semana", packageName: "com.nu.production", at: expiresAt } };
   await act(async () => {
-    root = create(createElement(DraftsScreen, render({ notMoney: [promo], onOpenCandidate })));
+    root = create(createElement(DraftsScreen, render({ otherNotifications: [promo], onOpenCandidate })));
   });
-  expect(text()).toContain("Not money · 1");
+  expect(text()).toContain("Other notifications · 1");
   expect(text()).not.toContain("Aprovecha 30%");
-  const fold = button("Not money, 1");
+  const fold = button("Other notifications, 1");
   expect(fold.props.accessibilityState.expanded).toBe(false);
   await act(async () => { fold.props.onPress(); });
   expect(text()).toContain("Aprovecha 30% de descuento este fin de semana");

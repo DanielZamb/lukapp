@@ -61,10 +61,10 @@ export function DraftsScreen({
   drafts, now, wait, ready, readyTotal, currency, segment, readyToShow, error,
   confirming, month, places, confirmedCount, onContinueAfterConfirmation,
   onSegment, onBack, onResumeDraft, onOpenCandidate, onConfirmReady, onCompleteMonth,
-  discardNotices = [], onDismissDiscardNotices, onSources, intakeWarning, notMoney = [],
+  discardNotices = [], onDismissDiscardNotices, onSources, intakeWarning, otherNotifications = [],
 }: {
-  /** Kept notifications with no amount in them; folded away under "Not money". */
-  notMoney?: IntakeCandidate[];
+  /** Recognized app notices and promotions; unknown notifications stay in review. */
+  otherNotifications?: IntakeCandidate[];
   onSources: () => void;
   intakeWarning?: string;
   discardNotices?: DiscardNotice[];
@@ -98,7 +98,7 @@ export function DraftsScreen({
   const [warningViewed, setWarningViewed] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [discardError, setDiscardError] = useState("");
-  const [showNotMoney, setShowNotMoney] = useState(false);
+  const [showOtherNotifications, setShowOtherNotifications] = useState(false);
   const empty = drafts.length === 0 && now.length === 0 && wait.length === 0;
   const candidateRows = segment === "now" ? now : wait;
   const postingDrafts = drafts.filter((item) => item.status === "posting");
@@ -219,7 +219,7 @@ export function DraftsScreen({
             {candidateRows.map((candidate) => (
               <CandidateRow
                 key={candidate.id}
-                title={candidate.suggestion.description.trim() || "Needs review"}
+                title={candidate.suggestion.description.trim() || candidate.notification?.text.trim() || "Needs review"}
                 detail={candidateDetail(candidate, currency, places)}
                 value={candidate.suggestion.amountMinorUnits === null ? "Amount needed" : formatMoney({
                   currency: candidate.currency,
@@ -244,19 +244,19 @@ export function DraftsScreen({
           </ListGroup>
         </>
       )}
-      {readyToShow && notMoney.length > 0 ? (
+      {readyToShow && otherNotifications.length > 0 ? (
         <View style={ui.section}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Not money, ${notMoney.length}`} accessibilityState={{ expanded: showNotMoney }}
-            accessibilityHint="Notifications with no amount in them" onPress={() => setShowNotMoney((value) => !value)} style={styles.fold}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Other notifications, ${otherNotifications.length}`} accessibilityState={{ expanded: showOtherNotifications }}
+            accessibilityHint="App notices and promotions. Open any notification to review it." onPress={() => setShowOtherNotifications((value) => !value)} style={styles.fold}>
             <View style={styles.candidateCopy}>
-              <Text style={styles.candidateTitle}>Not money · {notMoney.length}</Text>
-              <Text style={styles.candidateDetail}>No amount in these notifications. They're deleted after 15 days.</Text>
+              <Text style={styles.candidateTitle}>Other notifications · {otherNotifications.length}</Text>
+              <Text style={styles.candidateDetail}>App notices and promotions. Open any item to review it.</Text>
             </View>
-            <Ionicons name={showNotMoney ? "chevron-up" : "chevron-down"} size={20} color={theme.mutedForeground} />
+            <Ionicons name={showOtherNotifications ? "chevron-up" : "chevron-down"} size={20} color={theme.mutedForeground} />
           </Pressable>
-          {showNotMoney ? (
+          {showOtherNotifications ? (
             <ListGroup>
-              {notMoney.map((candidate) => {
+              {otherNotifications.map((candidate) => {
                 const lines = candidate.notification?.text.split("\n") ?? [];
                 const body = (lines.length > 1 ? lines.slice(1) : lines).join(" ");
                 return <CandidateRow key={candidate.id} title={body || "Notification"} value=""

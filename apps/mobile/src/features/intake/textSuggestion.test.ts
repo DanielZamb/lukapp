@@ -25,7 +25,15 @@ test("an explicit currency wins over the app's currency", () => {
   expect(isReadyCandidate(projectCandidate(row), "COP")).toBe(false);
 });
 
-test("text with no amount is kept as Not money without a currency error", () => {
+test("an account receipt without a currency marker uses the selected source currency", () => {
+  const row = only(ingest(emptyState(), withText("Recibiste 45,00 en tu cuenta\nTe llegó dinero de MARIA EJEMPLO con tu llave."), mapping, "a".repeat(64)));
+  expect(row.review).toMatchObject({ direction: "in", amountMinorUnits: 4_500, description: "MARIA EJEMPLO" });
+  expect(row.currency).toBe("COP");
+  expect(row.parserVersion).toBe(TEXT_SUGGESTION_VERSION);
+  expect(isReadyCandidate(projectCandidate(row), "COP")).toBe(true);
+});
+
+test("text with no amount is kept without inventing a currency error", () => {
   const row = only(ingest(emptyState(), withText("Aprovecha 30% de descuento este fin de semana."), mapping, "a".repeat(64)));
   expect(row.review.amountMinorUnits).toBeNull();
   expect(row.status).toEqual({ kind: "review", currencyReviewed: true });

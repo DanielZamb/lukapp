@@ -68,6 +68,8 @@ function Tree() {
         createElement(IntakeProvider, null, createElement(Screen, { index: 0 }), createElement(Screen, { index: 1 })))));
 }
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(now);
   vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   boundary.subject = "owner"; boundary.admitted = true; boundary.deviceAdmitted = true; boundary.events.clear(); boundary.hints.clear(); boundary.memory.clear();
   counts = []; lease = new LocalInputLease("owner", "session"); f = fixture();
@@ -75,7 +77,7 @@ beforeEach(() => {
     boundary.hints.add(listener); return { remove: () => boundary.hints.delete(listener) };
   } };
 });
-afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); vi.useRealTimers(); });
 async function mount() { await act(async () => { root = create(createElement(Tree)); }); }
 async function emit(name: string, value = "active") { await act(async () => { for (const listener of boundary.events.get(name) ?? []) listener(value); }); }
 

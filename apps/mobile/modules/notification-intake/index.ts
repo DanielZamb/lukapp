@@ -141,8 +141,9 @@ export const notificationIntake = {
   async openAccessSettings() { await required().openAccessSettings(); },
   async configure(input: z.infer<typeof configureSchema>) { return controlResult.parse(await required().configure(parseInput(configureSchema, input))); },
   async listPending(input: z.infer<typeof listSchema>) {
+    const { cursor, ...page } = parseInput(listSchema, input);
     return z.object({ epoch, captures: z.array(nativeCaptureSchema).max(50), nextCursor: z.string().nullable() }).strict()
-      .parse(await required().listPending(parseInput(listSchema, input)));
+      .parse(await required().listPending(cursor === undefined ? page : { ...page, cursor }));
   },
   async acknowledge(input: z.infer<typeof acknowledgeSchema>) {
     return z.array(z.object({ captureId: id, outcome: z.enum(["acknowledged", "already_acknowledged", "not_found_or_expired"]) }).strict()).max(50)

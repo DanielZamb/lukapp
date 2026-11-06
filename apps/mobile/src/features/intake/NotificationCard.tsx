@@ -64,6 +64,7 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
     : kind === "when" ? { color: theme.mutedForeground } : null;
 
   return <View style={styles.card} accessibilityLabel={`Notification from ${label}`}>
+    <Text style={styles.app}>Original notification</Text>
     <View style={styles.head}>
       <IconTile letter={appInitial(label)} tone="accent" />
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -71,13 +72,16 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
         <Text style={styles.meta}>{new Date(notification.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</Text>
       </View>
     </View>
-    {hidden ? <>
+    {!notification.text.trim() ? <>
+      <Text style={styles.app}>Notification text unavailable</Text>
+      <Text style={styles.meta}>No notification text was saved for this Candidate. Check the bank app before entering its details.</Text>
+    </> : hidden ? <>
       <Text style={styles.meta}>Hidden. It looks like a security code.</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Show the notification" onPress={() => setRevealed(true)} style={styles.reveal}>
         <Text style={[styles.app, { color: accent }]}>Show it anyway</Text>
       </Pressable>
     </> : <>
-      <Text style={styles.text}>
+      <Text style={styles.text} accessibilityLabel={notification.text}>
         {pieces(suggestion, chosen).map((piece) => {
           if (piece.mention) {
             const mention = piece.mention;
@@ -95,7 +99,7 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
       </Text>
       <Text accessibilityLiveRegion="polite" style={styles.meta}>
         {anchor !== null ? "Now tap the last word of the description."
-          : editable ? `Tap an amount to use it, or two words for the description.${suggestion.amounts.some((mention) => mention.role === "balance") ? " Dashed amounts look like balances." : ""}`
+          : editable ? `${suggestion.amounts.length ? "Tap an amount to use it" : "Enter the amount below"}, or tap two words for the description.${suggestion.amounts.some((mention) => mention.role === "balance") ? " Dashed amounts look like balances." : ""}`
           : "From this notification."}
       </Text>
     </>}

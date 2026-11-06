@@ -93,6 +93,17 @@ async function choose(profile = "Daily money") {
 async function enable() { await acknowledge(); await choose(); }
 const listMounted = () => root?.root.findAll((node) => node.type === FlatList) ?? [];
 
+test("email privacy guidance is visible before consent and in the picker without blocking mail apps", async () => {
+  vi.spyOn(f.native, "listSources").mockResolvedValue([{ label: "Gmail", packageName: "com.google.android.gm" }]);
+  await mount();
+  expect(text()).toContain("We strongly advise against selecting an email app");
+  await acknowledge();
+  await press("Add an app");
+  expect(text()).toContain("Record email-only transactions manually");
+  await press("Gmail");
+  expect(text()).toContain("Where do Gmail alerts go?");
+});
+
 test("the disclosure comes first, gates OS settings and never configures or enables empty sources", async () => {
   statusFields.access = "not_granted";
   const open = vi.spyOn(f.native, "openAccessSettings");

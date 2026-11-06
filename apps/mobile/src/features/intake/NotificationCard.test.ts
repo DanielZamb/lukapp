@@ -55,6 +55,14 @@ test("a read-only form shows the notification without taps", async () => {
   expect(all()).toContain("From this notification.");
 });
 
+test("a Candidate without saved text explains that its original notification is unavailable", async () => {
+  await render({ notification: { text: "", packageName: "com.nu.production", at: 0 } });
+  expect(all()).toContain("Original notification");
+  expect(all()).toContain("Notification text unavailable");
+  expect(all()).toContain("No notification text was saved for this Candidate.");
+  expect(all()).not.toContain("Tap an amount");
+});
+
 test("a tapped amount keeps the form's sign", () => {
   expect(signedAmountText(125_030_000, "COP", "-32.000", "out")).toBe("-1.250.300");
   expect(signedAmountText(3_200_000, "COP", "50.000", "out")).toBe("32.000");
