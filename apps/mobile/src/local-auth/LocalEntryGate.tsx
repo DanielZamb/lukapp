@@ -14,6 +14,7 @@ import { LocalEnrollment } from "./enrollment";
 import { LocalInstallation } from "./installation";
 import { DeviceAccessFailure, requiresLocalWipe, movedAccessLabel } from "./accessFailure";
 import { LocalInput } from "./localInput";
+import { IntakeAdmission } from "../features/intake/admission";
 import { clearLocalInput } from "../features/clearLocalInput";
 import { LocalEntryInteraction } from "./interaction";
 import { EntryController } from "./entryController";
@@ -120,6 +121,9 @@ export function LocalEntryGate({
   }, [controller]);
   const { state, obscured } = snapshot;
   const lease = controller.unlockedInputLease();
+  const intakeAdmitted = useCallback(() =>
+    lease !== null && controller.unlockedInputLease() === lease && controller.isOpenFor({ subject: lease.subject, sessionId: lease.sessionId }),
+  [controller, lease]);
   const report = useCallback((error: unknown) => {
     if (!requiresLocalWipe(error)) return false;
     if (lease) void controller.denyAccessFor(lease, movedAccessLabel(error));
@@ -142,6 +146,7 @@ export function LocalEntryGate({
         onTouchMove={controller.interaction}
       >
         <View
+          collapsable={false}
           style={{ flex: 1, opacity: obscured ? 0 : 1 }}
           pointerEvents={obscured ? "none" : "auto"}
           importantForAccessibility={obscured ? "no-hide-descendants" : "auto"}
@@ -150,11 +155,13 @@ export function LocalEntryGate({
           <LocalEntryInteraction.Provider value={controller.interaction}>
             <LocalInstallation.Provider value={controller.admissionInstallId()}>
               <LocalInput.Provider value={lease}>
+                <IntakeAdmission.Provider value={intakeAdmitted}>
                 <DeviceAccessFailure.Provider value={report}>
                   <LocalEnrollment.Provider value={{ ready: state.kind === "open", ensure: controller.ensureEnrollment }}>
                     {children}
                   </LocalEnrollment.Provider>
                 </DeviceAccessFailure.Provider>
+              </IntakeAdmission.Provider>
               </LocalInput.Provider>
             </LocalInstallation.Provider>
           </LocalEntryInteraction.Provider>

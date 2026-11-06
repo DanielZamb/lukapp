@@ -1,7 +1,8 @@
 import type { IntakeCandidate } from "./candidates";
 import type { UserCategory } from "../../../../../src/accounting/categories/types";
 import { defaultAccountingDate } from "../timeZones";
-import { addDiscardNotice, readDiscardNotices, type DiscardNotice } from "../localDiscardNotices";
+import { readDiscardNotices, type DiscardNotice } from "../localDiscardNotices";
+import { addDiscardNotice } from "../localDiscardNotices.testSupport";
 
 type DevSeedAction = { kind: "plant" | "ready" | "discard" | "remove"; id: string };
 

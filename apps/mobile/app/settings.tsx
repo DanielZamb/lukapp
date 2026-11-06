@@ -59,6 +59,12 @@ function SettingsContent({
           detail={categories ? draftCategories : undefined}
           icon="pricetag-outline"
           onPress={() => router.push("./categories")}
+        />
+        <ListRow
+          title="Notification intake"
+          detail="Device access, source apps, accounts and Candidates"
+          icon="notifications-outline"
+          onPress={() => router.push("/intake")}
           isLast
         />
       </ListGroup>

@@ -23,6 +23,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "../src/features/api";
 import { LocalEntryGate } from "../src/local-auth/LocalEntryGate";
 import { PrebuiltSignIn } from "../src/local-auth/PrebuiltSignIn";
+import { IntakeProvider } from "../src/features/intake/IntakeProvider";
 import { DeviceAdmissionGate } from "../src/device-admission/DeviceAdmissionGate";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import {
@@ -102,12 +103,14 @@ function Admission() {
     );
   return (
     <DeviceAdmissionGate>
-    <ContextPillHost admitted><SheetProvider>
+    <ContextPillHost admitted><SheetProvider><IntakeProvider>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="level-unlocked" options={{ gestureEnabled: false }} />
       <Stack.Screen name="post" />
       <Stack.Screen name="drafts" />
+      <Stack.Screen name="intake" />
+      <Stack.Screen name="intake-prototype" />
       <Stack.Screen name="alerts" />
       <Stack.Screen name="month-close" />
       <Stack.Screen name="account" />
@@ -119,7 +122,7 @@ function Admission() {
       <Stack.Screen name="categories" />
       <Stack.Screen name="oauth-callback" />
     </Stack>
-    </SheetProvider></ContextPillHost>
+    </IntakeProvider></SheetProvider></ContextPillHost>
     </DeviceAdmissionGate>
   );
 }

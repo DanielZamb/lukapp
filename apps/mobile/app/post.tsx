@@ -5,7 +5,7 @@ import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { type BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { useAction, useConvex, useQuery } from "convex/react";
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -70,7 +70,8 @@ import { usePostingBatchStorage } from "../src/features/posting/postingBatchStor
 import { usePostingTransport } from "../src/features/posting/usePostingTransport";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
-import { factsFromCandidate, suggestionOf } from "../src/features/intake/facts";
+import { createCandidateBinding } from "../src/features/intake/postingBinding";
+import { NotificationCard, signedAmountText } from "../src/features/intake/NotificationCard";
 import {
   canPostCategories,
   needsPrimary,
@@ -91,6 +92,8 @@ function PostMoney({
   candidateId?: string;
 }) {
   const ui = useUi();
+  const navigation = useNavigation();
+  const leavingCandidate = useRef(false);
   const theme = useTheme();
   const recordInteraction = useLocalEntryInteraction();
   const [categoryVisible, setCategoryVisible] = useState(false);
@@ -131,39 +134,22 @@ function PostMoney({
   const [binding, setBinding] = useState<IntakeBinding | null>(null);
   const [missingCandidate, setMissingCandidate] = useState(false);
   useEffect(() => {
-    if (!candidateId) return;
-    let active = true;
-    void intake.read(candidateId).then((row) => {
-      if (!active) return;
-      if (!row) {
-        setMissingCandidate(true);
-        return;
-      }
-      setBinding({
-        id: row.id,
-        facts: factsFromCandidate(row),
-        suggestion: suggestionOf(row),
-        parserVersion: row.parserVersion,
-        consentVersion: row.consentVersion,
-        confirm: async (input) => {
-          const result = await confirmOne(input);
-          const sign = input.confirmed.direction === "out" ? -1 : 1;
-          return {
-            description: result.posted.description,
-            amount: {
-              currency: result.posted.amount.currency,
-              minorUnits: sign * Math.abs(result.posted.amount.minorUnits),
-            },
-          };
-        },
-        consume: () => intake.consume(row.id),
-        fail: (error) => intake.fail(row.id, error),
-      });
-    });
-    return () => {
-      active = false;
-    };
-  }, [candidateId, confirmOne, intake.consume, intake.fail, intake.read]);
+    if (!candidateId || intake.count === null || binding?.id === candidateId) return;
+    const row = intake.service.read(candidateId);
+    if (!row || row.workspaceId !== workspace.id) { setMissingCandidate(true); return; }
+    setMissingCandidate(false);
+    setBinding(createCandidateBinding({ service: intake.service, candidateId, workspaceId: workspace.id, dispatch: confirmOne }));
+  }, [candidateId, confirmOne, intake.service, intake.count, binding?.id, workspace.id]);
+  const [appLabel, setAppLabel] = useState<string | undefined>();
+  const notificationPackage = binding?.notification?.packageName;
+  useEffect(() => {
+    if (!notificationPackage) return;
+    let current = true;
+    void intake.service.listSources().then((sources) => {
+      if (current) setAppLabel(sources.find((source) => source.packageName === notificationPackage)?.label);
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [intake.service, notificationPackage]);
   const transport = usePostingTransport(subject);
   const batchStorage = usePostingBatchStorage(subject, workspace.id);
   const convex = useConvex();
@@ -226,6 +212,17 @@ function PostMoney({
       intakeRoute: !!candidateId,
     },
   );
+  useEffect(() => {
+    if (!candidateId) return;
+    return navigation.addListener("beforeRemove", (event) => {
+      if (leavingCandidate.current) return;
+      event.preventDefault();
+      void editor.saveCandidateReview().then(() => {
+        leavingCandidate.current = true;
+        navigation.dispatch(event.data.action);
+      }).catch((error: unknown) => { transport.reportFailure?.(error); });
+    });
+  }, [candidateId, navigation, editor.saveCandidateReview, transport]);
   const profile = profiles?.find((place) => place.id === editor.profileId);
   const destination = profiles?.find(
     (place) => place.id === editor.destinationId,
@@ -274,7 +271,7 @@ function PostMoney({
     action();
   }
   const sourceNote = candidateId
-    ? "From drafts"
+    ? binding?.reviewNote ?? "From Candidate"
     : draftId
       ? "Draft on this device"
       : undefined;
@@ -353,6 +350,18 @@ function PostMoney({
       <PostingForm
         {...editor}
         sourceNote={sourceNote}
+        notification={binding?.notification ? (
+          <NotificationCard
+            notification={binding.notification}
+            appLabel={appLabel}
+            currency={workspace.functionalCurrency}
+            amount={editor.amount}
+            editable={editor.editable}
+            onUseAmount={(minor) => interaction(() => editor.setAmount(
+              signedAmountText(minor, workspace.functionalCurrency, editor.amount, binding.originalSuggestion.direction)))}
+            onUseDescription={(text) => interaction(() => editor.setDescription(text))}
+          />
+        ) : undefined}
         batchCount={batch.queue.length}
         onBatch={
           !candidateId && !editor.pending && !setup

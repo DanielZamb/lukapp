@@ -1,3 +1,4 @@
+import { intakeEvidence } from "./notificationIntakeValues";
 import { categoryFields } from "./categoryValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
@@ -214,15 +215,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     journalEntryId: v.id("journalEntries"),
     idempotencyKey: v.string(),
-    suggestion: v.object({
-      direction: v.union(v.literal("in"), v.literal("out")),
-      description: v.string(),
-      amount: v.object({ currency: v.string(), minorUnits: v.number() }),
-      accountingDate: v.string(),
-      financialAccountProfileId: v.string(),
-      userCategoryIds: v.array(v.string()),
-      primaryUserCategoryId: v.union(v.string(), v.null()),
-    }),
+    suggestion: intakeEvidence,
     changedFields: v.array(v.string()),
     parserVersion: v.string(),
     consentVersion: v.string(),

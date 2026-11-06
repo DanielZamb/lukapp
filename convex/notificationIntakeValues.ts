@@ -13,11 +13,20 @@ export const intakeSuggestion = v.object({
   primaryUserCategoryId: v.union(v.string(), v.null()),
 });
 
+export const intakeEvidence = v.object({
+  ...intakeSuggestion.fields,
+  direction: v.union(intakeSuggestion.fields.direction, v.null()),
+  amount: v.object({
+    currency: v.union(v.literal("COP"), v.literal("USD"), v.null()),
+    minorUnits: v.union(v.number(), v.null()),
+  }),
+});
+
 export const confirmOneArgs = {
   workspaceId: v.string(),
   candidateId: v.string(),
   confirmed: intakeSuggestion,
-  suggestion: intakeSuggestion,
+  suggestion: intakeEvidence,
   parserVersion: v.string(),
   consentVersion: v.string(),
 };
@@ -34,7 +43,7 @@ export const confirmOneResult = v.object({
     workspaceId: v.string(),
     journalEntryId: v.string(),
     idempotencyKey: v.string(),
-    suggestion: intakeSuggestion,
+    suggestion: intakeEvidence,
     changedFields: v.array(v.string()),
     parserVersion: v.string(),
     consentVersion: v.string(),

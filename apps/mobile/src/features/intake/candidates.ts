@@ -1,11 +1,8 @@
 import { z } from "zod";
 import * as SecureStore from "expo-secure-store";
-import {
-  runLocalInputWrite,
-  type LocalInputLease,
-} from "../../local-auth/localInput";
 import type { IntakeSuggestion } from "../../../../../src/notificationIntake/types";
 import { isReadyCandidate } from "./ready";
+import { suggest } from "./suggest";
 
 export { isReadyCandidate };
 
@@ -15,9 +12,9 @@ export const INTAKE_PRIORITY_MS = 3 * 24 * 60 * 60 * 1000;
 export type IntakeCandidateId = string;
 
 export type StoredSuggestion = {
-  direction: "in" | "out";
+  direction: "in" | "out" | null;
   description: string;
-  amountMinorUnits: number;
+  amountMinorUnits: number | null;
   accountingDate: string;
   financialAccountProfileId: string;
   userCategoryIds: string[];
@@ -31,9 +28,12 @@ export type IntakeCandidate = {
   workspaceId: string;
   currency: "COP" | "USD";
   suggestion: StoredSuggestion;
+  reviewAmountText?: string | null;
   parserVersion: string;
   consentVersion: string;
   error?: string;
+  /** The kept notification text, when the source was set up under disclosure v3. */
+  notification?: { text: string; packageName: string; at: number };
 };
 
 export type IntakeDocument = {
@@ -78,23 +78,17 @@ export function clearIntakeCandidates(subject: string) {
 
 export async function readIntakeRaw(subject: string): Promise<unknown> {
   const raw = await SecureStore.getItemAsync(intakeStorageKey(subject));
-  return raw === null ? null : JSON.parse(raw);
+  if (raw === null) return null;
+  return documentSchema.parse(JSON.parse(raw));
 }
 
-export function writeIntakeDocument(subject: string, document: IntakeDocument) {
-  return SecureStore.setItemAsync(
-    intakeStorageKey(subject),
-    JSON.stringify(document),
-  );
-}
-
-export function parseIntakeDocument(raw: unknown, now: number) {
-  if (raw === null || raw === undefined)
-    return { document: { v: 1 as const, candidates: [] }, dirty: false };
+export function parseIntakeDocument(raw: unknown, now: number): { document: IntakeDocument; dirty: boolean } {
+  if (raw === null)
+    return { document: { v: 1, candidates: [] }, dirty: false };
   const document = documentSchema.parse(raw);
   const candidates = document.candidates.filter((row) => row.expiresAt > now);
   return {
-    document: { v: 1 as const, candidates },
+    document: { v: 1, candidates },
     dirty: candidates.length !== document.candidates.length,
   };
 }
@@ -110,7 +104,8 @@ export function isPriorityCandidate(
   );
 }
 
-export function suggestionOf(candidate: IntakeCandidate): IntakeSuggestion {
+export function reviewSuggestionOf(candidate: IntakeCandidate): IntakeSuggestion {
+  if (candidate.suggestion.direction === null || candidate.suggestion.amountMinorUnits === null) throw new Error("Resolve Candidate facts before confirmation");
   return {
     direction: candidate.suggestion.direction,
     description: candidate.suggestion.description,
@@ -125,36 +120,14 @@ export function suggestionOf(candidate: IntakeCandidate): IntakeSuggestion {
   };
 }
 
-export function acceptIn(
-  document: IntakeDocument,
-  candidate: IntakeCandidate,
-  now: number,
-) {
-  const candidates = document.candidates.filter((row) => row.expiresAt > now);
-  return {
-    v: 1 as const,
-    candidates: [...candidates.filter((row) => row.id !== candidate.id), candidate],
-  };
-}
+const APP_NOTICE = /\b(?:descuentos?|promoci[oó]n|promociones|ofertas?|discounts?|promotions?|offers?|inici[oó]\s+sesi[oó]n|ingreso exitoso a la app|signed in|logged in|login successful|seguridad digital|mantenga su celular seguro|security tips)\b/iu;
+const MONEY_ACTIVITY = /\b(?:dinero|plata|transfer\p{L}*|transacci\p{L}*|consign\p{L}*|abono|dep[oó]sito|reembolso|devoluci[oó]n|payment)\b/iu;
 
-export function consumeIn(document: IntakeDocument, id: IntakeCandidateId) {
-  return {
-    v: 1 as const,
-    candidates: document.candidates.filter((row) => row.id !== id),
-  };
-}
-
-export function failIn(
-  document: IntakeDocument,
-  id: IntakeCandidateId,
-  error: string,
-) {
-  return {
-    v: 1 as const,
-    candidates: document.candidates.map((row) =>
-      row.id === id ? { ...row, error } : row,
-    ),
-  };
+export function isOtherNotification(row: IntakeCandidate) {
+  if (!row.notification?.text.trim() || row.error || row.suggestion.amountMinorUnits !== null || row.suggestion.direction !== null ||
+    row.reviewAmountText?.replace(/[-−+\s]/g, "") || MONEY_ACTIVITY.test(row.notification.text)) return false;
+  const suggestion = suggest({ text: row.notification.text });
+  return !suggestion.amount && !suggestion.direction && APP_NOTICE.test(row.notification.text);
 }
 
 export function viewInbox(
@@ -166,35 +139,14 @@ export function viewInbox(
   const live = document.candidates.filter(
     (row) => row.expiresAt > now && row.workspaceId === workspaceId,
   );
-  const nowRows = live.filter((row) => isPriorityCandidate(row, now, currency));
-  const waitRows = live.filter((row) => !isPriorityCandidate(row, now, currency));
+  const money = live.filter((row) => !isOtherNotification(row));
+  const nowRows = money.filter((row) => isPriorityCandidate(row, now, currency));
+  const waitRows = money.filter((row) => !isPriorityCandidate(row, now, currency));
   return {
     now: nowRows,
     wait: waitRows,
-    ready: live.filter((row) => isReadyCandidate(row, currency)),
-    count: live.length,
+    ready: money.filter((row) => isReadyCandidate(row, currency)),
+    otherNotifications: live.filter(isOtherNotification),
+    count: money.length,
   };
-}
-
-export async function mutateIntakeDocument<T>(
-  lease: LocalInputLease,
-  subject: string,
-  mutate: (
-    document: IntakeDocument,
-    now: number,
-    dirty: boolean,
-  ) => { document: IntakeDocument; result: T; write: boolean },
-): Promise<T> {
-  let completed = false;
-  let result!: T;
-  await runLocalInputWrite(lease, async () => {
-    const now = Date.now();
-    const parsed = parseIntakeDocument(await readIntakeRaw(subject), now);
-    const next = mutate(parsed.document, now, parsed.dirty);
-    if (next.write) await writeIntakeDocument(subject, next.document);
-    result = next.result;
-    completed = true;
-  });
-  if (!completed) throw new Error("Intake mutation did not complete");
-  return result;
 }

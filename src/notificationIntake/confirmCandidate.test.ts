@@ -79,7 +79,7 @@ test("confirming a Candidate posts once with intake key and a Receipt", async ()
   });
 });
 
-test("retrying the same Candidate returns the Receipt and does not insert another", async () => {
+test("retrying the same Candidate asks accounting to replay and preserves the Receipt", async () => {
   const posted: PostedIntakeEntry = {
     id: "je-1",
     description: "Groceries",

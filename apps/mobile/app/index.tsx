@@ -303,6 +303,10 @@ function ReadyIndex({
     return (
       <SetupCompletion
         summary={view.summary}
+        onNotificationSetup={() => {
+          setView({ kind: "home" });
+          router.push("/intake");
+        }}
         onHome={() => {
           setView({ kind: "home" });
           if (view.summary.wantsBudgets && view.summary.firstCategoryId)

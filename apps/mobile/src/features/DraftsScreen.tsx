@@ -10,11 +10,11 @@ import { formatMoney } from "./money";
 import type { DraftListItem, LocalEntryDraftId } from "./localEntryDrafts";
 import type { IntakeCandidate, IntakeCandidateId } from "./intake/candidates";
 import { currencyMismatchReason, isReadyCandidate } from "./intake/ready";
-import { IntakeSources, MonthCloseWarning, ReconciliationWarning, WarningIconButton } from "./intake/InboxDetails";
+import { MonthCloseWarning, ReconciliationWarning, WarningIconButton } from "./intake/InboxDetails";
 import type { DiscardNotice } from "./localDiscardNotices";
 
 export type InboxSegment = "now" | "wait";
-type InboxScreen = "inbox" | "warning" | "sources" | "month-close" | "discard";
+type InboxScreen = "inbox" | "warning" | "month-close" | "discard";
 
 function candidateDetail(
   candidate: IntakeCandidate,
@@ -61,8 +61,12 @@ export function DraftsScreen({
   drafts, now, wait, ready, readyTotal, currency, segment, readyToShow, error,
   confirming, month, places, confirmedCount, onContinueAfterConfirmation,
   onSegment, onBack, onResumeDraft, onOpenCandidate, onConfirmReady, onCompleteMonth,
-  discardNotices = [], onDismissDiscardNotices,
+  discardNotices = [], onDismissDiscardNotices, onSources, intakeWarning, otherNotifications = [],
 }: {
+  /** Recognized app notices and promotions; unknown notifications stay in review. */
+  otherNotifications?: IntakeCandidate[];
+  onSources: () => void;
+  intakeWarning?: string;
   discardNotices?: DiscardNotice[];
   onDismissDiscardNotices?: () => Promise<void>;
   drafts: DraftListItem[];
@@ -94,6 +98,7 @@ export function DraftsScreen({
   const [warningViewed, setWarningViewed] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [discardError, setDiscardError] = useState("");
+  const [showOtherNotifications, setShowOtherNotifications] = useState(false);
   const empty = drafts.length === 0 && now.length === 0 && wait.length === 0;
   const candidateRows = segment === "now" ? now : wait;
   const postingDrafts = drafts.filter((item) => item.status === "posting");
@@ -114,7 +119,6 @@ export function DraftsScreen({
   if (screen === "warning") {
     return <ReconciliationWarning onBack={() => { setWarningViewed(true); backToInbox(); }} />;
   }
-  if (screen === "sources") return <IntakeSources onBack={backToInbox} />;
   if (screen === "month-close") {
     return <MonthCloseWarning month={month} count={now.length + wait.length} onBack={backToInbox} onContinue={onCompleteMonth} />;
   }
@@ -159,20 +163,21 @@ export function DraftsScreen({
         <View style={styles.headerCopy}>
           <Header title="Candidates" eyebrow="NOTIFICATION INTAKE" onBack={onBack} />
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Sources" onPress={() => setScreen("sources")} style={styles.sources}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Sources" onPress={onSources} style={styles.sources}>
           <Text style={styles.linkText}>Sources</Text>
         </Pressable>
       </View>
       {error ? <Text accessibilityRole="alert" style={ui.error}>{error}</Text> : null}
+      {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{intakeWarning} Open Sources for observed details and capture notices.</Text> : null}
       {!readyToShow ? (
-        <ActivityIndicator accessibilityLabel="Loading drafts" />
+        <ActivityIndicator accessibilityLabel="Loading Candidates and drafts" />
       ) : empty && !error ? (
         <>
           <View style={styles.hero}>
-            <Text style={styles.kicker}>Review complete</Text>
+            <Text style={styles.kicker}>Candidate inbox</Text>
             <Text style={styles.amount}>Nothing waiting</Text>
             <Text style={styles.body}>
-              {month} is ready to close. Remaining local Candidates never block Month Close.
+              Notifications from enabled sources become Candidates here for review. No Candidates are waiting; this does not confirm capture. Remaining local Candidates never block Month Close.
             </Text>
           </View>
           <PrimaryButton label="Continue to Month Close" onPress={() => setScreen("month-close")} />
@@ -214,9 +219,9 @@ export function DraftsScreen({
             {candidateRows.map((candidate) => (
               <CandidateRow
                 key={candidate.id}
-                title={candidate.suggestion.description.trim() || "Needs review"}
+                title={candidate.suggestion.description.trim() || candidate.notification?.text.trim() || "Needs review"}
                 detail={candidateDetail(candidate, currency, places)}
-                value={formatMoney({
+                value={candidate.suggestion.amountMinorUnits === null ? "Amount needed" : formatMoney({
                   currency: candidate.currency,
                   minorUnits: Math.abs(candidate.suggestion.amountMinorUnits),
                 })}
@@ -239,11 +244,32 @@ export function DraftsScreen({
           </ListGroup>
         </>
       )}
+      {readyToShow && otherNotifications.length > 0 ? (
+        <View style={ui.section}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Other notifications, ${otherNotifications.length}`} accessibilityState={{ expanded: showOtherNotifications }}
+            accessibilityHint="App notices and promotions. Open any notification to review it." onPress={() => setShowOtherNotifications((value) => !value)} style={styles.fold}>
+            <View style={styles.candidateCopy}>
+              <Text style={styles.candidateTitle}>Other notifications · {otherNotifications.length}</Text>
+              <Text style={styles.candidateDetail}>App notices and promotions. Open any item to review it.</Text>
+            </View>
+            <Ionicons name={showOtherNotifications ? "chevron-up" : "chevron-down"} size={20} color={theme.mutedForeground} />
+          </Pressable>
+          {showOtherNotifications ? (
+            <ListGroup>
+              {otherNotifications.map((candidate) => {
+                const lines = candidate.notification?.text.split("\n") ?? [];
+                const body = (lines.length > 1 ? lines.slice(1) : lines).join(" ");
+                return <CandidateRow key={candidate.id} title={body || "Notification"} value=""
+                  detail={`${lines.length > 1 ? `${lines[0]} · ` : ""}${new Date(candidate.notification?.at ?? candidate.createdAt).toLocaleDateString()}`}
+                  onPress={() => onOpenCandidate(candidate.id)} />;
+              })}
+            </ListGroup>
+          ) : null}
+        </View>
+      ) : null}
+      {readyToShow && discardNotices.length > 0 ? <SecondaryButton label="Notifications discarded" onPress={() => setScreen("discard")} /> : null}
       {readyToShow && !empty ? (
         <>
-          {discardNotices.length > 0 && (
-            <SecondaryButton label="Notifications discarded" onPress={() => setScreen("discard")} />
-          )}
           <Pressable accessibilityRole="button" accessibilityLabel="Preview Month Close warning" onPress={() => setScreen("month-close")} style={styles.footer}>
             <Text style={styles.linkText}>Preview Month Close warning</Text>
             <Ionicons name="arrow-forward" size={16} color={theme.primary} />
@@ -267,6 +293,7 @@ function createStyles(theme: Theme, layout: ReadableLayout) {
     borderBottomColor: theme.border,
   },
   lastCandidateRow: { borderBottomWidth: 0 },
+  fold: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm },
   candidateContent: { flex: 1, minWidth: 0, flexDirection: layout.reflow ? "column" : "row", alignItems: layout.reflow ? "stretch" : "center", gap: spacing.sm },
   candidateCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
   candidateTitle: { fontFamily: font.semibold, fontSize: fontSize.body, lineHeight: 22, color: theme.foreground },

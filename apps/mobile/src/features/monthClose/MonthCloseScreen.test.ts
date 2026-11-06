@@ -69,10 +69,11 @@ async function show(
     onCancel: vi.fn(),
     onConfirm: vi.fn(),
   },
+  intakeWarning?: string,
 ) {
   await act(async () => {
     root = create(
-      createElement(MonthCloseScreen, { readiness, summary, phase, ...handlers }),
+      createElement(MonthCloseScreen, { readiness, summary, phase, intakeWarning, ...handlers }),
     );
   });
   return handlers;
@@ -222,4 +223,20 @@ test("failure offers retry and locking disables the action", async () => {
   })));
   expect(button("Completing…").props.disabled).toBe(true);
   expect(button("Completing…").props.accessibilityState.busy).toBe(true);
+});
+
+
+test("a capture gap warns in review and confirmation without blocking Month Close", async () => {
+  const warning = "Notification capture has a recovery gap. Reconcile missed activity with your accounts.";
+  const handlers = await show(october, { kind: "review" }, undefined, warning);
+  expect(text()).toContain(warning);
+  expect(text()).toContain("This does not block Month Close.");
+  expect(button("Complete and lock October").props.disabled).toBeFalsy();
+  await act(async () => button("Complete and lock October").props.onPress());
+  expect(handlers.onRequest).toHaveBeenCalledOnce();
+  await act(async () => { root?.unmount(); }); root = undefined;
+  await show(october, { kind: "confirm", period: october.period }, handlers, warning);
+  expect(text()).toContain(warning);
+  await act(async () => button("Complete and lock October").props.onPress());
+  expect(handlers.onConfirm).toHaveBeenCalledOnce();
 });

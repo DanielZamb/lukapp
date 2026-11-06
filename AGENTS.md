@@ -14,6 +14,14 @@ The current program's provider gate and receipts live in `.verification/provider
 
 For accounting, categories, transfers, retries, authorization, migrations, or verification work, read [VERIFICATION-LESSONS.md](VERIFICATION-LESSONS.md). It records the historical counterexamples, design lessons, and limits of prior evidence. Use it to guide new checks; current runtime acceptance still follows the real-provider requirements above.
 
+# Navigation
+
+Unnecessary navigation cycles are an anti-pattern. When screen B was opened from screen A, returning to A must reuse the existing screen. Do not push another A onto the stack or add reciprocal forward links that create A → B → A → B without advancing the user's task. Use one clear return path. Define an explicit fallback for direct links that have no caller.
+
+Encode return-only flows in the component interface: expose `onBack`, and omit callbacks that could push the parent as a new destination. Keep regression checks for the forbidden forward control and the expected return behavior.
+
+Review every navigation change by tracing its entry, child, cancel and return paths. Repeat the round trip twice, including Android system Back and sheet dismissal. A completed return must restore the existing caller without accumulating duplicate screens, reopening a dismissed sheet or losing the caller's state.
+
 # Issue tracking
 
 Track technical implementation, bugs, verification work, and marketing work in the Lukapp project on Linear. Include source references and acceptance evidence when updating a ticket. Implemented work with outstanding real-provider checks stays open.

@@ -10,12 +10,17 @@ export type IntakeSuggestion = {
   primaryUserCategoryId: string | null;
 };
 
+export type IntakeEvidence = Omit<IntakeSuggestion, "direction" | "amount"> & {
+  direction: IntakeDirection | null;
+  amount: { currency: "COP" | "USD" | null; minorUnits: number | null };
+};
+
 export type IntakeReceipt = {
   id: string;
   workspaceId: string;
   journalEntryId: string;
   idempotencyKey: string;
-  suggestion: IntakeSuggestion;
+  suggestion: IntakeEvidence;
   changedFields: string[];
   parserVersion: string;
   consentVersion: string;
@@ -27,7 +32,7 @@ export type ConfirmCandidateInput = {
   workspaceId: string;
   candidateId: string;
   confirmed: IntakeSuggestion;
-  suggestion: IntakeSuggestion;
+  suggestion: IntakeEvidence;
   parserVersion: string;
   consentVersion: string;
 };

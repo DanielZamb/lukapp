@@ -59,7 +59,8 @@
         }
       ],
       "./plugins/with-entry-privacy.cjs",
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "./plugins/with-notification-intake.cjs"
     ],
     "experiments": {
       "typedRoutes": true

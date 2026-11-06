@@ -2,7 +2,7 @@ import type { Theme } from "../../ui/tokens";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useEffect, useRef } from "react";
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, Screen, SecondaryButton, useTheme, useUi } from "../../ui/core";
+import { Header, PrimaryButton, Screen, SecondaryButton, useTheme } from "../../ui/core";
 import { font, radius, spacing } from "../../ui/tokens";
 
 export function WarningIconButton({ onPress }: { onPress: () => void }) {
@@ -74,31 +74,6 @@ export function ReconciliationWarning({ onBack }: { onBack: () => void }) {
         <Text style={styles.body}>Only your account history can settle the difference.</Text>
       </View>
       <PrimaryButton label="I understand" onPress={onBack} />
-    </Screen>
-  );
-}
-
-export function IntakeSources({ onBack }: { onBack: () => void }) {
-  const ui = useUi();
-  const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  return (
-    <Screen>
-      <Header title="Notification Intake" eyebrow="PRIVATE DEVICE SETUP" onBack={onBack} />
-      <View style={styles.detail}>
-        <View style={styles.disclosureIcon}>
-          <Ionicons name="shield-checkmark-outline" size={30} color={theme.primary} />
-        </View>
-        <Text style={styles.detailTitle}>Your notifications stay on this device</Text>
-        <Text style={styles.body}>
-          Lukapp reads only sources you select. Candidates expire after 15 days. Raw notification text is never uploaded. Capture may still miss activity.
-        </Text>
-      </View>
-      <View style={styles.health} accessibilityLiveRegion="polite">
-        <Text style={ui.label}>{Platform.OS === "ios" ? "IOS AUTOMATION" : "ANDROID LISTENER"}</Text>
-        <Text style={styles.healthState}>Waiting for a source</Text>
-        <Text style={styles.healthCheck}>Last health check · just now</Text>
-      </View>
     </Screen>
   );
 }

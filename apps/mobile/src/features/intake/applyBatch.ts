@@ -16,7 +16,11 @@ export async function applyBatchResults(
 
 export function readyTotalMinorUnits(ready: IntakeCandidate[]) {
   return ready.reduce(
-    (sum, row) => sum + Math.abs(row.suggestion.amountMinorUnits),
+    (sum, row) => {
+      const amount = row.suggestion.amountMinorUnits;
+      if (amount === null) throw new Error("Resolve Candidate amount before totaling Ready entries");
+      return sum + Math.abs(amount);
+    },
     0,
   );
 }

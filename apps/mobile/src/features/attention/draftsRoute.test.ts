@@ -1,8 +1,9 @@
 import * as React from "react";
-import { createElement } from "react";
+import { createElement, useSyncExternalStore } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import DraftsRoute from "../../../app/drafts";
+import { fixture, now } from "../intake/service.testSupport";
 import type { IntakeCandidate } from "../intake/candidates";
 import type { ConfirmCandidateInput } from "../../../../../src/notificationIntake/types";
 
@@ -14,8 +15,9 @@ const route = vi.hoisted((): {
 const intakeState = vi.hoisted(() => ({
   now: [] as IntakeCandidate[],
   wait: [] as IntakeCandidate[],
-  confirm: vi.fn(), consume: vi.fn(), fail: vi.fn(), refresh: vi.fn(), report: vi.fn(),
+  confirm: vi.fn(), refresh: vi.fn(), report: vi.fn(),
 }));
+vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
 vi.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ segment: route.segment }),
@@ -28,12 +30,19 @@ vi.mock("../activity", () => ({ usePersonalDefaults: () => ({
   financialAccountProfile: { id: "daily" },
 }) }));
 vi.mock("../useLocalEntryDrafts", () => ({ useLocalEntryDrafts: () => ({ items: [], count: 0, error: "" }) }));
-vi.mock("../useIntakeCandidates", () => ({ useIntakeCandidates: () => ({
-  now: intakeState.now, wait: intakeState.wait,
-  ready: [...intakeState.now, ...intakeState.wait].filter((row) => !row.error),
-  count: intakeState.now.length + intakeState.wait.length, error: "", accept: vi.fn(),
-  consume: intakeState.consume, fail: intakeState.fail, refresh: intakeState.refresh,
-}) }));
+vi.mock("../useIntakeCandidates", () => ({ useIntakeCandidates: () => {
+  useSyncExternalStore(f.service.subscribe, f.service.getSnapshot);
+  const projected = f.service.candidates();
+  const project = (rows: IntakeCandidate[]) => rows.flatMap((row) => {
+    const saved = f.service.getSnapshot().state.records.find((record) => record.id === row.id);
+    return saved?.kind === "terminal" ? [] : [projected.find((candidate) => candidate.id === row.id) ?? row];
+  });
+  const now = project(intakeState.now), wait = project(intakeState.wait);
+  return { now, wait, ready: [...now, ...wait].filter((row) => !row.error),
+    count: now.length + wait.length, error: "", notices: [], dismissNotices: vi.fn(), service: f.service,
+    refresh: async () => { intakeState.refresh(); await f.service.refresh(); },
+  };
+} }));
 vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => intakeState.report }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
@@ -49,6 +58,7 @@ vi.mock("react-native", () => ({
   },
 }));
 let root: ReactTestRenderer;
+let f: ReturnType<typeof fixture>;
 beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -58,14 +68,9 @@ beforeEach(() => {
   route.replace.mockClear();
   intakeState.now = [];
   intakeState.wait = [];
-  intakeState.consume.mockReset().mockImplementation(async (id: string) => {
-    intakeState.now = intakeState.now.filter((row) => row.id !== id);
-    intakeState.wait = intakeState.wait.filter((row) => row.id !== id);
-  });
-  intakeState.fail.mockReset().mockImplementation(async (id: string, error: string) => {
-    intakeState.now = intakeState.now.map((row) => row.id === id ? { ...row, error } : row);
-    intakeState.wait = intakeState.wait.map((row) => row.id === id ? { ...row, error } : row);
-  });
+  f = fixture();
+  f.setValue(null, 0);
+  f.setPages([{ captures: [], nextCursor: null }]);
   intakeState.refresh.mockReset();
   intakeState.report.mockReset().mockReturnValue(false);
   intakeState.confirm.mockReset().mockImplementation(async ({ items }: { items: ConfirmCandidateInput[] }) => ({
@@ -89,6 +94,11 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   vi.unstubAllGlobals();
 });
+async function mount() {
+  f.setLegacy({ v: 1, candidates: [...intakeState.now, ...intakeState.wait] });
+  await f.service.refresh();
+  await act(async () => { root = create(createElement(DraftsRoute)); });
+}
 function button(label: string) {
   const found = root.root.findAllByType("button").find((node) => node.props.accessibilityLabel === label);
   if (!found) throw new Error(`Missing ${label}`);
@@ -97,7 +107,7 @@ function button(label: string) {
 test("Drafts can open Can wait, then Needs you now, while Month Close remains in the footer", async () => {
   route.segment = ["wait"];
   intakeState.wait = [candidate("later")];
-  await act(async () => { root = create(createElement(DraftsRoute)); });
+  await mount();
   expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
   expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: false, checked: false });
   route.segment = "now";
@@ -116,7 +126,7 @@ test("Drafts can open Can wait, then Needs you now, while Month Close remains in
 
 function candidate(id: string): IntakeCandidate {
   return {
-    id, createdAt: 1, expiresAt: 2, workspaceId: "workspace", currency: "COP",
+    id, createdAt: now - 100, expiresAt: now + 1000000, workspaceId: "workspace", currency: "COP",
     suggestion: {
       direction: "out", description: "Groceries", amountMinorUnits: 126400,
       accountingDate: "2026-10-17", financialAccountProfileId: "daily",
@@ -131,8 +141,8 @@ function text() {
 
 test("a cleared inbox hides segment controls and Month Close preview", async () => {
   route.segment = undefined;
-  await act(async () => { root = create(createElement(DraftsRoute)); });
-  expect(text()).toContain("Review complete");
+  await mount();
+  expect(text()).toContain("Candidate inbox");
   expect(text()).toContain("Nothing waiting");
   expect(text()).toContain("Continue to Month Close");
   expect(text()).not.toContain("Nothing needs you now");
@@ -143,7 +153,7 @@ test("a cleared inbox hides segment controls and Month Close preview", async () 
 test("later Candidates without a segment open Can wait when nothing needs you now", async () => {
   route.segment = undefined;
   intakeState.wait = [candidate("later")];
-  await act(async () => { root = create(createElement(DraftsRoute)); });
+  await mount();
   expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
   expect(text()).toContain("Groceries");
 });
@@ -151,14 +161,14 @@ test("later Candidates without a segment open Can wait when nothing needs you no
 test("a priority Candidate without a segment opens Needs you now", async () => {
   route.segment = undefined;
   intakeState.now = [candidate("c1")];
-  await act(async () => { root = create(createElement(DraftsRoute)); });
+  await mount();
   expect(button("Needs you now, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
 });
 
 test("a manual segment choice is kept when the inbox still has no priority rows", async () => {
   route.segment = undefined;
   intakeState.wait = [candidate("later")];
-  await act(async () => { root = create(createElement(DraftsRoute)); });
+  await mount();
   expect(button("Can wait, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
   await act(async () => button("Needs you now, 0").props.onPress());
   expect(button("Needs you now, 0").props.accessibilityState).toEqual({ selected: true, checked: true });
@@ -169,7 +179,7 @@ test("a manual segment choice is kept when the inbox still has no priority rows"
 test("a manual Can wait choice survives when the priority count changes", async () => {
   route.segment = undefined;
   intakeState.now = [candidate("c1")];
-  await act(async () => { root = create(createElement(DraftsRoute)); });
+  await mount();
   expect(button("Needs you now, 1").props.accessibilityState).toEqual({ selected: true, checked: true });
   await act(async () => button("Can wait, 0").props.onPress());
   expect(button("Can wait, 0").props.accessibilityState).toEqual({ selected: true, checked: true });
@@ -184,12 +194,12 @@ test("Confirm all Ready retains the Convex payload and waits for local acknowled
   intakeState.now = [candidate("c1")];
   let acknowledge = () => {};
   const acknowledgement = new Promise<void>((resolve) => { acknowledge = resolve; });
-  intakeState.consume.mockImplementation(async () => {
+  await mount();
+  const apply = f.service.applyRecordedOutcomes.bind(f.service);
+  const applyOutcomes = vi.spyOn(f.service, "applyRecordedOutcomes").mockImplementation(async () => {
     await acknowledgement;
-    intakeState.now = [];
-    intakeState.wait = [];
+    await apply();
   });
-  await act(async () => { root = create(createElement(DraftsRoute)); });
   await act(async () => button("Confirm all Ready").props.onPress());
   expect(text()).not.toContain("Record added");
   expect(button("Confirm all Ready").props.disabled).toBe(true);
@@ -211,7 +221,8 @@ test("Confirm all Ready retains the Convex payload and waits for local acknowled
     }],
   });
   await act(async () => acknowledge());
-  expect(intakeState.consume).toHaveBeenCalledExactlyOnceWith("c1");
+  expect(applyOutcomes).toHaveBeenCalledOnce();
+  expect(f.service.getSnapshot().state.records[0]).toMatchObject({ id: "c1", kind: "terminal", reason: "confirmed" });
   expect(text()).toContain("Record added");
   await act(async () => button("Continue to Month Close").props.onPress());
   expect(route.replace).toHaveBeenCalledExactlyOnceWith("/month-close");
@@ -224,11 +235,11 @@ test("a partial batch reports only acknowledged records and keeps the failed Can
     const batch = await confirm?.(input);
     return { results: [batch.results[0], { candidateId: "c2", ok: false, error: "Locked Period" }] };
   });
-  await act(async () => { root = create(createElement(DraftsRoute)); });
+  await mount();
   await act(async () => button("Confirm all Ready").props.onPress());
   expect(text()).toContain("Record added");
   expect(text()).not.toContain("2 records added");
-  expect(intakeState.fail).toHaveBeenCalledExactlyOnceWith("c2", "Locked Period");
+  expect(f.service.read("c2")?.status).toEqual({ kind: "review", currencyReviewed: true, error: "Locked Period" });
   await act(async () => button("Back to Candidates").props.onPress());
   expect(text()).toContain("Candidates");
   await act(async () => button("Needs you now, 1").props.onPress());
@@ -237,7 +248,7 @@ test("a partial batch reports only acknowledged records and keeps the failed Can
 
 test("confirmation counts successful records across Convex batches", async () => {
   intakeState.now = Array.from({ length: 51 }, (_, i) => candidate(`c${i}`));
-  await act(async () => { root = create(createElement(DraftsRoute)); });
+  await mount();
   await act(async () => button("Confirm all Ready").props.onPress());
   expect(intakeState.confirm.mock.calls.map(([input]) => input.items.length)).toEqual([50, 1]);
   expect(text()).toContain("51 records added");
@@ -246,10 +257,19 @@ test("confirmation counts successful records across Convex batches", async () =>
 test("a failed server request refreshes the inbox without showing confirmation", async () => {
   intakeState.now = [candidate("c1")];
   intakeState.confirm.mockRejectedValue(new Error("offline"));
-  await act(async () => { root = create(createElement(DraftsRoute)); });
+  await mount();
   await act(async () => button("Confirm all Ready").props.onPress());
-  expect(intakeState.consume).not.toHaveBeenCalled();
+  expect(f.service.read("c1")?.status.kind).toBe("submitting");
   expect(intakeState.refresh).toHaveBeenCalledOnce();
   expect(text()).not.toContain("Record added");
-  expect(button("Confirm all Ready").props.disabled).toBe(false);
+  // The outcome is unknown, so the Candidate leaves Ready (it stays "submitting") and is retried by opening it.
+  expect(button("Confirm all Ready").props.disabled).toBe(true);
+});
+
+
+test("Sources navigates to the canonical intake route and Candidate review keeps the existing posting route", async () => {
+  route.segment = "now"; intakeState.now = [candidate("c1")]; await mount();
+  await act(async () => button("Sources").props.onPress());
+  await act(async () => button("Review Groceries").props.onPress());
+  expect(route.push.mock.calls).toEqual([["/intake"], [{ pathname: "/post", params: { candidateId: "c1" } }]]);
 });

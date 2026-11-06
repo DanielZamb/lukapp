@@ -1,7 +1,7 @@
 import { formatMoneyInput } from "../money";
 import { defaultAccountingDate } from "../timeZones";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useMemo, useState, type ComponentProps } from "react";
+import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { ComposeModeToggle } from "./ComposeModeToggle";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import type { Theme } from "../../ui/tokens";
@@ -57,6 +57,8 @@ export type PostingFormProps = {
   onDestination?: () => void;
   categoryEnabled?: boolean;
   sourceNote?: string;
+  /** Shown under the header in place of the source note, e.g. the notification a Candidate came from. */
+  notification?: ReactNode;
   currency: string;
   amount: string;
   description: string;
@@ -266,11 +268,11 @@ export function PostingForm(props: PostingFormProps) {
       }
     >
       <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
-      {props.sourceNote ? (
+      {props.notification ?? (props.sourceNote ? (
         <Text preset="caption" style={styles.detail}>
           {props.sourceNote}
         </Text>
-      ) : null}
+      ) : null)}
       {!props.saveToBatch && (
         <ComposeModeToggle
           mode="one"

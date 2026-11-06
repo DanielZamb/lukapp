@@ -8,13 +8,7 @@ function view({ _id, _creationTime, workspaceId, ...receipt }: Doc<"notification
     id: _id,
     workspaceId,
     ...receipt,
-    suggestion: {
-      ...receipt.suggestion,
-      amount: {
-        currency: receipt.suggestion.amount.currency === "USD" ? "USD" : "COP",
-        minorUnits: receipt.suggestion.amount.minorUnits,
-      },
-    },
+
   };
 }
 

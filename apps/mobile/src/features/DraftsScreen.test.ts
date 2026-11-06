@@ -108,6 +108,7 @@ function render(
     onContinueAfterConfirmation: vi.fn(),
     onSegment: vi.fn(),
     onBack: vi.fn(),
+    onSources: vi.fn(),
     onResumeDraft: vi.fn(),
     onOpenCandidate: vi.fn(),
     onConfirmReady: vi.fn(),
@@ -132,7 +133,7 @@ test("the inbox names the month when empty and waits for loading to finish", asy
   expect(text()).toContain("Candidates");
   expect(text()).toContain("NOTIFICATION INTAKE");
   expect(text()).toContain("Nothing waiting");
-  expect(text()).toContain("October is ready to close. Remaining local Candidates never block Month Close.");
+  expect(text()).toContain("Notifications from enabled sources become Candidates here for review. No Candidates are waiting; this does not confirm capture. Remaining local Candidates never block Month Close.");
   expect(text()).not.toContain("Preview Month Close warning");
   expect(root?.root.findAllByType("button").some((node) => node.props.accessibilityRole === "radio")).toBe(false);
 });
@@ -318,18 +319,12 @@ test("the Month Close preview counts Candidates, returns to review, and continue
   expect(onCompleteMonth).toHaveBeenCalledOnce();
 });
 
-test.each(["ios", "android"])("Sources shows only disclosure and honest %s health", async (platform) => {
-  platformState.os = platform;
-  await act(async () => { root = create(createElement(DraftsScreen, render())); });
+test("Sources opens the canonical intake setup through its navigation callback", async () => {
+  const onSources = vi.fn();
+  await act(async () => { root = create(createElement(DraftsScreen, render({ onSources }))); });
   await act(async () => button("Sources").props.onPress());
-  expect(text()).toContain("Your notifications stay on this device");
-  expect(text()).toContain("Candidates expire after 15 days. Raw notification text is never uploaded.");
-  expect(text()).toContain(platform === "ios" ? "IOS AUTOMATION" : "ANDROID LISTENER");
-  expect(text()).toContain("Waiting for a source");
-  expect(text()).toContain("Last health check · just now");
-  expect(text()).not.toMatch(/Listening|Bancolombia|Davivienda|Nequi|Choose allowed sources|Open Android settings/);
-  await act(async () => button("Back").props.onPress());
-  expect(text()).toContain("Candidates");
+  expect(onSources).toHaveBeenCalledOnce();
+  expect(text()).not.toContain("just now");
 });
 
 test("an empty segment explains that nothing is waiting later", async () => {
@@ -361,4 +356,32 @@ test("Confirm all Ready stays disabled without Ready Candidates or during confir
   expect(button("Confirm all Ready").props.disabled).toBe(true);
   await act(async () => { root?.update(createElement(DraftsScreen, render({ now: [candidate], ready: [candidate], confirming: true }))); });
   expect(button("Confirm all Ready").props.disabled).toBe(true);
+});
+
+test("unresolved Candidates identify themselves with their original notification text", async () => {
+  const onOpenCandidate = vi.fn();
+  const body = "Recibiste 45,00 en tu cuenta\nTe llegó dinero de MARIA EJEMPLO con tu llave.";
+  const row: IntakeCandidate = { ...candidate, suggestion: { ...candidate.suggestion, description: "", amountMinorUnits: null, direction: "in" },
+    notification: { text: body, packageName: "com.nu.production", at: expiresAt } };
+  await act(async () => { root = create(createElement(DraftsScreen, render({ now: [row], onOpenCandidate }))); });
+  expect(text()).toContain(body);
+  await act(async () => { button(`Review ${body}`).props.onPress(); });
+  expect(onOpenCandidate).toHaveBeenCalledWith(candidate.id);
+});
+
+test("Other notifications is folded, counted, and each row opens its Candidate", async () => {
+  const onOpenCandidate = vi.fn();
+  const promo: IntakeCandidate = { ...candidate, id: "promo", suggestion: { ...candidate.suggestion, amountMinorUnits: null, direction: null, description: "" },
+    notification: { text: "Nu\nAprovecha 30% de descuento este fin de semana", packageName: "com.nu.production", at: expiresAt } };
+  await act(async () => {
+    root = create(createElement(DraftsScreen, render({ otherNotifications: [promo], onOpenCandidate })));
+  });
+  expect(text()).toContain("Other notifications · 1");
+  expect(text()).not.toContain("Aprovecha 30%");
+  const fold = button("Other notifications, 1");
+  expect(fold.props.accessibilityState.expanded).toBe(false);
+  await act(async () => { fold.props.onPress(); });
+  expect(text()).toContain("Aprovecha 30% de descuento este fin de semana");
+  await act(async () => { button("Review Aprovecha 30% de descuento este fin de semana").props.onPress(); });
+  expect(onOpenCandidate).toHaveBeenCalledWith("promo");
 });
