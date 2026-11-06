@@ -545,11 +545,11 @@ export function PostingForm(props: PostingFormProps) {
               }
               onBack={props.onBack}
             />
-            {props.sourceNote ? (
+            {props.notification ?? (props.sourceNote ? (
               <Text variant="meta" tone="muted">
                 {props.sourceNote}
               </Text>
-            ) : null}
+            ) : null)}
             {props.pending ? (
               <InlineNotice
                 tone="danger"

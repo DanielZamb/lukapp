@@ -75,3 +75,25 @@ it("production native capability blocks raw diagnostics even when JavaScript ask
   await expect(notificationIntake.listDiagnostics({ expectedEpoch: "a".repeat(22), ownerScope: "o".repeat(43) })).rejects.toMatchObject({ code: "UNSUPPORTED" });
   expect(listDiagnostics).not.toHaveBeenCalled();
 });
+
+it("draws app logos only through a current binary and returns only requested packages", async () => {
+  const listSourceIcons = vi.fn().mockResolvedValue({ "com.nu.production": "iVBORw0KGgo=", "com.other.app": "AAAA" });
+  native.current = { apiVersion: 3, listSourceIcons };
+  const { sourceIcons } = await import("./index");
+  await expect(sourceIcons.list({ packageNames: ["com.nu.production", "com.whatsapp"], size: 48 }))
+    .resolves.toEqual({ "com.nu.production": "iVBORw0KGgo=" });
+  expect(listSourceIcons).toHaveBeenCalledWith({ packageNames: ["com.nu.production", "com.whatsapp"], size: 48 });
+  await expect(sourceIcons.list({ packageNames: ["not a package"], size: 48 })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  await expect(sourceIcons.list({ packageNames: ["com.nu.production"], size: 400 })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  expect(listSourceIcons).toHaveBeenCalledOnce();
+});
+it("falls back to letters without a binary that can draw logos, and rejects malformed PNG data", async () => {
+  const { sourceIcons } = await import("./index");
+  await expect(sourceIcons.list({ packageNames: ["com.nu.production"], size: 48 })).resolves.toEqual({});
+  vi.resetModules();
+  native.current = { apiVersion: 3 };
+  await expect((await import("./index")).sourceIcons.list({ packageNames: ["com.nu.production"], size: 48 })).resolves.toEqual({});
+  vi.resetModules();
+  native.current = { apiVersion: 3, listSourceIcons: vi.fn().mockResolvedValue({ "com.nu.production": "<svg onload=x>" }) };
+  await expect((await import("./index")).sourceIcons.list({ packageNames: ["com.nu.production"], size: 48 })).rejects.toThrow();
+});

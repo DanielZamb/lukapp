@@ -311,6 +311,15 @@ test("the Posted moment shows the receipt and category, with Done and Post anoth
   expect(another).toHaveBeenCalledOnce();
 });
 
+test.each([1, 1.5])("a Candidate's original notification shows above the form at font scale %s", async (scale) => {
+  const screen = await show(createElement(PostingForm, {
+    ...emptyPostingForm, ...formHandlers, sourceNote: "From a notification",
+    notification: createElement("view", { testID: "kept-notification" }),
+  }), scale);
+  expect(screen.findAllByProps({ testID: "kept-notification" })).toHaveLength(1);
+  expect(screen.findAllByType("text").map((node) => node.children.join(""))).not.toContain("From a notification");
+});
+
 test("a failed post retains frozen answers and the retry action", async () => {
   const retry = vi.fn();
   const screen = await show(

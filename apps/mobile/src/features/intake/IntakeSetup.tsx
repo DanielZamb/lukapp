@@ -2,8 +2,8 @@ import type { FunctionReturnType } from "convex/server";
 import { useConvex } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import { Choice, Header, PrimaryButton, Screen, SecondaryButton, useUi } from "../../ui/core";
+import { ActivityIndicator, View } from "react-native";
+import { Choice, Group, Header, Presentation, PrimaryButton, Screen, SecondaryButton, Text, useUi } from "../../ui/core";
 import { spacing } from "../../ui/tokens";
 import { api } from "../api";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
@@ -13,7 +13,7 @@ import type { SourceMapping } from "./durableState";
 import { IntakeSelectionPicker } from "./IntakeSelectionPicker";
 import { ArrivalInspector } from "./ArrivalInspector";
 import type { IntakeService } from "./service";
-import { ActionBar, AlertLine, Card, CheckRow, FactRow, HeroState, IconTile, Muted, NavRow, NoteCard, SectionHeading, TextButton, type Tone } from "./IntakeParts";
+import { ActionBar, AlertLine, AppTile, Card, CheckRow, FactRow, HeroState, IconTile, Muted, NavRow, NoteCard, SectionHeading, TextButton, type Tone } from "./IntakeParts";
 import { appInitial, likelyBankApp, orderSources, productKindLabel, timeZoneCity } from "./appCatalog";
 
 export const INTAKE_DISCLOSURE_VERSION = "notification-disclosure@3";
@@ -165,7 +165,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
     {error ? <AlertLine>{error}</AlertLine> : null}
     {snapshot.error && snapshot.error !== "UNSUPPORTED" ? <AlertLine>{intakeActionError(new Error(snapshot.error))}</AlertLine> : null}
   </>;
-  const pendingLine = pending ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{pending}…</Text> : null;
+  const pendingLine = pending ? <Text accessibilityLiveRegion="polite" preset="body" tone="muted">{pending}…</Text> : null;
 
   if (current.kind === "inspect") return <ArrivalInspector onBack={() => setStep({ kind: "hub" })} />;
 
@@ -183,15 +183,15 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
         <FactRow icon="mail-outline" tone="warning" title="Keep email private" detail={EMAIL_SOURCE_WARNING} />
       </View>
       {diagnostics ? <View style={ui.section}>
-        <Text style={ui.label}>BETA BUILD</Text>
+        <Text variant="label" tone="muted">BETA BUILD</Text>
         <Muted>This beta also keeps the original notification text, encrypted, for up to 24 hours. It's never uploaded.</Muted>
       </View> : null}
       <View style={ui.section}>
         <TextButton label={readFull ? "Hide the full disclosure" : "Read the full disclosure"} expanded={readFull} onPress={() => setReadFull((value) => !value)} />
         {readFull ? <>
-          <Text style={ui.body}>Lukapp reads notifications only from apps you select. Each one becomes a Candidate that keeps the notification's title and text next to the suggested values, so you can see where they came from. Candidates are encrypted on this device and deleted 15 days after their first capture. The notification text is never uploaded; only the values you confirm are posted. Notifications that look like security codes are not kept.{diagnostics ? " This dev/beta build also encrypts original delivered notification contents, including security messages, in a separate local diagnostic store for up to 24 hours. Nothing from that store is uploaded." : ""}</Text>
-          <Text style={ui.body}>Notifications may be missed or delayed. Reconcile with your accounts. Every Candidate requires review before financial posting.</Text>
-          <Text style={ui.muted}>Your saved purchase-alert preference does not grant device access. Acknowledging this disclosure does not enable capture.</Text>
+          <Text preset="body" tone="default">Lukapp reads notifications only from apps you select. Each one becomes a Candidate that keeps the notification's title and text next to the suggested values, so you can see where they came from. Candidates are encrypted on this device and deleted 15 days after their first capture. The notification text is never uploaded; only the values you confirm are posted. Notifications that look like security codes are not kept.{diagnostics ? " This dev/beta build also encrypts original delivered notification contents, including security messages, in a separate local diagnostic store for up to 24 hours. Nothing from that store is uploaded." : ""}</Text>
+          <Text preset="body" tone="default">Notifications may be missed or delayed. Reconcile with your accounts. Every Candidate requires review before financial posting.</Text>
+          <Text preset="body" tone="muted">Your saved purchase-alert preference does not grant device access. Acknowledging this disclosure does not enable capture.</Text>
         </> : null}
       </View>
       <Card>
@@ -204,7 +204,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
   if (current.kind === "wipe") {
     return <Screen footer={<ActionBar>
       {pendingLine}
-      <SecondaryButton label="Turn off and wipe" tone="danger" disabled={pending !== null} onPress={() => {
+      <SecondaryButton label="Turn off and wipe" tone="danger" icon="trash-outline" disabled={pending !== null} onPress={() => {
         void perform("Wiping local intake", async () => { await service.disableAndWipe(); setAcknowledged(false); }, false)
           .then(() => setStep({ kind: "hub" }));
       }} />
@@ -249,11 +249,14 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
       {ready ? <Muted>{`${ready.workspace.kind} · ${ready.workspace.functionalCurrency} · ${timeZoneCity(ready.workspace.timeZone)}`}</Muted> : null}
       {!ready ? <ActivityIndicator accessibilityLabel="Loading places" />
         : !profiles.length ? <AlertLine>No places in this workspace yet. Add one in My finances, then come back.</AlertLine>
-        : <View accessibilityRole="radiogroup" style={{ gap: spacing.sm }}>
-          {profiles.map((profile) => <Choice key={profile.id} label={profile.name} detail={productKindLabel(profile.productKind)}
-            selected={current.profileId === profile.id} disabled={!canConfigure}
-            onPress={() => { if (canConfigure) setStep({ ...current, profileId: profile.id }); }} />)}
-        </View>}
+        : (() => {
+          const choices = profiles.map((profile) => <Choice key={profile.id} label={profile.name} detail={productKindLabel(profile.productKind)}
+            emoji={profile.emoji ?? "💰"} selected={current.profileId === profile.id} disabled={!canConfigure}
+            onPress={() => { if (canConfigure) setStep({ ...current, profileId: profile.id }); }} />);
+          return <Presentation legacy={<View accessibilityRole="radiogroup" style={{ gap: spacing.sm }}>{choices}</View>}>
+            <View accessibilityRole="radiogroup"><Group>{choices}</Group></View>
+          </Presentation>;
+        })()}
       <Muted>{`You can change this later. Other workspaces keep their own place for ${label}.`}</Muted>
     </Screen>;
   }
@@ -279,7 +282,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
         <NavRow leading={<IconTile icon="wallet-outline" tone={accountMissing(mapping) ? "danger" : "accent"} />} title="Alerts go to"
           status={accountName(mapping)} statusTone={accountMissing(mapping) ? "danger" : undefined}
           accessibilityLabel={`Alerts go to ${accountName(mapping)}`} />
-        <NavRow last leading={<IconTile letter={appInitial(label)} tone="accent" />} title="App" status={mapping.packageName}
+        <NavRow last leading={<AppTile packageName={mapping.packageName} label={label} />} title="App" status={mapping.packageName}
           accessibilityLabel={`App package ${mapping.packageName}`} />
       </Card>
       {mapping.workspaceId !== workspaceId ? <Muted>Saved in another workspace. Changing it sends its alerts to this workspace instead.</Muted> : null}
@@ -312,6 +315,9 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
       : snapshot.status.reason === "native_module_missing" ? "Custom Android binary missing. Install a build with the notification intake module, then refresh status."
       : "Notification intake is supported only in the custom Android app."
     : null;
+
+  const refresh = <SecondaryButton label="Refresh status" icon="refresh-outline" disabled={pending !== null || snapshot.wipePending}
+    onPress={() => { setRevision((value) => value + 1); void perform("Refreshing status", () => service.refresh(), false); }} />;
 
   return <Screen footer={next || pending ? <ActionBar>
     {pendingLine}
@@ -354,7 +360,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
           const label = appLabel(mapping.packageName);
           const problem = appMissing(mapping) ? "Not installed" : accountMissing(mapping) ? "Place unavailable" : null;
           const line = `${problem ? `${problem} · ` : ""}To ${accountName(mapping)}`;
-          return <NavRow key={mapping.sourceSelectionId} last={index === active.length - 1} leading={<IconTile letter={appInitial(label)} tone="accent" />}
+          return <NavRow key={mapping.sourceSelectionId} last={index === active.length - 1} leading={<AppTile packageName={mapping.packageName} label={label} />}
             title={label} status={line} statusTone={problem ? "danger" : undefined} accessibilityLabel={`${label}, ${line}`}
             onPress={() => setStep({ kind: "app", packageName: mapping.packageName })} />;
         })}
@@ -363,7 +369,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
         : catalog.kind === "failed" ? <AlertLine>Couldn't load your apps or places. Refresh to try again. No app can be added until then.</AlertLine>
         : !catalog.sources.length ? <Muted>No installed apps can send alerts. Install your bank app, then refresh.</Muted> : null}
       {active.length ? <>
-        <SecondaryButton label="Add another app" disabled={!canChange || !ready} onPress={() => withAcknowledgement({ kind: "addApp" })} />
+        <SecondaryButton label="Add another app" icon="add" disabled={!canChange || !ready} onPress={() => withAcknowledgement({ kind: "addApp" })} />
         <Muted>Adding an app doesn't prove an alert was captured. Captured alerts show up in the candidate inbox.</Muted>
       </> : null}
     </View> : null}
@@ -381,13 +387,14 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
       </Card>
       <Muted>{`Checked ${when(status.checkedAt)} · ${status.lastConnectedAt === null ? "no connection seen yet" : `last connected ${when(status.lastConnectedAt)}`}`}</Muted>
       {status.pendingCount > 0 ? <Muted>{`${plural(status.pendingCount, "capture")} waiting to be read.`}</Muted> : null}
-      {status.connection !== "connected" ? <SecondaryButton label="Retry listener connection" disabled={blocked || status.access !== "granted"}
+      {status.connection !== "connected" ? <SecondaryButton label="Retry listener connection" icon="pulse-outline" disabled={blocked || status.access !== "granted"}
         onPress={() => { if (!blocked && status.access === "granted") void perform("Retrying connection", () => service.retryConnection()); }} /> : null}
-      <SecondaryButton label="Android notification settings" disabled={blocked} onPress={() => withAcknowledgement({ kind: "settings" })} />
+      {/* D4 keeps Refresh with the phone's status; the default page keeps it below. */}
+      <Presentation legacy={null}>{refresh}</Presentation>
+      <SecondaryButton label="Android notification settings" icon="notifications-outline" disabled={blocked} onPress={() => withAcknowledgement({ kind: "settings" })} />
     </View> : null}
 
-    <SecondaryButton label="Refresh status" disabled={pending !== null || snapshot.wipePending}
-      onPress={() => { setRevision((value) => value + 1); void perform("Refreshing status", () => service.refresh(), false); }} />
+    {status ? <Presentation legacy={refresh} /> : refresh}
 
     {status?.notices.length ? <View style={ui.section}>
       <SectionHeading title="Skipped alerts" meta="No notification text is kept for these. Missed activity may need reconciling." />
@@ -409,7 +416,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
     </Card> : null}
 
     {ready ? <Muted>{`${ready.workspace.kind} · ${ready.workspace.functionalCurrency} · ${timeZoneCity(ready.workspace.timeZone)}`}</Muted> : null}
-    {supported && !snapshot.wipePending ? <SecondaryButton label="Turn off and wipe" tone="danger" disabled={pending !== null} onPress={() => setStep({ kind: "wipe" })} /> : null}
+    {supported && !snapshot.wipePending ? <SecondaryButton label="Turn off and wipe" tone="danger" icon="trash-outline" disabled={pending !== null} onPress={() => setStep({ kind: "wipe" })} /> : null}
 
     {catalogOpen && ready ? <IntakeSelectionPicker title="Add an app" eyebrow={`${ready.sources.length} ON THIS PHONE`} searchLabel="Search apps" guidance={EMAIL_SOURCE_WARNING}
       options={orderSources(ready.sources).map((source) => ({ id: source.packageName, label: source.label, detail: source.packageName,

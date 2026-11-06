@@ -408,6 +408,8 @@ export type ChoiceProps = {
   label: string; detail?: string; selected: boolean; onPress: () => void; disabled?: boolean;
   kind?: "radio" | "checkbox"; leading?: ReactNode; presentation?: "grouped" | "option"; isLast?: boolean;
   emoji?: string;
+  /** Replaces the spoken label, for a choice whose meaning is longer than its visible label. */
+  accessibilityLabel?: string;
 };
 
 export function Choice({
@@ -415,12 +417,12 @@ export function Choice({
   detail,
   selected,
   onPress,
-  disabled = false, kind = "radio", leading, presentation = "grouped", isLast, emoji,
+  disabled = false, kind = "radio", leading, presentation = "grouped", isLast, emoji, accessibilityLabel,
 }: ChoiceProps) {
   const { theme, styles, layout } = useCore();
   if (layout.tier === "xxxl") {
     const option = presentation === "option";
-    return <Pressable accessibilityRole={kind} accessibilityLabel={[label, detail].filter(Boolean).join(", ")}
+    return <Pressable accessibilityRole={kind} accessibilityLabel={accessibilityLabel ?? [label, detail].filter(Boolean).join(", ")}
       accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onPress}
       style={{ minHeight: option ? 60 : 72, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: option ? (selected ? 11 : 12) : 16, paddingHorizontal: option && selected ? 15 : 16,
         ...(option ? { borderRadius: 18, borderWidth: selected ? 2 : 1, borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? `${theme.primary}17` : theme.secondary } : { borderBottomWidth: isLast ? 0 : 1, borderBottomColor: theme.border }), opacity: disabled ? 0.45 : 1 }}>
@@ -436,7 +438,7 @@ export function Choice({
   return (
     <Pressable
       accessibilityRole={kind}
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}
       onPress={onPress}

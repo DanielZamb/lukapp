@@ -50,6 +50,10 @@ const exact: Record<TextPreset, object> = {
   monthTitle: { fontFamily: font.extrabold, fontSize: 28, lineHeight: 34 }, monthCount: { fontFamily: font.extrabold, fontSize: 64, lineHeight: 68, letterSpacing: -2 },
   draftAmount: { fontFamily: font.extrabold, fontSize: 38, lineHeight: 43, letterSpacing: -0.8 }, draftBody: { fontFamily: font.regular, fontSize: 15, lineHeight: 22 }, warningBody: { fontFamily: font.regular, fontSize: 18, lineHeight: 27 },
   composeSelected: { fontFamily: font.bold, fontSize: 13 }, segmentLabel: { fontFamily: font.medium, fontSize: 16 }, completionAmount: { fontFamily: font.extrabold, fontSize: 32, lineHeight: 52 }, startingAmount: { fontFamily: font.extrabold, fontSize: 40, lineHeight: 48, letterSpacing: -1 }, placeHeroEmoji: { fontSize: 40, lineHeight: 48 }, placeLookEmoji: { fontSize: 32, lineHeight: 38 }, tileEmoji: { fontSize: 22, lineHeight: 26 },
+  groupHeading: { fontFamily: font.bold, fontSize: 20, lineHeight: 26 }, stateTitle: { fontFamily: font.extrabold, fontSize: 24, lineHeight: 30, letterSpacing: -0.4 },
+  pickerTitle: { fontFamily: font.bold, fontSize: 26, lineHeight: 32 }, rowStatus: { fontFamily: font.regular, fontSize: 14, lineHeight: 20 },
+  alertLine: { fontFamily: font.medium, fontSize: 16, lineHeight: 22 }, noticeText: { fontFamily: font.regular, fontSize: 16, lineHeight: 26 },
+  noticeMeta: { fontFamily: font.regular, fontSize: 13, lineHeight: 18 },
   nativeInput: {}, system: {}, emoji16: { fontSize: 16 }, emoji17: { fontSize: 17 }, emoji18: { fontSize: 18 }, emoji21: { fontSize: 21 }, emoji22: { fontSize: 22 }, emoji26: { fontSize: 26 }, emoji28: { fontSize: 28 },
 };
 

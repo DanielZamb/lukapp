@@ -1,9 +1,10 @@
 import type { Theme } from "../../ui/tokens";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useEffect, useRef } from "react";
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, Screen, SecondaryButton, useTheme } from "../../ui/core";
-import { font, radius, spacing } from "../../ui/tokens";
+import { Animated, Easing, Platform, Pressable, StyleSheet, View } from "react-native";
+import { ActionBar, FactRow, Group, Header, IconTile, Presentation, PrimaryButton, Screen, SecondaryButton, Text, useTheme } from "../../ui/core";
+import { radius, spacing } from "../../ui/tokens";
+import { LeadIcon } from "./IntakeParts";
 
 export function WarningIconButton({ onPress }: { onPress: () => void }) {
   const theme = useTheme();
@@ -58,23 +59,42 @@ export function WarningIconButton({ onPress }: { onPress: () => void }) {
 export function ReconciliationWarning({ onBack }: { onBack: () => void }) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const fact = (icon: "notifications-off-outline" | "refresh-outline" | "receipt-outline", label: string, value: string) =>
+    <FactRow label={label} value={value} leading={<IconTile icon={icon} tone="neutral" size={48} />} />;
   return (
-    <Screen>
+    <Presentation legacy={<Screen>
       <Header title="Reconciliation warning" eyebrow="READ BEFORE USING INTAKE" onBack={onBack} />
       <View style={styles.detail}>
         <Ionicons name="alert-circle-outline" size={36} color={theme.foreground} />
-        <Text style={styles.detailTitle}>Notifications are a shortcut, not a statement</Text>
-        <Text style={styles.warningCopy}>
+        <Text preset="detailName" tone="default" style={styles.narrow}>Notifications are a shortcut, not a statement</Text>
+        <Text preset="warningBody" tone="default">
           Notification Intake may miss, delay, or duplicate activity. Reconcile against your financial accounts.
         </Text>
       </View>
       <View style={styles.facts}>
-        <Text style={styles.body}>A missing notification can leave activity out.</Text>
-        <Text style={styles.body}>A delayed or repeated notification can create the wrong review queue.</Text>
-        <Text style={styles.body}>Only your account history can settle the difference.</Text>
+        <Text preset="bodyCopy" tone="muted">A missing notification can leave activity out.</Text>
+        <Text preset="bodyCopy" tone="muted">A delayed or repeated notification can create the wrong review queue.</Text>
+        <Text preset="bodyCopy" tone="muted">Only your account history can settle the difference.</Text>
       </View>
       <PrimaryButton label="I understand" onPress={onBack} />
-    </Screen>
+    </Screen>}>
+      <Screen footer={<ActionBar primary={{ label: "I understand", icon: "checkmark", onPress: onBack }} />}>
+        <Header title="Before you use intake" eyebrow="READ ONCE" onBack={onBack} />
+        <View style={styles.hero}>
+          <LeadIcon icon="warning-outline" tone="warning" />
+          <Text variant="section" accessibilityRole="header">A shortcut, not a statement</Text>
+          <Text variant="body" tone="muted">Notifications can miss, delay or repeat activity. Reconcile against your financial accounts.</Text>
+        </View>
+        <View style={styles.stack}>
+          <Text variant="section" accessibilityRole="header">What can go wrong</Text>
+          <Group pairGap={12}>
+            {fact("notifications-off-outline", "A missing notification", "Leaves activity out")}
+            {fact("refresh-outline", "A repeated one", "Shows up twice")}
+            {fact("receipt-outline", "What settles it", "Your account history")}
+          </Group>
+        </View>
+      </Screen>
+    </Presentation>
   );
 }
 
@@ -92,12 +112,12 @@ export function MonthCloseWarning({
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
-    <Screen>
+    <Presentation legacy={<Screen>
       <Header title={`Complete ${month}`} eyebrow="BEFORE YOU CONTINUE" onBack={onBack} />
       <View style={styles.monthMessage}>
-        <Text style={styles.monthCount}>{count}</Text>
-        <Text style={styles.monthTitle}>local Candidates still need a decision</Text>
-        <Text style={styles.body}>
+        <Text preset="monthCount" style={styles.count}>{count}</Text>
+        <Text preset="monthTitle" tone="default" style={styles.narrow}>local Candidates still need a decision</Text>
+        <Text preset="bodyCopy" tone="muted">
           Review any {month} activity now. Notification Intake is incomplete evidence, so this does not block Month Close.
         </Text>
       </View>
@@ -105,7 +125,17 @@ export function MonthCloseWarning({
         <PrimaryButton label="Review Candidates" onPress={onBack} />
         <SecondaryButton label="Continue Month Close anyway" onPress={onContinue} />
       </View>
-    </Screen>
+    </Screen>}>
+      <Screen footer={<ActionBar primary={{ label: "Review candidates", icon: "arrow-forward", onPress: onBack }}
+        secondary={{ label: "Continue anyway", onPress: onContinue }} />}>
+        <Header title={`Complete ${month}`} eyebrow="BEFORE YOU CONTINUE" onBack={onBack} />
+        <View style={styles.hero}>
+          <Text variant="label" tone="muted">Still on this phone</Text>
+          <Text variant="screen">{count === 1 ? "1 candidate" : `${count} candidates`}</Text>
+          <Text variant="body" tone="muted">They don't block Month Close.</Text>
+        </View>
+      </Screen>
+    </Presentation>
   );
 }
 
@@ -122,27 +152,16 @@ function createStyles(theme: Theme) {
     backgroundColor: "#fff7ed",
   },
   detail: { gap: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.section },
-  detailTitle: {
-    maxWidth: 330, color: theme.foreground, fontSize: 30, lineHeight: 36, fontFamily: font.extrabold,
-  },
-  warningCopy: { color: theme.foreground, fontSize: 18, lineHeight: 27, fontFamily: font.regular },
-  body: { color: theme.mutedForeground, fontSize: 16, lineHeight: 24, fontFamily: font.regular },
+  narrow: { maxWidth: 330 },
   facts: {
     gap: spacing.lg, paddingVertical: spacing.xl,
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.border,
   },
-  disclosureIcon: {
-    width: 72, height: 72, borderRadius: radius.lg, backgroundColor: theme.secondary,
-    alignItems: "center", justifyContent: "center",
-  },
-  health: {
-    gap: spacing.xs, paddingVertical: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
-  },
-  healthState: { color: theme.foreground, fontSize: 28, lineHeight: 33, fontFamily: font.extrabold },
-  healthCheck: { color: theme.mutedForeground, fontSize: 14, lineHeight: 20, fontFamily: font.regular },
   monthMessage: { gap: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.section },
-  monthCount: { color: theme.primary, fontSize: 64, lineHeight: 68, fontFamily: font.extrabold, letterSpacing: -2 },
-  monthTitle: { maxWidth: 330, color: theme.foreground, fontSize: 28, lineHeight: 34, fontFamily: font.extrabold },
+  count: { color: theme.primary },
   actions: { gap: spacing.lg, paddingTop: spacing.xl },
+  // XXXL (D4): hero block and a titled stack.
+  hero: { gap: 8, paddingTop: 4 },
+  stack: { gap: 12 },
   });
 }

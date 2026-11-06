@@ -12,6 +12,8 @@ export type ActionBarProps = {
   secondary?: SecondaryBarAction | readonly SecondaryBarAction[];
   status?: ReactNode;
   legacy?: ReactNode;
+  /** Extra footer content after the actions, such as a pending line the screen owns. */
+  children?: ReactNode;
 };
 const FooterContext = createContext(false);
 export function FooterFrame({ children, onLayout }: PropsWithChildren<{ onLayout?: (event: LayoutChangeEvent) => void }>) {
@@ -20,7 +22,7 @@ export function FooterFrame({ children, onLayout }: PropsWithChildren<{ onLayout
   if (framed) return children;
   return <FooterContext.Provider value={true}><View onLayout={onLayout} style={{ paddingHorizontal: xxxl.spacing.footerHorizontal, paddingVertical: xxxl.spacing.footerVertical, gap: 8, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.background }}>{children}</View></FooterContext.Provider>;
 }
-export function ActionBar({ primary, secondary, status, legacy = null }: ActionBarProps) {
+export function ActionBar({ primary, secondary, status, legacy = null, children }: ActionBarProps) {
   const tier = useTier();
   if (tier !== "xxxl") return legacy;
   const actions = secondary ? (Array.isArray(secondary) ? secondary : [secondary]) : [];
@@ -28,5 +30,6 @@ export function ActionBar({ primary, secondary, status, legacy = null }: ActionB
     {status ? <View style={{ paddingBottom: 8 }}>{status}</View> : null}
     {primary ? <PrimaryButton {...primary} trailingIcon={primary.icon} /> : null}
     {actions.map((action, index) => <SecondaryButton key={index} {...action} />)}
+    {children}
   </FooterFrame>;
 }
