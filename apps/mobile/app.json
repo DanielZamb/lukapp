@@ -13,7 +13,7 @@
       }
     },
     "android": {
-      "package": "com.lukapp.u01.dev",
+      "package": "com.lukapp.dev",
       "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
