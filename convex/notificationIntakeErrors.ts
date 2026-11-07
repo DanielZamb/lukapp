@@ -6,7 +6,7 @@ export async function runIntake<T>(work: () => Promise<T>): Promise<T> {
     return await work();
   } catch (error) {
     if (error instanceof IntakeError)
-      throw new ConvexError({ kind: "intake", code: error.code, message: error.code });
+      throw new ConvexError({ kind: "intake", code: error.code, message: error.message });
     throw error;
   }
 }

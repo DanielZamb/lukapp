@@ -3,7 +3,8 @@ import { useAction, useQuery_experimental } from "convex/react";
 import Constants from "expo-constants";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ConvexError } from "convex/values";
-import { ActivityIndicator, Platform, Text } from "react-native";
+import { Platform, Text } from "react-native";
+import { ConnectingScreen } from "../ui/ConnectingScreen";
 import { api } from "../features/api";
 import { useLocalInstallId } from "../local-auth/installation";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
@@ -153,12 +154,7 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
   );
   if (status.status === "pending" || submitted || !!existingLabel ||
       (status.status === "success" && status.data.status === "registered")) return (
-    <Screen>
-      <ActivityIndicator />
-      <Text style={ui.body}>Confirming device access…</Text>
-      <SecondaryButton label="Check again" onPress={retry} />
-      <SecondaryButton label={busy ? "Signing out…" : "Sign out"} disabled={busy} onPress={() => void leave()} />
-    </Screen>
+    <ConnectingScreen phase="device" onCheckAgain={retry} onSignOut={() => void leave()} signingOut={busy} />
   );
   return (
     <NamedDeviceStep

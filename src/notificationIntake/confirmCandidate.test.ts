@@ -109,7 +109,7 @@ test("retrying the same Candidate asks accounting to replay and preserves the Re
   expect(second.receipt.confirmedAt).toBe(1);
 });
 
-test("an existing Receipt still delegates payload verification to accounting", async () => {
+test("an existing Receipt is returned only after validating the posting replay", async () => {
   const receipt: IntakeReceipt = {
     id: "receipt-1",
     workspaceId: "workspace",

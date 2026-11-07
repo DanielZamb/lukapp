@@ -20,6 +20,7 @@
     }
   },
   "dependencies": {
+    "@bacons/apple-targets": "5.0.0",
     "@clerk/expo": "4.11.0",
     "@clerk/expo-native-components": "0.1.0",
     "@expo-google-fonts/geist": "0.4.2",
@@ -30,11 +31,13 @@
     "convex": "1.46.0",
     "expo": "~55.0.31",
     "expo-auth-session": "~55.0.0",
+    "expo-blur": "~55.0.18",
     "expo-constants": "~55.0.0",
     "expo-crypto": "~55.0.0",
     "expo-dev-client": "~55.0.0",
     "expo-file-system": "~55.0.26",
     "expo-font": "~55.0.0",
+    "expo-glass-effect": "~55.0.11",
     "expo-linking": "~55.0.0",
     "expo-local-authentication": "~55.0.18",
     "expo-router": "~55.0.0",

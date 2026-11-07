@@ -47,3 +47,9 @@ test("user-approved token pairs meet their documented WCAG contrast ratios", () 
     5.2 - 0.01,
   );
 });
+
+test.each(["light", "dark"] as const)("%s primary text meets AA on background and secondary", (mode) => {
+  const palette = themes[mode];
+  expect(contrastRatio(palette.primaryText, palette.background)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(palette.primaryText, palette.secondary)).toBeGreaterThanOrEqual(4.5);
+});

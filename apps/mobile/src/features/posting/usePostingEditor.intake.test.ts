@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
+import { intakeConfirmOutcome } from "../../../../../src/notificationIntake/outcome";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   usePostingEditor,
@@ -235,6 +236,19 @@ test.each(["intake", "accounting"])("an idempotency conflict from %s retains the
   expect(retry().posted).toBeNull();
   expect(retry().description).toBe("Groceries");
   expect(retry().error).toBe("Could not confirm posting. Retry to safely check the same entry.");
+});
+
+test("a changed confirmation conflict retains the Candidate and shows failure without a success receipt", async () => {
+  const message = "This notification was already confirmed with different details. Review the original entry.";
+  const conflict = new ConvexError({ kind: "intake", code: "candidate_confirmation_conflict", message });
+  expect(intakeConfirmOutcome(conflict)).toBe("fail");
+  const confirm = vi.fn(async () => { throw conflict; });
+  const editor = await open({ id: "candidate-groceries", facts,
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), confirm });
+  await act(async () => editor().setAmount("-450.000,00"));
+  await act(async () => editor().submit());
+  expect(editor()).toMatchObject({ error: message, posted: null,
+    amount: "-450.000,00", description: "Groceries", profileId: "daily", date: "2026-10-17" });
 });
 
 test("a definite accounting rejection fails the Candidate and never aborts a Draft", async () => {

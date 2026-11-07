@@ -79,6 +79,9 @@ const writeSchema = readSchema.extend({ expectedRevision: integer, value: z.stri
   try { const v: unknown = JSON.parse(s); return typeof v === "object" && v !== null && !Array.isArray(v); } catch { return false; }
 }) }).strict();
 const dismissSchema = expectedEpoch.extend({ noticeIds: z.array(id).max(64) }).strict();
+const iconRequestSchema = z.object({ packageNames: z.array(packageName).max(64), size: z.number().int().min(16).max(96) }).strict();
+// A 96 dp icon at density 3 is a 288 px PNG, comfortably under this cap.
+const iconSchema = z.record(z.string(), z.string().min(1).max(400_000).regex(/^[A-Za-z0-9+/]+={0,2}$/));
 const hintSchema = z.object({ epoch, changeSequence: integer, kind: z.enum(["capture", "queue", "notice", "control", "health"]) }).strict();
 
 interface NativeBridge {
@@ -99,6 +102,8 @@ interface NativeBridge {
   retryConnection(input: z.infer<typeof expectedEpoch>): Promise<unknown>;
   disableAndWipe(input: z.infer<typeof mutation>): Promise<unknown>;
   dismissNotices(input: z.infer<typeof dismissSchema>): Promise<void>;
+  /** Added after API v3 without a version bump; older binaries lack it. */
+  listSourceIcons?(input: z.infer<typeof iconRequestSchema>): Promise<unknown>;
   addListener(event: "onChange", callback: (hint: unknown) => void): { remove(): void };
 }
 export const NATIVE_API_VERSION = 3;
@@ -161,3 +166,13 @@ export const notificationIntake = {
   },
 };
 export type NotificationIntakeNative = typeof notificationIntake;
+
+/** App logos for the sources list, as base64 PNG by package name. Empty when the binary can't draw them. */
+export const sourceIcons = {
+  async list(input: z.infer<typeof iconRequestSchema>): Promise<Record<string, string>> {
+    const request = parseInput(iconRequestSchema, input);
+    if (!native || native.apiVersion !== NATIVE_API_VERSION || typeof native.listSourceIcons !== "function" || !request.packageNames.length) return {};
+    const icons = iconSchema.parse(await native.listSourceIcons(request));
+    return Object.fromEntries(request.packageNames.flatMap((name) => icons[name] ? [[name, icons[name]]] : []));
+  },
+};

@@ -5,12 +5,14 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { BottomSheetProps, BottomSheetModal } from "@gorhom/bottom-sheet";
 import type { CategorySheet } from "./CategorySheet";
 import { CategoryPicker } from "./CategoryPicker";
+import { SheetModal } from "../../ui/SheetModal";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
 const android = vi.hoisted(() => ({
   os: "ios", busy: false, handler: undefined as (() => boolean) | undefined,
 }));
 vi.mock("react-native", () => ({
+  View: "view",
   Platform: { get OS() { return android.os; } },
   BackHandler: { addEventListener: (_event: string, handler: () => boolean) => {
     android.handler = handler;
@@ -47,15 +49,15 @@ vi.mock("@gorhom/bottom-sheet/src/components/bottomSheet", () => ({
   }),
 }));
 vi.mock("./useCategoryPicker", () => ({
-  useCategoryPicker: (_mode: unknown, onClose: () => void) => ({ sheet: { busy: android.busy, onDismiss: onClose } }),
+  useCategoryPicker: () => ({ sheet: { busy: android.busy, onBack: () => {} } }),
 }));
 vi.mock("./CategorySheet", async () => {
-  const { default: Modal } = await vi.importActual<{ default: typeof BottomSheetModal }>("@gorhom/bottom-sheet/src/components/bottomSheetModal/BottomSheetModal");
   return {
     CategorySheet: (props: ComponentProps<typeof CategorySheet>) => createElement(
-      Modal<never>,
+      SheetModal,
       {
-        ref: props.sheetRef, onDismiss: props.onDismiss,
+        sheetRef: props.sheetRef, onDismiss: props.onDismiss,
+        presentOnMount: false, trackPresentation: true, androidBack: true, busy: props.busy,
         snapPoints: ["92%"], enableDynamicSizing: false,
         children: createElement("category-options", { testID: "category-options" }, "Search categories"),
       },

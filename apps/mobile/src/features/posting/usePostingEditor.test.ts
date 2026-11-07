@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
+import { accountingErrorMessages } from "../../../../../src/accounting/errors";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   LocalInputLease,
@@ -77,6 +78,35 @@ const common = {
   description: "Example",
   idempotencyKey: "saved-key",
 } as const;
+
+test("a debt-cap rejection keeps the transfer facts editable and posts the corrected amount with a new key", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setEntryType("transfer");
+    editor().setDestinationId("card");
+    editor().setAmount("-450.000,00");
+    editor().setDescription("Pay card");
+    editor().setDate("2026-10-17");
+  });
+  await act(async () => editor().confirmTransferReview());
+  api.post.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "repayment_exceeds_debt",
+    message: accountingErrorMessages.repayment_exceeds_debt }));
+  await act(async () => editor().submit());
+  expect(editor()).toMatchObject({ editable: true, amount: "-450.000,00", profileId: "bank",
+    destinationId: "card", description: "Pay card", date: "2026-10-17",
+    error: "This payment exceeds the total debt still owed. Reduce the amount and try again." });
+  expect(api.abort).toHaveBeenCalledTimes(1);
+  expect(api.clear).not.toHaveBeenCalled();
+  await act(async () => editor().setAmount("-123.000,00"));
+  await act(async () => editor().submit());
+  expect(api.post.mock.calls[1][0]).toEqual({ kind: "transfer", payload: {
+    workspaceId: "workspace", sourceFinancialAccountProfileId: "bank", destinationFinancialAccountProfileId: "card",
+    amount: { currency: "COP", minorUnits: 12_300_000 }, description: "Pay card", accountingDate: "2026-10-17",
+    idempotencyKey: "entry-2",
+  } });
+  expect(api.clear).toHaveBeenCalledTimes(1);
+});
 const entries: PendingPosting[] = [
   {
     kind: "income",

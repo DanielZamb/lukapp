@@ -6,11 +6,14 @@
     "scheme": "lukapp-u01",
     "orientation": "portrait",
     "ios": {
-      "bundleIdentifier": "com.lukapp.u01.dev",
-      "buildNumber": "3"
+      "bundleIdentifier": "com.lukapp.dev",
+      "buildNumber": "3",
+      "infoPlist": {
+        "NSSupportsLiveActivities": true
+      }
     },
     "android": {
-      "package": "com.lukapp.u01.dev",
+      "package": "com.lukapp.dev",
       "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
@@ -56,6 +59,7 @@
         }
       ],
       "./plugins/with-entry-privacy.cjs",
+      "@bacons/apple-targets",
       "./plugins/with-notification-intake.cjs"
     ],
     "experiments": {

@@ -1,0 +1,329 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`counterpart and wrapper default identities stay frozen in default 1`] = `
+"{
+  "type": "button",
+  "props": {
+    "accessibilityRole": "radio",
+    "accessibilityLabel": "Monthly",
+    "accessibilityState": {
+      "checked": true,
+      "disabled": false
+    },
+    "disabled": false,
+    "onPress": "[callback]",
+    "style": [
+      {
+        "minHeight": 76,
+        "flexDirection": "row",
+        "alignItems": "center",
+        "borderWidth": 1,
+        "borderColor": "#e5e5e5",
+        "borderRadius": 16,
+        "padding": 16,
+        "gap": 12,
+        "backgroundColor": "#f4f4f5"
+      },
+      {
+        "borderWidth": 2,
+        "borderColor": "#6d28d9"
+      },
+      false
+    ]
+  },
+  "children": [
+    {
+      "type": "view",
+      "props": {
+        "style": {
+          "flex": 1,
+          "gap": 4,
+          "minWidth": 0
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "props": {
+            "style": {
+              "fontFamily": "Geist_600SemiBold",
+              "fontSize": 16,
+              "lineHeight": 22,
+              "color": "#0a0a0a"
+            }
+          },
+          "children": [
+            "Monthly"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "icon",
+      "props": {
+        "name": "checkmark-circle",
+        "size": 24,
+        "color": "#6d28d9"
+      },
+      "children": null
+    }
+  ]
+}"
+`;
+
+exports[`counterpart and wrapper default identities stay frozen in default 2`] = `
+"{
+  "type": "button",
+  "props": {
+    "accessibilityRole": "button",
+    "accessibilityLabel": "Plans, Budget and recovery",
+    "onPress": "[callback]",
+    "style": [
+      {
+        "width": "47%",
+        "minHeight": 156,
+        "justifyContent": "flex-end",
+        "padding": 16,
+        "borderRadius": 24,
+        "gap": 8
+      },
+      {
+        "backgroundColor": "#f4f4f5"
+      }
+    ]
+  },
+  "children": [
+    {
+      "type": "icon",
+      "props": {
+        "name": "layers-outline",
+        "size": 28,
+        "color": "#0a0a0a"
+      },
+      "children": null
+    },
+    {
+      "type": "view",
+      "props": {
+        "style": {
+          "flex": 1
+        }
+      },
+      "children": null
+    },
+    {
+      "type": "text",
+      "props": {
+        "style": {
+          "fontSize": 20,
+          "fontFamily": "Geist_700Bold",
+          "color": "#0a0a0a"
+        }
+      },
+      "children": [
+        "Plans"
+      ]
+    },
+    {
+      "type": "text",
+      "props": {
+        "style": {
+          "fontSize": 16,
+          "fontFamily": "Geist_400Regular",
+          "color": "#6e6e6e"
+        }
+      },
+      "children": [
+        "Budget and recovery"
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`counterpart and wrapper default identities stay frozen in default 3`] = `
+"{
+  "type": "text",
+  "props": {
+    "accessibilityLabel": "COP 56.526.163,06",
+    "style": [
+      {
+        "fontFamily": "Geist_800ExtraBold",
+        "fontSize": 44,
+        "lineHeight": 52,
+        "color": "#0a0a0a"
+      },
+      null
+    ],
+    "adjustsFontSizeToFit": true,
+    "numberOfLines": 1
+  },
+  "children": [
+    "COP 56.526.163,06"
+  ]
+}"
+`;
+
+exports[`counterpart and wrapper default identities stay frozen in reflow 1`] = `
+"{
+  "type": "button",
+  "props": {
+    "accessibilityRole": "radio",
+    "accessibilityLabel": "Monthly",
+    "accessibilityState": {
+      "checked": true,
+      "disabled": false
+    },
+    "disabled": false,
+    "onPress": "[callback]",
+    "style": [
+      {
+        "minHeight": 76,
+        "flexDirection": "row",
+        "alignItems": "center",
+        "borderWidth": 1,
+        "borderColor": "#e5e5e5",
+        "borderRadius": 16,
+        "padding": 16,
+        "gap": 12,
+        "backgroundColor": "#f4f4f5"
+      },
+      {
+        "borderWidth": 2,
+        "borderColor": "#6d28d9"
+      },
+      false
+    ]
+  },
+  "children": [
+    {
+      "type": "view",
+      "props": {
+        "style": {
+          "flex": 1,
+          "gap": 4,
+          "minWidth": 0
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "props": {
+            "style": {
+              "fontFamily": "Geist_600SemiBold",
+              "fontSize": 16,
+              "lineHeight": 22,
+              "color": "#0a0a0a"
+            }
+          },
+          "children": [
+            "Monthly"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "icon",
+      "props": {
+        "name": "checkmark-circle",
+        "size": 24,
+        "color": "#6d28d9"
+      },
+      "children": null
+    }
+  ]
+}"
+`;
+
+exports[`counterpart and wrapper default identities stay frozen in reflow 2`] = `
+"{
+  "type": "button",
+  "props": {
+    "accessibilityRole": "button",
+    "accessibilityLabel": "Plans, Budget and recovery",
+    "onPress": "[callback]",
+    "style": [
+      {
+        "width": "100%",
+        "minHeight": 156,
+        "justifyContent": "flex-end",
+        "padding": 16,
+        "borderRadius": 24,
+        "gap": 8
+      },
+      {
+        "backgroundColor": "#f4f4f5"
+      }
+    ]
+  },
+  "children": [
+    {
+      "type": "icon",
+      "props": {
+        "name": "layers-outline",
+        "size": 28,
+        "color": "#0a0a0a"
+      },
+      "children": null
+    },
+    {
+      "type": "view",
+      "props": {
+        "style": {
+          "flex": 1
+        }
+      },
+      "children": null
+    },
+    {
+      "type": "text",
+      "props": {
+        "style": {
+          "fontSize": 20,
+          "fontFamily": "Geist_700Bold",
+          "color": "#0a0a0a"
+        }
+      },
+      "children": [
+        "Plans"
+      ]
+    },
+    {
+      "type": "text",
+      "props": {
+        "style": {
+          "fontSize": 16,
+          "fontFamily": "Geist_400Regular",
+          "color": "#6e6e6e"
+        }
+      },
+      "children": [
+        "Budget and recovery"
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`counterpart and wrapper default identities stay frozen in reflow 3`] = `
+"{
+  "type": "text",
+  "props": {
+    "accessibilityLabel": "COP 56.526.163,06",
+    "style": [
+      {
+        "fontFamily": "Geist_800ExtraBold",
+        "fontSize": 44,
+        "lineHeight": 52,
+        "color": "#0a0a0a"
+      },
+      null
+    ],
+    "adjustsFontSizeToFit": true,
+    "numberOfLines": 1
+  },
+  "children": [
+    "COP 56.526.163,06"
+  ]
+}"
+`;

@@ -1,33 +1,39 @@
 import { useMemo } from "react";
 import type { Theme } from "../../ui/tokens";
-import { useReadableLayout } from "../../ui/themeContext";
-import type { ReadableLayout } from "../../ui/layout";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useTheme } from "../../ui/core";
-import { font, radius, spacing } from "../../ui/tokens";
+import { Pressable, StyleSheet, View } from "react-native";
+import { EmojiTile, IconTile, ListRow, Presentation, Text, moneyTone, useReflowStyles, useTheme } from "../../ui/core";
+import { radius, spacing } from "../../ui/tokens";
 import type { HistoryListRow as Row } from "./listModel";
+import { historyRowDescription } from "./listModel";
 
-export function HistoryListRow({ row, onEntry, isFirst, isLast }: {
-  row: Row; onEntry: (id: string, profileId?: string) => void; isFirst: boolean; isLast: boolean;
+export function HistoryListRow({ row, onEntry, isFirst, isLast, sharedPlace }: {
+  row: Row; onEntry: (id: string, profileId?: string) => void; isFirst: boolean; isLast: boolean; sharedPlace?: string;
 }) {
   const theme = useTheme();
-  const layout = useReadableLayout();
-  const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${row.title}, ${row.amountLabel}`}
+  const reflow = useReflowStyles();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const open = () => row.transfer ? onEntry(row.id, row.financialAccountProfileId) : onEntry(row.id);
+  const legacy = <Pressable accessibilityRole="button" accessibilityLabel={`${row.title}, ${row.amountLabel}`}
     onPress={() => row.transfer ? onEntry(row.id, row.financialAccountProfileId) : onEntry(row.id)}
-    style={({ pressed }) => [styles.row, isFirst && styles.first, isLast && styles.last, pressed && styles.pressed]}>
+    style={({ pressed }) => [styles.row, reflow.row("center", "stretch"), isFirst && styles.first, isLast && styles.last, pressed && styles.pressed]}>
     <View style={styles.copy}>
-      <Text numberOfLines={layout.reflow ? undefined : 1} style={styles.title}>{row.title}</Text>
-      <Text numberOfLines={layout.reflow ? undefined : 1} style={styles.subtitle}>{row.subtitle}</Text>
+      <Text preset="rowName" reflow="unclamp" style={styles.title}>{row.title}</Text>
+      <Text preset="rowSubtitle" reflow="unclamp" style={styles.subtitle}>{row.subtitle}</Text>
     </View>
-    <Text numberOfLines={layout.reflow ? undefined : 1} style={[styles.amount, row.amount.minorUnits > 0 && { color: theme.primary }]}>{row.amountLabel}</Text>
+    <Text preset="rowMoney" reflow="trail" style={[styles.amount, row.amount.minorUnits > 0 && { color: theme.primary }]}>{row.amountLabel}</Text>
   </Pressable>;
+  return <Presentation legacy={legacy}>
+    <ListRow title={row.transfer ? "Transfer" : row.categoryName} value={row.amountLabel}
+      meta={historyRowDescription(row, sharedPlace)} tone={moneyTone(row.amount.minorUnits)} isLast={isLast} onPress={open}
+      leading={row.transfer ? <IconTile icon="swap-horizontal" tone="neutral" size={36} /> :
+        <EmojiTile emoji={row.emoji || "🧾"} color={theme[row.categoryStyle?.tone ?? "mutedForeground"]} size={36} />} />
+  </Presentation>;
 }
 
-function createStyles(theme: Theme, layout: ReadableLayout) {
+function createStyles(theme: Theme) {
   return StyleSheet.create({
     row: {
-      minHeight: 70, flexDirection: layout.reflow ? "column" : "row", alignItems: layout.reflow ? "stretch" : "center", gap: spacing.md,
+      minHeight: 70, gap: spacing.md,
       paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: theme.secondary,
       borderColor: theme.border, borderLeftWidth: 1, borderRightWidth: 1,
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -35,9 +41,9 @@ function createStyles(theme: Theme, layout: ReadableLayout) {
     first: { borderTopWidth: 1, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
     last: { borderBottomWidth: 1, borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
     copy: { flex: 1, minWidth: 0, gap: spacing.xs },
-    title: { color: theme.foreground, fontFamily: font.semibold, fontSize: 16 },
-    subtitle: { color: theme.mutedForeground, fontFamily: font.regular, fontSize: 14, lineHeight: 20 },
-    amount: { maxWidth: layout.reflow ? "100%" : "45%", color: theme.foreground, fontFamily: font.semibold, fontSize: 14, textAlign: layout.reflow ? "left" : "right" },
+    title: { color: theme.foreground },
+    subtitle: { color: theme.mutedForeground },
+    amount: { color: theme.foreground },
     pressed: { opacity: 0.72 },
   });
 }

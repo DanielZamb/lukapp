@@ -1,14 +1,20 @@
 import { formatAmount } from "../money";
 import type { Theme } from "../../ui/tokens";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useMemo, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useMemo,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type ComponentProps,
+} from "react";
 import {
   BackHandler,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -20,8 +26,30 @@ import {
   ScreenStackItem,
 } from "react-native-screens";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { PrimaryButton, SecondaryButton, theme, useTheme, useUi } from "../../ui/core";
-import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
+import {
+  ActionBar,
+  CenteredMoment,
+  DateSection,
+  EmojiTile,
+  Header,
+  IconButton,
+  IconTile,
+  ListRow,
+  MoneyHero,
+  Presentation,
+  PrimaryButton,
+  Screen,
+  SecondaryButton,
+  Text,
+  TintCard,
+  InlineNotice,
+  moneyTone,
+  theme,
+  useNativeStackHeaderConfig,
+  useTheme,
+  useUi,
+} from "../../ui/core";
+import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import { ComposeModeToggle } from "./ComposeModeToggle";
 import {
   signedBatchAmount,
@@ -31,7 +59,33 @@ import {
 import { categoryColor } from "../categories/appearance";
 import type { Category } from "../categories/model";
 
-type Row = { category: string; place: string; emoji: string; color: string };
+type Row = {
+  category: string;
+  place: string;
+  emoji: string;
+  color: string;
+  lookColor?: ComponentProps<typeof EmojiTile>["color"];
+};
+
+export function batchSharedPlace(
+  queue: QueuedPosting[],
+  rowFor: (item: QueuedPosting) => Row,
+) {
+  const places = queue.map((item) => {
+    const { command } = item;
+    const payload = command.payload;
+    return command.kind === "transfer"
+      ? command.payload.sourceFinancialAccountProfileId
+      : "financialAccountProfileId" in payload
+        ? payload.financialAccountProfileId
+        : undefined;
+  });
+  const first = queue[0];
+  return first && places[0] && places.every((id) => id === places[0])
+    ? rowFor(first).place
+    : undefined;
+}
+
 export function batchRowFor({
   item,
   categories,
@@ -63,15 +117,18 @@ export function batchRowFor({
       ids
         ?.map(
           (id) =>
-            categories?.find((row) => row.id === id)?.name ??
-            "Saved category",
+            categories?.find((row) => row.id === id)?.name ?? "Saved category",
         )
         .join(" · ") || "No category",
-    place:
-      profiles?.find((row) => row.id === profileId)?.name ??
-      "No account",
+    place: profiles?.find((row) => row.id === profileId)?.name ?? "No account",
     emoji: category?.style.emoji ?? "💰",
     color: category ? categoryColor(category.style) : theme.primary,
+    lookColor: category
+      ? {
+          light: categoryColor(category.style),
+          dark: categoryColor(category.style, "dark"),
+        }
+      : undefined,
   };
 }
 
@@ -161,12 +218,14 @@ export function BatchNativeStack({
       onPress={() => void batch.postAll()}
       style={styles.headerPost}
     >
-      <Text style={styles.headerPostText}>Post {queue.length}</Text>
+      <Text preset="filterSort" style={styles.headerPostText}>
+        Post {queue.length}
+      </Text>
     </Pressable>
   ) : (
     <View />
   );
-  const tape = (
+  const legacyTape = (
     <SafeAreaView
       style={ui.screen}
       edges={
@@ -176,7 +235,9 @@ export function BatchNativeStack({
       {Platform.OS === "web" && (
         <View style={styles.webHeader}>
           {back}
-          <Text style={ui.title}>Batch</Text>
+          <Text variant="section" style={ui.title}>
+            Batch
+          </Text>
           {headerPost}
         </View>
       )}
@@ -193,15 +254,17 @@ export function BatchNativeStack({
             if (mode === "one") onOne();
           }}
         />
-        <Text style={styles.muted}>
+        <Text preset="rowSubtitle" style={styles.muted}>
           {queue.length === 0
             ? "Add the transactions you want to post together. They stay on this device until you post."
             : `${queue.length} ${queue.length === 1 ? "draft" : "drafts"} held on this device. Nothing is posted yet.`}
         </Text>
         {queue.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>The batch is empty</Text>
-            <Text style={styles.muted}>
+            <Text variant="section" style={styles.emptyTitle}>
+              The batch is empty
+            </Text>
+            <Text preset="rowSubtitle" style={styles.muted}>
               Every one you add lands here with its amount, so you can check the
               net before it posts.
             </Text>
@@ -227,17 +290,26 @@ export function BatchNativeStack({
                   <View
                     style={[styles.chip, { backgroundColor: `${row.color}22` }]}
                   >
-                    <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
+                    <Text preset="emoji16">{row.emoji}</Text>
                   </View>
                   <View style={styles.rowCopy}>
-                    <Text style={styles.rowTitle} numberOfLines={1}>
+                    <Text
+                      preset="rowName"
+                      style={styles.rowTitle}
+                      numberOfLines={1}
+                    >
                       {description || "Untitled"}
                     </Text>
-                    <Text style={styles.rowMeta} numberOfLines={1}>
+                    <Text
+                      preset="rowMeta"
+                      style={styles.rowMeta}
+                      numberOfLines={1}
+                    >
                       {row.category} · {row.place}
                     </Text>
                   </View>
                   <Text
+                    preset="batchAmount"
                     style={[styles.rowAmount, amount > 0 && styles.positive]}
                   >
                     {signedBatchMoney(amount, currency)}
@@ -265,22 +337,29 @@ export function BatchNativeStack({
             {totals.out > 0 && totals.incoming > 0 && (
               <>
                 <View style={styles.splitRow}>
-                  <Text style={styles.muted}>Out</Text>
-                  <Text style={styles.rowAmount}>
+                  <Text preset="rowSubtitle" style={styles.muted}>
+                    Out
+                  </Text>
+                  <Text preset="batchAmount" style={styles.rowAmount}>
                     {signedBatchMoney(-totals.out, currency)}
                   </Text>
                 </View>
                 <View style={styles.splitRow}>
-                  <Text style={styles.muted}>In</Text>
-                  <Text style={styles.rowAmount}>
+                  <Text preset="rowSubtitle" style={styles.muted}>
+                    In
+                  </Text>
+                  <Text preset="batchAmount" style={styles.rowAmount}>
                     {signedBatchMoney(totals.incoming, currency)}
                   </Text>
                 </View>
               </>
             )}
             <View style={styles.netRow}>
-              <Text style={styles.netLabel}>NET</Text>
+              <Text variant="label" style={styles.netLabel}>
+                NET
+              </Text>
               <Text
+                preset="batchNet"
                 style={[styles.netValue, totals.net > 0 && styles.positive]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
@@ -312,7 +391,7 @@ export function BatchNativeStack({
           </View>
         )}
         {!!batch.error && (
-          <Text accessibilityRole="alert" style={ui.error}>
+          <Text preset="caption" accessibilityRole="alert" style={ui.error}>
             {batch.error}
           </Text>
         )}
@@ -331,8 +410,10 @@ export function BatchNativeStack({
             />
           </View>
           <View style={styles.rowCopy}>
-            <Text style={styles.rowTitle}>Posted {posted.count}</Text>
-            <Text style={styles.rowMeta}>
+            <Text preset="rowName" style={styles.rowTitle}>
+              Posted {posted.count}
+            </Text>
+            <Text preset="rowMeta" style={styles.rowMeta}>
               Net {signedBatchMoney(posted.net, currency)} · this month
             </Text>
           </View>
@@ -342,12 +423,205 @@ export function BatchNativeStack({
             onPress={onBack}
             style={styles.back}
           >
-            <Text style={styles.rowTitle}>Done</Text>
+            <Text preset="rowName" style={styles.rowTitle}>
+              Done
+            </Text>
           </Pressable>
         </View>
       )}
     </SafeAreaView>
   );
+  const sharedPlace = batchSharedPlace(queue, rowFor);
+  const tape = (
+    <Presentation legacy={legacyTape}>
+      <Screen
+        footer={
+          posted ? (
+            <ActionBar
+              primary={{ label: "Done", onPress: onBack, icon: "checkmark" }}
+              secondary={{
+                label: "Add one",
+                onPress: onAdd,
+                icon: "add",
+                disabled: !batch.editable,
+              }}
+            />
+          ) : (
+            <ActionBar
+              primary={
+                queue.length > 0
+                  ? {
+                      label: `Post ${queue.length}`,
+                      onPress: () => void batch.postAll(),
+                      pending: batch.busy,
+                      icon: "checkmark",
+                    }
+                  : undefined
+              }
+              secondary={{
+                label: "Add one",
+                onPress: onAdd,
+                icon: "add",
+                disabled: !batch.editable,
+              }}
+            />
+          )
+        }
+      >
+        {posted ? (
+          <CenteredMoment
+            icon="checkmark"
+            tone="positive"
+            title={`Posted ${posted.count}`}
+            amount={
+              <MoneyHero
+                currency={currency}
+                amount={formatAmount(Math.abs(posted.net), currency, {
+                  hideZeroDecimals: true,
+                })}
+                negative={posted.net < 0}
+                tone={moneyTone(posted.net)}
+                align="center"
+              />
+            }
+          />
+        ) : (
+          <>
+            <Header title="Batch" onBack={onBack} />
+            <ComposeModeToggle
+              mode="batch"
+              count={queue.length}
+              disabled={!batch.editable}
+              onMode={(mode) => {
+                if (mode === "one") onOne();
+              }}
+            />
+            <TintCard>
+              <Text variant="label" tone="muted">
+                Net of {queue.length} {queue.length === 1 ? "draft" : "drafts"}
+              </Text>
+              <MoneyHero
+                currency={currency}
+                amount={formatAmount(Math.abs(totals.net), currency, {
+                  hideZeroDecimals: true,
+                })}
+                negative={totals.net < 0}
+                tone={moneyTone(totals.net)}
+              />
+              <Text variant="meta" tone="muted">
+                Not posted yet
+              </Text>
+            </TintCard>
+            {batch.error ? (
+              <InlineNotice
+                tone="danger"
+                title="Couldn't post yet"
+                detail={batch.error}
+              />
+            ) : null}
+            {queue.length === 0 ? (
+              <CenteredMoment
+                icon="documents-outline"
+                tone="soft"
+                title="The batch is empty"
+                body="Every one you add lands here with its amount, so you can check the net before it posts."
+              />
+            ) : (
+              <DateSection
+                date="In this batch"
+                place={sharedPlace ? `From ${sharedPlace}` : undefined}
+              >
+                {queue.map((item) => {
+                  const row = rowFor(item);
+                  const description =
+                    "description" in item.command.payload
+                      ? item.command.payload.description
+                      : item.command.payload.name;
+                  const amount = signedBatchAmount(item.command);
+                  const title =
+                    item.command.kind === "transfer"
+                      ? "Transfer"
+                      : item.command.kind === "opening"
+                        ? "Initial balance"
+                        : row.category;
+                  return (
+                    <ListRow
+                      key={item.id}
+                      title={title}
+                      value={signedBatchMoney(amount, currency)}
+                      meta={[
+                        sharedPlace ? "" : row.place,
+                        description || "Untitled",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      leading={
+                        item.command.kind === "transfer" ? (
+                          <IconTile
+                            icon="swap-horizontal"
+                            tone="neutral"
+                            size={36}
+                          />
+                        ) : (
+                          <EmojiTile
+                            emoji={row.emoji}
+                            color={row.lookColor ?? row.color}
+                            size={36}
+                          />
+                        )
+                      }
+                      tone={moneyTone(amount)}
+                      chevron={false}
+                      onPress={batch.editable ? () => onEdit(item) : undefined}
+                      trailing={
+                        <IconButton
+                          preset="remove"
+                          icon="close"
+                          iconSize={20}
+                          accessibilityLabel={`Remove ${description || "untitled draft"}`}
+                          disabled={!batch.editable}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            batch.remove(item.id);
+                          }}
+                        />
+                      }
+                    />
+                  );
+                })}
+              </DateSection>
+            )}
+          </>
+        )}
+      </Screen>
+    </Presentation>
+  );
+  const headerConfig = useNativeStackHeaderConfig({
+    hidden: false,
+    title: "Batch",
+    largeTitle: Platform.OS === "ios",
+    hideBackButton: true,
+    hideShadow: true,
+    translucent: Platform.OS === "ios",
+    backgroundColor: theme.background,
+    color: theme.foreground,
+    titleColor: theme.foreground,
+    titleFontFamily: font.bold,
+    largeTitleFontFamily: font.extrabold,
+    children: (
+      <>
+        <ScreenStackHeaderLeftView>
+          {back}
+          {Platform.OS !== "ios" && (
+            <Text variant="section" style={ui.title}>
+              Batch
+            </Text>
+          )}
+        </ScreenStackHeaderLeftView>
+        <ScreenStackHeaderRightView>{headerPost}</ScreenStackHeaderRightView>
+      </>
+    ),
+  });
   if (Platform.OS === "web") return composing ? compose : tape;
   return (
     <ScreenStack style={{ flex: 1 }}>
@@ -356,29 +630,7 @@ export function BatchNativeStack({
         stackPresentation="push"
         style={StyleSheet.absoluteFill}
         contentStyle={{ backgroundColor: theme.background }}
-        headerConfig={{
-          title: "Batch",
-          largeTitle: Platform.OS === "ios",
-          hideBackButton: true,
-          hideShadow: true,
-          translucent: Platform.OS === "ios",
-          backgroundColor: theme.background,
-          color: theme.foreground,
-          titleColor: theme.foreground,
-          titleFontFamily: font.bold,
-          largeTitleFontFamily: font.extrabold,
-          children: (
-            <>
-              <ScreenStackHeaderLeftView>
-                {back}
-                {Platform.OS !== "ios" && <Text style={ui.title}>Batch</Text>}
-              </ScreenStackHeaderLeftView>
-              <ScreenStackHeaderRightView>
-                {headerPost}
-              </ScreenStackHeaderRightView>
-            </>
-          ),
-        }}
+        headerConfig={headerConfig}
       >
         {tape}
       </ScreenStackItem>
@@ -431,12 +683,10 @@ function createStyles(theme: Theme) {
     headerPostText: {
       color: theme.primaryForeground,
       fontFamily: font.bold,
-      fontSize: 14,
     },
     muted: {
       color: theme.mutedForeground,
       fontFamily: font.regular,
-      fontSize: 14,
       lineHeight: 20,
     },
     emptyCard: {
@@ -449,7 +699,6 @@ function createStyles(theme: Theme) {
     },
     emptyTitle: {
       fontFamily: font.bold,
-      fontSize: fontSize.title,
       color: theme.foreground,
     },
     tape: {
@@ -481,17 +730,14 @@ function createStyles(theme: Theme) {
     rowCopy: { flex: 1, gap: 2 },
     rowTitle: {
       fontFamily: font.semibold,
-      fontSize: fontSize.body,
       color: theme.foreground,
     },
     rowMeta: {
       fontFamily: font.regular,
-      fontSize: 13,
       color: theme.mutedForeground,
     },
     rowAmount: {
       fontFamily: font.semibold,
-      fontSize: 15,
       color: theme.foreground,
       fontVariant: ["tabular-nums"],
     },
@@ -518,14 +764,12 @@ function createStyles(theme: Theme) {
     },
     netLabel: {
       fontFamily: font.bold,
-      fontSize: fontSize.label,
       color: theme.mutedForeground,
       letterSpacing: 1,
     },
     netValue: {
       flexShrink: 1,
       fontFamily: font.extrabold,
-      fontSize: 32,
       color: theme.foreground,
     },
     banner: {

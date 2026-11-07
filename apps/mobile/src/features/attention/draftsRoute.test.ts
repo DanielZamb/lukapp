@@ -262,7 +262,8 @@ test("a failed server request refreshes the inbox without showing confirmation",
   expect(f.service.read("c1")?.status.kind).toBe("submitting");
   expect(intakeState.refresh).toHaveBeenCalledOnce();
   expect(text()).not.toContain("Record added");
-  expect(button("Confirm all Ready").props.disabled).toBe(false);
+  // The outcome is unknown, so the Candidate leaves Ready (it stays "submitting") and is retried by opening it.
+  expect(button("Confirm all Ready").props.disabled).toBe(true);
 });
 
 

@@ -1,8 +1,8 @@
 import type { IntakeEvidence } from "./types";
 
 export class IntakeError extends Error {
-  constructor(readonly code: string) {
-    super(code);
+  constructor(readonly code: string, message = code) {
+    super(message);
   }
 }
 
