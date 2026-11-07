@@ -6,7 +6,7 @@
     "scheme": "lukapp-u01",
     "orientation": "portrait",
     "ios": {
-      "bundleIdentifier": "com.lukapp.u01.dev",
+      "bundleIdentifier": "com.lukapp.dev",
       "buildNumber": "3",
       "infoPlist": {
         "NSSupportsLiveActivities": true
