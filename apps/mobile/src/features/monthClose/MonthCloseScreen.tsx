@@ -30,6 +30,7 @@ import type { MonthClosePhase } from "./useMonthClose";
 
 export function MonthCloseScreen({
   readiness,
+  intakeWarning,
   summary,
   phase,
   onBack,
@@ -43,6 +44,7 @@ export function MonthCloseScreen({
   onConfirm,
 }: {
   readiness: MonthCloseReadiness;
+  intakeWarning?: string;
   summary: {
     currency: string;
     spendMinorUnits: number;
@@ -108,6 +110,7 @@ export function MonthCloseScreen({
             {phase.message}
           </Text>
         ) : null}
+        {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{intakeWarning} This does not block Month Close.</Text> : null}
         <Text style={ui.body}>{confirmDetail(display)}</Text>
         <PrimaryButton
           label={
@@ -144,6 +147,7 @@ export function MonthCloseScreen({
         eyebrow={reviewEyebrow(readiness)}
         onBack={onBack}
       />
+      {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{intakeWarning} This does not block Month Close.</Text> : null}
       <View style={styles.amountCard}>
         <Text style={ui.muted}>{readiness.monthLabel} spending</Text>
         <Text style={styles.detailAmount}>

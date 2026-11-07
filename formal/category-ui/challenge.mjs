@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const args = process.argv.slice(2);
-const out = resolve(root, args.includes('--out') ? args[args.indexOf('--out') + 1] : '.orchestrator/runs/2026-10-20-category-ui-crud-formal/challenges');
+const out = resolve(root, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'reports/formal-category-ui/challenges');
 mkdirSync(out, { recursive: true });
 const sha = value => createHash('sha256').update(value).digest('hex');
 const editor = 'apps/mobile/src/features/posting/usePostingEditor.ts';
@@ -89,7 +89,7 @@ for (const mutation of mutations) {
     writeFileSync(file, after);
     const mutationOut = resolve(out, mutation.name);
     const run = spawnSync(process.execPath, [resolve(scratch, 'formal/category-ui/check.mjs'), '--out', mutationOut,
-      '--graph', mutation.graph ?? 'account', '--invariant', mutation.invariant, '--jar', resolve(root, '.orchestrator/tools/tla/v1.7.4/tla2tools.jar'), '--scratch-mutation'],
+      '--graph', mutation.graph ?? 'account', '--invariant', mutation.invariant, '--jar', resolve(root, '.verification/tools/tla/v1.7.4/tla2tools.jar'), '--scratch-mutation'],
       { cwd: scratch, encoding: 'utf8', maxBuffer: 20_000_000, env: { ...process.env, CATEGORY_UI_GIT_ROOT: process.env.CATEGORY_UI_GIT_ROOT ?? root,
         CATEGORY_UI_MUTATION_FLAG: mutation.flag, CATEGORY_UI_MUTATION_NAME: mutation.name } });
     mkdirSync(mutationOut, { recursive: true });

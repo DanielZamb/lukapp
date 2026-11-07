@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import * as SecureStore from "expo-secure-store";
-import { consumeIn, isReadyCandidate } from "./candidates";
-import { devSeedAction, readySeedCandidate, seedCandidate, seedDiscardNotices } from "./devSeed";
-import { addDiscardNotice, discardNoticesStorageKey, readDiscardNotices } from "../localDiscardNotices";
+import { isReadyCandidate } from "./candidates";
+import { consumeIn } from "./legacy.testSupport";
+import { devSeedAction, readySeedCandidate, seedCandidate, seedDiscardNotices } from "./devSeed.testSupport";
+import { addDiscardNotice } from "../localDiscardNotices.testSupport";
+import { discardNoticesStorageKey, readDiscardNotices } from "../localDiscardNotices";
 
 const memory = new Map<string, string>();
 beforeEach(() => {

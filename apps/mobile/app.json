@@ -55,7 +55,8 @@
           "faceIDPermission": "Use Face ID to unlock your financial information in Lukapp."
         }
       ],
-      "./plugins/with-entry-privacy.cjs"
+      "./plugins/with-entry-privacy.cjs",
+      "./plugins/with-notification-intake.cjs"
     ],
     "experiments": {
       "typedRoutes": true

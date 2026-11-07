@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const args = process.argv.slice(2);
 const option = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback;
-const out = resolve(root, option('--out', '.orchestrator/runs/2026-10-20-category-ui-crud-formal/latest'));
+const out = resolve(root, option('--out', 'reports/formal-category-ui/latest'));
 const graphSelection = option('--graph', 'all');
 const invariantSelection = option('--invariant', null);
 if (invariantSelection && !args.includes('--scratch-mutation')) throw new Error('Selecting one invariant requires --scratch-mutation');
@@ -15,7 +15,7 @@ if (!['all', 'account', 'crud'].includes(graphSelection)) throw new Error('Expec
 if (process.env.CATEGORY_UI_MUTATION_FLAG && !args.includes('--scratch-mutation')) throw new Error('Mutation witness mode requires --scratch-mutation');
 const accountEnabled = graphSelection !== 'crud';
 const crudEnabled = graphSelection !== 'account';
-const jar = resolve(root, option('--jar', '.orchestrator/tools/tla/v1.7.4/tla2tools.jar'));
+const jar = resolve(root, option('--jar', '.verification/tools/tla/v1.7.4/tla2tools.jar'));
 mkdirSync(out, { recursive: true });
 writeFileSync(resolve(out, 'receipt.json'), JSON.stringify({ status: 'RUNNING', at: new Date().toISOString() }, null, 2));
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');

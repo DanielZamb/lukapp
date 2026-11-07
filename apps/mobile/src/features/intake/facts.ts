@@ -1,21 +1,22 @@
 import { formatMoney } from "../money";
 import type { LocalEntryFacts } from "../localEntryDrafts";
 import type { IntakeCandidate } from "./candidates";
-import { suggestionOf } from "./candidates";
+import { reviewSuggestionOf } from "./candidates";
 
 export function factsFromCandidate(candidate: IntakeCandidate): LocalEntryFacts {
-  const signed =
+  const known = candidate.suggestion.amountMinorUnits;
+  const signed = known === null ? null :
     candidate.suggestion.direction === "out"
-      ? -Math.abs(candidate.suggestion.amountMinorUnits)
-      : Math.abs(candidate.suggestion.amountMinorUnits);
+      ? -Math.abs(known)
+      : Math.abs(known);
   return {
     workspaceId: candidate.workspaceId,
     currency: candidate.currency,
     entryType: "normal",
-    amountText: formatMoney({
+    amountText: candidate.reviewAmountText ?? (signed === null || candidate.suggestion.direction === null ? "" : formatMoney({
       currency: candidate.currency,
       minorUnits: signed,
-    }).replace(`${candidate.currency} `, ""),
+    }).replace(`${candidate.currency} `, "")),
     accountingDate: candidate.suggestion.accountingDate,
     description: candidate.suggestion.description,
     profileId: candidate.suggestion.financialAccountProfileId,
@@ -27,4 +28,4 @@ export function factsFromCandidate(candidate: IntakeCandidate): LocalEntryFacts 
   };
 }
 
-export { suggestionOf };
+export { reviewSuggestionOf };

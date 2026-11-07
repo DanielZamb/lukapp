@@ -178,7 +178,7 @@ def main():
         declared = {**packages["dependencies"], **packages["devDependencies"]}.get(package)
         if declared != version:
             raise SystemExit(f"Tool version changed: review {package}, expected {version}, got {declared}")
-    evidence = ROOT / ".orchestrator/verification/categories" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    evidence = ROOT / "reports/formal-categories" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     evidence.mkdir(parents=True)
     source_before = {entry["path"]: digest(ROOT / entry["path"]) for entry in coverage["files"]}
     verifier_before = {path: digest(ROOT / path) for path in VERIFIER_FILES}

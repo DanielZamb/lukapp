@@ -96,7 +96,7 @@ function setup(): ComponentProps<typeof Setup> {
 function completion(): ComponentProps<typeof SetupCompletion> {
   if (!root) throw new Error("Entry is not mounted");
   const props = root.root.findByType(SetupCompletion).props;
-  return { summary: props.summary, onHome: props.onHome };
+  return { summary: props.summary, onHome: props.onHome, onNotificationSetup: props.onNotificationSetup };
 }
 
 test("a live defaults update keeps setup mounted until its receipt and Go to home opens the first category budget", async () => {
@@ -149,4 +149,13 @@ test("Go to home without the shortcut leaves the budget closed", async () => {
   await act(async () => completion().onHome());
   expect(state.push).not.toHaveBeenCalled();
   expect(root?.root.findAllByType(SetupCompletion)).toHaveLength(0);
+});
+
+
+test("purchase-alert setup has an explicit device setup action without taking the budget path", async () => {
+  await open();
+  await act(async () => setup().onComplete({ ...summary, purchaseAlertsConsent: true }));
+  expect(state.push).not.toHaveBeenCalled();
+  await act(async () => completion().onNotificationSetup());
+  expect(state.push).toHaveBeenCalledExactlyOnceWith("/intake");
 });

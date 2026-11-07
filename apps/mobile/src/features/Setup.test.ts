@@ -161,7 +161,7 @@ test("only categories open; choices reveal currency, alerts, then empty amount a
   expect(nodes("Starting amount")).toHaveLength(0);
   await press("Food");
   expect(node("COP").props.accessibilityState.checked).toBe(false);
-  expect(nodes("Use them, Alerts become drafts you confirm")).toHaveLength(0);
+  expect(nodes("Use them, Alerts can become Candidates after device setup")).toHaveLength(0);
   expect(
     nodes(`Timezone, ${Intl.DateTimeFormat().resolvedOptions().timeZone}`),
   ).toHaveLength(1);
@@ -243,7 +243,7 @@ test("More searches all supported currencies by code and name, marks selection, 
   await type("Search currencies", "Canadian");
   await press("CAD, Canadian Dollar");
   expect(text()).toContain("Canadian Dollar");
-  expect(nodes("Use them, Alerts become drafts you confirm")).toHaveLength(1);
+  expect(nodes("Use them, Alerts can become Candidates after device setup")).toHaveLength(1);
   await press("More currencies");
   await type("Search currencies", "CAD");
   expect(node("CAD, Canadian Dollar").props.accessibilityState.checked).toBe(
@@ -260,9 +260,9 @@ test("timezone search changes the row without revealing alerts or gating currenc
   await type("Search timezones", "Bogota");
   await press("America/Bogota, Bogotá");
   expect(nodes("Timezone, America/Bogota")).toHaveLength(1);
-  expect(nodes("Use them, Alerts become drafts you confirm")).toHaveLength(0);
+  expect(nodes("Use them, Alerts can become Candidates after device setup")).toHaveLength(0);
   await press("USD");
-  expect(nodes("Use them, Alerts become drafts you confirm")).toHaveLength(1);
+  expect(nodes("Use them, Alerts can become Candidates after device setup")).toHaveLength(1);
 });
 
 test("Start tracking saves real setup answers once, with empty meaning zero and consent only", async () => {
@@ -375,6 +375,7 @@ test("Cancel setup and pan dismissal leave without saving", async () => {
 
 test("completion shows six look chips and exact summary, then goes home", async () => {
   const home = vi.fn();
+  const notificationSetup = vi.fn();
   const summary: SetupSummary = {
     categories: starterCategories
       .slice(0, 7)
@@ -386,10 +387,10 @@ test("completion shows six look chips and exact summary, then goes home", async 
     firstCategoryId: "food",
   };
   await act(async () => {
-    root = create(createElement(SetupCompletion, { summary, onHome: home }));
+    root = create(createElement(SetupCompletion, { summary, onHome: home, onNotificationSetup: notificationSetup }));
   });
   expect(text()).toContain("You're set");
-  expect(text()).toContain("Purchase alerts can become drafts.");
+  expect(text()).toContain("Purchase alerts can become Candidates after device setup. Device access and review are still required.");
   expect(text()).toContain("Budgets stay one door away.");
   expect(text()).not.toContain("Shopping");
   expect(
@@ -400,8 +401,13 @@ test("completion shows six look chips and exact summary, then goes home", async 
   ).toContain(
     "Colombian Peso, starting from COP 1.500,25. Tracking Food, Transport, Dining and 4 more.",
   );
+  await press("Set up notification intake");
+  expect(notificationSetup).toHaveBeenCalledOnce();
+  expect(home).not.toHaveBeenCalled();
   await press("Go to home");
   expect(home).toHaveBeenCalledOnce();
+  await act(async () => { root?.update(createElement(SetupCompletion, { summary: { ...summary, purchaseAlertsConsent: false }, onHome: home, onNotificationSetup: notificationSetup })); });
+  expect(nodes("Set up notification intake")).toHaveLength(0);
 });
 
 test("palette has 28 unique swatches and arbitrary emoji keeps one grapheme", () => {

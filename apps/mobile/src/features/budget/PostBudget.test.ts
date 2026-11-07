@@ -1,3 +1,4 @@
+vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -19,6 +20,7 @@ import { router } from "expo-router";
 import type { api } from "../api";
 import type { FunctionReturnType } from "convex/server";
 
+const navigation = vi.hoisted(() => ({ addListener: vi.fn(() => () => {}), dispatch: vi.fn() }));
 const memory = vi.hoisted(() => new Map<string, string>());
 vi.mock("expo-secure-store", () => ({
   getItemAsync: async (key: string) => memory.get(key) ?? null,
@@ -30,7 +32,8 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModalProvider: "SheetProvider", BottomSheetModal: "Sheet", BottomSheetView: "SheetView", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
 }));
 vi.mock("react-native-screens", () => ({ ScreenStack: "Stack", ScreenStackItem: "StackItem", ScreenStackHeaderLeftView: "HeaderLeft", ScreenStackHeaderRightView: "HeaderRight" }));
-vi.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), router: { replace: vi.fn(), back: vi.fn() }, useNavigation: vi.fn(), Redirect: "Redirect" }));
+vi.mock("expo-router", () => ({
+  useNavigation: () => navigation, useLocalSearchParams: () => ({}), router: { replace: vi.fn(), back: vi.fn() }, Redirect: "Redirect" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("react-native", () => ({
@@ -44,7 +47,6 @@ vi.mock("../activity", () => ({ usePersonalDefaults: () => ({
 }) }));
 vi.mock("../useLocalEntryDrafts", () => ({ useLocalEntryDrafts: () => ({ port: null }) }));
 vi.mock("../useIntakeCandidates", () => ({ useIntakeCandidates: () => ({}) }));
-vi.mock("../intake/facts", () => ({ factsFromCandidate: vi.fn(), suggestionOf: vi.fn() }));
 vi.mock("../posting/usePostingTransport", () => ({ usePostingTransport: () => transport }));
 vi.mock("../categories/CategoryPicker", () => ({ CategoryPicker: () => null }));
 vi.mock("../posting/PlaceSheet", () => ({ PlaceSheet: () => null }));
@@ -229,8 +231,7 @@ test("saving the second place inside a tx stays in the form without LevelUnlocke
   expect(form().amount).toBe("-120.000,00");
   expect(form().description).toBe("Groceries");
   expect(router.replace).not.toHaveBeenCalled();
-  const { useNavigation } = await import("expo-router");
-  expect(useNavigation).not.toHaveBeenCalled();
+  expect(navigation.dispatch).not.toHaveBeenCalled();
 });
 
 test("retrying a pending expense preserves its command and idempotency key", async () => {

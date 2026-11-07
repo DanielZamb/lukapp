@@ -86,7 +86,7 @@ export function MonthClose({
         });
   const close = useMonthClose(workspaceId, readiness, transport);
   const title = `Complete ${monthLabel(requestedPeriod)}`;
-  const error = drafts.error || intake.error;
+  const error = drafts.error || (intake.supported === false ? "" : intake.error);
   if (error)
     return (
       <Screen>
@@ -106,6 +106,7 @@ export function MonthClose({
   return (
     <MonthCloseScreen
       readiness={readiness}
+      intakeWarning={intake.warning}
       summary={{
         currency,
         spendMinorUnits: activity.monthSpendMinorUnits,

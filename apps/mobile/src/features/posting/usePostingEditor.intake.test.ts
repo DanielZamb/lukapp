@@ -98,12 +98,8 @@ test("a Candidate prefills the shared posting form", async () => {
   const editor = await open({
     id: "candidate-groceries",
     facts,
-    suggestion,
-    parserVersion: "parser@1",
-    consentVersion: "consent@1",
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
     confirm: vi.fn(),
-    consume: vi.fn(),
-    fail: vi.fn(),
   });
   expect(editor().description).toBe("Groceries");
   expect(editor().amount).toBe("-1.264,00");
@@ -113,21 +109,16 @@ test("a Candidate prefills the shared posting form", async () => {
   expect(editor().canKeepDraft).toBe(false);
 });
 
-test("confirming a Candidate posts once and consumes it", async () => {
+test("confirming a Candidate displays its receipt once", async () => {
   const confirm = vi.fn(async () => ({
     description: "Groceries",
     amount: { currency: "COP", minorUnits: -126400 },
   }));
-  const consume = vi.fn(async () => {});
   const editor = await open({
     id: "candidate-groceries",
     facts,
-    suggestion,
-    parserVersion: "parser@1",
-    consentVersion: "consent@1",
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
     confirm,
-    consume,
-    fail: vi.fn(),
   });
   await act(async () => {
     await editor().submit();
@@ -135,15 +126,12 @@ test("confirming a Candidate posts once and consumes it", async () => {
   expect(confirm).toHaveBeenCalledOnce();
   expect(confirm).toHaveBeenCalledWith(
     expect.objectContaining({
-      candidateId: "candidate-groceries",
-      confirmed: expect.objectContaining({
-        description: "Groceries",
-        financialAccountProfileId: "daily",
-        amount: { currency: "COP", minorUnits: 126400 },
-      }),
+      direction: "out",
+      description: "Groceries",
+      financialAccountProfileId: "daily",
+      amount: { currency: "COP", minorUnits: 126400 },
     }),
   );
-  expect(consume).toHaveBeenCalledOnce();
   expect(editor().posted).toEqual({
     description: "Groceries",
     amount: { currency: "COP", minorUnits: -126400 },
@@ -167,12 +155,8 @@ test("a Candidate route is blocked when a posting Draft exists and never touches
     {
       id: "candidate-groceries",
       facts,
-      suggestion,
-      parserVersion: "parser@1",
-      consentVersion: "consent@1",
+      originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
       confirm,
-      consume: vi.fn(),
-      fail: vi.fn(),
     },
     api,
     { intakeRoute: true },
@@ -194,12 +178,8 @@ test("a bound Candidate stays a cash in or out and refuses setup", async () => {
   const editor = await open({
     id: "candidate-groceries",
     facts,
-    suggestion,
-    parserVersion: "parser@1",
-    consentVersion: "consent@1",
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
     confirm: vi.fn(),
-    consume: vi.fn(),
-    fail: vi.fn(),
   });
   expect(editor().lockEntryType).toBe(true);
   await act(async () => {
@@ -215,12 +195,10 @@ test("a bound Candidate stays a cash in or out and refuses setup", async () => {
   expect(editor().setup).toBeNull();
 });
 
-test("idempotency conflict consumes the Candidate; a timeout leaves it", async () => {
-  const consume = vi.fn(async () => {});
-  const fail = vi.fn(async () => {});
+test.each(["intake", "accounting"])("an idempotency conflict from %s retains the Candidate and never fabricates Posted", async (kind) => {
   const confirm = vi.fn(async () => {
     throw new ConvexError({
-      kind: "intake",
+      kind,
       code: "idempotency_key_conflict",
       message: "idempotency_key_conflict",
     });
@@ -228,50 +206,44 @@ test("idempotency conflict consumes the Candidate; a timeout leaves it", async (
   const editor = await open({
     id: "candidate-groceries",
     facts,
-    suggestion,
-    parserVersion: "parser@1",
-    consentVersion: "consent@1",
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
     confirm,
-    consume,
-    fail,
   });
   await act(async () => {
     await editor().submit();
   });
-  expect(consume).toHaveBeenCalledOnce();
-  expect(fail).not.toHaveBeenCalled();
+  expect(editor().posted).toBeNull();
+  expect(editor().error).toBe("idempotency_key_conflict");
+  expect(editor().description).toBe("Groceries");
+  expect(editor().amount).toBe(facts.amountText);
+  expect(editor().categories).toEqual(facts.categories);
+  await act(async () => { await editor().submit(); });
+  expect(confirm).toHaveBeenCalledTimes(2);
+  expect(editor().posted).toBeNull();
   const timeout = vi.fn(async () => {
     throw new Error("network timeout");
   });
-  const retryFail = vi.fn(async () => {});
-  const retryConsume = vi.fn(async () => {});
   const retry = await open({
     id: "candidate-groceries",
     facts,
-    suggestion,
-    parserVersion: "parser@1",
-    consentVersion: "consent@1",
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
     confirm: timeout,
-    consume: retryConsume,
-    fail: retryFail,
   });
   await act(async () => {
     await retry().submit();
   });
-  expect(retryConsume).not.toHaveBeenCalled();
-  expect(retryFail).not.toHaveBeenCalled();
+  expect(retry().posted).toBeNull();
+  expect(retry().description).toBe("Groceries");
+  expect(retry().error).toBe("Could not confirm posting. Retry to safely check the same entry.");
 });
 
 test("a definite accounting rejection fails the Candidate and never aborts a Draft", async () => {
-  const fail = vi.fn(async () => {});
   const api = transport();
   const editor = await open(
     {
       id: "candidate-groceries",
       facts,
-      suggestion,
-      parserVersion: "parser@1",
-      consentVersion: "consent@1",
+      originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
       confirm: vi.fn(async () => {
         throw new ConvexError({
           kind: "accounting",
@@ -279,23 +251,20 @@ test("a definite accounting rejection fails the Candidate and never aborts a Dra
           message: "Locked Period",
         });
       }),
-      consume: vi.fn(),
-      fail,
     },
     api,
   );
   await act(async () => {
     await editor().submit();
   });
-  expect(fail).toHaveBeenCalledWith("Locked Period");
+  expect(editor().error).toBe("Locked Period");
   expect(api.abort).not.toHaveBeenCalled();
 });
 
 
 test("the account door explicitly refuses intake without changing its facts or writing", async () => {
   const api = transport();
-  const binding = { id: "candidate-groceries", facts, suggestion, parserVersion: "parser@1", consentVersion: "consent@1",
-    confirm: vi.fn(), consume: vi.fn(), fail: vi.fn() };
+  const binding = { id: "candidate-groceries", facts, originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), confirm: vi.fn() };
   const editor = await open(binding, api, { intakeRoute: true });
   let accepted = true;
   await act(async () => {
@@ -309,4 +278,19 @@ test("the account door explicitly refuses intake without changing its facts or w
   expect(api.save).not.toHaveBeenCalled();
   expect(api.post).not.toHaveBeenCalled();
   expect(binding.confirm).not.toHaveBeenCalled();
+});
+
+test("partial original evidence opens the existing editor with no amount and correction uses the reviewed workspace currency", async () => {
+  const confirm = vi.fn(async () => ({ description: "Reviewed", amount: { currency: "COP", minorUnits: -1230 } }));
+  const persistReview = vi.fn(async () => {});
+  const editor = await open({ id: "partial", facts: { ...facts, amountText: "", description: "", categories: { ids: [], primaryId: null } },
+    originalSuggestion: { ...suggestion, direction: null, description: "", amount: { currency: null, minorUnits: null } },
+    frozen: false, persistReview, confirm });
+  expect(editor().amount).toBe(""); expect(editor().canSubmit).toBe(false);
+  await act(async () => { await editor().submit(); }); expect(confirm).not.toHaveBeenCalled();
+  await act(async () => { editor().setAmount("-12,30"); editor().setDescription("Reviewed"); });
+  expect(editor().canSubmit).toBe(true);
+  await act(async () => { await editor().submit(); });
+  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ direction: "out", description: "Reviewed", amount: { currency: "COP", minorUnits: 1230 } }));
+  expect(persistReview).toHaveBeenCalled();
 });

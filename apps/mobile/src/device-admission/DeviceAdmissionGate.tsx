@@ -1,7 +1,7 @@
 import { useClerk } from "@clerk/expo";
 import { useAction, useQuery_experimental } from "convex/react";
 import Constants from "expo-constants";
-import React, { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ConvexError } from "convex/values";
 import { ActivityIndicator, Platform, Text } from "react-native";
 import { api } from "../features/api";
@@ -14,6 +14,7 @@ import { useLocalEnrollment } from "../local-auth/enrollment";
 import { OccupiedDeviceStep } from "./OccupiedDeviceStep";
 import { NamedDeviceStep } from "./NamedDeviceStep";
 import { DeviceActivity } from "./DeviceActivity";
+import { IntakeDeviceAdmission } from "../features/intake/admission";
 import { ProtectedReadBoundary } from "./ProtectedReadBoundary";
 
 export function DeviceAdmissionGate({ children }: { children: ReactNode }) {
@@ -42,6 +43,9 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     query: api.deviceAccess.status,
     args: nativePlatform ? { installId, platform: nativePlatform } : { installId },
   });
+  const intakeAdmission = useRef(false);
+  intakeAdmission.current = status.status === "success" && status.data.status === "registered" && enrollment.ready;
+  const intakeAdmitted = useCallback(() => intakeAdmission.current, []);
   useLayoutEffect(() => {
     if (status.status === "error") report(status.error);
     else if (status.status === "success" && status.data.status === "revoked")
@@ -140,7 +144,7 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     </Screen>
   );
   if (status.status === "success" && status.data.status === "registered" && enrollment.ready)
-    return <DeviceActivity><ProtectedReadBoundary>{children}</ProtectedReadBoundary></DeviceActivity>;
+    return <IntakeDeviceAdmission.Provider value={intakeAdmitted}><DeviceActivity><ProtectedReadBoundary>{children}</ProtectedReadBoundary></DeviceActivity></IntakeDeviceAdmission.Provider>;
   if (occupier && nativePlatform && !submitted && (!existingLabel || failure?.kind === "occupied")) return (
     <OccupiedDeviceStep platform={nativePlatform} label={occupier.label} lastSeenAt={occupier.lastSeenAt}
       name={replacementName} busy={busy} error={failure?.message ?? ""}

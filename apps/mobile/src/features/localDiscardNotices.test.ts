@@ -1,3 +1,11 @@
+vi.mock("expo", () => ({ requireOptionalNativeModule: () => ({
+  apiVersion: 3,
+  getStatus: async () => ({ schemaVersion: 2, epoch: "a".repeat(22), enabled: false,
+    access: "not_granted", connection: "disconnected", changeSequence: 0, pendingCount: 0, gap: null,
+    lastConnectedAt: null, checkedAt: Date.now(), notices: [], storageState: "healthy" }),
+  disableAndWipe: async () => ({ epoch: "b".repeat(22) }),
+}) }));
+vi.mock("expo-crypto", () => ({ randomUUID: () => "00000000-0000-4000-8000-000000000001" }));
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -5,12 +13,14 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import DraftsRoute from "../../app/drafts";
 import type { DraftListItem } from "./localEntryDrafts";
 import {
-  addDiscardNotice,
   clearDiscardNotices,
   DISCARD_NOTICE_TTL_MS,
   discardNoticesStorageKey,
   readDiscardNotices,
 } from "./localDiscardNotices";
+import { addDiscardNotice } from "./localDiscardNotices.testSupport";
+import { addDiscardNotice as addAdmittedNotice } from "./localDiscardNotices";
+import { LocalInputLease } from "../local-auth/localInput";
 import { clearLocalInput } from "./clearLocalInput";
 
 const state = vi.hoisted(() => ({
@@ -38,7 +48,7 @@ vi.mock("./activity", () => ({ usePersonalDefaults: () => ({
 }) }));
 vi.mock("./useLocalEntryDrafts", () => ({ useLocalEntryDrafts: () => ({ items: state.drafts, count: state.drafts.length, error: "" }) }));
 vi.mock("./useIntakeCandidates", () => ({ useIntakeCandidates: () => ({
-  now: [], wait: [], ready: [], count: 0, error: "", accept: vi.fn(),
+  now: [], wait: [], ready: [], count: 0, error: "", notices: [], dismissNotices: vi.fn(async () => {}),
 }) }));
 vi.mock("../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => vi.fn() }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
@@ -226,12 +236,12 @@ test("OK retains notices and offers retry when removal fails", async () => {
   expect(text()).not.toContain("Notifications discarded");
 });
 
-test("Review complete hides the notice even when unexpired notices exist", async () => {
+test("the empty inbox still exposes unexpired content-free notices", async () => {
   state.drafts = [];
   await addDiscardNotice("owner", { reason: "Security alert", time: now });
   await mount();
-  expect(text()).toContain("Review complete");
-  expect(text()).not.toContain("Notifications discarded");
+  expect(text()).toContain("Candidate inbox");
+  expect(text()).toContain("Notifications discarded");
   expect(await readDiscardNotices("owner")).toHaveLength(1);
 });
 
@@ -245,5 +255,14 @@ test("the inbox hides the button without notices and when the last notice expire
   expect(text()).toContain("Notifications discarded");
   await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
   expect(text()).not.toContain("Notifications discarded");
+  expect(await readDiscardNotices("owner")).toEqual([]);
+});
+
+
+test("a late notice producer from a denied lease cannot recreate input after cleanup", async () => {
+  const lease = new LocalInputLease("owner", "revoked");
+  await addAdmittedNotice(lease, "owner", { reason: "Security alert", time: now });
+  lease.deny(); await clearLocalInput("owner");
+  await expect(addAdmittedNotice(lease, "owner", { reason: "Security alert", time: now })).rejects.toThrow("Local input admission ended");
   expect(await readDiscardNotices("owner")).toEqual([]);
 });

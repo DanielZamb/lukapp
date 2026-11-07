@@ -15,8 +15,7 @@ import { pendingExpenseSchema } from "../pendingExpenseSchema";
 import { LocalEntryDraftGoneError } from "../localEntryDraftErrors";
 import type { EntryType } from "./PostingForm";
 import type {
-  ConfirmCandidateInput,
-  IntakeSuggestion,
+  IntakeSuggestion, IntakeEvidence,
 } from "../../../../../src/notificationIntake/types";
 import {
   intakeConfirmOutcome,
@@ -65,12 +64,13 @@ export type PlaceDraft = {
 export type IntakeBinding = {
   id: string;
   facts: LocalEntryFacts;
-  suggestion: IntakeSuggestion;
-  parserVersion: string;
-  consentVersion: string;
-  confirm: (input: ConfirmCandidateInput) => Promise<PostingReceipt>;
-  consume: () => Promise<void>;
-  fail: (error: string) => Promise<void>;
+  reviewNote?: string;
+  /** The kept notification text, shown beside the form. Never submitted. */
+  notification?: { text: string; packageName: string; at: number } | null;
+  originalSuggestion: IntakeEvidence;
+  readonly frozen: boolean;
+  persistReview(facts: LocalEntryFacts): Promise<void>;
+  confirm(confirmed: IntakeSuggestion): Promise<PostingReceipt>;
 };
 export type PostingDraftsSession = {
   drafts?: LocalEntryDraftsPort | null;
@@ -126,7 +126,7 @@ export function usePostingEditor(
   const submitting = useRef(false);
   const appliedDraft = useRef<LocalEntryDraftId | undefined>(undefined);
   const lifetime = useRef({ active: false });
-  const editable = !busy && !pending && !loading && !blocked;
+  const editable = !busy && !pending && !loading && !blocked && !intake?.frozen;
   const canKeepDraft =
     drafts !== null &&
     intake === null &&
@@ -139,7 +139,8 @@ export function usePostingEditor(
     !submitting.current &&
     !pending &&
     !loading &&
-    !blocked;
+    !blocked &&
+    !intake?.frozen;
   function hydrateFromCommand(value: PendingPosting) {
     const payload = value.payload;
     setDate(payload.accountingDate);
@@ -240,11 +241,13 @@ export function usePostingEditor(
     setError("");
   }
   function snapshotConfirmed(binding: IntakeBinding): IntakeSuggestion {
+    const currency = binding.facts.currency;
+    if (currency !== "COP" && currency !== "USD") throw new Error("Unsupported Candidate currency");
     return {
       direction,
       description: description.trim(),
       amount: {
-        currency: binding.suggestion.amount.currency,
+        currency,
         minorUnits: Math.abs(parseMoney(amount, "es-CO", account.currency)),
       },
       accountingDate: date,
@@ -433,7 +436,7 @@ export function usePostingEditor(
       (!pending &&
         entryType === "normal" &&
         !setup &&
-        intake.suggestion.amount.currency === account.currency)) &&
+        intake.facts.currency === account.currency)) &&
     (!!pending || (setup ? setupValid : amountValid && validTransfer));
   async function keepDraft() {
     const mounted = lifetime.current;
@@ -473,6 +476,34 @@ export function usePostingEditor(
       if (mounted.active) setKeeping(false);
     }
   }
+  const reviewWrites = useRef<Promise<void>>(Promise.resolve());
+  const latestReview = useRef<LocalEntryFacts | null>(null);
+  const persistedReview = useRef<string | null>(null);
+  const reviewFacts = intake && !loading && appliedDraft.current === `intake:${intake.id}` ? snapshotFacts() : null;
+  latestReview.current = reviewFacts;
+  const reviewValue = reviewFacts ? JSON.stringify(reviewFacts) : null;
+  useLayoutEffect(() => {
+    if (!intake || intake.frozen || reviewValue === null || !reviewFacts) return;
+    if (persistedReview.current === null) { persistedReview.current = reviewValue; return; }
+    if (persistedReview.current === reviewValue) return;
+    persistedReview.current = reviewValue;
+    const facts = reviewFacts;
+    const write = reviewWrites.current.catch(() => {}).then(() => intake.persistReview(facts));
+    reviewWrites.current = write;
+    void write.catch((error: unknown) => {
+      if (transport.reportFailure?.(error)) return;
+      if (lifetime.current.active) setError("Could not save Candidate review. Retry before leaving.");
+    });
+  }, [intake, reviewValue, transport]);
+  async function saveCandidateReview() {
+    try {
+      await reviewWrites.current.catch(() => {});
+      if (intake && !intake.frozen && latestReview.current) await intake.persistReview(latestReview.current);
+    } catch (error) {
+      if (!transport.reportFailure?.(error) && lifetime.current.active) setError("Could not save Candidate review. Retry before leaving.");
+      throw error;
+    }
+  }
   async function submit() {
     const mounted = lifetime.current;
     if (!mounted.active || opLock.current || !canSubmit) return;
@@ -487,15 +518,8 @@ export function usePostingEditor(
           setError("A posting is already in progress. Finish it from Drafts.");
           return;
         }
-        const receipt = await intake.confirm({
-          workspaceId: account.workspaceId,
-          candidateId: intake.id,
-          confirmed: snapshotConfirmed(intake),
-          suggestion: intake.suggestion,
-          parserVersion: intake.parserVersion,
-          consentVersion: intake.consentVersion,
-        });
-        await intake.consume();
+        await saveCandidateReview();
+        const receipt = await intake.confirm(snapshotConfirmed(intake));
         if (!mounted.active) return;
         setAmount("-");
         setDescription("");
@@ -547,33 +571,6 @@ export function usePostingEditor(
           "Could not confirm this Candidate.",
         );
         const outcome = intakeConfirmOutcome(error);
-        if (outcome === "consume") {
-          try {
-            await intake.consume();
-          } catch {
-            /* A replay still belongs on this device until consume writes. */
-          }
-          if (!mounted.active) return;
-          setAmount("-");
-          setDescription("");
-          setCategories({ ids: [], primaryId: null });
-          setPosted({
-            description: description.trim() || "Entry",
-            amount: {
-              currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
-              minorUnits:
-                (direction === "out" ? -1 : 1) * Math.abs(minorUnits ?? 0),
-            },
-          });
-          return;
-        }
-        if (outcome === "fail") {
-          try {
-            await intake.fail(message);
-          } catch {
-            /* The Candidate stays for retry if fail cannot write. */
-          }
-        }
         if (mounted.active)
           setError(
             outcome === "fail"
@@ -734,7 +731,7 @@ export function usePostingEditor(
           setAmount(categoryAmount(amount, nature));
       }
     },
-    pending: !!pending,
+    pending: !!pending || intake?.frozen === true,
     loading,
     busy,
     error,
@@ -764,6 +761,7 @@ export function usePostingEditor(
       return true;
     },
     resume,
+    saveCandidateReview,
     submit,
     dismissPosted: () => setPosted(null),
   };

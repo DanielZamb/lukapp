@@ -14,7 +14,7 @@ const cases = [
   { name: "wrong-reversal-lines", path: "src/accounting/commands/reversePostedEntry.ts", from: "debitMinorUnits: line.creditMinorUnits,\n      creditMinorUnits: line.debitMinorUnits,", to: "debitMinorUnits: line.debitMinorUnits,\n      creditMinorUnits: line.creditMinorUnits,", invariant: "UniqueMirroredReversal", harm: "Reversing an entry repeats its accounting effect instead of canceling it." },
 ];
 const hash = path => createHash("sha256").update(readFileSync(path)).digest("hex");
-const scratchManifest = resolve(root, ".orchestrator/scratch-source-files.json");
+const scratchManifest = resolve(root, ".verification/scratch-source-files.json");
 function listSourcePaths() {
   if (existsSync(scratchManifest)) {
     const paths = JSON.parse(readFileSync(scratchManifest, "utf8"));
@@ -22,8 +22,8 @@ function listSourcePaths() {
     return paths;
   }
   const listing = spawnSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: root, encoding: "utf8" });
-  if (listing.status !== 0) throw new Error(`Scratch source requires Git metadata or .orchestrator/scratch-source-files.json: ${listing.stderr}`);
-  const paths = listing.stdout.split("\0").filter(name => name && !name.startsWith("formal/") && !name.startsWith(".agents/") && existsSync(resolve(root, name)));
+  if (listing.status !== 0) throw new Error(`Scratch source requires Git metadata or .verification/scratch-source-files.json: ${listing.stderr}`);
+  const paths = listing.stdout.split("\0").filter(name => name && !name.startsWith("formal/") && !name.startsWith(".agents/") && !name.startsWith(".verification/") && existsSync(resolve(root, name)));
   if (paths.length === 0) throw new Error("No product source found for scratch verification");
   return paths;
 }
@@ -40,7 +40,7 @@ export function scratchCheckout(label, sourceRef) {
     if (extracted.status !== 0) throw new Error(`Cannot extract source ref ${sourceRef}: ${extracted.stderr}`);
     const listing = spawnSync("git", ["ls-tree", "-rz", "--name-only", sourceRef], { cwd: root, encoding: "utf8" });
     if (listing.status !== 0) throw new Error(`Cannot list source ref ${sourceRef}`);
-    copiedPaths = listing.stdout.split("\0").filter(name => name && !name.startsWith("formal/") && !name.startsWith(".agents/"));
+    copiedPaths = listing.stdout.split("\0").filter(name => name && !name.startsWith("formal/") && !name.startsWith(".agents/") && !name.startsWith(".verification/"));
   } else {
     for (const name of sourcePaths) {
       mkdirSync(dirname(resolve(scratch, name)), { recursive: true });
@@ -51,11 +51,11 @@ export function scratchCheckout(label, sourceRef) {
   const skill = ".agents/skills/verify-accounting-replay";
   if (existsSync(resolve(root, skill))) cpSync(resolve(root, skill), resolve(scratch, skill), { recursive: true });
   symlinkSync(resolve(root, "node_modules"), resolve(scratch, "node_modules"), "dir");
-  mkdirSync(resolve(scratch, ".orchestrator/tools"), { recursive: true });
-  symlinkSync(resolve(root, ".orchestrator/tools/tla"), resolve(scratch, ".orchestrator/tools/tla"), "dir");
-  mkdirSync(resolve(scratch, ".orchestrator/runs"), { recursive: true });
-  symlinkSync(resolve(root, ".orchestrator/runs/2026-10-20-v1-replay"), resolve(scratch, ".orchestrator/runs/2026-10-20-v1-replay"), "dir");
-  writeFileSync(resolve(scratch, ".orchestrator/scratch-source-files.json"), JSON.stringify(copiedPaths));
+  mkdirSync(resolve(scratch, ".verification/tools"), { recursive: true });
+  symlinkSync(resolve(root, ".verification/tools/tla"), resolve(scratch, ".verification/tools/tla"), "dir");
+  mkdirSync(resolve(scratch, ".verification/inputs"), { recursive: true });
+  symlinkSync(resolve(root, ".verification/inputs/accounting-v1"), resolve(scratch, ".verification/inputs/accounting-v1"), "dir");
+  writeFileSync(resolve(scratch, ".verification/scratch-source-files.json"), JSON.stringify(copiedPaths));
   return scratch;
 }
 

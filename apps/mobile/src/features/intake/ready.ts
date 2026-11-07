@@ -12,7 +12,8 @@ export function isReadyCandidate(
     currency?: string;
     suggestion: {
       description: string;
-      amountMinorUnits: number;
+      amountMinorUnits: number | null;
+      direction: "in" | "out" | null;
       financialAccountProfileId: string;
     };
   },
@@ -21,7 +22,10 @@ export function isReadyCandidate(
   return (
     !candidate.error &&
     !!candidate.suggestion.description.trim() &&
-    candidate.suggestion.amountMinorUnits !== 0 &&
+    candidate.suggestion.direction !== null &&
+    candidate.suggestion.amountMinorUnits !== null &&
+    Number.isSafeInteger(candidate.suggestion.amountMinorUnits) &&
+    candidate.suggestion.amountMinorUnits > 0 &&
     !!candidate.suggestion.financialAccountProfileId &&
     (!workspaceCurrency || candidate.currency === workspaceCurrency)
   );
