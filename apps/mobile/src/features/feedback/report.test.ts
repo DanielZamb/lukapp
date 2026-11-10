@@ -434,3 +434,129 @@ test("closing the layer keeps a typed report and its capture, but deletes an unt
   await untouched.machine.dispose();
   expect(untouched.deleted).toEqual([shot.uri]);
 });
+
+import * as SecureStore from "expo-secure-store";
+import { LocalInputLease } from "../../local-auth/localInput";
+import { createReportDraftStore } from "./draftStore";
+
+test("repro: after a failed send, a redaction and a kill before the debounced save, the restart must not submit the earlier upload", async () => {
+  vi.useFakeTimers();
+  const secure = new Map<string, string>();
+  vi.mocked(SecureStore.getItemAsync).mockImplementation(async (key) => secure.get(key) ?? null);
+  vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => void secure.set(key, value));
+  vi.mocked(SecureStore.deleteItemAsync).mockImplementation(async (key) => void secure.delete(key));
+  const submitted: SubmitArgs[] = [];
+  let rateLimited = true;
+  const boot = () =>
+    new ReportMachine({
+      newKey: () => "report-1",
+      now: () => 1_000,
+      capture: async () => shot,
+      deleteCapture: async () => {},
+      drafts: createReportDraftStore({ lease: new LocalInputLease("owner", "session"), now: () => 1_000, deleteCapture: async () => {} }),
+      transport: {
+        prepareScreenshotUpload: async () => ({ uploadUrl: "https://upload.example/1" }),
+        upload: async (_url, screenshot) => ({ storageId: `stored ${screenshot.uri}` }),
+        submit: async (args) => {
+          submitted.push(args);
+          if (rateLimited) throw new ConvexError({ code: "rate_limited", retryAfterMs: 1 });
+          return sent;
+        },
+      },
+      context: () => context,
+      isOffline: () => false,
+      classify: (error) => classifySendError(error, { now: 1_000, reportAccessFailure: () => false }),
+    });
+  try {
+    const first = boot();
+    first.setDestination({ configured: true, repository: "owner/lukapp", audience: "private" });
+    await first.open("shake", "/history");
+    first.edit("title", "Balance looks wrong");
+    first.edit("whatHappened", "Totals differ.");
+    await first.send();
+    await vi.advanceTimersByTimeAsync(1_000);
+    const flattened = { ...shot, uri: "file:///cache/lukapp-feedback/flat-1.png" };
+    await first.replaceScreenshot(flattened);
+    rateLimited = false;
+    const restarted = boot();
+    restarted.setDestination({ configured: true, repository: "owner/lukapp", audience: "private" });
+    await restarted.open("menu", "/history");
+    await restarted.resume();
+    await restarted.send();
+    expect(submitted.at(-1)?.screenshotStorageId).toBe(`stored ${flattened.uri}`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("repro: the report is frozen on the phone before the first network call", async () => {
+  vi.useFakeTimers();
+  const secure = new Map<string, string>();
+  vi.mocked(SecureStore.getItemAsync).mockImplementation(async (key) => secure.get(key) ?? null);
+  vi.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => void secure.set(key, value));
+  vi.mocked(SecureStore.deleteItemAsync).mockImplementation(async (key) => void secure.delete(key));
+  const storedAtFirstCall: unknown[] = [];
+  const machine = new ReportMachine({
+    newKey: () => "report-1",
+    now: () => 1_000,
+    capture: async () => shot,
+    deleteCapture: async () => {},
+    drafts: createReportDraftStore({ lease: new LocalInputLease("owner", "session"), now: () => 1_000, deleteCapture: async () => {} }),
+    transport: {
+      prepareScreenshotUpload: async () => {
+        storedAtFirstCall.push(JSON.parse(secure.get("lukapp.feedback.report.owner") ?? "null")?.report?.frozen);
+        return { uploadUrl: "https://upload.example/1" };
+      },
+      upload: async () => ({ storageId: "storage-1" }),
+      submit: () => new Promise<never>(() => {}),
+    },
+    context: () => context,
+    isOffline: () => false,
+    classify: (error) => classifySendError(error, { now: 1_000, reportAccessFailure: () => false }),
+  });
+  try {
+    machine.setDestination({ configured: true, repository: "owner/lukapp", audience: "private" });
+    await machine.open("shake", "/history");
+    machine.edit("title", "Balance looks wrong");
+    machine.edit("whatHappened", "Totals differ.");
+    void machine.send();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storedAtFirstCall).toHaveLength(1);
+    expect(storedAtFirstCall[0]).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("repro: report_expired keeps the typed report editable and the next Send uses a new key", async () => {
+  const h = harness();
+  h.transport.submit.mockRejectedValueOnce(new ConvexError({ code: "report_expired" }));
+  await h.machine.open("shake", "/history");
+  h.write();
+  await h.machine.send();
+  expect(h.phase()).toMatchObject({ kind: "editing", notice: { code: "report_expired" } });
+  expect(h.report()).toMatchObject({ fields: { title: "Balance looks wrong" }, screenshot: shot });
+  await h.machine.send();
+  expect(h.submitted.map((args) => args.reportKey)).toEqual(["report-2"]);
+});
+
+test("repro: toggling during a send has no effect on what is submitted", async () => {
+  const h = harness();
+  let release = () => {};
+  h.transport.upload.mockImplementationOnce(
+    (_url, screenshot) =>
+      new Promise((resolve) => {
+        release = () => resolve({ storageId: `stored ${screenshot.uri}` });
+      }),
+  );
+  await h.machine.open("shake", "/history");
+  h.write();
+  const sending = h.machine.send();
+  await vi.waitFor(() => expect(h.transport.upload).toHaveBeenCalled(), { interval: 1 });
+  h.machine.setScreenshotIncluded(false);
+  await h.machine.removeScreenshot();
+  await h.machine.replaceScreenshot({ ...shot, uri: "file:///cache/lukapp-feedback/flat-2.png" });
+  release();
+  await sending;
+  expect(h.submitted[0].screenshotStorageId).toBe(`stored ${shot.uri}`);
+});

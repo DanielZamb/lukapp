@@ -52,6 +52,7 @@ const backend = vi.hoisted(() => ({
   upload: [] as [string, RequestInit][],
 }));
 const view = vi.hoisted(() => ({ captureRef: vi.fn(), onCapture: [] as (() => void)[] }));
+const gate = vi.hoisted(() => ({ unlocked: true }));
 const fs = vi.hoisted(() => ({ current: null as null | ReturnType<typeof import("./fileSystem.testSupport").memoryFileSystem> }));
 
 vi.mock("react-native", () => ({
@@ -155,6 +156,7 @@ beforeEach(() => {
   fs.current?.files.clear();
   device.appState.currentState = "active";
   device.uuid = 0;
+  gate.unlocked = true;
 });
 afterEach(async () => {
   await act(async () => root?.unmount());
@@ -170,6 +172,7 @@ function Caller() {
 }
 
 async function render(children: ReactNode, { admitted = true, unlocked = true, language = "en" as "en" | "es" } = {}) {
+  gate.unlocked = unlocked;
   const lease = new LocalInputLease("owner", "session");
   await act(async () => {
     root = create(
@@ -181,7 +184,7 @@ async function render(children: ReactNode, { admitted = true, unlocked = true, l
         { value: lease },
         createElement(
           IntakeAdmission.Provider,
-          { value: () => unlocked },
+          { value: () => gate.unlocked },
           createElement(FeedbackHost, null, admitted ? createElement(FeedbackAdmission) : null, children),
         ),
       ),
@@ -535,4 +538,38 @@ test("the local input wipe deletes report captures along with the saved report",
   await clearLocalInput("owner");
   expect(fs.current!.files.size).toBe(0);
   expect(secure.has("lukapp.feedback.report.owner")).toBe(false);
+});
+
+function heldCapture() {
+  let release = () => {};
+  view.captureRef.mockImplementationOnce(
+    () =>
+      new Promise<string>((resolve) => {
+        release = () => resolve(realScreen);
+      }),
+  );
+  return () => release();
+}
+
+test("repro: a capture that finishes after the app went to the background is deleted and opens nothing", async () => {
+  await render(createElement(Caller));
+  const release = heldCapture();
+  await shake();
+  expect(view.captureRef).toHaveBeenCalledTimes(1);
+  await act(async () => device.emitApp("change", "background"));
+  await act(async () => release());
+  await act(async () => device.emitApp("change", "active"));
+  expect(layer()).toBeUndefined();
+  expect([...fs.current!.files.keys()]).toEqual([]);
+  expect(device.sensor.size).toBe(1);
+});
+
+test("repro: a capture that finishes after sign-out is deleted and opens nothing", async () => {
+  await render(createElement(Caller));
+  const release = heldCapture();
+  await shake();
+  gate.unlocked = false;
+  await act(async () => release());
+  expect(layer()).toBeUndefined();
+  expect([...fs.current!.files.keys()]).toEqual([]);
 });
