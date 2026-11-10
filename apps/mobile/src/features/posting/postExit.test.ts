@@ -462,3 +462,34 @@ test.each([
   expect(nav.router.push).not.toHaveBeenCalled();
   expect(nav.router.replace).not.toHaveBeenCalled();
 });
+
+test("Save changes on a Draft another screen already sent shows that entry and leaves it frozen", async () => {
+  await seed(keepIn({ v: 1, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
+  await openPost({ draftId: "taxi" });
+  await act(async () => props().onDescriptionChange("Taxi home"));
+  const sent = parseLocalEntryDocument(await readRaw("owner"), now).document;
+  await seed(beginPostIn(sent, { draftId: "taxi", command: { kind: "expense", payload: {
+    workspaceId: "workspace-1", financialAccountProfileId: "wallet", amount: { currency: "COP", minorUnits: 1200000 },
+    accountingDate: "2026-10-20", description: "Taxi", idempotencyKey: "taxi-key",
+  } } }, now, () => "unused").document);
+  await act(async () => { nav.swipeBack(); });
+  await act(async () => button("Save changes").props.onPress());
+  expect({
+    asking: sheet() !== null,
+    stack: [...nav.stack],
+    description: props().description,
+    pending: props().pending,
+    shown: props().error,
+    prevented: nav.nativeDismissPrevented(),
+  }).toEqual({
+    asking: false,
+    stack: ["drafts", "post"],
+    description: "Taxi",
+    pending: true,
+    shown: "This entry was already sent and its result is not known yet. Post again to check it.",
+    prevented: false,
+  });
+  await act(async () => { nav.swipeBack(); });
+  expect(nav.stack).toEqual(["drafts"]);
+  expect((await stored()).map((draft) => [draft.id, draft.status])).toEqual([["taxi", "posting"]]);
+});

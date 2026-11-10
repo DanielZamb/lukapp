@@ -49,6 +49,7 @@ const intakeActions = { get count() { return 1; }, get service() { return candid
 
 
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
+vi.mock("@react-navigation/native", () => ({ usePreventRemove: () => {} }));
 vi.mock("expo-router", () => ({
   router: { back: routeBack, replace: vi.fn(), setParams: vi.fn() },
   Redirect: "redirect",

@@ -32,6 +32,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModalProvider: "SheetProvider", BottomSheetModal: "Sheet", BottomSheetView: "SheetView", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
 }));
 vi.mock("react-native-screens", () => ({ ScreenStack: "Stack", ScreenStackItem: "StackItem", ScreenStackHeaderLeftView: "HeaderLeft", ScreenStackHeaderRightView: "HeaderRight" }));
+vi.mock("@react-navigation/native", () => ({ usePreventRemove: () => {} }));
 vi.mock("expo-router", () => ({
   useNavigation: () => navigation, useLocalSearchParams: () => ({}), router: { replace: vi.fn(), back: vi.fn() }, Redirect: "Redirect" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
