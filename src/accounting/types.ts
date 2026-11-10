@@ -273,6 +273,7 @@ export type AccountingStore = {
   ): Promise<LedgerAccount | undefined>;
   listLedgerAccounts(workspaceId: string): Promise<LedgerAccount[]>;
   insertProfile(profile: Omit<StoredProfile, "id" | "createdAt">): Promise<StoredProfile>;
+  renameProfile(profileId: string, name: string): Promise<StoredProfile>;
   restyleProfile(profileId: string, emoji: string): Promise<StoredProfile>;
   getProfile(profileId: string): Promise<StoredProfile | undefined>;
   listProfiles(workspaceId: string): Promise<StoredProfile[]>;

@@ -89,3 +89,50 @@ test("an empty setup look is rejected before creating any account", async () => 
   })).rejects.toThrow("account_emoji_required");
   expect(await t.query(api.accounting.listFinancialAccountProfiles, { workspaceId: workspace.id })).toEqual([]);
 });
+
+test("rename preserves the Place, posting identity and money, including the first My money Place", async () => {
+  const t = await convexAccounting(modules);
+  const setup = await t.action(api.accounting.ensurePersonalDefaults, {
+    functionalCurrency: "COP", startingMinorUnits: 100, timeZone: "America/Bogota",
+  });
+  const { workspace, financialAccountProfile: place } = setup;
+  const snapshot = () => t.run(async ctx => ({
+    profiles: await ctx.db.query("financialAccountProfiles").collect(),
+    accounts: await ctx.db.query("ledgerAccounts").collect(),
+    entries: await ctx.db.query("journalEntries").collect(),
+    lines: await ctx.db.query("journalLines").collect(),
+    defaults: await ctx.db.query("personalDefaults").collect(),
+  }));
+  const before = await snapshot();
+  const args = { workspaceId: workspace.id, financialAccountProfileId: place.id,
+    expectedName: "My money", name: "  Everyday  " };
+  const renamed = await t.action(api.accounting.renameAccount, args);
+  expect(renamed).toEqual({ ...place, name: "Everyday" });
+  const after = await snapshot();
+  expect(after).toEqual({ ...before,
+    profiles: before.profiles.map(p => ({ ...p, name: "Everyday" })),
+    accounts: before.accounts.map(a => a._id === place.ledgerAccountId ? { ...a, name: "Everyday" } : a),
+  });
+  expect(await t.action(api.accounting.renameAccount, args)).toEqual(renamed);
+  expect(await snapshot()).toEqual(after);
+  expect(await t.query(api.accounting.postedActivity, { workspaceId: workspace.id, month: "2026-09" }))
+    .toMatchObject({ accounts: [{ name: "Everyday" }] });
+  expect(await t.query(api.accounting.personalDefaults, {}))
+    .toMatchObject({ financialAccountProfile: { name: "Everyday" } });
+  await expect(t.action(api.accounting.renameAccount, { ...args, name: "Stale" }))
+    .rejects.toMatchObject({ data: { code: "account_name_stale" } });
+});
+
+test("rename trims names, rejects blanks and accent-insensitive duplicates, and isolates workspaces", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const daily = await createDaily(t, workspace.id);
+  await t.action(api.accounting.createFinancialAccountProfile, { workspaceId: workspace.id, name: "Café", productKind: "cash" });
+  const args = { workspaceId: workspace.id, financialAccountProfileId: daily.id, expectedName: "Daily", name: " CAFÉ " };
+  await expect(t.action(api.accounting.renameAccount, args)).rejects.toMatchObject({ data: { code: "account_name_conflict" } });
+  await expect(t.action(api.accounting.renameAccount, { ...args, name: " " })).rejects.toMatchObject({ data: { code: "name_required" } });
+  const other = await createOwnedWorkspace(t);
+  await expect(t.action(api.accounting.renameAccount, { ...args, workspaceId: other.id })).rejects.toMatchObject({ data: { code: "financial_account_profile_not_found" } });
+  expect(await t.action(api.accounting.renameAccount, { ...args, name: "Cafe", workspaceId: workspace.id }).catch(e => e.data.code)).toBe("account_name_conflict");
+  expect(await t.action(api.accounting.renameAccount, { ...args, name: "Daily" })).toEqual(daily);
+});

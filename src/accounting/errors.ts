@@ -1,6 +1,8 @@
 export const accountingErrorMessages = {
   ledger_summary_not_ready: "Ledger totals are being prepared. Try again after the migration completes",
   ledger_totals_out_of_range: "Ledger totals exceed the supported amount range",
+  account_name_conflict: "Another place already uses this name",
+  account_name_stale: "This place was renamed. Refresh before changing it",
   account_emoji_required: "Choose a look for this place",
   transfer_profiles_must_differ: "Choose two different places for an Account Transfer",
   opening_already_exists: "Reverse the active starting amount before replacing it",
