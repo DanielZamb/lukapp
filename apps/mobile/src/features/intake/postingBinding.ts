@@ -34,7 +34,8 @@ export function createCandidateBinding(input: {
     if (current.status.kind !== "review") return;
     if (facts.workspaceId !== current.workspaceId || facts.currency !== current.currency || facts.entryType !== "normal")
       throw new Error("Candidate review belongs to another workspace");
-    const typed: StoredAmountText = { text: facts.amountText, format: facts.amountFormat, ...(facts.amountReenter ? { reenter: true } : {}) };
+    const typed: StoredAmountText = { text: facts.amountText, format: facts.amountFormat, ...(facts.amountReenter ? { reenter: true } : {}),
+      ...(facts.amountReview ? { review: facts.amountReview } : {}) };
     const amount = storedAmountMinorUnits(typed, current.currency);
     seen = await service.updateReview(candidateId, current.recordRevision, {
       direction: amount === null || amount === 0 ? current.review.direction : amount < 0 ? "out" : "in",

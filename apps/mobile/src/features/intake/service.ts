@@ -223,10 +223,12 @@ export class IntakeService {
     const edited = (row: ActiveCandidate): ActiveCandidate => {
       if (row.status.kind !== "review") throw new Error("Confirmation frozen");
       const currencyReviewed = row.status.currencyReviewed || options.currencyReviewed === true;
-      const { reviewAmountReenter: _previous, ...kept } = row;
+      const { reviewAmountReenter: _previous, reviewAmountReview: _review, ...kept } = row;
       const amount = options.amount
-        ? { reviewAmountText: options.amount.text, reviewAmountFormat: options.amount.format, ...(options.amount.reenter ? { reviewAmountReenter: true as const } : {}) }
-        : { reviewAmountText: row.reviewAmountText, reviewAmountFormat: row.reviewAmountFormat, ...(row.reviewAmountReenter ? { reviewAmountReenter: true as const } : {}) };
+        ? { reviewAmountText: options.amount.text, reviewAmountFormat: options.amount.format, ...(options.amount.reenter ? { reviewAmountReenter: true as const } : {}),
+          ...(options.amount.review ? { reviewAmountReview: options.amount.review } : {}) }
+        : { reviewAmountText: row.reviewAmountText, reviewAmountFormat: row.reviewAmountFormat, ...(row.reviewAmountReenter ? { reviewAmountReenter: true as const } : {}),
+          ...(row.reviewAmountReview ? { reviewAmountReview: row.reviewAmountReview } : {}) };
       return { ...kept, review: parsed, ...amount, recordRevision: row.recordRevision + 1,
         status: { kind: "review", currencyReviewed, ...(!currencyReviewed ? { error: "Review unresolved currency" } : {}) } };
     };

@@ -3,7 +3,7 @@ import { nativeCaptureSchema, type NativeCapture } from "../../../modules/notifi
 import { calendarDate } from "../timeZones";
 import type { IntakeCandidate } from "./candidates";
 import { suggest } from "./suggest";
-import { amountTextFormatSchema, preCurrencyReviewAgrees, type StoredAmountText } from "../amount/storedText";
+import { amountTextFormatSchema, preCurrencyReviewAgrees, storedAmountReviewSchema, type StoredAmountText } from "../amount/storedText";
 
 /** Parser version recorded for candidates suggested from the kept notification text. */
 export const TEXT_SUGGESTION_VERSION = "suggest-v2";
@@ -81,6 +81,8 @@ const activeSchema = z.object({
   ]),
   originalSuggestion: originalSchema, review: reviewSchema, reviewAmountText: z.string().max(256).nullable(),
   reviewAmountFormat: amountTextFormatSchema.nullable(), reviewAmountReenter: z.literal(true).optional(),
+  /** Version 5: the review text still awaits the person's confirmation, so closing and reopening cannot skip it. */
+  reviewAmountReview: storedAmountReviewSchema.optional(),
   parserVersion: text, consentVersion: text,
   status: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("review"), error: z.string().optional(), currencyReviewed: z.boolean() }).strict(),
@@ -94,7 +96,7 @@ const configureSchema = z.object({
   sources: z.array(z.object({ packageName: text, sourceSelectionId: text }).strict()).max(16),
 }).strict();
 export const stateSchema = z.object({
-  v: z.literal(4), records: z.array(z.discriminatedUnion("kind", [activeSchema, terminalSchema])).max(512),
+  v: z.literal(5), records: z.array(z.discriminatedUnion("kind", [activeSchema, terminalSchema])).max(512),
   mappings: z.array(mappingSchema).max(64), activeSelectionIds: z.array(text).max(16),
   pendingConfigure: configureSchema.nullable(),
   legacyMigration: z.object({ digest: z.string().regex(/^[a-f0-9]{64}$/) }).strict().nullable().default(null),
@@ -110,7 +112,7 @@ export const stateSchema = z.object({
 export type CandidateState = z.infer<typeof stateSchema>;
 export type CandidateRecord = CandidateState["records"][number];
 export type ActiveCandidate = z.infer<typeof activeSchema>;
-export const emptyState = (): CandidateState => ({ v: 4, records: [], mappings: [], activeSelectionIds: [], pendingConfigure: null, legacyMigration: null });
+export const emptyState = (): CandidateState => ({ v: 5, records: [], mappings: [], activeSelectionIds: [], pendingConfigure: null, legacyMigration: null });
 export function utf8Bytes(value: string) {
   let size = 0;
   for (const c of value) { const n = c.codePointAt(0) ?? 0; size += n <= 127 ? 1 : n <= 2047 ? 2 : n <= 65535 ? 3 : 4; }
@@ -148,20 +150,26 @@ function fromVersion3(raw: unknown) {
     return { ...active, reviewAmountFormat: typed === null ? null : "pre-currency",
       ...(typed !== null && !preCurrencyReviewAgrees(typed, active.currency, active.review) ? { reviewAmountReenter: true } : {}) };
   });
-  return { ...old, v: 4, records };
+  return { ...old, v: 4 as const, records };
+}
+/** Version 4 documents have no pending confirmation on any review text; they read unchanged. */
+function fromVersion4(raw: unknown) {
+  return { ...z.object({ v: z.literal(4) }).passthrough().parse(raw), v: 5 };
 }
 export function parseState(value: string | null): CandidateState {
   if (value === null) return emptyState();
   const raw: unknown = JSON.parse(value);
   const version = z.object({ v: z.number() }).parse(raw).v;
-  if (version === 2) return stateSchema.parse(fromVersion3(fromVersion2(raw)));
-  if (version === 3) return stateSchema.parse(fromVersion3(raw));
+  if (version === 2) return stateSchema.parse(fromVersion4(fromVersion3(fromVersion2(raw))));
+  if (version === 3) return stateSchema.parse(fromVersion4(fromVersion3(raw)));
+  if (version === 4) return stateSchema.parse(fromVersion4(raw));
   return stateSchema.parse(raw);
 }
 /** The review text the person typed, with the grammar it was typed in. */
 export function reviewAmountOf(row: ActiveCandidate): StoredAmountText | null {
   if (row.reviewAmountText === null || row.reviewAmountFormat === null) return null;
-  return { text: row.reviewAmountText, format: row.reviewAmountFormat, ...(row.reviewAmountReenter ? { reenter: true } : {}) };
+  return { text: row.reviewAmountText, format: row.reviewAmountFormat, ...(row.reviewAmountReenter ? { reenter: true } : {}),
+    ...(row.reviewAmountReview ? { review: row.reviewAmountReview } : {}) };
 }
 export function prune(state: CandidateState, now: number): CandidateState {
   return { ...state, records: state.records.filter((r) => r.expiresAt > now) };
