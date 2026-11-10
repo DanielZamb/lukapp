@@ -412,3 +412,23 @@ test("English completion copy is unchanged", async () => {
     "Recovery plan active", "Laptop repair will begin with a COP 2.300 contribution in November.", "View Plans", "Back home",
   ]));
 });
+
+test.each([
+  [{ kind: "transfer_reversed" as const, transferJournalEntryId: "t1", reversalJournalEntryId: "r1" },
+    "Lukapp cancelled this plan because a transfer that counted toward it was reversed and a newer plan already covers this expense."],
+  [{ kind: "contribution_corrected" as const, contributionId: "c1", correctionId: "k1" },
+    "Lukapp cancelled this plan because a transfer was removed from it and a newer plan already covers this expense."],
+])("a plan Lukapp cancelled says so and why, and a plan the person cancelled does not", async (cause, sentence) => {
+  const cancelled = (origin: NonNullable<RecoveryPlanView["cancellation"]>["origin"]): RecoveryPlanView => ({
+    ...plan, status: "cancelled", canCancel: false, acceptsContributions: false, remainingMinorUnits: 0, dueMinorUnits: 0,
+    cancellation: {
+      id: "cancel", workspaceId: "workspace", planId: plan.id, idempotencyKey: "key", createdBy: "owner",
+      eventTime: Date.UTC(2026, 9, 5, 15), recordedAt: Date.UTC(2026, 9, 5, 15), origin,
+    },
+  });
+  const shown = async (view: RecoveryPlanView) => (await render(createElement(RecoveryPlanScreen, {
+    ...planDefaults, plan: view, month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }))).findAll((node) => node.type === Text).map((node) => node.children.join(""));
+  expect(await shown(cancelled({ kind: "automatic", unfinishedPlanId: "newer", cause }))).toContain(sentence);
+  expect((await shown(cancelled({ kind: "person" }))).filter((text) => text.startsWith("Lukapp cancelled"))).toEqual([]);
+});

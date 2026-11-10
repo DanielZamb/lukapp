@@ -48,6 +48,8 @@ export const planning: Messages<typeof en> = {
 
   cancelledNotice: "Plan cancelado. La plata que pasaste se queda en tus ahorros.",
   cancelledOn: "Cancelado el {date}",
+  cancelledAutomaticallyReversal: "Lukapp canceló este plan porque se reversó una transferencia que contaba para él y ya hay un plan más reciente para este gasto.",
+  cancelledAutomaticallyCorrection: "Lukapp canceló este plan porque se le quitó una transferencia y ya hay un plan más reciente para este gasto.",
   cancelledReason: "Motivo: {reason}",
   replaceAction: "Empezar un plan de reemplazo",
   replaceOpen: "Quedan {amount} de este gasto para un plan nuevo.",

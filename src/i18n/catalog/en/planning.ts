@@ -45,6 +45,8 @@ export const planning = {
 
   cancelledNotice: "Plan cancelled. The money you moved stays in savings.",
   cancelledOn: "Cancelled on {date}",
+  cancelledAutomaticallyReversal: "Lukapp cancelled this plan because a transfer that counted toward it was reversed and a newer plan already covers this expense.",
+  cancelledAutomaticallyCorrection: "Lukapp cancelled this plan because a transfer was removed from it and a newer plan already covers this expense.",
   cancelledReason: "Reason: {reason}",
   replaceAction: "Start a replacement",
   replaceOpen: "{amount} of this expense is open for a new plan.",

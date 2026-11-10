@@ -273,6 +273,12 @@ export function RecoveryPlanScreen(props: {
           <Text style={ui.title}>
             {t("planning.cancelledOn", { date: formatLongDate(language, plan.cancellation.eventTime, props.timeZone) })}
           </Text>
+          {plan.cancellation.origin?.kind === "automatic" && (
+            <Text style={ui.muted}>
+              {t(plan.cancellation.origin.cause.kind === "transfer_reversed"
+                ? "planning.cancelledAutomaticallyReversal" : "planning.cancelledAutomaticallyCorrection")}
+            </Text>
+          )}
           {plan.cancellation.reason && (
             <Text style={ui.muted}>{t("planning.cancelledReason", { reason: plan.cancellation.reason })}</Text>
           )}
