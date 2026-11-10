@@ -17,6 +17,7 @@ const intakeState = vi.hoisted(() => ({
   now: [] as IntakeCandidate[],
   wait: [] as IntakeCandidate[],
   confirm: vi.fn(), refresh: vi.fn(), report: vi.fn(),
+  places: [] as Array<{ id: string; name: string; status: string }>,
 }));
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
@@ -24,7 +25,7 @@ vi.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ segment: route.segment }),
   router: { push: route.push, replace: route.replace, back: vi.fn() }, Redirect: "redirect",
 }));
-vi.mock("convex/react", () => ({ useAction: () => intakeState.confirm, useQuery: () => [] }));
+vi.mock("convex/react", () => ({ useAction: () => intakeState.confirm, useQuery: () => intakeState.places }));
 vi.mock("expo-secure-store", () => ({}));
 vi.mock("../activity", () => ({ usePersonalDefaults: () => ({
   workspace: { id: "workspace", functionalCurrency: "COP", currentAccountingPeriod: { year: 2026, month: 10 } },
@@ -72,6 +73,7 @@ beforeEach(() => {
   route.replace.mockClear();
   intakeState.now = [];
   intakeState.wait = [];
+  intakeState.places = [];
   f = fixture();
   f.setValue(null, 0);
   f.setPages([{ captures: [], nextCursor: null }]);
@@ -293,4 +295,18 @@ test("Sources navigates to the canonical intake route and Candidate review keeps
   await act(async () => button("Sources").props.onPress());
   await act(async () => button("Review Groceries").props.onPress());
   expect(route.push.mock.calls).toEqual([["/intake"], [{ pathname: "/post", params: { candidateId: "c1" } }]]);
+});
+
+
+test("a Candidate naming a closed Place says so and is left out of Confirm all Ready, without being changed or deleted", async () => {
+  route.segment = "now";
+  intakeState.places = [{ id: "daily", name: "Daily", status: "open" }, { id: "wallet", name: "Wallet", status: "closed" }];
+  const onWallet = candidate("c2");
+  onWallet.suggestion = { ...onWallet.suggestion, description: "Taxi", financialAccountProfileId: "wallet" };
+  intakeState.now = [candidate("c1"), onWallet];
+  await mount();
+  expect(text()).toContain("Wallet is closed. Choose another place.");
+  await act(async () => button("Confirm all Ready").props.onPress());
+  expect(intakeState.confirm.mock.calls.map(([input]) => input.items.map((item: ConfirmCandidateInput) => item.candidateId))).toEqual([["c1"]]);
+  expect(f.service.read("c2")?.review.financialAccountProfileId).toBe("wallet");
 });

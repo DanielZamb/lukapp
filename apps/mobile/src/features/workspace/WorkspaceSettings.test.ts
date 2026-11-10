@@ -32,11 +32,12 @@ vi.mock("convex/react", async () => {
     "accounting:changeFunctionalCurrency": state.currency,
   };
   return {
-    useQuery: (reference: Parameters<typeof getFunctionName>[0]) => {
+    useQuery: (reference: Parameters<typeof getFunctionName>[0], args?: { status?: string }) => {
       const name = getFunctionName(reference);
       if (name === "accounting:personalDefaults") return { workspace: { id: "ws" } };
       if (name === "accounting:workspaceSettings") return state.settings;
-      if (name === "accounting:listFinancialAccountProfiles") return state.profiles;
+      if (name === "accounting:listFinancialAccountProfiles")
+        return args?.status === "all" ? state.profiles : state.profiles.filter((profile) => (profile.status ?? "open") === "open");
       throw new Error(`Unexpected query ${name}`);
     },
     useAction: (reference: Parameters<typeof getFunctionName>[0]) => actions[getFunctionName(reference)],
@@ -208,6 +209,15 @@ test("choosing another place sends it against the last-read default and the scre
   language = "es";
   await render();
   expect(row("Lugar por defecto").value).toBe("Savings");
+});
+
+test("the default place picker offers only open places", async () => {
+  state.profiles = [daily, savings, { ...savings, id: "wallet", name: "Wallet", status: "closed" },
+    { ...savings, id: "old", name: "Old", status: "undone" }, { ...savings, id: "card", name: "Card", status: "undoing" }];
+  await render();
+  await press(row("Default place"));
+  expect(root!.root.findAll((node) => node.type === "button" && node.props.accessibilityRole === "radio")
+    .map((node) => node.props.accessibilityLabel)).toEqual(["Daily", "Savings"]);
 });
 
 test("a sole place is shown without a picker", async () => {

@@ -8,6 +8,7 @@ import { feedback } from "./feedback";
 import { home } from "./home";
 import { inbox } from "./inbox";
 import { lifecycle } from "./lifecycle";
+import { placeEnding } from "./placeEnding";
 import { places } from "./places";
 import { planning } from "./planning";
 import { posting } from "./posting";
@@ -17,4 +18,4 @@ import { settings } from "./settings";
 import { setup } from "./setup";
 import { workspace } from "./workspace";
 
-export const en = { access, amount, budget, categories, common, drafts, feedback, home, inbox, lifecycle, places, planning, posting, recovery, review, settings, setup, workspace } as const;
+export const en = { access, amount, budget, categories, common, drafts, feedback, home, inbox, lifecycle, placeEnding, places, planning, posting, recovery, review, settings, setup, workspace } as const;

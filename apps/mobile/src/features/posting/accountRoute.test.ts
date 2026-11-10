@@ -10,7 +10,14 @@ vi.mock("expo-router", () => ({
   router: { push: state.push, back: state.back }, Redirect: "redirect",
   useLocalSearchParams: () => ({ profileId: "card-profile" }),
 }));
-vi.mock("convex/react", () => ({ useAction: () => state.changeLook }));
+vi.mock("convex/react", async () => {
+  const { getFunctionName } = await import("convex/server");
+  return {
+    useAction: () => state.changeLook,
+    useQuery: (ref: Parameters<typeof getFunctionName>[0]) => getFunctionName(ref) === "accounting:listFinancialAccountProfiles"
+      ? [{ id: "card-profile", workspaceId: "ws", name: "Card", productKind: "creditCard", ledgerAccountId: "ledger", status: "open" }] : null,
+  };
+});
 vi.mock("../places/EmojiSheet", () => ({ EmojiSheet: "emoji-sheet" }));
 vi.mock("../places/RenameSheet", () => ({ RenameSheet: "rename-sheet" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
@@ -50,7 +57,7 @@ test("account shows the real place metadata, empty activity and filtered history
   await render();
   expect(texts()).toEqual(["PLACE", "Card", "💳", "Current balance", "COP 100", "See in history",
     "Name", "Card", "Type", "Credit card", "Currency", "COP", "Tracking from", "September 24, 2026",
-    "Recent activity", "No activity yet", "New entries will appear here"]);
+    "Recent activity", "No activity yet", "New entries will appear here", "Close or undo this place"]);
   expect(state.recent).toHaveBeenCalledWith("ws", 3, "card-profile");
   await act(async () => button("See in history").props.onPress());
   expect(state.push).toHaveBeenCalledWith({ pathname: "/history", params: { profileId: "card-profile" } });

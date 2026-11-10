@@ -22,6 +22,8 @@ const rejectionKeys: Record<string, MessageKey> = {
   amount_must_be_positive: "posting.rejectAmountMustBePositive",
   locked_period: "posting.rejectLockedPeriod",
   financial_account_profile_not_found: "posting.rejectProfileNotFound",
+  financial_account_profile_ended: "placeEnding.rejectEnded",
+  place_undo_in_progress: "placeEnding.rejectUndoing",
   name_required: "posting.rejectNameRequired",
   workspace_membership_required: "posting.rejectMembershipRequired",
   idempotency_key_conflict: "posting.rejectIdempotencyConflict",

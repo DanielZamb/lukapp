@@ -42,6 +42,7 @@ import { useEntryExit } from "../src/features/posting/useEntryExit";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { createCandidateBinding } from "../src/features/intake/postingBinding";
+import { everyPlace, placeLabel, unavailablePlaceReason } from "../src/features/placeEnding/model";
 import { NotificationCard, signedAmount } from "../src/features/intake/NotificationCard";
 import {
   canPostCategories,
@@ -80,6 +81,11 @@ function PostMoney({
   });
   const profiles = useQuery(api.accounting.listFinancialAccountProfiles, {
     workspaceId: defaults.workspace.id,
+  });
+  // Pickers offer open Places only; this read names a Place a Draft or Candidate kept after it ended.
+  const allProfiles = useQuery(api.accounting.listFinancialAccountProfiles, {
+    workspaceId: defaults.workspace.id,
+    ...everyPlace,
   });
   const dateSheet = useRef<BottomSheetModal>(null);
   const placeSheet = useRef<BottomSheetModal>(null);
@@ -204,6 +210,10 @@ function PostMoney({
   const destination = profiles?.find(
     (place) => place.id === editor.destinationId,
   );
+  const keptSource = profile ? undefined : allProfiles?.find((place) => place.id === editor.profileId);
+  const keptDestination = destination || editor.entryType !== "transfer" ? undefined
+    : allProfiles?.find((place) => place.id === editor.destinationId);
+  const unavailablePlace = unavailablePlaceReason(keptSource, t) ?? unavailablePlaceReason(keptDestination, t);
   const needsBudgetCheck =
     editor.entryType === "normal" &&
     editor.direction === "out" &&
@@ -264,13 +274,13 @@ function PostMoney({
       </Screen>
     );
   const completeEntry = editor.description.trim().length > 0 && categoryValid && placesValid;
-  const blockedReason = !editor.description.trim() ? t("posting.blockedDescription")
+  const blockedReason = unavailablePlace ?? (!editor.description.trim() ? t("posting.blockedDescription")
     : !profile ? t("posting.blockedPlace")
     : editor.entryType === "transfer" && !destination ? t("posting.blockedDestination")
     : editor.entryType === "transfer" && editor.transferReviewRequired ? t("posting.blockedTransferReview")
     : !categoryValid ? t("posting.blockedCategory")
     : !editor.canSubmit ? t("posting.blockedAmount")
-    : needsBudgetCheck && budget === undefined ? t("posting.checkingBudget") : undefined;
+    : needsBudgetCheck && budget === undefined ? t("posting.checkingBudget") : undefined);
   const canQueue =
     editor.canSubmit &&
     !setup &&
@@ -315,11 +325,13 @@ function PostMoney({
         saveToBatch={mode === "batch"}
         lockEntryType={editor.lockEntryType}
         currency={workspace.functionalCurrency}
-        place={profile ? `${profile.emoji ?? "💰"} ${profile.name}` : t("posting.pick")}
+        place={profile ? `${profile.emoji ?? "💰"} ${profile.name}`
+          : keptSource && unavailablePlaceReason(keptSource, t) ? `${keptSource.emoji ?? "💰"} ${placeLabel(keptSource, t)}` : t("posting.pick")}
         destination={
           destination
             ? `${destination.emoji ?? "💰"} ${destination.name}`
-            : t("posting.pick")
+            : keptDestination && unavailablePlaceReason(keptDestination, t)
+              ? `${keptDestination.emoji ?? "💰"} ${placeLabel(keptDestination, t)}` : t("posting.pick")
         }
         category={
           editor.categories.ids
@@ -577,7 +589,7 @@ function PostMoney({
           editor.resetComposer();
           setMode("one");
         }}
-        rowFor={(item) => batchRowFor({ item, categories, profiles, t })}
+        rowFor={(item) => batchRowFor({ item, categories, profiles: allProfiles?.map((place) => ({ ...place, name: placeLabel(place, t) })), t })}
       />
       {impactSheet}
     </>

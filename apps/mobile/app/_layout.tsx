@@ -134,6 +134,7 @@ function Admission() {
       <Stack.Screen name="alerts" />
       <Stack.Screen name="month-close" />
       <Stack.Screen name="account" />
+      <Stack.Screen name="place-ending" />
       <Stack.Screen name="overview" />
       <Stack.Screen name="plans" />
       <Stack.Screen name="budget" />

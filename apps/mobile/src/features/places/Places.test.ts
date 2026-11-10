@@ -4,10 +4,21 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Place } from "./model";
 
-const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), accounts: [] as Place[], hasLimit: false, defaultId: "daily" }));
+const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), accounts: [] as Place[], hasLimit: false, defaultId: "daily",
+  statuses: {} as Record<string, "open" | "undoing" | "closed" | "undone"> }));
 vi.mock("expo-router", () => ({ router: { push: state.push, back: state.back }, Redirect: "redirect" }));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
-vi.mock("convex/react", () => ({ useQuery: () => ({ jars: state.hasLimit ? [{}] : [], removedLimits: [] }) }));
+vi.mock("convex/react", async () => {
+  const { getFunctionName } = await import("convex/server");
+  return { useQuery: (ref: Parameters<typeof getFunctionName>[0]) => {
+    const name = getFunctionName(ref);
+    if (name === "accounting:listFinancialAccountProfiles") return state.accounts.map((account) => ({
+      id: account.financialAccountProfileId, workspaceId: "ws", name: account.name, productKind: account.productKind,
+      ledgerAccountId: "ledger", status: state.statuses[account.financialAccountProfileId] ?? "open" }));
+    if (name === "accounting:placeUndoStatus") return null;
+    return { jars: state.hasLimit ? [{}] : [], removedLimits: [] };
+  } };
+});
 vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ month: "2026-10" }) }));
 vi.mock("../HomePlaceSetup", () => ({ HomePlaceSetup: "add-place" }));
 vi.mock("../activity", () => ({
@@ -29,7 +40,7 @@ const daily: Place = { financialAccountProfileId: "daily", name: "Daily", nature
   trackingFrom: "2026-09-24", balance: { currency: "COP", minorUnits: 10000 } };
 beforeEach(() => {
   vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.clearAllMocks(); state.accounts = [daily]; state.hasLimit = false; state.defaultId = "daily";
+  vi.clearAllMocks(); state.accounts = [daily]; state.hasLimit = false; state.defaultId = "daily"; state.statuses = {};
 });
 afterEach(async () => { await act(async () => root?.unmount()); vi.unstubAllGlobals(); });
 async function render(language?: "es") {
