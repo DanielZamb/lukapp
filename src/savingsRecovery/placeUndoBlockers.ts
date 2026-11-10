@@ -12,3 +12,9 @@ export async function contributedExpensePlans(store: RecoveryReadStore, profileI
   }
   return result;
 }
+
+export async function contributedDestinationPlans(store: RecoveryReadStore, profileId: string) {
+  const [plans, contributions] = await Promise.all([store.listPlans(), store.listContributions()]);
+  const funded = new Set(contributions.map(c => c.planId));
+  return plans.filter(p => p.destinationFinancialAccountProfileId === profileId && funded.has(p.id)).map(p => ({ id: p.id, title: p.title }));
+}

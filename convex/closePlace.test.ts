@@ -404,6 +404,6 @@ test("closing entries respect the existing opening date rule and roll back", asy
   const s = await setup();
   const future = await s.t.action(api.accounting.setupFinancialAccountProfile, { workspaceId: s.workspace.id, name: "Future opening", productKind: "cash", amount: money(100), accountingDate: "2026-10-01", idempotencyKey: "future" });
   const before = await snapshot(s.t);
-  await expect(s.t.action(api.accounting.closePlace, { ...s.args, financialAccountProfileId: future.financialAccountProfile.id, lines: [{ kind: "adjustment", amount: money(100) }] })).rejects.toThrow("activity_before_opening");
+  await expect(s.t.action(api.accounting.closePlace, { ...s.args, financialAccountProfileId: future.financialAccountProfile.id, lines: [{ kind: "adjustment", amount: money(100) }] })).rejects.toThrow("place_future_entries");
   expect(await snapshot(s.t)).toEqual(before);
 });

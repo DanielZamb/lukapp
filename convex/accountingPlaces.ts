@@ -1,3 +1,4 @@
+import { endingBlockers } from "./accountingEndingChecks";
 import { AccountingError } from "../src/accounting/errors";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Actor } from "../src/accounting/types";
@@ -15,6 +16,7 @@ export function placeClosureServices(ctx: QueryCtx, actor: Actor, workspaceId: s
   }
   return {
     defaultPlace,
+    endingBlockers: (profileId: string, today: string) => endingBlockers(ctx, workspaceId, profileId, today),
     unfinishedDestinationPlans: (profileId: string) => unfinishedDestinationPlans(recoveryReadStore(ctx, workspaceId), profileId),
   };
 }

@@ -1,3 +1,6 @@
+import { requireWorkspacePermission } from "./lib/deviceAuthorization";
+import { optionalDescription } from "../src/accounting/descriptions";
+import { reversalBlockers, hasUnreversedOriginal, touchingOriginals, endingBlockers } from "./accountingEndingChecks";
 import { RecoveryError } from "../src/savingsRecovery/policy";
 import { run } from "./accountingErrors";
 import { ConvexError, v, type Infer } from "convex/values";
@@ -11,22 +14,26 @@ import { calendarDate, workspaceTimeZone } from "../src/accounting/timeZone";
 import { periodFromAccountingDate } from "../src/accounting/period";
 import { placeClosure } from "../src/accounting/commands/closePlace";
 import { placeClosingServices, placeClosureServices } from "./accountingPlaces";
-import { contributedExpensePlans } from "../src/savingsRecovery/placeUndoBlockers";
+import { contributedExpensePlans, contributedDestinationPlans } from "../src/savingsRecovery/placeUndoBlockers";
 import { cancelReopenedPlans } from "../src/savingsRecovery/cancelReopenedPlans";
 import { recoveryReadStore, recoveryWriteStore } from "./savingsRecoveryStore";
 import { requireSelectableDefaultPlace } from "../src/accounting/commands/chooseDefaultPlace";
-import type { Actor, StoredJournalEntry } from "../src/accounting/types";
+import type { AccountingStore, Actor, StoredJournalEntry } from "../src/accounting/types";
 import { undoPlace, undoOperation, undoReceipt, type undoBlocker } from "./accountingUndoValues";
 
-export const UNDO_BATCH_SIZE = 20;
+export const UNDO_BATCH_SIZE = 10;
+export const WATCHDOG_MS = 5 * 60_000;
+export const MAX_PAUSE_RETRIES = 5;
 const RETRY_MS = 60_000;
 function view(doc: Doc<"placeUndoOperations">): Infer<typeof undoOperation> {
   const { _id, _creationTime, ...operation } = doc;
-  return { id: _id, ...operation };
+  return { id: _id, ...operation, hasReversedEntries: operation.reversedCount > 0 };
 }
 export async function operationForPlace(ctx: QueryCtx, profileId: string) {
   const id = ctx.db.normalizeId("financialAccountProfiles", profileId);
-  return id ? ctx.db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", id)).unique() : null;
+  if (!id) return null;
+  const operations = await ctx.db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", id)).order("desc").collect();
+  return operations.find(o => o.state.kind !== "done" && o.state.kind !== "aborted") ?? operations[0] ?? null;
 }
 export async function readUndoStatus(ctx: QueryCtx, workspaceId: string, profileId: string) {
   const profile = await convexReadStore(ctx.db).getProfile(profileId);
@@ -36,20 +43,28 @@ export async function readUndoStatus(ctx: QueryCtx, workspaceId: string, profile
 }
 async function undoContext(ctx: QueryCtx, actor: Actor, args: { workspaceId: string; financialAccountProfileId: string }) {
   const store = convexReadStore(ctx.db);
-  const closure = await placeClosure(store, { now: () => new Date() }, placeClosureServices(ctx, actor, args.workspaceId), { ...args, actor });
+  const originals = await touchingOriginals(ctx, args.workspaceId, args.financialAccountProfileId);
+  const services = { ...placeClosureServices(ctx, actor, args.workspaceId),
+    endingBlockers: (profileId: string, today: string) => endingBlockers(ctx, args.workspaceId, profileId, today, originals) };
+  const closure = await placeClosure(store, { now: () => new Date() }, services, { ...args, actor });
   const blockers: Infer<typeof undoBlocker>[] = [...closure.blockers];
+  blockers.push(...await reversalBlockers(ctx, args.workspaceId, args.financialAccountProfileId, closure.accountingDate, originals));
+  const destinations = await contributedDestinationPlans(recoveryReadStore(ctx, args.workspaceId), args.financialAccountProfileId);
+  if (destinations.length) blockers.push({ code: "place_recovery_contributed_destination", plans: destinations });
   const plans = await contributedExpensePlans(recoveryReadStore(ctx, args.workspaceId), args.financialAccountProfileId);
   if (plans.length) blockers.push({ code: "place_recovery_covered_expenses", plans });
   if ((await store.getAccountingPeriod(args.workspaceId, periodFromAccountingDate(closure.accountingDate)))?.status === "locked")
     blockers.push({ code: "place_undo_current_period_locked" });
-  return { closure, blockers };
+  return { closure, blockers, originals };
 }
 async function pageLines(ctx: QueryCtx, profile: { workspaceId: Id<"workspaces">; postingAccountId: Id<"ledgerAccounts"> }, cursor: string | null) {
   return ctx.db.query("journalLines").withIndex("by_workspace_account", q => q.eq("workspaceId", profile.workspaceId).eq("ledgerAccountId", profile.postingAccountId))
     .paginate({ cursor, numItems: UNDO_BATCH_SIZE });
 }
-function isRepresentative(entry: StoredJournalEntry, line: Doc<"journalLines">) {
-  return !entry.reversesEntryId && entry.lines.findIndex(item => item.ledgerAccountId === line.ledgerAccountId) === line.lineNumber;
+async function isRepresentative(ctx: QueryCtx, entry: StoredJournalEntry, line: Doc<"journalLines">) {
+  if (entry.reversesEntryId) return false;
+  const first = await ctx.db.query("journalLines").withIndex("by_entry_account", q => q.eq("journalEntryId", line.journalEntryId).eq("ledgerAccountId", line.ledgerAccountId)).first();
+  return first?._id === line._id;
 }
 export async function previewUndo(ctx: QueryCtx, actor: Actor, args: { workspaceId: string; financialAccountProfileId: string; cursor?: string | null }) {
   const { closure, blockers } = await undoContext(ctx, actor, args);
@@ -65,7 +80,7 @@ export async function previewUndo(ctx: QueryCtx, actor: Actor, args: { workspace
   for (const line of page.page) {
     const entry = await store.getJournalEntry(line.journalEntryId);
     if (!entry) throw new AccountingError("journal_entry_not_found");
-    if (!isRepresentative(entry, line)) continue;
+    if (!await isRepresentative(ctx, entry, line)) continue;
     if (await store.findReversalOf(entry.id)) { alreadyReversed++; continue; }
     entriesToReverse++;
     if ((await store.getAccountingPeriod(args.workspaceId, entry.period))?.status === "locked") lockedMonthEntries++;
@@ -91,7 +106,8 @@ export async function startUndo(ctx: MutationCtx, actor: Actor, args: Infer<type
   if (!args.idempotencyKey.trim()) throw new AccountingError("idempotency_key_required");
   const workspaceId = ctx.db.normalizeId("workspaces", args.workspaceId);
   if (!workspaceId) throw new AccountingError("workspace_membership_required");
-  const request = JSON.stringify({ act: "undo", financialAccountProfileId: args.financialAccountProfileId,
+  const reversalDescriptionPrefix = optionalDescription(args.reversalDescriptionPrefix);
+  const request = JSON.stringify({ ...(reversalDescriptionPrefix !== undefined ? { reversalDescriptionPrefix } : {}), act: "undo", financialAccountProfileId: args.financialAccountProfileId,
     replacementDefaultFinancialAccountProfileId: args.replacementDefaultFinancialAccountProfileId ?? null });
   const prior = await ctx.db.query("placeUndoOperations").withIndex("by_workspace_request", q => q.eq("workspaceId", workspaceId).eq("idempotencyKey", args.idempotencyKey)).unique();
   if (prior) {
@@ -99,7 +115,10 @@ export async function startUndo(ctx: MutationCtx, actor: Actor, args: Infer<type
     return { operation: view(prior), replay: true };
   }
   const context = await undoContext(ctx, actor, args);
-  if (context.blockers[0]) throw new AccountingError(context.blockers[0].code);
+  if (context.blockers[0]) {
+    const blocker = context.blockers[0];
+    throw new AccountingError(blocker.code, blocker);
+  }
   const replacement = args.replacementDefaultFinancialAccountProfileId;
   if (context.closure.isDefault && !replacement) throw new AccountingError("place_default_replacement_required");
   if (replacement !== undefined) {
@@ -109,26 +128,40 @@ export async function startUndo(ctx: MutationCtx, actor: Actor, args: Infer<type
   }
   const profileId = ctx.db.normalizeId("financialAccountProfiles", args.financialAccountProfileId);
   if (!profileId) throw new AccountingError("financial_account_profile_not_found");
-  const fields = { workspaceId, financialAccountProfileId: profileId, idempotencyKey: args.idempotencyKey,
-    request, authorizedBy: actor.userId, startedAt: Date.now(),
+  const profiles = await convexReadStore(ctx.db).listProfiles(args.workspaceId);
+  const counterparties = profiles.filter(p => p.id !== args.financialAccountProfileId).map(p => ({
+    financialAccountProfileId: p.id, remainingEntries: (context.originals ?? []).filter(e => e.financialAccountProfileId === p.id || e.lines.some(l => l.ledgerAccountId === p.postingAccountId)).length,
+  })).filter(p => p.remainingEntries > 0);
+  const fields = { counterparties, workspaceId, financialAccountProfileId: profileId, idempotencyKey: args.idempotencyKey,
+    request, authorizedBy: actor.userId, startedAt: Date.now(), heartbeatAt: Date.now(), retryCount: 0, watchdogCount: 0,
+    ...(reversalDescriptionPrefix !== undefined ? { reversalDescriptionPrefix } : {}),
     ...(replacement !== undefined ? { replacementDefaultFinancialAccountProfileId: replacement } : {}),
     state: { kind: "pending" } as const, version: 0, cursor: null, reversedCount: 0, alreadyReversedCount: 0, scannedLineCount: 0, lockedMonthCount: 0 };
   const id = await ctx.db.insert("placeUndoOperations", fields);
   await ctx.scheduler.runAfter(0, internal.accountingUndo.drive, { operationId: id, version: 0 });
-  return { operation: { id, ...fields }, replay: false };
+  await ctx.scheduler.runAfter(WATCHDOG_MS, internal.accountingUndo.watchdog, { operationId: id });
+  return { operation: { id, ...fields, hasReversedEntries: false }, replay: false };
 }
 const batchArgs = { operationId: v.id("placeUndoOperations"), version: v.number() };
 
 // Only the authorized operation gets this capability. Public commands always use the ordinary store.
-function operationStore(ctx: MutationCtx, operation: Doc<"placeUndoOperations">) {
+async function operationStore(ctx: MutationCtx, operation: Doc<"placeUndoOperations">): Promise<AccountingStore> {
   const store = convexStore(ctx.db);
+  const profiles = (await store.listProfiles(operation.workspaceId));
+  const prepared = convexStore(ctx.db, profiles);
+  const accounts = await store.listLedgerAccounts(operation.workspaceId);
+  const categories = await store.listCategories(operation.workspaceId);
+  const workspace = await store.getWorkspace(operation.workspaceId);
   function allowOwnPlace<T extends { id: string; undoOperationId?: string }>(profile: T): T {
     return profile.undoOperationId === operation._id ? { ...profile, undoOperationId: undefined } : profile;
   }
-  return { ...store,
+  return { ...prepared,
     isMember: async (workspaceId: string, userId: string) => workspaceId === operation.workspaceId && userId === operation.authorizedBy,
-    getProfile: async (id: string) => { const p = await store.getProfile(id); return p ? allowOwnPlace(p) : undefined; },
-    listProfiles: async (id: string) => (await store.listProfiles(id)).map(allowOwnPlace),
+    getWorkspace: async () => workspace,
+    listLedgerAccounts: async () => accounts, getLedgerAccount: async (id: string) => accounts.find(a => a.id === id),
+    listCategories: async () => categories, getCategory: async (id: string) => categories.find(c => c.id === id),
+    getProfile: async (id: string) => { const p = profiles.find(p => p.id === id); return p ? allowOwnPlace(p) : undefined; },
+    listProfiles: async () => profiles.map(allowOwnPlace),
   };
 }
 function errorCode(error: unknown): string {
@@ -144,25 +177,27 @@ function errorDetail(error: unknown): string {
   }
   return "The batch failed unexpectedly and was rolled back. Investigate before retrying";
 }
-export const processBatch = internalMutation({
-  args: batchArgs, returns: v.null(),
-  handler: async (ctx, args): Promise<null> => run(async () => {
+const batchInput = v.object(batchArgs);
+export async function processUndoBatch(ctx: MutationCtx, args: Infer<typeof batchInput>): Promise<null> {
+  return run(async () => {
     const operation = await ctx.db.get(args.operationId);
-    if (!operation || operation.version !== args.version || operation.state.kind === "done" || operation.state.kind === "needs_attention") return null;
+    if (!operation || operation.version !== args.version || operation.state.kind === "done" || operation.state.kind === "aborted" || operation.state.kind === "needs_attention") return null;
     const workspace = await ctx.db.get(operation.workspaceId);
     const profile = await ctx.db.get(operation.financialAccountProfileId);
     const active = await operationForPlace(ctx, operation.financialAccountProfileId);
     if (!workspace || !profile || profile.workspaceId !== workspace._id || active?._id !== operation._id) throw new AccountingError("place_undo_operation_not_found");
     const today = calendarDate(new Date(), workspaceTimeZone(workspace));
-    const store = operationStore(ctx, operation);
+    const store = await operationStore(ctx, operation);
     if ((await store.getAccountingPeriod(workspace._id, periodFromAccountingDate(today)))?.status === "locked") throw new AccountingError("place_undo_current_period_locked");
     const page = await pageLines(ctx, profile, operation.cursor);
     let reversedCount = operation.reversedCount, alreadyReversedCount = operation.alreadyReversedCount, lockedMonthCount = operation.lockedMonthCount;
+    const counterparties = operation.counterparties?.map(p => ({ ...p }));
+    const profiles = await store.listProfiles(operation.workspaceId);
     for (const line of page.page) {
       try {
         const original = await store.getJournalEntry(line.journalEntryId);
         if (!original) throw new AccountingError("journal_entry_not_found");
-        if (!isRepresentative(original, line)) continue;
+        if (!await isRepresentative(ctx, original, line)) continue;
         if (await store.findReversalOf(original.id)) { alreadyReversedCount++; continue; }
         if ((await store.getAccountingPeriod(operation.workspaceId, original.period))?.status === "locked") lockedMonthCount++;
         const key = `place-undo:${JSON.stringify([operation._id, original.id])}`;
@@ -170,20 +205,26 @@ export const processBatch = internalMutation({
           throw new AccountingError("idempotency_key_conflict");
         const reversal = await reversePostedEntry(store, { now: () => new Date() }, {
           actor: { userId: operation.authorizedBy }, workspaceId: operation.workspaceId, journalEntryId: original.id,
-          accountingDate: today, idempotencyKey: key,
+          accountingDate: today, idempotencyKey: key, reversalDescriptionPrefix: operation.reversalDescriptionPrefix,
         });
         await cancelReopenedPlans(recoveryWriteStore(ctx, operation.workspaceId), {
           workspaceId: operation.workspaceId, actorId: operation.authorizedBy, now: Date.now(),
           cause: { kind: "transfer_reversed", transferJournalEntryId: original.id, reversalJournalEntryId: reversal.id },
         });
+        for (const dependency of counterparties ?? []) {
+          const profile = profiles.find(p => p.id === dependency.financialAccountProfileId);
+          if (profile && (original.financialAccountProfileId === profile.id || original.lines.some(l => l.ledgerAccountId === profile.postingAccountId))) dependency.remainingEntries--;
+        }
         reversedCount++;
       } catch (error) {
         throw new ConvexError({ code: errorCode(error), detail: errorDetail(error), journalEntryId: line.journalEntryId });
       }
     }
-    const progress = { cursor: page.continueCursor, reversedCount, alreadyReversedCount, lockedMonthCount,
+    const progress = { ...(counterparties ? { counterparties } : {}), cursor: page.continueCursor, reversedCount, alreadyReversedCount, lockedMonthCount,
+      heartbeatAt: Date.now(), retryCount: 0, watchdogCount: 0,
       scannedLineCount: operation.scannedLineCount + page.page.length, version: operation.version + 1 };
     if (page.isDone) {
+      if (await hasUnreversedOriginal(ctx, operation.workspaceId, profile.postingAccountId)) throw new AccountingError("place_undo_originals_remain");
       const totals = (await store.accountTotals(operation.workspaceId)).get(profile.postingAccountId);
       if (totals && totals.debitMinorUnits !== totals.creditMinorUnits) throw new AccountingError("place_undo_balance_not_zero");
       const now = Date.now();
@@ -198,24 +239,30 @@ export const processBatch = internalMutation({
       await ctx.scheduler.runAfter(0, internal.accountingUndo.drive, { operationId: operation._id, version: progress.version });
     }
     return null;
-  }),
-});
+  });
+}
+export const processBatch = internalMutation({ args: batchArgs, returns: v.null(), handler: processUndoBatch });
 export const drive = internalMutation({
   args: batchArgs, returns: v.null(),
   handler: async (ctx, args): Promise<null> => run(async () => {
     const operation = await ctx.db.get(args.operationId);
-    if (!operation || operation.version !== args.version || operation.state.kind === "done" || operation.state.kind === "needs_attention") return null;
+    if (!operation || operation.version !== args.version || operation.state.kind === "done" || operation.state.kind === "aborted" || operation.state.kind === "needs_attention") return null;
     try {
       await ctx.runMutation(internal.accountingUndo.processBatch, args);
     } catch (error) {
       const code = errorCode(error);
       if (code === "place_undo_current_period_locked" || code === "locked_period" || code === "ledger_summary_not_ready" || code === "reversal_date_before_original" || code === "activity_before_opening") {
-        await ctx.db.patch(operation._id, { state: { kind: "paused", code, retryAt: Date.now() + RETRY_MS } });
-        await ctx.scheduler.runAfter(RETRY_MS, internal.accountingUndo.drive, args);
+        const retryCount = (operation.retryCount ?? 0) + 1;
+        const delay = RETRY_MS * 2 ** (retryCount - 1);
+        const version = operation.version + 1;
+        await ctx.db.patch(operation._id, { retryCount, version, heartbeatAt: Date.now(), state: retryCount <= MAX_PAUSE_RETRIES
+          ? { kind: "paused", code, retryAt: Date.now() + delay }
+          : { kind: "needs_attention", code, detail: errorDetail(error) } });
+        if (retryCount <= MAX_PAUSE_RETRIES) await ctx.scheduler.runAfter(delay, internal.accountingUndo.drive, { ...args, version });
       } else {
         const data = error instanceof ConvexError ? error.data : null;
         const journalEntryId = data && typeof data === "object" && "journalEntryId" in data && typeof data.journalEntryId === "string" ? data.journalEntryId : undefined;
-        await ctx.db.patch(operation._id, { state: { kind: "needs_attention", code, detail: errorDetail(error), ...(journalEntryId ? { journalEntryId } : {}) } });
+        await ctx.db.patch(operation._id, { heartbeatAt: Date.now(), state: { kind: "needs_attention", code, detail: errorDetail(error), ...(journalEntryId ? { journalEntryId } : {}) } });
       }
     }
     return null;
@@ -225,10 +272,48 @@ export const retryAfterRepair = internalMutation({
   args: { operationId: v.id("placeUndoOperations") }, returns: v.null(),
   handler: async (ctx, args): Promise<null> => run(async () => {
     const operation = await ctx.db.get(args.operationId);
-    if (!operation || operation.state.kind === "done") return null;
+    if (!operation || (operation.state.kind !== "needs_attention" && operation.state.kind !== "paused")) return null;
     const version = operation.version + 1;
-    await ctx.db.patch(operation._id, { version, state: { kind: "pending" } });
+    await ctx.db.patch(operation._id, { version, heartbeatAt: Date.now(), retryCount: 0, watchdogCount: 0, state: { kind: "pending" } });
     await ctx.scheduler.runAfter(0, internal.accountingUndo.drive, { operationId: operation._id, version });
+    await ctx.scheduler.runAfter(WATCHDOG_MS, internal.accountingUndo.watchdog, { operationId: operation._id });
+    return null;
+  }),
+});
+
+export const watchdog = internalMutation({
+  args: { operationId: v.id("placeUndoOperations") }, returns: v.null(),
+  handler: async (ctx, { operationId }) => {
+    const operation = await ctx.db.get(operationId);
+    if (!operation || operation.state.kind === "done" || operation.state.kind === "aborted" || operation.state.kind === "needs_attention") return null;
+    const now = Date.now();
+    const nextCheck = operation.state.kind === "paused" ? Math.max(operation.state.retryAt, (operation.heartbeatAt ?? operation.startedAt) + WATCHDOG_MS) : (operation.heartbeatAt ?? operation.startedAt) + WATCHDOG_MS;
+    if (nextCheck <= now) {
+      const version = operation.version + 1;
+      const watchdogCount = (operation.watchdogCount ?? 0) + 1;
+      if (watchdogCount > 5) {
+        await ctx.db.patch(operationId, { version, heartbeatAt: now, watchdogCount, state: { kind: "needs_attention", code: "place_undo_stalled", detail: "Five watchdog re-drives made no progress. Inspect the failed scheduled mutations before retrying" } });
+        return null;
+      }
+      await ctx.db.patch(operationId, { version, heartbeatAt: now, watchdogCount });
+      await ctx.scheduler.runAfter(0, internal.accountingUndo.drive, { operationId, version });
+    }
+    await ctx.scheduler.runAfter(Math.max(WATCHDOG_MS, nextCheck - now), internal.accountingUndo.watchdog, { operationId });
+    return null;
+  },
+});
+
+export const abortBeforeProgress = internalMutation({
+  args: { operationId: v.id("placeUndoOperations"), authorizedBy: v.string() }, returns: v.null(),
+  handler: async (ctx, { operationId, authorizedBy }) => run(async () => {
+    const operation = await ctx.db.get(operationId);
+    if (!operation) throw new AccountingError("place_undo_operation_not_found");
+    const actor = await requireWorkspacePermission(ctx, { workspaceId: operation.workspaceId, permission: "workspace:admin" });
+    const member = await ctx.db.query("workspaceMemberships").withIndex("by_workspace_user", q => q.eq("workspaceId", operation.workspaceId).eq("userId", authorizedBy)).unique();
+    if (actor.userId !== authorizedBy || member?.role !== "Owner" || operation.authorizedBy !== authorizedBy || operation.reversedCount !== 0 || (operation.state.kind !== "needs_attention" && operation.state.kind !== "aborted"))
+      throw new AccountingError("place_undo_abort_forbidden");
+    if (operation.state.kind === "aborted") return null;
+    await ctx.db.patch(operationId, { version: operation.version + 1, heartbeatAt: Date.now(), state: { kind: "aborted", abortedAt: Date.now(), abortedBy: authorizedBy } });
     return null;
   }),
 });

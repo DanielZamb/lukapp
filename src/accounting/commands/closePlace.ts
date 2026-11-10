@@ -1,5 +1,6 @@
 import type { Infer } from "convex/values";
 import type { closePlaceInput, placeClosure as closureValue } from "../../../convex/accountingPlaceValues";
+import { optionalDescription } from "../descriptions";
 import { hasVisibleText } from "../names";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
@@ -16,6 +17,7 @@ import type { AccountingStore, AccountingClock, Actor, PostedJournalEntry } from
 
 type CloseInput = Infer<typeof closePlaceInput>;
 export type PlaceClosureServices = {
+  endingBlockers: (profileId: string, today: string) => Promise<Infer<typeof closureValue>["blockers"]>;
   defaultPlace: () => Promise<string | undefined>;
   unfinishedDestinationPlans: (profileId: string) => Promise<Array<{ id: string; title: string }>>;
 };
@@ -36,14 +38,16 @@ export async function placeClosure(store: AccountingStore, clock: AccountingCloc
   const openPlaceCount = profiles.filter(item => placeStatus(item) === "open").length;
   const blockers: Infer<typeof closureValue>["blockers"] = [];
   if (profile.ending) blockers.push({ code: "financial_account_profile_ended" });
-  if (profiles.some(item => item.undoOperationId)) blockers.push({ code: "place_undo_in_progress" });
+  if (profile.undoOperationId) blockers.push({ code: "place_undo_in_progress" });
   if (openPlaceCount <= 1) blockers.push({ code: "place_last_open" });
   if (plans.length) blockers.push({ code: "place_recovery_destination", plans });
+  const accountingDate = calendarDate(clock.now(), workspaceTimeZone(workspace));
+  blockers.push(...await services.endingBlockers(profile.id, accountingDate));
   const isDefault = defaultId === profile.id;
   return {
     financialAccountProfileId: profile.id, status: placeStatus(profile), canClose: blockers.length === 0,
     blockers, isDefault, requiresReplacementDefault: isDefault, openPlaceCount,
-    balance: balance.balance, nature: balance.nature, accountingDate: calendarDate(clock.now(), workspaceTimeZone(workspace)),
+    balance: balance.balance, nature: balance.nature, accountingDate,
   };
 }
 
@@ -56,15 +60,16 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
     if (name !== undefined && !hasVisibleText(name)) throw new AccountingError("name_required");
     if (name !== undefined && name.length > 80) throw new AccountingError("category_name_too_long");
   }
+  const lines = input.lines.map(line => ({ ...line, description: optionalDescription(line.description) }));
   const request = JSON.stringify({
     ...(names.expense !== undefined ? { closingAdjustmentExpenseName: names.expense } : {}),
     ...(names.income !== undefined ? { closingAdjustmentIncomeName: names.income } : {}),
     act: "close", financialAccountProfileId: input.financialAccountProfileId,
     replacementDefaultFinancialAccountProfileId: input.replacementDefaultFinancialAccountProfileId ?? null,
-    lines: input.lines.map(line => line.kind === "transfer"
+    lines: lines.map(line => ({ ...(line.description !== undefined ? { description: line.description } : {}), ...(line.kind === "transfer"
       ? { kind: line.kind, otherFinancialAccountProfileId: line.otherFinancialAccountProfileId, amount: { currency: line.amount.currency, minorUnits: line.amount.minorUnits } }
       : line.kind === "expense" ? { kind: line.kind, userCategoryId: line.userCategoryId, amount: { currency: line.amount.currency, minorUnits: line.amount.minorUnits } }
-      : { kind: line.kind, amount: line.amount }),
+      : { kind: line.kind, amount: { currency: line.amount.currency, minorUnits: line.amount.minorUnits } }) })),
   });
   const prior = await store.findPlaceEnding(workspace.id, input.idempotencyKey);
   if (prior) {
@@ -73,7 +78,7 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
   }
   const closure = await placeClosure(store, clock, services, input);
   const blocker = closure.blockers[0];
-  if (blocker) throw new AccountingError(blocker.code);
+  if (blocker) throw new AccountingError(blocker.code, blocker);
   const replacement = input.replacementDefaultFinancialAccountProfileId;
   if (closure.isDefault && !replacement) throw new AccountingError("place_default_replacement_required");
   if (replacement !== undefined) {
@@ -97,9 +102,9 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
   }
   if (sum !== BigInt(Math.abs(closure.balance.minorUnits))) throw new AccountingError("place_close_balance_mismatch");
   const entries: PostedJournalEntry[] = [];
-  for (const [index, line] of input.lines.entries()) {
+  for (const [index, line] of lines.entries()) {
     const common = { actor: input.actor, workspaceId: workspace.id, amount: line.amount,
-      accountingDate: closure.accountingDate, description: "Closing a Place", idempotencyKey: `place-close:${JSON.stringify([input.idempotencyKey, index])}` };
+      accountingDate: closure.accountingDate, description: line.description ?? (line.kind === "adjustment" ? "Closing Adjustment" : "Closing a Place"), idempotencyKey: `place-close:${JSON.stringify([input.idempotencyKey, index])}` };
     // Internal keys must never adopt a journal submitted independently of this close.
     if (await store.findJournalEntryByIdempotencyKey(workspace.id, common.idempotencyKey)
       || await store.findOpeningMarkerByIdempotencyKey(workspace.id, common.idempotencyKey))
@@ -114,7 +119,7 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
         : (await closingAdjustmentCategory(store, workspace, credit ? "Expense" : "Income", credit ? names.expense : names.income)).id;
       const post = credit ? recordCashExpense : recordCashIncome;
       entries.push(await post(store, clock, { ...common, financialAccountProfileId: input.financialAccountProfileId,
-        userCategoryId: categoryId, description: line.kind === "adjustment" ? "Closing Adjustment" : "Closing a Place" }));
+        userCategoryId: categoryId }));
     }
   }
   const final = (await balances(store, input)).find(item => item.financialAccountProfileId === input.financialAccountProfileId);
