@@ -1,8 +1,7 @@
 import {
   createAmountEditor,
-  editAmount,
   formatMinorUnits,
-  type AmountEdit,
+  parseAmount,
   type AmountEditorState,
   type AmountFormat,
 } from "../../../../../src/money/amount";
@@ -16,42 +15,41 @@ import {
 } from "./storedText";
 
 /**
- * An amount the person must confirm before it is sent: text the app rewrote from an older saved format, or pasted
- * text that carried a separator. `minorUnits` is the magnitude shown for confirmation; once the amount becomes any
- * other number the person has typed it themselves and the requirement is gone.
+ * An amount the person must confirm before it is sent: text the app rewrote from an older saved format, or text that
+ * arrived several characters at once, such as a paste, carrying a separator. The requirement holds through every
+ * later edit while the text still has a separator, so editing and restoring cannot skip it.
  */
-export type AmountReview = Readonly<{ reason: AmountReviewReason; previous: string | null; minorUnits: number }>;
+export type AmountReview = Readonly<{ reason: AmountReviewReason; previous: string | null }>;
 
 /**
- * One editing session of one amount field, bound to one currency. Every keystroke advances the same session, so
- * the editor keeps knowing which separators it generated. A new currency starts a new session; a language change
- * does not touch it.
+ * One editing session of one amount field, bound to one currency. The text is exactly what the native field shows:
+ * the app never regroups it while the person types, so the amount is always the text read with the strict grammar.
+ * A new currency starts a new session; a language change does not touch it.
  */
 export type AmountSession = Readonly<{ currency: string; editor: AmountEditorState; review: AmountReview | null }>;
 
-/**
- * The editor for opened text. Text already written exactly as the editor would group it, such as a saved amount
- * or one the app formatted, gets the separators it would have had if typed, so a later digit regroups it instead of
- * leaving a short or long group. Anything else opens literally.
- */
-export function openedEditor(format: AmountFormat, text: string): AmountEditorState {
-  const literal = createAmountEditor(format, text);
-  if (literal.kind !== "complete") return literal;
-  const typed = createAmountEditor(format, literal.text.split(format.convention.group).join(""));
-  return typed.text === literal.text ? typed : literal;
+/** The editor state for text exactly as written, read with the strict grammar and never rewritten. */
+export function literalEditor(format: AmountFormat, text: string): AmountEditorState {
+  const base = { format, text, selection: { start: text.length, end: text.length }, generatedGroups: [] };
+  const parsed = parseAmount(text, format);
+  if (parsed.kind === "parsed") return { ...base, kind: "complete", minorUnits: parsed.minorUnits };
+  const { issue } = parsed;
+  return issue.code === "empty" || issue.code === "incomplete" ? { ...base, kind: "incomplete", issue } : { ...base, kind: "invalid", issue };
 }
 
-/** The session with its canonical text's separators treated as the editor's own, keeping its caret. */
-export function withCanonicalGroups(session: AmountSession): AmountSession {
-  const { editor } = session;
-  const opened = openedEditor(editor.format, editor.text);
-  return opened.text === editor.text && opened.generatedGroups.length > editor.generatedGroups.length
-    ? withEditor(session, editAmount(opened, { kind: "select", selection: editor.selection }))
-    : session;
+/**
+ * Text the app opens, such as a saved amount or one it formatted. Text grouped exactly as the format groups its digits
+ * opens without the group marks, which reads the same and leaves the field holding only what the person types. Any
+ * other text opens as written.
+ */
+function openedText(format: AmountFormat, text: string): string {
+  const signed = text.replace(/^−/, "-");
+  const ungrouped = signed.split(format.convention.group).join("");
+  return ungrouped !== signed && createAmountEditor(format, ungrouped).text === signed ? ungrouped : text;
 }
 
 export function openAmountIn(format: AmountFormat, currency: string, text = ""): AmountSession {
-  return { currency, editor: openedEditor(format, text), review: null };
+  return { currency, editor: literalEditor(format, openedText(format, text)), review: null };
 }
 
 export function openAmount(currency: string, text = ""): AmountSession {
@@ -69,18 +67,13 @@ export function amountOfMinorUnits(
   return openAmountIn(format, currency, `${sign}${formatMinorUnits(Math.abs(minorUnits), format, options)}`);
 }
 
-function magnitude(editor: AmountEditorState) {
-  return editor.kind === "complete" ? Math.abs(editor.minorUnits) : null;
-}
-
 function requireReview(session: AmountSession, reason: AmountReviewReason, previous: string | null): AmountSession {
-  const minorUnits = magnitude(session.editor);
-  return minorUnits === null ? session : { ...session, review: { reason, previous, minorUnits } };
+  return { ...session, review: { reason, previous } };
 }
 
 /**
  * A session for saved text, read under the grammar it was saved in. Text the app rewrote into the current format,
- * and text saved while it still awaited confirmation, open awaiting confirmation.
+ * and text saved while it still awaited confirmation, open exactly as they are shown for confirmation.
  */
 export function openSavedAmount(
   currency: string,
@@ -88,11 +81,12 @@ export function openSavedAmount(
   format: AmountFormat = amountFormat(currency),
 ): { session: AmountSession; notice: AmountNotice | null } {
   const opened = openStoredAmountText(stored, currency, format);
-  const session = openAmountIn(format, currency, opened.text);
+  const awaiting = (reason: AmountReviewReason, previous: string | null) =>
+    requireReview({ currency, editor: literalEditor(format, opened.text), review: null }, reason, previous);
   if (opened.notice?.kind === "converted")
-    return { session: requireReview(session, "converted", stored.review?.previous ?? opened.notice.previous), notice: opened.notice };
-  if (stored.review && !opened.notice) return { session: requireReview(session, stored.review.reason, stored.review.previous), notice: null };
-  return { session, notice: opened.notice };
+    return { session: awaiting("converted", stored.review?.previous ?? opened.notice.previous), notice: opened.notice };
+  if (stored.review && !opened.notice) return { session: awaiting(stored.review.reason, stored.review.previous), notice: null };
+  return { session: openAmountIn(format, currency, opened.text), notice: opened.notice };
 }
 
 /** The signed minor units to send: a complete amount the person does not still have to confirm. Anything else is null. */
@@ -114,19 +108,49 @@ export function storedAmountOf(session: AmountSession): StoredAmountText {
   };
 }
 
-/** The session with a new editor state. A confirmation still applies only while the amount keeps its magnitude. */
-export function withEditor(session: AmountSession, editor: AmountEditorState): AmountSession {
-  const review = session.review && magnitude(editor) === session.review.minorUnits ? session.review : null;
-  return { ...session, editor, review };
+function hasSeparator(text: string) {
+  return /[.,]/.test(text);
 }
 
-export function editAmountSession(session: AmountSession, edit: AmountEdit): AmountSession {
-  return withEditor(session, editAmount(session.editor, edit));
+/** The characters an edit wrote where `previous` became `next`: what lies between their common start and end. */
+function written(previous: string, next: string) {
+  let start = 0;
+  while (start < previous.length && start < next.length && previous[start] === next[start]) start++;
+  let end = 0;
+  while (end < previous.length - start && end < next.length - start
+    && previous[previous.length - 1 - end] === next[next.length - 1 - end]) end++;
+  return next.slice(start, next.length - end);
 }
 
-/** Pasted text that carried a separator must be confirmed before it is sent, so a copied 1.234 is never sent unseen. */
-export function requirePastedReview(session: AmountSession): AmountSession {
-  return requireReview(session, "pasted", null);
+function withText(session: AmountSession, text: string, review: AmountReview | null): AmountSession {
+  return { ...session, editor: literalEditor(session.editor.format, text), review: review && hasSeparator(text) ? review : null };
+}
+
+/**
+ * The session after the native field reported its text. The text is taken as it is. When the edit wrote more than
+ * one character and a separator among them, as a paste does, the amount awaits confirmation; a keystroke writes one.
+ * A confirmation still pending stays while the text has any separator.
+ */
+export function withNativeText(session: AmountSession, text: string): AmountSession {
+  if (text === session.editor.text) return session;
+  const wrote = written(session.editor.text, text);
+  const pasted = wrote.length > 1 && hasSeparator(wrote);
+  return withText(session, text, pasted ? { reason: "pasted", previous: null } : session.review);
+}
+
+/**
+ * Writes this currency's decimal mark at `caret`, with a leading 0 when no digit comes before it, and says where the
+ * caret goes. Text that already has the mark only moves the caret after it.
+ */
+export function withDecimalMark(session: AmountSession, caret: number): { session: AmountSession; caret: number } {
+  const { text, format } = session.editor;
+  const mark = format.convention.decimal;
+  const existing = text.indexOf(mark);
+  if (existing >= 0) return { session, caret: existing + 1 };
+  const at = Math.max(0, Math.min(caret, text.length));
+  const before = text.slice(0, at);
+  const insert = /^\s*[+−-]?$/.test(before) ? `0${mark}` : mark;
+  return { session: withText(session, before + insert + text.slice(at), session.review), caret: at + insert.length };
 }
 
 /** The person confirms the amount shown. */
@@ -139,18 +163,11 @@ export function amountSign(session: AmountSession): "+" | "-" | "" {
   return sign === "+" ? "+" : sign === "-" || sign === "−" ? "-" : "";
 }
 
-/** Writes `sign` in front of the amount without retyping it, so its digits, grouping and caret stay as they were. */
+/** Writes `sign` in front of the amount and changes nothing else. */
 export function withAmountSign(session: AmountSession, sign: "+" | "-"): AmountSession {
-  const current = amountSign(session);
-  if (current === sign && session.editor.text.startsWith(sign)) return session;
-  const { text, selection } = session.editor;
-  const signed = /^[+−-]/.test(text);
-  let editor = editAmount(session.editor, { kind: "select", selection: { start: 0, end: signed ? 1 : 0 } });
-  editor = editAmount(editor, { kind: "type", character: sign });
-  const fromEnd = text.length - selection.end;
-  const caret = Math.max(1, Math.min(editor.text.length, editor.text.length - fromEnd));
-  editor = editAmount(editor, { kind: "select", selection: { start: caret, end: caret } });
-  return withEditor(session, editor);
+  const { text } = session.editor;
+  const next = sign + text.trimStart().replace(/^[+−-]/, "");
+  return next === text ? session : withText(session, next, session.review);
 }
 
 export function toggleAmountSign(session: AmountSession): AmountSession {

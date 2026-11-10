@@ -1,0 +1,123 @@
+{
+ "device": "Samsung Galaxy S21 FE (SM-G990E), Android 16, Samsung Keyboard 5.9.20.89, locale en-US, font scale 1.5",
+ "recorded": "2026-11-10",
+ "source": "reports/mvp-2026-11-10/amount-field/device/logs/r2-S9-kwd.jsonl",
+ "currency": "KWD",
+ "initialText": "",
+ "finalText": "1234,567",
+ "sends": [
+  1234567
+ ],
+ "events": [
+  {
+   "kind": "keyPress",
+   "key": "1"
+  },
+  {
+   "kind": "text",
+   "text": "1",
+   "eventCount": 68
+  },
+  {
+   "kind": "selection",
+   "start": 1,
+   "end": 1
+  },
+  {
+   "kind": "keyPress",
+   "key": "2"
+  },
+  {
+   "kind": "text",
+   "text": "12",
+   "eventCount": 72
+  },
+  {
+   "kind": "selection",
+   "start": 2,
+   "end": 2
+  },
+  {
+   "kind": "keyPress",
+   "key": "3"
+  },
+  {
+   "kind": "text",
+   "text": "123",
+   "eventCount": 76
+  },
+  {
+   "kind": "selection",
+   "start": 3,
+   "end": 3
+  },
+  {
+   "kind": "keyPress",
+   "key": "4"
+  },
+  {
+   "kind": "text",
+   "text": "1234",
+   "eventCount": 80
+  },
+  {
+   "kind": "selection",
+   "start": 4,
+   "end": 4
+  },
+  {
+   "kind": "decimal"
+  },
+  {
+   "kind": "selection",
+   "start": 5,
+   "end": 5
+  },
+  {
+   "kind": "keyPress",
+   "key": "5"
+  },
+  {
+   "kind": "text",
+   "text": "1234,5",
+   "eventCount": 84
+  },
+  {
+   "kind": "selection",
+   "start": 6,
+   "end": 6
+  },
+  {
+   "kind": "keyPress",
+   "key": "6"
+  },
+  {
+   "kind": "text",
+   "text": "1234,56",
+   "eventCount": 88
+  },
+  {
+   "kind": "selection",
+   "start": 7,
+   "end": 7
+  },
+  {
+   "kind": "keyPress",
+   "key": "7"
+  },
+  {
+   "kind": "text",
+   "text": "1234,567",
+   "eventCount": 92
+  },
+  {
+   "kind": "selection",
+   "start": 8,
+   "end": 8
+  },
+  {
+   "kind": "send",
+   "expect": 1234567
+  }
+ ]
+}

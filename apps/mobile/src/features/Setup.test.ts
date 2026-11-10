@@ -1,4 +1,5 @@
 import * as React from "react";
+import { typeAmount } from "./amount/typing.testSupport";
 import { createElement, type PropsWithChildren } from "react";
 import {
   act,
@@ -683,10 +684,7 @@ test("at the largest text the purchase-alert choices stack and size to their Spa
 });
 
 async function typeKeys(label: string, keys: string) {
-  for (const key of keys) {
-    const field = node(label);
-    await act(async () => field.props.onChangeText(`${field.props.value as string}${key}`));
-  }
+  await typeAmount(() => node(label), keys);
 }
 
 test.each([

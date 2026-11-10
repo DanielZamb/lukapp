@@ -118,7 +118,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
           <AmountField session={setup.amount} editable={editor.editable} inputAccessibilityLabel={t("home.addPlaceBalance")}
             placeholder="0" InputComponent={BottomSheetTextInput} inputStyle={styles.input}
             onChange={(value: AmountSession) => { interact();
-              editor.setSetup({ ...setup, amount: value.editor.text.trim() ? value : openAmount(value.currency, "0") });
+              editor.setSetup({ ...setup, amount: value });
             }} />
         </View>
         {!!editor.error && <Text accessibilityRole="alert" style={ui.error}>{editor.error}</Text>}

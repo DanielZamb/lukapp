@@ -2,9 +2,11 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
-import { openAmount } from "../amount/session";
+import { openAmount, withNativeText } from "../amount/session";
 
-const money = (text: string, currency = "COP") => openAmount(currency, text);
+/** The session after a person types `text` key by key. */
+const money = (text: string, currency = "COP") =>
+  [...text].reduce((session, key) => withNativeText(session, session.editor.text + key), openAmount(currency));
 const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
 import { useBudgetEditor, type BudgetEditorSeed, type BudgetTransport } from "./useBudgetEditor";
 
@@ -67,7 +69,7 @@ test("a validation rejection preserves input, and a stale revision requires clos
   const api = transport();
   api.send.mockRejectedValueOnce(new ConvexError({ kind: "budget", code: "limit_must_be_positive" }));
   const editor = await open(api, { ...seed, jar: foodJar });
-  expect(editor()).toMatchObject({ amount: typedAmount("1.000,00"), amountIssue: "unchanged", canSubmit: false });
+  expect(editor()).toMatchObject({ amount: typedAmount("1000,00"), amountIssue: "unchanged", canSubmit: false });
   await act(async () => { await editor().submit(); });
   expect(api.send).not.toHaveBeenCalled();
   await act(async () => { editor().onAmount(money("1.500")); });
@@ -168,7 +170,7 @@ test("an uncertain removal stays frozen until the identical removal is retried",
   expect([editor().canSend("remove"), editor().canSend("amount"), editor().canSend("spendNothing")]).toEqual([true, false, false]);
   await act(async () => { editor().onAmount(money("2.000")); editor().onResetAmount(); });
   await act(async () => { await editor().submit(); await editor().spendNothing(); });
-  expect(editor().amount.editor.text).toBe("1.000,00");
+  expect(editor().amount.editor.text).toBe("1000,00");
   expect(api.send).toHaveBeenCalledOnce();
   await act(async () => { await editor().remove(); });
   expect(api.send.mock.calls.map(([command]) => command)).toEqual([
@@ -201,7 +203,7 @@ test("a typed zero is its own issue: nothing saves, and the two explicit acts re
   expect(api.send).not.toHaveBeenCalled();
   expect([editor().canSend("remove"), editor().canSend("spendNothing")]).toEqual([true, true]);
   await act(async () => { editor().onResetAmount(); });
-  expect(editor().amount.editor.text).toBe("1.000,00");
+  expect(editor().amount.editor.text).toBe("1000,00");
 });
 
 test.each([

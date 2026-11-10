@@ -3,9 +3,11 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
-import { openAmount } from "../amount/session";
+import { openAmount, withNativeText } from "../amount/session";
 
-const money = (text: string, currency = "COP") => openAmount(currency, text);
+/** The session after a person types `text` key by key. */
+const money = (text: string, currency = "COP") =>
+  [...text].reduce((session, key) => withNativeText(session, session.editor.text + key), openAmount(currency));
 const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
 import type { RecoveryPlace, RecoveryPlanView } from "./model";
 import { LanguageProvider } from "../../i18n";
@@ -61,7 +63,7 @@ test("the due amount posts one guarded movement under one key", async () => {
   vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
   const api = transport();
   const move = await open(api);
-  expect(move()).toMatchObject({ sourceId: "daily", amount: typedAmount("2.300"), canSubmit: true });
+  expect(move()).toMatchObject({ sourceId: "daily", amount: typedAmount("2300"), canSubmit: true });
   await act(async () => { await Promise.all([move().submit(), move().submit()]); });
   expect(api.move.mock.calls.map(([request]) => request)).toEqual([{
     workspaceId: "workspace", planId: "plan-1", sourceFinancialAccountProfileId: "daily",
@@ -86,7 +88,7 @@ test("an uncertain movement freezes edits and retry reuses the same key", async 
   api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const move = await open(api);
   await act(async () => { await move().submit(); move().onSource("savings"); move().onAmount(money("3.000")); });
-  expect(move()).toMatchObject({ sourceId: "daily", amount: typedAmount("2.300"), pending: true, editable: false, canDismiss: false });
+  expect(move()).toMatchObject({ sourceId: "daily", amount: typedAmount("2300"), pending: true, editable: false, canDismiss: false });
   await act(async () => { await move().submit(); });
   expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
 });

@@ -245,7 +245,7 @@ test("Keep draft keeps an incomplete entry, returns to the caller and lists it i
   await act(async () => button("Keep draft").props.onPress());
   expect(nav.stack).toEqual(["drafts"]);
   const [kept] = await stored();
-  expect(kept).toMatchObject({ status: "open", facts: { description: "Taxi", amountText: "-12.000", amountFormat: "cop/1", profileId: "account-1", categories: { ids: [], primaryId: null } } });
+  expect(kept).toMatchObject({ status: "open", facts: { description: "Taxi", amountText: "-12000", amountFormat: "cop/1", profileId: "account-1", categories: { ids: [], primaryId: null } } });
   await closePost();
   await act(async () => { root = create(providers(createElement(DraftsRoute))); });
   expect(text()).toContain("Taxi");
@@ -255,7 +255,7 @@ test("Keep draft keeps an incomplete entry, returns to the caller and lists it i
 test("reopening a Draft restores every fact, and saving changes updates that same Draft", async () => {
   await seed(keepIn({ v: 3, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
   await openPost({ draftId: "taxi" });
-  expect(props().amount.editor.text).toBe("-12.000");
+  expect(props().amount.editor.text).toBe("-12000");
   expect(props()).toMatchObject({ description: "Taxi", entryType: "normal", place: "👛 Wallet", category: "F Food", date: "October 20, 2026" });
   await act(async () => props().onDescriptionChange("Taxi home"));
   await act(async () => props().onBack());
@@ -268,7 +268,7 @@ test("reopening a Draft restores every fact, and saving changes updates that sam
   expect(drafts[0]).toMatchObject({ status: "open", facts: { ...taxi, description: "Taxi home" } });
   await closePost();
   await openPost({ draftId: "taxi" });
-  expect(props().amount.editor.text).toBe("-12.000");
+  expect(props().amount.editor.text).toBe("-12000");
   expect(props()).toMatchObject({ description: "Taxi home", place: "👛 Wallet", category: "F Food" });
 });
 

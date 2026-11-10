@@ -67,12 +67,12 @@ test("a Candidate without saved text explains that its original notification is 
 test("a tapped amount keeps the form's sign and is written in the workspace currency's format", () => {
   const tapped = (minor: number, currency: string, current: string, fallback: "in" | "out") =>
     signedAmount(minor, currency, openAmount(currency, current), fallback).editor.text;
-  expect(tapped(125_030_000, "COP", "-32.000", "out")).toBe("-1.250.300");
-  expect(tapped(3_200_000, "COP", "50.000", "out")).toBe("32.000");
-  expect(tapped(3_200_000, "COP", "-", "in")).toBe("-32.000");
-  expect(tapped(3_200_000, "COP", "", "out")).toBe("-32.000");
-  expect(tapped(125_030_050, "USD", "-32,000", "out")).toBe("-1,250,300.50");
-  expect(tapped(3_200_000, "USD", "", "in")).toBe("32,000");
+  expect(tapped(125_030_000, "COP", "-32.000", "out")).toBe("-1250300");
+  expect(tapped(3_200_000, "COP", "50.000", "out")).toBe("32000");
+  expect(tapped(3_200_000, "COP", "-", "in")).toBe("-32000");
+  expect(tapped(3_200_000, "COP", "", "out")).toBe("-32000");
+  expect(tapped(125_030_050, "USD", "-32,000", "out")).toBe("-1250300.50");
+  expect(tapped(3_200_000, "USD", "", "in")).toBe("32000");
 });
 
 test("the card reads in Spanish while the bank's text and app name stay as captured", async () => {

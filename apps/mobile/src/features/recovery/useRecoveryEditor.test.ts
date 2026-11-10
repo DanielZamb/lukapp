@@ -3,9 +3,11 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
-import { openAmount } from "../amount/session";
+import { openAmount, withNativeText } from "../amount/session";
 
-const money = (text: string, currency = "COP") => openAmount(currency, text);
+/** The session after a person types `text` key by key. */
+const money = (text: string, currency = "COP") =>
+  [...text].reduce((session, key) => withNativeText(session, session.editor.text + key), openAmount(currency));
 const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
 import { LanguageProvider } from "../../i18n";
 import { useRecoveryEditor, type RecoveryEditorSeed, type RecoveryEditorTransport } from "./useRecoveryEditor";

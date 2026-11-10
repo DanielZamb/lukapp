@@ -656,9 +656,9 @@ test("a Candidate's kept notification is shown in Post, and tapping it fills the
   type Card = { props: { notification: { text: string }; onUseAmount(minor: number): void; onUseDescription(text: string): void } };
   const card = () => form.props?.notification as unknown as Card;
   expect(card().props.notification.text).toContain("TIENDA D1");
-  expect(form.props?.amount.editor.text).toBe("-32.000,00"); expect(form.props?.description).toBe("TIENDA D1");
+  expect(form.props?.amount.editor.text).toBe("-32000,00"); expect(form.props?.description).toBe("TIENDA D1");
   await act(async () => { card().props.onUseAmount(125_030_000); });
-  expect(form.props?.amount.editor.text).toBe("-1.250.300");
+  expect(form.props?.amount.editor.text).toBe("-1250300");
   await act(async () => { card().props.onUseDescription("Tienda de barrio"); });
   expect(form.props?.description).toBe("Tienda de barrio");
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
