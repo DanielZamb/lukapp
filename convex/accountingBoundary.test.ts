@@ -140,11 +140,14 @@ test("accounting writes use public actions and screenshot preparation is the onl
     expect(handler.isInternal).toBe(true);
   // Inspect every deployed module so a new legacy public mutation cannot escape the inventory.
   const publicMutations: string[] = [];
+  const feedbackFunctions: string[] = [];
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", fixtureIdentity.issuer);
   for (const [path, load] of Object.entries(modules)) {
     const loaded: unknown = await load();
     if (!loaded || typeof loaded !== "object") continue;
     for (const [name, value] of Object.entries(loaded)) {
+      if (path === "./feedback.ts" && value && (typeof value === "object" || typeof value === "function") && "isPublic" in value)
+        feedbackFunctions.push(name);
       if (
         value &&
         (typeof value === "object" || typeof value === "function") &&
@@ -154,7 +157,8 @@ test("accounting writes use public actions and screenshot preparation is the onl
         publicMutations.push(`${path}:${name}`);
     }
   }
-  expect(publicMutations).toEqual(["./feedback.ts:prepareScreenshotUpload"]);
+  expect(publicMutations).toEqual(["./feedback.ts:removeScreenshot"]);
+  expect(feedbackFunctions.sort()).toEqual(["attachScreenshot", "destination", "removeScreenshot", "submit"]);
 });
 
 test("raw workspace creation is denied even for the registered live Owner", async () => {

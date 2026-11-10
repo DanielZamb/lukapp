@@ -15,10 +15,13 @@ import {
 
 export default defineSchema({
   feedbackReports: defineTable(reportFields)
-    .index("by_user_key", ["userId", "reportKey"]),
+    .index("by_user_key", ["userId", "reportKey"])
+    .index("by_screenshot", ["screenshotStorageId"]),
   feedbackReservations: defineTable(reservationFields)
     .index("by_user_key", ["userId", "reportKey"])
-    .index("by_user_time", ["userId", "reservedAt"]),
+    .index("by_user_time", ["userId", "reservedAt"])
+    .index("by_user_sent", ["userId", "sentAt"])
+    .index("by_screenshot", ["screenshot.storageId"]),
   ledgerAccountTotals: defineTable({
     workspaceId: v.id("workspaces"),
     ledgerAccountId: v.id("ledgerAccounts"),
