@@ -67,6 +67,14 @@ test("a ready Candidate is listed and consumed after confirm", () => {
   expect(consumeIn(accepted, "c1").candidates).toEqual([]);
 });
 
+test("a Candidate whose confirmation is pending stays in Needs you now and joins the Confirm all retry set", () => {
+  const pending = candidate("pending", { status: { kind: "pending" }, error: "Confirmation pending. Open to retry." });
+  const failed = candidate("failed", { status: { kind: "review", revision: 3 }, error: "Locked Period" });
+  const inbox = viewInbox({ v: 1, candidates: [pending, failed, candidate("ready")] }, "workspace", now, "COP");
+  expect(inbox.now.map((row) => row.id)).toEqual(["pending", "failed"]);
+  expect(inbox.ready.map((row) => row.id)).toEqual(["pending", "ready"]);
+});
+
 test("a Candidate in a foreign currency is never Ready", () => {
   const usd = candidate("usd", { currency: "USD" });
   const inbox = viewInbox({ v: 1, candidates: [usd] }, "workspace", now, "COP");

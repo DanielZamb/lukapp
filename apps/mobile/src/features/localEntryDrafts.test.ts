@@ -36,6 +36,8 @@ import {
   viewDocument,
   writeDocument,
   countDraftsInMonth,
+  discardLocalEntryDraft,
+  discardOpenIn,
   factsFromCommand,
   type LocalEntryDocument,
   type LocalEntryFacts,
@@ -619,4 +621,55 @@ test("a EUR local draft survives storage and restores only in the matching curre
     .toMatchObject({ kind: "open", draft: { facts: { currency: "EUR" } } });
   expect(() => restoreFromDocument(parsed.document, { workspaceId: "workspace", currency: "COP", draftId: kept.id }, now))
     .toThrow("Pending entry belongs to another workspace");
+});
+
+async function storedDrafts() {
+  return parseLocalEntryDocument(await readRaw("owner"), Date.now()).document.drafts.map((draft) => [draft.id, draft.status]);
+}
+
+async function storeThree() {
+  const createdAt = Date.now();
+  const taxi = keepIn(empty, { facts: { ...facts, description: "Taxi" } }, createdAt, () => "taxi");
+  const lunch = keepIn(taxi.document, { facts: { ...facts, description: "Lunch" } }, createdAt, () => "lunch");
+  const posting = beginPostIn(lunch.document, { command: expense }, createdAt, () => "posting");
+  await writeDocument("owner", posting.document);
+}
+
+test("discard removes one open Draft and keeps the others through a restart", async () => {
+  await storeThree();
+  const lease = new LocalInputLease("owner", "session");
+  expect(await discardLocalEntryDraft(lease, "owner", "workspace", "taxi")).toBe("discarded");
+  expect(await storedDrafts()).toEqual([["lunch", "open"], ["posting", "posting"]]);
+  const restarted = parseLocalEntryDocument(await readRaw("owner"), Date.now()).document;
+  expect(viewDocument(restarted, "workspace", Date.now()).items.map((item) => item.description)).toEqual(["Lunch", "Food"]);
+});
+
+test("discard refuses a Draft whose posting command was dispatched", async () => {
+  await storeThree();
+  const before = memory.get(storageKey("owner"));
+  const lease = new LocalInputLease("owner", "session");
+  expect(await discardLocalEntryDraft(lease, "owner", "workspace", "posting")).toBe("frozen");
+  expect(memory.get(storageKey("owner"))).toBe(before);
+  expect(await loadPendingPosting("owner")).toEqual(expense);
+});
+
+test("discard refuses another user's lease, another workspace and an ended admission", async () => {
+  await storeThree();
+  const before = memory.get(storageKey("owner"));
+  await expect(discardLocalEntryDraft(new LocalInputLease("intruder", "session"), "owner", "workspace", "taxi"))
+    .rejects.toThrow("Draft belongs to another user");
+  await expect(discardLocalEntryDraft(new LocalInputLease("owner", "session"), "owner", "other-workspace", "taxi"))
+    .rejects.toThrow("Draft belongs to another workspace");
+  const ended = new LocalInputLease("owner", "session");
+  ended.deny();
+  await expect(discardLocalEntryDraft(ended, "owner", "workspace", "taxi")).rejects.toThrow("Local input admission ended");
+  expect(memory.get(storageKey("owner"))).toBe(before);
+});
+
+test("discardOpenIn reports a missing or expired Draft as gone and leaves batch rows to their batch", () => {
+  const open = keepIn(empty, { facts }, now, () => "open-1").document;
+  expect(discardOpenIn(open, "missing", "workspace", now)).toEqual({ document: open, outcome: "gone" });
+  expect(discardOpenIn(open, "open-1", "workspace", now + ttl).outcome).toBe("gone");
+  const batched: LocalEntryDocument = { ...open, postingBatches: { batch: { queue: [{ id: "row", draftId: "open-1", command: expense }], receipts: { count: 0, net: 0 } } } };
+  expect(() => discardOpenIn(batched, "open-1", "workspace", now)).toThrow("Draft belongs to a batch");
 });

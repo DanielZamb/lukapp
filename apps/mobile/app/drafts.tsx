@@ -10,6 +10,7 @@ import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { readyTotalMinorUnits } from "../src/features/intake/applyBatch";
 import { confirmReadyCandidates, handleReadyBatchError } from "../src/features/intake/confirmReady";
+import { discardCandidate } from "../src/features/intake/discard";
 import { api } from "../src/features/api";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import { clearDiscardNotices, DISCARD_NOTICE_TTL_MS, readDiscardNotices, type DiscardNotice } from "../src/features/localDiscardNotices";
@@ -121,6 +122,12 @@ function Drafts({
       onOpenCandidate={(id) =>
         router.push({ pathname: "/post", params: { candidateId: id } })
       }
+      onDiscardCandidate={async (id, revision) => {
+        const outcome = await discardCandidate(intake.service, id, revision);
+        if (outcome !== "discarded") await intake.refresh().catch(() => {});
+        return outcome;
+      }}
+      onDiscardDraft={(id) => drafts.port.discard(id)}
       onConfirmReady={() => {
         void (async () => {
           if (!intake.ready.length || confirming) return;

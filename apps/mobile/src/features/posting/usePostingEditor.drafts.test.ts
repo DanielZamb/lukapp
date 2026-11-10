@@ -14,6 +14,7 @@ import {
 } from "../../local-auth/localInput";
 import {
   beginPostIn,
+  discardOpenIn,
   keepIn,
   rejectPostIn,
   removeIn,
@@ -78,6 +79,13 @@ function port(drafts: LocalEntryDraft[] = []) {
       return id;
     }),
     read: vi.fn(async (id) => drafts.find((draft) => draft.id === id) ?? null),
+    discard: vi.fn(async (id: string) => {
+      const index = drafts.findIndex((draft) => draft.id === id);
+      if (index < 0) return "gone" as const;
+      if (drafts[index]?.status === "posting") return "frozen" as const;
+      drafts.splice(index, 1);
+      return "discarded" as const;
+    }),
   } satisfies LocalEntryDraftsPort;
 }
 async function open(
@@ -221,6 +229,11 @@ function sharedStore() {
       },
       read: async (id) =>
         document.drafts.find((draft) => draft.id === id) ?? null,
+      discard: async (id) => {
+        const discarded = discardOpenIn(document, id, "workspace", Date.now());
+        document = discarded.document;
+        return discarded.outcome;
+      },
     } satisfies LocalEntryDraftsPort,
   };
 }

@@ -14,6 +14,7 @@ import {
 } from "./posting/pendingPostingSchema";
 import { LocalEntryDraftGoneError } from "./localEntryDraftErrors";
 import { postingBatchSchema, type StoredPostingBatch } from "./posting/postingBatchSchema";
+import type { DiscardOutcome } from "./discardOutcome";
 export { LocalEntryDraftGoneError };
 
 export const LOCAL_ENTRY_DRAFT_TTL_MS = 15 * 24 * 60 * 60 * 1000;
@@ -84,6 +85,8 @@ export type LocalEntryDraftsPort = {
     facts: LocalEntryFacts;
   }): Promise<LocalEntryDraftId>;
   read(id: LocalEntryDraftId): Promise<LocalEntryDraft | null>;
+  /** Removes one open Draft of this workspace. A Draft whose posting command was dispatched stays `frozen`. */
+  discard(id: LocalEntryDraftId): Promise<DiscardOutcome>;
 };
 
 const categoriesSchema = z
@@ -527,6 +530,43 @@ export function removeIn(
     ...document,
     drafts: document.drafts.filter((draft) => draft.id !== id),
   };
+}
+
+/**
+ * The person's discard of one Draft. Only an open Draft is removed. A posting Draft keeps its dispatched
+ * command for retry, and a batch row belongs to its batch, so neither is removed here.
+ */
+export function discardOpenIn(
+  document: LocalEntryDocument,
+  id: LocalEntryDraftId,
+  workspaceId: string,
+  now: number,
+): { document: LocalEntryDocument; outcome: Extract<DiscardOutcome, "discarded" | "frozen" | "gone"> } {
+  const draft = liveDrafts(document, now).find((row) => row.id === id);
+  if (!draft) return { document, outcome: "gone" };
+  if (workspaceOf(draft) !== workspaceId)
+    throw new Error("Draft belongs to another workspace");
+  if (isBatchDraft(document, draft)) throw new Error("Draft belongs to a batch");
+  if (draft.status === "posting") return { document, outcome: "frozen" };
+  return { document: removeIn(document, id), outcome: "discarded" };
+}
+
+export function discardLocalEntryDraft(
+  lease: LocalInputLease,
+  subject: string,
+  workspaceId: string,
+  id: LocalEntryDraftId,
+) {
+  if (lease.subject !== subject)
+    return Promise.reject(new Error("Draft belongs to another user"));
+  return mutateLocalEntryDocument(lease, subject, (document, now, dirty) => {
+    const discarded = discardOpenIn(document, id, workspaceId, now);
+    return {
+      document: discarded.document,
+      result: discarded.outcome,
+      write: dirty || discarded.outcome === "discarded",
+    };
+  });
 }
 
 export async function loadPendingPosting(subject: string) {

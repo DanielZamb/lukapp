@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useLocalInputLease } from "../local-auth/localInput";
 import {
   countDraftsInMonth,
+  discardLocalEntryDraft,
   findLiveDraft,
   keepIn,
   mutateLocalEntryDocument,
@@ -104,6 +105,11 @@ export function useLocalEntryDrafts(input: {
           now,
         );
         return findLiveDraft(parsed.document, id, input.workspaceId, now);
+      },
+      discard: async (id) => {
+        const outcome = await discardLocalEntryDraft(lease, input.subject, input.workspaceId, id);
+        await refresh();
+        return outcome;
       },
     }),
     [input.subject, input.workspaceId, lease, refresh],

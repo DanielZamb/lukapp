@@ -5,6 +5,9 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { ConfirmationScreen, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useTheme, useUi } from "../ui/core";
+import { ConfirmSheet } from "../ui/ConfirmSheet";
+import { useT } from "../i18n";
+import type { DiscardOutcome } from "./discardOutcome";
 import { font, fontSize, radius, spacing, touchTarget } from "../ui/tokens";
 import { formatMoney } from "./money";
 import type { DraftListItem, LocalEntryDraftId } from "./localEntryDrafts";
@@ -15,6 +18,9 @@ import type { DiscardNotice } from "./localDiscardNotices";
 
 export type InboxSegment = "now" | "wait";
 type InboxScreen = "inbox" | "warning" | "month-close" | "discard";
+type DiscardTarget =
+  | { kind: "candidate"; id: IntakeCandidateId; revision: number; title: string; value: string }
+  | { kind: "draft"; id: LocalEntryDraftId; title: string };
 
 function candidateDetail(
   candidate: IntakeCandidate,
@@ -28,33 +34,50 @@ function candidateDetail(
   return places.find((place) => place.id === candidate.suggestion.financialAccountProfileId)?.name ?? "Saved place";
 }
 
-function CandidateRow({ title, detail, value, onPress, isLast }: {
+function InboxRow({ title, detail, value, accessibilityLabel, onPress, discardLabel, onDiscard, isLast }: {
   title: string;
   detail: string;
-  value: string;
+  value?: string;
+  accessibilityLabel?: string;
   onPress: () => void;
+  discardLabel?: string;
+  onDiscard?: () => void;
   isLast?: boolean;
 }) {
   const theme = useTheme();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Review ${title}`}
-      onPress={onPress}
-      style={[styles.candidateRow, isLast && styles.lastCandidateRow]}
-    >
-      <View style={styles.candidateContent}>
-        <View style={styles.candidateCopy}>
-          <Text style={styles.candidateTitle}>{title}</Text>
-          <Text style={styles.candidateDetail}>{detail}</Text>
+    <View style={[styles.inboxRow, isLast && styles.lastCandidateRow]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        onPress={onPress}
+        style={[styles.candidateRow, onDiscard && styles.discardableRow]}
+      >
+        <View style={styles.candidateContent}>
+          <View style={styles.candidateCopy}>
+            <Text style={styles.candidateTitle}>{title}</Text>
+            <Text style={styles.candidateDetail}>{detail}</Text>
+          </View>
+          {value ? <Text style={styles.candidateValue}>{value}</Text> : null}
         </View>
-        <Text style={styles.candidateValue}>{value}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
-    </Pressable>
+        <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
+      </Pressable>
+      {onDiscard ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={discardLabel} onPress={onDiscard} style={styles.discard}>
+          <Ionicons name="trash-outline" size={20} color={theme.mutedForeground} />
+        </Pressable>
+      ) : null}
+    </View>
   );
+}
+
+function candidateValue(candidate: IntakeCandidate) {
+  return candidate.suggestion.amountMinorUnits === null ? "Amount needed" : formatMoney({
+    currency: candidate.currency,
+    minorUnits: Math.abs(candidate.suggestion.amountMinorUnits),
+  });
 }
 
 export function DraftsScreen({
@@ -62,7 +85,12 @@ export function DraftsScreen({
   confirming, month, places, confirmedCount, onContinueAfterConfirmation,
   onSegment, onBack, onResumeDraft, onOpenCandidate, onConfirmReady, onCompleteMonth,
   discardNotices = [], onDismissDiscardNotices, onSources, intakeWarning, otherNotifications = [],
+  onDiscardCandidate, onDiscardDraft,
 }: {
+  /** Discards one open Candidate at the revision shown in its row. */
+  onDiscardCandidate?: (id: IntakeCandidateId, revision: number) => Promise<DiscardOutcome>;
+  /** Discards one open Draft. */
+  onDiscardDraft?: (id: LocalEntryDraftId) => Promise<DiscardOutcome>;
   /** Recognized app notices and promotions; unknown notifications stay in review. */
   otherNotifications?: IntakeCandidate[];
   onSources: () => void;
@@ -99,6 +127,44 @@ export function DraftsScreen({
   const [dismissing, setDismissing] = useState(false);
   const [discardError, setDiscardError] = useState("");
   const [showOtherNotifications, setShowOtherNotifications] = useState(false);
+  const { t } = useT();
+  const [discardTarget, setDiscardTarget] = useState<DiscardTarget | null>(null);
+  const [discardBusy, setDiscardBusy] = useState(false);
+  const [discardFailure, setDiscardFailure] = useState("");
+  const [discardNotice, setDiscardNotice] = useState("");
+  function askDiscard(target: DiscardTarget) {
+    setDiscardNotice("");
+    setDiscardFailure("");
+    setDiscardTarget(target);
+  }
+  function closeDiscard() {
+    if (discardBusy) return;
+    setDiscardTarget(null);
+    setDiscardFailure("");
+  }
+  async function confirmDiscard() {
+    const target = discardTarget;
+    if (!target || discardBusy) return;
+    setDiscardBusy(true);
+    setDiscardFailure("");
+    try {
+      const outcome = target.kind === "candidate"
+        ? await onDiscardCandidate?.(target.id, target.revision)
+        : await onDiscardDraft?.(target.id);
+      setDiscardTarget(null);
+      setDiscardNotice(outcome === "changed" ? t("drafts.candidateChanged")
+        : outcome === "frozen" ? t(target.kind === "candidate" ? "drafts.candidateFrozen" : "drafts.draftFrozen") : "");
+    } catch {
+      setDiscardFailure(t("drafts.discardFailed"));
+    } finally {
+      setDiscardBusy(false);
+    }
+  }
+  function discardCandidate(candidate: IntakeCandidate, title: string) {
+    const status = candidate.status;
+    if (!onDiscardCandidate || status?.kind !== "review") return undefined;
+    return () => askDiscard({ kind: "candidate", id: candidate.id, revision: status.revision, title, value: candidateValue(candidate) });
+  }
   const empty = drafts.length === 0 && now.length === 0 && wait.length === 0;
   const candidateRows = segment === "now" ? now : wait;
   const postingDrafts = drafts.filter((item) => item.status === "posting");
@@ -168,6 +234,7 @@ export function DraftsScreen({
         </Pressable>
       </View>
       {error ? <Text accessibilityRole="alert" style={ui.error}>{error}</Text> : null}
+      {discardNotice ? <Text accessibilityRole="alert" style={ui.error}>{discardNotice}</Text> : null}
       {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{intakeWarning} Open Sources for observed details and capture notices.</Text> : null}
       {!readyToShow ? (
         <ActivityIndicator accessibilityLabel="Loading Candidates and drafts" />
@@ -216,26 +283,35 @@ export function DraftsScreen({
             ))}
           </View>
           <ListGroup>
-            {candidateRows.map((candidate) => (
-              <CandidateRow
-                key={candidate.id}
-                title={candidate.suggestion.description.trim() || candidate.notification?.text.trim() || "Needs review"}
-                detail={candidateDetail(candidate, currency, places)}
-                value={candidate.suggestion.amountMinorUnits === null ? "Amount needed" : formatMoney({
-                  currency: candidate.currency,
-                  minorUnits: Math.abs(candidate.suggestion.amountMinorUnits),
-                })}
-                onPress={() => onOpenCandidate(candidate.id)}
-              />
-            ))}
-            {draftRows.map((item) => (
-              <ListRow
-                key={item.id}
-                title={item.description.trim() || "Incomplete draft"}
-                detail={item.status === "posting" ? "Retry posting" : "Draft on this device"}
-                onPress={() => onResumeDraft(item.id)}
-              />
-            ))}
+            {candidateRows.map((candidate) => {
+              const title = candidate.suggestion.description.trim() || candidate.notification?.text.trim() || "Needs review";
+              return (
+                <InboxRow
+                  key={candidate.id}
+                  title={title}
+                  accessibilityLabel={`Review ${title}`}
+                  detail={candidateDetail(candidate, currency, places)}
+                  value={candidateValue(candidate)}
+                  onPress={() => onOpenCandidate(candidate.id)}
+                  discardLabel={t("drafts.discardCandidateA11y", { title })}
+                  onDiscard={discardCandidate(candidate, title)}
+                />
+              );
+            })}
+            {draftRows.map((item) => {
+              const title = item.description.trim() || t("drafts.incompleteDraft");
+              return (
+                <InboxRow
+                  key={item.id}
+                  title={title}
+                  detail={item.status === "posting" ? "Retry posting" : "Draft on this device"}
+                  onPress={() => onResumeDraft(item.id)}
+                  discardLabel={t("drafts.discardDraftA11y", { title })}
+                  onDiscard={item.status === "open" && onDiscardDraft
+                    ? () => askDiscard({ kind: "draft", id: item.id, title }) : undefined}
+                />
+              );
+            })}
             {candidateRows.length === 0 && draftRows.length === 0 && (
               <View style={styles.emptyList}>
                 <Text style={styles.body}>{segment === "now" ? "Nothing needs you now." : "Nothing waiting later."}</Text>
@@ -259,9 +335,11 @@ export function DraftsScreen({
               {otherNotifications.map((candidate) => {
                 const lines = candidate.notification?.text.split("\n") ?? [];
                 const body = (lines.length > 1 ? lines.slice(1) : lines).join(" ");
-                return <CandidateRow key={candidate.id} title={body || "Notification"} value=""
+                const title = body || "Notification";
+                return <InboxRow key={candidate.id} title={title} accessibilityLabel={`Review ${title}`}
                   detail={`${lines.length > 1 ? `${lines[0]} · ` : ""}${new Date(candidate.notification?.at ?? candidate.createdAt).toLocaleDateString()}`}
-                  onPress={() => onOpenCandidate(candidate.id)} />;
+                  onPress={() => onOpenCandidate(candidate.id)}
+                  discardLabel={t("drafts.discardCandidateA11y", { title })} onDiscard={discardCandidate(candidate, title)} />;
               })}
             </ListGroup>
           ) : null}
@@ -276,22 +354,45 @@ export function DraftsScreen({
           </Pressable>
         </>
       ) : null}
+      {discardTarget ? (
+        <ConfirmSheet
+          label={t(discardTarget.kind === "candidate" ? "drafts.discardCandidateTitle" : "drafts.discardDraftTitle")}
+          title={t(discardTarget.kind === "candidate" ? "drafts.discardCandidateTitle" : "drafts.discardDraftTitle")}
+          detail={discardTarget.kind === "candidate" && discardTarget.value ? `${discardTarget.title} · ${discardTarget.value}` : discardTarget.title}
+          body={t(discardTarget.kind === "candidate" ? "drafts.discardCandidateBody" : "drafts.discardDraftBody")}
+          busy={discardBusy}
+          error={discardFailure}
+          actions={[
+            { label: t("common.discard"), tone: "danger", onPress: () => void confirmDiscard() },
+            { label: t("common.cancel"), onPress: closeDiscard },
+          ]}
+          onDismiss={closeDiscard}
+        />
+      ) : null}
     </Screen>
   );
 }
 
 function createStyles(theme: Theme, layout: ReadableLayout) {
   return StyleSheet.create({
+  inboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
+  },
   candidateRow: {
+    flex: 1,
+    minWidth: 0,
     minHeight: 70,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.border,
   },
+  discardableRow: { paddingRight: spacing.xs },
+  discard: { minWidth: touchTarget, minHeight: touchTarget, marginRight: spacing.sm, alignItems: "center", justifyContent: "center" },
   lastCandidateRow: { borderBottomWidth: 0 },
   fold: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm },
   candidateContent: { flex: 1, minWidth: 0, flexDirection: layout.reflow ? "column" : "row", alignItems: layout.reflow ? "stretch" : "center", gap: spacing.sm },

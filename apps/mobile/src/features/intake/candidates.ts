@@ -34,6 +34,11 @@ export type IntakeCandidate = {
   error?: string;
   /** The kept notification text, when the source was set up under disclosure v3. */
   notification?: { text: string; packageName: string; at: number };
+  /**
+   * Open for review at a saved record revision, or pending once its confirmation was dispatched and its outcome is
+   * unknown. A pending Candidate is frozen: it can only be retried with the same command. Legacy documents omit it.
+   */
+  status?: { kind: "review"; revision: number } | { kind: "pending" };
 };
 
 export type IntakeDocument = {
@@ -145,7 +150,7 @@ export function viewInbox(
   return {
     now: nowRows,
     wait: waitRows,
-    ready: money.filter((row) => isReadyCandidate(row, currency)),
+    ready: money.filter((row) => row.status?.kind === "pending" || isReadyCandidate(row, currency)),
     otherNotifications: live.filter(isOtherNotification),
     count: money.length,
   };
