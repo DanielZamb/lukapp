@@ -1,7 +1,0 @@
-
-> lukapp@ typecheck /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-2a56b65e-ece2b88b49957ccb
-> tsc --noEmit && pnpm --filter @lukapp/mobile typecheck
-
-
-> @lukapp/mobile@0.1.0 typecheck /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-2a56b65e-ece2b88b49957ccb/apps/mobile
-> tsc --noEmit
