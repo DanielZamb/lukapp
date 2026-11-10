@@ -322,3 +322,30 @@ test.each([
   expect(phone.has(storedKey)).toBe(kept);
   expect(texts().includes("We couldn't confirm whether Wallet started undoing")).toBe(kept);
 });
+
+test("a stopped Undo with nothing reversed, its cancel and its receipt read in Spanish", async () => {
+  state.statuses = { wallet: "undoing" };
+  state.undo = { wallet: attention({ replacementDefaultFinancialAccountProfileId: "daily" }) };
+  state.abort.mockImplementation(async () => {
+    state.statuses = { wallet: "open" };
+    return { operation: attention({ state: { kind: "aborted", abortedAt: nov9, abortedBy: "owner", defaultRestored: true },
+      replacementDefaultFinancialAccountProfileId: "daily" }), replay: false };
+  });
+  await render(AccountRoute, "es");
+  expect(texts()).toEqual(expect.arrayContaining(["Necesita atención", "Algo inesperado lo detuvo.", "Todavía no se ha reversado ningún movimiento.",
+    "Tus movimientos siguen como estaban, pero el lugar queda bloqueado hasta que se arregle el problema o canceles la orden de deshacerlo.",
+    "Empezó el 8 de noviembre de 2026 para reversar 7 movimientos.", "Para soporte: place_undo_unexpected_failure. x",
+    "Todavía no se ha reversado nada, así que puedes cancelar esto. Wallet vuelve a ser un lugar abierto y sus movimientos quedan como estaban.",
+    "Wallet también vuelve a ser tu lugar por defecto, salvo que hayas cambiado tu lugar por defecto desde entonces."]));
+  await act(async () => root!.root.find((node) => String(node.type) === "Pressable" && node.props.accessibilityLabel === "Cancelar y dejarlo abierto").props.onPress());
+  expect(texts()).toEqual(expect.arrayContaining(["Se canceló antes de cambiar algo", "Se canceló el 9 de noviembre de 2026. El lugar quedó abierto otra vez.",
+    "Wallet vuelve a ser tu lugar por defecto."]));
+});
+
+test("an Undo's progress reads in Spanish on the Places list", async () => {
+  state.accounts = [place("daily", "Diario", 10_000), place("card", "Tarjeta", 5_000)];
+  state.statuses = { card: "undoing" };
+  state.undo = { card: operation({ kind: "running" }, 2) };
+  await render(PlacesRoute, "es");
+  expect(texts()).toContain("Deshaciendo este lugar · 2 de 7 movimientos reversados");
+});

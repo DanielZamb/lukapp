@@ -885,3 +885,54 @@ test("retrying a closing whose outcome is unknown resends it even if a source no
   await settle();
   expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
 });
+
+test("choosing an unavailable answer again returns to the summary, and backing out of the picker does too, twice", async () => {
+  await reviewTransferToSavings();
+  await act(async () => serverChange(() => { remote.places = [wallet, daily, { ...savings, status: "closed" }]; }));
+  for (const _round of [1, 2]) {
+    await ui.row("Transfer to Savings (closed)");
+    expect(ui.texts()[1]).toBe("Which place did it go to?");
+    await systemBack();
+    expect(ui.texts()[1]).toBe("Review before closing Wallet");
+    expect(mounted!.routes()).toEqual(["index", "places", "account", "place-ending"]);
+  }
+  await systemBack();
+  expect(ui.texts()[1]).toBe("Where did the money go?");
+  await systemBack();
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  await systemBack();
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("an unconfirmed closing's screen goes back to the Place's page with one Back and keeps the request, twice", async () => {
+  storeOnPhone(sentTransfer);
+  for (const _round of [1, 2]) {
+    await open();
+    await settle();
+    expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet closed");
+    await systemBack();
+    expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+    await act(async () => mounted!.root.unmount());
+  }
+  mounted = undefined;
+  expect(JSON.parse(phone.get(storedKey)!).endings[0].request).toEqual(sentTransfer);
+  expect(remote.close).not.toHaveBeenCalled();
+});
+
+test("in Spanish the new day and a stale refusal read as such", async () => {
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_date_stale", message: "x" }))
+    .mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_balance_stale", message: "x" }));
+  remote.places = [wallet, daily, { ...savings, name: "Ahorros" }];
+  await open("es");
+  await ui.press("Cerrar Wallet");
+  await ui.press("La pasé a otro lugar");
+  await ui.press("Ahorros");
+  await ui.press("Cerrar Wallet");
+  expect(ui.alerts()).toEqual(["Cambió el día antes de cerrar el lugar, así que no se registró nada. Este celular todavía muestra 10 de noviembre de 2026: revisa su fecha y hora, y vuelve a intentarlo."]);
+  await act(async () => serverChange(() => { remote.phoneDay = "2026-11-11"; }));
+  expect(ui.texts().slice(2, 4)).toEqual(["Cambió el día: este cierre ahora se registra el 11 de noviembre de 2026. Revísalo otra vez antes de cerrar.",
+    "Se registra hoy, 11 de noviembre de 2026:"]);
+  await ui.press("Cerrar Wallet");
+  expect(ui.alerts()).toEqual(["Cambió el día: este cierre ahora se registra el 11 de noviembre de 2026. Revísalo otra vez antes de cerrar.",
+    "El saldo cambió antes de cerrar el lugar, así que no se registró nada. Estamos trayendo el saldo nuevo…"]);
+});

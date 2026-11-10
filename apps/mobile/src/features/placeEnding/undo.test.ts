@@ -432,3 +432,21 @@ test("a source mapped to the Place after the confirmation was drawn stops the st
   expect(ui.texts().slice(1, 4)).toEqual(["You can't undo Wallet yet", "Apps send their notifications here",
     "Notifications from Nequi land in this place. Point them at another place or stop reading them."]);
 });
+
+test("choosing the default again from the confirmation returns to it with system back, twice, keeping the typed name", async () => {
+  remote.closure = closure({ isDefault: true, requiresReplacementDefault: true });
+  await openUndo();
+  await ui.press("Daily");
+  await ui.press("Continue");
+  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => serverChange(() => { remote.places = [profile("wallet", "Wallet"), profile("daily", "Daily", "closed"), profile("savings", "Savings")]; }));
+  for (const _round of [1, 2]) {
+    await ui.row("Daily (closed) can't become your default place anymore");
+    expect(ui.texts()[1]).toBe("Choose your new default place");
+    await act(async () => { mounted!.stack.goBack(); });
+    expect(ui.texts()[1]).toBe("Undo Wallet");
+    expect(ui.input("Place name to confirm").props.value).toBe("Wallet");
+  }
+  expect(mounted!.routes()).toEqual(["index", "places", "account", "place-ending"]);
+  expect(remote.undo).not.toHaveBeenCalled();
+});
