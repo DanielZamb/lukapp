@@ -3,22 +3,25 @@ import { useAction, useQuery } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { useNavigation } from "expo-router";
 import { useRef, useState } from "react";
-import { useT } from "../../i18n";
+import { formatLongDate, useT } from "../../i18n";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { amountOfMinorUnits, openAmount, type AmountSession } from "../amount/session";
 import { api } from "../api";
+import { formatMoney } from "../money";
 import { useFrozenCommand } from "../useFrozenCommand";
+import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import {
-  answerSpec, balanceCase, closeRequest, everyPlace, lineComplete, refusalMessage, refusalOf, remainingMinorUnits, typedNameMatches, undoRequest,
-  type Act, type Answer, type Blocker, type CloseReceipt, type CloseRequest, type LineDraft, type UndoReceipt, type UndoRequest,
+  answerSpec, balanceCase, categoryChoice, closeRequest, everyPlace, keepAllowed, lineComplete, placeChoice, refusalMessage, refusalOf,
+  remainingMinorUnits, sameMoney, staleNotice, typedNameMatches, undoRequest, workspaceDay,
+  type Act, type Answer, type Blocker, type ChoiceView, type CloseReceipt, type CloseRequest, type LineDraft, type Reviewed,
+  type StaleNotice, type UndoReceipt, type UndoRequest,
 } from "./model";
 import {
   BlockersScreen, ChooseScreen, DefaultScreen, EndedScreen, LinesScreen, LoadingScreen, PickScreen, ReceiptScreen, ReviewScreen,
   UndoConfirmScreen, type PickOption,
 } from "./PlaceEndingScreens";
 import { useSourceBlocker } from "./sources";
-import { useUndoPreview } from "./useUndoPreview";
 
 type Step =
   | { name: "choose" }
@@ -31,6 +34,8 @@ type Step =
 export type PlaceEndingProps = {
   workspaceId: string;
   profileId: string;
+  /** The workspace's time zone, for the day a closing is recorded on. */
+  timeZone: string;
   /** Returns to the account page that opened the flow. */
   onBack: () => void;
   /** After the Place has closed: returns to the Places list. */
@@ -41,17 +46,29 @@ export type PlaceEndingProps = {
   onSources: () => void;
 };
 
+/** After a balance change, the person is returned to the step that depends on it; the steps before it stay. */
+function restack(steps: Step[], zero: boolean): Step[] {
+  const at = steps[steps.length - 1]!.name;
+  if (at === "choose" || at === "default") return steps;
+  return [...steps.filter((step) => step.name === "choose" || step.name === "default"), zero ? { name: "review" } : { name: "lines" }];
+}
+
 /**
  * Ending a Place: choosing Close or Undo, clearing what blocks it, choosing a new Default Place when needed and,
  * for Close, saying where the money went. Each step returns to the one before it; a sent command whose outcome
  * is unknown locks the flow until it is retried with the same request.
+ *
+ * A confirmation belongs to the values on screen. Close binds the balance and day it shows and Undo binds the
+ * preview fingerprint of the numbers it shows; when either changes underneath, the confirmation is withdrawn and the
+ * person is told what changed before confirming again.
  */
-export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onStarted, onSources }: PlaceEndingProps) {
+export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEnded, onStarted, onSources }: PlaceEndingProps) {
   const translator = useT();
-  const { t } = translator;
+  const { t, language } = translator;
   const interact = useLocalEntryInteraction();
   const navigation = useNavigation();
   const reportFailure = useDeviceAccessFailure();
+  const calendar = useWorkspaceCalendar(timeZone);
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, ...everyPlace });
   const closure = useQuery(api.accounting.placeClosure, { workspaceId, financialAccountProfileId: profileId });
   const [act, setAct] = useState<Act | null>(null);
@@ -61,10 +78,14 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
   const [adding, setAdding] = useState(false);
   const [typed, setTyped] = useState("");
   const [receipt, setReceipt] = useState<CloseReceipt | null>(null);
+  const [reviewed, setReviewed] = useState<Reviewed | null>(null);
+  const [notice, setNotice] = useState<StaleNotice | null>(null);
+  const [shownPreview, setShownPreview] = useState<string | null>(null);
+  const [previewChanged, setPreviewChanged] = useState(false);
   const nextLine = useRef(0);
   const leaving = useRef(false);
   const categories = useQuery(api.accounting.listUserCategories, act === "close" ? { workspaceId } : "skip");
-  const preview = useUndoPreview(workspaceId, profileId, act === "undo");
+  const preview = useQuery(api.accounting.previewUndoPlace, act === "undo" ? { workspaceId, financialAccountProfileId: profileId, cursor: null } : "skip");
   const sources = useSourceBlocker(workspaceId, profileId);
   const refusal = useRef<ReturnType<typeof refusalOf>>(null);
   const refusalCode = (error: unknown) => { refusal.current = refusalOf(error); return refusal.current?.code ?? null; };
@@ -93,6 +114,8 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
     if (place && place.status !== "open") return leave(onBack);
     if (command.state.name === "open" && command.state.refusal) command.release();
     if (adding) return setAdding(false);
+    if (step.name === "confirm") { setShownPreview(null); setPreviewChanged(false); }
+    if (step.name === "lines" || step.name === "review") setNotice(null);
     if (steps.length > 1) return setSteps((current) => current.slice(0, -1));
     leave(onBack);
   }
@@ -105,9 +128,36 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
   const others = (places ?? []).filter((item) => item.status === "open" && item.id !== profileId);
   if (!places || !closure) return <LoadingScreen onBack={back} />;
   if (!place) return <EndedScreen title={t("placeEnding.missingTitle")} detail={t("placeEnding.missingDetail")} onBack={back} />;
-  const balance = closure.balance;
-  const situation = balanceCase(closure);
   const name = place.name;
+  const live: Reviewed = { balance: closure.balance, nature: closure.nature, accountingDate: workspaceDay(closure.accountingDate, calendar.date) };
+
+  // The facts under an open Close moved: withdraw what was built on them before this render reaches the screen.
+  const changed = act === "close" && reviewed && !locked && !receipt ? staleNotice(reviewed, live, notice) : null;
+  if (changed && reviewed) {
+    setReviewed(live);
+    setNotice(changed);
+    if (!sameMoney(reviewed.balance, live.balance)) {
+      const situation = balanceCase(live);
+      setLines(keepAllowed(lines, situation));
+      setAdding(false);
+      setSteps(restack(steps, situation === "zero"));
+    }
+    if (close.state.name === "open" && close.state.refusal) close.release();
+  }
+  // The Undo preview changed while its numbers were on the confirmation: those numbers and the typed name no longer count.
+  if (act === "undo" && step.name === "confirm" && preview && !locked) {
+    if (shownPreview === null) setShownPreview(preview.fingerprint);
+    else if (preview.fingerprint !== shownPreview) {
+      setShownPreview(preview.fingerprint);
+      setTyped("");
+      setPreviewChanged(true);
+      if (undo.state.name === "open" && undo.state.refusal) undo.release();
+    }
+  }
+
+  const basis = reviewed ?? live;
+  const balance = basis.balance;
+  const situation = balanceCase(basis);
 
   function sequence(chosen: Act): Step[] {
     const tail: Step[] = chosen === "undo" ? [{ name: "confirm" }] : situation === "zero" ? [{ name: "review" }] : [{ name: "lines" }, { name: "review" }];
@@ -116,6 +166,11 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
   function advance() {
     if (!act) return;
     interact();
+    const below = steps[steps.length - 2];
+    // Choosing again from a confirmation returns to that confirmation.
+    if (step.name === "default" && (below?.name === "review" || below?.name === "confirm"))
+      return setSteps((current) => current.slice(0, -1));
+    if (step.name === "lines") setNotice(null);
     const order = sequence(act);
     const at = order.findIndex((item) => item.name === step.name);
     const next = order[at + 1];
@@ -125,6 +180,10 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
     interact();
     if (chosen !== act) { setLines([]); setTyped(""); setAdding(false); }
     setAct(chosen);
+    setReviewed(chosen === "close" ? live : null);
+    setNotice(null);
+    setShownPreview(null);
+    setPreviewChanged(false);
     setSteps([{ name: "choose" }, sequence(chosen)[0]!]);
   }
 
@@ -136,7 +195,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
     return <ChooseScreen name={name} onBack={back} onClose={() => choose("close")} onUndo={() => choose("undo")} />;
 
   if (!locked) {
-    const server = act === "undo" ? preview.first?.blockers : closure.blockers;
+    const server = act === "undo" ? preview?.blockers : closure.blockers;
     if (server === undefined || sources === undefined) return <LoadingScreen onBack={back} />;
     const blockers: Blocker[] = [...(sources ? [sources] : []), ...server];
     if (blockers.length)
@@ -146,7 +205,8 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
 
   if (step.name === "default")
     return <DefaultScreen act={act} name={name} places={others} selected={replacement}
-      onSelect={(id) => { interact(); setReplacement(id); }} onContinue={replacement ? advance : undefined} onBack={back} />;
+      onSelect={(id) => { interact(); setReplacement(id); }}
+      onContinue={replacement && others.some((item) => item.id === replacement) ? advance : undefined} onBack={back} />;
 
   const findLine = (id: string) => lines.find((line) => line.id === id);
   function update(id: string, change: Partial<LineDraft>) {
@@ -159,23 +219,31 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
     interact();
     const remaining = remainingMinorUnits(balance, lines);
     const { kind } = answerSpec(answer);
-    const only = kind === "transfer" && others.length === 1 ? others[0]!.id : null;
+    const only = kind === "transfer" && others.length === 1 ? { id: others[0]!.id, name: others[0]!.name } : null;
     const line: LineDraft = { id: `line-${nextLine.current++}`, answer, target: only, amount: amountFor(remaining) };
     const nextLines = [...lines, line];
     setLines(nextLines);
     setAdding(false);
     if (kind === "adjustment" || only) {
-      if (nextLines.length === 1 && lineComplete(line) && remainingMinorUnits(balance, nextLines) === 0) setSteps((current) => [...current, { name: "review" }]);
+      if (nextLines.length === 1 && lineComplete(line) && remainingMinorUnits(balance, nextLines) === 0) {
+        setNotice(null);
+        setSteps((current) => [...current, { name: "review" }]);
+      }
     } else setSteps((current) => [...current, { name: "pick", lineId: line.id }]);
   }
-  function pickTarget(lineId: string, target: string) {
+  function pickTarget(lineId: string, option: PickOption) {
     if (!close.canEdit()) return;
     interact();
-    const nextLines = lines.map((line) => line.id === lineId ? { ...line, target } : line);
+    const nextLines = lines.map((line) => line.id === lineId ? { ...line, target: { id: option.id, name: option.label } } : line);
     setLines(nextLines);
-    const done = nextLines.length === 1 && nextLines.every(lineComplete) && remainingMinorUnits(balance, nextLines) === 0;
-    setSteps((current) => [...current.slice(0, -1), ...(done ? [{ name: "review" } as const] : [])]);
+    const rest = steps.slice(0, -1);
+    const firstAnswer = rest[rest.length - 1]?.name === "lines" && nextLines.length === 1 && nextLines.every(lineComplete)
+      && remainingMinorUnits(balance, nextLines) === 0;
+    if (firstAnswer) setNotice(null);
+    setSteps(firstAnswer ? [...rest, { name: "review" }] : rest);
   }
+  const repick = (lineId: string) => { if (close.canEdit()) { interact(); setSteps((current) => [...current, { name: "pick", lineId }]); } };
+  const repickDefault = () => { if (command.canEdit()) { interact(); setSteps((current) => [...current, { name: "default" }]); } };
 
   if (step.name === "pick") {
     const line = findLine(step.lineId);
@@ -185,46 +253,61 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
       ? others.map((item) => ({ id: item.id, label: item.name, emoji: item.emoji }))
       : categories?.filter((category) => category.nature === "Expense")
         .map((category) => ({ id: category.id, label: category.name, emoji: category.style.emoji }));
-    return <PickScreen kind={kind === "transfer" ? "place" : "category"} answer={line.answer} options={options} selected={line.target}
-      onSelect={(id) => pickTarget(line.id, id)} onBack={back} />;
+    return <PickScreen kind={kind === "transfer" ? "place" : "category"} answer={line.answer} options={options} selected={line.target?.id ?? null}
+      onSelect={(option) => pickTarget(line.id, option)} onBack={back} />;
   }
 
-  const targetName = (line: LineDraft) => answerSpec(line.answer).kind === "transfer"
-    ? places.find((item) => item.id === line.target)?.name ?? null
-    : categories?.find((category) => category.id === line.target)?.name ?? null;
+  const choiceOf = (line: LineDraft): ChoiceView | null => !line.target ? null
+    : answerSpec(line.answer).kind === "transfer" ? placeChoice(line.target.id, places, t, line.target.name)
+    : categories ? categoryChoice(line.target, categories, t) : { label: line.target.name, unavailable: false };
+  const replacementChoice = replacement ? placeChoice(replacement, places, t) : null;
+  const unavailable = lines.some((line) => choiceOf(line)?.unavailable) || !!replacementChoice?.unavailable;
+  const noticeLines = notice ? [
+    ...(notice.balance && !sameMoney(notice.balance.from, notice.balance.to) ? [t(situation === "zero" ? "placeEnding.staleBalanceZero" : "placeEnding.staleBalance",
+      { name, from: formatMoney(notice.balance.from, { hideZeroDecimals: true }), to: formatMoney(notice.balance.to, { hideZeroDecimals: true }) })] : []),
+    ...(notice.date ? [t("placeEnding.staleDate", { date: formatLongDate(language, Date.parse(`${notice.date}T12:00:00Z`), "UTC") })] : []),
+  ] : [];
 
   if (step.name === "lines")
     return <LinesScreen name={name} situation={situation} balance={balance} lines={lines} adding={adding || lines.length === 0}
-      editable={!close.frozen} targetName={targetName} onAnswer={addLine} onAdd={() => { interact(); setAdding(true); }}
-      onCancelAdd={() => { interact(); setAdding(false); }}
-      onPick={(id) => { interact(); setSteps((current) => [...current, { name: "pick", lineId: id }]); }}
+      editable={!close.frozen} choiceOf={choiceOf} notice={noticeLines} blocked={unavailable}
+      onAnswer={addLine} onAdd={() => { interact(); setAdding(true); }}
+      onCancelAdd={() => { interact(); setAdding(false); }} onPick={repick}
       onAmount={(id, amount) => { if (close.canEdit() && amount.currency === balance.currency) { interact(); update(id, { amount }); } }}
       onRemove={(id) => { if (close.canEdit()) { interact(); setLines((current) => current.filter((line) => line.id !== id)); } }}
       onContinue={advance} onBack={back} />;
 
-  const replacementName = replacement ? others.find((item) => item.id === replacement)?.name ?? null : null;
+  const waiting = command.state.name === "open" && command.state.refusal !== null
+    && (command.state.refusal.code === "place_close_balance_stale" || command.state.refusal.code === "place_undo_preview_stale");
   const error = command.state.name === "uncertain"
     ? t(act === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain")
+    : command.state.name === "open" && command.state.refusal?.code === "place_close_date_stale"
+      ? t("placeEnding.refuseDateStale", { date: formatLongDate(language, Date.parse(`${basis.accountingDate}T12:00:00Z`), "UTC") })
     : command.state.name === "open" && command.state.refusal && refusal.current ? refusalMessage(refusal.current, act, translator) : "";
 
-  if (step.name === "confirm")
-    return <UndoConfirmScreen name={name} balance={balance} totals={preview.totals} settled={preview.settled} failed={preview.failed}
-      replacementName={replacementName} typed={typed} editable={!undo.frozen}
-      onTyped={(value) => { if (undo.canEdit()) { interact(); setTyped(value); } }} onRetryPreview={preview.retry}
+  if (step.name === "confirm") {
+    const snapshot = preview?.snapshot ?? null;
+    return <UndoConfirmScreen name={name} balance={balance} snapshot={snapshot} changed={previewChanged}
+      replacement={replacementChoice} onRepickDefault={repickDefault} typed={typed} editable={!undo.frozen}
+      onTyped={(value) => { if (undo.canEdit()) { interact(); setTyped(value); } }}
       busy={undo.busy} uncertain={undo.state.name === "uncertain"} error={error} onBack={locked ? undefined : back}
-      canConfirm={(undo.state.name === "uncertain" || (preview.settled && typedNameMatches(typed, name))) && !undo.busy}
+      canConfirm={!undo.busy && (undo.state.name === "uncertain"
+        || (!!snapshot && !waiting && !replacementChoice?.unavailable && typedNameMatches(typed, name)))}
       onConfirm={() => {
         interact();
-        void undo.submit(() => typedNameMatches(typed, name) && preview.settled
-          ? undoRequest({ previewFingerprint: preview.first!.fingerprint, workspaceId, placeId: profileId, replacement, idempotencyKey: Crypto.randomUUID() }, t) : null);
+        void undo.submit(() => snapshot && typedNameMatches(typed, name) && !replacementChoice?.unavailable
+          ? undoRequest({ previewFingerprint: snapshot.fingerprint, workspaceId, placeId: profileId, replacement, idempotencyKey: Crypto.randomUUID() }, t)
+          : null);
       }} />;
+  }
 
-  return <ReviewScreen name={name} balance={balance} lines={lines} targetName={targetName} accountingDate={closure.accountingDate}
-    replacementName={replacementName} busy={close.busy} uncertain={close.state.name === "uncertain"} error={error}
-    onBack={locked ? undefined : back}
+  return <ReviewScreen name={name} balance={balance} lines={lines} choiceOf={choiceOf} accountingDate={basis.accountingDate}
+    notice={noticeLines} replacement={replacementChoice} unavailable={unavailable} onRepick={repick} onRepickDefault={repickDefault}
+    busy={close.busy} uncertain={close.state.name === "uncertain"} error={error} onBack={locked ? undefined : back}
+    canConfirm={!close.busy && (close.state.name === "uncertain" || (!unavailable && !waiting))}
     onConfirm={() => {
       interact();
-      void close.submit(() => closeRequest({ accountingDate: closure.accountingDate, workspaceId, place: { id: profileId, name }, balance, lines, replacement,
-        idempotencyKey: Crypto.randomUUID() }, t));
+      void close.submit(() => unavailable ? null
+        : closeRequest({ reviewed: basis, workspaceId, place: { id: profileId, name }, lines, replacement, idempotencyKey: Crypto.randomUUID() }, t));
     }} />;
 }

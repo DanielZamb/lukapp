@@ -14,5 +14,6 @@ export default function PlaceEndingRoute() {
   const toPlaces = () => router.dismissTo("/places");
   const toAccount = () => router.canGoBack() ? router.back() : router.replace({ pathname: "/account", params: { profileId } });
   return <PlaceEndingFlow key={`${defaults.workspace.id}:${profileId}`} workspaceId={defaults.workspace.id} profileId={profileId}
+    timeZone={defaults.workspace.timeZone}
     onBack={toAccount} onStarted={toAccount} onEnded={toPlaces} onSources={() => router.push("/intake")} />;
 }

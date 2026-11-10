@@ -9,7 +9,7 @@ import type { AmountSession } from "../amount/session";
 import { formatMoney } from "../money";
 import {
   answerSpec, answersFor, blockerView, lineMinorUnits, remainingMinorUnits, signedMoney, situationCopy,
-  type Act, type Answer, type BalanceCase, type Blocker, type Closure, type CloseReceipt, type LineDraft, type UndoTotals,
+  type Act, type Answer, type BalanceCase, type Blocker, type ChoiceView, type Closure, type CloseReceipt, type LineDraft, type UndoSnapshot,
 } from "./model";
 
 type Money = Closure["balance"];
@@ -28,6 +28,15 @@ function useStyles() {
       borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.background },
     remaining: { ...ui.body, fontFamily: font.semibold },
   }), [theme, ui, layout]);
+}
+
+/** What changed under the person's answers, stated before anything else on the step they were returned to. */
+function Notice({ lines }: { lines: string[] }) {
+  const styles = useStyles();
+  if (!lines.length) return null;
+  return <View accessibilityLiveRegion="polite" style={styles.warningCard}>
+    {lines.map((line) => <Text key={line} accessibilityRole="alert" style={styles.strong}>{line}</Text>)}
+  </View>;
 }
 
 export function LoadingScreen({ onBack }: { onBack?: () => void }) {
@@ -109,7 +118,7 @@ export type PickOption = { id: string; label: string; emoji?: string };
 
 export function PickScreen({ kind, answer, options, selected, onSelect, onBack }: {
   kind: "place" | "category"; answer: Answer; options: PickOption[] | undefined; selected: string | null;
-  onSelect: (id: string) => void; onBack: () => void;
+  onSelect: (option: PickOption) => void; onBack: () => void;
 }) {
   const ui = useUi();
   const { t } = useT();
@@ -120,15 +129,15 @@ export function PickScreen({ kind, answer, options, selected, onSelect, onBack }
       : options.length === 0 ? <Text style={ui.body}>{t(kind === "place" ? "placeEnding.pickNoPlaces" : "placeEnding.pickNoCategories")}</Text>
       : <View style={ui.section}>
         {options.map((option) => <Choice key={option.id} label={[option.emoji, option.label].filter(Boolean).join(" ")}
-          selected={option.id === selected} onPress={() => onSelect(option.id)} />)}
+          selected={option.id === selected} onPress={() => onSelect(option)} />)}
       </View>}
   </Screen>;
 }
 
-export function LinesScreen({ name, situation, balance, lines, adding, editable, targetName, onAnswer, onAdd, onCancelAdd, onPick,
+export function LinesScreen({ name, situation, balance, lines, adding, editable, choiceOf, notice, blocked, onAnswer, onAdd, onCancelAdd, onPick,
   onAmount, onRemove, onContinue, onBack }: {
   name: string; situation: BalanceCase; balance: Money; lines: LineDraft[]; adding: boolean; editable: boolean;
-  targetName: (line: LineDraft) => string | null;
+  choiceOf: (line: LineDraft) => ChoiceView | null; notice: string[]; blocked: boolean;
   onAnswer: (answer: Answer) => void; onAdd: () => void; onCancelAdd: () => void; onPick: (lineId: string) => void;
   onAmount: (lineId: string, amount: AmountSession) => void; onRemove: (lineId: string) => void;
   onContinue: () => void; onBack: () => void;
@@ -139,7 +148,7 @@ export function LinesScreen({ name, situation, balance, lines, adding, editable,
   if (situation === "zero") return null;
   const copy = situationCopy[situation];
   const remaining = remainingMinorUnits(balance, lines);
-  const ready = lines.length > 0 && remaining === 0 && lines.every((line) => lineMinorUnits(line) !== null
+  const ready = !blocked && lines.length > 0 && remaining === 0 && lines.every((line) => lineMinorUnits(line) !== null
     && (answerSpec(line.answer).kind === "adjustment" || line.target !== null));
   const magnitude = { currency: balance.currency, minorUnits: Math.abs(balance.minorUnits) };
   const footer = <View style={styles.footer}>
@@ -151,15 +160,19 @@ export function LinesScreen({ name, situation, balance, lines, adding, editable,
   </View>;
   return <Screen footer={footer}>
     <Header title={t(copy.title)} eyebrow={t("placeEnding.eyebrow")} onBack={onBack} />
+    <Notice lines={notice} />
     <Text style={ui.body}>{t(copy.intro, { name, amount: money(magnitude) })}</Text>
     {lines.map((line) => {
       const spec = answerSpec(line.answer);
       const label = t(spec.label);
+      const choice = choiceOf(line);
       return <View key={line.id} style={styles.card}>
         <Text style={styles.strong}>{label}</Text>
         {spec.kind !== "adjustment" && <ListGroup>
           <ListRow title={t(spec.kind === "transfer" ? "placeEnding.linePlace" : "placeEnding.lineCategory")}
-            value={targetName(line) ?? t("placeEnding.lineChoose")} onPress={editable ? () => onPick(line.id) : undefined} />
+            value={choice?.label ?? t("placeEnding.lineChoose")} tone={choice?.unavailable ? "warning" : undefined}
+            detail={choice?.unavailable ? t("placeEnding.lineChooseAgain") : undefined}
+            onPress={editable ? () => onPick(line.id) : undefined} />
         </ListGroup>}
         <AmountField label={t("placeEnding.lineAmount")} inputAccessibilityLabel={t("placeEnding.lineAmountA11y", { answer: label })}
           session={line.amount} editable={editable} onChange={(amount) => onAmount(line.id, amount)}
@@ -189,11 +202,11 @@ function useLineLabel() {
   return (line: LineDraft, target: string | null) => t(answerSpec(line.answer).review, { target: target ?? "" });
 }
 
-export function ReviewScreen({ name, balance, lines, targetName, accountingDate, replacementName, busy, uncertain, error,
-  onBack, onConfirm }: {
-  name: string; balance: Money; lines: LineDraft[]; targetName: (line: LineDraft) => string | null; accountingDate: string;
-  replacementName: string | null; busy: boolean; uncertain: boolean; error: string;
-  onBack?: () => void; onConfirm: () => void;
+export function ReviewScreen({ name, balance, lines, choiceOf, accountingDate, notice, replacement, unavailable, onRepick, onRepickDefault,
+  busy, uncertain, error, canConfirm, onBack, onConfirm }: {
+  name: string; balance: Money; lines: LineDraft[]; choiceOf: (line: LineDraft) => ChoiceView | null; accountingDate: string;
+  notice: string[]; replacement: ChoiceView | null; unavailable: boolean; onRepick: (lineId: string) => void; onRepickDefault: () => void;
+  busy: boolean; uncertain: boolean; error: string; canConfirm: boolean; onBack?: () => void; onConfirm: () => void;
 }) {
   const ui = useUi();
   const styles = useStyles();
@@ -202,20 +215,39 @@ export function ReviewScreen({ name, balance, lines, targetName, accountingDate,
   const date = formatLongDate(language, Date.parse(`${accountingDate}T12:00:00Z`), "UTC");
   return <Screen>
     <Header title={t("placeEnding.reviewTitle", { name })} eyebrow={t("placeEnding.eyebrow")} onBack={onBack} />
+    <Notice lines={notice} />
     {lines.length === 0 ? <Text style={ui.body}>{t("placeEnding.reviewZero", { name, amount: money(balance) })}</Text> : <>
       <Text style={ui.body}>{t("placeEnding.reviewDated", { date })}</Text>
       <ListGroup>
-        {lines.map((line) => <ListRow key={line.id} title={lineLabel(line, targetName(line))}
-          value={money({ currency: balance.currency, minorUnits: lineMinorUnits(line) ?? 0 })} />)}
+        {lines.map((line) => {
+          const choice = choiceOf(line);
+          return <ListRow key={line.id} title={lineLabel(line, choice?.label ?? null)} tone={choice?.unavailable ? "warning" : undefined}
+            detail={choice?.unavailable ? t("placeEnding.lineChooseAgain") : undefined}
+            onPress={choice?.unavailable && !uncertain ? () => onRepick(line.id) : undefined}
+            value={money({ currency: balance.currency, minorUnits: lineMinorUnits(line) ?? 0 })} />;
+        })}
       </ListGroup>
     </>}
-    {replacementName && <Text style={ui.body}>{t("placeEnding.reviewDefault", { place: replacementName })}</Text>}
+    <DefaultLine replacement={replacement} uncertain={uncertain} onRepick={onRepickDefault} />
     <Text style={styles.strong}>{t("placeEnding.reviewForGood", { name })}</Text>
+    {unavailable && !uncertain && <Text accessibilityRole="alert" style={ui.error}>{t("placeEnding.reviewUnavailable")}</Text>}
     {busy && <ActivityIndicator accessibilityLabel={t("placeEnding.closing")} />}
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     <PrimaryButton label={uncertain ? t("placeEnding.closeRetry") : t("placeEnding.closeConfirm", { name })}
-      trailingIcon={uncertain ? "refresh" : "checkmark"} pending={busy} onPress={onConfirm} />
+      trailingIcon={uncertain ? "refresh" : "checkmark"} pending={busy} disabled={!canConfirm} onPress={onConfirm} />
   </Screen>;
+}
+
+/** The new Default Place both confirmations name; one that can no longer be the default is marked and chosen again. */
+function DefaultLine({ replacement, uncertain, onRepick }: { replacement: ChoiceView | null; uncertain: boolean; onRepick: () => void }) {
+  const ui = useUi();
+  const { t } = useT();
+  if (!replacement) return null;
+  if (!replacement.unavailable) return <Text style={ui.body}>{t("placeEnding.reviewDefault", { place: replacement.label })}</Text>;
+  return <ListGroup>
+    <ListRow title={t("placeEnding.reviewDefaultUnavailable", { place: replacement.label })} tone="warning"
+      detail={t("placeEnding.reviewDefaultChoose")} onPress={uncertain ? undefined : onRepick} />
+  </ListGroup>;
 }
 
 export function ReceiptScreen({ name, receipt, onDone }: { name: string; receipt: CloseReceipt; onDone: () => void }) {
@@ -235,41 +267,37 @@ export function ReceiptScreen({ name, receipt, onDone }: { name: string; receipt
   </Screen>;
 }
 
-export function UndoConfirmScreen({ name, balance, totals, settled, failed, replacementName, typed, editable, onTyped, onRetryPreview,
+export function UndoConfirmScreen({ name, balance, snapshot, changed, replacement, onRepickDefault, typed, editable, onTyped,
   busy, uncertain, error, canConfirm, onConfirm, onBack }: {
-  name: string; balance: Money; totals: UndoTotals | null; settled: boolean; failed: boolean; replacementName: string | null;
-  typed: string; editable: boolean; onTyped: (value: string) => void; onRetryPreview: () => void;
+  name: string; balance: Money; snapshot: UndoSnapshot | null; changed: boolean; replacement: ChoiceView | null; onRepickDefault: () => void;
+  typed: string; editable: boolean; onTyped: (value: string) => void;
   busy: boolean; uncertain: boolean; error: string; canConfirm: boolean; onConfirm: () => void; onBack?: () => void;
 }) {
   const ui = useUi();
   const styles = useStyles();
   const { t, tn } = useT();
-  const exact = !!totals?.complete;
-  const counted = (count: number) => exact ? undefined : { count: t("placeEnding.atLeast", { count }) };
   return <Screen>
     <Header title={t("placeEnding.undoConfirmTitle", { name })} eyebrow={t("placeEnding.eyebrow")} onBack={onBack} />
+    <Notice lines={changed ? [t("placeEnding.undoChanged")] : []} />
     <Text style={styles.warning}>{t("placeEnding.undoWarning")}</Text>
-    {!totals ? <ActivityIndicator accessibilityLabel={t("placeEnding.undoLoading")} /> : <View style={styles.card}>
-      <Text style={styles.strong}>{tn("placeEnding.undoEntries", totals.entries, counted(totals.entries))}</Text>
-      {totals.lockedMonthEntries > 0 && <Text style={ui.body}>{tn("placeEnding.undoLocked", totals.lockedMonthEntries, counted(totals.lockedMonthEntries))}</Text>}
-      {totals.otherPlaces.length > 0 ? <>
+    {!snapshot ? <ActivityIndicator accessibilityLabel={t("placeEnding.undoLoading")} /> : <View style={styles.card}>
+      <Text style={styles.strong}>{tn("placeEnding.undoEntries", snapshot.entriesToReverse)}</Text>
+      {snapshot.lockedMonthEntries > 0 && <Text style={ui.body}>{tn("placeEnding.undoLocked", snapshot.lockedMonthEntries)}</Text>}
+      {snapshot.earlierOpenMonthEntries > 0 && <Text style={ui.body}>{tn("placeEnding.undoEarlierOpen", snapshot.earlierOpenMonthEntries)}</Text>}
+      {snapshot.lockedMonthEntries + snapshot.earlierOpenMonthEntries > 0 && <Text style={ui.body}>{t("placeEnding.undoEarlierKept")}</Text>}
+      {snapshot.otherPlaces.length > 0 ? <>
         <Text style={ui.body}>{t("placeEnding.undoOthersTitle")}</Text>
         <ListGroup>
-          {totals.otherPlaces.map((place) => <ListRow key={place.id} title={place.name} value={signedMoney(place.change)} />)}
+          {snapshot.otherPlaces.map((place) => <ListRow key={place.financialAccountProfileId} title={place.name} value={signedMoney(place.balanceChange)} />)}
         </ListGroup>
-      </> : exact ? <Text style={ui.body}>{t("placeEnding.undoNoOthers")}</Text> : null}
-      {!exact && totals.otherPlaces.length > 0 && <Text style={ui.muted}>{t("placeEnding.undoOthersPartial")}</Text>}
-      {(totals.expenseChange.minorUnits !== 0 || totals.incomeChange.minorUnits !== 0) &&
-        <Text style={ui.body}>{t("placeEnding.undoMonth", { expense: signedMoney(totals.expenseChange), income: signedMoney(totals.incomeChange) })}</Text>}
-      {totals.expenseChange.minorUnits < 0 && <Text style={ui.body}>{t("placeEnding.undoBudget")}</Text>}
-      {!settled && !failed && <Text style={ui.muted}>{t("placeEnding.undoLoading")}</Text>}
+      </> : <Text style={ui.body}>{t("placeEnding.undoNoOthers")}</Text>}
+      {(snapshot.currentMonthExpenseChange.minorUnits !== 0 || snapshot.currentMonthIncomeChange.minorUnits !== 0) &&
+        <Text style={ui.body}>{t("placeEnding.undoMonth", { expense: signedMoney(snapshot.currentMonthExpenseChange),
+          income: signedMoney(snapshot.currentMonthIncomeChange) })}</Text>}
+      {snapshot.currentMonthExpenseChange.minorUnits < 0 && <Text style={ui.body}>{t("placeEnding.undoBudget")}</Text>}
     </View>}
-    {failed && <>
-      <Text accessibilityRole="alert" style={ui.error}>{t("placeEnding.undoPreviewFailed")}</Text>
-      <SecondaryButton label={t("placeEnding.undoPreviewRetry")} onPress={onRetryPreview} />
-    </>}
     <Text style={ui.body}>{t("placeEnding.undoZero", { name, amount: money({ currency: balance.currency, minorUnits: 0 }) })}</Text>
-    {replacementName && <Text style={ui.body}>{t("placeEnding.reviewDefault", { place: replacementName })}</Text>}
+    <DefaultLine replacement={replacement} uncertain={uncertain} onRepick={onRepickDefault} />
     <Text style={ui.muted}>{t("placeEnding.undoAfter", { name })}</Text>
     <Field label={t("placeEnding.undoTypeLabel", { name })} accessibilityLabel={t("placeEnding.undoTypeA11y")} value={typed}
       editable={editable} onChangeText={onTyped} autoCapitalize="none" autoCorrect={false} />

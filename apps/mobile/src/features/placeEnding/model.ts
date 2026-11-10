@@ -13,6 +13,8 @@ export type CloseReceipt = FunctionReturnType<typeof api.accounting.closePlace>;
 export type UndoRequest = FunctionArgs<typeof api.accounting.startUndoPlace>;
 export type UndoReceipt = FunctionReturnType<typeof api.accounting.startUndoPlace>;
 export type UndoBlocker = UndoPreview["blockers"][number];
+/** The whole bounded Undo preview of one consistent read, with the fingerprint Start binds. */
+export type UndoSnapshot = NonNullable<UndoPreview["snapshot"]>;
 export type PlaceProfile = FunctionReturnType<typeof api.accounting.listFinancialAccountProfiles>[number];
 export type PlaceStatus = PlaceProfile["status"];
 type Money = Closure["balance"];
@@ -105,8 +107,62 @@ export function answerSpec(answer: Answer) {
   return answers[answer];
 }
 
-/** One answer to "where did the money go?". `target` is the other Place for a transfer and the category for an expense. */
-export type LineDraft = { id: string; answer: Answer; target: string | null; amount: AmountSession };
+/**
+ * One answer to "where did the money go?". `target` is the other Place for a transfer and the category for an
+ * expense, with the name the person picked it by: a category that is deleted later leaves the live list, and its
+ * name is still needed to show it as unavailable.
+ */
+export type LineDraft = { id: string; answer: Answer; target: { id: string; name: string } | null; amount: AmountSession };
+
+/** The facts a Close confirmation binds: the balance its answers settle and the day they are recorded on. */
+export type Reviewed = { balance: Money; nature: Closure["nature"]; accountingDate: string };
+
+/** What changed under a Close the person was building or reviewing; either part, or both. */
+export type StaleNotice = { balance: { from: Money; to: Money } | null; date: string | null };
+
+export function sameMoney(a: Money, b: Money) {
+  return a.currency === b.currency && a.minorUnits === b.minorUnits;
+}
+
+/**
+ * Today in the workspace, from the later of the server's reading and the phone's workspace calendar. A query's date
+ * is read when the query runs and a query is not re-run because time passed, so after midnight only the phone's
+ * calendar moves; it never moves the day backwards.
+ */
+export function workspaceDay(closureDate: string, phoneDay: string) {
+  return phoneDay > closureDate ? phoneDay : closureDate;
+}
+
+/** The changes between what was reviewed and what is true now, added to any earlier notice, or null when nothing changed. */
+export function staleNotice(reviewed: Reviewed, live: Reviewed, earlier: StaleNotice | null): StaleNotice | null {
+  const balanceChanged = !sameMoney(reviewed.balance, live.balance);
+  const dateChanged = reviewed.accountingDate !== live.accountingDate;
+  if (!balanceChanged && !dateChanged) return null;
+  const from = earlier?.balance?.from ?? reviewed.balance;
+  return {
+    balance: balanceChanged ? { from, to: live.balance } : earlier?.balance ?? null,
+    date: dateChanged ? live.accountingDate : earlier?.date ?? null,
+  };
+}
+
+/** The answers a new balance still allows, with their picks and amounts; the sign rules decide which answers exist. */
+export function keepAllowed(lines: readonly LineDraft[], situation: BalanceCase) {
+  return lines.filter((line) => answersFor[situation].includes(line.answer));
+}
+
+/** A chosen Place or category as the flow shows it: its live name, or its last name marked once it can't be used. */
+export type ChoiceView = { label: string; unavailable: boolean };
+
+export function placeChoice(id: string, places: readonly Pick<PlaceProfile, "id" | "name" | "status">[], t: Translator["t"], fallback = ""): ChoiceView {
+  const place = places.find((item) => item.id === id);
+  if (!place) return { label: t("placeEnding.placeUnavailable", { name: fallback }), unavailable: true };
+  return { label: placeLabel(place, t), unavailable: place.status !== "open" };
+}
+
+export function categoryChoice(target: { id: string; name: string }, categories: readonly { id: string; name: string; nature?: string }[], t: Translator["t"]): ChoiceView {
+  const category = categories.find((item) => item.id === target.id && item.nature === "Expense");
+  return category ? { label: category.name, unavailable: false } : { label: t("placeEnding.categoryDeleted", { name: target.name }), unavailable: true };
+}
 
 /** The positive amount a line explains, or null while it is incomplete, unconfirmed or not positive. */
 export function lineMinorUnits(line: LineDraft) {
@@ -114,6 +170,7 @@ export function lineMinorUnits(line: LineDraft) {
   return minorUnits !== null && minorUnits > 0 ? minorUnits : null;
 }
 
+/** True when every amount is filled and every answer that needs a Place or category has one; availability is checked apart. */
 export function lineComplete(line: LineDraft) {
   return lineMinorUnits(line) !== null && (answerSpec(line.answer).kind === "adjustment" || line.target !== null);
 }
@@ -136,26 +193,26 @@ export function canReview(balance: Money, lines: readonly LineDraft[]) {
 export function closeRequest(input: {
   workspaceId: string;
   place: { id: string; name: string };
-  balance: Money;
-  accountingDate: string;
+  reviewed: Reviewed;
   lines: readonly LineDraft[];
   replacement: string | null;
   idempotencyKey: string;
 }, t: Translator["t"]): CloseRequest | null {
-  if (!canReview(input.balance, input.lines)) return null;
+  const { balance, accountingDate } = input.reviewed;
+  if (!canReview(balance, input.lines)) return null;
   const description = t("placeEnding.closingDescription", { place: input.place.name });
   const adjustment = t("placeEnding.adjustmentDescription", { place: input.place.name });
   const lines = input.lines.map((line): CloseRequest["lines"][number] => {
-    const amount = { currency: input.balance.currency, minorUnits: lineMinorUnits(line)! };
+    const amount = { currency: balance.currency, minorUnits: lineMinorUnits(line)! };
     const { kind } = answerSpec(line.answer);
-    if (kind === "transfer") return { kind, otherFinancialAccountProfileId: line.target!, amount, description };
-    if (kind === "expense") return { kind, userCategoryId: line.target!, amount, description };
+    if (kind === "transfer") return { kind, otherFinancialAccountProfileId: line.target!.id, amount, description };
+    if (kind === "expense") return { kind, userCategoryId: line.target!.id, amount, description };
     return { kind, amount, description: adjustment };
   });
   return {
     workspaceId: input.workspaceId,
     financialAccountProfileId: input.place.id,
-    reviewedBalance: input.balance, reviewedAccountingDate: input.accountingDate,
+    reviewedBalance: balance, reviewedAccountingDate: accountingDate,
     idempotencyKey: input.idempotencyKey,
     ...(input.replacement ? { replacementDefaultFinancialAccountProfileId: input.replacement } : {}),
     ...(lines.some((line) => line.kind === "adjustment") ? {
@@ -183,40 +240,6 @@ export function undoRequest(input: {
 export function typedNameMatches(typed: string, name: string) {
   const normal = (text: string) => text.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
   return normal(typed) !== "" && normal(typed) === normal(name);
-}
-
-/** Every page of the Undo preview, added together. `complete` is false while the totals are still lower bounds. */
-export type UndoTotals = {
-  entries: number;
-  alreadyReversed: number;
-  lockedMonthEntries: number;
-  otherPlaces: Array<{ id: string; name: string; change: Money }>;
-  expenseChange: Money;
-  incomeChange: Money;
-  complete: boolean;
-};
-
-export function addUndoPage(totals: UndoTotals | null, page: UndoPreview["page"]): UndoTotals {
-  const currency = page.currentMonthExpenseChange.currency;
-  const base: UndoTotals = totals ?? {
-    entries: 0, alreadyReversed: 0, lockedMonthEntries: 0, otherPlaces: [],
-    expenseChange: { currency, minorUnits: 0 }, incomeChange: { currency, minorUnits: 0 }, complete: false,
-  };
-  const otherPlaces = base.otherPlaces.map((place) => ({ ...place }));
-  for (const item of page.otherPlaces) {
-    const found = otherPlaces.find((place) => place.id === item.financialAccountProfileId);
-    if (found) found.change = { ...found.change, minorUnits: found.change.minorUnits + item.balanceChange.minorUnits };
-    else otherPlaces.push({ id: item.financialAccountProfileId, name: item.name, change: item.balanceChange });
-  }
-  return {
-    entries: base.entries + page.entriesToReverse,
-    alreadyReversed: base.alreadyReversed + page.alreadyReversed,
-    lockedMonthEntries: base.lockedMonthEntries + page.lockedMonthEntries,
-    otherPlaces: otherPlaces.filter((place) => place.change.minorUnits !== 0),
-    expenseChange: { currency, minorUnits: base.expenseChange.minorUnits + page.currentMonthExpenseChange.minorUnits },
-    incomeChange: { currency, minorUnits: base.incomeChange.minorUnits + page.currentMonthIncomeChange.minorUnits },
-    complete: page.isDone,
-  };
 }
 
 export function signedMoney(money: Money) {
@@ -298,6 +321,8 @@ const refusals: Record<string, MessageKey> = {
   category_name_too_long: "placeEnding.refuseRequest",
   place_close_line_invalid: "placeEnding.refuseLineInvalid",
   place_close_balance_mismatch: "placeEnding.refuseBalanceChanged",
+  place_close_balance_stale: "placeEnding.refuseBalanceStale",
+  place_undo_preview_stale: "placeEnding.refuseUndoStale",
   transfer_profiles_must_differ: "placeEnding.refuseSamePlace",
   amount_must_be_positive: "placeEnding.refuseAmount",
   currency_mismatch: "placeEnding.refuseCurrency",

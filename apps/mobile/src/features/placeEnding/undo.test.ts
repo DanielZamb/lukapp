@@ -6,7 +6,6 @@ import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { emptyState } from "../intake/durableState";
 import { mountStack, screenHelpers, settle } from "./flow.testSupport";
-import { UNDO_PREVIEW_PAGE_LIMIT } from "./useUndoPreview";
 
 vi.mock("react-native", () => ({
   Platform: { OS: "android" }, KeyboardAvoidingView: "KeyboardAvoidingView",
@@ -30,36 +29,47 @@ const intake = vi.hoisted(() => ({
 }));
 vi.mock("../intake/IntakeProvider", () => ({ useIntakeService: () => intake.service, useIntakeSnapshot: () => intake.snapshot }));
 type Money = { currency: string; minorUnits: number };
-type Page = {
-  entriesToReverse: number; alreadyReversed: number; lockedMonthEntries: number;
+type Snapshot = {
+  fingerprint: string; entriesToReverse: number; lockedMonthEntries: number; earlierOpenMonthEntries: number;
   otherPlaces: Array<{ financialAccountProfileId: string; name: string; balanceChange: Money }>;
-  currentMonthExpenseChange: Money; currentMonthIncomeChange: Money; scannedLines: number; isDone: boolean; continueCursor: string;
+  currentMonthExpenseChange: Money; currentMonthIncomeChange: Money;
 };
 const remote = vi.hoisted(() => ({
-  places: [] as unknown[], closure: null as unknown, blockers: [] as unknown[],
-  page: (_cursor: string | null): Page | Error => { throw new Error("no page"); },
-  close: vi.fn(), undo: vi.fn(),
+  places: [] as unknown[], closure: null as unknown, blockers: [] as unknown[], snapshot: null as unknown,
+  close: vi.fn(), undo: vi.fn(), pages: vi.fn(), version: 0, listeners: new Set<() => void>(),
 }));
+function serverChange(change: () => void) {
+  change();
+  remote.version++;
+  for (const listener of remote.listeners) listener();
+}
+vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: "2026-11-10", month: "2026-11", now: new Date() }) }));
 vi.mock("convex/react", async () => {
   const { getFunctionName } = await import("convex/server");
-  const preview = (cursor: string | null) => {
-    const page = remote.page(cursor);
-    if (page instanceof Error) throw page;
-    return { fingerprint: "reviewed-snapshot", closure: remote.closure, canUndo: remote.blockers.length === 0, blockers: remote.blockers, operation: null, page };
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => { remote.listeners.add(listener); return () => { remote.listeners.delete(listener); }; };
+  const preview = () => {
+    const current = remote.snapshot as Snapshot | null;
+    return { fingerprint: current?.fingerprint ?? "", snapshot: current, closure: remote.closure, canUndo: remote.blockers.length === 0,
+      blockers: remote.blockers, operation: null,
+      // A single page of a larger ledger: the confirmation must not mistake it for the whole preview.
+      page: { entriesToReverse: 1, alreadyReversed: 0, lockedMonthEntries: 0, earlierOpenMonthEntries: 0, otherPlaces: [],
+        currentMonthExpenseChange: { currency: "COP", minorUnits: 0 }, currentMonthIncomeChange: { currency: "COP", minorUnits: 0 },
+        scannedLines: 10, isDone: false, continueCursor: "c1" } };
   };
-  const client = { query: async (_ref: unknown, args: { cursor: string | null }) => preview(args.cursor) };
   return {
     useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
+      useSyncExternalStore(subscribe, () => remote.version);
       if (args === "skip") return undefined;
       const name = getFunctionName(ref);
       if (name === "accounting:listFinancialAccountProfiles") return remote.places;
       if (name === "accounting:placeClosure") return remote.closure;
-      if (name === "accounting:previewUndoPlace") return preview(null);
+      if (name === "accounting:previewUndoPlace") return preview();
       if (name === "accounting:listUserCategories") return [];
       return undefined;
     },
     useAction: (ref: Parameters<typeof getFunctionName>[0]) => getFunctionName(ref) === "accounting:closePlace" ? remote.close : remote.undo,
-    useConvex: () => client,
+    useConvex: () => ({ query: remote.pages }),
   };
 });
 const router = vi.hoisted(() => ({ back: vi.fn(), dismissTo: vi.fn(), push: vi.fn(), replace: vi.fn(), canGoBack: vi.fn(() => true) }));
@@ -79,19 +89,12 @@ function closure(extra: Record<string, unknown> = {}) {
   return { financialAccountProfileId: "wallet", status: "open", canClose: true, blockers: [], isDefault: false,
     requiresReplacementDefault: false, openPlaceCount: 3, balance: cop(5_000_000), nature: "Asset", accountingDate: "2026-11-10", ...extra };
 }
-function page(values: Partial<Page>): Page {
-  return { entriesToReverse: 0, alreadyReversed: 0, lockedMonthEntries: 0, otherPlaces: [], currentMonthExpenseChange: cop(0),
-    currentMonthIncomeChange: cop(0), scannedLines: 10, isDone: true, continueCursor: "end", ...values };
-}
-const realistic: Record<string, Page> = {
-  start: page({ entriesToReverse: 4, alreadyReversed: 1, lockedMonthEntries: 1, isDone: false, continueCursor: "c1",
-    otherPlaces: [{ financialAccountProfileId: "savings", name: "Savings", balanceChange: cop(2_000_000) }],
-    currentMonthExpenseChange: cop(-1_500_000) }),
-  c1: page({ entriesToReverse: 3, lockedMonthEntries: 2, isDone: true,
-    otherPlaces: [{ financialAccountProfileId: "savings", name: "Savings", balanceChange: cop(500_000) },
+function snapshot(values: Partial<Snapshot> = {}): Snapshot {
+  return { fingerprint: "reviewed-snapshot", entriesToReverse: 7, lockedMonthEntries: 2, earlierOpenMonthEntries: 1,
+    otherPlaces: [{ financialAccountProfileId: "savings", name: "Savings", balanceChange: cop(2_500_000) },
       { financialAccountProfileId: "visa", name: "Visa", balanceChange: cop(-250_000) }],
-    currentMonthExpenseChange: cop(-500_000), currentMonthIncomeChange: cop(-4_000_000) }),
-};
+    currentMonthExpenseChange: cop(-2_000_000), currentMonthIncomeChange: cop(-4_000_000), ...values };
+}
 
 let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
@@ -103,9 +106,10 @@ beforeEach(() => {
   remote.places = [profile("wallet", "Wallet"), profile("daily", "Daily"), profile("savings", "Savings")];
   remote.closure = closure();
   remote.blockers = [];
-  remote.page = (cursor) => realistic[cursor ?? "start"]!;
+  remote.snapshot = snapshot();
   remote.close.mockReset();
   remote.undo.mockReset();
+  remote.pages.mockReset();
 });
 afterEach(async () => {
   await act(async () => mounted?.root.unmount());
@@ -118,15 +122,18 @@ async function openUndo(language?: "es") {
   await settle();
 }
 const operation = (state: unknown) => ({ operation: { id: "op", state, reversedCount: 0 }, replay: false });
+const warning = "Nothing is erased: the originals stay in History, marked as reversed, and earlier months keep the results they had. Each reversal is a new movement in this month, so this month's spending and income can change and its Budget spending can go negative. Transfers with other places are reversed too, which changes their balances.";
+const changedNotice = "This place's movements changed, so the numbers were refreshed. Check them and type the name again.";
 
-test("the confirmation states every preview page's totals: movements, closed months, other places and this month", async () => {
+test("the confirmation states the whole preview of one read: movements, closed and still-open earlier months, other places and this month", async () => {
   await openUndo();
   expect(ui.texts()).toEqual([
-    "CLOSE OR UNDO", "Undo Wallet",
-    "This erases its movements from your reports by reversing each one. The originals stay in History, marked as reversed. Movements from months you already closed are reversed in this month, and transfers with other places are reversed too, so their balances change.",
+    "CLOSE OR UNDO", "Undo Wallet", warning,
     "This reverses 7 movements.",
-    "Of these, 3 are from closed months; they're reversed in this month.",
-    "Other places' balances change:", "Savings", "+COP 25.000", "Visa", "−COP 2.500",
+    "Of these, 2 are from months you already closed.",
+    "Of these, 1 is from an earlier month that's still open.",
+    "Those months keep the results they had; their reversals are recorded in this month.",
+    "Other places' balances change by:", "Savings", "+COP 25.000", "Visa", "−COP 2.500",
     "This month: spending −COP 20.000, income −COP 40.000.",
     "So this month's Budget spending can go negative.",
     "Wallet goes to COP 0 and ends for good; it can't be reopened.",
@@ -134,37 +141,89 @@ test("the confirmation states every preview page's totals: movements, closed mon
     "To confirm, type Wallet",
     "Undo Wallet",
   ]);
+  expect(remote.pages).not.toHaveBeenCalled();
 });
 
-test("a preview that never finishes within the page limit is stated as a lower bound", async () => {
-  remote.page = (cursor) => {
-    const index = cursor === null ? 0 : Number(cursor.slice(1));
-    return page({ entriesToReverse: 1, isDone: false, continueCursor: `c${index + 1}`,
-      otherPlaces: [{ financialAccountProfileId: "savings", name: "Savings", balanceChange: cop(100) }] });
-  };
+test("only transfers and current-month movements leave out the earlier-month and Budget lines", async () => {
+  remote.snapshot = snapshot({ entriesToReverse: 1, lockedMonthEntries: 0, earlierOpenMonthEntries: 0, otherPlaces: [],
+    currentMonthExpenseChange: cop(0), currentMonthIncomeChange: cop(150_000) });
   await openUndo();
-  await settle();
-  expect(ui.texts()).toEqual(expect.arrayContaining([`This reverses at least ${UNDO_PREVIEW_PAGE_LIMIT} movements.`,
-    "More places may change.", "Savings", `+COP ${UNDO_PREVIEW_PAGE_LIMIT}`]));
-  expect(ui.texts()).not.toContain("No other place's balance changes.");
+  expect(ui.texts().slice(3, 6)).toEqual(["This reverses 1 movement.", "No other place's balance changes.",
+    "This month: spending COP 0, income +COP 1.500."]);
+  expect(ui.texts()).not.toContain("So this month's Budget spending can go negative.");
+});
+
+test("a preview that changes while the confirmation is open refreshes its numbers, clears the typed name and says why", async () => {
+  remote.undo.mockResolvedValue(operation({ kind: "pending" }));
+  await openUndo();
   await ui.type("Place name to confirm", "Wallet");
   expect(ui.disabled("Undo Wallet")).toBe(false);
-});
-
-test("a preview page that fails to load blocks the confirmation until it is read again", async () => {
-  let fail = true;
-  remote.page = (cursor) => cursor === "c1" && fail ? new Error("offline") : realistic[cursor ?? "start"]!;
-  await openUndo();
-  expect(ui.alerts()).toEqual(["We couldn't work out everything that changes."]);
-  expect(ui.texts()).toContain("This reverses at least 4 movements.");
-  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => serverChange(() => { remote.snapshot = snapshot({ fingerprint: "after-a-new-expense", entriesToReverse: 8 }); }));
+  expect(ui.texts().slice(1, 5)).toEqual(["Undo Wallet", changedNotice, warning, "This reverses 8 movements."]);
+  expect(ui.input("Place name to confirm").props.value).toBe("");
   expect(ui.disabled("Undo Wallet")).toBe(true);
-  fail = false;
-  await ui.press("Try again");
-  await settle();
-  expect(ui.alerts()).toEqual([]);
-  expect(ui.texts()).toContain("This reverses 7 movements.");
-  expect(ui.disabled("Undo Wallet")).toBe(false);
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["after-a-new-expense"]);
+});
+
+test("a preview that changes before the confirmation opens needs no notice", async () => {
+  remote.closure = closure({ isDefault: true, requiresReplacementDefault: true });
+  await openUndo();
+  await act(async () => serverChange(() => { remote.snapshot = snapshot({ fingerprint: "changed-earlier", entriesToReverse: 9 }); }));
+  await ui.press("Daily");
+  await ui.press("Continue");
+  expect(ui.texts().slice(2, 4)).toEqual([warning, "This reverses 9 movements."]);
+});
+
+test("a start refused as stale after the new preview arrived asks again with the new numbers and the typed name", async () => {
+  remote.undo.mockImplementationOnce(async () => {
+    serverChange(() => { remote.snapshot = snapshot({ fingerprint: "newer", entriesToReverse: 6 }); });
+    throw new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" });
+  }).mockResolvedValueOnce(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  expect(ui.texts().slice(1, 5)).toEqual(["Undo Wallet", changedNotice, warning, "This reverses 6 movements."]);
+  expect(ui.alerts()).toEqual([changedNotice]);
+  expect(ui.input("Place name to confirm").props.value).toBe("");
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  expect(remote.undo.mock.calls.map(([request]) => [request.idempotencyKey, request.previewFingerprint]))
+    .toEqual([["key-1", "reviewed-snapshot"], ["key-2", "newer"]]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a start refused as stale before the new preview arrives blocks starting until it does", async () => {
+  remote.undo.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  expect(ui.alerts()).toEqual(["This place's movements changed before the undo started, so nothing started. Getting the new numbers…"]);
+  expect(ui.disabled("Undo Wallet")).toBe(true);
+  await act(async () => serverChange(() => { remote.snapshot = snapshot({ fingerprint: "newer", entriesToReverse: 6 }); }));
+  expect(ui.alerts()).toEqual([changedNotice]);
+  expect(ui.texts()).toContain("This reverses 6 movements.");
+  expect(remote.undo).toHaveBeenCalledTimes(1);
+});
+
+test("a new default place that closes before the start is marked, blocks it and is chosen again", async () => {
+  remote.closure = closure({ isDefault: true, requiresReplacementDefault: true });
+  remote.undo.mockResolvedValue(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.press("Daily");
+  await ui.press("Continue");
+  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => serverChange(() => { remote.places = [profile("wallet", "Wallet"), profile("daily", "Daily", "closed"), profile("savings", "Savings")]; }));
+  expect(ui.texts()).toContain("Daily (closed) can't become your default place anymore");
+  expect(ui.disabled("Undo Wallet")).toBe(true);
+  await ui.row("Daily (closed) can't become your default place anymore");
+  expect(ui.has("Daily")).toBe(false);
+  await ui.press("Savings");
+  await ui.press("Continue");
+  expect(ui.texts()).toContain("Savings becomes your default place.");
+  await ui.press("Undo Wallet");
+  expect(remote.undo.mock.calls[0]![0]).toMatchObject({ replacementDefaultFinancialAccountProfileId: "savings", previewFingerprint: "reviewed-snapshot" });
 });
 
 test("Undo starts only after the Place's name is typed, sends the localized prefix and returns to the Place's page", async () => {
@@ -267,10 +326,12 @@ test("the Undo confirmation reads in Spanish and sends the Spanish prefix", asyn
   await openUndo("es");
   expect(ui.texts()).toEqual([
     "CERRAR O DESHACER", "Deshacer Wallet",
-    "Esto borra sus movimientos de tus reportes reversando cada uno. Los originales se quedan en el Historial, marcados como reversados. Los movimientos de meses que ya cerraste se reversan en este mes, y las transferencias con otros lugares también se reversan, así que sus saldos cambian.",
+    "No se borra nada: los originales se quedan en el Historial, marcados como reversados, y los meses anteriores conservan los resultados que tenían. Cada reversión es un movimiento nuevo de este mes, así que los gastos y los ingresos de este mes pueden cambiar y el gasto de tu Presupuesto de este mes puede quedar en negativo. Las transferencias con otros lugares también se reversan, y eso cambia sus saldos.",
     "Esto reversa 7 movimientos.",
-    "De esos, 3 son de meses cerrados y se reversan en este mes.",
-    "Cambia el saldo de otros lugares:", "Savings", "+COP 25.000", "Visa", "−COP 2.500",
+    "De esos, 2 son de meses que ya cerraste.",
+    "De esos, 1 es de un mes anterior que sigue abierto.",
+    "Esos meses conservan los resultados que tenían; sus reversiones se registran en este mes.",
+    "El saldo de otros lugares cambia en:", "Savings", "+COP 25.000", "Visa", "−COP 2.500",
     "Este mes: gastos −COP 20.000, ingresos −COP 40.000.",
     "Por eso el gasto de este mes en tu Presupuesto puede quedar en negativo.",
     "Wallet queda en COP 0 y termina para siempre; no se puede volver a abrir.",
@@ -278,9 +339,11 @@ test("the Undo confirmation reads in Spanish and sends the Spanish prefix", asyn
     "Para confirmar, escribe Wallet",
     "Deshacer Wallet",
   ]);
+  await act(async () => serverChange(() => { remote.snapshot = snapshot({ fingerprint: "otra", entriesToReverse: 8 }); }));
+  expect(ui.alerts()).toEqual(["Los movimientos de este lugar cambiaron, así que actualizamos las cifras. Revísalas y vuelve a escribir el nombre."]);
   await ui.type("Nombre del lugar para confirmar", "wallet");
   await ui.press("Deshacer Wallet");
-  expect(remote.undo.mock.calls[0]![0].reversalDescriptionPrefix).toBe("Reversión:");
+  expect(remote.undo.mock.calls[0]![0]).toMatchObject({ reversalDescriptionPrefix: "Reversión:", previewFingerprint: "otra" });
 });
 
 test("backing out of Undo twice sends nothing and returns to the account page", async () => {
