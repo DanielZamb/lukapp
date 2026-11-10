@@ -1,3 +1,5 @@
+import { requireContributablePlan, requireContributionDate } from "./lifecycle";
+import { ALL_MONTHS, planProgress } from "./progress";
 import { isAssetProductKind, RecoveryError, requireIdempotencyKey } from "./policy";
 import { recordContribution } from "./recordContribution";
 import type { RecoveryContribution, RecoveryWriteStore } from "./types";
@@ -33,8 +35,13 @@ export async function recordRecoveryMove(
   const plan = (await store.listPlans()).find((item) => item.id === input.planId);
   if (!plan || plan.workspaceId !== input.workspaceId)
     throw new RecoveryError("plan_not_found");
-  if (!prior && await store.findReversalOf(plan.sourceJournalEntryId))
-    throw new RecoveryError("expense_not_recoverable");
+  if (!prior) {
+    await requireContributablePlan(store, plan.id, input.workspaceId);
+    await requireContributionDate(store, plan, input.accountingDate);
+    const progress = await planProgress(plan, await store.listContributions(), async id =>
+      Boolean(await store.findReversalOf(id)), ALL_MONTHS, await store.listCorrections());
+    if (progress.remainingMinorUnits === 0) throw new RecoveryError("plan_already_complete");
+  }
   const profiles = await store.listProfiles();
   const source = profiles.find((profile) => profile.id === input.sourceFinancialAccountProfileId);
   if (!source || source.workspaceId !== input.workspaceId || !isAssetProductKind(source.productKind))

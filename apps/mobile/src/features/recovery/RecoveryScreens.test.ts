@@ -22,6 +22,7 @@ const candidate: RecoveryCandidate = {
   amountMinorUnits: 1_200_000, financialAccountProfileId: "daily", placeName: "Daily",
 };
 const plan: RecoveryPlanView = {
+  cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
   status: "active",
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",

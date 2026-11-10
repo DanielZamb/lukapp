@@ -16,6 +16,7 @@ import { run } from "./accountingErrors";
 import {
   accountSetup,
   accountLook,
+  accountRename,
   accountTransfer,
   openingPosition,
   categoryCreation,
@@ -102,6 +103,15 @@ export const createFinancialAccountProfile = action({
       internal.accountingWrites.createFinancialAccountProfile,
       { ...args, session },
     );
+  },
+});
+
+export const renameAccount = action({
+  args: accountRename,
+  returns: financialAccountProfile,
+  handler: async (ctx, args): Promise<Infer<typeof financialAccountProfile>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.renameAccount, { ...args, session });
   },
 });
 

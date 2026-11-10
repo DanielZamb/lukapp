@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
+import { internal } from "./_generated/api";
 import { api } from "./_generated/api";
-import { accountingFixture, fixtureIdentity, septNow, octNow } from "../src/accounting/convexHarness";
+import { accountingFixture, fixtureIdentity, octNow } from "../src/accounting/convexHarness";
 
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
 
@@ -11,7 +12,7 @@ async function setup() {
   const { workspace, financialAccountProfile } = await t.action(api.accounting.ensurePersonalDefaults, {
     functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota",
   });
-  vi.setSystemTime(septNow);
+  vi.setSystemTime(Date.UTC(2026, 8, 17, 12));
   const savings = await t.action(api.accounting.createFinancialAccountProfile, {
     workspaceId: workspace.id, name: "Savings", productKind: "savingsAccount",
   });
@@ -198,4 +199,257 @@ test("a plan activated late on the month's last evening belongs to that month in
   const plan = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
   expect(plan.plan.activationMonth).toBe("2026-10");
   expect(await s.read()).toMatchObject({ currentMonth: "2026-10" });
+});
+
+async function secondPlan(s: Awaited<ReturnType<typeof setup>>) {
+  const expense = await s.t.action(api.accounting.recordCashExpense, {
+    workspaceId: s.workspaceId, financialAccountProfileId: s.dailyId,
+    amount: { currency: "COP", minorUnits: 1_200_000 }, accountingDate: "2026-09-10",
+    description: "Second expense", idempotencyKey: "second-expense",
+  });
+  return (await s.t.action(api.savingsRecovery.activatePlan, {
+    ...s.activate, sourceJournalEntryId: expense.id, idempotencyKey: "second-plan",
+  })).plan;
+}
+
+test.each([false, true])("cancellation preserves frozen terms and recorded saving, contributed=%s", async contributed => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const gift = contributed ? await s.move(plan.id, "saved") : undefined;
+  const before = await s.ledger();
+  const args = { workspaceId: s.workspaceId, planId: plan.id, reason: "  Different schedule  ", idempotencyKey: "cancel" };
+  const first = await s.t.action(api.savingsRecovery.cancelPlan, args);
+  expect(first).toMatchObject({ replay: false, cancellation: {
+    planId: plan.id, createdBy: "owner-1", reason: "Different schedule", eventTime: Date.now(), recordedAt: Date.now(),
+  } });
+  expect(await s.t.action(api.savingsRecovery.cancelPlan, args)).toEqual({ ...first, replay: true });
+  await expect(s.t.action(api.savingsRecovery.cancelPlan, { ...args, reason: "changed" }))
+    .rejects.toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  await expect(s.t.action(api.savingsRecovery.cancelPlan, { ...args, idempotencyKey: "other" }))
+    .rejects.toMatchObject({ data: { code: "plan_already_cancelled" } });
+  expect(await s.read()).toMatchObject({
+    plans: [{ status: "cancelled", recoveredMinorUnits: contributed ? 230_000 : 0, remainingMinorUnits: 0, dueMinorUnits: 0,
+      targetMinorUnits: 1_380_000, installmentMinorUnits: 230_000, cancellation: first.cancellation }],
+    candidates: [{ journalEntryId: s.expenseId, amountMinorUnits: contributed ? 1_000_000 : 1_200_000 }],
+  });
+  await expect(s.move(plan.id, "after-cancel")).rejects.toMatchObject({ data: { code: "plan_cancelled" } });
+  if (gift) expect(await s.move(plan.id, "saved")).toEqual({ ...gift, replay: true });
+  expect(await s.ledger()).toEqual(before);
+  expect(await s.t.run(ctx => ctx.db.query("savingsRecoveryPlans").collect())).toMatchObject([{
+    principalMinorUnits: 1_200_000, installmentMinorUnits: 230_000,
+  }]);
+  expect(await s.t.run(ctx => ctx.db.query("savingsRecoveryCancellations").collect())).toHaveLength(1);
+});
+
+test.each([false, true])("suspended plans can be cancelled, contributed=%s; completed plans cannot", async contributed => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  if (contributed) await s.move(plan.id, "saved");
+  await s.t.action(api.accounting.reversePostedEntry, { workspaceId: s.workspaceId, journalEntryId: s.expenseId, idempotencyKey: "reverse-source" });
+  const before = await s.ledger();
+  await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: plan.id, idempotencyKey: "cancel-suspended" });
+  expect((await s.read()).plans[0]).toMatchObject({ status: "cancelled", recoveredMinorUnits: contributed ? 230_000 : 0, dueMinorUnits: 0 });
+  expect((await s.read()).candidates).toEqual([]);
+  expect(await s.ledger()).toEqual(before);
+  const completed = await secondPlan(s);
+  await s.move(completed.id, "complete", 1_380_000);
+  await expect(s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: completed.id, idempotencyKey: "cancel-complete" }))
+    .rejects.toMatchObject({ data: { code: "plan_already_complete" } });
+  for (const reason of [" ", "x".repeat(1001)])
+    await expect(s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: completed.id, reason, idempotencyKey: "bad-reason" }))
+      .rejects.toMatchObject({ data: { code: "reason_invalid" } });
+});
+
+test("linked replacements reserve only unrecovered principal and link in both directions", async () => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  await s.move(plan.id, "saved");
+  const args = { ...s.activate, replacesPlanId: plan.id, installmentMinorUnits: 180_000, idempotencyKey: "replacement" };
+  await expect(s.t.action(api.savingsRecovery.activatePlan, args)).rejects.toMatchObject({ data: { code: "replacement_plan_not_cancelled" } });
+  await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: plan.id, idempotencyKey: "cancel" });
+  const before = await s.ledger();
+  const replacement = await s.t.action(api.savingsRecovery.activatePlan, args);
+  expect(replacement.plan).toMatchObject({ principalMinorUnits: 1_000_000, replacesPlanId: plan.id });
+  expect(await s.t.action(api.savingsRecovery.activatePlan, args)).toEqual({ ...replacement, replay: true });
+  await expect(s.t.action(api.savingsRecovery.activatePlan, { ...args, replacesPlanId: undefined }))
+    .rejects.toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  const view = await s.read();
+  expect(view.plans.find(p => p.id === plan.id)).toMatchObject({ replacedByPlanId: replacement.plan.id, recoveredMinorUnits: 230_000 });
+  expect(view.plans.find(p => p.id === replacement.plan.id)).toMatchObject({ replacesPlanId: plan.id, recoveredMinorUnits: 0, remainingMinorUnits: 1_080_000 });
+  expect(view.candidates).toEqual([]);
+  expect(await s.ledger()).toEqual(before);
+  await expect(s.t.action(api.savingsRecovery.activatePlan, { ...args, idempotencyKey: "duplicate-replacement" }))
+    .rejects.toMatchObject({ data: { code: "replacement_already_exists" } });
+  await expect(s.t.action(api.savingsRecovery.activatePlan, { ...s.activate, idempotencyKey: "overlap" }))
+    .rejects.toMatchObject({ data: { code: "expense_already_recovered" } });
+});
+
+test("replacement references reject missing, foreign-workspace and different-expense plans", async () => {
+  const s = await setup();
+  const other = await secondPlan(s);
+  await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: other.id, idempotencyKey: "cancel-second" });
+  await expect(s.t.action(api.savingsRecovery.activatePlan, { ...s.activate, replacesPlanId: other.id }))
+    .rejects.toMatchObject({ data: { code: "replacement_expense_mismatch" } });
+  await expect(s.t.action(api.savingsRecovery.activatePlan, { ...s.activate, replacesPlanId: "missing" }))
+    .rejects.toMatchObject({ data: { code: "replacement_plan_not_found" } });
+  await s.t.run(async ctx => {
+    const id = ctx.db.normalizeId("savingsRecoveryPlans", other.id);
+    if (!id) throw Error("Missing plan");
+    const ws = await ctx.db.insert("workspaces", { functionalCurrency: "COP", kind: "Personal", chartOfAccountsTemplate: "co-puc-personal@1" });
+    await ctx.db.patch(id, { workspaceId: ws });
+  });
+  await expect(s.t.action(api.savingsRecovery.activatePlan, { ...s.activate, replacesPlanId: other.id }))
+    .rejects.toMatchObject({ data: { code: "replacement_plan_not_found" } });
+});
+
+test.each([false, true])("planning correction preserves journals and balances across locks, reattribute=%s", async reattribute => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const target = await secondPlan(s);
+  const gift = await s.move(plan.id, "saved");
+  vi.setSystemTime(octNow);
+  await s.t.action(api.accounting.lockAccountingPeriod, { workspaceId: s.workspaceId, period: { year: 2026, month: 9 } });
+  const before = await s.ledger();
+  const args = { workspaceId: s.workspaceId, contributionId: gift.contribution.id, reason: "Wrong plan",
+    ...(reattribute ? { targetPlanId: target.id } : {}), idempotencyKey: "correct" };
+  const first = await s.t.action(api.savingsRecovery.correctContribution, args);
+  expect(first.correction).toMatchObject({ contributionDate: "2026-09-18", recordedAt: octNow, createdBy: "owner-1", reason: "Wrong plan" });
+  expect(first.replacementContribution?.amountMinorUnits).toBe(reattribute ? 230_000 : undefined);
+  expect(await s.t.action(api.savingsRecovery.correctContribution, args)).toEqual({ ...first, replay: true });
+  for (const changed of [{ reason: "Other" }, { targetPlanId: plan.id }, { contributionId: "missing" }])
+    await expect(s.t.action(api.savingsRecovery.correctContribution, { ...args, ...changed }))
+      .rejects.toMatchObject({ data: { code: "idempotency_key_conflict" } });
+  await expect(s.t.action(api.savingsRecovery.correctContribution, { ...args, idempotencyKey: "second-correction" }))
+    .rejects.toMatchObject({ data: { code: "contribution_already_corrected" } });
+  const view = await s.read();
+  expect(view.plans.find(p => p.id === plan.id)).toMatchObject({ recoveredMinorUnits: 0, remainingMinorUnits: 1_380_000, dueMinorUnits: 460_000,
+    contributionHistory: [{ id: gift.contribution.id, status: "corrected", transferJournalEntryId: gift.transfer.id,
+      contributionDate: "2026-09-18", recordedAt: gift.contribution.recordedAt, correction: first.correction }] });
+  expect(view.plans.find(p => p.id === target.id)?.recoveredMinorUnits).toBe(reattribute ? 230_000 : 0);
+  if (reattribute) expect(view.plans.find(p => p.id === target.id)?.contributionHistory[0]).toMatchObject({
+    status: "active", transferJournalEntryId: gift.transfer.id, contributionDate: "2026-09-18", recordedAt: octNow,
+    correctsContributionId: gift.contribution.id,
+  });
+  expect(await s.ledger()).toEqual(before);
+  expect((await s.ledger()).entries).toHaveLength(before.entries.length);
+  expect(await s.move(plan.id, "saved")).toEqual({ ...gift, replay: true });
+});
+
+test("a reversed contribution is void in history and cannot be corrected; cancelling does not erase it", async () => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const gift = await s.move(plan.id, "saved");
+  await s.t.action(api.accounting.reversePostedEntry, { workspaceId: s.workspaceId, journalEntryId: gift.transfer.id, idempotencyKey: "reverse-transfer" });
+  await expect(s.t.action(api.savingsRecovery.correctContribution, { workspaceId: s.workspaceId, contributionId: gift.contribution.id, reason: "Wrong", idempotencyKey: "correct-void" }))
+    .rejects.toMatchObject({ data: { code: "contribution_voided" } });
+  expect((await s.read()).plans[0]).toMatchObject({ recoveredMinorUnits: 0,
+    contributionHistory: [{ id: gift.contribution.id, status: "voided", transferReversed: true }] });
+  await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: plan.id, idempotencyKey: "cancel" });
+  expect((await s.read()).plans[0].contributionHistory).toHaveLength(1);
+});
+
+test("correction target must be active on the transfer date, in the workspace, with matching destination and capacity", async () => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const gift = await s.move(plan.id, "saved");
+  const args = { workspaceId: s.workspaceId, contributionId: gift.contribution.id, reason: "Wrong", idempotencyKey: "correct" };
+  await expect(s.t.action(api.savingsRecovery.correctContribution, { ...args, targetPlanId: plan.id })).rejects.toMatchObject({ data: { code: "correction_target_same_plan" } });
+  await expect(s.t.action(api.savingsRecovery.correctContribution, { ...args, targetPlanId: "missing" })).rejects.toMatchObject({ data: { code: "plan_not_found" } });
+  vi.setSystemTime(octNow);
+  const target = await secondPlan(s);
+  await expect(s.t.action(api.savingsRecovery.correctContribution, { ...args, targetPlanId: target.id })).rejects.toMatchObject({ data: { code: "transfer_predates_activation" } });
+  await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: target.id, idempotencyKey: "cancel-target" });
+  await expect(s.t.action(api.savingsRecovery.correctContribution, { ...args, targetPlanId: target.id })).rejects.toMatchObject({ data: { code: "plan_cancelled" } });
+  for (const reason of [" ", "x".repeat(1001)]) await expect(s.t.action(api.savingsRecovery.correctContribution, { ...args, reason }))
+    .rejects.toMatchObject({ data: { code: "reason_invalid" } });
+  await expect(s.t.action(api.savingsRecovery.correctContribution, { ...args, contributionId: "missing" })).rejects.toMatchObject({ data: { code: "contribution_not_found" } });
+  expect(await s.t.run(ctx => ctx.db.query("savingsRecoveryCorrections").collect())).toEqual([]);
+});
+
+test.each(["signed-out", "inactive", "stale", "revoked", "non-member"] as const)("Recovery lifecycle commands recheck authorization before replay, denial=%s", async denial => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const gift = await s.move(plan.id, "saved");
+  const cancelArgs = { workspaceId: s.workspaceId, planId: plan.id, idempotencyKey: "cancel" };
+  const correctArgs = { workspaceId: s.workspaceId, contributionId: gift.contribution.id, reason: "Wrong", idempotencyKey: "correct" };
+  await s.t.action(api.savingsRecovery.correctContribution, correctArgs);
+  await s.t.action(api.savingsRecovery.cancelPlan, cancelArgs);
+  const state = () => s.t.run(async ctx => ({
+    plans: await ctx.db.query("savingsRecoveryPlans").collect(),
+    contributions: await ctx.db.query("savingsRecoveryContributions").collect(),
+    cancellations: await ctx.db.query("savingsRecoveryCancellations").collect(),
+    corrections: await ctx.db.query("savingsRecoveryCorrections").collect(),
+    entries: await ctx.db.query("journalEntries").collect(),
+    lines: await ctx.db.query("journalLines").collect(),
+  }));
+  const before = await state();
+  const session = { userId: s.providerSession.user_id, clerkSessionId: s.providerSession.id, clerkClientId: s.providerSession.client_id,
+    verifiedAt: Date.now(), expiresAt: s.providerSession.expire_at, abandonsAt: s.providerSession.abandon_at };
+  let code: string;
+  if (denial === "inactive") { s.providerSession.status = "ended"; code = "session_inactive"; }
+  else if (denial === "stale") { session.verifiedAt -= 5001; code = "session_verification_required"; }
+  else if (denial === "revoked") { await s.root.run(ctx => ctx.db.patch(s.deviceId, { revokedAt: Date.now() })); code = "device_revoked"; }
+  else if (denial === "non-member") {
+    await s.root.run(async ctx => {
+      const member = await ctx.db.query("workspaceMemberships").unique();
+      if (!member) throw Error("Missing member");
+      await ctx.db.delete(member._id);
+    });
+    code = "membership_required";
+  } else code = "authentication_required";
+  const client = denial === "signed-out" ? s.root : s.t;
+  const calls = denial === "stale" ? [
+    () => client.mutation(internal.savingsRecoveryWrites.cancelPlan, { ...cancelArgs, session }),
+    () => client.mutation(internal.savingsRecoveryWrites.correctContribution, { ...correctArgs, session }),
+    () => client.mutation(internal.savingsRecoveryWrites.activatePlan, { ...s.activate, session }),
+  ] : [
+    () => client.action(api.savingsRecovery.cancelPlan, cancelArgs),
+    () => client.action(api.savingsRecovery.correctContribution, correctArgs),
+    () => client.action(api.savingsRecovery.activatePlan, s.activate),
+  ];
+  if (denial === "revoked" || denial === "non-member") calls.push(
+    () => client.mutation(internal.savingsRecoveryWrites.cancelPlan, { ...cancelArgs, session }),
+    () => client.mutation(internal.savingsRecoveryWrites.correctContribution, { ...correctArgs, session }),
+    () => client.mutation(internal.savingsRecoveryWrites.activatePlan, { ...s.activate, session }),
+  );
+  for (const call of calls) await expect(call()).rejects.toMatchObject({ data: { code } });
+  expect(await state()).toEqual(before);
+});
+
+test("corrections can remove attribution from a cancelled plan and restore its candidate principal", async () => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const gift = await s.move(plan.id, "saved");
+  await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: plan.id, idempotencyKey: "cancel" });
+  expect((await s.read()).candidates[0].amountMinorUnits).toBe(1_000_000);
+  await s.t.action(api.savingsRecovery.correctContribution, { workspaceId: s.workspaceId, contributionId: gift.contribution.id, reason: "Not recovery", idempotencyKey: "correct" });
+  expect(await s.read()).toMatchObject({ candidates: [{ amountMinorUnits: 1_200_000 }],
+    plans: [{ status: "cancelled", recoveredMinorUnits: 0, remainingMinorUnits: 0, dueMinorUnits: 0 }] });
+});
+
+test("pre-activation public contribution is rejected before posting money", async () => {
+  const s = await setup();
+  vi.setSystemTime(octNow);
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const before = await s.ledger();
+  await expect(s.move(plan.id, "predates")).rejects.toMatchObject({ data: { code: "transfer_predates_activation" } });
+  expect(await s.ledger()).toEqual(before);
+});
+
+test("lifecycle commands validate request keys and missing plan references without writes", async () => {
+  const s = await setup();
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const gift = await s.move(plan.id, "saved");
+  const before = await s.ledger();
+  for (const idempotencyKey of [" ", "x".repeat(201)]) {
+    await expect(s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: plan.id, idempotencyKey }))
+      .rejects.toMatchObject({ data: { code: "idempotency_key_invalid" } });
+    await expect(s.t.action(api.savingsRecovery.correctContribution, { workspaceId: s.workspaceId, contributionId: gift.contribution.id, reason: "Wrong", idempotencyKey }))
+      .rejects.toMatchObject({ data: { code: "idempotency_key_invalid" } });
+  }
+  await expect(s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: "missing", idempotencyKey: "missing" }))
+    .rejects.toMatchObject({ data: { code: "plan_not_found" } });
+  expect(await s.ledger()).toEqual(before);
+  expect(await s.t.run(ctx => ctx.db.query("savingsRecoveryCancellations").collect())).toEqual([]);
+  expect(await s.t.run(ctx => ctx.db.query("savingsRecoveryCorrections").collect())).toEqual([]);
 });

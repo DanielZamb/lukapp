@@ -39,6 +39,12 @@ export function recoveryReadStore(ctx: Pick<QueryCtx, "db">, workspaceId: string
       if (!workspace) throw new RecoveryError("workspace_not_found");
       return workspaceTimeZone(workspace);
     },
+    listCancellations: async () => (await ctx.db.query("savingsRecoveryCancellations")
+      .withIndex("by_workspace", q => q.eq("workspaceId", id)).collect())
+      .map(({ _id, _creationTime, ...item }) => ({ id: _id, ...item })),
+    listCorrections: async () => (await ctx.db.query("savingsRecoveryCorrections")
+      .withIndex("by_workspace", q => q.eq("workspaceId", id)).collect())
+      .map(({ _id, _creationTime, ...item }) => ({ id: _id, ...item })),
     listPlans: async () => (await ctx.db.query("savingsRecoveryPlans")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", id)).collect()).map(planView),
     listContributions: async () => (await ctx.db.query("savingsRecoveryContributions")
@@ -79,6 +85,23 @@ export function recoveryWriteStore(ctx: Pick<MutationCtx, "db">, workspaceId: st
   if (!id) throw new RecoveryError("workspace_not_found");
   return {
     ...read,
+    insertCancellation: async decision => {
+      const planId = ctx.db.normalizeId("savingsRecoveryPlans", decision.planId);
+      if (!planId) throw new RecoveryError("plan_not_found");
+      const saved = await ctx.db.insert("savingsRecoveryCancellations", { ...decision, workspaceId: id, planId });
+      return { ...decision, id: saved };
+    },
+    insertCorrection: async decision => {
+      const contributionId = ctx.db.normalizeId("savingsRecoveryContributions", decision.contributionId);
+      const targetPlanId = decision.targetPlanId === undefined ? undefined : ctx.db.normalizeId("savingsRecoveryPlans", decision.targetPlanId);
+      const replacementContributionId = decision.replacementContributionId === undefined ? undefined : ctx.db.normalizeId("savingsRecoveryContributions", decision.replacementContributionId);
+      if (!contributionId || targetPlanId === null || replacementContributionId === null)
+        throw new RecoveryError("contribution_not_found");
+      const saved = await ctx.db.insert("savingsRecoveryCorrections", {
+        ...decision, workspaceId: id, contributionId, targetPlanId, replacementContributionId,
+      });
+      return { ...decision, id: saved };
+    },
     findPlanRequest: async (key) => {
       const plan = await ctx.db.query("savingsRecoveryPlans")
         .withIndex("by_workspace_request", (q) => q.eq("workspaceId", id).eq("idempotencyKey", key)).unique();
@@ -86,7 +109,8 @@ export function recoveryWriteStore(ctx: Pick<MutationCtx, "db">, workspaceId: st
     },
     findContributionRequest: async (key) => {
       const contribution = await ctx.db.query("savingsRecoveryContributions")
-        .withIndex("by_workspace_request", (q) => q.eq("workspaceId", id).eq("idempotencyKey", key)).unique();
+        .withIndex("by_workspace_request", (q) => q.eq("workspaceId", id).eq("idempotencyKey", key))
+        .filter(q => q.eq(q.field("correctsContributionId"), undefined)).unique();
       if (!contribution) return null;
       const { _id, _creationTime, ...rest } = contribution;
       return { id: _id, ...rest };
@@ -98,8 +122,10 @@ export function recoveryWriteStore(ctx: Pick<MutationCtx, "db">, workspaceId: st
       );
       if (!sourceJournalEntryId || !destinationFinancialAccountProfileId)
         throw new RecoveryError("expense_not_found");
+      const replacesPlanId = plan.replacesPlanId === undefined ? undefined : ctx.db.normalizeId("savingsRecoveryPlans", plan.replacesPlanId);
+      if (replacesPlanId === null) throw new RecoveryError("replacement_plan_not_found");
       const planId = await ctx.db.insert("savingsRecoveryPlans", {
-        ...plan, workspaceId: id, sourceJournalEntryId, destinationFinancialAccountProfileId,
+        ...plan, workspaceId: id, sourceJournalEntryId, destinationFinancialAccountProfileId, replacesPlanId,
       });
       return { ...plan, id: planId };
     },
@@ -107,8 +133,11 @@ export function recoveryWriteStore(ctx: Pick<MutationCtx, "db">, workspaceId: st
       const planId = ctx.db.normalizeId("savingsRecoveryPlans", contribution.planId);
       const transferJournalEntryId = ctx.db.normalizeId("journalEntries", contribution.transferJournalEntryId);
       if (!planId || !transferJournalEntryId) throw new RecoveryError("transfer_not_found");
+      const correctsContributionId = contribution.correctsContributionId === undefined ? undefined :
+        ctx.db.normalizeId("savingsRecoveryContributions", contribution.correctsContributionId);
+      if (correctsContributionId === null) throw new RecoveryError("contribution_not_found");
       const contributionId = await ctx.db.insert("savingsRecoveryContributions", {
-        ...contribution, workspaceId: id, planId, transferJournalEntryId,
+        ...contribution, workspaceId: id, planId, transferJournalEntryId, correctsContributionId,
       });
       return { ...contribution, id: contributionId };
     },

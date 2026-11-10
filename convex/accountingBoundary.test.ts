@@ -19,6 +19,7 @@ const modules = import.meta.glob([
 const style = { emoji: "🛒", tone: "primary" } as const;
 function writeArgs(workspaceId = "foreign", profileId = "foreign") {
   return {
+    renameAccount: { workspaceId, financialAccountProfileId: profileId, name: "New", expectedName: "Old" },
     changeAccountLook: { workspaceId, financialAccountProfileId: profileId, emoji: "🐷" },
     createFinancialAccountProfile: {
       workspaceId,

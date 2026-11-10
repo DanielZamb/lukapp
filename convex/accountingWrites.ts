@@ -1,3 +1,4 @@
+import { renameAccount as rename } from "../src/accounting/commands/renameAccount";
 import { v } from "convex/values";
 import { changeAccountLook as changeLook } from "../src/accounting/commands/changeAccountLook";
 import { internalMutation } from "./_generated/server";
@@ -17,6 +18,7 @@ import { run } from "./accountingErrors";
 import {
   accountSetup,
   accountLook,
+  accountRename,
   accountTransfer,
   openingPosition,
   categoryCreation,
@@ -37,6 +39,16 @@ import {
   postedJournalEntry,
 } from "./validators";
 import { createCategoryResult, userCategory } from "./categoryValidators";
+
+export const renameAccount = internalMutation({
+  args: { ...accountRename, session: liveSession }, returns: financialAccountProfile,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, {
+      session, workspaceId: args.workspaceId, permission: "workspace:admin",
+    });
+    return run(() => rename(convexStore(ctx.db), { ...args, actor }));
+  },
+});
 
 export const changeAccountLook = internalMutation({
   args: { ...accountLook, session: liveSession },

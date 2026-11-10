@@ -10,6 +10,7 @@ export type RecoveryPlan = {
   impliedAnnualRateBps: number;
   currency: string;
   activationMonth: string;
+  replacesPlanId?: string;
   idempotencyKey: string;
   createdBy: string;
   createdAt: number;
@@ -25,6 +26,7 @@ export type RecoveryContribution = {
   idempotencyKey: string;
   createdBy: string;
   recordedAt: number;
+  correctsContributionId?: string;
 };
 
 export type RecoveryLedgerEntry = {
@@ -58,6 +60,7 @@ export type RecoverySuggestion = {
 };
 
 export type ActivatePlan = {
+  replacesPlanId?: string;
   workspaceId: string;
   sourceJournalEntryId: string;
   destinationFinancialAccountProfileId: string;
@@ -76,6 +79,8 @@ export type RecordContribution = {
 export type RecoveryReadStore = {
   functionalCurrency: () => Promise<string>;
   timeZone: () => Promise<string>;
+  listCancellations: () => Promise<RecoveryCancellation[]>;
+  listCorrections: () => Promise<RecoveryCorrection[]>;
   listPlans: () => Promise<RecoveryPlan[]>;
   listContributions: () => Promise<RecoveryContribution[]>;
   listProfiles: () => Promise<RecoveryProfile[]>;
@@ -85,10 +90,51 @@ export type RecoveryReadStore = {
 };
 
 export type RecoveryWriteStore = RecoveryReadStore & {
+  insertCancellation: (decision: Omit<RecoveryCancellation, "id">) => Promise<RecoveryCancellation>;
+  insertCorrection: (decision: Omit<RecoveryCorrection, "id">) => Promise<RecoveryCorrection>;
   findPlanRequest: (key: string) => Promise<RecoveryPlan | null>;
   findContributionRequest: (key: string) => Promise<RecoveryContribution | null>;
   insertPlan: (plan: Omit<RecoveryPlan, "id">) => Promise<RecoveryPlan>;
   insertContribution: (
     contribution: Omit<RecoveryContribution, "id">,
   ) => Promise<RecoveryContribution>;
+};
+
+export type RecoveryCancellation = {
+  id: string;
+  workspaceId: string;
+  planId: string;
+  reason?: string;
+  idempotencyKey: string;
+  createdBy: string;
+  eventTime: number;
+  recordedAt: number;
+};
+
+export type RecoveryCorrection = {
+  id: string;
+  workspaceId: string;
+  contributionId: string;
+  reason: string;
+  targetPlanId?: string;
+  replacementContributionId?: string;
+  contributionDate: string;
+  idempotencyKey: string;
+  createdBy: string;
+  recordedAt: number;
+};
+
+export type CancelPlan = {
+  workspaceId: string;
+  planId: string;
+  reason?: string;
+  idempotencyKey: string;
+};
+
+export type CorrectContribution = {
+  workspaceId: string;
+  contributionId: string;
+  reason: string;
+  targetPlanId?: string;
+  idempotencyKey: string;
 };

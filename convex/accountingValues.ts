@@ -91,6 +91,10 @@ export const accountTransfer = {
   userCategoryIds: v.optional(v.array(v.string())),
   primaryUserCategoryId: v.optional(v.string()),
 };
+export const accountRename = {
+  workspaceId: v.string(), financialAccountProfileId: v.string(),
+  name: v.string(), expectedName: v.string(),
+};
 export const accountLook = {
   ...inWorkspace,
   financialAccountProfileId: v.string(),

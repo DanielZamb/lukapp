@@ -28,6 +28,7 @@ type WriteMethod =
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
+  | "renameProfile"
   | "restyleProfile"
   | "insertJournalEntry"
   | "insertAccountingPeriod"
@@ -426,6 +427,15 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
       return { id, ...account };
     },
 
+    async renameProfile(profileId, name) {
+      const id = storedId<"financialAccountProfiles">(profileId);
+      const profile = await db.get(id);
+      if (!profile) throw new AccountingError("financial_account_profile_not_found");
+      await db.patch(id, { name });
+      await db.patch(profile.postingAccountId, { name });
+      return toProfile({ ...profile, name });
+    },
+
     async restyleProfile(profileId, emoji) {
       const id = storedId<"financialAccountProfiles">(profileId);
       await db.patch(id, { emoji });
@@ -570,6 +580,7 @@ function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),
+    renameProfile: async () => unavailable("renameProfile"),
     restyleProfile: async () => unavailable("restyleProfile"),
     insertJournalEntry: async () => unavailable("insertJournalEntry"),
     insertAccountingPeriod: async () => unavailable("insertAccountingPeriod"),
