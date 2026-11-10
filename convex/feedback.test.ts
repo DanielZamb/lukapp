@@ -542,3 +542,106 @@ test("deletes a screenshot that was uploaded but never sent, and keeps a recent 
   expect(remaining.map((blob) => blob._id)).not.toContain(unclaimed);
   vi.useRealTimers();
 });
+
+// Security regressions use only harmless fixture data and the normal public functions.
+test("security: submit rejects any caller-supplied storage id", async () => {
+  const f = await fixture();
+  const screenshotStorageId = await f.root.run((ctx) => ctx.storage.store(new Blob([png], { type: "image/png" })));
+  const value = report();
+  await f.t.mutation(api.feedback.prepareScreenshotUpload, { reportKey: value.reportKey });
+  await expect(f.t.action(api.feedback.submit, { ...value, screenshotStorageId })).rejects.toThrow();
+  expect(f.creates()).toHaveLength(0);
+  expect(await f.root.run((ctx) => ctx.storage.get(screenshotStorageId))).not.toBeNull();
+});
+
+test("security: revocation and failed create publish no repository attachment", async () => {
+  const f = await fixture();
+  const value = await f.addScreenshot(report());
+  f.state.onList = async () => { await f.t.run((ctx) => ctx.db.patch(f.deviceId, { revokedAt: Date.now() })); };
+  await expect(f.t.action(api.feedback.submit, value)).rejects.toMatchObject({ data: { code: "device_revoked" } });
+  expect(f.uploads()).toHaveLength(0);
+  expect(f.contents.size).toBe(0);
+});
+
+test("security: attachment endpoint validates bytes before storing and requires live admission", async () => {
+  const f = await fixture();
+  const value = { reportKey: report().reportKey, image: new Uint8Array(6 * 1024 * 1024).buffer };
+  await expect(f.t.action(api.feedback.attachScreenshot, value)).rejects.toMatchObject({ data: { code: "invalid_report", field: "screenshot" } });
+  expect(await f.root.run((ctx) => ctx.db.system.query("_storage").collect())).toHaveLength(0);
+  f.state.inactive = true;
+  await expect(f.t.action(api.feedback.attachScreenshot, { ...value, image: png.buffer })).rejects.toMatchObject({ data: { code: "session_inactive" } });
+});
+
+test("security: recovery never adopts another author's copied nonce", async () => {
+  const f = await fixture();
+  const value = report();
+  f.state.loseCreateResponse = true;
+  await expect(f.t.action(api.feedback.submit, value)).rejects.toThrow();
+  const forged = { ...f.issues[0], number: 99, html_url: "https://github.com/DanielZamb/lukapp/issues/99", user: { login: "attacker" } };
+  f.state.pages.set(1, [forged, f.issues[0]]);
+  expect(await f.t.action(api.feedback.submit, value)).toMatchObject({ reference: "#41" });
+});
+
+test("security: removing triage labels cannot hide a committed issue on retry", async () => {
+  const f = await fixture();
+  const value = report();
+  f.state.loseCreateResponse = true;
+  await expect(f.t.action(api.feedback.submit, value)).rejects.toThrow();
+  f.issues[0].labels = [];
+  expect(await f.t.action(api.feedback.submit, value)).toMatchObject({ reference: "#41" });
+  const lists = f.transport.mock.calls.filter(([url]) => String(url).includes("/issues?"));
+  expect(lists.every(([url]) => !new URL(String(url)).searchParams.has("labels"))).toBe(true);
+  expect(f.creates()).toHaveLength(1);
+});
+
+test("security: orphan sweep retains screenshots referenced by a leased pending report", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const f = await fixture();
+  const value = await f.addScreenshot(report());
+  f.state.createStatus = 503;
+  await expect(f.t.action(api.feedback.submit, value)).rejects.toThrow();
+  vi.setSystemTime(Date.now() + unclaimedUploadAgeMs + 1);
+  await f.t.run(async (ctx) => {
+    const row = await ctx.db.query("feedbackReports").unique();
+    if (row?.state !== "pending") throw new Error("Expected pending row");
+    await ctx.db.patch(row._id, { lease: { owner: "live-attempt", until: Date.now() + leaseMs } });
+  });
+  await f.t.mutation(internal.feedbackStore.sweepUnclaimedUploads, {});
+  expect(await f.t.run((ctx) => ctx.storage.get(value.screenshotStorageId))).not.toBeNull();
+});
+
+test("security: expired failed screenshot report returns report_expired so a new key can send", async () => {
+  const f = await fixture();
+  const value = await f.addScreenshot(report());
+  f.state.createStatus = 503;
+  await expect(f.t.action(api.feedback.submit, value)).rejects.toThrow();
+  const key = await f.t.run((ctx) => ctx.db.query("feedbackReservations").unique());
+  if (!key) throw new Error("Expected reservation");
+  vi.spyOn(Date, "now").mockReturnValue(Date.now() + retentionMs + 1);
+  await f.t.mutation(internal.feedbackStore.expire, { reservationId: key._id });
+  f.state.createStatus = 201;
+  await expect(f.t.action(api.feedback.submit, value)).rejects.toMatchObject({ data: { code: "report_expired" } });
+  expect(await f.t.action(api.feedback.submit, report())).toMatchObject({ reference: "#41" });
+});
+
+test("security: keys reserved in earlier hours cannot bypass the send-hour quota", async () => {
+  const f = await fixture();
+  const old = Array.from({ length: 5 }, () => report());
+  for (const value of old) await f.t.mutation(api.feedback.prepareScreenshotUpload, { reportKey: value.reportKey });
+  vi.spyOn(Date, "now").mockReturnValue(Date.now() + 3600_001);
+  for (let i = 0; i < 5; i++) await f.t.action(api.feedback.submit, report());
+  for (const value of old) await expect(f.t.action(api.feedback.submit, value)).rejects.toMatchObject({ data: { code: "rate_limited" } });
+  expect(f.creates()).toHaveLength(5);
+});
+
+test("security: public issues contain independent nonces and no reporter or report key", async () => {
+  const f = await fixture();
+  const values = [report(), report()];
+  for (const value of values) await f.t.action(api.feedback.submit, value);
+  const markers = f.issues.map((issue) => issue.body.match(/<!-- lukapp-feedback:([^ ]+) -->/)?.[1]);
+  expect(markers[0]).not.toBe(markers[1]);
+  for (const issue of f.issues) {
+    expect(issue.body).not.toContain("| Reporter |");
+    for (const value of values) expect(issue.body).not.toContain(value.reportKey);
+  }
+});
