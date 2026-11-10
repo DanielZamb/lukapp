@@ -5,7 +5,7 @@ import { z } from "zod";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import type { ReportPayload } from "./feedbackValues";
-import { leaseMs, retentionMs } from "./feedbackStore";
+import { leaseMs, retentionMs, unclaimedUploadAgeMs } from "./feedbackStore";
 
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
 const identity = { subject: "user-feedback-fixture", issuer: "https://feedback.clerk.accounts.dev", sid: "sess_feedback", sts: "active", email: "never-publish@example.test", name: "Never Publish Name" };
@@ -526,4 +526,19 @@ test("an unused upload URL can be refreshed after an hour without another reserv
   const refreshed = await f.t.mutation(api.feedback.prepareScreenshotUpload, args);
   expect(refreshed.uploadUrl).not.toBe(first.uploadUrl);
   expect(await f.t.run((ctx) => ctx.db.query("feedbackReservations").collect())).toHaveLength(1);
+});
+
+test("deletes a screenshot that was uploaded but never sent, and keeps a recent one", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const f = await fixture();
+  const start = Date.now();
+  const unclaimed = await f.root.run((ctx) => ctx.storage.store(new Blob([png], { type: "image/png" })));
+  vi.setSystemTime(start + unclaimedUploadAgeMs);
+  const recent = await f.root.run((ctx) => ctx.storage.store(new Blob([png], { type: "image/png" })));
+  vi.setSystemTime(start + unclaimedUploadAgeMs + 1000);
+  expect(await f.t.mutation(internal.feedbackStore.sweepUnclaimedUploads, {})).toBe(1);
+  const remaining = await f.root.run((ctx) => ctx.db.system.query("_storage").collect());
+  expect(remaining.map((blob) => blob._id)).toEqual([recent]);
+  expect(remaining.map((blob) => blob._id)).not.toContain(unclaimed);
+  vi.useRealTimers();
 });

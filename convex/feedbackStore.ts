@@ -156,3 +156,20 @@ export const expire = internalMutation({
     return null;
   },
 });
+
+// File storage holds only report screenshots. One that is still stored after the
+// retention window and the longest lease was uploaded for a report that was never
+// sent, or was dropped from a report before a retry, so no row points at it.
+export const unclaimedUploadAgeMs = retentionMs + 2 * leaseMs;
+
+export const sweepUnclaimedUploads = internalMutation({
+  args: {}, returns: v.number(),
+  handler: async (ctx) => {
+    const stale = await ctx.db.system.query("_storage")
+      .withIndex("by_creation_time", (q) => q.lt("_creationTime", Date.now() - unclaimedUploadAgeMs))
+      .take(100);
+    for (const blob of stale) await ctx.storage.delete(blob._id);
+    if (stale.length === 100) await ctx.scheduler.runAfter(0, internal.feedbackStore.sweepUnclaimedUploads, {});
+    return stale.length;
+  },
+});
