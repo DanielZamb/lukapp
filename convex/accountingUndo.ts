@@ -1,3 +1,4 @@
+import { RecoveryError } from "../src/savingsRecovery/policy";
 import { run } from "./accountingErrors";
 import { ConvexError, v, type Infer } from "convex/values";
 import { internalMutation, type QueryCtx, type MutationCtx } from "./_generated/server";
@@ -131,9 +132,17 @@ function operationStore(ctx: MutationCtx, operation: Doc<"placeUndoOperations">)
   };
 }
 function errorCode(error: unknown): string {
-  if (error instanceof AccountingError) return error.code;
+  if (error instanceof AccountingError || error instanceof RecoveryError) return error.code;
   if (error instanceof ConvexError && error.data && typeof error.data === "object" && "code" in error.data && typeof error.data.code === "string") return error.data.code;
   return "place_undo_unexpected_failure";
+}
+function errorDetail(error: unknown): string {
+  if (error instanceof AccountingError || error instanceof RecoveryError) return error.message;
+  if (error instanceof ConvexError && error.data && typeof error.data === "object") {
+    if ("detail" in error.data && typeof error.data.detail === "string") return error.data.detail;
+    if ("message" in error.data && typeof error.data.message === "string") return error.data.message;
+  }
+  return "The batch failed unexpectedly and was rolled back. Investigate before retrying";
 }
 export const processBatch = internalMutation({
   args: batchArgs, returns: v.null(),
@@ -169,7 +178,7 @@ export const processBatch = internalMutation({
         });
         reversedCount++;
       } catch (error) {
-        throw new ConvexError({ code: errorCode(error), journalEntryId: line.journalEntryId });
+        throw new ConvexError({ code: errorCode(error), detail: errorDetail(error), journalEntryId: line.journalEntryId });
       }
     }
     const progress = { cursor: page.continueCursor, reversedCount, alreadyReversedCount, lockedMonthCount,
@@ -206,7 +215,7 @@ export const drive = internalMutation({
       } else {
         const data = error instanceof ConvexError ? error.data : null;
         const journalEntryId = data && typeof data === "object" && "journalEntryId" in data && typeof data.journalEntryId === "string" ? data.journalEntryId : undefined;
-        await ctx.db.patch(operation._id, { state: { kind: "needs_attention", code, ...(journalEntryId ? { journalEntryId } : {}) } });
+        await ctx.db.patch(operation._id, { state: { kind: "needs_attention", code, detail: errorDetail(error), ...(journalEntryId ? { journalEntryId } : {}) } });
       }
     }
     return null;

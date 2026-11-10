@@ -1,3 +1,4 @@
+import { AccountingError } from "../src/accounting/errors";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import { accountingFixture, createProfile, provisionWorkspace, reverse, lock, type AccountingTest } from "../src/accounting/convexHarness";
@@ -195,10 +196,10 @@ test("a failed reversal rolls back its batch, reports the entry, and can continu
   const reversalModule = await import("../src/accounting/commands/reversePostedEntry");
   const realReverse = reversalModule.reversePostedEntry;
   const fault = vi.spyOn(reversalModule, "reversePostedEntry");
-  fault.mockImplementationOnce(realReverse).mockRejectedValueOnce(new Error("Injected failure"));
+  fault.mockImplementationOnce(realReverse).mockRejectedValueOnce(new AccountingError("ledger_totals_out_of_range"));
   await s.t.mutation(internal.accountingUndo.drive, { operationId, version: 1 });
   fault.mockRestore();
-  expect(await s.status()).toMatchObject({ state: { kind: "needs_attention", code: "place_undo_unexpected_failure", journalEntryId: expect.any(String) }, reversedCount: 20 });
+  expect(await s.status()).toMatchObject({ state: { kind: "needs_attention", code: "ledger_totals_out_of_range", detail: "Ledger totals exceed the supported amount range", journalEntryId: expect.any(String) }, reversedCount: 20 });
   expect((await state(s.t)).entries).toEqual(before.entries);
   expect((await state(s.t)).endings).toHaveLength(0);
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ operation: { state: { kind: "needs_attention" } }, closure: { status: "undoing" } });

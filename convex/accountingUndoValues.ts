@@ -10,7 +10,7 @@ export const undoState = v.union(
   v.object({ kind: v.literal("pending") }),
   v.object({ kind: v.literal("running") }),
   v.object({ kind: v.literal("paused"), code: v.string(), retryAt: v.number() }),
-  v.object({ kind: v.literal("needs_attention"), code: v.string(), journalEntryId: v.optional(v.string()) }),
+  v.object({ kind: v.literal("needs_attention"), code: v.string(), detail: v.string(), journalEntryId: v.optional(v.string()) }),
   v.object({ kind: v.literal("done"), endingId: v.string(), completedAt: v.number() }),
 );
 export const undoOperationFields = {
