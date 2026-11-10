@@ -15,5 +15,6 @@ import { recovery } from "./recovery";
 import { review } from "./review";
 import { settings } from "./settings";
 import { setup } from "./setup";
+import { workspace } from "./workspace";
 
-export const es: Catalog = { access, budget, categories, common, drafts, feedback, home, inbox, lifecycle, places, planning, posting, recovery, review, settings, setup };
+export const es: Catalog = { access, budget, categories, common, drafts, feedback, home, inbox, lifecycle, places, planning, posting, recovery, review, settings, setup, workspace };
