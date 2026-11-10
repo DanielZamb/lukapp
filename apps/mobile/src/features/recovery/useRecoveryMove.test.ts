@@ -6,6 +6,7 @@ import type { RecoveryPlace, RecoveryPlanView } from "./model";
 import { useRecoveryMove, type RecoveryMoveTransport } from "./useRecoveryMove";
 
 const plan: RecoveryPlanView = {
+  cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
   status: "active",
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",

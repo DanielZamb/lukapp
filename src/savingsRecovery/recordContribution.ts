@@ -1,5 +1,6 @@
+import { requireContributablePlan, requireContributionDate } from "./lifecycle";
 import { isAssetProductKind, RecoveryError, requireIdempotencyKey } from "./policy";
-import { ALL_MONTHS, planProgress } from "./evaluate";
+import { ALL_MONTHS, activeAttributions, planProgress } from "./progress";
 import type { RecordContribution, RecoveryWriteStore } from "./types";
 
 export async function recordContribution(
@@ -16,11 +17,7 @@ export async function recordContribution(
       throw new RecoveryError("idempotency_key_conflict");
     return { contribution: prior, replay: true };
   }
-  const plan = (await store.listPlans()).find((item) => item.id === input.planId);
-  if (!plan || plan.workspaceId !== input.workspaceId)
-    throw new RecoveryError("plan_not_found");
-  if (await store.findReversalOf(plan.sourceJournalEntryId))
-    throw new RecoveryError("expense_not_recoverable");
+  const plan = await requireContributablePlan(store, input.planId, input.workspaceId);
   const transfer = await store.getEntry(input.transferJournalEntryId);
   if (!transfer || transfer.workspaceId !== input.workspaceId || transfer.policy !== "account-transfer@1")
     throw new RecoveryError("transfer_not_found");
@@ -35,17 +32,21 @@ export async function recordContribution(
     throw new RecoveryError("source_must_be_asset");
   if (!destination || !isAssetProductKind(destination.productKind))
     throw new RecoveryError("destination_must_be_asset");
-  const claimed = (await store.listContributions()).some(
-    (contribution) => contribution.transferJournalEntryId === transfer.id,
-  );
-  if (claimed) throw new RecoveryError("transfer_already_attributed");
+  await requireContributionDate(store, plan, transfer.accountingDate);
+  const contributions = await store.listContributions();
+  const corrections = await store.listCorrections();
+  const claimed = activeAttributions(contributions, corrections)
+    .filter(item => item.transferJournalEntryId === transfer.id)
+    .reduce((sum, item) => sum + item.amountMinorUnits, 0);
+  const available = transfer.amountMinorUnits - claimed;
+  if (available <= 0) throw new RecoveryError("transfer_already_attributed");
   // The cap counts every unreversed contribution, including future-dated ones, so a plan is
   // never attributed past its target.
   const remaining = (await planProgress(plan, await store.listContributions(), async (entryId) =>
-    Boolean(await store.findReversalOf(entryId)), ALL_MONTHS,
+    Boolean(await store.findReversalOf(entryId)), ALL_MONTHS, corrections,
   )).remainingMinorUnits;
   if (remaining <= 0) throw new RecoveryError("plan_already_complete");
-  const amount = Math.min(transfer.amountMinorUnits, remaining);
+  const amount = Math.min(available, remaining);
   if (amount <= 0) throw new RecoveryError("transfer_not_usable");
   const contribution = await store.insertContribution({
     workspaceId: input.workspaceId,

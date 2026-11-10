@@ -1,3 +1,5 @@
+import { cancelPlan as runCancelPlan } from "../src/savingsRecovery/cancelPlan";
+import { correctContribution as runCorrectContribution } from "../src/savingsRecovery/correctContribution";
 import { internalMutation } from "./_generated/server";
 import { requireSubmission } from "./lib/deviceAuthorization";
 import { liveSession } from "./lib/securityValues";
@@ -8,7 +10,7 @@ import { recoveryWriteStore } from "./savingsRecoveryStore";
 import { runRecovery } from "./savingsRecoveryErrors";
 import { run } from "./accountingErrors";
 import { convexStore } from "./store";
-import { activateArgs, activateResult, contributeArgs, contributeResult } from "./savingsRecoveryValues";
+import { activateArgs, activateResult, contributeArgs, contributeResult, cancelArgs, cancelResult, correctArgs, correctResult } from "./savingsRecoveryValues";
 
 export const activatePlan = internalMutation({
   args: { ...activateArgs, session: liveSession }, returns: activateResult,
@@ -47,6 +49,26 @@ export const recordContribution = internalMutation({
         },
         contribution: result.contribution,
       };
+    }));
+  },
+});
+
+export const cancelPlan = internalMutation({
+  args: { ...cancelArgs, session: liveSession }, returns: cancelResult,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    return runRecovery(() => runCancelPlan(recoveryWriteStore(ctx, args.workspaceId), {
+      ...args, actorId: actor.userId, now: Date.now(),
+    }));
+  },
+});
+
+export const correctContribution = internalMutation({
+  args: { ...correctArgs, session: liveSession }, returns: correctResult,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    return runRecovery(() => runCorrectContribution(recoveryWriteStore(ctx, args.workspaceId), {
+      ...args, actorId: actor.userId, now: Date.now(),
     }));
   },
 });

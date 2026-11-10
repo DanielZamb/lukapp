@@ -1,44 +1,12 @@
 import {
-  currentRecoveryMonth, isAssetProductKind, planTargetMinorUnits, RecoveryError, requireMonth,
-  scheduledDueMinorUnits,
+  currentRecoveryMonth, isAssetProductKind, requireMonth,
 } from "./policy";
+import { remainingPrincipal } from "./lifecycle";
 import type {
-  RecoveryContribution,
   RecoveryLedgerEntry,
-  RecoveryPlan,
   RecoveryReadStore,
 } from "./types";
-
-// Sorts after every real YYYY-MM, so progress counts all contributions.
-export const ALL_MONTHS = "9999-12";
-
-export async function planProgress(
-  plan: RecoveryPlan,
-  contributions: RecoveryContribution[],
-  reversed: (transferId: string) => Promise<boolean>,
-  viewedMonth: string,
-) {
-  const target = planTargetMinorUnits(
-    plan.principalMinorUnits, plan.installmentCount, plan.installmentMinorUnits,
-  );
-  // Progress for a month counts only what had been contributed by that month's end, so a
-  // later transfer never makes an earlier month look recovered or erase what was due then.
-  let recovered = 0;
-  for (const contribution of contributions.filter((item) =>
-    item.planId === plan.id && item.contributionDate.slice(0, 7) <= viewedMonth)) {
-    if (!(await reversed(contribution.transferJournalEntryId)))
-      recovered += contribution.amountMinorUnits;
-  }
-  if (!Number.isSafeInteger(recovered) || !Number.isSafeInteger(target - recovered))
-    throw new RecoveryError("amount_out_of_range");
-  const remaining = Math.max(0, target - recovered);
-  return {
-    recoveredMinorUnits: recovered,
-    remainingMinorUnits: remaining,
-    targetMinorUnits: target,
-    dueMinorUnits: Math.max(0, scheduledDueMinorUnits(plan, viewedMonth) - recovered),
-  };
-}
+import { planProgress } from "./progress";
 
 export async function evaluateWorkspace(
   store: RecoveryReadStore,
@@ -47,14 +15,17 @@ export async function evaluateWorkspace(
   const timeZone = await store.timeZone();
   const month = input.month ?? currentRecoveryMonth(input.now, timeZone);
   requireMonth(month);
-  const [currency, plans, contributions, profiles, expenses] = await Promise.all([
+  const [currency, plans, contributions, profiles, expenses, cancellations, corrections] = await Promise.all([
     store.functionalCurrency(),
     store.listPlans(),
     store.listContributions(),
     store.listProfiles(),
     store.listExpenseEntries(),
+    store.listCancellations(),
+    store.listCorrections(),
   ]);
-  const reserved = new Set(plans.map((plan) => plan.sourceJournalEntryId));
+  const cancelled = new Map(cancellations.map(item => [item.planId, item]));
+  const reserved = new Set(plans.filter(plan => !cancelled.has(plan.id)).map(plan => plan.sourceJournalEntryId));
   const assets = profiles.filter((profile) => isAssetProductKind(profile.productKind));
   const destinations = assets
     .slice()
@@ -65,9 +36,19 @@ export async function evaluateWorkspace(
     .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
     .map(async (plan) => {
       const progress = await planProgress(plan, contributions, async (entryId) =>
-        Boolean(await store.findReversalOf(entryId)), month);
+        Boolean(await store.findReversalOf(entryId)), month, corrections);
       const source = await store.getEntry(plan.sourceJournalEntryId);
-      const status: "active" | "suspended" = await store.findReversalOf(plan.sourceJournalEntryId) ? "suspended" : "active";
+      const status: "active" | "suspended" | "cancelled" | "completed" = cancelled.has(plan.id) ? "cancelled" :
+        await store.findReversalOf(plan.sourceJournalEntryId) ? "suspended" :
+        progress.remainingMinorUnits === 0 ? "completed" : "active";
+      const contributionHistory = await Promise.all(contributions.filter(item => item.planId === plan.id)
+        .sort((a, b) => a.contributionDate.localeCompare(b.contributionDate) || a.recordedAt - b.recordedAt || a.id.localeCompare(b.id))
+        .map(async item => {
+          const correction = corrections.find(decision => decision.contributionId === item.id);
+          const voided = Boolean(await store.findReversalOf(item.transferJournalEntryId));
+          const contributionStatus: "active" | "voided" | "corrected" = correction ? "corrected" : voided ? "voided" : "active";
+          return { ...item, status: contributionStatus, transferReversed: voided, correction };
+        }));
       const destination = destinations.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
       return {
         id: plan.id,
@@ -84,7 +65,12 @@ export async function evaluateWorkspace(
         currency: plan.currency,
         ...progress,
         status,
-        dueMinorUnits: status === "suspended" ? 0 : progress.dueMinorUnits,
+        cancellation: cancelled.get(plan.id),
+        replacesPlanId: plan.replacesPlanId,
+        replacedByPlanId: plans.find(item => item.replacesPlanId === plan.id)?.id,
+        contributionHistory,
+        remainingMinorUnits: status === "cancelled" ? 0 : progress.remainingMinorUnits,
+        dueMinorUnits: status === "active" ? progress.dueMinorUnits : 0,
       };
     }));
   return {
@@ -92,8 +78,12 @@ export async function evaluateWorkspace(
     currentMonth: currentRecoveryMonth(input.now, timeZone),
     currency,
     plans: views,
-    candidates: expenses
-      .filter((entry) => !entry.reversesEntryId && !reserved.has(entry.id))
+    candidates: (await Promise.all(expenses
+      .filter(entry => !entry.reversesEntryId && !reserved.has(entry.id))
+      .map(async entry => ({
+      ...entry, amountMinorUnits: await remainingPrincipal(store, entry.id, entry.amountMinorUnits, { plans, contributions, corrections }),
+    }))))
+      .filter(entry => entry.amountMinorUnits > 0)
       .sort((a, b) => b.accountingDate.localeCompare(a.accountingDate) || b.id.localeCompare(a.id))
       .map((entry) => candidateView(entry, profiles)),
     destinations: destinations.map((profile) => ({

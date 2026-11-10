@@ -76,6 +76,7 @@ export default defineSchema({
     impliedAnnualRateBps: v.number(),
     currency: v.string(),
     activationMonth: v.string(),
+    replacesPlanId: v.optional(v.id("savingsRecoveryPlans")),
     idempotencyKey: v.string(),
     createdBy: v.string(),
     createdAt: v.number(),
@@ -83,7 +84,23 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
     .index("by_workspace_source", ["workspaceId", "sourceJournalEntryId"]),
+  savingsRecoveryCancellations: defineTable({
+    workspaceId: v.id("workspaces"), planId: v.id("savingsRecoveryPlans"),
+    reason: v.optional(v.string()), idempotencyKey: v.string(), createdBy: v.string(),
+    eventTime: v.number(), recordedAt: v.number(),
+  }).index("by_workspace", ["workspaceId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_plan", ["planId"]),
+  savingsRecoveryCorrections: defineTable({
+    workspaceId: v.id("workspaces"), contributionId: v.id("savingsRecoveryContributions"),
+    reason: v.string(), targetPlanId: v.optional(v.id("savingsRecoveryPlans")),
+    replacementContributionId: v.optional(v.id("savingsRecoveryContributions")),
+    contributionDate: v.string(), idempotencyKey: v.string(), createdBy: v.string(), recordedAt: v.number(),
+  }).index("by_workspace", ["workspaceId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_contribution", ["contributionId"]),
   savingsRecoveryContributions: defineTable({
+    correctsContributionId: v.optional(v.id("savingsRecoveryContributions")),
     workspaceId: v.id("workspaces"),
     planId: v.id("savingsRecoveryPlans"),
     transferJournalEntryId: v.id("journalEntries"),
