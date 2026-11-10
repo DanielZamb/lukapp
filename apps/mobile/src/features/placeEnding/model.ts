@@ -383,44 +383,106 @@ export function refusalMessage(refusal: { code: string; blocker: UndoBlocker | n
   return translator.t(refusals[refusal.code] ?? "placeEnding.refuseOther", { code: refusal.code });
 }
 
-const pauseReasons: Record<string, MessageKey> = {
-  place_undo_current_period_locked: "placeEnding.pausedMonthLocked",
-  locked_period: "placeEnding.pausedMonthLocked",
-  ledger_summary_not_ready: "placeEnding.pausedNotReady",
-  reversal_date_before_original: "placeEnding.pausedDate",
-  activity_before_opening: "placeEnding.pausedDate",
+/** Why an Undo paused or needs attention, by the backend's machine-readable reason. Unknown reasons keep a general message. */
+const undoReasons: Record<string, MessageKey> = {
+  place_undo_current_period_locked: "placeEnding.reasonMonthLocked",
+  locked_period: "placeEnding.reasonMonthLocked",
+  ledger_summary_not_ready: "placeEnding.reasonNotReady",
+  reversal_date_before_original: "placeEnding.reasonDate",
+  activity_before_opening: "placeEnding.reasonDate",
+  place_undo_stalled: "placeEnding.reasonStalled",
+  place_undo_unexpected_failure: "placeEnding.reasonUnexpected",
+  financial_account_profile_ended: "placeEnding.reasonPlaceEnded",
+  place_undo_in_progress: "placeEnding.reasonPlaceUndoing",
+  ledger_totals_out_of_range: "placeEnding.reasonTotals",
+  category_not_found: "placeEnding.reasonCategory",
+  category_nature_required: "placeEnding.reasonCategory",
+  category_nature_mismatch: "placeEnding.reasonCategory",
+  category_selection_invalid: "placeEnding.reasonCategory",
+  category_limit_exceeded: "placeEnding.reasonCategory",
+  category_primary_invalid: "placeEnding.reasonCategory",
+  journal_entry_not_found: "placeEnding.reasonRecords",
+  journal_entry_incomplete: "placeEnding.reasonRecords",
+  journal_line_invalid: "placeEnding.reasonRecords",
+  posted_journal_entry_unbalanced: "placeEnding.reasonRecords",
+  ledger_account_not_found: "placeEnding.reasonRecords",
+  financial_account_profile_not_found: "placeEnding.reasonRecords",
+  accounting_period_not_found: "placeEnding.reasonRecords",
+  accounting_period_invalid: "placeEnding.reasonRecords",
+  place_undo_originals_remain: "placeEnding.reasonRemaining",
+  place_undo_balance_not_zero: "placeEnding.reasonRemaining",
+  expense_not_recoverable: "placeEnding.reasonRecovery",
+  plan_cancelled: "placeEnding.reasonRecovery",
+  plan_already_complete: "placeEnding.reasonRecovery",
+  plan_not_found: "placeEnding.reasonRecovery",
 };
 
-export type UndoStatusView = { tone: "progress" | "warning" | "done"; title: string; lines: string[] };
+export function undoReason(code: string, t: Translator["t"]) {
+  return t(undoReasons[code] ?? "placeEnding.reasonOther");
+}
+
+/** How far an Undo is: a fraction of what it started with, or only the count for an operation that predates its total. */
+export function undoProgress(operation: UndoOperation, tn: Translator["tn"]) {
+  return operation.totalEntriesToReverse === undefined ? tn("placeEnding.statusReversed", operation.reversedCount)
+    : tn("placeEnding.statusProgress", operation.totalEntriesToReverse, { reversed: operation.reversedCount });
+}
+
+/** Cancelling is only for an Undo that stopped for attention before reversing anything. */
+export function undoAbortable(operation: UndoOperation) {
+  return operation.state.kind === "needs_attention" && operation.reversedCount === 0 && !operation.hasReversedEntries;
+}
+
+export type UndoStatusView = { tone: "progress" | "warning" | "done"; title: string; lines: string[]; support: string[] };
 
 /** What the person reads about an Undo, from the status the backend keeps. It never calls a partial Undo finished. */
-export function undoStatusView(operation: UndoOperation, { t, tn, language }: Translator, timeZone: string): UndoStatusView {
-  const reversed = tn("placeEnding.statusReversed", operation.reversedCount);
+export function undoStatusView(operation: UndoOperation, name: string, { t, tn, language }: Translator, timeZone: string): UndoStatusView {
+  const progress = undoProgress(operation, tn);
   const { state } = operation;
+  const support = (code: string, detail?: string, entry?: string) => [
+    detail ? t("placeEnding.statusSupport", { code, detail }) : t("placeEnding.statusSupportCode", { code }),
+    ...(entry ? [t("placeEnding.statusAttentionEntry", { entry })] : []),
+  ];
   switch (state.kind) {
     case "pending":
     case "running":
-      return { tone: "progress", title: t("placeEnding.statusRunningTitle"), lines: [reversed, t("placeEnding.statusRunningDetail")] };
+      return { tone: "progress", title: t("placeEnding.statusRunningTitle"), lines: [progress, t("placeEnding.statusRunningDetail")], support: [] };
     case "paused":
       return { tone: "warning", title: t("placeEnding.statusPausedTitle"), lines: [
-        t(pauseReasons[state.code] ?? "placeEnding.pausedOther", { code: state.code }),
+        undoReason(state.code, t),
         t("placeEnding.statusPausedRetry", { time: formatDateTime(language, state.retryAt, timeZone) }),
-        reversed,
-      ] };
+        progress,
+      ], support: support(state.code, state.detail) };
     case "needs_attention":
       return { tone: "warning", title: t("placeEnding.statusAttentionTitle"), lines: [
-        operation.hasReversedEntries ? reversed : t("placeEnding.statusAttentionNothing"),
+        undoReason(state.code, t),
+        operation.hasReversedEntries ? progress : t("placeEnding.statusAttentionNothing"),
         t(operation.hasReversedEntries ? "placeEnding.statusAttentionPartial" : "placeEnding.statusAttentionUntouched"),
-        t("placeEnding.statusAttentionDetail", { code: state.code, detail: state.detail }),
-        ...(state.journalEntryId ? [t("placeEnding.statusAttentionEntry", { entry: state.journalEntryId })] : []),
-      ] };
+      ], support: support(state.code, state.detail, state.journalEntryId) };
     case "aborted":
-      return { tone: "done", title: t("placeEnding.statusAbortedTitle"),
-        lines: [t("placeEnding.statusAbortedDetail", { date: formatLongDate(language, state.abortedAt, timeZone) })] };
+      return { tone: "done", title: t("placeEnding.statusAbortedTitle"), lines: [
+        t("placeEnding.statusAbortedDetail", { date: formatLongDate(language, state.abortedAt, timeZone) }),
+        ...(state.defaultRestored ? [t("placeEnding.abortDefaultRestored", { name })]
+          : operation.replacementDefaultFinancialAccountProfileId ? [t("placeEnding.abortDefaultKept")] : []),
+      ], support: [] };
     case "done":
       return { tone: "done", title: t("placeEnding.statusDoneTitle"),
-        lines: [t("placeEnding.statusDoneDetail", { date: formatLongDate(language, state.completedAt, timeZone) }), reversed] };
+        lines: [t("placeEnding.statusDoneDetail", { date: formatLongDate(language, state.completedAt, timeZone) }), progress], support: [] };
   }
+}
+
+/** What the Undo began with, from its own receipt rather than a preview of a ledger it is already changing. */
+export function undoStartedLines(operation: UndoOperation, { t, tn, language }: Translator, timeZone: string) {
+  const date = formatLongDate(language, operation.startedAt, timeZone);
+  const started = operation.startedPreview;
+  if (!started || operation.totalEntriesToReverse === undefined) return { lines: [t("placeEnding.startedLegacy", { date })], places: [] };
+  const month = started.currentMonthExpenseChange.minorUnits !== 0 || started.currentMonthIncomeChange.minorUnits !== 0;
+  return {
+    lines: [
+      tn("placeEnding.startedSummary", operation.totalEntriesToReverse, { date }),
+      ...(month ? [t("placeEnding.undoMonth", { expense: signedMoney(started.currentMonthExpenseChange), income: signedMoney(started.currentMonthIncomeChange) })] : []),
+    ],
+    places: started.otherPlaces.map((place) => ({ id: place.financialAccountProfileId, name: place.name, change: signedMoney(place.balanceChange) })),
+  };
 }
 
 type PostedEntry = FunctionReturnType<typeof api.accounting.postedEntry>;

@@ -10,9 +10,11 @@ import { EmojiSheet } from "../src/features/places/EmojiSheet";
 import { accountEmoji, accountKinds, placeTitle, trackingDate } from "../src/features/places/model";
 import { RenameSheet } from "../src/features/places/RenameSheet";
 import { usePlaceStyles } from "../src/features/places/styles";
-import { everyPlace } from "../src/features/placeEnding/model";
+import { everyPlace, refusalMessage, refusalOf, type UndoOperation } from "../src/features/placeEnding/model";
 import { UndoStatusCard, useUndoStatus } from "../src/features/placeEnding/UndoStatus";
-import { useT } from "../src/i18n";
+import { useFrozenCommand } from "../src/features/useFrozenCommand";
+import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
+import { formatLongDate, useT } from "../src/i18n";
 import { Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
 
 function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
@@ -28,14 +30,20 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, ...everyPlace });
   const recent = useRecentActivity(workspaceId, 3, profileId);
   const translator = useT();
-  const { t } = translator;
+  const { t, language } = translator;
   const changeLook = useAction(api.accounting.changeAccountLook);
+  const reportFailure = useDeviceAccessFailure();
+  const [aborted, setAborted] = useState<UndoOperation | null>(null);
+  const abort = useFrozenCommand({ send: useAction(api.accounting.abortUndoPlace), reportFailure,
+    onDone: (receipt: { operation: UndoOperation }) => setAborted(receipt.operation) });
   const rename = useAction(api.accounting.renameAccount);
   const [emoji, setEmoji] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const account = activity?.accounts.find((a) => a.financialAccountProfileId === profileId);
-  const status = profiles?.find((profile) => profile.id === profileId)?.status;
+  const profile = profiles?.find((item) => item.id === profileId);
+  const status = profile?.status;
+  const endedOn = profile?.endedAt === undefined ? null : formatLongDate(language, profile.endedAt, timeZone);
   const open = status === "open";
   const openCount = profiles?.filter((profile) => profile.status === "open").length ?? 0;
   const undo = useUndoStatus(workspaceId, profileId, status === "undoing" || status === "undone");
@@ -56,8 +64,14 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
         {open && profileId === defaultProfileId && openCount > 1 &&
           <Text style={[styles.badge, { alignSelf: "flex-start" }]}>{t("workspace.defaultBadge")}</Text>}
       </View>
+      {aborted && open && <UndoStatusCard operation={aborted} name={account.name} timeZone={timeZone} />}
+      {endedOn && <Text style={ui.title}>{t(status === "closed" ? "placeEnding.closedOn" : "placeEnding.undoneOn", { date: endedOn })}</Text>}
       {status === "closed" && <Text style={ui.body}>{t("placeEnding.accountClosed")}</Text>}
-      {(status === "undoing" || status === "undone") && (undo ? <UndoStatusCard operation={undo} timeZone={timeZone} />
+      {(status === "undoing" || status === "undone") && (undo ? <UndoStatusCard operation={undo} name={account.name} timeZone={timeZone}
+        abort={{ busy: abort.busy, uncertain: abort.state.name === "uncertain",
+          error: abort.state.name === "uncertain" ? t("placeEnding.abortUncertain")
+            : abort.state.name === "open" && abort.state.refusal ? abortRefusal(abort.state.refusal.code, translator) : "",
+          onAbort: () => { void abort.submit(() => ({ workspaceId, operationId: undo.id })); } }} />
         : undo === undefined ? <ActivityIndicator accessibilityLabel={t("placeEnding.loading")} /> : null)}
       {status === "undone" && <Text style={ui.body}>{t("placeEnding.accountUndone")}</Text>}
       {status === "undoing" && <Text style={ui.body}>{t("placeEnding.accountUndoing")}</Text>}
@@ -85,6 +99,11 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
     </> : ready ? <Text style={ui.muted}>{t("places.accountNotFound")}</Text> : <ActivityIndicator accessibilityLabel={t("places.accountLoading")} />}
   </Screen>;
 }
+function abortRefusal(code: string, translator: ReturnType<typeof useT>) {
+  return code === "place_undo_abort_forbidden" ? translator.t("placeEnding.abortForbidden")
+    : refusalMessage({ code, blocker: null }, "undo", translator);
+}
+
 export default function AccountRoute() {
   const defaults = usePersonalDefaults();
   const { profileId } = useLocalSearchParams<{ profileId?: string }>();
