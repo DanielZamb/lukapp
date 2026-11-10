@@ -7,7 +7,15 @@ import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Screen } from "../../ui/core";
 import { api } from "../api";
-import { movedCopy, recoveryMoney, type RecoveryCandidate } from "./model";
+import {
+  movedCopy,
+  openCancelledPlan,
+  recoveryMoney,
+  type RecoveryCandidate,
+  type RecoveryContribution,
+  type RecoveryPlanView,
+} from "./model";
+import { RecoveryCancelScreen, RecoveryCorrectScreen } from "./RecoveryLifecycleScreens";
 import {
   RecoveryActivated,
   RecoveryCandidates,
@@ -16,17 +24,23 @@ import {
   RecoveryMoved,
   RecoveryPlanList,
   RecoveryPlanScreen,
+  type RecoveryPlanNotice,
 } from "./RecoveryScreens";
 import { useRecoveryEditor, type RecoveryEditorSeed } from "./useRecoveryEditor";
+import { useRecoveryCancel, useRecoveryCorrection } from "./useRecoveryLifecycle";
 import { useRecoveryMove } from "./useRecoveryMove";
 
+type CandidatesView = { name: "candidates"; parentPlanId: string | null };
+type PlanView = { name: "plan"; id: string; notice?: RecoveryPlanNotice };
 type View =
   | { name: "entry" }
-  | { name: "candidates"; parentPlanId: string | null }
-  | { name: "draft"; key: string; candidate: RecoveryCandidate; parentPlanId: string | null }
+  | CandidatesView
+  | { name: "draft"; key: string; candidate: RecoveryCandidate; replacesPlanId: string | null; from: CandidatesView | PlanView }
   | { name: "activated"; title: string; installmentMinorUnits: number; currency: string; activationMonth: string }
-  | { name: "plan"; id: string }
+  | PlanView
   | { name: "move"; key: string; id: string }
+  | { name: "cancel"; key: string; id: string }
+  | { name: "correct"; key: string; id: string; contributionId: string }
   | {
     name: "moved";
     planId: string;
@@ -72,8 +86,9 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
           currency: board.currency,
           candidate: view.candidate,
           destinations: board.destinations,
+          replacesPlanId: view.replacesPlanId,
         }}
-        onClose={() => setView({ name: "candidates", parentPlanId: view.parentPlanId })}
+        onClose={() => setView(view.from)}
         onSaved={(receipt) => {
           refresh(Crypto.randomUUID());
           setView({
@@ -136,16 +151,70 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
       />
     );
   }
+  if (view.name === "cancel") {
+    const plan = board.plans.find((item) => item.id === view.id);
+    if (!plan) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    return (
+      <Cancel
+        key={view.key}
+        workspaceId={workspaceId}
+        plan={plan}
+        onClose={() => setView({ name: "plan", id: plan.id })}
+        onCancelled={() => {
+          refresh(Crypto.randomUUID());
+          setView({ name: "plan", id: plan.id, notice: "cancelled" });
+        }}
+      />
+    );
+  }
+  if (view.name === "correct") {
+    const plan = board.plans.find((item) => item.id === view.id);
+    const contribution = plan?.contributionHistory.find((item) => item.id === view.contributionId);
+    if (!plan || !contribution) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    return (
+      <Correct
+        key={view.key}
+        workspaceId={workspaceId}
+        plan={plan}
+        plans={board.plans}
+        contribution={contribution}
+        onClose={() => setView({ name: "plan", id: plan.id })}
+        onCorrected={() => {
+          refresh(Crypto.randomUUID());
+          setView({ name: "plan", id: plan.id, notice: "corrected" });
+        }}
+      />
+    );
+  }
   if (view.name === "plan" || (view.name === "entry" && board.plans.length === 1)) {
     const plan = view.name === "plan" ? board.plans.find((item) => item.id === view.id) : board.plans[0];
     if (!plan) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    const replacement = board.candidates.find((item) => item.journalEntryId === plan.sourceJournalEntryId) ?? null;
     return (
       <RecoveryPlanScreen
         plan={plan}
+        plans={board.plans}
         month={board.currentMonth}
+        timeZone={timeZone}
+        replacement={replacement}
+        notice={view.name === "plan" ? view.notice : undefined}
         onBack={back}
         onMove={() => { interact(); setView({ name: "move", key: Crypto.randomUUID(), id: plan.id }); }}
         onFind={() => setView({ name: "candidates", parentPlanId: plan.id })}
+        onCancel={() => { interact(); setView({ name: "cancel", key: Crypto.randomUUID(), id: plan.id }); }}
+        onReplace={() => {
+          if (!replacement) return;
+          interact();
+          setView({
+            name: "draft", key: Crypto.randomUUID(), candidate: replacement,
+            replacesPlanId: plan.id, from: { name: "plan", id: plan.id },
+          });
+        }}
+        onPlan={(id) => { interact(); setView({ name: "plan", id }); }}
+        onFix={(contributionId) => {
+          interact();
+          setView({ name: "correct", key: Crypto.randomUUID(), id: plan.id, contributionId });
+        }}
       />
     );
   }
@@ -164,7 +233,11 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
       onBack={back}
       onStart={(candidate) => {
         interact();
-        setView({ name: "draft", key: Crypto.randomUUID(), candidate, parentPlanId });
+        setView({
+          name: "draft", key: Crypto.randomUUID(), candidate,
+          replacesPlanId: openCancelledPlan(board.plans, candidate.journalEntryId)?.id ?? null,
+          from: { name: "candidates", parentPlanId },
+        });
       }}
     />
   );
@@ -188,6 +261,7 @@ function Draft({
       candidate={seed.candidate}
       currency={seed.currency}
       destinations={seed.destinations}
+      replacing={!!seed.replacesPlanId}
       {...editor}
       onMonths={(count) => { interact(); editor.onMonths(count); }}
       onAmount={(value) => { interact(); editor.onAmount(value); }}
@@ -224,6 +298,62 @@ function Move({
       onSource={(id) => { interact(); move.onSource(id); }}
       onAmount={(value) => { interact(); move.onAmount(value); }}
       submit={async () => { interact(); await move.submit(); }}
+      onBack={back}
+    />
+  );
+}
+
+function Cancel({
+  workspaceId, plan, onClose, onCancelled,
+}: {
+  workspaceId: string;
+  plan: RecoveryPlanView;
+  onClose: () => void;
+  onCancelled: () => void;
+}) {
+  const cancel = useAction(api.savingsRecovery.cancelPlan);
+  const reportFailure = useDeviceAccessFailure();
+  const interact = useLocalEntryInteraction();
+  const form = useRecoveryCancel({ workspaceId, plan }, { cancel, reportFailure, newKey: Crypto.randomUUID, onCancelled });
+  const back = () => { if (form.canDismiss) onClose(); };
+  useRecoveryBack(back);
+  return (
+    <RecoveryCancelScreen
+      plan={plan}
+      {...form}
+      onReason={(value) => { interact(); form.onReason(value); }}
+      onConfirm={() => { interact(); void form.submit(); }}
+      onBack={back}
+    />
+  );
+}
+
+function Correct({
+  workspaceId, plan, plans, contribution, onClose, onCorrected,
+}: {
+  workspaceId: string;
+  plan: RecoveryPlanView;
+  plans: RecoveryPlanView[];
+  contribution: RecoveryContribution;
+  onClose: () => void;
+  onCorrected: () => void;
+}) {
+  const correct = useAction(api.savingsRecovery.correctContribution);
+  const reportFailure = useDeviceAccessFailure();
+  const interact = useLocalEntryInteraction();
+  const form = useRecoveryCorrection({ workspaceId, plan, plans, contribution }, {
+    correct, reportFailure, newKey: Crypto.randomUUID, onCorrected,
+  });
+  const back = () => { if (form.canDismiss) onClose(); };
+  useRecoveryBack(back);
+  return (
+    <RecoveryCorrectScreen
+      plan={plan}
+      contribution={contribution}
+      {...form}
+      onTarget={(target) => { interact(); form.onTarget(target); }}
+      onReason={(value) => { interact(); form.onReason(value); }}
+      onSave={() => { interact(); void form.submit(); }}
       onBack={back}
     />
   );

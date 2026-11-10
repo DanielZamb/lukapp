@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
 import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
+import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
 import { parseMoney } from "../money";
 import {
@@ -23,6 +24,7 @@ export type RecoveryEditorSeed = {
   currency: string;
   candidate: RecoveryCandidate;
   destinations: RecoveryPlace[];
+  replacesPlanId?: string | null;
 };
 export type RecoveryEditorTransport = {
   save: (request: Request) => Promise<Receipt>;
@@ -31,8 +33,15 @@ export type RecoveryEditorTransport = {
   onSaved: (receipt: Receipt) => void;
 };
 const rejection = z.object({ kind: z.literal("recovery"), code: z.string() });
+const replacementRefusals: Record<string, MessageKey> = {
+  replacement_already_exists: "planning.replacementExists",
+  replacement_plan_not_found: "planning.replacementUnavailable",
+  replacement_plan_not_cancelled: "planning.replacementUnavailable",
+  replacement_expense_mismatch: "planning.replacementUnavailable",
+};
 
 export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryEditorTransport) {
+  const { t } = useT();
   const defaultDestination = seed.destinations.find((place) => place.productKind === "savingsAccount")
     ?? seed.destinations[0] ?? null;
   const [installmentCount, setInstallmentCount] = useState<MonthCount>(DEFAULT_INSTALLMENT_COUNT);
@@ -68,6 +77,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
         installmentCount,
         installmentMinorUnits: suggestion.installmentMinorUnits,
         idempotencyKey: transport.newKey(),
+        ...(seed.replacesPlanId ? { replacesPlanId: seed.replacesPlanId } : {}),
       };
       request.current = payload;
       setPending(true);
@@ -82,9 +92,11 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
       if (parsed.success) {
         request.current = null;
         setPending(false);
+        const replacement = replacementRefusals[parsed.data.code];
         setError(parsed.data.code === "expense_already_recovered"
           ? "This expense already has a recovery plan."
-          : "The plan was not activated. Check the monthly amount and destination, then try again.");
+          : replacement ? t(replacement)
+            : "The plan was not activated. Check the monthly amount and destination, then try again.");
       } else setError("Could not confirm activation. Retry to safely check the same plan.");
     } finally {
       submitting.current = false;

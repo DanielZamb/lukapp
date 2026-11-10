@@ -95,3 +95,36 @@ export function movedCopy(input: {
   const counted = recoveryMoney({ currency: input.currency, minorUnits: input.countedMinorUnits });
   return `${counted} counted toward ${input.title}. ${recovered}`;
 }
+
+export type RecoveryContribution = RecoveryPlanView["contributionHistory"][number];
+export const REASON_LIMIT = 1000;
+
+export function isCancellable(plan: Pick<RecoveryPlanView, "status" | "remainingMinorUnits">) {
+  return (plan.status === "active" || plan.status === "suspended") && plan.remainingMinorUnits > 0;
+}
+
+export function isEnded(plan: Pick<RecoveryPlanView, "status">) {
+  return plan.status === "cancelled" || plan.status === "completed";
+}
+
+export function openCancelledPlan(plans: RecoveryPlanView[], sourceJournalEntryId: string) {
+  return plans.find((plan) => plan.status === "cancelled" && !plan.replacedByPlanId
+    && plan.sourceJournalEntryId === sourceJournalEntryId) ?? null;
+}
+
+export function correctionTargets(
+  plans: RecoveryPlanView[],
+  from: RecoveryPlanView,
+  contribution: Pick<RecoveryContribution, "amountMinorUnits" | "contributionDate">,
+) {
+  return plans.filter((plan) => plan.id !== from.id
+    && plan.status === "active"
+    && plan.destinationFinancialAccountProfileId === from.destinationFinancialAccountProfileId
+    && plan.remainingMinorUnits >= contribution.amountMinorUnits
+    && plan.activationMonth <= contribution.contributionDate.slice(0, 7));
+}
+
+export function contributionsNewestFirst(history: RecoveryContribution[]) {
+  return history.slice().sort((a, b) => b.contributionDate.localeCompare(a.contributionDate)
+    || b.recordedAt - a.recordedAt || b.id.localeCompare(a.id));
+}
