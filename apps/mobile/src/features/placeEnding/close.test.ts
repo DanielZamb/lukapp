@@ -416,7 +416,7 @@ test("a refusal names the blocker from its context and a later attempt is a new 
   expect(ui.alerts()).toEqual(["It has a movement dated in the future The latest is dated November 30, 2026. Wait until that day, or reverse that movement first."]);
   expect(ui.has("Back")).toBe(true);
   await ui.press("Close Wallet");
-  expect(ui.alerts()).toEqual(["The balance changed meanwhile. Check that the amounts add up to the whole balance."]);
+  expect(ui.alerts()).toEqual(["The amounts don't add up to the whole balance. Check them and try again."]);
   expect(remote.close.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-1", "key-2"]);
 });
 
@@ -499,7 +499,7 @@ test("a refusal clears once the person goes back to change their answer", async 
   await ui.press("Close Wallet");
   await ui.press("I don't know / adjustment");
   await ui.press("Close Wallet");
-  expect(ui.alerts()).toEqual(["The balance changed meanwhile. Check that the amounts add up to the whole balance."]);
+  expect(ui.alerts()).toEqual(["The amounts don't add up to the whole balance. Check them and try again."]);
   await systemBack();
   await ui.press("Review");
   expect(ui.alerts()).toEqual([]);

@@ -307,7 +307,7 @@ test.each([
     detail: "“Laptop” already has contributions for an expense paid from this place. Reversing it would break that plan, so close this place instead." },
   { blocker: { code: "place_recovery_destination", plans: [{ id: "p", title: "Emergency" }] }, closeInstead: false,
     title: "A Savings recovery plan uses it",
-    detail: "“Emergency” save money into this place. Finish or cancel them in Savings recovery before undoing it." },
+    detail: "“Emergency” save money into this place. Cancel them in Savings recovery before undoing it." },
   { blocker: { code: "place_undo_ended_counterparty", places: [{ id: "old", name: "Old card" }] }, closeInstead: true,
     title: "A movement touches a closed place",
     detail: "Some movements also touch Old card, which is already closed, so they can't be reversed. Close this place instead." },

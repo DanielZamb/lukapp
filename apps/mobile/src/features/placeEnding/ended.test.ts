@@ -143,7 +143,7 @@ test.each([
   { name: "needs attention with nothing reversed", status: "undoing" as const,
     operation: operation({ kind: "needs_attention", code: "category_not_found", detail: "Category missing", journalEntryId: "j7" }),
     shown: ["Needs attention", "A movement uses a category that can't be reversed.", "No movement has been reversed yet.",
-      "Your movements are as they were, but the place stays locked until it's reviewed.", ...startedLines,
+      "Your movements are as they were, but the place stays locked until the problem is fixed or you cancel the undo.", ...startedLines,
       "For support: category_not_found. Category missing", "Movement: j7",
       "Nothing has been reversed, so you can cancel this undo. Wallet becomes an open place again, with its movements as they were."] },
   { name: "needs attention after reversing some", status: "undoing" as const,
@@ -249,7 +249,7 @@ test("a cancel whose outcome is unknown retries the same request, and a refusal 
   expect(texts()).toContain("We couldn't confirm whether the undo was cancelled. Retry: we send the same request and nothing happens twice.");
   await act(async () => abortButton().props.onPress());
   expect(state.abort.mock.calls).toEqual([[{ workspaceId: "ws", operationId: "op" }], [{ workspaceId: "ws", operationId: "op" }]]);
-  expect(texts()).toContain("It can't be cancelled anymore: a movement was already reversed, or it's no longer stopped for attention.");
+  expect(texts()).toContain("It can't be cancelled. Only the person who started this undo can cancel it, and only while it's stopped before reversing anything.");
 });
 
 test("the Places list counts open Places, follows an Undo's progress and lists ended Places with the day they ended", async () => {
