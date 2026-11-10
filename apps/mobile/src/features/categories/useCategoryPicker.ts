@@ -2,6 +2,7 @@ import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { useAction, useQuery } from "convex/react";
 import { useRef, useState } from "react";
+import { useT } from "../../i18n";
 import { api } from "../api";
 import { useNatureSuggestion } from "./useNatureSuggestion";
 import { defaultCategoryStyle, selectionKey } from "./model";
@@ -39,6 +40,7 @@ export function useCategoryPicker(
   mode: CategoryPickerMode,
   onClose: () => void,
 ) {
+  const { t } = useT();
   const recordInteraction = useLocalEntryInteraction();
   const reportFailure = useDeviceAccessFailure();
   const categories = useQuery(
@@ -71,14 +73,14 @@ export function useCategoryPicker(
           key: selectionKey(s),
           name:
             s.kind === "preset"
-              ? (presets?.find((p) => p.id === s.presetId)?.name ?? "Category")
+              ? (presets?.find((p) => p.id === s.presetId)?.name ?? t("categories.pickerTitle"))
               : s.name,
           style: s.style,
           selected: true,
         }));
   const options = mode.kind === "posting" && knownOptions && categories
     ? [...knownOptions, ...mode.value.ids.filter((id) => !categories.some((category) => category.id === id))
-      .map((id) => ({ key: id, name: "Unavailable category", style: defaultCategoryStyle, selected: true }))]
+      .map((id) => ({ key: id, name: t("categories.unavailableCategory"), style: defaultCategoryStyle, selected: true }))]
     : knownOptions;
   function back() {
     if (!saving.current) {
@@ -167,7 +169,7 @@ export function useCategoryPicker(
         if (!answer) return;
         if (answer === "stillMine" || answer === "payDebt") {
           if (mode.kind !== "posting" || !mode.onAccountSetup?.({ name: editor.name.trim(), answer, style: editor.style })) {
-            setError("Account setup is unavailable here. Keep this editor open and add the place from Places.");
+            setError(t("categories.errorAccountSetupUnavailable"));
             return;
           }
           setEditor(null);
@@ -211,9 +213,7 @@ export function useCategoryPicker(
       }
     } catch (error) {
       if (reportFailure(error)) return;
-      setError(
-        "Could not save this category. Try again.",
-      );
+      setError(t("categories.errorSaveCategory"));
     } finally {
       saving.current = false;
       setBusy(false);

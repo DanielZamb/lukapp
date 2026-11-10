@@ -18,7 +18,7 @@ export function HistoryListRow({ row, onEntry, isFirst, isLast }: {
     style={({ pressed }) => [styles.row, isFirst && styles.first, isLast && styles.last, pressed && styles.pressed]}>
     <View style={styles.copy}>
       <Text numberOfLines={layout.reflow ? undefined : 1} style={styles.title}>{row.title}</Text>
-      <Text numberOfLines={layout.reflow ? undefined : 1} style={styles.subtitle}>{row.subtitle}</Text>
+      <Text numberOfLines={layout.reflow ? undefined : 2} style={styles.subtitle}>{row.subtitle}</Text>
     </View>
     <Text numberOfLines={layout.reflow ? undefined : 1} style={[styles.amount, row.amount.minorUnits > 0 && { color: theme.primary }]}>{row.amountLabel}</Text>
   </Pressable>;

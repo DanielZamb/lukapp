@@ -51,6 +51,7 @@ vi.mock("../activity", () => ({
 import AccountRoute from "../../../app/account";
 import { LanguageProvider } from "../../i18n";
 import { historyListRow } from "../history/listModel";
+import { createTranslator } from "../../../../../src/i18n";
 
 const daily: Place = { financialAccountProfileId: "daily", name: "Daily", nature: "Asset", productKind: "bankAccount",
   trackingFrom: "2026-09-24", balance: { currency: "COP", minorUnits: 10000 } };
@@ -263,8 +264,8 @@ test("history resolves a renamed place by its unchanged id", () => {
     id: "1", title: "Lunch", date: "2026-10-17", detail: "Food", userCategories: [], financialAccountProfileId: "daily",
     reversed: false, amount: { currency: "COP", minorUnits: -150000 },
   };
-  expect(historyListRow(row, [], [{ id: "daily", name: "Daily" }], "2026-10-18").placeName).toBe("Daily");
-  expect(historyListRow(row, [], [{ id: "daily", name: "Everyday" }], "2026-10-18").placeName).toBe("Everyday");
+  expect(historyListRow(row, [], [{ id: "daily", name: "Daily" }], "2026-10-18", createTranslator("en")).placeName).toBe("Daily");
+  expect(historyListRow(row, [], [{ id: "daily", name: "Everyday" }], "2026-10-18", createTranslator("en")).placeName).toBe("Everyday");
 });
 
 test.each([

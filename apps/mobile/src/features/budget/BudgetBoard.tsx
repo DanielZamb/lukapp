@@ -6,6 +6,7 @@ import type { ReadableLayout } from "../../ui/layout";
 import { Header, PrimaryButton, Screen, SecondaryButton, useUi, useTheme, useThemeMode } from "../../ui/core";
 import { categoryOutline } from "../categories/appearance";
 import { font, fontSize, radius, spacing } from "../../ui/tokens";
+import { useT } from "../../i18n";
 import { formatMoney } from "../money";
 import { compactAmount, jarPresentation, monthLabel, nextAction, type BudgetJar } from "./model";
 
@@ -42,19 +43,21 @@ export function BudgetBoard(props: BudgetBoardProps) {
   const theme = useTheme();
   const layout = useReadableLayout();
   const styles = useMemo(() => boardStyles(theme, layout), [theme, layout]);
-  const action = nextAction(props.jars, props.month);
+  const translator = useT();
+  const { t, language } = translator;
+  const action = nextAction(props.jars, props.month, translator);
   return (
     <Screen contentStyle={styles.page}>
-      <Header title="Budgets" eyebrow={monthLabel(props.month, "month").toUpperCase()} onBack={props.onBack} />
+      <Header title={t("budget.boardTitle")} eyebrow={monthLabel(props.month, "month", language).toLocaleUpperCase(translator.locale)} onBack={props.onBack} />
       <PrimaryButton label={action.label} onPress={() => action.kind === "edit" ? props.onEdit(action.jar) : props.onAdd()} />
-      {props.saved && <Text accessibilityRole="alert" style={ui.body}>Budget saved</Text>}
+      {props.saved && <Text accessibilityRole="alert" style={ui.body}>{t("budget.saved")}</Text>}
       <View style={styles.grid}>
         {props.jars.map((jar) => (
           <Jar key={jar.category.id} jar={jar} currency={props.currency}
             color={props.categoryColors.get(jar.category.id) ?? theme.primary} onPress={() => props.onEdit(jar)} />
         ))}
       </View>
-      {props.jars.length > 0 && props.canAdd && <SecondaryButton label="Set another limit" onPress={props.onAdd} />}
+      {props.jars.length > 0 && props.canAdd && <SecondaryButton label={t("budget.setAnother")} onPress={props.onAdd} />}
     </Screen>
   );
 }
@@ -64,13 +67,14 @@ function Jar({ jar, currency, color, onPress }: { jar: BudgetJar; currency: stri
   const mode = useThemeMode();
   const layout = useReadableLayout();
   const styles = useMemo(() => boardStyles(theme, layout), [theme, layout]);
+  const { t, language } = useT();
   const { over, amount, fill } = jarPresentation(jar);
   const value = formatMoney({ currency, minorUnits: amount });
   const limit = formatMoney({ currency, minorUnits: jar.limitMinorUnits });
   const spent = formatMoney({ currency, minorUnits: jar.consumptionMinorUnits });
   return (
     <Pressable accessibilityRole="button"
-      accessibilityLabel={`${jar.category.name}: ${value} ${over ? "over a limit of" : "left of"} ${limit}. ${spent} spent. Edit Budget.`}
+      accessibilityLabel={t(over ? "budget.jarA11yOver" : "budget.jarA11yLeft", { name: jar.category.name, amount: value, limit, spent })}
       onPress={onPress} style={({ pressed }) => [styles.jar, {
         borderColor: over ? theme.danger : categoryOutline(color, mode),
         backgroundColor: over ? `${theme.danger}18` : theme.secondary,
@@ -79,7 +83,7 @@ function Jar({ jar, currency, color, onPress }: { jar: BudgetJar; currency: stri
       <Text style={styles.emoji}>{jar.category.emoji}</Text>
       <Text style={styles.name}>{jar.category.name}</Text>
       <Text style={[styles.amount, { color: over ? theme.danger : theme.foreground }]}>
-        {compactAmount(amount, currency)} {over ? "over" : "left"}
+        {t(over ? "budget.jarOver" : "budget.jarLeft", { amount: compactAmount(amount, currency, language) })}
       </Text>
     </Pressable>
   );

@@ -1,4 +1,7 @@
 import { createElement } from "react";
+import { createTranslator } from "../../../../../src/i18n";
+
+const english = createTranslator("en");
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
 import { ConvexError } from "convex/values";
@@ -21,7 +24,7 @@ afterEach(async () => {
 async function open(api: ReversalTransport, id = "entry") {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let result: ReturnType<typeof useReversal> | undefined;
-  function Harness({ entryId }: { entryId: string }) { result = useReversal("workspace", entryId, api); return null; }
+  function Harness({ entryId }: { entryId: string }) { result = useReversal("workspace", entryId, api, english); return null; }
   await act(async () => { root = create(createElement(Harness, { entryId: id })); });
   return {
     current: () => { if (!result) throw new Error("Hook not mounted"); return result; },

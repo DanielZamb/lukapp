@@ -2,6 +2,7 @@ import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { Choice, Header, PrimaryButton, SecondaryButton, useUi, useTheme } from "../../ui/core";
+import { useT } from "../../i18n";
 import { spacing } from "../../ui/tokens";
 import type { BudgetCategory } from "./model";
 
@@ -32,6 +33,7 @@ export type BudgetEditorSheetProps = {
 export function BudgetEditorSheet(props: BudgetEditorSheetProps) {
   const ui = useUi();
   const theme = useTheme();
+  const { t, locale } = useT();
   const sheet = useRef<BottomSheetModal>(null);
   const active = useRef(false);
   useLayoutEffect(() => {
@@ -48,11 +50,11 @@ export function BudgetEditorSheet(props: BudgetEditorSheetProps) {
       onDismiss={() => { if (active.current) props.onDismiss(); }} backgroundStyle={{ backgroundColor: theme.background }}>
       <BottomSheetScrollView keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: spacing.xxl, gap: spacing.xl }}>
-        <Header title={props.title} eyebrow={props.monthLabel.toUpperCase()} />
-        <Text style={ui.label}>CATEGORY</Text>
+        <Header title={props.title} eyebrow={props.monthLabel.toLocaleUpperCase(locale)} />
+        <Text style={ui.label}>{t("budget.categoryEyebrow")}</Text>
         {props.categoryFixed ? <Text style={ui.title}>{selected?.emoji} {selected?.name}</Text> : (
           <>
-            <BottomSheetTextInput accessibilityLabel="Search Budget categories" placeholder="Search categories"
+            <BottomSheetTextInput accessibilityLabel={t("budget.searchA11y")} placeholder={t("budget.searchPlaceholder")}
               placeholderTextColor={theme.mutedForeground} value={props.search} onChangeText={props.onSearch}
               editable={props.editable} style={ui.input} />
             {categories === undefined ? <ActivityIndicator /> : categories.length ? (
@@ -66,17 +68,17 @@ export function BudgetEditorSheet(props: BudgetEditorSheetProps) {
                   }}
                 />
               ))
-            ) : <Text style={ui.muted}>No categories available. Add an expense category from Post money first.</Text>}
+            ) : <Text style={ui.muted}>{t("budget.noCategories")}</Text>}
           </>
         )}
-        <Text style={ui.label}>LIMIT IN {props.currency}</Text>
-        <BottomSheetTextInput accessibilityLabel={`Budget limit in ${props.currency}`} keyboardType="decimal-pad"
+        <Text style={ui.label}>{t("budget.limitIn", { currency: props.currency })}</Text>
+        <BottomSheetTextInput accessibilityLabel={t("budget.limitInA11y", { currency: props.currency })} keyboardType="decimal-pad"
           placeholder="0" placeholderTextColor={theme.mutedForeground} value={props.amount}
           onChangeText={props.onAmount} editable={props.editable} style={[ui.input, ui.hero]} />
         <Text style={ui.muted}>{props.policyCopy}</Text>
         {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}
-        <PrimaryButton label={props.busy ? "Saving…" : props.pending ? "Retry save" : "Save Budget"} disabled={!props.canSubmit} onPress={props.onSave} />
-        {props.canDismiss && <SecondaryButton label="Cancel" onPress={() => sheet.current?.dismiss()} />}
+        <PrimaryButton label={props.busy ? t("budget.saving") : props.pending ? t("budget.retrySave") : t("budget.saveBudget")} disabled={!props.canSubmit} onPress={props.onSave} />
+        {props.canDismiss && <SecondaryButton label={t("common.cancel")} onPress={() => sheet.current?.dismiss()} />}
         <View style={{ height: spacing.xxl }} />
       </BottomSheetScrollView>
     </BottomSheetModal>

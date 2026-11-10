@@ -1,6 +1,7 @@
 import { useAction, useQuery } from "convex/react";
 import { useMemo } from "react";
 import { ActivityIndicator, Text } from "react-native";
+import { useT } from "../../i18n";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalInputLease } from "../../local-auth/localInput";
 import { lockWhenClear } from "./lockWhenClear";
@@ -11,8 +12,8 @@ import { useLocalEntryDrafts } from "../useLocalEntryDrafts";
 import { MonthCloseScreen } from "./MonthCloseScreen";
 import {
   evaluateMonthClose,
+  footerLabel,
   monthKey,
-  monthLabel,
   periodStatusOf,
   type ClosePeriod,
   type PeriodStatus,
@@ -47,6 +48,8 @@ export function MonthClose({
   onHome: () => void;
 }) {
   const ui = useUi();
+  const translator = useT();
+  const { t, language } = translator;
   const month = monthKey(requestedPeriod);
   const activity = useQuery(api.accounting.postedActivity, {
     workspaceId,
@@ -79,13 +82,14 @@ export function MonthClose({
     drafts.monthCount === null || intake.count === null
       ? null
       : evaluateMonthClose({
+          language,
           period: requestedPeriod,
           periodStatus: periodStatusOf(requestedPeriod, currentPeriod),
           draftCount: drafts.monthCount,
           candidateCount: countCandidatesInMonth([...intake.now, ...intake.wait], requestedPeriod),
         });
   const close = useMonthClose(workspaceId, readiness, transport);
-  const title = `Complete ${monthLabel(requestedPeriod)}`;
+  const title = footerLabel(requestedPeriod, translator);
   const error = drafts.error || (intake.supported === false ? "" : intake.error);
   if (error)
     return (
@@ -100,7 +104,7 @@ export function MonthClose({
     return (
       <Screen>
         <Header title={title} onBack={onBack} />
-        <ActivityIndicator accessibilityLabel="Loading month close" />
+        <ActivityIndicator accessibilityLabel={t("review.closeLoading")} />
       </Screen>
     );
   return (

@@ -8,7 +8,7 @@ import { Field, Header, PrimaryButton, SecondaryButton, useTheme, useThemeMode, 
 import { faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { formatMoney, formatMoneyInput, minorUnitFactor, currencyDisplayPrefix } from "../money";
-import { compactAmount, jarPresentation, monthLabel, type BudgetJar } from "./model";
+import { compactAmount, jarPresentation, monthInSentence, monthLabel, type BudgetJar } from "./model";
 import type { AmountIssue, useBudgetEditor } from "./useBudgetEditor";
 
 const issueMessage: Record<AmountIssue, MessageKey> = {
@@ -37,7 +37,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
   const ui = useUi();
   const theme = useTheme();
   const mode = useThemeMode();
-  const { t } = useT();
+  const { t, language, locale } = useT();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const sheet = useRef<BottomSheetModal>(null);
   const active = useRef(false);
@@ -64,8 +64,9 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
     Math.round(props.jar.consumptionMinorUnits / stepMinorUnits) * stepMinorUnits + 2 * stepMinorUnits,
   ].filter((value, index, all) => value > 0 && all.indexOf(value) === index);
   const symbol = currencyDisplayPrefix(props.currency);
-  const month = monthLabel(props.month, "month");
-  const previousMonth = monthLabel(props.previousMonth, "month");
+  const month = monthInSentence(props.month, language);
+  const previousMonth = monthInSentence(props.previousMonth, language);
+  const compact = (minorUnits: number) => `${symbol}${compactAmount(minorUnits, props.currency, language)}`;
   return (
     <BottomSheetModal ref={sheet} snapPoints={["88%"]} enableDynamicSizing={false}
       enablePanDownToClose={props.canDismiss} enableContentPanningGesture={props.canDismiss}
@@ -74,15 +75,15 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
       backdropComponent={(backdrop) => <BottomSheetBackdrop {...backdrop} opacity={0.4}
         appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={props.canDismiss ? "close" : "none"} />}>
       <BottomSheetScrollView contentContainerStyle={styles.content}>
-        <Header eyebrow={month.toUpperCase()} title={props.jar.category.name} titleStyle={styles.title} />
-        <Text style={[styles.amount, over && { color: theme.danger }]}>{`${over ? "−" : ""}${symbol}${compactAmount(amount, props.currency)}`}</Text>
-        <View accessible accessibilityRole="progressbar" accessibilityLabel={`Remaining in ${props.jar.category.name}`}
+        <Header eyebrow={monthLabel(props.month, "month", language).toLocaleUpperCase(locale)} title={props.jar.category.name} titleStyle={styles.title} />
+        <Text style={[styles.amount, over && { color: theme.danger }]}>{`${over ? "−" : ""}${compact(amount)}`}</Text>
+        <View accessible accessibilityRole="progressbar" accessibilityLabel={t("budget.sheetJarA11y", { name: props.jar.category.name })}
           accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100),
-            text: `${formatMoney({ currency: props.currency, minorUnits: amount })} ${over ? "over" : "left"}` }}
+            text: t(over ? "budget.jarOver" : "budget.jarLeft", { amount: formatMoney({ currency: props.currency, minorUnits: amount }) }) }}
           style={[styles.jar, { backgroundColor: over ? `${theme.danger}33` : `${props.color}22` }, !over && faintEdge(props.color, mode)]}>
           <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: props.color }, faintEdge(props.color, mode)]} />
         </View>
-        <Text style={styles.meta}>Stay under this month</Text>
+        <Text style={styles.meta}>{t("budget.stayUnderThisMonth")}</Text>
         <Field label={t("lifecycle.limitLabel")} InputComponent={BottomSheetTextInput}
           accessibilityLabel={t("lifecycle.limitInputA11y", { currency: props.currency })}
           keyboardType="decimal-pad" placeholder="0" value={props.amount} editable={props.editable}
@@ -93,23 +94,22 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
         <Text style={styles.meta}>{t("lifecycle.limitShortcuts")}</Text>
         <View style={styles.chips}>
           {choices.map((value) => (
-            <Pressable key={value} accessibilityRole="button" accessibilityLabel={`Limit ${symbol}${compactAmount(value, props.currency)}`}
+            <Pressable key={value} accessibilityRole="button" accessibilityLabel={t("budget.shortcutA11y", { amount: compact(value) })}
               accessibilityState={{ selected: value === props.minorUnits, disabled: !props.editable }}
               disabled={!props.editable} onPress={() => props.onLimit(value)}
               style={[styles.chip, value === props.minorUnits && styles.selectedChip]}>
-              <Text style={styles.chipText}>{symbol}{compactAmount(value, props.currency)}</Text>
+              <Text style={styles.chipText}>{compact(value)}</Text>
             </Pressable>
           ))}
         </View>
         {!issue && props.minorUnits !== props.jar.limitMinorUnits && <Text style={styles.note}>
-          {props.previousSpendMinorUnits === undefined ? `Loading ${previousMonth} spending.`
-            : `${previousMonth} ${props.jar.category.name} spent ${symbol}${compactAmount(props.previousSpendMinorUnits, props.currency)}.`}
-          {` Saving applies to ${month} and future months.`}
+          {props.previousSpendMinorUnits === undefined ? t("budget.noteLoading", { previousMonth, month })
+            : t("budget.notePrevious", { previousMonth, month, name: props.jar.category.name, amount: compact(props.previousSpendMinorUnits) })}
         </Text>}
         {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}
-        <PrimaryButton label={props.busy ? "Saving…" : props.pending ? "Retry save" : `Save ${month}`}
+        <PrimaryButton label={props.busy ? t("budget.saving") : props.pending ? t("budget.retrySave") : t("budget.saveMonth", { month })}
           disabled={!props.canSubmit} onPress={props.onSave} />
-        {props.canDismiss && <SecondaryButton label="Close" onPress={() => sheet.current?.dismiss()} />}
+        {props.canDismiss && <SecondaryButton label={t("common.close")} onPress={() => sheet.current?.dismiss()} />}
       </BottomSheetScrollView>
     </BottomSheetModal>
   );

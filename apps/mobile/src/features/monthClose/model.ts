@@ -1,4 +1,6 @@
 import { ConvexError } from "convex/values";
+import type { Language, Translator } from "../../../../../src/i18n";
+import { formatMonthName } from "../../../../../src/i18n/format";
 
 export type ClosePeriod = { year: number; month: number };
 export type PeriodStatus = "open" | "locked" | "not_opened" | "mismatch";
@@ -24,11 +26,9 @@ export function monthKey(period: ClosePeriod) {
   return `${String(period.year).padStart(4, "0")}-${String(period.month).padStart(2, "0")}`;
 }
 
-export function monthLabel(period: ClosePeriod) {
-  return new Intl.DateTimeFormat("en", {
-    month: "long",
-    timeZone: "UTC",
-  }).format(Date.UTC(period.year, period.month - 1, 1));
+/** The month as it reads inside a sentence: "October" / "octubre". */
+export function monthLabel(period: ClosePeriod, language: Language = "en") {
+  return formatMonthName(language, Date.UTC(period.year, period.month - 1, 1), { timeZone: "UTC", capitalize: false });
 }
 
 export function periodStatusOf(
@@ -41,6 +41,7 @@ export function periodStatusOf(
 }
 
 export function evaluateMonthClose(input: {
+  language: Language;
   period: ClosePeriod;
   periodStatus: PeriodStatus;
   draftCount: number;
@@ -51,7 +52,7 @@ export function evaluateMonthClose(input: {
   const blocked = !alreadyLocked && !mismatched && input.draftCount > 0;
   return {
     period: input.period,
-    monthLabel: monthLabel(input.period),
+    monthLabel: monthLabel(input.period, input.language),
     periodStatus: input.periodStatus,
     draftCount: input.draftCount,
     candidateCount: input.candidateCount,
@@ -61,62 +62,43 @@ export function evaluateMonthClose(input: {
   };
 }
 
-export function footerLabel(period: ClosePeriod) {
-  return `Complete ${monthLabel(period)}`;
+export function footerLabel(period: ClosePeriod, { t, language }: Translator) {
+  return t("review.closeTitle", { month: monthLabel(period, language) });
 }
 
-export function reviewEyebrow(readiness: MonthCloseReadiness) {
+export function reviewEyebrow(readiness: MonthCloseReadiness, { t }: Translator) {
   return readiness.blocked
-    ? "1 STEP NEEDS ATTENTION"
+    ? t("review.closeEyebrowBlocked")
     : readiness.candidateCount > 0
-      ? "CANDIDATES STILL LOCAL"
-      : "READY TO REVIEW";
+      ? t("review.closeEyebrowCandidates")
+      : t("review.closeEyebrowReady");
 }
 
-export function draftsDetail(count: number) {
-  return count ? `${count} still need review` : "All reviewed";
+export function draftsDetail(count: number, { t, tn }: Translator) {
+  return count ? tn("review.draftsPending", count) : t("review.draftsDone");
 }
 
-export function candidatesDetail(count: number) {
-  return count === 0
-    ? "None waiting"
-    : `${count} still local. Intake is not a statement.`;
+export function candidatesDetail(count: number, { t, tn }: Translator) {
+  return count === 0 ? t("review.candidatesNone") : tn("review.candidatesPending", count);
 }
 
-export function lockActionLabel(period: ClosePeriod) {
-  return `Complete and lock ${monthLabel(period)}`;
+export function lockActionLabel(period: ClosePeriod, { t, language }: Translator) {
+  return t("review.closeAction", { month: monthLabel(period, language) });
 }
 
-export function confirmDetail(readiness: MonthCloseReadiness) {
-  const lock =
-    `This review locks ${readiness.monthLabel}. It does not move money or change balances.`;
-  return readiness.candidateCount > 0
-    ? `${lock} Candidates will stay for later review.`
-    : lock;
+export function confirmDetail(readiness: MonthCloseReadiness, { t }: Translator) {
+  return t(readiness.candidateCount > 0 ? "review.closeConfirmCandidates" : "review.closeConfirm",
+    { month: readiness.monthLabel });
 }
 
-export function closedTitle(period: ClosePeriod) {
-  return `${monthLabel(period)} is complete`;
+export function closedTitle(period: ClosePeriod, { t, language }: Translator) {
+  return t("review.closedTitle", { month: monthLabel(period, language) });
 }
 
-export function closedDetail() {
-  return "The month is locked. Balances and posted activity did not change because of the close itself.";
-}
-
-export function mismatchDetail() {
-  return "This device and the workspace do not agree on the current month yet.";
-}
-
-export function lockFailureMessage(error: unknown) {
+/** The server's own message is English; only a known rejection is shown, in the reader's language. */
+export function lockFailureMessage(error: unknown, { t }: Translator) {
   const data: unknown = error instanceof ConvexError ? error.data : null;
-  if (
-    data &&
-    typeof data === "object" &&
-    "kind" in data &&
-    data.kind === "accounting" &&
-    "message" in data &&
-    typeof data.message === "string"
-  )
-    return data.message;
-  return "Could not confirm the close. Retry to lock the same month safely.";
+  if (data && typeof data === "object" && "kind" in data && data.kind === "accounting")
+    return t("review.closeRejected");
+  return t("review.closeUnknown");
 }

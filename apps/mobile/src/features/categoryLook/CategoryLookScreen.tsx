@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Header, PrimaryButton, SecondaryButton, Screen, useTheme, useThemeMode, useUi } from "../../ui/core";
 import { categoryColor, categoryOutline, faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
+import { useT } from "../../i18n";
 import { formatMoney } from "../money";
 import { remaining, remainingFill } from "../overview/model";
 import type { CategoryLookData } from "./model";
@@ -17,35 +18,36 @@ export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const mode = useThemeMode();
+  const { t } = useT();
   const color = data ? categoryColor(data.style, mode) : theme.primary;
   const left = data ? remaining(data) : null;
   const money = (minorUnits: number) => formatMoney({ currency: data?.currency ?? "COP", minorUnits }, { hideZeroDecimals: true });
   return (
     <Screen contentStyle={styles.page}>
-      <Header title={data?.name ?? "Category"} eyebrow="THIS MONTH" onBack={onBack} />
-      {data === undefined ? <ActivityIndicator accessibilityLabel="Loading category" />
-        : data === null ? <Text style={ui.muted}>This category is no longer available.</Text> : <>
+      <Header title={data?.name ?? t("categories.pickerTitle")} eyebrow={t("categories.lookEyebrow")} onBack={onBack} />
+      {data === undefined ? <ActivityIndicator accessibilityLabel={t("categories.lookLoading")} />
+        : data === null ? <Text style={ui.muted}>{t("categories.lookGone")}</Text> : <>
           <View style={styles.openAmount}>
             <View style={[styles.lookChip, { backgroundColor: `${color}24`, borderColor: categoryOutline(color, mode) }]}>
               <Text style={styles.emoji}>{data.style.emoji}</Text>
               <Text style={styles.chipText}>{data.name}</Text>
             </View>
-            <Text style={styles.muted}>Out this month</Text>
+            <Text style={styles.muted}>{t("categories.lookOutThisMonth")}</Text>
             <Text adjustsFontSizeToFit numberOfLines={1} style={[ui.hero, styles.hero]}>{money(data.spendMinorUnits)}</Text>
             {data.limitMinorUnits !== null && left !== null && <View style={styles.jarBlock}>
-              <View accessibilityRole="progressbar" accessibilityLabel="Remaining in the jar"
+              <View accessibilityRole="progressbar" accessibilityLabel={t("categories.lookJarA11y")}
                 accessibilityValue={{ min: 0, max: 100, now: Math.round(remainingFill(data) * 100) }}
                 style={[styles.jar, { backgroundColor: left < 0 ? `${theme.danger}33` : `${color}22` }, left >= 0 && faintEdge(color, mode)]}>
                 <View style={[styles.jarFill, { width: `${remainingFill(data) * 100}%`, backgroundColor: color }, faintEdge(color, mode)]} />
               </View>
               <Text style={styles.jarHint}>{left < 0
-                ? `Over the ${money(data.limitMinorUnits)} line`
-                : `${money(left)} still in the jar`}</Text>
+                ? t("categories.lookOver", { limit: money(data.limitMinorUnits) })
+                : t("categories.lookLeft", { amount: money(left) })}</Text>
             </View>}
           </View>
           <View style={styles.group}>
             {data.recent.length === 0 ? <View style={styles.row}>
-              <Text style={styles.muted}>Nothing in this category yet</Text>
+              <Text style={styles.muted}>{t("categories.lookEmpty")}</Text>
             </View> : data.recent.map((item, index) => <View key={item.id}
               style={[styles.row, index < data.recent.length - 1 && styles.rowBorder]}>
               <View style={styles.rowCopy}>
@@ -55,9 +57,9 @@ export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
               <Text style={styles.rowValue}>−{money(item.minorUnits)}</Text>
             </View>)}
           </View>
-          <PrimaryButton label={data.limitMinorUnits === null ? "Keep this under a limit" : "Change this limit"}
+          <PrimaryButton label={data.limitMinorUnits === null ? t("categories.lookSetLimit") : t("categories.lookChangeLimit")}
             trailingIcon="flag-outline" onPress={onSetLimit} />
-          {onEdit && <SecondaryButton label="Edit category" onPress={onEdit} />}
+          {onEdit && <SecondaryButton label={t("categories.lookEdit")} onPress={onEdit} />}
         </>}
     </Screen>
   );
