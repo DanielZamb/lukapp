@@ -136,3 +136,69 @@ test("rename trims names, rejects blanks and accent-insensitive duplicates, and 
   expect(await t.action(api.accounting.renameAccount, { ...args, name: "Cafe", workspaceId: workspace.id }).catch(e => e.data.code)).toBe("account_name_conflict");
   expect(await t.action(api.accounting.renameAccount, { ...args, name: "Daily" })).toEqual(daily);
 });
+
+test("Place creation and rename cap trimmed names at 80 characters without changing duplicate creation", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const args = { workspaceId: workspace.id, name: "a".repeat(81), productKind: "cash" as const };
+  await expect(t.action(api.accounting.createFinancialAccountProfile, args))
+    .rejects.toMatchObject({ data: { code: "account_name_too_long" } });
+  const place = await t.action(api.accounting.createFinancialAccountProfile, { ...args, name: ` ${"a".repeat(80)} ` });
+  expect(place.name).toBe("a".repeat(80));
+  const duplicate = await t.action(api.accounting.createFinancialAccountProfile, { ...args, name: "a".repeat(80) });
+  expect(duplicate.name).toBe("a".repeat(80));
+  expect(duplicate.id).not.toBe(place.id);
+  const rename = { workspaceId: workspace.id, financialAccountProfileId: place.id, expectedName: place.name, name: "b".repeat(81) };
+  await expect(t.action(api.accounting.renameAccount, rename)).rejects.toMatchObject({ data: { code: "account_name_too_long" } });
+  expect(await t.action(api.accounting.renameAccount, { ...rename, name: "b".repeat(80) })).toMatchObject({ id: place.id, name: "b".repeat(80) });
+});
+
+test.each(["cafe   grande", "ＣＡＦÉ　ＧＲＡＮＤＥ", "cafe\t\n grande"])("rename compares collapsed whitespace and compatibility Unicode for %s", async name => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const daily = await createDaily(t, workspace.id);
+  await t.action(api.accounting.createFinancialAccountProfile, { workspaceId: workspace.id, name: "Café Grande", productKind: "cash" });
+  await expect(t.action(api.accounting.renameAccount, { workspaceId: workspace.id, financialAccountProfileId: daily.id, expectedName: daily.name, name }))
+    .rejects.toMatchObject({ data: { code: "account_name_conflict" } });
+  expect(await t.query(api.accounting.listFinancialAccountProfiles, { workspaceId: workspace.id }))
+    .toMatchObject(expect.arrayContaining([{ ...daily }]));
+});
+
+test("legacy long Place names can be renamed and original long-name setup receipts still replay", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const args = { workspaceId: workspace.id, name: "Original", productKind: "cash" as const,
+    amount: { currency: "COP", minorUnits: 0 }, accountingDate: "2026-09-24", idempotencyKey: "legacy-setup" };
+  const setup = await t.action(api.accounting.setupFinancialAccountProfile, args);
+  const longName = "l".repeat(81);
+  await t.run(async ctx => {
+    const profileId = ctx.db.normalizeId("financialAccountProfiles", setup.financialAccountProfile.id);
+    const accountId = ctx.db.normalizeId("ledgerAccounts", setup.financialAccountProfile.ledgerAccountId);
+    const receipt = await ctx.db.query("financialAccountSetups").first();
+    if (!profileId || !accountId || !receipt) throw Error("Missing legacy setup");
+    await ctx.db.patch(profileId, { name: longName });
+    await ctx.db.patch(accountId, { name: longName });
+    await ctx.db.patch(receipt._id, { name: longName });
+  });
+  const replay = await t.action(api.accounting.setupFinancialAccountProfile, { ...args, name: longName });
+  expect(replay).toMatchObject({ replay: true, financialAccountProfile: { id: setup.financialAccountProfile.id, name: longName } });
+  const renamed = await t.action(api.accounting.renameAccount, { workspaceId: workspace.id,
+    financialAccountProfileId: setup.financialAccountProfile.id, expectedName: longName, name: "Valid" });
+  expect(renamed).toMatchObject({ id: setup.financialAccountProfile.id, name: "Valid" });
+  expect(await t.action(api.accounting.setupFinancialAccountProfile, { ...args, name: longName }))
+    .toMatchObject({ replay: true, financialAccountProfile: { id: renamed.id, name: "Valid" } });
+});
+
+test("rename and setup reject overlong new names before any writes", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await createOwnedWorkspace(t);
+  const daily = await createDaily(t, workspace.id);
+  await expect(t.action(api.accounting.renameAccount, { workspaceId: workspace.id,
+    financialAccountProfileId: daily.id, expectedName: daily.name, name: "x".repeat(81) }))
+    .rejects.toMatchObject({ data: { code: "account_name_too_long" } });
+  await expect(t.action(api.accounting.setupFinancialAccountProfile, { workspaceId: workspace.id,
+    name: "x".repeat(81), productKind: "cash", amount: { currency: "COP", minorUnits: 0 },
+    accountingDate: "2026-09-24", idempotencyKey: "overlong-setup" }))
+    .rejects.toMatchObject({ data: { code: "account_name_too_long" } });
+  expect(await t.query(api.accounting.listFinancialAccountProfiles, { workspaceId: workspace.id })).toEqual([daily]);
+});
