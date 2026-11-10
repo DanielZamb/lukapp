@@ -77,7 +77,7 @@ export function recoveryReadStore(ctx: Pick<QueryCtx, "db">, workspaceId: string
       .withIndex("by_workspace", (q) => q.eq("workspaceId", id)).collect())
       .map(({ _id, _creationTime, ...contribution }) => ({ id: _id, ...contribution })),
     listProfiles: async () => (await accounting.listProfiles(workspaceId))
-      .map((profile) => ({ ending: profile.ending, id: profile.id, workspaceId: profile.workspaceId, name: profile.name, productKind: profile.productKind })),
+      .map((profile) => ({ undoOperationId: profile.undoOperationId, ending: profile.ending, id: profile.id, workspaceId: profile.workspaceId, name: profile.name, productKind: profile.productKind })),
     getEntry: async (entryId) => {
       const entry = await accounting.getJournalEntry(entryId);
       if (!entry || entry.workspaceId !== workspaceId) return null;

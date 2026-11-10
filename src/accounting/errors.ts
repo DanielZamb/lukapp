@@ -1,4 +1,9 @@
 export const accountingErrorMessages = {
+  place_undo_in_progress: "A Place is being undone. Wait for it to finish",
+  place_recovery_covered_expenses: "A Recovery plan has contributions for an expense in this Place",
+  place_undo_current_period_locked: "Undo needs the current month to be open",
+  place_undo_operation_not_found: "Undo operation not found",
+  place_undo_balance_not_zero: "Undo could not bring the Place balance to zero",
   financial_account_profile_ended: "This Place has ended. Choose an open Place",
   place_last_open: "Keep at least one open Place",
   place_recovery_destination: "Finish or cancel the Recovery plans using this Place",

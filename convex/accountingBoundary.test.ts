@@ -19,6 +19,7 @@ const modules = import.meta.glob([
 const style = { emoji: "🛒", tone: "primary" } as const;
 function writeArgs(workspaceId = "foreign", profileId = "foreign") {
   return {
+    startUndoPlace: { workspaceId, financialAccountProfileId: profileId, idempotencyKey: "undo" },
     closePlace: { workspaceId, financialAccountProfileId: profileId, idempotencyKey: "close", lines: [] },
     changeDefaultPlace: { workspaceId, financialAccountProfileId: profileId, expectedFinancialAccountProfileId: profileId, idempotencyKey: "default" },
     changeWorkspaceTimeZone: { workspaceId, timeZone: "Pacific/Auckland", expectedTimeZone: "America/Bogota", idempotencyKey: "zone" },
@@ -63,6 +64,8 @@ function writeArgs(workspaceId = "foreign", profileId = "foreign") {
 }
 function readArgs(workspaceId: string) {
   return {
+    previewUndoPlace: { workspaceId, financialAccountProfileId: "foreign" },
+    placeUndoStatus: { workspaceId, financialAccountProfileId: "foreign" },
     placeClosure: { workspaceId, financialAccountProfileId: "foreign" },
     openWorkspace: { workspaceId },
     listFinancialAccountProfiles: { workspaceId },

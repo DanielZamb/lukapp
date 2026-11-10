@@ -7,7 +7,7 @@ const accounts: Record<string, Record<CategoryNature, string>> = {
   "us-gaap-personal@1": { Expense: "6170", Income: "4970" },
 };
 
-export async function closingAdjustmentCategory(store: AccountingStore, workspace: StoredWorkspace, nature: CategoryNature) {
+export async function closingAdjustmentCategory(store: AccountingStore, workspace: StoredWorkspace, nature: CategoryNature, displayName?: string) {
   const code = accounts[workspace.chartOfAccountsTemplate]?.[nature];
   if (!code) throw new Error("Closing Adjustment accounts missing for template");
   const categories = await store.listCategories(workspace.id);
@@ -15,11 +15,11 @@ export async function closingAdjustmentCategory(store: AccountingStore, workspac
     && category.classification.kind === "fallback" && category.classification.version === "closing-adjustment@1"
     && category.defaultPostingAccountCode === code);
   if (existing) return existing;
-  const base = nature === "Expense" ? "Closing Adjustment (expense)" : "Closing Adjustment (income)";
+  const base = displayName ?? (nature === "Expense" ? "Closing Adjustment (expense)" : "Closing Adjustment (income)");
   let name = base;
   let suffix = 2;
   while (categories.some(category => category.deletedAt === undefined && category.normalizedName === normalizeCategoryName(name)))
-    name = `${base} ${suffix++}`;
+    name = `${base.slice(0, 80 - String(suffix).length - 1)} ${suffix++}`;
   return store.insertCategory({
     workspaceId: workspace.id, name, normalizedName: normalizeCategoryName(name), nature,
     natureSource: "preset", classification: { kind: "fallback", version: "closing-adjustment@1" },

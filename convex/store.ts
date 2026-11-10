@@ -86,9 +86,10 @@ function toLedgerAccount(doc: Doc<"ledgerAccounts">): LedgerAccount {
   };
 }
 
-function toProfile(doc: Doc<"financialAccountProfiles">, ending?: StoredProfile["ending"]): StoredProfile {
+function toProfile(doc: Doc<"financialAccountProfiles">, ending?: StoredProfile["ending"], undoOperationId?: string): StoredProfile {
   return {
     ...(ending ? { ending: { act: ending.act, endedBy: ending.endedBy, occurredAt: ending.occurredAt, recordedAt: ending.recordedAt } } : {}),
+    ...(undoOperationId ? { undoOperationId } : {}),
     createdAt: doc._creationTime,
     ...(doc.createdAccountingDate ? { createdAccountingDate: doc.createdAccountingDate } : {}),
     id: doc._id,
@@ -286,7 +287,8 @@ function readStore(db: ReadDb): ReadMethods {
       const id = idFor(db, "financialAccountProfiles", profileId);
       const doc = id && (await db.get(id));
       const ending = doc && await db.query("placeEndings").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
-      return doc ? toProfile(doc, ending ?? undefined) : undefined;
+      const operation = doc && await db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
+      return doc ? toProfile(doc, ending ?? undefined, operation && operation.state.kind !== "done" ? operation._id : undefined) : undefined;
     },
 
     async listProfiles(workspaceId) {
@@ -298,7 +300,10 @@ function readStore(db: ReadDb): ReadMethods {
         .collect();
       const endings = await db.query("placeEndings").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).collect();
       const byProfile = new Map(endings.map(ending => [ending.financialAccountProfileId, ending]));
-      return docs.map(doc => toProfile(doc, byProfile.get(doc._id)));
+      return Promise.all(docs.map(async doc => {
+        const operation = await db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
+        return toProfile(doc, byProfile.get(doc._id), operation && operation.state.kind !== "done" ? operation._id : undefined);
+      }));
     },
 
     async getJournalEntry(entryId) {

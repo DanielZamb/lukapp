@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as accountingUndo from "../accountingUndo.js";
+import type * as accountingUndoValues from "../accountingUndoValues.js";
 import type * as accounting from "../accounting.js";
 import type * as accountingErrors from "../accountingErrors.js";
 import type * as accountingValues from "../accountingValues.js";
@@ -64,6 +66,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accountingUndo: typeof accountingUndo;
+  accountingUndoValues: typeof accountingUndoValues;
   accounting: typeof accounting;
   accountingErrors: typeof accountingErrors;
   accountingValues: typeof accountingValues;
