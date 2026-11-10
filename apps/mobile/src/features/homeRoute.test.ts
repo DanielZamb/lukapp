@@ -126,7 +126,7 @@ test("level 0 renders balance and prototype copy, with only the user header acti
   expect(texts()).toEqual([
     "THIS MONTH", "What you have now", "COP 8.500.000", "One pool · See this place",
     "Drafts", "Nothing waiting", "Overview", "This month, by category",
-    "What do you want to do?", "Create a place", "Another pocket for money", "Create a tx", "Post money",
+    "What do you want to do?", "Create a place", "Another pocket for money", "Add an entry", "Record an expense or income",
   ]);
   expect(root.root.findAll((node) => node.props.accessibilityRole === "progressbar")).toHaveLength(0);
   await act(async () => button("Open user and workspace").props.onPress());
@@ -173,7 +173,7 @@ test("amount opens a pan-to-close sheet, dismissal stays home, and choices open 
   await act(async () => root.root.find((node) => String(node.type) === "place-setup").props.onClose());
   expect(root.root.findAll((node) => String(node.type) === "place-setup")).toHaveLength(0);
   expect(state.push).not.toHaveBeenCalled();
-  await act(async () => button("Create a tx, Post money").props.onPress());
+  await act(async () => button("Add an entry, Record an expense or income").props.onPress());
   expect(state.push.mock.calls).toEqual([["/post"]]);
 });
 

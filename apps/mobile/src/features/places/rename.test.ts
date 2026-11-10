@@ -269,9 +269,9 @@ test("history resolves a renamed place by its unchanged id", () => {
 });
 
 test.each([
-  { lang: "en" as const, rows: { Type: "Checking", Currency: "COP", "Tracking from": "September 24, 2026" },
+  { lang: "en" as const, rows: { Type: "Checking account", Currency: "COP", "Tracking from": "September 24, 2026" },
     copy: ["PLACE", "Current balance", "Recent activity"] },
-  { lang: "es" as const, rows: { Tipo: "Cuenta bancaria", Moneda: "COP", "Seguimiento desde": "24 de septiembre de 2026" },
+  { lang: "es" as const, rows: { Tipo: "Cuenta corriente", Moneda: "COP", "Seguimiento desde": "24 de septiembre de 2026" },
     copy: ["LUGAR", "Saldo actual", "Movimientos recientes"] },
 ])("the account page reads in $lang with product kind and tracking date as app copy", async ({ lang, rows, copy }) => {
   language = lang;

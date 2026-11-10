@@ -439,7 +439,7 @@ test("an accounting rejection reopens the draft instead of deleting it", async (
   expect(api.clear).not.toHaveBeenCalled();
   expect(editor().pending).toBe(false);
   expect(editor().editable).toBe(true);
-  expect(editor().error).toBe("Locked Period");
+  expect(editor().error).toBe("That month is already closed");
   expect(editor().description).toBe("Food");
 });
 

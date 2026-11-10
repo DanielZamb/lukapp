@@ -166,7 +166,7 @@ test("the editable hero precedes one static source, destination and plan, then p
   expect(children[1].props.children[0].props.children).toBe("Amount");
   expect(children[2].type).toBe(ListGroup);
   expect(children[3].type).toBe(PrimaryButton);
-  expect(children[4].props.children).toBe("Progress changes only after this real account-to-account transfer posts.");
+  expect(children[4].props.children).toBe("Progress changes only after this real transfer between your places is posted.");
   expect(screen.findByType(PrimaryButton).props.trailingIcon).toBe("checkmark");
   await act(async () => { input.props.onChangeText("3.000,25"); });
   expect(onAmount).toHaveBeenCalledExactlyOnceWith("3.000,25");
@@ -353,7 +353,7 @@ test("Spanish proposal editor shows the range error when the monthly amount is o
   }));
   expect(screen.findByType(Header).props.eyebrow).toBe("LAPTOP REPAIR · REEMPLAZO");
   expect(visibleCopy(screen)).toEqual(expect.arrayContaining([
-    "Escribe un valor por mes entre COP 3.000 y COP 12.000.",
+    "Escribe un monto por mes entre COP 3.000 y COP 12.000.",
     "Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan recuperas justo lo del gasto, sin nada de más.",
     "Destino",
   ]));
@@ -381,7 +381,7 @@ test("Spanish plan page and Move money keep stored names and translate everythin
     ["De", "Daily"], ["Para", "Savings"], ["Cuenta para", "Laptop repair"],
   ]);
   const moveCopy = visibleCopy(move);
-  expect(moveCopy).toEqual(expect.arrayContaining(["Valor", "Valor en COP", "Registrar transferencia"]));
+  expect(moveCopy).toEqual(expect.arrayContaining(["Monto", "Monto en COP", "Registrar transferencia"]));
   expectNoEnglish(moveCopy);
 });
 

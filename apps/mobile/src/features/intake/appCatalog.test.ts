@@ -22,7 +22,7 @@ test("likely bank apps sort first, then by name", () => {
 
 test("labels are human readable", () => {
   expect(appInitial(" águila")).toBe("Á"); expect(appInitial("")).toBe("?");
-  expect(productKindLabel(t, "savingsAccount")).toBe("Savings"); expect(productKindLabel(t, "other")).toBe("Account");
-  expect(productKindLabel(createTranslator("es").t, "savingsAccount")).toBe("Ahorros");
+  expect(productKindLabel(t, "savingsAccount")).toBe("Savings account"); expect(productKindLabel(t, "other")).toBe("Account");
+  expect(productKindLabel(createTranslator("es").t, "savingsAccount")).toBe("Cuenta de ahorro");
   expect(timeZoneCity("America/Bogota")).toBe("Bogota"); expect(timeZoneCity("America/New_York")).toBe("New York");
 });

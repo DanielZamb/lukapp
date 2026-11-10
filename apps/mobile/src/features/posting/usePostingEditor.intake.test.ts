@@ -213,7 +213,7 @@ test.each(["intake", "accounting"])("an idempotency conflict from %s retains the
     await editor().submit();
   });
   expect(editor().posted).toBeNull();
-  expect(editor().error).toBe("Idempotency key already used");
+  expect(editor().error).toBe("This entry was already sent with different details");
   expect(editor().description).toBe("Groceries");
   expect(editor().amount).toBe(facts.amountText);
   expect(editor().categories).toEqual(facts.categories);
@@ -257,7 +257,7 @@ test("a definite accounting rejection fails the Candidate and never aborts a Dra
   await act(async () => {
     await editor().submit();
   });
-  expect(editor().error).toBe("Locked Period");
+  expect(editor().error).toBe("That month is already closed");
   expect(api.abort).not.toHaveBeenCalled();
 });
 

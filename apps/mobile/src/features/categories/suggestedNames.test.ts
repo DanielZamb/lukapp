@@ -11,7 +11,7 @@ test("English keeps the built-in names and Spanish suggests Colombian ones", () 
   expect(starterCategories.map((starter) => suggestedCategoryName(en, starter.key, starter.name)))
     .toEqual(starterCategories.map((starter) => starter.name));
   expect(starterCategories.map((starter) => suggestedCategoryName(es, starter.key, starter.name))).toEqual([
-    "Comida", "Transporte", "Restaurantes", "Hogar", "Salud", "Diversión",
+    "Mercado", "Transporte", "Restaurantes", "Hogar", "Salud", "Diversión",
     "Compras", "Servicios", "Familia", "Educación", "Mascotas", "Otros",
   ]);
   expect(suggestedCategoryName(es, "unknown-preset", "Server name")).toBe("Server name");

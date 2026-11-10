@@ -67,7 +67,7 @@ test("the route reads Convex with the workspace month and navigates back, all-pl
     ["budget:evaluate", { workspaceId: "workspace", month: "2026-10" }],
   ]);
   expect(texts()).toEqual(expect.arrayContaining(["Net", "$500", "Out", "$1.5K", "In", "$2K", "Food", "$1.500", "500 left"]));
-  await press("Back"); await press("Go to tx history"); await press("Food");
+  await press("Back"); await press("Go to history"); await press("Food");
   expect(provider.back).toHaveBeenCalledOnce();
   expect(provider.push.mock.calls).toEqual([["/history"], [{ pathname: "/category-look", params: { categoryId: "food" } }]]);
   provider.month = "2026-11";

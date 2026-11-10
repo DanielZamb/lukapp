@@ -61,7 +61,7 @@ test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["AED", "AED "]])("shows 
     });
     expect(texts(screen())).toEqual(expect.arrayContaining(["Net", `−${symbol}10K`, "Out", `${symbol}10K`, "In", `${symbol}0`]));
     expect(texts(button("Food"))).toEqual(["🍔", "Food", `${symbol}10.000`]);
-    await press("Go to tx history");
+    await press("Go to history");
     expect(callbacks.onHistory).toHaveBeenCalledOnce();
   } finally {
     if (formatToParts) Object.defineProperty(Intl.NumberFormat.prototype, "formatToParts", formatToParts);
@@ -99,7 +99,7 @@ test("List is default with spend, draining/flat coins, colored remaining amounts
   expect(leftText?.props.style[1].color).toBe(theme.positive);
   const coinFills = screen().findAllByType("view").filter((node) => Array.isArray(node.props.style) && node.props.style[1]?.height);
   expect(coinFills.map((node) => node.props.style[1].height)).toEqual(["80%", "100%"]);
-  await press("Back"); await press("Go to tx history"); await press("Partial");
+  await press("Back"); await press("Go to history"); await press("Partial");
   expect(callbacks.onBack).toHaveBeenCalledOnce();
   expect(callbacks.onHistory).toHaveBeenCalledOnce();
   expect(callbacks.onCategory).toHaveBeenCalledExactlyOnceWith("partial");
@@ -143,7 +143,7 @@ test("exactly spent limits have zero remaining without an over warning", async (
 test("loading keeps the header and history available, and an empty workspace has zero flow", async () => {
   await act(async () => { root = create(createElement(OverviewScreen, { data: undefined, onBack: vi.fn(), onHistory: vi.fn(), onCategory: vi.fn() })); });
   expect(screen().findAllByType(ActivityIndicator)).toHaveLength(1);
-  expect(texts(screen())).toContain("Go to tx history");
+  expect(texts(screen())).toContain("Go to history");
   await act(async () => root?.update(createElement(OverviewScreen, { data: { currency: "COP", outMinorUnits: 0, inMinorUnits: 0, categories: [] }, onBack: vi.fn(), onHistory: vi.fn(), onCategory: vi.fn() })));
   expect(screen().findAllByType(ActivityIndicator)).toHaveLength(0);
   expect(texts(screen()).filter((value) => value === "$0")).toHaveLength(3);

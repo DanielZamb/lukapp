@@ -246,7 +246,7 @@ test("a definitive rejection reopens the saved draft for correction", async () =
   });
   expect(api.abort).toHaveBeenCalledOnce();
   expect(session.get().batch.editable).toBe(true);
-  expect(session.get().batch.error).toBe("Locked Period");
+  expect(session.get().batch.error).toBe("That month is already closed");
   expect(session.get().batch.queue[0].draftId).toBe("key-1");
   expect(session.get().batch.posted).toBeNull();
 });

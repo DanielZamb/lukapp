@@ -507,7 +507,7 @@ test("a failed sign-in handoff reads in Spanish and retries", async () => {
       createElement(PrebuiltSignIn, { onSessionCreated: handoff })));
   });
   if (!root) throw new Error("Sign-in not mounted");
-  expect(JSON.stringify(root.toJSON())).toContain("No se pudo terminar el inicio de sesión. Intenta de nuevo.");
+  expect(JSON.stringify(root.toJSON())).toContain("No pudimos terminar el inicio de sesión. Intenta de nuevo.");
   await act(async () => root?.root.findByProps({ label: "Reintentar" }).props.onPress());
   expect(handoff).toHaveBeenCalledTimes(2);
 });

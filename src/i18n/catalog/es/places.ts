@@ -31,8 +31,8 @@ export const places: Messages<typeof en> = {
   accountNotFound: "No encontramos este lugar.",
   accountLoading: "Cargando el lugar",
 
-  kindBankAccount: "Cuenta bancaria",
-  kindSavingsAccount: "Ahorros",
+  kindBankAccount: "Cuenta corriente",
+  kindSavingsAccount: "Cuenta de ahorro",
   kindCash: "Efectivo",
   kindCreditCard: "Tarjeta de crédito",
   kindLoan: "Préstamo",

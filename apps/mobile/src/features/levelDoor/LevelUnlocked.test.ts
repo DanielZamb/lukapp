@@ -42,7 +42,7 @@ test.each([
   await render({ door: "account", accountName });
   expect(texts()).toEqual([
     "A second place",
-    `${name} is live. Moving money between places is now a thing, and any category can take a limit.`,
+    `${name} is ready. You can now move money between places and set a limit on any category.`,
     "Back to the month",
   ]);
   expect(root.root.findAll((node) => String(node.type) === "icon").map((node) => node.props.name)).toEqual(["checkmark", "home-outline"]);

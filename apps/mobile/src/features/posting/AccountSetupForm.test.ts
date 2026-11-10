@@ -138,10 +138,10 @@ test("Look renders the standard dimming backdrop with tap-to-close", async () =>
 
 test("Look keeps its controls and place answers after sheet animations settle", async () => {
   await mount();
-  const accountName = screen().findByProps({ accessibilityLabel: "Account name" });
+  const accountName = screen().findByProps({ accessibilityLabel: "Place name" });
   await act(async () => accountName.props.onChangeText("Trip savings"));
   const savings = screen().findAllByType("button").find((node) =>
-    node.props.accessibilityRole === "radio" && node.findByType("text").children.join("") === "Savings",
+    node.props.accessibilityRole === "radio" && node.findByType("text").children.join("") === "Savings account",
   );
   if (!savings) throw new Error("Missing Savings choice");
   await act(async () => savings.props.onPress());
@@ -198,10 +198,10 @@ function hardwareBack() {
 
 test("Android Back cancels only Look and retains the unsaved place answers", async () => {
   await mount();
-  await act(async () => screen().findByProps({ accessibilityLabel: "Account name" }).props.onChangeText("Back trip"));
+  await act(async () => screen().findByProps({ accessibilityLabel: "Place name" }).props.onChangeText("Back trip"));
   await act(async () => screen().findByProps({ accessibilityLabel: "Balance today" }).props.onChangeText("456"));
   const wallet = screen().findAllByType("button").find((node) =>
-    node.props.accessibilityRole === "radio" && node.findByType("text").children.join("") === "Wallet",
+    node.props.accessibilityRole === "radio" && node.findByType("text").children.join("") === "Cash",
   );
   if (!wallet) throw new Error("Missing Wallet choice");
   await act(async () => wallet.props.onPress());

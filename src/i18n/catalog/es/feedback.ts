@@ -32,7 +32,7 @@ export const feedback: Messages<typeof en> = {
   removeScreenshot: "Quitar la captura de pantalla",
   blackOut: "Tapar partes",
   screenshotRedacted: "Hay partes tapadas en esta imagen.",
-  captureUnavailable: "No se pudo tomar la captura de pantalla aquí, así que este reporte va solo con texto.",
+  captureUnavailable: "No pudimos tomar la captura de pantalla aquí, así que este reporte va solo con texto.",
   menuTextOnly: "Este reporte va solo con texto.",
   menuShakeHint: "Para incluir una captura de pantalla, agita el celular en la pantalla donde está el problema.",
 
@@ -44,7 +44,7 @@ export const feedback: Messages<typeof en> = {
   applyBoxes: "Aplicar",
   boxCount_one: "{count} recuadro",
   boxCount_other: "{count} recuadros",
-  redactFailed: "No se pudo tapar la imagen, así que quitamos la captura de pantalla.",
+  redactFailed: "No pudimos tapar la imagen, así que quitamos la captura de pantalla.",
   screenshotMissing: "La captura de pantalla guardada con este reporte ya no está en este celular o cambió, así que la quitamos.",
 
   audienceLoading: "Revisando a dónde llegan los reportes…",
@@ -70,7 +70,7 @@ export const feedback: Messages<typeof en> = {
   notConfigured: "Los reportes no están disponibles en esta versión.",
   accessFailure: "El acceso a Lukapp cambió en este celular, así que el reporte no se envió.",
   invalidReport: "Revisa el campo marcado y envíalo otra vez.",
-  invalidScreenshot: "No se pudo enviar la captura de pantalla. Quítala y vuelve a enviar el reporte.",
+  invalidScreenshot: "No pudimos enviar la captura de pantalla. Quítala y vuelve a enviar el reporte.",
   changedReport: "Este reporte ya no coincide con lo que se envió primero. Edítalo y envíalo como un reporte nuevo.",
   reportExpired: "El intento anterior venció antes de llegarle al equipo. Tu reporte sigue aquí, así que puedes enviarlo otra vez.",
 

@@ -19,7 +19,7 @@ export const categories = {
   errorNotFound: "This category is no longer available. Close the editor and choose another.",
   errorSaveChange: "Could not save this change. Try again.",
   errorSaveCategory: "Could not save this category. Try again.",
-  errorAccountSetupUnavailable: "Account setup is unavailable here. Keep this editor open and add the place from Places.",
+  errorAccountSetupUnavailable: "You can't add a place here. Keep this editor open and add it from Places.",
 
   natureQuestion: "What happens to the money?",
   natureSuggested: "Suggested from the name. You can change it.",

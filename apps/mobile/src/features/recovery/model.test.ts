@@ -62,12 +62,12 @@ test("a replayed move uses server progress, and a larger transfer shows moved ve
     currency: "COP", title: "Laptop repair",
     movedMinorUnits: 230_000, countedMinorUnits: 230_000,
     recoveredMinorUnits: 230_000, targetMinorUnits: 1_380_000,
-  }, en.t)).toBe("Your Laptop repair plan is now 17% complete. The Savings account balance remains separate from plan progress.");
+  }, en.t)).toBe("Your Laptop repair plan is now 17% complete. Your savings place's balance is separate from plan progress.");
   expect(movedCopy({
     currency: "COP", title: "Laptop repair",
     movedMinorUnits: 500_000, countedMinorUnits: 230_000,
     recoveredMinorUnits: 230_000, targetMinorUnits: 1_380_000,
-  }, en.t)).toBe("COP 2.300 counted toward Laptop repair. Your Laptop repair plan is now 17% complete. The Savings account balance remains separate from plan progress.");
+  }, en.t)).toBe("COP 2.300 counted toward Laptop repair. Your Laptop repair plan is now 17% complete. Your savings place's balance is separate from plan progress.");
 });
 
 test("only plans the server will accept are offered as targets, and never another plan for the same expense", () => {
@@ -117,7 +117,7 @@ test("the proposal limits explain the range and the extra saving in Spanish with
   expect(limitsCopy("COP", suggestionFor(1_200_000, 4, 330_000), es.t)).toEqual({
     range: "Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000.",
     extra: "Con este plan terminas ahorrando COP 1.200 de más.",
-    invalid: "Escribe un valor por mes entre COP 3.000 y COP 12.000.",
+    invalid: "Escribe un monto por mes entre COP 3.000 y COP 12.000.",
   });
   expect(limitsCopy("COP", suggestionFor(1_200_000, 4), en.t).extra).toBe("This schedule replenishes the expense with no extra.");
   expect(limitsCopy("COP", suggestionFor(1_200_000, 4), es.t).extra).toBe("Con este plan recuperas justo lo del gasto, sin nada de más.");
