@@ -12,10 +12,10 @@ import { formatMoney } from "../money";
 import { refusalCodeOf, useFrozenCommand } from "../useFrozenCommand";
 import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import {
-  answerSpec, balanceCase, categoryChoice, closeRequest, everyPlace, keepAllowed, lineComplete, placeChoice, refusalMessage, refusalOf,
+  answerSpec, balanceCase, blockerView, categoryChoice, closeRequest, everyPlace, keepAllowed, lineComplete, placeChoice, refusalMessage, refusalOf,
   remainingMinorUnits, sameMoney, staleNotice, typedNameMatches, undoRequest, workspaceDay,
   type Act, type Answer, type Blocker, type ChoiceView, type CloseReceipt, type CloseRequest, type LineDraft, type Reviewed,
-  type StaleNotice, type UndoReceipt, type UndoRequest,
+  type SourceBlocker, type StaleNotice, type UndoReceipt, type UndoRequest,
 } from "./model";
 import {
   BlockersScreen, ChooseScreen, DefaultScreen, EndedScreen, LinesScreen, LoadingScreen, PickScreen, ReceiptScreen, ReviewScreen,
@@ -91,11 +91,12 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const [shownPreview, setShownPreview] = useState<string | null>(null);
   const [previewChanged, setPreviewChanged] = useState(false);
   const [resolvedNotice, setResolvedNotice] = useState<string | null>(null);
+  const [sendBlock, setSendBlock] = useState<SourceBlocker | null>(null);
   const nextLine = useRef(0);
   const leaving = useRef(false);
   const categories = useQuery(api.accounting.listUserCategories, act === "close" ? { workspaceId } : "skip");
   const preview = useQuery(api.accounting.previewUndoPlace, act === "undo" ? { workspaceId, financialAccountProfileId: profileId, cursor: null } : "skip");
-  const sources = useSourceBlocker(workspaceId, profileId);
+  const { blocker: sources, atSend: sourcesAtSend } = useSourceBlocker(workspaceId, profileId);
   const refusal = useRef<ReturnType<typeof refusalOf>>(null);
   const refusalCode = (error: unknown) => { refusal.current = refusalOf(error); return refusal.current?.code ?? null; };
   const unresolved = useUnresolvedEnding(workspaceId, profileId);
@@ -133,6 +134,12 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const step = steps[steps.length - 1]!;
   const place = places?.find((item) => item.id === profileId);
 
+  /** A new request leaves only if no notification source on this phone points at the Place at this moment. */
+  function clearToSend() {
+    const blocked = sourcesAtSend();
+    setSendBlock(blocked);
+    return blocked === null;
+  }
   function leave(go: () => void) {
     leaving.current = true;
     go();
@@ -185,6 +192,8 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
       if (undo.state.name === "open" && undo.state.refusal) undo.release();
     }
   }
+
+  if (sendBlock && sources === null) setSendBlock(null);
 
   const basis = reviewed ?? live;
   const balance = basis.balance;
@@ -334,7 +343,8 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     ? t(act === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain")
     : command.state.name === "open" && command.state.refusal?.code === "place_close_date_stale"
       ? t("placeEnding.refuseDateStale", { date: formatLongDate(language, Date.parse(`${basis.accountingDate}T12:00:00Z`), "UTC") })
-    : command.state.name === "open" && command.state.refusal && refusal.current ? refusalMessage(refusal.current, act, translator) : "";
+    : command.state.name === "open" && command.state.refusal && refusal.current ? refusalMessage(refusal.current, act, translator)
+    : sendBlock ? (({ title, detail }) => `${title} ${detail}`)(blockerView(sendBlock, act, translator)) : "";
 
   if (step.name === "confirm") {
     const snapshot = preview?.snapshot ?? null;
@@ -346,6 +356,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
         || (!!snapshot && !waiting && !replacementChoice?.unavailable && typedNameMatches(typed, name)))}
       onConfirm={() => {
         interact();
+        if (!undo.frozen && !clearToSend()) return;
         void undo.submit(() => snapshot && typedNameMatches(typed, name) && !replacementChoice?.unavailable
           ? undoRequest({ previewFingerprint: snapshot.fingerprint, workspaceId, placeId: profileId, replacement, idempotencyKey: Crypto.randomUUID() }, t)
           : null);
@@ -358,6 +369,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     canConfirm={!close.busy && (close.state.name === "uncertain" || (!unavailable && !waiting))}
     onConfirm={() => {
       interact();
+      if (!close.frozen && !clearToSend()) return;
       void close.submit(() => unavailable ? null
         : closeRequest({ reviewed: basis, workspaceId, place: { id: profileId, name }, lines, replacement, idempotencyKey: Crypto.randomUUID() }, t));
     }} />;

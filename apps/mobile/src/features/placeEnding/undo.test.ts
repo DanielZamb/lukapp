@@ -34,10 +34,13 @@ const keys = vi.hoisted(() => ({ next: 0 }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => `key-${++keys.next}` }));
 vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => () => false }));
 vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () => () => {} }));
-const intake = vi.hoisted(() => ({
-  snapshot: { state: null as unknown, status: null, error: "", loaded: true, wipePending: false, drain: null },
-  service: { listSources: async () => [] },
-}));
+const intake = vi.hoisted(() => {
+  const value = {
+    snapshot: { state: null as unknown, status: null, error: "", loaded: true, wipePending: false, drain: null },
+    service: { listSources: async () => [{ packageName: "com.nequi.MobileApp", label: "Nequi" }], getSnapshot: () => value.snapshot },
+  };
+  return value;
+});
 vi.mock("../intake/IntakeProvider", () => ({ useIntakeService: () => intake.service, useIntakeSnapshot: () => intake.snapshot }));
 type Money = { currency: string; minorUnits: number };
 type Snapshot = {
@@ -416,4 +419,16 @@ test("a resent start refused as stale is forgotten and a fresh confirmation foll
   await ui.press("Undo Wallet");
   expect(remote.undo.mock.calls.map(([request]) => [request.idempotencyKey, request.previewFingerprint]))
     .toEqual([["old", "old-snapshot"], ["key-1", "reviewed-snapshot"]]);
+});
+
+test("a source mapped to the Place after the confirmation was drawn stops the start at the moment of sending", async () => {
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  intake.snapshot = { ...intake.snapshot, state: { ...emptyState(), activeSelectionIds: ["s1"], mappings: [{ sourceSelectionId: "s1",
+    packageName: "com.nequi.MobileApp", workspaceId: "ws", financialAccountProfileId: "wallet", currency: "COP", timeZone: "America/Bogota" }] } };
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo).not.toHaveBeenCalled();
+  expect(ui.texts().slice(1, 4)).toEqual(["You can't undo Wallet yet", "Apps send their notifications here",
+    "Notifications from Nequi land in this place. Point them at another place or stop reading them."]);
 });

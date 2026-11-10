@@ -35,11 +35,17 @@ vi.mock("expo-crypto", () => ({ randomUUID: () => `key-${++keys.next}` }));
 const access = vi.hoisted(() => ({ report: (_error: unknown): boolean => false }));
 vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => access.report }));
 vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () => () => {} }));
-const intake = vi.hoisted(() => ({
-  snapshot: { state: null as unknown, status: null, error: "", loaded: true, wipePending: false, drain: null },
-  listeners: new Set<() => void>(),
-  service: { listSources: async () => [{ packageName: "com.todo1.mobile", label: "Bancolombia" }, { packageName: "com.nequi.MobileApp", label: "Nequi" }] },
-}));
+const intake = vi.hoisted(() => {
+  const value = {
+    snapshot: { state: null as unknown, status: null, error: "", loaded: true, wipePending: false, drain: null },
+    listeners: new Set<() => void>(),
+    service: {
+      listSources: async () => [{ packageName: "com.todo1.mobile", label: "Bancolombia" }, { packageName: "com.nequi.MobileApp", label: "Nequi" }],
+      getSnapshot: () => value.snapshot,
+    },
+  };
+  return value;
+});
 vi.mock("../intake/IntakeProvider", async () => {
   const { useSyncExternalStore } = await import("react");
   const subscribe = (listener: () => void) => { intake.listeners.add(listener); return () => { intake.listeners.delete(listener); }; };
@@ -839,4 +845,43 @@ test("in Spanish an unconfirmed closing reads as such", async () => {
   expect(ui.texts()).toEqual(["CERRAR O DESHACER", "No pudimos confirmar si Wallet quedó cerrado",
     "El cierre se envió, pero la respuesta nunca llegó a este celular, así que puede que ya esté registrado. Envíalo otra vez tal como estaba: si ya se registró, verás lo que quedó registrado; si no, se registra ahora.",
     "Se registra el 10 de noviembre de 2026:", "Gasto en Mercado", "COP 50.000", "Enviar otra vez"]);
+});
+
+test("a source mapped to the Place after the summary was drawn stops the closing at the moment of sending, with the same message", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  intake.snapshot = { ...intake.snapshot, state: { ...emptyState(), mappings: [mapping("s1", "com.todo1.mobile")], activeSelectionIds: ["s1"] } };
+  await ui.press("Close Wallet");
+  await settle();
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "You can't close Wallet yet", "Apps send their notifications here",
+    "Notifications from Bancolombia land in this place. Point them at another place or stop reading them.",
+    "Go to notification sources", "Go back"]);
+  await ui.press("Go to notification sources");
+  await act(async () => phoneWith([mapping("s1", "com.todo1.mobile", "daily")], ["s1"]));
+  await systemBack();
+  expect(ui.texts()[1]).toBe("Review before closing Wallet");
+  expect(ui.alerts()).toEqual([]);
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls).toEqual([[sentTransfer]]);
+});
+
+test("a phone whose sources can't be read at the moment of sending stops the closing", async () => {
+  await reviewTransferToSavings();
+  intake.snapshot = { ...intake.snapshot, loaded: false, error: "storage" };
+  await ui.press("Close Wallet");
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(ui.texts().slice(2, 4)).toEqual(["We couldn't check this phone's notification sources",
+    "Open notification sources and check that none of them lands in this place."]);
+});
+
+test("retrying a closing whose outcome is unknown resends it even if a source now points at the Place", async () => {
+  remote.close.mockRejectedValueOnce(new Error("network lost")).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  intake.snapshot = { ...intake.snapshot, state: { ...emptyState(), mappings: [mapping("s1", "com.todo1.mobile")], activeSelectionIds: ["s1"] } };
+  await ui.press("Retry closing");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
 });
