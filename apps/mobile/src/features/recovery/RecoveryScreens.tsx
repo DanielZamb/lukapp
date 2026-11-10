@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import type { Theme } from "../../ui/tokens";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import {
   Choice,
   Field,
@@ -15,10 +14,12 @@ import {
   useTheme,
   useUi,
 } from "../../ui/core";
-import { font, fontSize, radius, spacing } from "../../ui/tokens";
+import { formatLongDate, useT } from "../../i18n";
 import {
   candidateDetail,
   INSTALLMENT_COUNTS,
+  isCancellable,
+  isEnded,
   limitsCopy,
   progressCopy,
   progressRatio,
@@ -29,6 +30,8 @@ import {
   type RecoveryPlace,
   type RecoveryPlanView,
 } from "./model";
+import { ContributionHistory } from "./RecoveryLifecycleScreens";
+import { createRecoveryStyles } from "./styles";
 
 type MonthCount = (typeof INSTALLMENT_COUNTS)[number];
 
@@ -37,20 +40,50 @@ export function RecoveryPlanList(props: {
   onBack: () => void;
   onPlan: (id: string) => void;
 }) {
+  const theme = useTheme();
+  const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
+  const ui = useUi();
+  const { t } = useT();
+  const current = props.plans.filter((plan) => !isEnded(plan));
+  const past = props.plans.filter(isEnded);
   return (
     <Screen>
       <Header title="Savings recovery" eyebrow="PLANS" onBack={props.onBack} />
-      <ListGroup>
-        {props.plans.map((plan) => (
-          <ListRow
-            key={plan.id}
-            title={plan.title}
-            detail={progressCopy(plan)}
-            value={`${Math.round(progressRatio(plan) * 100)}%`}
-            onPress={() => props.onPlan(plan.id)}
-          />
-        ))}
-      </ListGroup>
+      {current.length > 0 && (
+        <ListGroup>
+          {current.map((plan) => (
+            <ListRow
+              key={plan.id}
+              title={plan.title}
+              detail={progressCopy(plan)}
+              value={`${Math.round(progressRatio(plan) * 100)}%`}
+              onPress={() => props.onPlan(plan.id)}
+            />
+          ))}
+        </ListGroup>
+      )}
+      {past.length > 0 && (
+        <View style={ui.section}>
+          <Text style={ui.label}>{t("planning.pastPlans")}</Text>
+          <ListGroup>
+            {past.map((plan) => (
+              <ListRow
+                key={plan.id}
+                title={plan.title}
+                titleStyle={styles.quiet}
+                detail={plan.status === "cancelled"
+                  ? t("planning.listCancelledDetail", {
+                    amount: recoveryMoney({ currency: plan.currency, minorUnits: plan.recoveredMinorUnits }),
+                  })
+                  : progressCopy(plan)}
+                value={plan.status === "cancelled" ? t("planning.statusCancelled") : `${Math.round(progressRatio(plan) * 100)}%`}
+                valueStyle={styles.quiet}
+                onPress={() => props.onPlan(plan.id)}
+              />
+            ))}
+          </ListGroup>
+        </View>
+      )}
     </Screen>
   );
 }
@@ -96,6 +129,7 @@ export function RecoveryDraft(props: {
   candidate: RecoveryCandidate;
   currency: string;
   destinations: RecoveryPlace[];
+  replacing?: boolean;
   installmentCount: number;
   amount: string;
   destinationId: string | null;
@@ -113,8 +147,9 @@ export function RecoveryDraft(props: {
   onBack: () => void;
 }) {
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   const ui = useUi();
+  const { t } = useT();
   const limits = limitsCopy(props.currency, props.suggestion);
   const principal = recoveryMoney({
     currency: props.currency,
@@ -124,9 +159,12 @@ export function RecoveryDraft(props: {
     <Screen>
       <Header
         title="Plan the recovery"
-        eyebrow={`${props.candidate.title.toUpperCase()} · DRAFT`}
+        eyebrow={props.replacing
+          ? t("planning.replacementEyebrow", { title: props.candidate.title.toUpperCase() })
+          : `${props.candidate.title.toUpperCase()} · DRAFT`}
         onBack={props.canDismiss ? props.onBack : undefined}
       />
+      {props.replacing && <Text style={ui.muted}>{t("planning.replacementNote")}</Text>}
       <View style={styles.amountCard}>
         <Text style={ui.muted}>Amount to replenish</Text>
         <Text style={[ui.hero, styles.amount]}>{principal}</Text>
@@ -193,55 +231,96 @@ export function RecoveryDraft(props: {
   );
 }
 
+export type RecoveryPlanNotice = "cancelled" | "corrected";
+
 export function RecoveryPlanScreen(props: {
   plan: RecoveryPlanView;
+  plans: RecoveryPlanView[];
   month: string;
+  timeZone: string;
+  replacement: RecoveryCandidate | null;
+  notice?: RecoveryPlanNotice;
   onBack: () => void;
   onMove: () => void;
   onFind: () => void;
+  onCancel: () => void;
+  onReplace: () => void;
+  onPlan: (id: string) => void;
+  onFix: (contributionId: string) => void;
 }) {
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   const ui = useUi();
-  const due = recoveryMoney({ currency: props.plan.currency, minorUnits: props.plan.dueMinorUnits });
-  const remaining = recoveryMoney({ currency: props.plan.currency, minorUnits: props.plan.remainingMinorUnits });
-  const complete = props.plan.remainingMinorUnits === 0;
+  const { t, language } = useT();
+  const { plan } = props;
+  const money = (minorUnits: number) => recoveryMoney({ currency: plan.currency, minorUnits });
+  const complete = plan.remainingMinorUnits === 0;
+  const cancelled = plan.status === "cancelled";
+  const replaces = props.plans.find((item) => item.id === plan.replacesPlanId);
+  const replacedBy = props.plans.find((item) => item.id === plan.replacedByPlanId);
   return (
     <Screen>
-      <Header title="Savings recovery" eyebrow={props.plan.title.toUpperCase()} onBack={props.onBack} />
+      <Header title="Savings recovery" eyebrow={plan.title.toUpperCase()} onBack={props.onBack} />
+      {props.notice && (
+        <Text accessibilityRole="alert" style={ui.body}>
+          {t(props.notice === "cancelled" ? "planning.cancelledNotice" : "planning.correctedNotice")}
+        </Text>
+      )}
+      {plan.cancellation && (
+        <View style={ui.section}>
+          <Text style={ui.title}>
+            {t("planning.cancelledOn", { date: formatLongDate(language, plan.cancellation.eventTime, props.timeZone) })}
+          </Text>
+          {plan.cancellation.reason && (
+            <Text style={ui.muted}>{t("planning.cancelledReason", { reason: plan.cancellation.reason })}</Text>
+          )}
+        </View>
+      )}
       <View style={styles.amountCard}>
         <Text style={ui.muted}>Recovered so far</Text>
-        <Text style={[ui.hero, styles.amount]}>
-          {recoveryMoney({ currency: props.plan.currency, minorUnits: props.plan.recoveredMinorUnits })}
-        </Text>
-        <ProgressBar value={progressRatio(props.plan)} label={`${props.plan.title} recovery progress`} />
-        <View style={styles.legend}>
-          <Text style={ui.muted}>{Math.round(progressRatio(props.plan) * 100)}% complete</Text>
-          <Text style={ui.muted}>{remaining} left</Text>
-        </View>
+        <Text style={[ui.hero, styles.amount]}>{money(plan.recoveredMinorUnits)}</Text>
+        {!cancelled && <>
+          <ProgressBar value={progressRatio(plan)} label={`${plan.title} recovery progress`} />
+          <View style={styles.legend}>
+            <Text style={ui.muted}>{Math.round(progressRatio(plan) * 100)}% complete</Text>
+            <Text style={ui.muted}>{money(plan.remainingMinorUnits)} left</Text>
+          </View>
+        </>}
       </View>
       <ListGroup>
-        <ListRow
-          title="Due this month"
-          value={due}
-          valueStyle={props.plan.dueMinorUnits > 0 ? styles.warning : undefined}
-        />
-        <ListRow title="Destination" value={props.plan.destinationName} />
-        <ListRow title="Original plan" value={`${props.plan.installmentCount} months`} />
+        {!cancelled && (
+          <ListRow
+            title="Due this month"
+            value={money(plan.dueMinorUnits)}
+            valueStyle={plan.dueMinorUnits > 0 ? styles.warning : undefined}
+          />
+        )}
+        <ListRow title="Destination" value={plan.destinationName} />
+        <ListRow title="Original plan" value={`${plan.installmentCount} months`} />
+        {replaces && <ListRow title={t("planning.replaces")} value={replaces.title} onPress={() => props.onPlan(replaces.id)} />}
+        {replacedBy && (
+          <ListRow title={t("planning.replacedBy")} value={replacedBy.title} onPress={() => props.onPlan(replacedBy.id)} />
+        )}
       </ListGroup>
-      {props.plan.status === "suspended" && (
+      {plan.status === "suspended" && (
         <Text style={ui.muted}>
           Plan suspended because the original expense was reversed. Money already saved stays in your accounts.
         </Text>
       )}
-      {!complete && props.plan.status === "active" && (
+      {!complete && plan.status === "active" && plan.acceptsContributions && (
         <PrimaryButton
           label={`Move money for ${recoveryMonthName(props.month)}`}
           trailingIcon="swap-horizontal"
           onPress={props.onMove}
         />
       )}
+      {cancelled && !plan.replacedByPlanId && (props.replacement ? <>
+        <Text style={ui.muted}>{t("planning.replaceOpen", { amount: money(props.replacement.amountMinorUnits) })}</Text>
+        <PrimaryButton label={t("planning.replaceAction")} trailingIcon="refresh" onPress={props.onReplace} />
+      </> : <Text style={ui.muted}>{t("planning.replaceUnavailable")}</Text>)}
       <SecondaryButton label="Find another expense" onPress={props.onFind} />
+      {isCancellable(plan) && <SecondaryButton label={t("planning.cancelAction")} tone="danger" onPress={props.onCancel} />}
+      <ContributionHistory plan={plan} plans={props.plans} timeZone={props.timeZone} onPlan={props.onPlan} onFix={props.onFix} />
       <Text style={ui.muted}>
         Recovery is a saving plan. It does not undo the original expense or create money you owe yourself.
       </Text>
@@ -266,7 +345,7 @@ export function RecoveryMoveScreen(props: {
   onBack: () => void;
 }) {
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   const ui = useUi();
   const places = props.sources.filter((place) => place.id !== props.plan.destinationFinancialAccountProfileId);
   return (
@@ -338,7 +417,7 @@ export function RecoveryMoved(props: {
 }) {
   const ui = useUi();
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   return (
     <Screen contentStyle={styles.completion}>
       <View style={styles.completionIcon}>
@@ -362,7 +441,7 @@ export function RecoveryActivated(props: {
 }) {
   const ui = useUi();
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   return (
     <Screen contentStyle={styles.completion}>
       <View style={styles.completionIcon}>
@@ -376,51 +455,4 @@ export function RecoveryActivated(props: {
       <SecondaryButton label="Back home" onPress={props.onHome} />
     </Screen>
   );
-}
-
-function createStyles(theme: Theme) {
-  return StyleSheet.create({
-    amountCard: {
-      gap: spacing.md,
-      padding: spacing.xl,
-      backgroundColor: theme.secondary,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    amount: { fontSize: 30, lineHeight: 36, letterSpacing: -0.6 },
-    amountEntry: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-    amountInput: { flex: 1, minWidth: 0, padding: 0, minHeight: 44 },
-    sources: {
-      gap: spacing.md,
-      padding: spacing.lg,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.border,
-    },
-    legend: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "space-between",
-      gap: spacing.sm,
-    },
-    warning: { color: theme.warning },
-    completion: { justifyContent: "center" },
-    completionIcon: {
-      alignSelf: "center",
-      alignItems: "center",
-      justifyContent: "center",
-      width: 68,
-      height: 68,
-      borderRadius: radius.full,
-      backgroundColor: theme.primary,
-    },
-    completionTitle: {
-      fontFamily: font.extrabold,
-      fontSize: 30,
-      lineHeight: 36,
-      color: theme.foreground,
-      textAlign: "center",
-    },
-    completionCopy: { fontSize: fontSize.body, lineHeight: 24, textAlign: "center" },
-  });
 }

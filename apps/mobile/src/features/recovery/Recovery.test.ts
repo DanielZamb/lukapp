@@ -1,20 +1,24 @@
 import * as React from "react";
 import { createElement } from "react";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { Text } from "react-native";
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
+import { Text, TextInput } from "react-native";
 import { getFunctionName, type FunctionReturnType } from "convex/server";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   BaseNavigationContainer, createNavigationContainerRef, createNavigatorFactory,
   StackActions, StackRouter, useNavigationBuilder,
 } from "@react-navigation/native";
-import { Header, ListRow, PrimaryButton, SecondaryButton } from "../../ui/core";
+import { ConvexError } from "convex/values";
+import { Choice, Header, ListGroup, ListRow, PrimaryButton, SecondaryButton } from "../../ui/core";
 import type { api } from "../api";
 import { Recovery } from "./Recovery";
 import { RecoveryCandidates, RecoveryDraft, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
+import type { RecoveryCandidate, RecoveryContribution, RecoveryPlanView } from "./model";
 import type { RecoveryEditorTransport } from "./useRecoveryEditor";
+import type { RecoveryCancelTransport, RecoveryCorrectionTransport } from "./useRecoveryLifecycle";
 import type { RecoveryMoveTransport } from "./useRecoveryMove";
 import { RecoveryMoveScreen } from "./RecoveryScreens";
+import { RecoveryCorrectScreen } from "./RecoveryLifecycleScreens";
 import RecoveryRoute from "../../../app/recovery";
 
 vi.mock("react-native", () => ({
@@ -31,14 +35,22 @@ vi.mock("@react-navigation/native", async () => {
   return import(require.resolve("@react-navigation/core", { paths: [require.resolve("@react-navigation/native")] }));
 });
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
-vi.mock("expo-crypto", () => ({ randomUUID: () => "activation-key" }));
-vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => () => false }));
+const uuid = vi.hoisted(() => ({ next: (): string => "activation-key" }));
+vi.mock("expo-crypto", () => ({ randomUUID: () => uuid.next() }));
+const access = vi.hoisted(() => ({ report: (_error: unknown): boolean => false }));
+vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => access.report }));
 vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () => () => {} }));
-const remote = vi.hoisted(() => ({ query: vi.fn(), activate: vi.fn<RecoveryEditorTransport["save"]>(), move: vi.fn<RecoveryMoveTransport["move"]>() }));
+const remote = vi.hoisted(() => ({
+  query: vi.fn(), activate: vi.fn<RecoveryEditorTransport["save"]>(), move: vi.fn<RecoveryMoveTransport["move"]>(),
+  cancel: vi.fn<RecoveryCancelTransport["cancel"]>(), correct: vi.fn<RecoveryCorrectionTransport["correct"]>(),
+}));
 vi.mock("convex/react", () => ({
   useQuery: remote.query,
-  useAction: (action: typeof api.savingsRecovery.activatePlan | typeof api.savingsRecovery.recordContribution) =>
-    getFunctionName(action) === "savingsRecovery:recordContribution" ? remote.move : remote.activate,
+  useAction: (action: Parameters<typeof getFunctionName>[0]) => ({
+    "savingsRecovery:recordContribution": remote.move,
+    "savingsRecovery:cancelPlan": remote.cancel,
+    "savingsRecovery:correctContribution": remote.correct,
+  } as Record<string, unknown>)[getFunctionName(action)] ?? remote.activate,
 }));
 const navigation = vi.hoisted(() => ({ back: vi.fn(), dismissTo: vi.fn() }));
 vi.mock("expo-router", async () => {
@@ -59,8 +71,9 @@ const candidate = {
   journalEntryId: "dental", title: "Dental care", accountingDate: "2026-08-04",
   amountMinorUnits: 48_000_000, financialAccountProfileId: "daily", placeName: "Daily account",
 };
-const plan = {
-  status: "active",
+const plan: RecoveryPlanView = {
+  cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
+  status: "active", canCancel: true, acceptsContributions: true,
   id: "repair", title: "Emergency repair", sourceJournalEntryId: "expense-repair", sourceTitle: "Emergency repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 300_000_000, installmentCount: 10, installmentMinorUnits: 30_000_000,
@@ -74,17 +87,23 @@ const evaluation = {
   sources: [{ id: "daily", name: "Daily account", productKind: "bankAccount" }],
 } satisfies FunctionReturnType<typeof api.savingsRecovery.evaluate>;
 
+function button(screen: ReactTestInstance, label: string) {
+  return screen.find((node) => (node.type === PrimaryButton || node.type === SecondaryButton) && node.props.label === label);
+}
+
 let root: ReactTestRenderer | undefined;
 afterEach(async () => {
   await act(async () => root?.unmount());
   root = undefined;
   vi.unstubAllGlobals();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  uuid.next = () => "activation-key";
+  access.report = () => false;
 });
-async function open(plans: typeof plan[] = [], route = false, origin = "plans") {
+async function open(plans: typeof plan[] = [], route = false, origin = "plans", candidates: RecoveryCandidate[] = evaluation.candidates) {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  remote.query.mockReturnValue({ ...evaluation, plans });
+  remote.query.mockReturnValue({ ...evaluation, plans, candidates });
   const onBack = vi.fn();
   const onViewPlans = vi.fn();
   const onHome = vi.fn();
@@ -181,7 +200,7 @@ test("activation keeps the draft locked and hides back until completion replaces
 test("one plan opens live progress, and candidates and drafts return to that plan", async () => {
   const { screen, onBack } = await open([plan]);
   expect(screen.findByType(RecoveryPlanScreen).props.plan.title).toBe("Emergency repair");
-  await act(async () => { screen.findByType(SecondaryButton).props.onPress(); });
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
   expect(screen.findByType(RecoveryCandidates).props.candidates[0].title).toBe("Dental care");
   await act(async () => { screen.findByType(ListRow).props.onPress(); });
   expect(screen.findByType(Header).props.eyebrow).toBe("DENTAL CARE · DRAFT");
@@ -200,7 +219,7 @@ test("several plans opens a plan list and back from a plan returns to the list",
   expect(screen.findAllByType(RecoveryCandidates)).toHaveLength(0);
   await act(async () => { screen.findAllByType(ListRow)[1].props.onPress(); });
   expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("appliance");
-  await act(async () => { screen.findByType(SecondaryButton).props.onPress(); });
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
   expect(screen.findByType(RecoveryCandidates).props.candidates[0].title).toBe("Dental care");
   await act(async () => { screen.findByType(Header).props.onBack(); });
   expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("appliance");
@@ -229,7 +248,7 @@ test.each(["android", "ios"])("%s back follows draft, candidates, opening plan, 
   const back = () => platform === "android" ? stack.goBack() : stack.dispatch(StackActions.pop(1));
   const { screen } = await open([plan, { ...plan, id: "appliance", title: "Home appliance" }], true);
   await act(async () => { screen.findAllByType(ListRow)[1].props.onPress(); });
-  await act(async () => { screen.findByType(SecondaryButton).props.onPress(); });
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
   await act(async () => { screen.findByType(ListRow).props.onPress(); });
   await act(async () => { back(); });
   expect(screen.findByType(RecoveryCandidates).props.candidates[0].title).toBe("Dental care");
@@ -246,7 +265,7 @@ test.each([
   { name: "a single opening plan", plans: [plan] },
 ])("system back unwinds the draft and candidates with $name, then leaves Recovery", async ({ plans }) => {
   const { screen } = await open(plans, true);
-  if (plans.length) await act(async () => { screen.findByType(SecondaryButton).props.onPress(); });
+  if (plans.length) await act(async () => { button(screen, "Find another expense").props.onPress(); });
   await act(async () => { screen.findByType(ListRow).props.onPress(); });
   await act(async () => { stack.goBack(); });
   expect(screen.findByType(RecoveryCandidates).props.candidates[0].title).toBe("Dental care");
@@ -376,4 +395,492 @@ test("an uncertain transfer keeps back hidden, retries the same movement, then B
   expect(remote.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["activation-key", "activation-key"]);
   await act(async () => { screen.findByType(SecondaryButton).props.onPress(); });
   expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index"]);
+});
+
+function contribution(id: string, over: Partial<RecoveryContribution> = {}): RecoveryContribution {
+  return {
+    id, workspaceId: "workspace", planId: "repair", transferJournalEntryId: `transfer-${id}`, amountMinorUnits: 30_000_000,
+    contributionDate: "2026-09-18", idempotencyKey: `key-${id}`, createdBy: "owner", recordedAt: Date.UTC(2026, 8, 18, 17),
+    status: "active", transferReversed: false, correction: undefined, correctsContributionId: undefined, ...over,
+  };
+}
+const repair: RecoveryPlanView = {
+  ...plan,
+  contributionHistory: [
+    contribution("aug", { contributionDate: "2026-08-18", amountMinorUnits: 25_000_000, status: "voided", transferReversed: true }),
+    contribution("sep"),
+  ],
+};
+const appliance: RecoveryPlanView = {
+  ...plan, id: "appliance", title: "Home appliance", sourceJournalEntryId: "expense-appliance",
+  activationMonth: "2026-06", remainingMinorUnits: 200_000_000, recoveredMinorUnits: 0, contributionHistory: [],
+};
+const repairCandidate: RecoveryCandidate = {
+  journalEntryId: "expense-repair", title: "Emergency repair", accountingDate: "2026-05-02",
+  amountMinorUnits: 120_000_000, financialAccountProfileId: "daily", placeName: "Daily account",
+};
+const cancellation = {
+  id: "cancel-1", workspaceId: "workspace", planId: "repair", reason: "Income changed", idempotencyKey: "cancel-key",
+  createdBy: "owner", eventTime: Date.UTC(2026, 9, 5, 15), recordedAt: Date.UTC(2026, 9, 5, 15),
+};
+const cancelledRepair: RecoveryPlanView = {
+  ...repair, canCancel: false, acceptsContributions: false, status: "cancelled", cancellation, remainingMinorUnits: 0, dueMinorUnits: 0,
+};
+function texts() {
+  return root?.root.findAll((node) => node.type === Text).map((node) => node.children.join("")) ?? [];
+}
+function alerts() {
+  return root?.root.findAll((node) => node.type === Text && node.props.accessibilityRole === "alert")
+    .map((node) => node.children.join("")) ?? [];
+}
+function field(screen: ReactTestInstance, label: string) {
+  return screen.find((node) => node.type === TextInput && node.props.accessibilityLabel === label);
+}
+function labels(screen: ReactTestInstance) {
+  return screen.findAll((node) => node.type === PrimaryButton || node.type === SecondaryButton).map((node) => node.props.label);
+}
+function cancelReceipt(request: Parameters<RecoveryCancelTransport["cancel"]>[0]) {
+  return { replay: false, cancellation: { ...cancellation, idempotencyKey: request.idempotencyKey, reason: request.reason } };
+}
+
+test("Cancel plan explains what stays, sends one trimmed command, and the cancelled plan offers a linked replacement", async () => {
+  const { screen } = await open([repair], true);
+  expect(labels(screen)).toEqual(["Move money for October", "Find another expense", "Cancel plan"]);
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  expect(screen.findByType(Header).props).toMatchObject({ title: "Cancel this plan?", eyebrow: "EMERGENCY REPAIR" });
+  expect(texts()).toEqual(expect.arrayContaining([
+    "Already moved back to savings",
+    "COP 1.800.000",
+    "The COP 1.800.000 you already moved to Savings stays there and stays counted in this plan’s history.",
+    "Cancelling moves no money. Nothing is transferred or refunded.",
+    "The rest of the plan is released. This expense can get a new plan with a new schedule.",
+    "This plan’s terms are not edited. Its schedule stays in history as it was.",
+  ]));
+  await act(async () => { field(screen, "Reason for cancelling").props.onChangeText("  Income changed  "); });
+  uuid.next = () => "cancel-key";
+  remote.cancel.mockImplementationOnce(async (request) => {
+    remote.query.mockReturnValue({ ...evaluation, plans: [cancelledRepair], candidates: [repairCandidate, candidate] });
+    return cancelReceipt(request);
+  });
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  expect(remote.cancel.mock.calls).toEqual([[{
+    workspaceId: "workspace", planId: "repair", reason: "Income changed", idempotencyKey: "cancel-key",
+  }]]);
+  expect(screen.findByType(RecoveryPlanScreen).props.plan.status).toBe("cancelled");
+  expect(alerts()).toEqual(["Plan cancelled. The money you moved stays in savings."]);
+  expect(texts()).toEqual(expect.arrayContaining([
+    "Cancelled on October 5, 2026", "Reason: Income changed", "COP 1.800.000",
+    "COP 1.200.000 of this expense is open for a new plan.",
+  ]));
+  expect(labels(screen)).toEqual(["Start a replacement", "Find another expense"]);
+  expect(screen.findAll((node) => node.type === ListRow && node.props.title === "Due this month")).toHaveLength(0);
+  expect(screen.findAll((node) => node.type === ListRow && node.props.title === "COP 300.000")).toHaveLength(1);
+  uuid.next = () => "replacement-key";
+  await act(async () => { button(screen, "Start a replacement").props.onPress(); });
+  expect(screen.findByType(Header).props.eyebrow).toBe("EMERGENCY REPAIR · REPLACEMENT");
+  expect(texts()).toContain("This plan replaces the cancelled one. Money counted toward the cancelled plan stays there.");
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ candidate: repairCandidate, amount: "300.000", replacing: true });
+  await act(async () => { button(screen, "Activate plan").props.onPress(); });
+  expect(remote.activate.mock.calls).toEqual([[{
+    workspaceId: "workspace", sourceJournalEntryId: "expense-repair", destinationFinancialAccountProfileId: "savings",
+    installmentCount: 4, installmentMinorUnits: 30_000_000, idempotencyKey: "replacement-key", replacesPlanId: "repair",
+  }]]);
+});
+
+test("a cancellation without a reason omits it", async () => {
+  const { screen } = await open([repair], true);
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  await act(async () => { field(screen, "Reason for cancelling").props.onChangeText("   "); });
+  uuid.next = () => "cancel-key";
+  remote.cancel.mockImplementationOnce(async (request) => cancelReceipt(request));
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  expect(remote.cancel.mock.calls).toEqual([[{ workspaceId: "workspace", planId: "repair", idempotencyKey: "cancel-key" }]]);
+});
+
+test.each(["keep", "header", "android", "ios"])("%s leaves the cancel confirmation for the same plan twice without sending anything", async (method) => {
+  const { screen, onBack } = await open([repair, appliance], true);
+  await act(async () => { screen.findAllByType(ListRow)[0].props.onPress(); });
+  for (const round of [1, 2]) {
+    await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+    expect(screen.findByType(Header).props.title).toBe("Cancel this plan?");
+    await act(async () => { field(screen, "Reason for cancelling").props.onChangeText(`draft ${round}`); });
+    await act(async () => {
+      if (method === "keep") button(screen, "Keep plan").props.onPress();
+      else if (method === "header") screen.findByType(Header).props.onBack();
+      else if (method === "android") stack.goBack();
+      else stack.dispatch(StackActions.pop(1));
+    });
+    expect(screen.findAllByType(RecoveryPlanScreen)).toHaveLength(1);
+    expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+    expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans", "recovery"]);
+  }
+  expect(remote.cancel).not.toHaveBeenCalled();
+  await act(async () => { stack.goBack(); });
+  expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(2);
+  await act(async () => { stack.goBack(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans"]);
+  expect(onBack).not.toHaveBeenCalled();
+});
+
+test("an uncertain cancellation stays frozen, ignores back, and retries the identical command", async () => {
+  const { screen } = await open([repair], true);
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  await act(async () => { field(screen, "Reason for cancelling").props.onChangeText("Income changed"); });
+  uuid.next = () => "cancel-key";
+  remote.cancel.mockRejectedValueOnce(new Error("offline"));
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  expect(alerts()).toEqual(["Could not confirm the cancellation. Retry to safely check the same request."]);
+  expect(screen.findByType(Header).props.onBack).toBeUndefined();
+  expect(labels(screen)).toEqual(["Retry cancellation"]);
+  expect(field(screen, "Reason for cancelling").props.editable).toBe(false);
+  await act(async () => { field(screen, "Reason for cancelling").props.onChangeText("Something else"); });
+  await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
+  expect(screen.findByType(Header).props.title).toBe("Cancel this plan?");
+  uuid.next = () => "new-key";
+  remote.cancel.mockImplementationOnce(async (request) => cancelReceipt(request));
+  await act(async () => { button(screen, "Retry cancellation").props.onPress(); });
+  const sent = { workspaceId: "workspace", planId: "repair", reason: "Income changed", idempotencyKey: "cancel-key" };
+  expect(remote.cancel.mock.calls.map(([request]) => request)).toEqual([sent, sent]);
+  expect(screen.findByType(RecoveryPlanScreen).props.notice).toBe("cancelled");
+});
+
+test("an access failure during cancellation goes to the device handler and the retry repeats the command", async () => {
+  const revoked = new ConvexError({ code: "session_inactive" });
+  const reported: unknown[] = [];
+  access.report = (error) => { reported.push(error); return error === revoked; };
+  const { screen } = await open([repair], true);
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  uuid.next = () => "cancel-key";
+  remote.cancel.mockRejectedValueOnce(revoked).mockImplementationOnce(async (request) => cancelReceipt(request));
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  expect(reported).toEqual([revoked]);
+  uuid.next = () => "new-key";
+  await act(async () => { button(screen, "Retry cancellation").props.onPress(); });
+  expect(remote.cancel.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["cancel-key", "cancel-key"]);
+});
+
+test.each([
+  { code: "plan_already_cancelled", message: "This plan was already cancelled. Nothing else changed." },
+  { code: "plan_already_complete", message: "This plan is already complete, so there is nothing left to cancel." },
+  { code: "reason_invalid", message: "Keep the reason under 1,000 characters." },
+  { code: "plan_not_found", message: "This plan is no longer available." },
+  { code: "idempotency_key_conflict", message: "The plan was not cancelled. Try again." },
+])("cancellation refusal $code keeps the reason and explains it", async ({ code, message }) => {
+  const { screen } = await open([repair], true);
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  await act(async () => { field(screen, "Reason for cancelling").props.onChangeText("Income changed"); });
+  remote.cancel.mockRejectedValueOnce(new ConvexError({ kind: "recovery", code }));
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  expect(alerts()).toEqual([message]);
+  expect(field(screen, "Reason for cancelling").props).toMatchObject({ value: "Income changed", editable: true });
+  expect(screen.findByType(Header).props.onBack).toBeDefined();
+  expect(JSON.stringify(root?.toJSON())).not.toContain(code);
+});
+
+test("a completed plan offers no cancel while a suspended plan can still be cancelled", async () => {
+  const completed = { ...repair, canCancel: false, acceptsContributions: false, status: "completed" as const, remainingMinorUnits: 0, dueMinorUnits: 0, recoveredMinorUnits: 300_000_000 };
+  const { screen } = await open([completed], true);
+  expect(labels(screen)).toEqual(["Find another expense"]);
+  await act(async () => root?.unmount());
+  const suspended = { ...repair, acceptsContributions: false, status: "suspended" as const, dueMinorUnits: 0 };
+  const next = await open([suspended], true);
+  expect(labels(next.screen)).toEqual(["Find another expense", "Cancel plan"]);
+});
+
+test("cancelled and completed plans sit in a quieter past group after current plans", async () => {
+  const replacement = { ...appliance, id: "repair-2", title: "Emergency repair again", replacesPlanId: "repair" };
+  const completed = { ...appliance, id: "laptop", title: "Laptop", canCancel: false, acceptsContributions: false, status: "completed" as const, remainingMinorUnits: 0, recoveredMinorUnits: 300_000_000, targetMinorUnits: 300_000_000 };
+  const { screen } = await open([{ ...cancelledRepair, replacedByPlanId: "repair-2" }, completed, replacement], true);
+  const groups = screen.findByType(RecoveryPlanList).findAllByType(ListGroup);
+  expect(groups.map((group) => group.findAllByType(ListRow).map((row) => [row.props.title, row.props.detail, row.props.value]))).toEqual([
+    [["Emergency repair again", "COP 0 of COP 3.000.000 moved back to savings", "0%"]],
+    [
+      ["Emergency repair", "Cancelled · COP 1.800.000 moved back to savings", "Cancelled"],
+      ["Laptop", "COP 3.000.000 of COP 3.000.000 moved back to savings", "100%"],
+    ],
+  ]);
+  expect(texts()).toContain("PAST PLANS");
+  expect(groups[1].findAllByType(ListRow).every((row) => row.props.titleStyle && row.props.valueStyle)).toBe(true);
+});
+
+test.each(["android", "ios"])("%s back returns from linked plans to the list without stacking, twice", async (platform) => {
+  const back = () => platform === "android" ? stack.goBack() : stack.dispatch(StackActions.pop(1));
+  const replacement = { ...appliance, id: "repair-2", title: "Emergency repair again", replacesPlanId: "repair" };
+  const { screen } = await open([{ ...cancelledRepair, replacedByPlanId: "repair-2" }, replacement], true, "plans", [candidate]);
+  await act(async () => { screen.findAllByType(ListRow)[1].props.onPress(); });
+  expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+  expect(labels(screen)).toEqual(["Find another expense"]);
+  for (const round of [1, 2]) {
+    const replacedBy = screen.find((node) => node.type === ListRow && node.props.title === "Replaced by");
+    expect(replacedBy.props.value).toBe("Emergency repair again");
+    await act(async () => { replacedBy.props.onPress(); });
+    expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair-2");
+    const replaces = screen.find((node) => node.type === ListRow && node.props.title === "Replaces");
+    expect(replaces.props.value).toBe("Emergency repair");
+    await act(async () => { replaces.props.onPress(); });
+    expect(screen.findAllByType(RecoveryPlanScreen)).toHaveLength(1);
+    expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+    expect(round).toBeGreaterThan(0);
+  }
+  await act(async () => { back(); });
+  expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(2);
+  await act(async () => { back(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans"]);
+});
+
+test.each(["android", "ios", "header"])("declining a replacement draft with %s back returns to the cancelled plan, twice", async (method) => {
+  const { screen } = await open([cancelledRepair], true, "plans", [repairCandidate]);
+  for (const round of [1, 2]) {
+    await act(async () => { button(screen, "Start a replacement").props.onPress(); });
+    expect(screen.findByType(RecoveryDraft).props.replacing).toBe(true);
+    await act(async () => {
+      if (method === "header") screen.findByType(Header).props.onBack();
+      else if (method === "android") stack.goBack();
+      else stack.dispatch(StackActions.pop(1));
+    });
+    expect(screen.findAllByType(RecoveryCandidates)).toHaveLength(0);
+    expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+    expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans", "recovery"]);
+    expect(round).toBeGreaterThan(0);
+  }
+  expect(remote.activate).not.toHaveBeenCalled();
+});
+
+test("starting the same expense later from candidates still links the replacement", async () => {
+  const { screen } = await open([cancelledRepair], true, "plans", [repairCandidate, candidate]);
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
+  await act(async () => { screen.findAllByType(ListRow)[1].props.onPress(); });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ candidate: { title: "Dental care" }, replacing: false });
+  await act(async () => { screen.findByType(Header).props.onBack(); });
+  await act(async () => { screen.findAllByType(ListRow)[0].props.onPress(); });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ candidate: repairCandidate, replacing: true });
+  uuid.next = () => "replacement-key";
+  await act(async () => { button(screen, "Activate plan").props.onPress(); });
+  expect(remote.activate.mock.calls[0][0]).toMatchObject({ sourceJournalEntryId: "expense-repair", replacesPlanId: "repair" });
+  await act(async () => { root?.unmount(); });
+  const next = await open([cancelledRepair, { ...appliance, id: "repair-2", replacesPlanId: "repair" }].map((item) =>
+    item.id === "repair" ? { ...item, replacedByPlanId: "repair-2" } : item), true, "plans", [candidate]);
+  await act(async () => { next.screen.findAllByType(ListRow)[1].props.onPress(); });
+  expect(next.screen.findAll((node) => node.type === PrimaryButton && node.props.label === "Start a replacement")).toHaveLength(0);
+});
+
+test.each([
+  { code: "replacement_already_exists", message: "The cancelled plan already has a replacement." },
+  { code: "replacement_plan_not_cancelled", message: "This can no longer replace the cancelled plan. Go back and check the plan." },
+  { code: "replacement_expense_mismatch", message: "This can no longer replace the cancelled plan. Go back and check the plan." },
+  { code: "replacement_plan_not_found", message: "This can no longer replace the cancelled plan. Go back and check the plan." },
+])("replacement refusal $code is explained on the draft", async ({ code, message }) => {
+  const { screen } = await open([cancelledRepair], true, "plans", [repairCandidate]);
+  await act(async () => { button(screen, "Start a replacement").props.onPress(); });
+  remote.activate.mockRejectedValueOnce(new ConvexError({ kind: "recovery", code }));
+  await act(async () => { button(screen, "Activate plan").props.onPress(); });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ error: message, editable: true, canDismiss: true });
+});
+
+test("a cancelled plan with nothing left to recover explains that no replacement is needed", async () => {
+  const { screen } = await open([cancelledRepair], true, "plans", [candidate]);
+  expect(texts()).toContain("Nothing of this expense is left to recover, so there is no replacement to start.");
+  expect(labels(screen)).toEqual(["Find another expense"]);
+});
+
+const correctionRecordedAt = Date.UTC(2026, 9, 2, 20, 30);
+const others: RecoveryPlanView[] = [
+  { ...appliance, id: "card", title: "Card fee", destinationFinancialAccountProfileId: "wallet", destinationName: "Wallet" },
+  { ...appliance, id: "trip", title: "Trip", activationMonth: "2026-10" },
+  { ...appliance, id: "small", title: "Small fix", remainingMinorUnits: 10_000_000 },
+  { ...appliance, id: "paused", title: "Paused", acceptsContributions: false, status: "suspended" },
+  { ...appliance, id: "ended", title: "Ended", canCancel: false, acceptsContributions: false, status: "cancelled", cancellation: { ...cancellation, planId: "ended" } },
+];
+function correctionReceipt(request: Parameters<RecoveryCorrectionTransport["correct"]>[0]) {
+  return {
+    replay: false,
+    correction: {
+      id: "correction-1", workspaceId: "workspace", contributionId: request.contributionId, reason: request.reason,
+      targetPlanId: request.targetPlanId, contributionDate: "2026-09-18", idempotencyKey: request.idempotencyKey,
+      createdBy: "owner", recordedAt: correctionRecordedAt,
+    },
+  };
+}
+async function openFix(plans: RecoveryPlanView[] = [repair, appliance, ...others]) {
+  const opened = await open(plans, true);
+  await act(async () => { opened.screen.findAllByType(ListRow)[0].props.onPress(); });
+  expect(opened.screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+  await act(async () => {
+    opened.screen.find((node) => node.type === ListRow && node.props.title === "COP 300.000").props.onPress();
+  });
+  return opened;
+}
+function choices(screen: ReactTestInstance) {
+  return screen.findByType(RecoveryCorrectScreen).findAllByType(Choice).map((node) => [node.props.label, node.props.selected]);
+}
+function choose(screen: ReactTestInstance, label: string) {
+  return act(async () => {
+    screen.findByType(RecoveryCorrectScreen).findAllByType(Choice).find((node) => node.props.label === label)?.props.onPress();
+  });
+}
+
+test("Fix attribution lists only plans that can take the contribution and sends one planning-only correction", async () => {
+  const { screen } = await openFix();
+  expect(screen.findByType(Header).props).toMatchObject({ title: "Fix attribution", eyebrow: "EMERGENCY REPAIR" });
+  expect(texts()).toEqual(expect.arrayContaining([
+    "COP 300.000", "September 18, 2026 · counts toward Emergency repair",
+    "This changes only which plan the transfer counts toward. It does not move money or reverse the transfer.",
+  ]));
+  expect(choices(screen)).toEqual([["Don’t count it toward a plan", false], ["Home appliance", false]]);
+  expect(screen.findByType(RecoveryCorrectScreen).findAllByType(Choice)[1].props.detail).toBe("COP 2.000.000 left to recover");
+  expect(button(screen, "Save correction").props.disabled).toBe(true);
+  await choose(screen, "Home appliance");
+  expect(button(screen, "Save correction").props.disabled).toBe(true);
+  await act(async () => { field(screen, "Reason for the correction").props.onChangeText("  Wrong plan  "); });
+  expect(button(screen, "Save correction").props.disabled).toBe(false);
+  uuid.next = () => "fix-key";
+  const corrected = {
+    ...repair,
+    contributionHistory: repair.contributionHistory.map((item) => item.id === "sep" ? {
+      ...item, status: "corrected" as const,
+      correction: { ...correctionReceipt({ workspaceId: "workspace", contributionId: "sep", reason: "Wrong plan", targetPlanId: "appliance", idempotencyKey: "fix-key" }).correction },
+    } : item),
+  };
+  remote.correct.mockImplementationOnce(async (request) => {
+    remote.query.mockReturnValue({
+      ...evaluation, candidates: [candidate],
+      plans: [corrected, { ...appliance, contributionHistory: [contribution("sep-moved", { planId: "appliance", correctsContributionId: "sep" })] }, ...others],
+    });
+    return correctionReceipt(request);
+  });
+  await act(async () => { button(screen, "Save correction").props.onPress(); });
+  expect(remote.correct.mock.calls).toEqual([[{
+    workspaceId: "workspace", contributionId: "sep", reason: "Wrong plan", targetPlanId: "appliance", idempotencyKey: "fix-key",
+  }]]);
+  expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+  expect(alerts()).toEqual(["Attribution corrected. No money moved."]);
+  const row = screen.find((node) => node.type === ListRow && node.props.title === "COP 300.000");
+  expect([row.props.value, row.props.detail]).toEqual([
+    "Corrected", "September 18, 2026\nMoved to Home appliance\nReason: Wrong plan\nRecorded Oct 2, 2026, 3:30 PM",
+  ]);
+  await act(async () => { row.props.onPress(); });
+  expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("appliance");
+  const moved = screen.find((node) => node.type === ListRow && node.props.title === "COP 300.000");
+  expect([moved.props.value, moved.props.detail]).toEqual(["Counted", "September 18, 2026\nMoved from Emergency repair"]);
+  await act(async () => { stack.goBack(); });
+  expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(7);
+});
+
+test("removing the attribution sends no target plan", async () => {
+  const { screen } = await openFix();
+  await choose(screen, "Don’t count it toward a plan");
+  await act(async () => { field(screen, "Reason for the correction").props.onChangeText("Not a recovery transfer"); });
+  uuid.next = () => "fix-key";
+  remote.correct.mockImplementationOnce(async (request) => correctionReceipt(request));
+  await act(async () => { button(screen, "Save correction").props.onPress(); });
+  expect(remote.correct.mock.calls).toEqual([[{
+    workspaceId: "workspace", contributionId: "sep", reason: "Not a recovery transfer", idempotencyKey: "fix-key",
+  }]]);
+});
+
+test.each([
+  ["correction_exceeds_plan_remaining", "Home appliance has less left to recover than this contribution. Choose another plan or don’t count it."],
+  ["transfer_destination_mismatch", "This transfer went to a different place than Home appliance uses. Choose another plan or don’t count it."],
+  ["transfer_predates_activation", "This transfer happened before Home appliance started, so it can’t count toward it. Choose another plan or don’t count it."],
+  ["plan_cancelled", "Home appliance was cancelled. Choose another plan or don’t count it."],
+  ["expense_not_recoverable", "The expense behind Home appliance was reversed, so it can’t take contributions now. Choose another plan or don’t count it."],
+  ["plan_not_found", "That plan is no longer available. Choose another plan or don’t count it."],
+  ["transfer_capacity_exceeded", "Other plans already count part of this transfer, so the whole amount can’t move there. Choose another plan or don’t count it."],
+  ["correction_target_same_plan", "It already counts toward that plan. Choose a different one."],
+  ["contribution_voided", "The transfer behind this contribution was reversed, so its attribution can’t change."],
+  ["contribution_already_corrected", "This contribution was already corrected. Nothing else changed."],
+  ["contribution_not_found", "This contribution is no longer available."],
+  ["reason_invalid", "Keep the reason between 1 and 1,000 characters."],
+  ["transfer_not_usable", "The correction was not saved. Try again."],
+])("correction refusal %s keeps the choice and reason and explains it", async (code, message) => {
+  const { screen } = await openFix();
+  await choose(screen, "Home appliance");
+  await act(async () => { field(screen, "Reason for the correction").props.onChangeText("Wrong plan"); });
+  remote.correct.mockRejectedValueOnce(new ConvexError({ kind: "recovery", code }));
+  await act(async () => { button(screen, "Save correction").props.onPress(); });
+  expect(alerts()).toEqual([message]);
+  expect(choices(screen)).toEqual([["Don’t count it toward a plan", false], ["Home appliance", true]]);
+  expect(field(screen, "Reason for the correction").props).toMatchObject({ value: "Wrong plan", editable: true });
+  expect(screen.findByType(Header).props.onBack).toBeDefined();
+  expect(JSON.stringify(root?.toJSON())).not.toContain(code);
+});
+
+test("an uncertain correction stays frozen, ignores back, and retries the identical command", async () => {
+  const { screen } = await openFix();
+  await choose(screen, "Home appliance");
+  await act(async () => { field(screen, "Reason for the correction").props.onChangeText("Wrong plan"); });
+  uuid.next = () => "fix-key";
+  remote.correct.mockRejectedValueOnce(new Error("offline"));
+  await act(async () => { button(screen, "Save correction").props.onPress(); });
+  expect(alerts()).toEqual(["Could not confirm the correction. Retry to safely check the same request."]);
+  expect(screen.findByType(Header).props.onBack).toBeUndefined();
+  await choose(screen, "Don’t count it toward a plan");
+  await act(async () => { field(screen, "Reason for the correction").props.onChangeText("Changed"); });
+  expect(choices(screen)).toEqual([["Don’t count it toward a plan", false], ["Home appliance", true]]);
+  expect(field(screen, "Reason for the correction").props).toMatchObject({ value: "Wrong plan", editable: false });
+  await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
+  expect(screen.findAllByType(RecoveryCorrectScreen)).toHaveLength(1);
+  uuid.next = () => "new-key";
+  remote.correct.mockImplementationOnce(async (request) => correctionReceipt(request));
+  await act(async () => { button(screen, "Retry correction").props.onPress(); });
+  const sent = { workspaceId: "workspace", contributionId: "sep", reason: "Wrong plan", targetPlanId: "appliance", idempotencyKey: "fix-key" };
+  expect(remote.correct.mock.calls.map(([request]) => request)).toEqual([sent, sent]);
+  expect(screen.findByType(RecoveryPlanScreen).props.notice).toBe("corrected");
+});
+
+test.each(["header", "android", "ios"])("%s back leaves Fix attribution for the same plan twice without sending anything", async (method) => {
+  const { screen, onBack } = await openFix();
+  for (const round of [1, 2]) {
+    if (round === 2) {
+      await act(async () => {
+        screen.find((node) => node.type === ListRow && node.props.title === "COP 300.000").props.onPress();
+      });
+    }
+    expect(screen.findAllByType(RecoveryCorrectScreen)).toHaveLength(1);
+    await choose(screen, "Home appliance");
+    await act(async () => {
+      if (method === "header") screen.findByType(Header).props.onBack();
+      else if (method === "android") stack.goBack();
+      else stack.dispatch(StackActions.pop(1));
+    });
+    expect(screen.findAllByType(RecoveryPlanScreen)).toHaveLength(1);
+    expect(screen.findByType(RecoveryPlanScreen).props).toMatchObject({ plan: { id: "repair" }, notice: undefined });
+    expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans", "recovery"]);
+  }
+  expect(remote.correct).not.toHaveBeenCalled();
+  await act(async () => { stack.goBack(); });
+  expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(7);
+  await act(async () => { stack.goBack(); });
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans"]);
+  expect(onBack).not.toHaveBeenCalled();
+});
+
+test("a contribution with no other eligible plan can still have its attribution removed", async () => {
+  const { screen } = await openFix([repair, ...others]);
+  expect(choices(screen)).toEqual([["Don’t count it toward a plan", false]]);
+  expect(texts()).toContain("No other plan can take this contribution. A plan needs the same destination, room for the whole amount, and to have started by September 18, 2026.");
+});
+
+test("a renamed destination place shows its new name on the plan and the draft while keeping its identity", async () => {
+  const { screen } = await open([repair], true);
+  const destination = () => screen.find((node) => node.type === ListRow && node.props.title === "Destination").props.value;
+  expect(destination()).toBe("Savings");
+  remote.query.mockReturnValue({
+    ...evaluation, candidates: [candidate],
+    plans: [{ ...repair, destinationName: "Emergency fund" }],
+    destinations: [{ id: "savings", name: "Emergency fund", productKind: "savingsAccount" }],
+  });
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
+  await act(async () => { screen.findByType(Header).props.onBack(); });
+  expect(destination()).toBe("Emergency fund");
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  expect(destination()).toBe("Emergency fund");
+  expect(screen.findByType(RecoveryDraft).props.destinationId).toBe("savings");
+  uuid.next = () => "dental-key";
+  await act(async () => { button(screen, "Activate plan").props.onPress(); });
+  expect(remote.activate.mock.calls).toEqual([[{
+    workspaceId: "workspace", sourceJournalEntryId: "dental", destinationFinancialAccountProfileId: "savings",
+    installmentCount: 4, installmentMinorUnits: 12_000_000, idempotencyKey: "dental-key",
+  }]]);
 });

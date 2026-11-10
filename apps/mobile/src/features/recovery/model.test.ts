@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { candidateDetail, formatRate, limitsCopy, minInstallment, movedCopy, progressCopy, progressRatio, recoveryMoney, recoveryMonthName, suggestionFor } from "./model";
+import { candidateDetail, correctionTargets, isCancellable, formatRate, limitsCopy, minInstallment, movedCopy, progressCopy, progressRatio, recoveryMoney, recoveryMonthName, suggestionFor } from "./model";
 
 test("recovery amounts hide only zero cents and dates use English without a year", () => {
   expect(recoveryMoney({ currency: "COP", minorUnits: 48_000_000 })).toBe("COP 480.000");
@@ -64,4 +64,28 @@ test("a replayed move uses server progress, and a larger transfer shows moved ve
     movedMinorUnits: 500_000, countedMinorUnits: 230_000,
     recoveredMinorUnits: 230_000, targetMinorUnits: 1_380_000,
   })).toBe("COP 2.300 counted toward Laptop repair. Your Laptop repair plan is now 17% complete. The Savings account balance remains separate from plan progress.");
+});
+
+test("only plans the server will accept are offered as targets, and never another plan for the same expense", () => {
+  const base = {
+    destinationFinancialAccountProfileId: "savings", remainingMinorUnits: 500_000, activationMonth: "2026-06",
+    acceptsContributions: true, sourceJournalEntryId: "expense-b",
+  };
+  const from = { ...base, id: "from", sourceJournalEntryId: "expense-a" };
+  const plans = [
+    from,
+    { ...base, id: "open" },
+    { ...base, id: "replacement-of-from", sourceJournalEntryId: "expense-a" },
+    { ...base, id: "closed-to-contributions", acceptsContributions: false },
+    { ...base, id: "other-destination", destinationFinancialAccountProfileId: "wallet" },
+    { ...base, id: "too-small", remainingMinorUnits: 100_000 },
+    { ...base, id: "started-later", activationMonth: "2026-10" },
+  ] as unknown as Parameters<typeof correctionTargets>[0];
+  expect(correctionTargets(plans, plans[0], { amountMinorUnits: 300_000, contributionDate: "2026-09-18" }).map((plan) => plan.id))
+    .toEqual(["open"]);
+});
+
+test("cancel is offered exactly when the server says the plan can be cancelled", () => {
+  expect(isCancellable({ canCancel: true })).toBe(true);
+  expect(isCancellable({ canCancel: false })).toBe(false);
 });
