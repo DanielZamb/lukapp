@@ -76,8 +76,8 @@ test.each([0, 1, 2])("legacy event dates survive %i zone changes before, during 
     await addPair("between", boundary + 2000, "2026-11-01");
   }
   if (changes === 2) {
-    await s.changeZone("America/Los_Angeles", "Pacific/Auckland", boundary + 3000);
-    await addPair("after", boundary + 4000, "2026-10-31");
+    await s.changeZone("Asia/Tokyo", "Pacific/Auckland", boundary + 3000);
+    await addPair("after", boundary + 4000, "2026-11-01");
   }
   vi.setSystemTime(boundary + 5000);
   async function check(stage: string) {
