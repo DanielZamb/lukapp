@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement, useState } from "react";
+import { createElement, useEffect, useState } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -354,4 +354,39 @@ test("rendered with a parent wrapper that echoes the same text, the input is kep
   expect(input()).toBe(kept);
   await phone.type("2");
   expect(input().props.value).toBe("12");
+});
+
+test("an owner that renders the field a commit late, as a bottom sheet's portal does, never makes the input show an older text", async () => {
+  const values: string[] = [];
+  function Recorder(props: Record<string, unknown>) { values.push(String(props.value)); return createElement("input", props); }
+  function LateOwner() {
+    const [session, setSession] = useState(() => openAmount("USD"));
+    const [shown, setShown] = useState(session);
+    useEffect(() => { setShown(session); }, [session]);
+    return createElement(AmountField, { session: shown, onChange: setSession, editable: true, inputAccessibilityLabel: "Amount",
+      InputComponent: Recorder as never });
+  }
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(LateOwner))); });
+  for (const text of ["1", "12", "123", "1234"]) {
+    values.length = 0;
+    await act(async () => input().props.onChangeText(text));
+    expect(values.length).toBeGreaterThan(0);
+    expect(values.every((value) => value === text), `renders after ${text}: ${values.join(",")}`).toBe(true);
+  }
+});
+
+test("a field that is not editable shows its owner's text and takes no native change", async () => {
+  function Frozen() {
+    const [session, setSession] = useState(() => openAmount("USD", "12"));
+    return createElement("view", null,
+      createElement(AmountField, { session, onChange: setSession, editable: false, inputAccessibilityLabel: "Amount" }),
+      createElement("button", { accessibilityLabel: "Send", accessibilityRole: "button",
+        onPress: () => { const minorUnits = amountMinorUnits(session); if (minorUnits !== null) sent.push({ currency: "USD", minorUnits }); } }));
+  }
+  sent.length = 0;
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Frozen))); });
+  await act(async () => input().props.onChangeText("99"));
+  expect(input().props.value).toBe("12");
+  await send();
+  expect(sent).toEqual([{ currency: "USD", minorUnits: 1200 }]);
 });
