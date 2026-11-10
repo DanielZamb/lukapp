@@ -4,7 +4,8 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import DraftsRoute from "../../../app/drafts";
 import { fixture, now } from "../intake/service.testSupport";
-import type { IntakeCandidate } from "../intake/candidates";
+const now0 = now;
+import { viewInbox, type IntakeCandidate } from "../intake/candidates";
 import type { ConfirmCandidateInput } from "../../../../../src/notificationIntake/types";
 
 const route = vi.hoisted((): {
@@ -38,7 +39,7 @@ vi.mock("../useIntakeCandidates", () => ({ useIntakeCandidates: () => {
     return saved?.kind === "terminal" ? [] : [projected.find((candidate) => candidate.id === row.id) ?? row];
   });
   const now = project(intakeState.now), wait = project(intakeState.wait);
-  return { now, wait, ready: [...now, ...wait].filter((row) => !row.error),
+  return { now, wait, ready: viewInbox({ v: 1, candidates: [...now, ...wait] }, "workspace", now0, "COP").ready,
     count: now.length + wait.length, error: "", notices: [], dismissNotices: vi.fn(), service: f.service,
     refresh: async () => { intakeState.refresh(); await f.service.refresh(); },
   };
@@ -263,6 +264,24 @@ test("a failed server request refreshes the inbox without showing confirmation",
   expect(intakeState.refresh).toHaveBeenCalledOnce();
   expect(text()).not.toContain("Record added");
   expect(button("Confirm all Ready").props.disabled).toBe(false);
+});
+
+test("Confirm all Ready retries a dropped batch with the same frozen command and settles it once", async () => {
+  route.segment = "now";
+  intakeState.now = [candidate("c1")];
+  const succeed = intakeState.confirm.getMockImplementation();
+  intakeState.confirm.mockRejectedValueOnce(new Error("offline"));
+  await mount();
+  await act(async () => button("Confirm all Ready").props.onPress());
+  expect(f.service.read("c1")?.status.kind).toBe("submitting");
+  expect(text()).toContain("Confirmation pending. Open to retry.");
+  intakeState.confirm.mockImplementation(succeed ?? (async () => ({ results: [] })));
+  await act(async () => button("Confirm all Ready").props.onPress());
+  const [first, second] = intakeState.confirm.mock.calls.map(([input]) => input);
+  expect(second).toEqual(first);
+  expect(second.items.map((item: ConfirmCandidateInput) => [item.candidateId, item.confirmed.amount.minorUnits])).toEqual([["c1", 126400]]);
+  expect(f.service.getSnapshot().state.records[0]).toMatchObject({ id: "c1", kind: "terminal", reason: "confirmed" });
+  expect(text()).toContain("Record added");
 });
 
 

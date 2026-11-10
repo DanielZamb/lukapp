@@ -173,6 +173,7 @@ export function projectCandidate(row: ActiveCandidate): IntakeCandidate {
   const notification = notificationOf(row);
   return { id: row.id, createdAt: row.createdAt, expiresAt: row.expiresAt, workspaceId: row.workspaceId, ...(notification ? { notification } : {}),
     currency: row.currency, suggestion: row.review, reviewAmountText: row.reviewAmountText, parserVersion: row.parserVersion, consentVersion: row.consentVersion,
+    status: row.status.kind === "review" ? { kind: "review", revision: row.recordRevision } : { kind: "pending" },
     ...(row.status.kind === "review" ? (row.status.error ? { error: row.status.error } : {}) : { error: "Confirmation pending. Open to retry." }) };
 }
 export function evidenceFor(row: ActiveCandidate) {
