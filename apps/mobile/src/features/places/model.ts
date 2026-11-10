@@ -1,4 +1,5 @@
 import type { FunctionReturnType } from "convex/server";
+import type { Translator } from "../../i18n";
 import type { api } from "../api";
 import { formatMoney, parseMoney } from "../money";
 
@@ -31,4 +32,8 @@ export function placeBalanceInput(value: string, currency: string) {
 export function trackingDate(value: string | null) {
   return value ? new Intl.DateTimeFormat("en", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
     .format(new Date(`${value}T12:00:00Z`)) : "Not started yet";
+}
+export const SETUP_PLACE_NAME = "My money";
+export function placeTitle(name: string, placeCount: number, t: Translator["t"]) {
+  return placeCount === 1 && name === SETUP_PLACE_NAME ? t("planning.myMoney") : name;
 }

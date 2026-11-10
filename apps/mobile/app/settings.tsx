@@ -4,6 +4,7 @@ import { router, Redirect } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
+import { placeTitle } from "../src/features/places/model";
 import { useT } from "../src/i18n";
 import { BrandLogo } from "../src/ui/Brand";
 import {
@@ -37,8 +38,8 @@ function SettingsContent({
   const title = user?.firstName?.trim() || t("settings.fallbackName");
   const placeCount = profiles?.length ?? 0;
   const financesDetail =
-    placeCount === 1
-      ? `${workspaceKind} · ${currency} · ${t("settings.myMoney")}`
+    profiles?.length === 1
+      ? `${workspaceKind} · ${currency} · ${placeTitle(profiles[0].name, 1, t)}`
       : `${workspaceKind} · ${currency} · ${tn("settings.places", placeCount)}`;
   const draftCategories =
     categories?.slice(0, 3).map((category) => category.name).join(" · ") ||

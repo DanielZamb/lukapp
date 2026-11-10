@@ -9,9 +9,10 @@ import { api } from "../src/features/api";
 import { HomePlaceSetup } from "../src/features/HomePlaceSetup";
 import { experienceLevel } from "../src/features/levelDoor/model";
 import { formatMoney } from "../src/features/money";
-import { accountEmoji, placesTotal } from "../src/features/places/model";
+import { accountEmoji, placesTotal, placeTitle } from "../src/features/places/model";
 import { usePlaceStyles } from "../src/features/places/styles";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
+import { useT } from "../src/i18n";
 import { Header, PrimaryButton, Screen, useTheme, useUi } from "../src/ui/core";
 
 function Places({ defaults, subject }: {
@@ -21,16 +22,19 @@ function Places({ defaults, subject }: {
   const styles = usePlaceStyles();
   const theme = useTheme();
   const ui = useUi();
+  const { t } = useT();
   const { workspace } = defaults;
   const activity = usePostedActivity(workspace.id, workspace.timeZone);
   const { month } = useWorkspaceCalendar(workspace.timeZone);
   const budget = useQuery(api.budget.evaluate, { workspaceId: workspace.id, month });
   const [placeOpen, setPlaceOpen] = useState(false);
-  const many = (activity?.accounts.length ?? 0) > 1;
+  const count = activity?.accounts.length ?? 0;
+  const many = count > 1;
+  const title = !activity ? "" : many ? "Places" : activity.accounts[0] ? placeTitle(activity.accounts[0].name, count, t) : t("planning.myMoney");
   const ready = activity !== undefined && budget !== undefined;
   const unlocking = ready && activity.accounts.length === 1 && experienceLevel(activity.accounts.length, budget.jars.length) === 0;
   return <Screen contentStyle={styles.page}>
-    <Header titleStyle={styles.pageTitle} title={many ? "Places" : "My money"} eyebrow={many ? "YOUR PLACES" : "ONE POOL"} onBack={() => router.back()} />
+    <Header titleStyle={styles.pageTitle} title={title} eyebrow={many ? "YOUR PLACES" : "ONE POOL"} onBack={() => router.back()} />
     {activity ? <>
       <View style={styles.hero}>
         <Text style={styles.muted}>What you have now</Text>
@@ -41,18 +45,18 @@ function Places({ defaults, subject }: {
           : "Bank and pocket are still one pool. Add a place when money lives apart."}</Text>
       </View>
       <View style={styles.group}>
-        {activity.accounts.map((account) => <View key={account.financialAccountProfileId} style={styles.row}>
-          <Pressable accessibilityRole="button" accessibilityLabel={account.name} style={styles.placeButton}
+        {activity.accounts.map((account) => { const name = placeTitle(account.name, count, t); return <View key={account.financialAccountProfileId} style={styles.row}>
+          <Pressable accessibilityRole="button" accessibilityLabel={name} style={styles.placeButton}
             onPress={() => router.push({ pathname: "/account", params: { profileId: account.financialAccountProfileId } })}>
             <Text style={styles.placeGlyph}>{accountEmoji(account)}</Text>
-            <Text style={styles.name}>{account.name}</Text>
+            <Text style={styles.name}>{name}</Text>
             <Text style={styles.value}>{formatMoney(account.balance, { hideZeroDecimals: true })}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Tx history for ${account.name}`} style={styles.icon}
+          <Pressable accessibilityRole="button" accessibilityLabel={`Tx history for ${name}`} style={styles.icon}
             onPress={() => router.push({ pathname: "/history", params: { profileId: account.financialAccountProfileId } })}>
             <Ionicons name="receipt-outline" size={18} color={theme.foreground} />
           </Pressable>
-        </View>)}
+        </View>; })}
       </View>
       {activity.accounts.length === 0 && <Text style={ui.muted}>No places yet.</Text>}
     </> : <ActivityIndicator accessibilityLabel="Loading places" />}

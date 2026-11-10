@@ -12,6 +12,7 @@ vi.mock("expo-router", () => ({
 }));
 vi.mock("convex/react", () => ({ useAction: () => state.changeLook }));
 vi.mock("../places/EmojiSheet", () => ({ EmojiSheet: "emoji-sheet" }));
+vi.mock("../places/RenameSheet", () => ({ RenameSheet: "rename-sheet" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native", () => ({
@@ -48,7 +49,7 @@ function button(label: string) {
 test("account shows the real place metadata, empty activity and filtered history", async () => {
   await render();
   expect(texts()).toEqual(["PLACE", "Card", "💳", "Current balance", "COP 100", "See in tx history",
-    "Type", "Credit card", "Currency", "COP", "Tracking from", "September 24, 2026",
+    "Name", "Card", "Type", "Credit card", "Currency", "COP", "Tracking from", "September 24, 2026",
     "Recent activity", "No activity yet", "New entries will appear here"]);
   expect(state.recent).toHaveBeenCalledWith("ws", 3, "card-profile");
   await act(async () => button("See in tx history").props.onPress());
