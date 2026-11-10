@@ -66,7 +66,7 @@ test("a spend-nothing jar is calm at zero or a net refund and over by everything
       impact: [{ category: { id: "Delivery", name: "Delivery", emoji: "🛒" }, overMinorUnits: 2_000_000 }],
       alerts: { rows: [], home: null, bellLabel: "Alerts, nothing needs attention" } },
     { presentation: { status: "over", spendNothing: true, amount: 5_000_000, fill: 0 }, action: "Open Delivery",
-      impact: [],
+      impact: [{ category: { id: "Delivery", name: "Delivery", emoji: "🛒" }, overMinorUnits: 2_000_000 }],
       alerts: {
         rows: [{ id: "Delivery", title: "🛒  Delivery is over", detail: "Spend nothing · COP 50.000 spent",
           destination: { pathname: "/category-look", params: { categoryId: "Delivery" } } }],
@@ -74,7 +74,7 @@ test("a spend-nothing jar is calm at zero or a net refund and over by everything
         bellLabel: "Alerts, 1 over the limit",
       } },
     { presentation: { status: "clear", spendNothing: true, amount: 0, fill: 0 }, action: "Change October's limit",
-      impact: [],
+      impact: [{ category: { id: "Delivery", name: "Delivery", emoji: "🛒" }, overMinorUnits: 2_000_000 }],
       alerts: { rows: [], home: null, bellLabel: "Alerts, nothing needs attention" } },
   ]);
   const numbers = (value: unknown): unknown[] => typeof value === "number" ? [value]
@@ -82,7 +82,7 @@ test("a spend-nothing jar is calm at zero or a net refund and over by everything
   expect(numbers(outputs).filter((value) => !Number.isFinite(value))).toEqual([]);
   expect(numbers({ broken: { ratio: 0 / 0 } })).toEqual([NaN]);
   expect(postingBudgetImpact({ jars: [zero(-5_000_000)], categoryIds: ["Delivery"], expenseMinorUnits: 7_000_000 }))
-    .toEqual([{ category: { id: "Delivery", name: "Delivery", emoji: "🛒" }, overMinorUnits: 2_000_000 }]);
+    .toEqual([{ category: { id: "Delivery", name: "Delivery", emoji: "🛒" }, overMinorUnits: 7_000_000 }]);
   expect(await batchPostingBudgetImpact([{ kind: "expense", payload: {
     workspaceId: "workspace", financialAccountProfileId: "cash", accountingDate: "2026-10-17", description: "Pizza",
     idempotencyKey: "pizza", amount: { currency: "COP", minorUnits: 1 }, userCategoryIds: ["Delivery"],

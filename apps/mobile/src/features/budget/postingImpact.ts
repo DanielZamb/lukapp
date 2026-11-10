@@ -1,6 +1,11 @@
 import type { PendingPosting } from "../posting/pendingPostingSchema";
 import type { BudgetJar } from "./model";
 
+/**
+ * How far an expense takes each selected jar over its limit. A positive limit warns only on the expense that
+ * crosses it. A spend-nothing limit warns on every expense, by the whole expense, since each one breaks it; a refund
+ * already in the month gives it no room.
+ */
 export function postingBudgetImpact({
   jars,
   categoryIds,
@@ -11,18 +16,15 @@ export function postingBudgetImpact({
   expenseMinorUnits: number;
 }) {
   return jars.flatMap((jar) => {
-    const remaining = jar.limitMinorUnits - jar.consumptionMinorUnits;
-    return categoryIds.includes(jar.category.id) &&
-      remaining >= 0 &&
-      expenseMinorUnits > remaining
-      ? [
-          {
-            category: jar.category,
-            overMinorUnits: expenseMinorUnits - remaining,
-          },
-        ]
-      : [];
+    const over = categoryIds.includes(jar.category.id) ? overLimit(jar, expenseMinorUnits) : 0;
+    return over > 0 ? [{ category: jar.category, overMinorUnits: over }] : [];
   });
+}
+
+function overLimit(jar: BudgetJar, expenseMinorUnits: number) {
+  if (jar.limitMinorUnits === 0) return expenseMinorUnits;
+  const remaining = jar.limitMinorUnits - jar.consumptionMinorUnits;
+  return remaining >= 0 ? expenseMinorUnits - remaining : 0;
 }
 
 export type PostingBudgetImpact = ReturnType<typeof postingBudgetImpact>;
