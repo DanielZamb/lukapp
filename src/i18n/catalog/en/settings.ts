@@ -7,6 +7,7 @@ export const settings = {
   language: "Language",
   languageSystem: "Device",
   languageSystemA11y: "Use the device language",
+  workspacePersonal: "Personal",
   myFinances: "My finances",
   myMoney: "My money",
   places_one: "{count} place",

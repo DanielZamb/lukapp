@@ -38,10 +38,11 @@ function SettingsContent({
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
   const title = user?.firstName?.trim() || t("settings.fallbackName");
   const placeCount = profiles?.length ?? 0;
+  const kind = workspaceKind === "Personal" ? t("settings.workspacePersonal") : workspaceKind;
   const financesDetail =
     profiles?.length === 1
-      ? `${workspaceKind} · ${currency} · ${placeTitle(profiles[0].name, 1, t)}`
-      : `${workspaceKind} · ${currency} · ${tn("settings.places", placeCount)}`;
+      ? `${kind} · ${currency} · ${placeTitle(profiles[0].name, 1, t)}`
+      : `${kind} · ${currency} · ${tn("settings.places", placeCount)}`;
   const draftCategories =
     categories?.slice(0, 3).map((category) => category.name).join(" · ") ||
     t("settings.noCategories");

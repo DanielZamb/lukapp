@@ -369,7 +369,7 @@ export function AppearanceToggle() {
 
 /** Device language, or an explicit English or Spanish choice that persists on this phone. */
 export function LanguageToggle() {
-  const { styles } = useCore();
+  const { styles, layout } = useCore();
   const { t, preference, setPreference } = useLanguage();
   const options = [
     { value: "system" as const, label: t("settings.languageSystem"), a11y: t("settings.languageSystemA11y") },
@@ -384,7 +384,7 @@ export function LanguageToggle() {
           accessibilityLabel={option.a11y}
           accessibilityState={{ selected: preference === option.value }}
           onPress={() => setPreference(option.value)}
-          style={[styles.segment, { flexBasis: "30%" }, preference === option.value && styles.segmentSelected]}
+          style={[styles.segment, !layout.reflow && { flexBasis: "30%" }, preference === option.value && styles.segmentSelected]}
         >
           <Text style={styles.segmentText}>{option.label}</Text>
         </Pressable>

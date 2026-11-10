@@ -266,14 +266,14 @@ export function createCoreStyles(theme: Theme, layout: ReadableLayout = defaultL
       textAlign: "center",
     },
     segmented: {
-      flexDirection: "row",
+      flexDirection: layout.reflow ? "column" : "row",
       gap: spacing.sm,
       padding: spacing.xs,
       borderRadius: radius.md,
       backgroundColor: theme.background,
     },
     segment: {
-      flex: 1,
+      flex: layout.reflow ? undefined : 1,
       minHeight: touchTarget,
       flexDirection: "row",
       gap: spacing.sm,

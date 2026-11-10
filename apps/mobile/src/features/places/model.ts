@@ -1,5 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
-import type { Translator } from "../../i18n";
+import { languages, translate } from "../../../../../src/i18n";
+import { formatLongDate, type MessageKey, type Translator } from "../../i18n";
 import type { api } from "../api";
 import { formatMoney, parseMoney } from "../money";
 
@@ -11,9 +12,9 @@ export const kindDetails = {
   Savings: { productKind: "savingsAccount", emoji: "🏦" },
   Wallet: { productKind: "cash", emoji: "👛" },
 } as const;
-export const accountKinds = {
-  bankAccount: "Checking", savingsAccount: "Savings", cash: "Wallet",
-  creditCard: "Credit card", loan: "Loan",
+export const accountKinds: Record<Place["productKind"], MessageKey> = {
+  bankAccount: "places.kindBankAccount", savingsAccount: "places.kindSavingsAccount", cash: "places.kindCash",
+  creditCard: "places.kindCreditCard", loan: "places.kindLoan",
 };
 export function accountEmoji(account: Pick<Place, "emoji" | "productKind">) {
   return account.emoji ?? {
@@ -29,11 +30,10 @@ export function placeBalanceInput(value: string, currency: string) {
   try { minorUnits = parseMoney(value, "es-CO", currency); } catch { minorUnits = 0; }
   return formatMoney({ currency, minorUnits }).replace(`${currency} `, "");
 }
-export function trackingDate(value: string | null) {
-  return value ? new Intl.DateTimeFormat("en", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
-    .format(new Date(`${value}T12:00:00Z`)) : "Not started yet";
+export function trackingDate(value: string | null, { t, language }: Translator) {
+  return value ? formatLongDate(language, new Date(`${value}T12:00:00Z`), "UTC") : t("places.accountNotStarted");
 }
-export const SETUP_PLACE_NAME = "My money";
+const setupPlaceNames: ReadonlySet<string> = new Set(languages.map((language) => translate(language, "planning.myMoney")));
 export function placeTitle(name: string, placeCount: number, t: Translator["t"]) {
-  return placeCount === 1 && name === SETUP_PLACE_NAME ? t("planning.myMoney") : name;
+  return placeCount === 1 && setupPlaceNames.has(name) ? t("planning.myMoney") : name;
 }

@@ -22,7 +22,7 @@ function Places({ defaults, subject }: {
   const styles = usePlaceStyles();
   const theme = useTheme();
   const ui = useUi();
-  const { t } = useT();
+  const { t, tn } = useT();
   const { workspace } = defaults;
   const activity = usePostedActivity(workspace.id, workspace.timeZone);
   const { month } = useWorkspaceCalendar(workspace.timeZone);
@@ -30,19 +30,18 @@ function Places({ defaults, subject }: {
   const [placeOpen, setPlaceOpen] = useState(false);
   const count = activity?.accounts.length ?? 0;
   const many = count > 1;
-  const title = !activity ? "" : many ? "Places" : activity.accounts[0] ? placeTitle(activity.accounts[0].name, count, t) : t("planning.myMoney");
+  const title = !activity ? "" : many ? t("places.title") : activity.accounts[0] ? placeTitle(activity.accounts[0].name, count, t) : t("planning.myMoney");
   const ready = activity !== undefined && budget !== undefined;
   const unlocking = ready && activity.accounts.length === 1 && experienceLevel(activity.accounts.length, budget.jars.length) === 0;
   return <Screen contentStyle={styles.page}>
-    <Header titleStyle={styles.pageTitle} title={title} eyebrow={many ? "YOUR PLACES" : "ONE POOL"} onBack={() => router.back()} />
+    <Header titleStyle={styles.pageTitle} title={title} eyebrow={many ? t("places.eyebrowMany") : t("places.eyebrowOne")} onBack={() => router.back()} />
     {activity ? <>
       <View style={styles.hero}>
-        <Text style={styles.muted}>What you have now</Text>
+        <Text style={styles.muted}>{t("places.now")}</Text>
         <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>
           {formatMoney(placesTotal(activity.accounts, workspace.functionalCurrency), { hideZeroDecimals: true })}
         </Text>
-        <Text style={styles.muted}>{many ? `Across ${activity.accounts.length} places`
-          : "Bank and pocket are still one pool. Add a place when money lives apart."}</Text>
+        <Text style={styles.muted}>{many ? tn("places.across", activity.accounts.length) : t("places.onePool")}</Text>
       </View>
       <View style={styles.group}>
         {activity.accounts.map((account) => { const name = placeTitle(account.name, count, t); return <View key={account.financialAccountProfileId} style={styles.row}>
@@ -52,15 +51,15 @@ function Places({ defaults, subject }: {
             <Text style={styles.name}>{name}</Text>
             <Text style={styles.value}>{formatMoney(account.balance, { hideZeroDecimals: true })}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Tx history for ${name}`} style={styles.icon}
+          <Pressable accessibilityRole="button" accessibilityLabel={t("places.historyA11y", { name })} style={styles.icon}
             onPress={() => router.push({ pathname: "/history", params: { profileId: account.financialAccountProfileId } })}>
             <Ionicons name="receipt-outline" size={18} color={theme.foreground} />
           </Pressable>
         </View>; })}
       </View>
-      {activity.accounts.length === 0 && <Text style={ui.muted}>No places yet.</Text>}
-    </> : <ActivityIndicator accessibilityLabel="Loading places" />}
-    <PrimaryButton label="Add another place" trailingIcon="add" disabled={!ready} onPress={() => setPlaceOpen(true)} />
+      {activity.accounts.length === 0 && <Text style={ui.muted}>{t("places.empty")}</Text>}
+    </> : <ActivityIndicator accessibilityLabel={t("places.loading")} />}
+    <PrimaryButton label={t("places.add")} trailingIcon="add" disabled={!ready} onPress={() => setPlaceOpen(true)} />
     {placeOpen && <HomePlaceSetup defaults={defaults} subject={subject} unlocking={unlocking} onClose={() => setPlaceOpen(false)} />}
   </Screen>;
 }

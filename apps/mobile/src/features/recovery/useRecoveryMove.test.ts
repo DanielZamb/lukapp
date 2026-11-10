@@ -1,8 +1,10 @@
+import * as React from "react";
 import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
 import type { RecoveryPlace, RecoveryPlanView } from "./model";
+import { LanguageProvider } from "../../i18n";
 import { useRecoveryMove, type RecoveryMoveTransport } from "./useRecoveryMove";
 
 const plan: RecoveryPlanView = {
@@ -37,11 +39,17 @@ function transport() {
     onMoved: vi.fn(), newKey: () => `move-${++sequence}`, reportFailure: vi.fn(() => false),
   } satisfies RecoveryMoveTransport;
 }
-async function open(api: RecoveryMoveTransport, seed = { workspaceId: "workspace", plan, sources, timeZone: "America/Bogota" }) {
+async function open(
+  api: RecoveryMoveTransport,
+  seed = { workspaceId: "workspace", plan, sources, timeZone: "America/Bogota" },
+  language?: "es",
+) {
+  vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let hook: ReturnType<typeof useRecoveryMove> | undefined;
   function Harness() { hook = useRecoveryMove(seed, api); return null; }
-  await act(async () => { root = create(createElement(Harness)); });
+  const node = language ? createElement(LanguageProvider, { initialPreference: language }, createElement(Harness)) : createElement(Harness);
+  await act(async () => { root = create(node); });
   return () => { if (!hook) throw new Error("Move hook not mounted"); return hook; };
 }
 
@@ -186,3 +194,44 @@ test.each([["JPY", 100, "100"], ["BHD", 1234, "1,234"]] satisfies [string, numbe
     expect(api.move.mock.calls[0][0].amount).toEqual({ currency, minorUnits });
   },
 );
+
+test("a Spanish movement stores a Spanish description and a retry repeats it unchanged", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const move = await open(api, undefined, "es");
+  await act(async () => { await move().submit(); });
+  expect(move().error).toBe("No pudimos confirmar la transferencia. Reintenta para revisar el mismo movimiento sin riesgo.");
+  await act(async () => { await move().submit(); });
+  expect(api.move.mock.calls.map(([request]) => [request.description, request.idempotencyKey])).toEqual([
+    ["Recuperar ahorros: Laptop repair", "move-1"], ["Recuperar ahorros: Laptop repair", "move-1"],
+  ]);
+});
+
+test.each([
+  { failure: new ConvexError({ kind: "accounting", code: "insufficient_funds" }),
+    en: "The movement was rejected. Check the source and amount, then try again.",
+    es: "No se hizo la transferencia. Revisa el origen y el valor, y vuelve a intentarlo." },
+  { failure: new Error("lost acknowledgement"),
+    en: "Could not confirm the transfer. Retry to safely check the same movement.",
+    es: "No pudimos confirmar la transferencia. Reintenta para revisar el mismo movimiento sin riesgo." },
+])("movement failure $failure.message maps to a catalog message in both languages", async ({ failure, en, es }) => {
+  for (const [language, message] of [[undefined, en], ["es", es]] as const) {
+    const api = transport();
+    api.move.mockRejectedValueOnce(failure);
+    const move = await open(api, undefined, language);
+    await act(async () => { await move().submit(); });
+    expect(move().error).toBe(message);
+    await act(async () => root?.unmount());
+  }
+  root = undefined;
+});
+
+test("choosing the destination as the source is refused in Spanish without sending", async () => {
+  const api = transport();
+  const move = await open(api, undefined, "es");
+  await act(async () => { move().onSource("savings"); });
+  await act(async () => { await move().submit(); });
+  expect(move().error).toBe("Escoge otro lugar de donde sacar la plata.");
+  expect(api.move).not.toHaveBeenCalled();
+});

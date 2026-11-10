@@ -5,6 +5,7 @@ import { getFunctionName, type FunctionReference, type FunctionReturnType } from
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import PlansRoute from "../../../app/plans";
 import { api } from "../api";
+import { LanguageProvider } from "../../i18n";
 
 type RecoveryEvaluation = FunctionReturnType<typeof api.savingsRecovery.evaluate>;
 
@@ -32,6 +33,7 @@ vi.mock("react-native", () => ({
 }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
+vi.mock("expo-secure-store", () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => {
@@ -150,4 +152,27 @@ test("Plans keeps the recovery row visible while evaluate is loading", async () 
   expect(copy).not.toContain("Emergency repair");
   root.root.findByProps({ accessibilityLabel: "Savings recovery, " });
   expect(root.root.findAll((node) => String(node.type) === "Icon").map((node) => node.props.name)).toContain("trending-up-outline");
+});
+
+test("Plans reads in Spanish with the workspace month inside each sentence", async () => {
+  const active = {
+    canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined,
+    contributionHistory: [], status: "active" as const, id: "plan-1", title: "Nevera", sourceJournalEntryId: "exp-1",
+    sourceTitle: "Nevera", destinationFinancialAccountProfileId: "savings", destinationName: "Ahorros",
+    principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 200_000, impliedAnnualRateBps: 0,
+    activationMonth: "2026-09", currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 1_200_000,
+    targetMinorUnits: 1_200_000, dueMinorUnits: 200_000,
+  };
+  state.recovery = { ...state.recovery!, plans: [active, { ...active, id: "plan-2", title: "Llantas" }] };
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(PlansRoute)));
+  });
+  if (!root) throw new Error("Plans not mounted");
+  expect(textCopy(root.root)).toEqual([
+    "LO QUE VIENE", "Planes", "Presupuesto de octubre", "Los topes de este mes", "Recuperar ahorros", "2 planes",
+    "El presupuesto es el plan de octubre. Recuperar ahorros va aparte: no es una fila del presupuesto.",
+  ]);
+  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Presupuesto de octubre, Los topes de este mes"
+    && typeof node.props.onPress === "function")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Atrás")).not.toHaveLength(0);
 });

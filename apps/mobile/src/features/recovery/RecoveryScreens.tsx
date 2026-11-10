@@ -48,14 +48,14 @@ export function RecoveryPlanList(props: {
   const past = props.plans.filter(isEnded);
   return (
     <Screen>
-      <Header title="Savings recovery" eyebrow="PLANS" onBack={props.onBack} />
+      <Header title={t("recovery.title")} eyebrow={t("recovery.listEyebrow")} onBack={props.onBack} />
       {current.length > 0 && (
         <ListGroup>
           {current.map((plan) => (
             <ListRow
               key={plan.id}
               title={plan.title}
-              detail={progressCopy(plan)}
+              detail={progressCopy(plan, t)}
               value={`${Math.round(progressRatio(plan) * 100)}%`}
               onPress={() => props.onPlan(plan.id)}
             />
@@ -75,7 +75,7 @@ export function RecoveryPlanList(props: {
                   ? t("planning.listCancelledDetail", {
                     amount: recoveryMoney({ currency: plan.currency, minorUnits: plan.recoveredMinorUnits }),
                   })
-                  : progressCopy(plan)}
+                  : progressCopy(plan, t)}
                 value={plan.status === "cancelled" ? t("planning.statusCancelled") : `${Math.round(progressRatio(plan) * 100)}%`}
                 valueStyle={styles.quiet}
                 onPress={() => props.onPlan(plan.id)}
@@ -96,30 +96,30 @@ export function RecoveryCandidates(props: {
   onStart: (candidate: RecoveryCandidate) => void;
 }) {
   const ui = useUi();
+  const translator = useT();
+  const { t, locale } = translator;
   return (
     <Screen>
       <Header
-        title="Expenses to recover"
-        eyebrow={`${recoveryMonthName(props.month).toUpperCase()} CLOSE`}
+        title={t("recovery.candidatesTitle")}
+        eyebrow={t("recovery.candidatesEyebrow", { month: recoveryMonthName(props.month, translator).toLocaleUpperCase(locale) })}
         onBack={props.onBack}
       />
-      <Text style={ui.muted}>
-        Choose an expense you want to replenish through future saving. The expense stays posted as it happened.
-      </Text>
+      <Text style={ui.muted}>{t("recovery.candidatesIntro")}</Text>
       {props.candidates.length ? (
         <ListGroup>
           {props.candidates.map((candidate) => (
             <ListRow
               key={candidate.journalEntryId}
               title={candidate.title}
-              detail={candidateDetail(candidate)}
+              detail={candidateDetail(candidate, translator)}
               value={recoveryMoney({ currency: props.currency, minorUnits: candidate.amountMinorUnits })}
               onPress={() => props.onStart(candidate)}
             />
           ))}
         </ListGroup>
       ) : (
-        <Text style={ui.muted}>No posted expenses are waiting to be recovered.</Text>
+        <Text style={ui.muted}>{t("recovery.candidatesEmpty")}</Text>
       )}
     </Screen>
   );
@@ -149,8 +149,9 @@ export function RecoveryDraft(props: {
   const theme = useTheme();
   const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   const ui = useUi();
-  const { t } = useT();
-  const limits = limitsCopy(props.currency, props.suggestion);
+  const { t, tn, locale } = useT();
+  const limits = limitsCopy(props.currency, props.suggestion, t);
+  const limitsHelp = `${limits.range} ${limits.extra}`;
   const principal = recoveryMoney({
     currency: props.currency,
     minorUnits: props.candidate.amountMinorUnits,
@@ -158,19 +159,18 @@ export function RecoveryDraft(props: {
   return (
     <Screen>
       <Header
-        title="Plan the recovery"
-        eyebrow={props.replacing
-          ? t("planning.replacementEyebrow", { title: props.candidate.title.toUpperCase() })
-          : `${props.candidate.title.toUpperCase()} · DRAFT`}
+        title={t("recovery.draftTitle")}
+        eyebrow={t(props.replacing ? "planning.replacementEyebrow" : "recovery.draftEyebrow",
+          { title: props.candidate.title.toLocaleUpperCase(locale) })}
         onBack={props.canDismiss ? props.onBack : undefined}
       />
       {props.replacing && <Text style={ui.muted}>{t("planning.replacementNote")}</Text>}
       <View style={styles.amountCard}>
-        <Text style={ui.muted}>Amount to replenish</Text>
+        <Text style={ui.muted}>{t("recovery.draftPrincipal")}</Text>
         <Text style={[ui.hero, styles.amount]}>{principal}</Text>
       </View>
       <View style={ui.section}>
-        <Text style={ui.label}>MONTHS</Text>
+        <Text style={ui.label}>{t("recovery.draftMonthsLabel")}</Text>
         {INSTALLMENT_COUNTS.map((count) => {
           const preview = count === props.installmentCount
             ? props.suggestion
@@ -178,8 +178,11 @@ export function RecoveryDraft(props: {
           return (
             <Choice
               key={count}
-              label={`${count} months`}
-              detail={`${recoveryMoney({ currency: props.currency, minorUnits: preview.installmentMinorUnits })} each · ${recoveryMoney({ currency: props.currency, minorUnits: preview.premiumMinorUnits })} extra saving`}
+              label={tn("recovery.months", count)}
+              detail={t("recovery.draftMonthsDetail", {
+                installment: recoveryMoney({ currency: props.currency, minorUnits: preview.installmentMinorUnits }),
+                extra: recoveryMoney({ currency: props.currency, minorUnits: preview.premiumMinorUnits }),
+              })}
               selected={count === props.installmentCount}
               onPress={() => { if (props.editable) props.onMonths(count); }}
             />
@@ -187,24 +190,24 @@ export function RecoveryDraft(props: {
         })}
       </View>
       <Field
-        label={`Monthly amount in ${props.currency}`}
-        accessibilityLabel={`Monthly amount in ${props.currency}`}
+        label={t("recovery.draftMonthly", { currency: props.currency })}
+        accessibilityLabel={t("recovery.draftMonthly", { currency: props.currency })}
         keyboardType="decimal-pad"
         value={props.amount}
         onChangeText={props.onAmount}
         editable={props.editable}
         invalid={!props.suggestion.valid}
         error={props.error || (!props.suggestion.valid ? limits.invalid : undefined)}
-        helperText={!props.error && props.suggestion.valid ? `${limits.range} ${limits.extra}` : undefined}
+        helperText={!props.error && props.suggestion.valid ? limitsHelp : undefined}
       />
-      {(props.error || !props.suggestion.valid) ? <Text style={ui.muted}>{`${limits.range} ${limits.extra}`}</Text> : null}
+      {(props.error || !props.suggestion.valid) ? <Text style={ui.muted}>{limitsHelp}</Text> : null}
       {props.destinations.length === 1 ? (
         <ListGroup>
-          <ListRow title="Destination" value={props.destinations[0].name} icon="wallet-outline" />
+          <ListRow title={t("recovery.destination")} value={props.destinations[0].name} icon="wallet-outline" />
         </ListGroup>
       ) : (
         <View style={ui.section}>
-          <Text style={ui.label}>DESTINATION</Text>
+          <Text style={ui.label}>{t("recovery.destinationLabel")}</Text>
           {props.destinations.length ? props.destinations.map((place) => (
             <Choice
               key={place.id}
@@ -213,20 +216,18 @@ export function RecoveryDraft(props: {
               onPress={() => { if (props.editable) props.onDestination(place.id); }}
             />
           )) : (
-            <Text style={ui.muted}>Add a savings place from Overview before you can start Recovery.</Text>
+            <Text style={ui.muted}>{t("recovery.draftNoDestination")}</Text>
           )}
         </View>
       )}
       <PrimaryButton
-        label={props.busy ? "Activating…" : props.pending ? "Retry activation" : "Activate plan"}
+        label={props.busy ? t("recovery.draftActivating") : props.pending ? t("recovery.draftRetry") : t("recovery.draftActivate")}
         disabled={!props.canSubmit}
         pending={props.busy}
         onPress={props.onSave}
         trailingIcon="checkmark"
       />
-      <Text style={ui.muted}>
-        Activation fixes this schedule. Future changes cancel and replace the plan; completed saving stays in history.
-      </Text>
+      <Text style={ui.muted}>{t("recovery.draftFootnote")}</Text>
     </Screen>
   );
 }
@@ -251,7 +252,8 @@ export function RecoveryPlanScreen(props: {
   const theme = useTheme();
   const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   const ui = useUi();
-  const { t, language } = useT();
+  const translator = useT();
+  const { t, tn, language, locale } = translator;
   const { plan } = props;
   const money = (minorUnits: number) => recoveryMoney({ currency: plan.currency, minorUnits });
   const complete = plan.remainingMinorUnits === 0;
@@ -260,7 +262,7 @@ export function RecoveryPlanScreen(props: {
   const replacedBy = props.plans.find((item) => item.id === plan.replacedByPlanId);
   return (
     <Screen>
-      <Header title="Savings recovery" eyebrow={plan.title.toUpperCase()} onBack={props.onBack} />
+      <Header title={t("recovery.title")} eyebrow={plan.title.toLocaleUpperCase(locale)} onBack={props.onBack} />
       {props.notice && (
         <Text accessibilityRole="alert" style={ui.body}>
           {t(props.notice === "cancelled" ? "planning.cancelledNotice" : "planning.correctedNotice")}
@@ -277,39 +279,37 @@ export function RecoveryPlanScreen(props: {
         </View>
       )}
       <View style={styles.amountCard}>
-        <Text style={ui.muted}>Recovered so far</Text>
+        <Text style={ui.muted}>{t("recovery.planRecovered")}</Text>
         <Text style={[ui.hero, styles.amount]}>{money(plan.recoveredMinorUnits)}</Text>
         {!cancelled && <>
-          <ProgressBar value={progressRatio(plan)} label={`${plan.title} recovery progress`} />
+          <ProgressBar value={progressRatio(plan)} label={t("recovery.planProgressA11y", { title: plan.title })} />
           <View style={styles.legend}>
-            <Text style={ui.muted}>{Math.round(progressRatio(plan) * 100)}% complete</Text>
-            <Text style={ui.muted}>{money(plan.remainingMinorUnits)} left</Text>
+            <Text style={ui.muted}>{t("recovery.planPercent", { percent: Math.round(progressRatio(plan) * 100) })}</Text>
+            <Text style={ui.muted}>{t("recovery.planLeft", { amount: money(plan.remainingMinorUnits) })}</Text>
           </View>
         </>}
       </View>
       <ListGroup>
         {!cancelled && (
           <ListRow
-            title="Due this month"
+            title={t("recovery.planDue")}
             value={money(plan.dueMinorUnits)}
             valueStyle={plan.dueMinorUnits > 0 ? styles.warning : undefined}
           />
         )}
-        <ListRow title="Destination" value={plan.destinationName} />
-        <ListRow title="Original plan" value={`${plan.installmentCount} months`} />
+        <ListRow title={t("recovery.destination")} value={plan.destinationName} />
+        <ListRow title={t("recovery.planOriginal")} value={tn("recovery.months", plan.installmentCount)} />
         {replaces && <ListRow title={t("planning.replaces")} value={replaces.title} onPress={() => props.onPlan(replaces.id)} />}
         {replacedBy && (
           <ListRow title={t("planning.replacedBy")} value={replacedBy.title} onPress={() => props.onPlan(replacedBy.id)} />
         )}
       </ListGroup>
       {plan.status === "suspended" && (
-        <Text style={ui.muted}>
-          Plan suspended because the original expense was reversed. Money already saved stays in your accounts.
-        </Text>
+        <Text style={ui.muted}>{t("recovery.planSuspended")}</Text>
       )}
       {!complete && plan.status === "active" && plan.acceptsContributions && (
         <PrimaryButton
-          label={`Move money for ${recoveryMonthName(props.month)}`}
+          label={t("recovery.planMove", { month: recoveryMonthName(props.month, translator) })}
           trailingIcon="swap-horizontal"
           onPress={props.onMove}
         />
@@ -318,12 +318,10 @@ export function RecoveryPlanScreen(props: {
         <Text style={ui.muted}>{t("planning.replaceOpen", { amount: money(props.replacement.amountMinorUnits) })}</Text>
         <PrimaryButton label={t("planning.replaceAction")} trailingIcon="refresh" onPress={props.onReplace} />
       </> : <Text style={ui.muted}>{t("planning.replaceUnavailable")}</Text>)}
-      <SecondaryButton label="Find another expense" onPress={props.onFind} />
+      <SecondaryButton label={t("recovery.planFind")} onPress={props.onFind} />
       {isCancellable(plan) && <SecondaryButton label={t("planning.cancelAction")} tone="danger" onPress={props.onCancel} />}
       <ContributionHistory plan={plan} plans={props.plans} timeZone={props.timeZone} onPlan={props.onPlan} onFix={props.onFix} />
-      <Text style={ui.muted}>
-        Recovery is a saving plan. It does not undo the original expense or create money you owe yourself.
-      </Text>
+      <Text style={ui.muted}>{t("recovery.planFootnote")}</Text>
     </Screen>
   );
 }
@@ -347,20 +345,21 @@ export function RecoveryMoveScreen(props: {
   const theme = useTheme();
   const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   const ui = useUi();
+  const { t } = useT();
   const places = props.sources.filter((place) => place.id !== props.plan.destinationFinancialAccountProfileId);
   return (
     <Screen>
       <Header
-        title="Move money"
-        eyebrow="RECOVERY CONTRIBUTION"
+        title={t("recovery.moveTitle")}
+        eyebrow={t("recovery.moveEyebrow")}
         onBack={props.canDismiss ? props.onBack : undefined}
       />
       <View style={styles.amountCard}>
-        <Text style={ui.muted}>Amount</Text>
+        <Text style={ui.muted}>{t("recovery.moveAmount")}</Text>
         <View style={styles.amountEntry}>
           <Text style={[ui.hero, styles.amount]}>{props.plan.currency}</Text>
           <TextInput
-            accessibilityLabel={`Amount in ${props.plan.currency}`}
+            accessibilityLabel={t("recovery.moveAmountA11y", { currency: props.plan.currency })}
             keyboardType="decimal-pad"
             value={props.amount}
             onChangeText={props.onAmount}
@@ -374,10 +373,10 @@ export function RecoveryMoveScreen(props: {
       </View>
       <ListGroup>
         {places.length === 1 ? (
-          <ListRow title="From" value={places[0].name} icon="arrow-up-circle-outline" />
+          <ListRow title={t("recovery.moveFrom")} value={places[0].name} icon="arrow-up-circle-outline" />
         ) : (
           <View>
-            <ListRow title="From" icon="arrow-up-circle-outline" />
+            <ListRow title={t("recovery.moveFrom")} icon="arrow-up-circle-outline" />
             <View style={styles.sources}>
               {places.length ? places.map((place) => (
                 <Choice
@@ -387,24 +386,22 @@ export function RecoveryMoveScreen(props: {
                   onPress={() => { if (props.editable) props.onSource(place.id); }}
                 />
               )) : (
-                <Text style={ui.muted}>Add another place before you can move money into this destination.</Text>
+                <Text style={ui.muted}>{t("recovery.moveNoSource")}</Text>
               )}
             </View>
           </View>
         )}
-        <ListRow title="To" value={props.plan.destinationName} icon="arrow-down-circle-outline" />
-        <ListRow title="Counts toward" value={props.plan.title} icon="trending-up-outline" />
+        <ListRow title={t("recovery.moveTo")} value={props.plan.destinationName} icon="arrow-down-circle-outline" />
+        <ListRow title={t("recovery.moveCountsToward")} value={props.plan.title} icon="trending-up-outline" />
       </ListGroup>
       <PrimaryButton
-        label={props.busy ? "Moving…" : props.pending ? "Retry transfer" : "Post transfer"}
+        label={props.busy ? t("recovery.moveBusy") : props.pending ? t("recovery.moveRetry") : t("recovery.moveSubmit")}
         disabled={!props.canSubmit || places.length === 0}
         pending={props.busy}
         onPress={() => { void props.submit(); }}
         trailingIcon="checkmark"
       />
-      <Text style={ui.muted}>
-        Progress changes only after this real account-to-account transfer posts.
-      </Text>
+      <Text style={ui.muted}>{t("recovery.moveFootnote")}</Text>
     </Screen>
   );
 }
@@ -418,6 +415,7 @@ export function RecoveryMoved(props: {
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
+  const { t } = useT();
   return (
     <Screen contentStyle={styles.completion}>
       <View style={styles.completionIcon}>
@@ -425,8 +423,8 @@ export function RecoveryMoved(props: {
       </View>
       <Text accessibilityRole="header" style={styles.completionTitle}>{props.title}</Text>
       <Text style={[ui.muted, styles.completionCopy]}>{props.detail}</Text>
-      <PrimaryButton label="View recovery plan" trailingIcon="trending-up-outline" onPress={props.onViewPlan} />
-      <SecondaryButton label="Back home" onPress={props.onHome} />
+      <PrimaryButton label={t("recovery.movedViewPlan")} trailingIcon="trending-up-outline" onPress={props.onViewPlan} />
+      <SecondaryButton label={t("recovery.backHome")} onPress={props.onHome} />
     </Screen>
   );
 }
@@ -442,17 +440,23 @@ export function RecoveryActivated(props: {
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
+  const translator = useT();
+  const { t } = translator;
   return (
     <Screen contentStyle={styles.completion}>
       <View style={styles.completionIcon}>
         <Ionicons name="checkmark" size={32} color={theme.primaryForeground} />
       </View>
-      <Text accessibilityRole="header" style={styles.completionTitle}>Recovery plan active</Text>
+      <Text accessibilityRole="header" style={styles.completionTitle}>{t("recovery.activatedTitle")}</Text>
       <Text style={[ui.muted, styles.completionCopy]}>
-        {`${props.title} will begin with a ${recoveryMoney({ currency: props.currency, minorUnits: props.installmentMinorUnits })} contribution in ${recoveryMonthName(props.activationMonth)}.`}
+        {t("recovery.activatedDetail", {
+          title: props.title,
+          amount: recoveryMoney({ currency: props.currency, minorUnits: props.installmentMinorUnits }),
+          month: recoveryMonthName(props.activationMonth, translator),
+        })}
       </Text>
-      <PrimaryButton label="View Plans" trailingIcon="layers-outline" onPress={props.onViewPlans} />
-      <SecondaryButton label="Back home" onPress={props.onHome} />
+      <PrimaryButton label={t("recovery.activatedViewPlans")} trailingIcon="layers-outline" onPress={props.onViewPlans} />
+      <SecondaryButton label={t("recovery.backHome")} onPress={props.onHome} />
     </Screen>
   );
 }

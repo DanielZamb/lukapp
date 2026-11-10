@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
 import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
+import { useT } from "../../i18n";
 import type { api } from "../api";
 import { parseMoney } from "../money";
 import { defaultAccountingDate } from "../timeZones";
@@ -21,6 +22,7 @@ export function useRecoveryMove(
   seed: { workspaceId: string; timeZone: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
   transport: RecoveryMoveTransport,
 ) {
+  const { t } = useT();
   const defaultSource = seed.sources.find((place) => place.id !== seed.plan.destinationFinancialAccountProfileId)
     ?? null;
   const [sourceId, setSourceId] = useState(defaultSource?.id ?? null);
@@ -45,7 +47,7 @@ export function useRecoveryMove(
     const selected = request.current?.sourceFinancialAccountProfileId ?? sourceId;
     if (!mounted.active || submitting.current || !selected || (!request.current && minorUnits <= 0)) return;
     if (!request.current && selected === seed.plan.destinationFinancialAccountProfileId) {
-      setError("Choose a different place to move money from.");
+      setError(t("recovery.moveSameSource"));
       return;
     }
     submitting.current = true;
@@ -58,7 +60,7 @@ export function useRecoveryMove(
         sourceFinancialAccountProfileId: selected,
         amount: { currency: seed.plan.currency, minorUnits },
         accountingDate: defaultAccountingDate(seed.timeZone),
-        description: `Recovery: ${seed.plan.title}`,
+        description: t("recovery.moveDescription", { title: seed.plan.title }),
         idempotencyKey: transport.newKey(),
       };
       request.current = payload;
@@ -74,8 +76,8 @@ export function useRecoveryMove(
       if (parsed.success) {
         request.current = null;
         setPending(false);
-        setError("The movement was rejected. Check the source and amount, then try again.");
-      } else setError("Could not confirm the transfer. Retry to safely check the same movement.");
+        setError(t("recovery.moveRejected"));
+      } else setError(t("recovery.moveUncertain"));
     } finally {
       submitting.current = false;
       if (mounted.active) setBusy(false);
