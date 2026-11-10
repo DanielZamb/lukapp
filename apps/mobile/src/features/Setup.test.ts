@@ -157,6 +157,9 @@ async function reveal() {
   await press("Not now, You add drafts yourself");
 }
 
+const starterSelection = ({ name, style }: { name: string; style: (typeof starterCategories)[number]["style"] }) =>
+  ({ name, starterName: name, style, source: "starter" as const });
+
 test("only categories open; choices reveal currency, alerts, then empty amount and never retract", async () => {
   await open();
   expect(text()).toContain("Where does your money go?");
@@ -293,7 +296,7 @@ test("Start tracking saves real setup answers once, with empty meaning zero and 
     purchaseAlertsConsent: false,
     wantsBudgets: true,
     firstCategoryId: "saved-food",
-    categories: [{ ...starterCategories[0], source: "starter" }],
+    categories: [starterSelection(starterCategories[0])],
   });
 });
 
@@ -321,7 +324,7 @@ test("comma cents parse exactly, malformed amounts stay editable, and an uncerta
   expect(complete).toHaveBeenCalledOnce();
   expect(complete).toHaveBeenCalledWith(expect.objectContaining({
     startingMinorUnits: 150025,
-    categories: [{ ...starterCategories[0], source: "starter" }],
+    categories: [starterSelection(starterCategories[0])],
   }));
 });
 
@@ -565,7 +568,7 @@ test("uncertain defaults keep account queue, categories and currency read-only t
   expect(backend.place).toHaveBeenCalledOnce();
   expect(backend.place.mock.calls[0][0].payload.name).toBe("Reserve A");
   expect(backend.ensure).toHaveBeenCalledTimes(2);
-  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ currency: "COP", startingMinorUnits: 1200, categories: [{ ...starterCategories[0], source: "starter" }] }));
+  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ currency: "COP", startingMinorUnits: 1200, categories: [starterSelection(starterCategories[0])] }));
 });
 
 async function openInSpanish() {
@@ -574,7 +577,7 @@ async function openInSpanish() {
     root = create(createElement(LanguageProvider, { initialPreference: "es" },
       createElement(Setup, { subject: "owner", onComplete: complete, onCancel: vi.fn() })));
   });
-  await act(async () => root?.root.findByType(SetupCategories).props.onChange([{ ...starterCategories[0], source: "starter" }]));
+  await act(async () => root?.root.findByType(SetupCategories).props.onChange([starterSelection(starterCategories[0])]));
   return complete;
 }
 
@@ -619,7 +622,7 @@ test("a Spanish setup sends the same starter selection as English, so the stored
   expect(backend.ensure.mock.calls[0]?.[0].categories).toEqual([
     { kind: "preset", presetId: "groceries", style: { emoji: "🛒", tone: "primary", color: "h150" } },
   ]);
-  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ categories: [{ ...starterCategories[0], source: "starter" }] }));
+  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ categories: [starterSelection(starterCategories[0])] }));
 });
 
 test("currency search reads in Spanish and finds names in the chosen language", async () => {
@@ -656,7 +659,7 @@ test("at the largest text the purchase-alert choices stack and size to their Spa
         createElement(ThemeProvider, { layout: { reflow, pagePadding: 16 } },
           createElement(Setup, { subject: "owner", onComplete: vi.fn(), onCancel: vi.fn() }))));
     });
-    await act(async () => root?.root.findByType(SetupCategories).props.onChange([{ ...starterCategories[0], source: "starter" }]));
+    await act(async () => root?.root.findByType(SetupCategories).props.onChange([starterSelection(starterCategories[0])]));
     await press("COP");
     const card = node("Usarlas, Las alertas pueden quedar como movimientos por revisar después de configurar el celular");
     return { card: card.props.style[0], row: card.parent?.props.style };

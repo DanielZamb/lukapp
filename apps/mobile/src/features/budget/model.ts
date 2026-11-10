@@ -17,16 +17,6 @@ export function jarPresentation(jar: BudgetJar) {
   };
 }
 
-export function recoveryPlansRowDetail(plans: readonly Pick<
-  FunctionReturnType<typeof api.savingsRecovery.evaluate>["plans"][number],
-  "title" | "remainingMinorUnits" | "status"
->[]) {
-  const activePlans = plans.filter((plan) => plan.status === "active" && plan.remainingMinorUnits > 0);
-  if (activePlans.length === 0) return "Start from an expense";
-  if (activePlans.length === 1) return activePlans[0].title;
-  return `${activePlans.length} plans`;
-}
-
 function monthDate(month: string) {
   const [year, number] = month.split("-").map(Number);
   return Date.UTC(year, number - 1, 1);

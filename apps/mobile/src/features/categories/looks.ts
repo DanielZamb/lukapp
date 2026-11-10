@@ -6,25 +6,25 @@ export const fallbackLook: CategoryStyle = {
   color: "h270",
 };
 export const starterCategories = [
-  { name: "Food", style: { emoji: "🛒", tone: "primary", color: "h150" } },
-  { name: "Transport", style: { emoji: "🚌", tone: "primary", color: "h210" } },
-  { name: "Dining", style: { emoji: "🍔", tone: "primary", color: "h30" } },
-  { name: "Home", style: { emoji: "🏠", tone: "primary", color: "h270" } },
-  { name: "Health", style: { emoji: "💊", tone: "primary", color: "h345" } },
-  { name: "Fun", style: { emoji: "🎮", tone: "primary", color: "h45" } },
-  { name: "Shopping", style: { emoji: "🛍️", tone: "primary", color: "h180" } },
+  { key: "groceries", name: "Food", style: { emoji: "🛒", tone: "primary", color: "h150" } },
+  { key: "transport", name: "Transport", style: { emoji: "🚌", tone: "primary", color: "h210" } },
+  { key: "dining", name: "Dining", style: { emoji: "🍔", tone: "primary", color: "h30" } },
+  { key: "home", name: "Home", style: { emoji: "🏠", tone: "primary", color: "h270" } },
+  { key: "health", name: "Health", style: { emoji: "💊", tone: "primary", color: "h345" } },
+  { key: "fun", name: "Fun", style: { emoji: "🎮", tone: "primary", color: "h45" } },
+  { key: "shopping", name: "Shopping", style: { emoji: "🛍️", tone: "primary", color: "h180" } },
   {
-    name: "Bills",
+    key: "bills", name: "Bills",
     style: { emoji: "🧾", tone: "primary", color: "cool-gray" },
   },
-  { name: "Family", style: { emoji: "👪", tone: "primary", color: "h195" } },
-  { name: "Education", style: { emoji: "📚", tone: "primary", color: "h240" } },
-  { name: "Pets", style: { emoji: "🐾", tone: "primary", color: "h15" } },
+  { key: "family", name: "Family", style: { emoji: "👪", tone: "primary", color: "h195" } },
+  { key: "education", name: "Education", style: { emoji: "📚", tone: "primary", color: "h240" } },
+  { key: "pets", name: "Pets", style: { emoji: "🐾", tone: "primary", color: "h15" } },
   {
-    name: "Other",
+    key: "other", name: "Other",
     style: { emoji: "✨", tone: "primary", color: "warm-gray" },
   },
-] satisfies { name: string; style: CategoryStyle }[];
+] satisfies { key: string; name: string; style: CategoryStyle }[];
 export const quickEmojis = ["🛒", "🍔", "🚌", "🏠", "💊", "🎮", "🛍️", "✨"];
 
 export function emojiFrom(text: string) {

@@ -1,7 +1,8 @@
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { useAction, useQuery } from "convex/react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { suggestedCategoryName } from "./suggestedNames";
 import { useT } from "../../i18n";
 import { api } from "../api";
 import { useNatureSuggestion } from "./useNatureSuggestion";
@@ -40,14 +41,19 @@ export function useCategoryPicker(
   mode: CategoryPickerMode,
   onClose: () => void,
 ) {
-  const { t } = useT();
+  const translator = useT();
+  const { t } = translator;
   const recordInteraction = useLocalEntryInteraction();
   const reportFailure = useDeviceAccessFailure();
   const categories = useQuery(
     api.accounting.listUserCategories,
     mode.kind === "posting" ? { workspaceId: mode.workspaceId } : "skip",
   );
-  const presets = useQuery(api.accounting.listCategoryPresets, mode.kind === "setup" ? { nature: "Expense" } : {});
+  const serverPresets = useQuery(api.accounting.listCategoryPresets, mode.kind === "setup" ? { nature: "Expense" } : {});
+  const presets = useMemo(
+    () => serverPresets?.map((preset) => ({ ...preset, name: suggestedCategoryName(translator, preset.id, preset.name) })),
+    [serverPresets, translator],
+  );
   const create = useAction(api.accounting.createUserCategory);
   const restyle = useAction(api.accounting.restyleUserCategory);
   const [search, setSearch] = useState("");
@@ -73,7 +79,7 @@ export function useCategoryPicker(
           key: selectionKey(s),
           name:
             s.kind === "preset"
-              ? (presets?.find((p) => p.id === s.presetId)?.name ?? t("categories.pickerTitle"))
+              ? (s.name ?? presets?.find((p) => p.id === s.presetId)?.name ?? t("categories.pickerTitle"))
               : s.name,
           style: s.style,
           selected: true,
@@ -164,6 +170,8 @@ export function useCategoryPicker(
           kind: "preset",
           presetId: editor.preset.id,
           style: editor.style,
+          ...(translator.language !== "en" && suggestedCategoryName(translator, editor.preset.id, "") === editor.preset.name
+            ? { name: editor.preset.name } : {}),
         };
       else {
         if (!answer) return;

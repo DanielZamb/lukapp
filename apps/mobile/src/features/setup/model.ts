@@ -10,7 +10,11 @@ import { parseMoney } from "../money";
 export type SetupCategory = {
   name: string;
   style: CategoryStyle;
-} & ({ source: "starter" } | { source: "custom"; answer: FlowAnswer });
+} & (
+  /** `starterName` is the built-in English name the server's presets are matched by; `name` is what the person saw. */
+  | { source: "starter"; starterName?: string }
+  | { source: "custom"; answer: FlowAnswer }
+);
 export type SetupSummary = {
   categories: SetupCategory[];
   currency: string;
@@ -26,10 +30,13 @@ export function setupSelections(
   return categories.map((category) => {
     const preset =
       category.source === "starter"
-        ? presets.find((preset) => preset.name === category.name)
+        ? presets.find((preset) => preset.name === (category.starterName ?? category.name))
         : undefined;
     return preset
-      ? { kind: "preset", presetId: preset.id, style: category.style }
+      ? {
+          kind: "preset", presetId: preset.id, style: category.style,
+          ...(category.name === preset.name ? {} : { name: category.name }),
+        }
       : {
           kind: "custom",
           name: category.name,

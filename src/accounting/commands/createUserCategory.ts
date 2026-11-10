@@ -27,7 +27,7 @@ export async function createUserCategory(
   const { selection } = input;
   const name =
     selection.kind === "preset"
-      ? requireCategoryPreset(selection.presetId).name
+      ? selection.name?.trim() || requireCategoryPreset(selection.presetId).name
       : selection.name.trim();
   if (!name) throw new AccountingError("name_required");
   if (name.length > 80) throw new AccountingError("category_name_too_long");

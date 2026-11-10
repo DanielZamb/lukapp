@@ -61,7 +61,7 @@ export const home: Messages<typeof en> = {
   addPlaceNamePlaceholder: "Ahorros",
   addPlaceDefaultName: "Cuenta nueva",
   addPlaceType: "Tipo",
-  placeKindChecking: "Corriente",
+  placeKindChecking: "Cuenta bancaria",
   placeKindSavings: "Ahorros",
   placeKindWallet: "Efectivo",
   addPlaceLook: "Estilo",

@@ -9,6 +9,7 @@ import type { SetupCategory } from "../setup/model";
 import type { AccountSetupRequest, CategoryStyle } from "./model";
 import { categoryColor, categoryOutline } from "./appearance";
 import { starterCategories } from "./looks";
+import { suggestedCategoryName } from "./suggestedNames";
 import { RestyleSheet, type RestyleTarget } from "./SetupRestyleSheet";
 
 export function SetupCategories({
@@ -25,14 +26,17 @@ export function SetupCategories({
   const theme = useTheme();
   const mode = useThemeMode();
   const ui = useUi();
-  const { t, tn } = useT();
+  const translator = useT();
+  const { t, tn } = translator;
   const styles = useSetupStyles();
   const recordInteraction = useLocalEntryInteraction();
   const [target, setTarget] = useState<RestyleTarget | null>(null);
   const [looks, setLooks] = useState<Record<string, CategoryStyle>>({});
   const names: SetupCategory[] = [
     ...starterCategories.map(
-      (category): SetupCategory => ({ ...category, source: "starter" }),
+      ({ key, name, style }): SetupCategory => ({
+        name: suggestedCategoryName(translator, key, name), starterName: name, style, source: "starter",
+      }),
     ),
     ...selections.filter((category) => category.source === "custom"),
   ];

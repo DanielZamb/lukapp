@@ -227,12 +227,12 @@ test("in Spanish the sheet reads in Spanish, a blank name stores the Spanish def
   const shown = root.root.findAllByType("text").map((node) => node.children.join(""));
   expect(shown).toEqual(expect.arrayContaining([
     "ESTO ABRE EL NIVEL 1", "Agregar un lugar", "Un nombre que reconozcas", "Tipo", "Estilo", "Cambiar", "Saldo de hoy",
-    "Corriente", "Ahorros", "Efectivo",
+    "Cuenta bancaria", "Ahorros", "Efectivo",
   ]));
   expect(input("Nombre de la cuenta").props.placeholder).toBe("Ahorros");
   expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityRole === "radio")
     .map((node) => [node.props.accessibilityLabel, node.props.accessibilityState.selected]))
-    .toEqual([["Corriente", false], ["Ahorros", true], ["Efectivo", false]]);
+    .toEqual([["Cuenta bancaria", false], ["Ahorros", true], ["Efectivo", false]]);
   await act(async () => button("Agregar este lugar").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "Cuenta nueva", productKind: "savingsAccount" });
   await act(async () => root.unmount());
