@@ -1,3 +1,6 @@
+import { closePlace as closePlaceArgs, closePlaceReceipt, placeClosure as placeClosureValue } from "./accountingPlaceValues";
+import { placeClosure as readPlaceClosure } from "../src/accounting/commands/closePlace";
+import { placeClosureServices } from "./accountingPlaces";
 import { ConvexError, v, type Infer } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { postedHistory as readPostedHistory } from "../src/accounting/queries/postedHistory";
@@ -126,7 +129,7 @@ export const changeAccountLook = action({
 });
 
 export const listFinancialAccountProfiles = query({
-  args: inWorkspace,
+  args: { ...inWorkspace, status: v.optional(v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("all"))) },
   returns: v.array(financialAccountProfile),
   handler: async (ctx, args) =>
     run(async () =>
@@ -308,7 +311,7 @@ export const ensurePersonalDefaults = action({
 });
 
 export const postedActivity = query({
-  args: { ...inWorkspace, month: v.string(), includeRows: v.optional(v.boolean()) },
+  args: { ...inWorkspace, month: v.string(), includeRows: v.optional(v.boolean()), status: v.optional(v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("all"))) },
   returns: v.object({
     accounts: v.array(
       v.object({
@@ -508,4 +511,20 @@ export const workspaceSettingHistory = query({
   args: inWorkspace, returns: v.array(workspaceSettingReceipt),
   handler: async (ctx, args) => run(async () => readWorkspaceSettingHistory(ctx,
     await requireWorkspacePermission(ctx, { ...args, permission: "workspace:read" }), args.workspaceId)),
+});
+
+export const closePlace = action({
+  args: closePlaceArgs, returns: closePlaceReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof closePlaceReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.closePlace, { ...args, session });
+  },
+});
+
+export const placeClosure = query({
+  args: { workspaceId: v.string(), financialAccountProfileId: v.string() }, returns: placeClosureValue,
+  handler: async (ctx, args) => run(async () => {
+    const actor = await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
+    return readPlaceClosure(convexReadStore(ctx.db), { now: () => new Date() }, placeClosureServices(ctx, actor, args.workspaceId), { ...args, actor });
+  }),
 });

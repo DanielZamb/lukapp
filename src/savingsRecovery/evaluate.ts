@@ -26,7 +26,7 @@ export async function evaluateWorkspace(
   ]);
   const cancelled = new Map(cancellations.map(item => [item.planId, item]));
   const reserved = new Set<string>();
-  const assets = profiles.filter((profile) => isAssetProductKind(profile.productKind));
+  const assets = profiles.filter((profile) => !profile.ending && isAssetProductKind(profile.productKind));
   const destinations = assets
     .slice()
     .sort((a, b) => Number(b.productKind === "savingsAccount") - Number(a.productKind === "savingsAccount")
@@ -57,7 +57,7 @@ export async function evaluateWorkspace(
           const contributionStatus: "active" | "voided" | "corrected" = correction ? "corrected" : voided ? "voided" : "active";
           return { ...item, status: contributionStatus, transferReversed: voided, correction };
         }));
-      const destination = destinations.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
+      const destination = profiles.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
       return {
         id: plan.id,
         title: plan.title,

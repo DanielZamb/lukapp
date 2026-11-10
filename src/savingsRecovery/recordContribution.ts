@@ -1,3 +1,4 @@
+import { requireOpenPlace } from "../accounting/placeState";
 import { requireContributablePlan, requireContributionDate } from "./lifecycle";
 import { isAssetProductKind, RecoveryError, requireIdempotencyKey } from "./policy";
 import { ALL_MONTHS, activeAttributions, planProgress } from "./progress";
@@ -32,6 +33,8 @@ export async function recordContribution(
     throw new RecoveryError("source_must_be_asset");
   if (!destination || !isAssetProductKind(destination.productKind))
     throw new RecoveryError("destination_must_be_asset");
+  requireOpenPlace(source);
+  requireOpenPlace(destination);
   requireContributionDate(plan, transfer.accountingDate);
   const contributions = await store.listContributions();
   const corrections = await store.listCorrections();

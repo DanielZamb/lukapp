@@ -1,0 +1,26 @@
+Tested product source: 203a1398369f98c51228a91b221c10b991c144be
+Base: 654546a971220c0b113bb235e01ac1b8fa2ed275
+Branch: t3/close-place-backend
+
+pnpm install --frozen-lockfile --offline
+Exit 0. Lockfile unchanged. Existing ignored dependency build scripts warning.
+
+Final pnpm vitest run
+Exit 0.
+Test Files 170 passed (170)
+Tests 2625 passed (2625)
+Start at 15:36:31
+Duration 16.83s
+Existing environmentMatchGlobs/react-test-renderer deprecation warnings.
+
+Final pnpm typecheck
+Exit 0.
+Root tsc --noEmit passed.
+@lukapp/mobile tsc --noEmit passed.
+
+git diff --check
+Exit 0.
+
+No deployment, real Clerk admission, public API requests to a real deployment,
+app build, device/emulator access, database reset, push or PR performed.
+Local harness evidence only. Real-provider and UI acceptance remain open.

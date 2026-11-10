@@ -1,3 +1,4 @@
+import { requireOpenPlace } from "../placeState";
 import { chartTemplate } from "../chartOfAccounts";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
@@ -79,6 +80,7 @@ export async function recordOpeningPosition(
       },
     );
   }
+  requireOpenPlace(profile);
   if (input.amount.currency !== workspace.functionalCurrency)
     throw new AccountingError("currency_mismatch");
   if (amount === 0) {

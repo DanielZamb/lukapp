@@ -1,3 +1,4 @@
+import { placeEndingFields } from "./accountingPlaceValues";
 import { defaults, workspaceSettingFields } from "./accountingValues";
 import { intakeEvidence } from "./notificationIntakeValues";
 import { categoryFields } from "./categoryValidators";
@@ -13,9 +14,13 @@ import {
   periodStatus,
   postingPolicy,
   productKind,
+  financialAccountProfile,
 } from "./validators";
 
 export default defineSchema({
+  placeEndings: defineTable({ ...placeEndingFields, workspaceId: v.id("workspaces"), financialAccountProfileId: v.id("financialAccountProfiles") })
+    .index("by_profile", ["financialAccountProfileId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"]),
   feedbackReports: defineTable(reportFields)
     .index("by_user_key", ["userId", "reportKey"])
     .index("by_screenshot", ["screenshotStorageId"]),
@@ -164,7 +169,7 @@ export default defineSchema({
   }).index("by_workspace_request", ["workspaceId", "idempotencyKey"])
     .index("by_workspace_setting", ["workspaceId", "setting"]),
   personalDefaults: defineTable({
-    setupResult: v.optional(defaults),
+    setupResult: v.optional(v.object({ ...defaults.fields, financialAccountProfile: v.object({ ...financialAccountProfile.fields, status: v.optional(financialAccountProfile.fields.status) }) })),
     ownerSubject: v.string(),
     workspaceId: v.id("workspaces"),
     financialAccountProfileId: v.id("financialAccountProfiles"),

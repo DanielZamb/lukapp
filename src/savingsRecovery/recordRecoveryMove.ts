@@ -1,3 +1,4 @@
+import { requireOpenPlace } from "../accounting/placeState";
 import { requireContributablePlan, requireContributionDate } from "./lifecycle";
 import { ALL_MONTHS, planProgress } from "./progress";
 import { isAssetProductKind, RecoveryError, requireIdempotencyKey } from "./policy";
@@ -49,6 +50,7 @@ export async function recordRecoveryMove(
   const destination = profiles.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
   if (!destination || destination.workspaceId !== input.workspaceId || !isAssetProductKind(destination.productKind))
     throw new RecoveryError("destination_must_be_asset");
+  if (!prior) { requireOpenPlace(source); requireOpenPlace(destination); }
   // A retry goes back through the U03 transfer command with the same key, so its own
   // idempotency check rejects any changed account, amount, date, description or currency.
   const posted = await postTransfer({

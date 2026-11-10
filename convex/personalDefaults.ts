@@ -103,7 +103,7 @@ export async function ensurePersonalDefaults(
         message: "First setup already completed with different answers",
       });
     }
-    return original;
+    return { ...original, financialAccountProfile: { ...original.financialAccountProfile, status: original.financialAccountProfile.status ?? "open" as const } };
   }
   const store = convexStore(ctx.db);
   const clock = { now: () => new Date() };
@@ -325,7 +325,7 @@ async function originalSetupResult(
       year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)), status: "open",
     } },
     financialAccountProfile: {
-      id: profile._id, workspaceId: profile.workspaceId, name: "My money",
+      status: "open", id: profile._id, workspaceId: profile.workspaceId, name: "My money",
       productKind: "cash", ledgerAccountId: profile.postingAccountId,
     },
     purchaseAlertsConsent: defaults.purchaseAlertsConsent ?? false,

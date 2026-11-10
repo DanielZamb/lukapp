@@ -19,6 +19,7 @@ export type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
 type ReadMethods = Omit<AccountingStore, WriteMethod>;
 type WriteMethod =
+  | "insertPlaceEnding"
   | "insertAccountSetup"
   | "insertOpeningMarker"
   | "insertCategory"
@@ -85,8 +86,9 @@ function toLedgerAccount(doc: Doc<"ledgerAccounts">): LedgerAccount {
   };
 }
 
-function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
+function toProfile(doc: Doc<"financialAccountProfiles">, ending?: StoredProfile["ending"]): StoredProfile {
   return {
+    ...(ending ? { ending: { act: ending.act, endedBy: ending.endedBy, occurredAt: ending.occurredAt, recordedAt: ending.recordedAt } } : {}),
     createdAt: doc._creationTime,
     ...(doc.createdAccountingDate ? { createdAccountingDate: doc.createdAccountingDate } : {}),
     id: doc._id,
@@ -166,6 +168,12 @@ function readStore(db: ReadDb): ReadMethods {
   }
 
   return {
+    async findPlaceEnding(workspaceId, idempotencyKey) {
+      const doc = await db.query("placeEndings").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId)).eq("idempotencyKey", idempotencyKey)).unique();
+      if (!doc) return undefined;
+      const { _id, _creationTime, ...ending } = doc;
+      return { id: _id, ...ending };
+    },
     async findAccountSetup(workspaceId, idempotencyKey) {
       const doc = await db
         .query("financialAccountSetups")
@@ -277,7 +285,8 @@ function readStore(db: ReadDb): ReadMethods {
     async getProfile(profileId) {
       const id = idFor(db, "financialAccountProfiles", profileId);
       const doc = id && (await db.get(id));
-      return doc ? toProfile(doc) : undefined;
+      const ending = doc && await db.query("placeEndings").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
+      return doc ? toProfile(doc, ending ?? undefined) : undefined;
     },
 
     async listProfiles(workspaceId) {
@@ -287,7 +296,9 @@ function readStore(db: ReadDb): ReadMethods {
           q.eq("workspaceId", storedId<"workspaces">(workspaceId)),
         )
         .collect();
-      return docs.map(toProfile);
+      const endings = await db.query("placeEndings").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).collect();
+      const byProfile = new Map(endings.map(ending => [ending.financialAccountProfileId, ending]));
+      return docs.map(doc => toProfile(doc, byProfile.get(doc._id)));
     },
 
     async getJournalEntry(entryId) {
@@ -361,6 +372,10 @@ function readStore(db: ReadDb): ReadMethods {
 
 function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
   return {
+    async insertPlaceEnding(ending) {
+      const id = await db.insert("placeEndings", { ...ending, workspaceId: storedId<"workspaces">(ending.workspaceId), financialAccountProfileId: storedId<"financialAccountProfiles">(ending.financialAccountProfileId) });
+      return { id, ...ending };
+    },
     async insertAccountSetup({ openingJournalEntryId, ...setup }) {
       await db.insert("financialAccountSetups", {
         ...setup,
@@ -576,6 +591,7 @@ function unavailable(method: string): never {
 
 function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
   return {
+    insertPlaceEnding: async () => unavailable("insertPlaceEnding"),
     insertAccountSetup: async () => unavailable("insertAccountSetup"),
     insertOpeningMarker: async () => unavailable("insertOpeningMarker"),
     insertCategory: async () => unavailable("insertCategory"),

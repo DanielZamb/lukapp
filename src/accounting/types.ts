@@ -83,7 +83,25 @@ export type Workspace = {
   currentAccountingPeriod: AccountingPeriod;
 };
 
+export type PlaceStatus = "open" | "closed" | "undone";
+export type PlaceEnding = {
+  act: "close" | "undo";
+  occurredAt: number;
+  recordedAt: number;
+  endedBy: string;
+};
+export type StoredPlaceEnding = PlaceEnding & {
+  id: string;
+  workspaceId: string;
+  financialAccountProfileId: string;
+  idempotencyKey: string;
+  request: string;
+  entries: PostedJournalEntry[];
+  replacementDefaultFinancialAccountProfileId?: string;
+};
+
 export type FinancialAccountProfile = {
+  status: PlaceStatus;
   id: string;
   workspaceId: string;
   name: string;
@@ -180,6 +198,7 @@ export type StoredWorkspace = {
 };
 
 export type StoredProfile = {
+  ending?: PlaceEnding;
   createdAccountingDate?: string;
   createdAt?: number;
   id: string;
@@ -240,6 +259,8 @@ export type AccountingClock = {
 };
 
 export type AccountingStore = {
+  findPlaceEnding(workspaceId: string, idempotencyKey: string): Promise<StoredPlaceEnding | undefined>;
+  insertPlaceEnding(ending: Omit<StoredPlaceEnding, "id">): Promise<StoredPlaceEnding>;
   findAccountSetup(workspaceId: string, idempotencyKey: string): Promise<StoredAccountSetup | undefined>;
   insertAccountSetup(setup: StoredAccountSetup): Promise<void>;
   findOpeningMarkerByIdempotencyKey(
@@ -331,6 +352,7 @@ export type AccountingCore = {
     productKind: FinancialAccountProductKind;
   }): Promise<FinancialAccountProfile>;
   listFinancialAccountProfiles(input: {
+    status?: PlaceStatus | "all";
     actor: Actor;
     workspaceId: string;
   }): Promise<FinancialAccountProfile[]>;

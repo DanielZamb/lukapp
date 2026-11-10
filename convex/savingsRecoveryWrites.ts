@@ -54,9 +54,9 @@ export const activatePlan = internalMutation({
   args: { ...activateArgs, session: liveSession }, returns: activateResult,
   handler: async (ctx, { session, ...args }) => {
     const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
-    return runRecovery(() => runActivatePlan(recoveryWriteStore(ctx, args.workspaceId), {
+    return run(() => runRecovery(() => runActivatePlan(recoveryWriteStore(ctx, args.workspaceId), {
       ...args, actorId: actor.userId, now: Date.now(),
-    }));
+    })));
   },
 });
 

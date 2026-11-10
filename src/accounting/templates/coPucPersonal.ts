@@ -25,6 +25,8 @@ export const coPucPersonalTemplate = {
     loan: "210510",
   },
   accounts: [
+    { code: "53959501", name: "Pérdida de dinero al cerrar un lugar", use: "expense" },
+    { code: "42959503", name: "Condonación de deudas", use: "income" },
     // 1 Activo
     { code: "122505", name: "Certificados de depósito a término (CDT)", use: "general" },
     { code: "124505", name: "Fideicomisos de inversión moneda nacional", use: "general" },
@@ -196,6 +198,7 @@ export const coPucPersonalTemplate = {
     "53": "No operacionales",
     "5305": "Financieros",
     "5310": "Pérdida en venta y retiro de bienes",
+    "539595": "Otros gastos diversos",
     "5395": "Gastos diversos",
     "54": "Impuesto de renta y complementarios",
     "5405": "Impuesto de renta y complementarios",
