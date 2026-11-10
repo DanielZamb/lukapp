@@ -7,6 +7,7 @@ import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { useT } from "../../i18n";
 import { formatMoney } from "../money";
 import { remaining, remainingFill } from "../overview/model";
+import { jarPresentation } from "../budget/model";
 import type { CategoryLookData } from "./model";
 
 export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
@@ -21,6 +22,9 @@ export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
   const { t } = useT();
   const color = data ? categoryColor(data.style, mode) : theme.primary;
   const left = data ? remaining(data) : null;
+  const jar = data && data.limitMinorUnits !== null
+    ? jarPresentation({ category: { id: data.id, name: data.name, emoji: data.style.emoji },
+      limitMinorUnits: data.limitMinorUnits, consumptionMinorUnits: data.spendMinorUnits }) : null;
   const money = (minorUnits: number) => formatMoney({ currency: data?.currency ?? "COP", minorUnits }, { hideZeroDecimals: true });
   return (
     <Screen contentStyle={styles.page}>
@@ -40,7 +44,10 @@ export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
                 style={[styles.jar, { backgroundColor: left < 0 ? `${theme.danger}33` : `${color}22` }, left >= 0 && faintEdge(color, mode)]}>
                 <View style={[styles.jarFill, { width: `${remainingFill(data) * 100}%`, backgroundColor: color }, faintEdge(color, mode)]} />
               </View>
-              <Text style={styles.jarHint}>{left < 0
+              {jar?.spendNothing && <Text style={styles.jarHint}>{t("budget.spendNothing")}</Text>}
+              <Text style={styles.jarHint}>{jar?.spendNothing
+                ? jar.status === "clear" ? t("budget.nothingSpent") : t("budget.jarOver", { amount: money(jar.amount) })
+                : left < 0
                 ? t("categories.lookOver", { limit: money(data.limitMinorUnits) })
                 : t("categories.lookLeft", { amount: money(left) })}</Text>
             </View>}
