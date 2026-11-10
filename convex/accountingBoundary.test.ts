@@ -19,6 +19,9 @@ const modules = import.meta.glob([
 const style = { emoji: "🛒", tone: "primary" } as const;
 function writeArgs(workspaceId = "foreign", profileId = "foreign") {
   return {
+    changeDefaultPlace: { workspaceId, financialAccountProfileId: profileId, expectedFinancialAccountProfileId: profileId, idempotencyKey: "default" },
+    changeWorkspaceTimeZone: { workspaceId, timeZone: "Pacific/Auckland", expectedTimeZone: "America/Bogota", idempotencyKey: "zone" },
+    changeFunctionalCurrency: { workspaceId, functionalCurrency: "USD", expectedFunctionalCurrency: "COP", idempotencyKey: "currency" },
     renameAccount: { workspaceId, financialAccountProfileId: profileId, name: "New", expectedName: "Old" },
     changeAccountLook: { workspaceId, financialAccountProfileId: profileId, emoji: "🐷" },
     createFinancialAccountProfile: {
@@ -72,6 +75,8 @@ function readArgs(workspaceId: string) {
     listUserCategories: { workspaceId },
     categoryTotals: { workspaceId, month: "2026-09" },
     personalDefaults: {},
+    workspaceSettings: { workspaceId },
+    workspaceSettingHistory: { workspaceId },
   };
 }
 async function expectWritesDenied(

@@ -12,10 +12,11 @@ import { createUserCategory as createCategory } from "../src/accounting/commands
 import { restyleUserCategory as restyleCategory } from "../src/accounting/commands/restyleUserCategory";
 import { updateUserCategory as updateCategory } from "../src/accounting/commands/updateUserCategory";
 import { deleteUserCategory as deleteCategory } from "../src/accounting/commands/deleteUserCategory";
-import { ensurePersonalDefaults as ensureDefaults } from "./personalDefaults";
+import { changeWorkspaceSetting, ensurePersonalDefaults as ensureDefaults } from "./personalDefaults";
 import { convexStore } from "./store";
 import { run } from "./accountingErrors";
 import {
+  defaultPlaceChange, timeZoneChange, functionalCurrencyChange, workspaceSettingReceipt,
   accountSetup,
   accountLook,
   accountRename,
@@ -245,5 +246,38 @@ export const setupFinancialAccountProfile = internalMutation({
     return run(() =>
       createAccountingCore(convexStore(ctx.db)).setupFinancialAccountProfile({ ...args, actor }),
     );
+  },
+});
+
+export const changeDefaultPlace = internalMutation({
+  args: { ...defaultPlaceChange, session: liveSession }, returns: workspaceSettingReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    return run(() => changeWorkspaceSetting(ctx, actor, {
+      workspaceId: args.workspaceId, idempotencyKey: args.idempotencyKey, setting: "defaultPlace",
+      value: args.financialAccountProfileId, expectedValue: args.expectedFinancialAccountProfileId,
+    }));
+  },
+});
+
+export const changeWorkspaceTimeZone = internalMutation({
+  args: { ...timeZoneChange, session: liveSession }, returns: workspaceSettingReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    return run(() => changeWorkspaceSetting(ctx, actor, {
+      workspaceId: args.workspaceId, idempotencyKey: args.idempotencyKey, setting: "timeZone",
+      value: args.timeZone, expectedValue: args.expectedTimeZone,
+    }));
+  },
+});
+
+export const changeFunctionalCurrency = internalMutation({
+  args: { ...functionalCurrencyChange, session: liveSession }, returns: workspaceSettingReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    return run(() => changeWorkspaceSetting(ctx, actor, {
+      workspaceId: args.workspaceId, idempotencyKey: args.idempotencyKey, setting: "functionalCurrency",
+      value: args.functionalCurrency, expectedValue: args.expectedFunctionalCurrency,
+    }));
   },
 });

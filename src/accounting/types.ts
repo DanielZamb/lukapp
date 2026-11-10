@@ -180,6 +180,7 @@ export type StoredWorkspace = {
 };
 
 export type StoredProfile = {
+  createdAccountingDate?: string;
   createdAt?: number;
   id: string;
   workspaceId: string;
@@ -407,10 +408,12 @@ export type AccountSetupInput = Omit<OpeningPositionInput, "financialAccountProf
   productKind: FinancialAccountProductKind;
 };
 export type StoredAccountSetup = Omit<AccountSetupInput, "actor"> & {
+  originalCurrency?: string;
   financialAccountProfileId: string;
   openingJournalEntryId?: string;
 };
 export type StoredOpeningMarker = {
+  originalCurrency?: string;
   workspaceId: string;
   financialAccountProfileId: string;
   accountingDate: string;
