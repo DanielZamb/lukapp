@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   accounts: [{ minorUnits: 8_500_000_00 }] as MockPlace[],
   currency: "COP",
   hasLimit: false,
+  removedLimit: false,
   balancesLoading: false,
   budgetLoading: false,
   inboxCount: 0 as number | undefined,
@@ -32,6 +33,7 @@ vi.mock("convex/react", () => ({ useQuery: (...args: unknown[]) => {
       category: { id: "food", name: "Food", emoji: "🍋" },
       limitMinorUnits: 100_00, consumptionMinorUnits: 0,
     }] : [],
+    removedLimits: state.removedLimit ? [{ categoryId: "food", revisionId: "removal", effectiveMonth: "2026-10" }] : [],
   };
 } }));
 vi.mock("./activity", () => ({
@@ -83,6 +85,7 @@ beforeEach(() => {
   state.accounts = [{ minorUnits: 8_500_000_00 }];
   state.currency = "COP";
   state.hasLimit = false;
+  state.removedLimit = false;
   state.balancesLoading = false;
   state.budgetLoading = false;
   state.inboxCount = 0;
@@ -111,9 +114,11 @@ test.each([
   { accounts: [{ minorUnits: 100 }, { minorUnits: 0 }, { minorUnits: -100 }], hasLimit: false, level: 1 },
   { accounts: [{ minorUnits: 100 }], hasLimit: true, level: 1 },
   { accounts: [], hasLimit: false, level: 0 },
-])("Home level $level with $accounts and category limit $hasLimit", async ({ accounts, hasLimit, level }) => {
+  { accounts: [{ minorUnits: 100 }], hasLimit: false, removedLimit: true, level: 1 },
+])("Home level $level with $accounts and category limit $hasLimit", async ({ accounts, hasLimit, removedLimit = false, level }) => {
   state.accounts = accounts;
   state.hasLimit = hasLimit;
+  state.removedLimit = removedLimit;
   await render();
   const bells = root.root.findAll((node) => String(node.type) === "icon").filter((node) => node.props.name === "notifications-outline");
   expect(bells).toHaveLength(level);

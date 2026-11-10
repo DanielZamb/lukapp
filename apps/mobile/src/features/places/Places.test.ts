@@ -7,7 +7,7 @@ import type { Place } from "./model";
 const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), accounts: [] as Place[], hasLimit: false, defaultId: "daily" }));
 vi.mock("expo-router", () => ({ router: { push: state.push, back: state.back }, Redirect: "redirect" }));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
-vi.mock("convex/react", () => ({ useQuery: () => ({ jars: state.hasLimit ? [{}] : [] }) }));
+vi.mock("convex/react", () => ({ useQuery: () => ({ jars: state.hasLimit ? [{}] : [], removedLimits: [] }) }));
 vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ month: "2026-10" }) }));
 vi.mock("../HomePlaceSetup", () => ({ HomePlaceSetup: "add-place" }));
 vi.mock("../activity", () => ({

@@ -65,7 +65,7 @@ export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { w
   if (!board || !categories || !activity) return <Screen><ActivityIndicator accessibilityLabel={t("budget.loading")} /></Screen>;
   const categoryColors = new Map(categories.map((category) => [category.id, categoryColor(category.style, mode)]));
   if (creation) return <BudgetCreation key={creation.key} seed={creation.seed} categories={creation.categories}
-    unlocking={activity.accounts.length === 1 && experienceLevel(activity.accounts.length, board.jars.length) === 0}
+    unlocking={activity.accounts.length === 1 && experienceLevel(activity.accounts.length, board) === 0}
     categoryColors={categoryColors}
     onClose={() => { setCreation(null); refresh(Crypto.randomUUID()); }}
     onSaved={() => { setCreation(null); refresh(Crypto.randomUUID()); setOutcome({ kind: "saved" }); }} />;

@@ -22,7 +22,8 @@ export function LevelUnlocked({ unlock, onHome }: { unlock: LevelUnlock; onHome:
       <Text accessibilityRole="header" style={styles.title}>{unlock.door === "budget" ? t("home.levelLimitTitle") : t("home.levelPlaceTitle")}</Text>
       {unlock.door === "budget" && <View style={[styles.chip, { backgroundColor: `${unlock.color}24`, borderColor: categoryOutline(unlock.color, mode) }]}>
         <Text style={styles.emoji}>{unlock.emoji}</Text>
-        <Text style={styles.chipText}>{unlock.category} · {formatMoney({ currency: unlock.currency, minorUnits: unlock.limitMinorUnits }, { hideZeroDecimals: true })}</Text>
+        <Text style={styles.chipText}>{unlock.category} · {unlock.limitMinorUnits === 0 ? t("budget.spendNothing")
+          : formatMoney({ currency: unlock.currency, minorUnits: unlock.limitMinorUnits }, { hideZeroDecimals: true })}</Text>
       </View>}
       <Text style={styles.copy}>{unlock.door === "budget"
         ? t("home.levelLimitBody")

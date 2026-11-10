@@ -145,11 +145,12 @@ test("creation chooses a category before the composer, then saves shared-parser 
   } }] } }]]);
 });
 
-test.each(["second place", "existing limit"])("a workspace with a %s returns home after saving a new limit", async (unlockedBy) => {
+test.each(["second place", "existing limit", "removed limit"])("a workspace with a %s returns home after saving a new limit", async (unlockedBy) => {
   if (unlockedBy === "second place") accountCount = 2;
+  else if (unlockedBy === "removed limit") board?.removedLimits.push({ categoryId: "travel", revisionId: "travel-removal", effectiveMonth: month });
   else if (board) board.jars.push({ category: { id: "travel", name: "Travel", emoji: "✈️" }, revisionId: "travel-limit", limitMinorUnits: 10_000_000, consumptionMinorUnits: 0 });
   const screen = await render();
-  await act(async () => screen.findByProps({ accessibilityLabel: unlockedBy === "second place" ? "Set a October limit" : "Set another limit" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityLabel: unlockedBy === "existing limit" ? "Set another limit" : "Set a October limit" }).props.onPress());
   await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
   await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("50.000"));
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());

@@ -54,7 +54,7 @@ vi.mock("../useWorkspaceCalendar", () => ({
   }),
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
-vi.mock("convex/react", () => ({ useQuery: () => ({ currency: "COP", jars: [] }) }));
+vi.mock("convex/react", () => ({ useQuery: () => ({ currency: "COP", jars: [], removedLimits: [] }) }));
 vi.mock("../useInboxCount", () => ({ useInboxCount: () => 0 }));
 vi.mock("../HomePlaceSetup", () => ({ HomePlaceSetup: "place-setup" }));
 vi.mock("../Setup", () => ({ Setup: "setup" }));
