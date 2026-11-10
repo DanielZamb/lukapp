@@ -1,5 +1,7 @@
 import { expect, test, vi } from "vitest";
-import { formatMoney, currencyDisplayPrefix, parseMoney } from "./money";
+import { formatMoney, currencyDisplayPrefix } from "./money";
+import { createTranslator } from "../../../../src/i18n";
+import { amountHint } from "./amount/hints";
 import { applyNativeText } from "./amount/nativeEdit";
 import { amountMinorUnits, openAmount } from "./amount/session";
 
@@ -38,24 +40,22 @@ test.each([
   ["1.234.567,89", 123456789],
   ["+12,5", 1250],
   [" 0 ", 0],
-])("es-CO %s parses to exactly %i minor units", (input, expected) => {
-  expect(parseMoney(input, "COP")).toBe(expected);
+])("COP %s reads as exactly %i minor units", (input, expected) => {
+  expect(amountMinorUnits(openAmount("COP", input))).toBe(expected);
 });
 test("a dot groups thousands in COP, without guessing", () => {
-  expect(parseMoney("1.234", "COP")).toBe(123400);
+  expect(amountMinorUnits(openAmount("COP", "1.234"))).toBe(123400);
 });
 test("parses exact safe-integer boundaries without BigInt on Hermes", () => {
   vi.stubGlobal("BigInt", undefined);
   try {
-    expect(parseMoney("90.071.992.547.409,91", "COP")).toBe(Number.MAX_SAFE_INTEGER);
-    expect(parseMoney("-90.071.992.547.409,91", "COP")).toBe(-Number.MAX_SAFE_INTEGER);
-    expect(parseMoney("00090071992547409,90", "COP")).toBe(
-      Number.MAX_SAFE_INTEGER - 1,
-    );
-    expect(() => parseMoney("90.071.992.547.409,92", "COP")).toThrow(
-      "Amount is too large.",
-    );
-    expect(parseMoney("000,01", "COP")).toBe(1);
+    const read = (text: string) => amountMinorUnits(openAmount("COP", text));
+    expect(read("90.071.992.547.409,91")).toBe(Number.MAX_SAFE_INTEGER);
+    expect(read("-90.071.992.547.409,91")).toBe(-Number.MAX_SAFE_INTEGER);
+    expect(read("00090071992547409,90")).toBe(Number.MAX_SAFE_INTEGER - 1);
+    expect(read("90.071.992.547.409,92")).toBeNull();
+    expect(amountHint(openAmount("COP", "90.071.992.547.409,92"), createTranslator("en").t)).toBe("This amount is too large.");
+    expect(read("000,01")).toBe(1);
   } finally {
     vi.unstubAllGlobals();
   }
@@ -73,7 +73,7 @@ test.each([
   "1.23.456",
   "90071992547410",
 ])("rejects malformed or unsafe input %s", (input) => {
-  expect(() => parseMoney(input, "COP")).toThrow();
+  expect(amountMinorUnits(openAmount("COP", input))).toBeNull();
 });
 test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["JPY", "¥"], ["AED", "AED "]])("currency %s has display prefix %s without formatToParts", (currency, expected) => {
   const formatToParts = Object.getOwnPropertyDescriptor(Intl.NumberFormat.prototype, "formatToParts");
@@ -116,7 +116,7 @@ test.each([
 });
 
 test.each([["JPY", "1,1"], ["BHD", "1,2345"]])("%s rejects fractional digits beyond its precision", (currency, text) => {
-  expect(() => parseMoney(text, currency)).toThrow();
+  expect(amountMinorUnits(openAmount(currency, text))).toBeNull();
 });
 
 

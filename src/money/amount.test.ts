@@ -1,7 +1,14 @@
 import { expect, test, vi } from "vitest";
 import { copAmountConvention, usdAmountConvention, legacyAmountConvention } from "../accounting/currencies";
 import { naiveRead } from "./amount.testSupport";
-import { formatAmount, parseMoney } from "../../apps/mobile/src/features/money";
+import { formatAmount } from "../../apps/mobile/src/features/money";
+import { readPreCurrencyAmount } from "../../apps/mobile/src/features/amount/preCurrency";
+
+function parseMoney(text: string, currency: string) {
+  const reading = readPreCurrencyAmount(text, currency);
+  if (reading.kind === "refused") throw new Error(`Legacy refusal for ${text}`);
+  return reading.minorUnits;
+}
 import { formatCompactBody, formatMinorUnits, parseAmount } from "./amount";
 import type { AmountFormat, AmountIssue, AmountPrecision } from "./amount";
 

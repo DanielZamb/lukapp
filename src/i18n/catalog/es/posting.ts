@@ -136,10 +136,6 @@ export const posting: Messages<typeof en> = {
   batchWaiting: "Un movimiento de esta lista ya se envió y todavía no se sabe cómo quedó. Registra otra vez para confirmarlo antes de cambiar la lista.",
   batchChanged: "Esta lista cambió en otra pantalla. Revísala y vuelve a intentarlo.",
 
-  amountDecimals: "Escribe un monto con máximo {precision} decimales.",
-  amountSeparators: "Revisa los separadores de miles.",
-  amountInvalid: "Escribe un monto válido.",
-  amountTooLarge: "El monto es demasiado grande.",
 
   rejectAccountNameConflict: "Ya tienes otro lugar con ese nombre.",
   rejectAccountNameTooLong: "Usa un nombre de lugar de 80 caracteres o menos.",
