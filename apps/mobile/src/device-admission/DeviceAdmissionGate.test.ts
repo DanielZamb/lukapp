@@ -356,12 +356,12 @@ test("naming this device reads in Spanish and registers the typed name unchanged
   const header = root?.root.findByType("header");
   expect(header?.props).toMatchObject({ title: "Ponle nombre a este celular", eyebrow: "TUS DISPOSITIVOS" });
   expect(spoken()).toContain("Elige un nombre para reconocer este celular.");
-  expect(spoken()).toContain("NOMBRE DEL DISPOSITIVO");
-  expect(root?.root.findByType("input").props).toMatchObject({ accessibilityLabel: "Nombre del dispositivo", placeholder: "Mi celular" });
-  expect(button("Registrar dispositivo")).toBeDefined();
+  expect(spoken()).toContain("NOMBRE DEL CELULAR");
+  expect(root?.root.findByType("input").props).toMatchObject({ accessibilityLabel: "Nombre del celular", placeholder: "Mi celular" });
+  expect(button("Registrar este celular")).toBeDefined();
   expect(button("Cerrar sesión")).toBeDefined();
   await act(async () => root?.root.findByType("input").props.onChangeText("Celular de Ana"));
-  await act(async () => button("Registrar dispositivo").props.onPress());
+  await act(async () => button("Registrar este celular").props.onPress());
   expect(sdk.register.mock.calls[0]?.[0]).toMatchObject({ label: "Celular de Ana" });
 });
 
@@ -379,9 +379,9 @@ test("the occupied screen reads in Spanish, offers a Spanish default name and a 
 test("closed access and revocation read in Spanish and stay distinguishable", async () => {
   await openInSpanish({ status: "success", data: { status: "revoked", wipeLocalInput: true } });
   expect(root?.root.findByType("header").props.title).toBe("Acceso no disponible en este celular");
-  expect(spoken()).toContain("Se revocó el acceso de este celular.");
+  expect(spoken()).toContain("Este celular ya no tiene acceso.");
   expect(button("Cerrar sesión")).toBeDefined();
-  expect(root?.root.findAllByProps({ label: "Intentar de nuevo" })).toHaveLength(0);
+  expect(root?.root.findAllByProps({ label: "Reintentar" })).toHaveLength(0);
   await act(async () => root?.unmount());
   await openInSpanish({ status: "success", data: { status: "revoked", wipeLocalInput: true, movedTo: "iPhone de Ana" } });
   expect(spoken()).toContain("El acceso pasó a iPhone de Ana");

@@ -14,7 +14,7 @@ test("a capture gap names its cause and the moment it began in each language", (
   expect(intakeWarning(gap, createTranslator("en"))).toBe(
     `Notification capture has a overflow gap since ${formatDateTime("en", since)}. Reconcile missed activity with your accounts.`);
   expect(intakeWarning(gap, createTranslator("es"))).toBe(
-    `La lectura de notificaciones tuvo un vacío desde ${formatDateTime("es", since)} porque llegaron demasiadas alertas a la vez. Compara con tus cuentas lo que se pudo perder.`);
+    `La lectura de notificaciones tuvo un vacío desde el ${formatDateTime("es", since)} porque llegaron demasiadas alertas a la vez. Compara con tus cuentas lo que se pudo perder.`);
   expect(formatDateTime("es", since, "America/Bogota")).toBe("10 de nov de 2026, 8:45 a. m.");
 });
 

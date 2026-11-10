@@ -125,7 +125,7 @@ test("unknown defaults wait and absent defaults redirect home", async () => {
 test("Alerts reads in Spanish, empty and with an over-limit category", async () => {
   const spanish = () => createElement(LanguageProvider, { initialPreference: "es" }, createElement(AlertsRoute));
   await act(async () => { root = create(spanish()); });
-  expect(texts()).toEqual(["LO QUE NECESITA ATENCIÓN", "Alertas", "Nada se pasó del tope", "Los topes se mantienen"]);
+  expect(texts()).toEqual(["LO QUE NECESITA ATENCIÓN", "Alertas", "Nada se pasó del tope", "Vas dentro de tus topes"]);
   expect(root.root.findAllByType("button").map((node) => node.props.accessibilityLabel)).toEqual(["Atrás"]);
   if (!evaluation) throw new Error("Expected evaluation");
   evaluation = { ...evaluation, jars: [{ category: { id: "food", name: "Mercado", emoji: "🍋" }, revisionId: "r",

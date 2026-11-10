@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
-import { useT } from "../i18n";
+import { formatList, useT } from "../i18n";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { Header, PrimaryButton, useTheme, useUi } from "../ui/core";
@@ -261,7 +261,7 @@ export function Setup({
               if (next.length) advance(2);
             }}
           />
-          {!!accountRequests.length && <Text style={ui.muted}>{t("setup.pendingPlaces", { names: accountRequests.map(({ name }) => name).join(", ") })}</Text>}
+          {!!accountRequests.length && <Text style={ui.muted}>{t("setup.pendingPlaces", { names: formatList(translator.language, accountRequests.map(({ name }) => name)) })}</Text>}
           {stage >= 2 && (
             <View style={styles.board}>
               <View style={styles.row}>

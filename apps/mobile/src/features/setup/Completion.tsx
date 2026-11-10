@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Text, View } from "react-native";
-import { useT } from "../../i18n";
+import { useT, formatList } from "../../i18n";
 import { PrimaryButton, SecondaryButton, Screen, useTheme, useUi } from "../../ui/core";
 import { font, spacing } from "../../ui/tokens";
 import { LookChip } from "../categories/LookChip";
@@ -24,8 +24,9 @@ export function SetupCompletion({
   const styles = useSetupStyles();
   const translator = useT();
   const { t, tn } = translator;
-  const names = summary.categories.slice(0, 3).map(({ name }) => name).join(", ");
   const extra = summary.categories.length - 3;
+  const shown = summary.categories.slice(0, 3).map(({ name }) => name);
+  const names = extra > 0 ? shown.join(", ") : formatList(translator.language, shown);
   const amount = formatMoney(
     { currency: summary.currency, minorUnits: summary.startingMinorUnits },
     { hideZeroDecimals: true },

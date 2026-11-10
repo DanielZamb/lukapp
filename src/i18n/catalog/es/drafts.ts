@@ -8,7 +8,7 @@ export const drafts: Messages<typeof en> = {
   discardCandidateBody: "Se borra de este celular junto con el texto de la notificación. No cambia ningún movimiento registrado y esa misma notificación no vuelve a aparecer.",
   discardDraftTitle: "¿Descartar este borrador?",
   discardDraftBody: "Solo se borra de este celular. No cambia ningún movimiento registrado.",
-  discardThisCandidate: "Descartar este movimiento",
+  discardThisCandidate: "Descartar sin registrar",
   discardDraft: "Descartar borrador",
   candidateChanged: "Este movimiento por revisar cambió desde que lo abriste. Revísalo y vuelve a intentarlo.",
   candidateFrozen: "Su confirmación ya se envió, así que no se puede descartar. Ábrelo para reintentar.",

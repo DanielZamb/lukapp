@@ -4,7 +4,7 @@ import type { categories as en } from "../en/categories";
 export const categories: Messages<typeof en> = {
   managerTitle: "Categorías",
   managerEyebrow: "A TU MANERA",
-  managerIntro: "Crea categorías para la plata que entra o sale. Toca una para cambiarle el nombre y el estilo.",
+  managerIntro: "Crea categorías para la plata que entra o sale. Toca una para cambiarle el nombre, el ícono o el color.",
   searchLabel: "Buscar categorías",
   searchPlaceholder: "Buscar",
   loading: "Cargando categorías",
@@ -12,7 +12,7 @@ export const categories: Messages<typeof en> = {
   natureIncome: "Entra plata",
   natureExpense: "Sale plata",
   natureUnset: "Sin definir si entra o sale",
-  editNatureNote: "{nature}. Cambiar el nombre o el estilo no cambia si la plata entra o sale.",
+  editNatureNote: "{nature}. Cambiar el nombre, el ícono o el color no cambia si la plata entra o sale.",
   managerEmpty: "Todavía no tienes categorías. Agrega una para empezar.",
   managerNoMatch: "Ninguna categoría coincide con tu búsqueda.",
   addCategory: "Agregar categoría",
@@ -22,7 +22,7 @@ export const categories: Messages<typeof en> = {
   errorNotFound: "Esta categoría ya no está disponible. Cierra el editor y elige otra.",
   errorSaveChange: "No pudimos guardar el cambio. Intenta de nuevo.",
   errorSaveCategory: "No pudimos guardar la categoría. Intenta de nuevo.",
-  errorAccountSetupUnavailable: "Aquí no puedes configurar la cuenta. Deja este editor abierto y agrega el lugar desde Lugares.",
+  errorAccountSetupUnavailable: "Aquí no puedes crear el lugar. Deja este editor abierto y agrégalo desde Lugares.",
 
   natureQuestion: "¿Qué pasa con la plata?",
   natureSuggested: "Lo sugerimos por el nombre. Puedes cambiarlo.",
@@ -31,7 +31,7 @@ export const categories: Messages<typeof en> = {
   answerStillMine: "Sigue siendo mía",
   answerPayDebt: "Pago una deuda",
 
-  yourOwn: "La tuya",
+  yourOwn: "Tu categoría",
   nameLabel: "Nombre de la categoría",
   namePlaceholder: "Ponle el nombre que quieras",
   emojiA11y: "Emoji {emoji}",
@@ -51,7 +51,7 @@ export const categories: Messages<typeof en> = {
   removeCategory: "Quitar categoría",
 
   pickerTitle: "Categoría",
-  pickerNoMatch: "Nada coincide con «{query}».",
+  pickerNoMatch: "Nada coincide con “{query}”.",
   pickerEmpty: "Todavía no tienes categorías.",
   addOwn: "Agregar la tuya",
   selectionCount: "{count} de 3 elegidas. Cada una cuenta el valor completo.",

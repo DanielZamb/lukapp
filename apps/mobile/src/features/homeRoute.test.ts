@@ -241,14 +241,14 @@ test("Home reads in Colombian Spanish with the workspace month, counted places a
     "ESTE MES", "1", "Lo que tienes ahora", "COP 750", "En 2 lugares",
     "Food se pasó del tope", "COP 50 de más", "3",
     "Borradores", "3 por revisar", "Resumen", "Este mes, por categoría",
-    "Planes", "Presupuesto de octubre y recuperar ahorros",
-    "¿Qué quieres hacer?", "Crear un lugar", "Otro bolsillo para tu plata", "Crear un movimiento", "Registra un gasto o un ingreso",
+    "Planes", "Presupuesto de octubre y ahorros",
+    "¿Qué quieres hacer?", "Crear un lugar", "Otro bolsillo para tu plata", "Registrar un movimiento", "Registra un gasto o un ingreso",
   ]);
   const labels = root.root.findAllByType("button").map((node) => node.props.accessibilityLabel);
   expect(labels).toEqual(expect.arrayContaining([
-    "Alertas, 1 se pasó del tope", "Abrir usuario y espacio de trabajo", "Ver lugares", "¿Qué quieres hacer?",
+    "Alertas, 1 categoría se pasó del tope", "Abrir usuario y espacio", "Ver lugares", "¿Qué quieres hacer?",
     "Food se pasó del tope, COP 50 de más", "Borradores, 3 por revisar", "Resumen, Este mes, por categoría",
-    "Planes, Presupuesto de octubre y recuperar ahorros",
+    "Planes, Presupuesto de octubre y ahorros",
   ]));
   const english = new Set(Object.values(catalogs.en.home));
   expect([...texts(), ...labels].filter((text) => english.has(text))).toEqual([]);
@@ -256,7 +256,7 @@ test("Home reads in Colombian Spanish with the workspace month, counted places a
 
 test("one place and nothing waiting read in Spanish", async () => {
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(Index))); });
-  expect(texts()).toContain("Un solo bolsillo · Ver este lugar");
+  expect(texts()).toContain("Todo junto · Ver este lugar");
   expect(texts()).toContain("Nada pendiente");
   expect(button("Borradores, Nada pendiente")).toBeDefined();
 });

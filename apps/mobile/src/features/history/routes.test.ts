@@ -234,7 +234,7 @@ test("sheet keeps confirmation, cancel, submitting, retry, posted receipt, and l
   expect(text()).toContain("Posting reversal…");
   expect(text()).not.toContain("Confirm reversal");
   await act(async () => finish?.(receipt));
-  expect(text()).toContain("Reversal posted · 2026-10-17");
+  expect(text()).toContain("Reversal posted · October 17, 2026");
   expect(text()).toContain("Reversed");
   expect(text()).not.toContain("Reverse entry");
   provider.details.set("100", reversed);
@@ -257,7 +257,7 @@ test("sheet retries an uncertain reversal with the same correction identity", as
   await act(async () => button("Confirm reversal").props.onPress());
   expect(text()).toContain("Could not confirm the reversal. Retry to check the same correction safely.");
   await act(async () => button("Retry reversal").props.onPress());
-  expect(text()).toContain("Reversal posted · 2026-10-17");
+  expect(text()).toContain("Reversal posted · October 17, 2026");
   expect(provider.post.mock.calls.map(([payload]) => payload)).toEqual([
     { workspaceId: "ws", journalEntryId: "100", idempotencyKey: "mobile-reversal@1:ws:100" },
     { workspaceId: "ws", journalEntryId: "100", idempotencyKey: "mobile-reversal@1:ws:100" },
@@ -304,7 +304,7 @@ test("standalone entry callers keep the detail screen, reversal confirmation, li
   expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
   await act(async () => button("Reverse entry").props.onPress());
   await act(async () => button("Confirm reversal").props.onPress());
-  expect(text()).toContain("Reversal posted · 2026-10-17");
+  expect(text()).toContain("Reversal posted · October 17, 2026");
   await act(async () => button("View reversal").props.onPress());
   expect(provider.push).toHaveBeenCalledWith({ pathname: "/entry", params: { entryId: "reversal" } });
   await act(async () => button("Back").props.onPress());

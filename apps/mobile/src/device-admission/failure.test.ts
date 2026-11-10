@@ -14,10 +14,10 @@ const failure = (code: string, language: "en" | "es", extra: Record<string, stri
 test("each server code keeps its kind and its own message in both languages", () => {
   const expected: Record<string, [string, string, string]> = {
     device_occupier_changed: ["retry", "The active phone changed. Check the device shown here and try again.",
-      "Cambió el celular activo. Revisa el dispositivo que aparece aquí e intenta de nuevo."],
+      "Cambió el celular activo. Revisa cuál aparece aquí e intenta de nuevo."],
     device_slot_occupied: ["occupied", "Another device uses this slot. Check the active device and try again.",
-      "Otro dispositivo ocupa este cupo. Revisa el dispositivo activo e intenta de nuevo."],
-    device_revoked: ["denied", "This device’s access was revoked.", "Se revocó el acceso de este celular."],
+      "Otro celular ya usa este cupo. Revisa cuál es el celular activo e intenta de nuevo."],
+    device_revoked: ["denied", "This device’s access was revoked.", "Este celular ya no tiene acceso."],
     owner_required: ["denied", "This account no longer has access.", "Esta cuenta ya no tiene acceso."],
     session_inactive: ["denied", "This session cannot be admitted. Sign out and sign in again.",
       "No se puede autorizar esta sesión. Cierra sesión y vuelve a iniciarla."],
@@ -31,7 +31,7 @@ test("each server code keeps its kind and its own message in both languages", ()
     expect(failure(code, "es"), code).toEqual({ kind, message: spanish });
   }
   expect(failure("device_slot_occupied", "es", { occupiedLabel: "Pixel de Ana" }).message)
-    .toBe("Pixel de Ana ya ocupa este cupo. Revisa el dispositivo activo e intenta de nuevo.");
+    .toBe("Pixel de Ana ya usa este cupo. Revisa cuál es el celular activo e intenta de nuevo.");
 });
 
 test("an unknown or malformed error is a calm retry, never a raw code or server text", () => {

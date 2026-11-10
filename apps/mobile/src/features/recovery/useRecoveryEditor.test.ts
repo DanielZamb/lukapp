@@ -113,7 +113,7 @@ test.each([
     en: "The plan was not activated. Check the monthly amount and destination, then try again.",
     es: "No se activó el plan. Revisa el valor por mes y el destino, y vuelve a intentarlo." },
   { failure: new Error("lost acknowledgement"), en: "Could not confirm activation. Retry to safely check the same plan.",
-    es: "No pudimos confirmar la activación. Reintenta para revisar el mismo plan sin riesgo." },
+    es: "No pudimos confirmar la activación. Reintenta: revisamos el mismo plan sin duplicarlo." },
 ])("activation failure $failure.message maps to a catalog message in both languages", async ({ failure, en, es }) => {
   for (const [language, message] of [[undefined, en], ["es", es]] as const) {
     const api = transport();

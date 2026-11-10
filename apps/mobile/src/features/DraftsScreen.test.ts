@@ -402,13 +402,13 @@ const englishInboxCopy = ["Candidates", "NOTIFICATION INTAKE", "Sources", "ready
 test("the inbox reads as one Spanish list: Por revisar, Atender ya, Puede esperar and the Ready set", async () => {
   await mountSpanish(render({ drafts, now: [candidate], ready: [candidate], readyTotal: 126400, segment: "now", month: "octubre" }));
   const shown = text();
-  for (const copy of ["Por revisar", "LECTURA DE NOTIFICACIONES", "Fuentes", "1 listo para agregar", "Atender ya", "Puede esperar",
-    "Revisa lo que hay que atender ya o confirma todos los que están listos.", "Reintentar registro", "Ver el aviso del Cierre de mes", "Daily money"])
+  for (const copy of ["Por revisar", "LECTURA DE NOTIFICACIONES", "Fuentes", "1 listo para registrar", "Atender ya", "Puede esperar",
+    "Revisa lo que hay que atender ya o registra todos los que están listos.", "Reintentar registro", "Ver el aviso del Cierre de mes", "Daily money"])
     expect(shown).toContain(copy);
   for (const copy of englishInboxCopy) expect(shown).not.toContain(copy);
   expect(button("Revisar Groceries")).toBeTruthy();
   expect(button("Atender ya, 2")).toBeTruthy();
-  expect(root?.root.findAllByProps({ label: "Confirmar los listos" }).length).toBeGreaterThan(0);
+  expect(root?.root.findAllByProps({ label: "Registrar los listos" }).length).toBeGreaterThan(0);
 
   await act(async () => button("Ver el aviso del Cierre de mes").props.onPress());
   expect(text()).toContain("Cerrar octubre");
@@ -418,7 +418,7 @@ test("the inbox reads as one Spanish list: Por revisar, Atender ya, Puede espera
 
 test("the Spanish inbox counts Ready Candidates and confirmed records", async () => {
   await mountSpanish(render({ now: [candidate, { ...candidate, id: "second" }], ready: [candidate, { ...candidate, id: "second" }] }));
-  expect(text()).toContain("2 listos para agregar");
+  expect(text()).toContain("2 listos para registrar");
   await act(async () => root?.unmount());
   await mountSpanish(render({ now: [candidate], confirmedCount: 1 }));
   expect(text()).toContain("Movimiento registrado");

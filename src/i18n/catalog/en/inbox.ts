@@ -271,7 +271,7 @@ export const inbox = {
   skippedDetail_one: "{count} alert · {from} to {to}",
   skippedDetail_other: "{count} alerts · {from} to {to}",
   dismiss: "Dismiss",
-  dismissA11y: "Dismiss {kind} notice",
+  dismissA11y: "Dismiss notice: {kind}",
   prototypeTitle: "Notification-first prototype",
   prototypeStatus: "Start from the notification text",
   prototypeA11y: "Open the notification-first prototype",

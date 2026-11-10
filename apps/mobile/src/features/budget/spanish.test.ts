@@ -104,7 +104,7 @@ test("the limit sheet keeps the month phrases whole in Spanish", async () => {
   const shown = texts(screen);
   expect(shown).toContain("OCTUBRE");
   expect(shown).toContain(`En septiembre gastaste $73${nb}mil en Comida. El cambio aplica para octubre y los meses siguientes.`);
-  expect(shown).toContain("No pasar de esto este mes");
+  expect(shown).toContain("Tope para este mes");
   expect(labels(screen)).toContain("Guardar para octubre");
   expect(labels(screen)).toContain("Lo que queda en Comida");
   expect(shown.join("\n")).not.toMatch(/Saving applies|Stay under|October/);

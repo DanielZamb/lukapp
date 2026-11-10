@@ -331,11 +331,11 @@ test("the batch reads in Spanish with counted drafts and a counted receipt", asy
   expect(copy()).toContain("1 borrador guardado en este celular.");
   await act(async () => root?.unmount());
   await renderSpanish({ ...batch(), posted: { count: 1, net: -1000 } });
-  expect(copy()).toContain("1 registrado\nNeto −$10 · este mes\nListo");
+  expect(copy()).toContain("Se registró 1\nNeto −$10 · este mes\nListo");
 });
 
 test("batch rows name a missing category and account in the reader's language", () => {
   const rowFor = (language: "en" | "es") => batchRowFor({ item: out, categories: [], profiles: [], t: createTranslator(language).t });
   expect(rowFor("en")).toMatchObject({ category: "No category", place: "No account" });
-  expect(rowFor("es")).toMatchObject({ category: "Sin categoría", place: "Sin cuenta" });
+  expect(rowFor("es")).toMatchObject({ category: "Sin categoría", place: "Sin lugar" });
 });

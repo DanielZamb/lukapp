@@ -120,18 +120,18 @@ test("the proposal limits explain the range and the extra saving in Spanish with
     invalid: "Escribe un valor por mes entre COP 3.000 y COP 12.000.",
   });
   expect(limitsCopy("COP", suggestionFor(1_200_000, 4), en.t).extra).toBe("This schedule replenishes the expense with no extra.");
-  expect(limitsCopy("COP", suggestionFor(1_200_000, 4), es.t).extra).toBe("Con este plan repones justo lo del gasto, sin nada de más.");
+  expect(limitsCopy("COP", suggestionFor(1_200_000, 4), es.t).extra).toBe("Con este plan recuperas justo lo del gasto, sin nada de más.");
 });
 
 test("progress and moved copy read as whole Spanish sentences", () => {
-  expect(progressCopy(laptopPlan, es.t)).toBe("COP 2.300 de COP 13.800 devueltos al ahorro");
+  expect(progressCopy(laptopPlan, es.t)).toBe("COP 2.300 de COP 13.800 recuperados");
   expect(progressCopy({ ...laptopPlan, status: "suspended" }, en.t)).toBe("Suspended · COP 2.300 moved back to savings");
-  expect(progressCopy({ ...laptopPlan, status: "suspended" }, es.t)).toBe("Suspendido · COP 2.300 devueltos al ahorro");
+  expect(progressCopy({ ...laptopPlan, status: "suspended" }, es.t)).toBe("Suspendido · COP 2.300 recuperados");
   const moved = { currency: "COP", title: "Arreglo del portátil", recoveredMinorUnits: 230_000, targetMinorUnits: 1_380_000 };
   expect(movedCopy({ ...moved, movedMinorUnits: 230_000, countedMinorUnits: 230_000 }, es.t))
-    .toBe("Tu plan de Arreglo del portátil ya va en el 17%. El saldo de la cuenta de ahorros va aparte del avance del plan.");
+    .toBe("Tu plan Arreglo del portátil ya va en el 17%. El saldo de tu lugar de ahorro va aparte del avance del plan.");
   expect(movedCopy({ ...moved, movedMinorUnits: 500_000, countedMinorUnits: 230_000 }, es.t))
-    .toBe("COP 2.300 cuentan para Arreglo del portátil. Tu plan de Arreglo del portátil ya va en el 17%. El saldo de la cuenta de ahorros va aparte del avance del plan.");
+    .toBe("COP 2.300 cuentan para Arreglo del portátil. Tu plan Arreglo del portátil ya va en el 17%. El saldo de tu lugar de ahorro va aparte del avance del plan.");
 });
 
 test("the Plans door names one active plan, counts several and invites a first one", () => {

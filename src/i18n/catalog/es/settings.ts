@@ -16,8 +16,8 @@ export const settings: Messages<typeof en> = {
   places_one: "{count} lugar",
   places_other: "{count} lugares",
   categories: "Categorías",
-  noCategories: "Aún no tienes categorías",
+  noCategories: "Todavía no tienes categorías",
   intake: "Lectura de notificaciones",
-  intakeDetail: "Acceso del celular, apps de origen, cuentas y movimientos por revisar",
+  intakeDetail: "Acceso del celular, apps de origen, lugares y movimientos por revisar",
   signOut: "Cerrar sesión",
 };

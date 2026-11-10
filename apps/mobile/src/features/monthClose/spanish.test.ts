@@ -69,17 +69,17 @@ test("a rejected close shows a translated message, never the server's English te
   const rejected = new ConvexError({ kind: "accounting", code: "accounting_period_invalid", message: "Accounting Period must be a real year and month" });
   expect(lockFailureMessage(rejected, es)).toBe("El mes no se cerró. Revisa que siga abierto y vuelve a intentar.");
   expect(lockFailureMessage(rejected, en)).toBe("The month was not locked. Check that it is still open and try again.");
-  expect(lockFailureMessage(new Error("offline"), es)).toBe("No pudimos confirmar el cierre. Vuelve a intentar: cerramos el mismo mes sin duplicar nada.");
+  expect(lockFailureMessage(new Error("offline"), es)).toBe("No pudimos confirmar el cierre. Reintenta: revisamos el mismo mes sin cerrarlo dos veces.");
   expect(lockFailureMessage(new Error("offline"), en)).toBe("Could not confirm the close. Retry to lock the same month safely.");
 });
 
 test("Month Close reads in Spanish and says plainly that a closed month takes no new movements", async () => {
   await show({ kind: "review" }, "Las notificaciones están apagadas.");
   const review = text();
-  for (const spanish of ["Cierre de octubre", "HAY MOVIMIENTOS POR REVISAR", "Gastos de octubre", "Por revisar", "Aviso",
+  for (const spanish of ["Cierre de octubre", "HAY MOVIMIENTOS POR REVISAR", "Gastos de octubre", "Por revisar", "Solo avisa",
     "Saldos de tus lugares", "1 lugar revisado", "Recuperar ahorros", "Nada pendiente este mes", "Terminar y cerrar octubre",
     "Al cerrar el mes, ya no recibe movimientos nuevos. Cerrar no mueve plata ni cambia saldos.",
-    "Las notificaciones están apagadas. Esto no impide el cierre de mes."])
+    "Las notificaciones están apagadas. Esto no impide el Cierre de mes."])
     expect(review).toContain(spanish);
   expect(review).not.toMatch(/Complete|spending|Candidates|Account balances|Financial Accounts|Savings recovery|October/);
 

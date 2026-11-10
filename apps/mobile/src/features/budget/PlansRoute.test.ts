@@ -170,7 +170,7 @@ test("Plans reads in Spanish with the workspace month inside each sentence", asy
   if (!root) throw new Error("Plans not mounted");
   expect(textCopy(root.root)).toEqual([
     "LO QUE VIENE", "Planes", "Presupuesto de octubre", "Los topes de este mes", "Recuperar ahorros", "2 planes",
-    "El presupuesto es el plan de octubre. Recuperar ahorros va aparte: no es una fila del presupuesto.",
+    "El presupuesto es tu plan para octubre. Recuperar ahorros va aparte.",
   ]);
   expect(root.root.findAll((node) => node.props.accessibilityLabel === "Presupuesto de octubre, Los topes de este mes"
     && typeof node.props.onPress === "function")).toHaveLength(1);

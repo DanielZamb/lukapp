@@ -84,7 +84,7 @@ test("editing keeps the stored name and explains the money direction in one sent
     editor: { kind: "edit", category, name: "Rent", style: category.style }, onDelete: vi.fn(), confirmingDelete: true,
   })));
   const shown = text();
-  expect(shown).toContain("Sale plata. Cambiar el nombre o el estilo no cambia si la plata entra o sale.");
+  expect(shown).toContain("Sale plata. Cambiar el nombre, el ícono o el color no cambia si la plata entra o sale.");
   expect(shown).toContain("¿Eliminar Rent?");
   expect(labels()).toEqual(expect.arrayContaining(["Guardar cambios", "Conservar categoría", "Sí, eliminar"]));
 });
@@ -94,7 +94,7 @@ test("the picker counts the selection and offers the encompassing category in Sp
     search: "zz", options: [], selectionCount: 3, limitReached: true, onDone: vi.fn(), onCreateEncompassing: vi.fn(),
   })));
   const shown = text();
-  expect(shown).toContain("Nada coincide con «zz».");
+  expect(shown).toContain("Nada coincide con “zz”.");
   expect(shown).toContain("3 de 3 elegidas. Cada una cuenta el valor completo.");
   expect(shown).toContain("Elige máximo tres categorías. Quita una o crea una categoría que las abarque.");
   expect(labels()).toEqual(expect.arrayContaining(["Buscar categorías", "Agregar la tuya", "Crear una categoría que las abarque", "Listo"]));

@@ -9,7 +9,7 @@ export const common: Messages<typeof en> = {
   delete: "Eliminar",
   discard: "Descartar",
   done: "Listo",
-  retry: "Intentar de nuevo",
+  retry: "Reintentar",
   loading: "Cargando…",
   yourProfile: "Tu perfil",
 };

@@ -386,7 +386,7 @@ test("the form reads in Colombian Spanish with no English labels left", async ()
   });
   const shown = text();
   for (const copy of ["Registrar plata", "NUEVO MOVIMIENTO", "Descripción", "Fecha del movimiento", "Saldo inicial", "Transferencia",
-    "De", "Para", "Invertir De y Para", "Confirmar De y Para", "Registrar"])
+    "De", "Para", "Intercambiar De y Para", "Confirmar De y Para", "Registrar"])
     expect(shown).toContain(copy);
   expect(shown).toContain("Pasa plata entre tus lugares.");
   for (const copy of englishFormCopy) expect(shown).not.toContain(copy);

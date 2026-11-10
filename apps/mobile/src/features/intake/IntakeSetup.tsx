@@ -387,7 +387,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
       {status.notices.map((notice) => <View key={notice.id} style={{ gap: spacing.sm }}>
         <FactRow icon="eye-off-outline" tone="neutral" title={t(NOTICE_LABELS[notice.kind])}
           detail={tn("inbox.skippedDetail", notice.count, { from: when(notice.firstAt), to: when(notice.lastAt) })} />
-        <SecondaryButton label={t("inbox.dismiss")} accessibilityLabel={t("inbox.dismissA11y", { kind: notice.kind })} disabled={pending !== null || snapshot.wipePending}
+        <SecondaryButton label={t("inbox.dismiss")} accessibilityLabel={t("inbox.dismissA11y", { kind: t(NOTICE_LABELS[notice.kind]) })} disabled={pending !== null || snapshot.wipePending}
           onPress={() => { void perform("inbox.pendingDismissing", () => service.dismissNotices([notice.id])); }} />
       </View>)}
     </View> : null}

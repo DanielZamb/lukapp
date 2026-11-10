@@ -31,7 +31,7 @@ export const budget: Messages<typeof en> = {
   limitIn: "TOPE EN {currency}",
   limitInA11y: "Tope del presupuesto en {currency}",
   saving: "Guardando…",
-  retrySave: "Intentar guardar de nuevo",
+  retrySave: "Reintentar",
   saveBudget: "Guardar presupuesto",
 
   composerSpent: "Salieron {amount} este mes",
@@ -44,7 +44,7 @@ export const budget: Messages<typeof en> = {
   saveLimit: "Guardar este tope",
 
   sheetJarA11y: "Lo que queda en {name}",
-  stayUnderThisMonth: "No pasar de esto este mes",
+  stayUnderThisMonth: "Tope para este mes",
   shortcutA11y: "Tope de {amount}",
   noteLoading: "Cargando lo gastado en {previousMonth}. El cambio aplica para {month} y los meses siguientes.",
   notePrevious: "En {previousMonth} gastaste {amount} en {name}. El cambio aplica para {month} y los meses siguientes.",
@@ -52,7 +52,7 @@ export const budget: Messages<typeof en> = {
 
   errorStale: "Este tope o el mes cambió. Cierra y vuelve a abrir el presupuesto para usar el tope más reciente.",
   errorRejected: "El presupuesto no se guardó. Revisa la categoría y que el tope sea mayor que cero, y vuelve a intentar.",
-  errorUnknown: "No pudimos confirmar si se guardó. Vuelve a intentar para revisar el mismo presupuesto sin duplicarlo.",
+  errorUnknown: "No pudimos confirmar si se guardó. Reintenta: revisamos el mismo presupuesto sin duplicarlo.",
 
   impactEyebrow: "TE PASARÍAS DEL TOPE",
   impactEntry: "Movimiento",

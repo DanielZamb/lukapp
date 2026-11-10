@@ -591,7 +591,7 @@ test("the setup sheet reads in Spanish through every stage and its errors", asyn
   await press("COP");
   expect(text()).toContain("Peso colombiano");
   expect(text()).toContain("Alertas de compras");
-  await press("Ahora no, Tú agregas los borradores");
+  await press("Ahora no, Tú registras tus movimientos");
   expect(text()).toContain("Lo que tienes ahora");
   expect(text()).toContain("Lo del banco más la plata que tienes en el bolsillo.");
   expect(text()).toContain("Ya conozco mis gastos. Quiero presupuestos.");
@@ -617,7 +617,7 @@ test("the setup sheet reads in Spanish through every stage and its errors", asyn
 test("a Spanish setup sends the same starter selection as English, so the stored names do not change", async () => {
   const complete = await openInSpanish();
   await press("COP");
-  await press("Ahora no, Tú agregas los borradores");
+  await press("Ahora no, Tú registras tus movimientos");
   await press("Empezar");
   expect(backend.ensure.mock.calls[0]?.[0].categories).toEqual([
     { kind: "preset", presetId: "groceries", style: { emoji: "🛒", tone: "primary", color: "h150" } },
@@ -631,7 +631,7 @@ test("currency search reads in Spanish and finds names in the chosen language", 
   await type("Buscar monedas", "dólar canadiense");
   expect(node("CAD, Dólar canadiense")).toBeDefined();
   await type("Buscar monedas", "zzz");
-  expect(text()).toContain("Nada coincide con \"zzz\".");
+  expect(text()).toContain("Nada coincide con “zzz”.");
 });
 
 test("the setup completion recap reads in Spanish as whole sentences around stored names", async () => {
@@ -645,7 +645,7 @@ test("the setup completion recap reads in Spanish as whole sentences around stor
   });
   expect(text()).toContain("¡Listo!");
   expect(text()).toContain(
-    "Peso colombiano, empezando con COP 1.500,25. Vas a seguir Food, Transport, Dining y 4 más. Tú vas a agregar los borradores. Los presupuestos quedan a un paso.",
+    "Peso colombiano, empezando con COP 1.500,25. Tus categorías: Food, Transport, Dining y 4 más. Tú vas a registrar tus movimientos. Los presupuestos quedan a un paso.",
   );
   expect(node("Ir al inicio")).toBeDefined();
   expect(nodes("Configurar la lectura de notificaciones")).toHaveLength(0);

@@ -201,7 +201,7 @@ test("a Spanish movement stores a Spanish description and a retry repeats it unc
   api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const move = await open(api, undefined, "es");
   await act(async () => { await move().submit(); });
-  expect(move().error).toBe("No pudimos confirmar la transferencia. Reintenta para revisar el mismo movimiento sin riesgo.");
+  expect(move().error).toBe("No pudimos confirmar la transferencia. Reintenta: revisamos la misma transferencia sin duplicarla.");
   await act(async () => { await move().submit(); });
   expect(api.move.mock.calls.map(([request]) => [request.description, request.idempotencyKey])).toEqual([
     ["Recuperar ahorros: Laptop repair", "move-1"], ["Recuperar ahorros: Laptop repair", "move-1"],
@@ -214,7 +214,7 @@ test.each([
     es: "No se hizo la transferencia. Revisa el origen y el valor, y vuelve a intentarlo." },
   { failure: new Error("lost acknowledgement"),
     en: "Could not confirm the transfer. Retry to safely check the same movement.",
-    es: "No pudimos confirmar la transferencia. Reintenta para revisar el mismo movimiento sin riesgo." },
+    es: "No pudimos confirmar la transferencia. Reintenta: revisamos la misma transferencia sin duplicarla." },
 ])("movement failure $failure.message maps to a catalog message in both languages", async ({ failure, en, es }) => {
   for (const [language, message] of [[undefined, en], ["es", es]] as const) {
     const api = transport();
@@ -232,6 +232,6 @@ test("choosing the destination as the source is refused in Spanish without sendi
   const move = await open(api, undefined, "es");
   await act(async () => { move().onSource("savings"); });
   await act(async () => { await move().submit(); });
-  expect(move().error).toBe("Escoge otro lugar de donde sacar la plata.");
+  expect(move().error).toBe("Elige otro lugar de donde sacar la plata.");
   expect(api.move).not.toHaveBeenCalled();
 });

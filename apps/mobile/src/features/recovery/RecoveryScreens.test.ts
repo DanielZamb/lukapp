@@ -300,7 +300,7 @@ function expectNoEnglish(copy: string[]) {
 
 test("Spanish plan list and candidates read as one voice with Colombian dates", async () => {
   const list = await spanish(createElement(RecoveryPlanList, { plans: [plan], onBack: () => {}, onPlan: () => {} }));
-  expect(visibleCopy(list)).toEqual(expect.arrayContaining(["Recuperar ahorros", "PLANES", "COP 2.300 de COP 13.800 devueltos al ahorro"]));
+  expect(visibleCopy(list)).toEqual(expect.arrayContaining(["Recuperar ahorros", "PLANES", "COP 2.300 de COP 13.800 recuperados"]));
   expectNoEnglish(visibleCopy(list));
   await act(async () => root?.unmount());
   const candidates = await spanish(createElement(RecoveryCandidates, {
@@ -309,7 +309,7 @@ test("Spanish plan list and candidates read as one voice with Colombian dates", 
   const copy = visibleCopy(candidates);
   expect(copy).toEqual(expect.arrayContaining([
     "Gastos por recuperar", "CIERRE DE OCTUBRE", "9 de septiembre · Daily",
-    "Escoge un gasto que quieras reponer ahorrando de a poquito. El gasto queda registrado tal como pasó.",
+    "Elige un gasto que quieras reponer ahorrando de a poquito. El gasto queda registrado tal como pasó.",
   ]));
   expect(copy).toContain("Laptop repair");
   expectNoEnglish(copy);
@@ -336,7 +336,7 @@ test("Spanish proposal editor explains months, the monthly range and the extra s
   expect(field.props.helperText)
     .toBe("Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan terminas ahorrando COP 1.200 de más.");
   const copy = visibleCopy(screen);
-  expect(copy).toEqual(expect.arrayContaining(["Lo que vas a reponer", "MESES", "DESTINO", "Activar plan"]));
+  expect(copy).toEqual(expect.arrayContaining(["Lo que vas a recuperar", "MESES", "DESTINO", "Activar plan"]));
   expectNoEnglish(copy);
 });
 
@@ -354,7 +354,7 @@ test("Spanish proposal editor shows the range error when the monthly amount is o
   expect(screen.findByType(Header).props.eyebrow).toBe("LAPTOP REPAIR · REEMPLAZO");
   expect(visibleCopy(screen)).toEqual(expect.arrayContaining([
     "Escribe un valor por mes entre COP 3.000 y COP 12.000.",
-    "Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan repones justo lo del gasto, sin nada de más.",
+    "Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan recuperas justo lo del gasto, sin nada de más.",
     "Destino",
   ]));
 });
@@ -378,7 +378,7 @@ test("Spanish plan page and Move money keep stored names and translate everythin
   }));
   expect(move.findByType(Header).props).toMatchObject({ title: "Pasar plata", eyebrow: "APORTE AL PLAN" });
   expect(move.findByType(ListGroup).findAllByType(ListRow).map((row) => [row.props.title, row.props.value])).toEqual([
-    ["Desde", "Daily"], ["Hacia", "Savings"], ["Cuenta para", "Laptop repair"],
+    ["De", "Daily"], ["Para", "Savings"], ["Cuenta para", "Laptop repair"],
   ]);
   const moveCopy = visibleCopy(move);
   expect(moveCopy).toEqual(expect.arrayContaining(["Valor", "Valor en COP", "Registrar transferencia"]));

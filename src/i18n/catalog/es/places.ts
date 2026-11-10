@@ -8,7 +8,7 @@ export const places: Messages<typeof en> = {
   now: "Lo que tienes hoy",
   across_one: "En {count} lugar",
   across_other: "En {count} lugares",
-  onePool: "Lo del banco y lo del bolsillo todavía van juntos. Agrega un lugar cuando tengas plata aparte.",
+  onePool: "Lo del banco y el efectivo todavía van juntos. Agrega un lugar cuando tengas plata aparte.",
   historyA11y: "Historial de {name}",
   empty: "Todavía no tienes lugares.",
   loading: "Cargando lugares",
@@ -41,5 +41,5 @@ export const places: Messages<typeof en> = {
   lookCustomA11y: "Emoji personalizado",
   lookPlaceholder: "O escribe el tuyo",
   lookUse: "Usar este",
-  lookFailed: "No pudimos guardar el ícono. Inténtalo otra vez.",
+  lookFailed: "No pudimos guardar el ícono. Intenta de nuevo.",
 };

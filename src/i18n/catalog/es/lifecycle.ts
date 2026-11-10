@@ -26,7 +26,7 @@ export const lifecycle: Messages<typeof en> = {
   deviceDetail: "{platform} · {status}",
   renameAction: "Cambiar nombre",
   renameA11y: "Cambiar el nombre de {name}",
-  renameTitle: "Cambia el nombre de este celular",
+  renameTitle: "Cambiar el nombre del dispositivo",
   renameLabel: "Nombre del dispositivo",
   renameHint: "Elige un nombre que reconozcas en esta lista.",
   renameSave: "Guardar nombre",

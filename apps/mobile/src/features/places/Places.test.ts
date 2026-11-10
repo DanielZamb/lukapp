@@ -110,7 +110,7 @@ test("the Places page reads in Spanish around the stored place names", async () 
   state.accounts = [{ ...daily, name: "My money" }];
   await act(async () => root.unmount());
   await render("es");
-  expect(texts()).toContain("Lo del banco y lo del bolsillo todavía van juntos. Agrega un lugar cuando tengas plata aparte.");
+  expect(texts()).toContain("Lo del banco y el efectivo todavía van juntos. Agrega un lugar cuando tengas plata aparte.");
   const visible = texts().join("\n");
   for (const english of ["What you have now", "Add another place", "ONE POOL", "Bank and pocket", "My money"]) {
     expect(visible).not.toContain(english);

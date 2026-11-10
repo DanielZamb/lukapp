@@ -260,7 +260,7 @@ test("observed content-free notices dismiss through the service while recovery g
   expect(text()).toContain("Too many alerts at once");
   expect(text()).toContain(`3 alerts · ${formatDateTime("en", now - 4000)} to ${formatDateTime("en", now - 2000)}`);
   expect(intakeWarning(f.service.getSnapshot(), createTranslator("en"))).toContain("recovery gap since");
-  await press("Dismiss overflow notice");
+  await press("Dismiss notice: Too many alerts at once");
   expect(dismiss).toHaveBeenCalledWith({ expectedEpoch: "a".repeat(22), noticeIds: ["notice-1"] });
   expect(text()).not.toContain("Too many alerts at once"); expect(text()).toContain("Activity may be missing");
 });

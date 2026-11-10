@@ -85,7 +85,7 @@ test("date ranges keep their ids and bounds and only the labels change language"
   const english = dateRanges("2026-08-23", en);
   const spanish = dateRanges("2026-08-23", es);
   expect(spanish.map(({ label, ...range }) => range)).toEqual(english.map(({ label, ...range }) => range));
-  expect(spanish.map((range) => range.label)).toEqual(["Todo", "Últimos 7 días", "Agosto", "Julio", "Junio"]);
+  expect(spanish.map((range) => range.label)).toEqual(["Todas las fechas", "Últimos 7 días", "Agosto", "Julio", "Junio"]);
 });
 
 test("search finds a row by its Spanish date words when reading in Spanish", () => {
@@ -111,7 +111,7 @@ test("reversal failures map each server code to a message in the reader's langua
   expect(reversalFailureMessage(failure("journal_entry_already_reversed"), es)).toBe("Este movimiento ya tiene una reversión. Abre la reversión vinculada.");
   expect(reversalFailureMessage(failure("reversal_cannot_be_reversed"), es)).toBe("Una reversión no se puede reversar. Mejor registra un movimiento nuevo.");
   expect(reversalFailureMessage(failure("locked_period"), es)).toBe("No se pudo reversar. Revisa el movimiento y que haya un mes abierto.");
-  expect(reversalFailureMessage(new Error("offline"), es)).toBe("No pudimos confirmar la reversión. Vuelve a intentar: revisamos la misma corrección sin duplicarla.");
+  expect(reversalFailureMessage(new Error("offline"), es)).toBe("No pudimos confirmar la reversión. Reintenta: revisamos la misma reversión sin duplicarla.");
   expect(reversalFailureMessage(failure("journal_entry_already_reversed"), en)).toBe("This entry already has a reversal. Open its linked reversal.");
   expect(reversalFailureMessage(failure("locked_period"), es)).not.toContain("Journal Entry");
 });

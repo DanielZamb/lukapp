@@ -1,5 +1,5 @@
 import { ActivityIndicator, Text, View } from "react-native";
-import { useT } from "../../i18n";
+import { formatLongDate, useT } from "../../i18n";
 import { PrimaryButton, SecondaryButton, useUi } from "../../ui/core";
 import type { EntryDetail } from "./types";
 import type { ReversalState } from "./useReversal";
@@ -15,7 +15,7 @@ export type EntryReversalProps = {
 
 export function EntryReversal({ detail, reversal, onEntry, onReverse, onCancel, onConfirm }: EntryReversalProps) {
   const ui = useUi();
-  const { t } = useT();
+  const { t, language } = useT();
   const { entry } = detail;
   const canReverse = !entry.reversesEntryId && !entry.reversedByEntryId;
   const originalId = entry.reversesEntryId;
@@ -24,7 +24,7 @@ export function EntryReversal({ detail, reversal, onEntry, onReverse, onCancel, 
     {originalId && <SecondaryButton label={t("review.viewOriginal")} onPress={() => onEntry(originalId)} />}
     {reversalId && <SecondaryButton label={t("review.viewReversal")} onPress={() => onEntry(reversalId)} />}
     {reversal.kind === "posted" ? <View style={ui.section}>
-      <Text accessibilityRole="alert" style={ui.body}>{t("review.reversalPosted", { date: reversal.receipt.accountingDate })}</Text>
+      <Text accessibilityRole="alert" style={ui.body}>{t("review.reversalPosted", { date: formatLongDate(language, Date.parse(`${reversal.receipt.accountingDate}T00:00:00Z`), "UTC") })}</Text>
       <Text style={ui.muted}>{t("review.originalPreserved")}</Text>
       {!entry.reversedByEntryId && <SecondaryButton label={t("review.viewReversal")} onPress={() => onEntry(reversal.receipt.id)} />}
     </View> : reversal.kind === "submitting" ? <View style={ui.section}>

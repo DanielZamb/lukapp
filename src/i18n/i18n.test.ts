@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { catalogs, createTranslator, resolveLanguage, translate, translateCount } from "./index";
-import { formatLongDate, formatMonthName, formatShortDate } from "./format";
+import { formatList, formatLongDate, formatMonthName, formatShortDate } from "./format";
 
 const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
 
@@ -66,5 +66,15 @@ describe("dates", () => {
     expect(formatMonthName("es", date, { timeZone: "UTC", capitalize: false })).toBe("noviembre");
     expect(formatShortDate("es", date, "UTC")).toBe("10 nov");
     expect(formatShortDate("en", date, "UTC")).toBe("Nov 10");
+  });
+});
+
+describe("lists", () => {
+  it("joins the last item with y in Spanish and leaves English as it was", () => {
+    expect(formatList("es", ["Comida", "Salud", "Hogar"])).toBe("Comida, Salud y Hogar");
+    expect(formatList("es", ["Padres", "Hijos"])).toBe("Padres e Hijos");
+    expect(formatList("es", ["Agua", "Hielo"])).toBe("Agua y Hielo");
+    expect(formatList("es", ["Nequi"])).toBe("Nequi");
+    expect(formatList("en", ["Food", "Health", "Home"])).toBe("Food, Health, Home");
   });
 });

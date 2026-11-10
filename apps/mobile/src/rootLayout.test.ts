@@ -57,9 +57,9 @@ const texts = () => root?.root.findAllByType("text").map((node) => node.children
 
 test("the root error screen follows a stored Spanish choice and still reports the failure", async () => {
   const { retry, error } = await renderError("es");
-  expect(texts()).toEqual(["No pudimos cargar tu plata", "Revisa tu conexión e intenta de nuevo.", "Intentar de nuevo"]);
+  expect(texts()).toEqual(["No pudimos cargar tu plata", "Revisa tu conexión e intenta de nuevo.", "Reintentar"]);
   expect(report).toHaveBeenCalledWith(error);
-  await act(async () => root?.root.findByProps({ accessibilityLabel: "Intentar de nuevo" }).props.onPress());
+  await act(async () => root?.root.findByProps({ accessibilityLabel: "Reintentar" }).props.onPress());
   expect(retry).toHaveBeenCalledOnce();
 });
 

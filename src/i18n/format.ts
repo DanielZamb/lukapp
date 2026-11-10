@@ -62,3 +62,11 @@ export function formatCompactNumber(language: Language, value: number): string {
     maximumFractionDigits: 2,
   }).format(value);
 }
+
+/** "a, b, c" in English as before; "a, b y c" in Spanish. */
+export function formatList(language: Language, items: readonly string[]): string {
+  if (language !== "es" || items.length < 2) return items.join(", ");
+  const last = items[items.length - 1]!;
+  const joiner = /^(i|hi)(?!e)/i.test(last) ? "e" : "y";
+  return `${items.slice(0, -1).join(", ")} ${joiner} ${last}`;
+}
