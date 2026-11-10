@@ -120,7 +120,7 @@ function observation(
   };
 }
 
-test("the complete accounting write inventory is public actions with only internal mutation handlers", async () => {
+test("accounting writes use public actions and screenshot preparation is the only public mutation", async () => {
   const actions = Object.entries(accounting)
     .filter(([, value]) => "isAction" in value)
     .map(([name]) => name)
@@ -154,7 +154,7 @@ test("the complete accounting write inventory is public actions with only intern
         publicMutations.push(`${path}:${name}`);
     }
   }
-  expect(publicMutations).toEqual([]);
+  expect(publicMutations).toEqual(["./feedback.ts:prepareScreenshotUpload"]);
 });
 
 test("raw workspace creation is denied even for the registered live Owner", async () => {
