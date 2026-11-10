@@ -130,3 +130,12 @@ test("a removed limit is confirmed by name and month above the remaining jars", 
   expect(screen.findAll((node) => String(node.type) === "Text" && node.props.accessibilityRole === "alert")
     .map((node) => node.children.join(""))).toEqual(["Limit for Food removed from October."]);
 });
+
+test("a USD board reads its jars and short amounts in the US format in both the label and the text", async () => {
+  const jars = [jar("Partial", 64_650_000), jar("Reversed", -150_000_000)];
+  const screen = await render({ currency: "USD", jars, categoryColors: new Map(jars.map((jar) => [jar.category.id, "#047857"])) });
+  expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join("")))
+    .toEqual(expect.arrayContaining(["354K left", "2.5M left"]));
+  const buttons = screen.findAll((node) => String(node.type) === "Pressable").filter((node) => node.props.accessibilityLabel?.includes("spent."));
+  expect(buttons[0].props.accessibilityLabel).toBe("Partial: USD 353,500.00 left of USD 1,000,000.00. USD 646,500.00 spent. Edit Budget.");
+});

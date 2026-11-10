@@ -67,11 +67,11 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   vi.unstubAllGlobals();
 });
-function props(unlocking = true): ComponentProps<typeof HomePlaceSetup> {
+function props(unlocking = true, currency = "COP"): ComponentProps<typeof HomePlaceSetup> {
   return {
       defaults: {
         purchaseAlertsConsent: false, wantsBudgets: false,
-        workspace: { id: "workspace", functionalCurrency: "COP", timeZone: "America/Bogota",
+        workspace: { id: "workspace", functionalCurrency: currency, timeZone: "America/Bogota",
           currentAccountingPeriod: { year: 2026, month: 10, status: "open" }, kind: "Personal", chartOfAccountsTemplate: "puc@1" },
         financialAccountProfile: { id: "daily", name: "Daily", productKind: "cash", ledgerAccountId: "ledger", workspaceId: "workspace" },
       },
@@ -258,3 +258,22 @@ test("in Spanish the sheet reads in Spanish, a blank name stores the Spanish def
   await act(async () => button("Agregar este lugar").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "Nequi" });
 });
+
+test.each([
+  ["COP", "Type a decimal comma for COP", "12.50", "Use the comma for decimals, for example 12,50", "1.234,50"],
+  ["USD", "Type a decimal point for USD", "12,50", "Use the point for decimals, for example 12.50", "1,234.50"],
+])("a %s home place balance is typed with the decimal key; the other separator is refused and nothing is sent",
+  async (currency, decimal, wrong, hint, shown) => {
+    await act(async () => { root = create(createElement(HomePlaceSetup, props(true, currency))); });
+    for (const key of wrong) await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+    expect(root.root.findAll((node) => node.props.accessibilityRole === "alert").map((node) => node.children.join(""))).toContain(hint);
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post).not.toHaveBeenCalled();
+    await act(async () => input("Balance today").props.onChangeText(""));
+    for (const key of "1234") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+    await act(async () => button(decimal).props.onPress());
+    for (const key of "50") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+    expect(input("Balance today").props.value).toBe(shown);
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency, minorUnits: 123450 });
+  });

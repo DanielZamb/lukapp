@@ -674,3 +674,38 @@ test("at the largest text the purchase-alert choices stack and size to their Spa
   expect(large.card.flex).toBeUndefined();
   expect(large.card.minHeight).toBe(120);
 });
+
+async function typeKeys(label: string, keys: string) {
+  for (const key of keys) {
+    const field = node(label);
+    await act(async () => field.props.onChangeText(`${field.props.value as string}${key}`));
+  }
+}
+
+test.each([
+  ["COP", "en", "Starting amount", "Type a decimal comma for COP", "Start tracking", "Not now, You record your own entries",
+    "COP 1.234,50. Bank plus the cash in your pocket.", "Use the comma for decimals, for example 12,50"],
+  ["USD", "en", "Starting amount", "Type a decimal point for USD", "Start tracking", "Not now, You record your own entries",
+    "USD 1,234.50. Bank plus the cash in your pocket.", "Use the point for decimals, for example 12.50"],
+  ["COP", "es", "Monto inicial", "Escribir coma decimal en COP", "Empezar", "Ahora no, Tú registras tus movimientos",
+    "COP 1.234,50. Lo del banco más la plata que tienes en el bolsillo.", "Usa la coma para los decimales, por ejemplo 12,50"],
+  ["USD", "es", "Monto inicial", "Escribir punto decimal en USD", "Empezar", "Ahora no, Tú registras tus movimientos",
+    "USD 1,234.50. Lo del banco más la plata que tienes en el bolsillo.", "Usa el punto para los decimales, por ejemplo 12.50"],
+])("the %s starting amount in %s is typed with the decimal key, previewed as sent, and a wrong separator is refused",
+  async (currency, language, field, decimal, start, consent, preview, hint) => {
+    if (language === "es") await openInSpanish();
+    else { await open(); await press("Food"); }
+    await press(currency);
+    await press(consent);
+    await typeKeys(field, currency === "COP" ? "12.50" : "12,50");
+    expect(text()).toContain(hint);
+    await press(start);
+    expect(backend.ensure).not.toHaveBeenCalled();
+    await type(field, "");
+    await typeKeys(field, "1234");
+    await press(decimal);
+    await typeKeys(field, "50");
+    expect(text()).toContain(preview);
+    await press(start);
+    expect(backend.ensure.mock.calls.map(([payload]) => [payload.functionalCurrency, payload.startingMinorUnits])).toEqual([[currency, 123450]]);
+  });
