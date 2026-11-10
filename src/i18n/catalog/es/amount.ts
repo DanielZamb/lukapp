@@ -15,6 +15,9 @@ export const amount: Messages<typeof en> = {
   hintNoDecimals: "Los montos en {currency} no llevan decimales, por ejemplo {example}",
   hintNotNumber: "Escribe solo números y separadores, por ejemplo {example}",
   hintTooLarge: "El monto es demasiado grande.",
-  noticeConverted: "Se guardó antes como {previous}. Revisa que {current} esté bien.",
+  reviewConverted: "Lo guardaste como {previous}. Ahora aparece como {amount}.",
+  reviewPasted: "Pegaste {amount}. Revisa que esté bien antes de seguir.",
+  reviewConfirm: "Confirmar {amount}",
+  reviewRequired: "Confirma el monto antes de seguir.",
   noticeReenter: "No pudimos leer el monto guardado antes ({previous}). Escríbelo de nuevo.",
 };

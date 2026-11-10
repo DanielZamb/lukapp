@@ -133,6 +133,8 @@ test("creation chooses a category before the composer, then saves shared-parser 
   await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("0"));
   expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(true);
   await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("1.500.000,25"));
+  expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(true);
+  await act(async () => screen.findByProps({ accessibilityLabel: "Confirm COP 1.500.000,25" }).props.onPress());
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
   expect(save.mock.calls).toEqual([[{
     workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10", limit: { currency: "COP", minorUnits: 150_000_025 },
@@ -338,7 +340,16 @@ function limitJar(limitMinorUnits = 40_000_000, revisionId = "revision") {
   }] };
 }
 const limitInput = (screen: ReactTestInstance) => screen.findByProps({ accessibilityLabel: "New limit in COP" });
-const typeLimit = (screen: ReactTestInstance, text: string) => act(async () => limitInput(screen).props.onChangeText(text));
+/** Selects the limit shown and types over it one key at a time. */
+async function typeLimit(screen: ReactTestInstance, text: string) {
+  const shown: string = limitInput(screen).props.value;
+  await act(async () => limitInput(screen).props.onSelectionChange({ nativeEvent: { selection: { start: 0, end: shown.length } } }));
+  if (!text) await act(async () => limitInput(screen).props.onChangeText(""));
+  for (const key of text) {
+    const { value, selection } = limitInput(screen).props as { value: string; selection: { start: number; end: number } };
+    await act(async () => limitInput(screen).props.onChangeText(value.slice(0, selection.start) + key + value.slice(selection.end)));
+  }
+}
 const saveButton = (screen: ReactTestInstance) => screen.findByProps({ accessibilityLabel: "Save October" });
 
 test("an existing limit saves typed amounts below and above it that no shortcut offers", async () => {

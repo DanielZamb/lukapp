@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme, useThemeMode } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
-import { amountMinorUnits, amountOfMinorUnits, amountSign, type AmountSession } from "../amount/session";
+import { amountOfMinorUnits, amountSign, displayedMinorUnits, type AmountSession } from "../amount/session";
 import { appInitial } from "./appCatalog";
 import { IconTile } from "./IntakeParts";
 import { pieces, suggest, type Mention } from "./suggest";
@@ -45,7 +45,7 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
   const [revealed, setRevealed] = useState(false);
   const [anchor, setAnchor] = useState<number | null>(null);
   const accent = dark ? DARK_PRIMARY_TEXT : theme.primary;
-  const typed = amountMinorUnits(amount);
+  const typed = displayedMinorUnits(amount);
   const current = typed === null ? null : Math.abs(typed);
   const chosen = suggestion.amounts.find((mention) => mention.minor === current) ?? null;
   const hidden = suggestion.sensitive !== null && !revealed;

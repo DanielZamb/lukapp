@@ -116,7 +116,7 @@ test("revocation wipe deletes Candidates without touching a missing Drafts key",
 });
 
 test("platform-unsupported local-input wipe clears legacy Drafts and Candidates for the subject", async () => {
-  await writeDocument("owner", { v: 2, drafts: [] });
+  await writeDocument("owner", { v: 3, drafts: [] });
   await writeIntakeDocument("owner", {
     v: 1,
     candidates: [candidate("c1")],

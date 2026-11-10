@@ -2,12 +2,12 @@ import { expect, test, vi } from "vitest";
 import { formatMoney, currencyDisplayPrefix } from "./money";
 import { createTranslator } from "../../../../src/i18n";
 import { amountHint } from "./amount/hints";
-import { applyNativeText } from "./amount/nativeEdit";
+import { nativeTextChange, nativeTrackOf } from "./amount/nativeEdit";
 import { amountMinorUnits, openAmount } from "./amount/session";
 
 function typed(currency: string, keys: string) {
   let session = openAmount(currency);
-  for (const key of keys) session = applyNativeText(session, session.editor.text + key);
+  for (const key of keys) session = nativeTextChange(session, nativeTrackOf(session), session.editor.text + key).session;
   return session;
 }
 

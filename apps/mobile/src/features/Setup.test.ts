@@ -308,6 +308,10 @@ test("comma cents parse exactly, malformed amounts stay editable, and an uncerta
   expect(backend.ensure).not.toHaveBeenCalled();
   expect(node("Starting amount").props.editable).toBe(true);
   await type("Starting amount", "1.500,25");
+  await press("Start tracking");
+  expect(backend.ensure).not.toHaveBeenCalled();
+  expect(text()).toContain("Confirm the amount before you continue.");
+  await press("Confirm COP 1.500,25");
   backend.ensure.mockRejectedValueOnce(new Error("lost acknowledgement"));
   await press("Start tracking");
   expect(node("Starting amount").props.editable).toBe(false);
@@ -526,6 +530,9 @@ test("a deferred place uses the selected non-COP workspace currency without subs
   await press("Not now, You record your own entries");
   await press("Start tracking");
   await type("Balance today", "12,34");
+  await press("Add this place");
+  expect(backend.place).not.toHaveBeenCalled();
+  await press("Confirm CAD 12,34");
   await press("Add this place");
   expect(backend.ensure.mock.calls[0][0].functionalCurrency).toBe("CAD");
   expect(backend.place.mock.calls[0][0].payload.amount).toEqual({ currency: "CAD", minorUnits: 1234 });

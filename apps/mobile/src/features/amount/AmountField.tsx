@@ -3,9 +3,10 @@ import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type Text
 import { useT } from "../../i18n";
 import { useThemeContext } from "../../ui/themeContext";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
+import { formatMoney } from "../money";
 import { amountHint } from "./hints";
-import { applyNativeText, nativeCaretAfter } from "./nativeEdit";
-import { editAmountSession, toggleAmountSign, type AmountSession } from "./session";
+import { nativeSelectionChange, nativeTextChange, nativeTrackOf } from "./nativeEdit";
+import { confirmAmount, editAmountSession, toggleAmountSign, type AmountSession } from "./session";
 
 export type AmountFieldProps = {
   session: AmountSession;
@@ -27,7 +28,8 @@ export type AmountFieldProps = {
 
 /**
  * The one input for an amount. It turns each text and selection change from the native field into an edit of the
- * same session, offers the workspace's decimal mark as a key of its own, and explains refused input.
+ * same session, offers the workspace's decimal mark as a key of its own, explains refused input, and asks the person
+ * to confirm an amount the app rewrote or that arrived pasted with a separator.
  */
 export function AmountField(props: AmountFieldProps) {
   const { t } = useT();
@@ -35,18 +37,25 @@ export function AmountField(props: AmountFieldProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const latest = useRef(props.session);
   latest.current = props.session;
-  const staleCaret = useRef<number | null>(null);
-  const { editor, currency } = props.session;
+  const track = useRef(nativeTrackOf(props.session));
+  const { editor, currency, review } = props.session;
   const { decimal } = editor.format.convention;
   const decimals = editor.format.precision > 0;
   const hint = amountHint(props.session, t);
   const Input = props.InputComponent ?? TextInput;
   function emit(next: AmountSession) {
+    if (next === latest.current) return;
     latest.current = next;
     props.onChange(next);
   }
+  /** A press of the field's own keys comes after every report the last native edit could still send. */
+  function press(next: AmountSession) {
+    track.current = nativeTrackOf(next, track.current.order);
+    emit(next);
+  }
   const keyEnabled = props.editable && decimals;
   const refused = !!hint || !!props.message?.error;
+  const reviewed = review ? formatMoney({ currency, minorUnits: review.minorUnits }) : null;
   return (
     <View style={styles.field}>
       {props.label ? <Text style={shared.fieldLabel}>{props.label}</Text> : null}
@@ -64,20 +73,14 @@ export function AmountField(props: AmountFieldProps) {
           cursorColor={theme.primary}
           selectionColor={theme.primary}
           onChangeText={(text) => {
-            const current = latest.current;
-            const caret = nativeCaretAfter(current, text);
-            const next = applyNativeText(current, text);
-            staleCaret.current = next.editor.selection.end === caret ? null : caret;
-            emit(next);
+            const next = nativeTextChange(latest.current, track.current, text);
+            track.current = next.track;
+            emit(next.session);
           }}
           onSelectionChange={({ nativeEvent: { selection } }) => {
-            const current = latest.current;
-            const stale = staleCaret.current;
-            staleCaret.current = null;
-            if (stale !== null && selection.start === stale && selection.end === stale) return;
-            if (selection.start > selection.end || selection.end > current.editor.text.length) return;
-            if (selection.start === current.editor.selection.start && selection.end === current.editor.selection.end) return;
-            emit(editAmountSession(current, { kind: "select", selection }));
+            const next = nativeSelectionChange(latest.current, track.current, selection);
+            track.current = next.track;
+            emit(next.session);
           }}
           style={[props.label ? [shared.fieldInput, styles.boxed, refused && shared.fieldInputInvalid] : null, styles.input, props.inputStyle]}
         />
@@ -87,7 +90,7 @@ export function AmountField(props: AmountFieldProps) {
             accessibilityLabel={t("amount.signA11y")}
             accessibilityState={{ disabled: !props.editable || props.sign.disabled === true }}
             disabled={!props.editable || props.sign.disabled === true}
-            onPress={() => emit(toggleAmountSign(latest.current))}
+            onPress={() => press(toggleAmountSign(latest.current))}
             style={({ pressed }) => [styles.key, (!props.editable || props.sign?.disabled) && styles.keyDisabled, pressed && styles.pressed]}
           >
             <Text style={styles.keyText}>+/−</Text>
@@ -100,13 +103,32 @@ export function AmountField(props: AmountFieldProps) {
             : t("amount.noDecimalsA11y", { currency })}
           accessibilityState={{ disabled: !keyEnabled }}
           disabled={!keyEnabled}
-          onPress={() => emit(editAmountSession(latest.current, { kind: "decimal" }))}
+          onPress={() => press(editAmountSession(latest.current, { kind: "decimal" }))}
           style={({ pressed }) => [styles.key, !keyEnabled && styles.keyDisabled, pressed && styles.pressed]}
         >
           <Text style={styles.keyText}>{decimal}</Text>
         </Pressable>
       </View>
       {props.notice ? <Text style={ui.muted}>{props.notice}</Text> : null}
+      {review && reviewed ? (
+        <View style={styles.review} accessibilityLiveRegion="polite">
+          <Text style={ui.body}>
+            {review.reason === "converted" && review.previous !== null
+              ? t("amount.reviewConverted", { previous: review.previous, amount: reviewed })
+              : t("amount.reviewPasted", { amount: reviewed })}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("amount.reviewConfirm", { amount: reviewed })}
+            accessibilityState={{ disabled: !props.editable }}
+            disabled={!props.editable}
+            onPress={() => press(confirmAmount(latest.current))}
+            style={({ pressed }) => [shared.secondaryButton, !props.editable && shared.buttonDisabled, pressed && shared.buttonPressed]}
+          >
+            <Text style={shared.secondaryButtonLabel}>{t("amount.reviewConfirm", { amount: reviewed })}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {hint ? (
         <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={ui.error}>{hint}</Text>
       ) : props.message?.error ? (
@@ -124,6 +146,7 @@ function createStyles(theme: Theme) {
     row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
     input: { flex: 1, minWidth: 0 },
     boxed: { width: "auto" },
+    review: { gap: spacing.sm, paddingVertical: spacing.xs },
     key: {
       minWidth: touchTarget,
       minHeight: touchTarget,

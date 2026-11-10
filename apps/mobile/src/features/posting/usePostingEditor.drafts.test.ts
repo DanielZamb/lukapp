@@ -140,7 +140,7 @@ const groceriesFacts = {
   categories: { ids: [] as string[], primaryId: null },
 };
 function sharedStore() {
-  let document: LocalEntryDocument = { v: 2, drafts: [] };
+  let document: LocalEntryDocument = { v: 3, drafts: [] };
   const lease = new LocalInputLease("two-editors", "session");
   let nextId = 0;
   const kept = keepIn(

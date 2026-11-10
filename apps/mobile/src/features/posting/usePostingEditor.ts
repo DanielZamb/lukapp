@@ -28,6 +28,7 @@ import {
   amountMinorUnits,
   amountOfMinorUnits,
   amountSign,
+  displayedMinorUnits,
   openAmount,
   openSavedAmount,
   storedAmountOf,
@@ -97,27 +98,30 @@ export type PostingDraftsSession = {
 /** Equal keys mean the person has nothing new to keep. */
 function factsKey(facts: LocalEntryFacts) {
   return JSON.stringify([facts.workspaceId, facts.currency, facts.entryType, facts.amountText, facts.amountFormat,
-    facts.amountReenter === true, facts.accountingDate, facts.description, facts.profileId, facts.destinationId,
+    facts.amountReenter === true, facts.amountReview ?? null, facts.accountingDate, facts.description, facts.profileId, facts.destinationId,
     facts.categories.ids, facts.categories.primaryId]);
 }
 
 function factsAmount(facts: LocalEntryFacts): StoredAmountText {
-  return { text: facts.amountText, format: facts.amountFormat, ...(facts.amountReenter ? { reenter: true } : {}) };
+  return { text: facts.amountText, format: facts.amountFormat, ...(facts.amountReenter ? { reenter: true } : {}),
+    ...(facts.amountReview ? { review: facts.amountReview } : {}) };
 }
 
-function amountFacts(stored: StoredAmountText): Pick<LocalEntryFacts, "amountText" | "amountFormat" | "amountReenter"> {
-  return { amountText: stored.text, amountFormat: stored.format, ...(stored.reenter ? { amountReenter: true } : {}) };
+function amountFacts(stored: StoredAmountText): Pick<LocalEntryFacts, "amountText" | "amountFormat" | "amountReenter" | "amountReview"> {
+  return { amountText: stored.text, amountFormat: stored.format, ...(stored.reenter ? { amountReenter: true } : {}),
+    ...(stored.review ? { amountReview: stored.review } : {}) };
 }
 
 function categoryAmount(value: AmountSession, nature: CategoryNature) {
   return withAmountSign(value, nature === "Income" ? "+" : "-");
 }
 
-/** The opened saved amount, while the person has not changed its text. */
-type OpenedAmount = { session: AmountSession; stored: StoredAmountText; notice: AmountNotice | null };
-function untouched(opened: OpenedAmount | null, amount: AmountSession) {
-  return opened !== null && opened.session.currency === amount.currency && opened.session.editor.text === amount.editor.text;
-}
+/**
+ * The saved amount the editor opened, kept while nothing has changed the amount since. Saving it again keeps the
+ * saved text and its format, so an unreadable or rewritten amount reopens exactly as before. Any change to the
+ * amount, even one that ends with the same characters, drops it: the amount is then saved as the session holds it.
+ */
+type OpenedAmount = { stored: StoredAmountText; notice: AmountNotice | null };
 
 /** The amount of a complete session. Submission paths call it after checking validity, and it refuses again. */
 function requiredMinorUnits(session: AmountSession): number {
@@ -230,7 +234,7 @@ export function usePostingEditor(
     const stored = factsAmount(facts);
     const opened = openSavedAmount(facts.currency, stored);
     setAmount(opened.session);
-    setOpenedAmount({ ...opened, stored });
+    setOpenedAmount({ stored, notice: opened.notice });
     setDescription(facts.description);
     setDate(facts.accountingDate);
     setEntryType(facts.entryType);
@@ -324,7 +328,7 @@ export function usePostingEditor(
       workspaceId: account.workspaceId,
       currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
       entryType: entryType === "transfer" ? "transfer" : "normal",
-      ...amountFacts(openedAmount && untouched(openedAmount, amount) ? openedAmount.stored : storedAmountOf(amount)),
+      ...amountFacts(openedAmount ? openedAmount.stored : storedAmountOf(amount)),
       accountingDate: date,
       description,
       profileId,
@@ -415,8 +419,14 @@ export function usePostingEditor(
   const validTransfer =
     entryType !== "transfer" ||
     (!!destinationId && destinationId !== profileId && !transferReviewRequired);
+  const shownMinorUnits = displayedMinorUnits(amount);
   const direction: "in" | "out" =
-    minorUnits !== null && minorUnits > 0 ? "in" : "out";
+    shownMinorUnits !== null && shownMinorUnits > 0 ? "in" : "out";
+  /** Changes the amount; a change to its text or its confirmation means it is no longer the saved amount. */
+  function changeAmount(next: AmountSession) {
+    if (next.editor.text !== amount.editor.text || next.review !== amount.review) setOpenedAmount(null);
+    setAmount(next);
+  }
   function buildEntry(): PendingPosting {
     if (setup) {
       if (!setup.productKind) throw new Error("Choose Credit card or Loan");
@@ -705,19 +715,19 @@ export function usePostingEditor(
     factsKey(snapshotFacts()) !== savedFacts;
   return {
     amount,
-    amountNotice: openedAmount && untouched(openedAmount, amount) ? openedAmount.notice : null,
+    amountNotice: openedAmount?.notice?.kind === "reenter" ? openedAmount.notice : null,
     signLocked: entryType === "normal" && classification.nature !== null,
     setAmount: (value: AmountSession) => {
       if (canEdit() && value.currency === amount.currency) {
         if (entryType === "normal" && classification.nature) {
-          setAmount(categoryAmount(value, classification.nature));
+          changeAmount(categoryAmount(value, classification.nature));
           return;
         }
-        const next = amountMinorUnits(value);
+        const next = displayedMinorUnits(value);
         const nextDirection = next === null ? direction : next > 0 ? "in" : "out";
         if (nextDirection !== direction)
           setCategories({ ids: [], primaryId: null });
-        setAmount(value);
+        changeAmount(value);
       }
     },
     description,
@@ -806,7 +816,7 @@ export function usePostingEditor(
       ) {
         setCategories({ ids: [...value.ids], primaryId: value.primaryId }, nature);
         if (entryType === "normal" && value.ids.length && nature)
-          setAmount(categoryAmount(amount, nature));
+          changeAmount(categoryAmount(amount, nature));
       }
     },
     pending: !!pending || intake?.frozen === true,

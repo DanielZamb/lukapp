@@ -69,7 +69,7 @@ const expense = {
     idempotencyKey: "same-expense",
   },
 } satisfies PostableCommand;
-const empty: LocalEntryDocument = { v: 2, drafts: [] };
+const empty: LocalEntryDocument = { v: 3, drafts: [] };
 
 const opening = {
   kind: "opening",
@@ -124,7 +124,7 @@ test("legacy expense JSON becomes one posting draft on the existing key", () => 
   const parsed = parseLocalEntryDocument(expense.payload, now);
   expect(parsed.dirty).toBe(true);
   expect(parsed.document).toEqual({
-    v: 2,
+    v: 3,
     drafts: [
       {
         id: "same-expense",
@@ -175,7 +175,7 @@ test("a v1 collection drops expired drafts and keeps live ones", () => {
 });
 
 test("corrupt JSON is not wiped", () => {
-  expect(() => parseLocalEntryDocument({ v: 3, drafts: [] }, now)).toThrow();
+  expect(() => parseLocalEntryDocument({ v: 4, drafts: [] }, now)).toThrow();
   expect(() => parseLocalEntryDocument({ foo: 1 }, now)).toThrow();
 });
 
@@ -381,7 +381,7 @@ test("Month Close counts only live listed drafts dated in that workspace month",
   expect(
     countDraftsInMonth(
       {
-        v: 2,
+        v: 3,
         drafts: [
           {
             id: "expired",
@@ -524,7 +524,7 @@ test("Home expiry purge does not read the store until it holds the local-input l
     status: "posting" as const,
     command: expense,
   };
-  await writeDocument("owner", { v: 2, drafts: [expired, live] });
+  await writeDocument("owner", { v: 3, drafts: [expired, live] });
   events.length = 0;
   const lease = new LocalInputLease("owner", "session");
   let release!: () => void;
@@ -562,7 +562,7 @@ test("Home expiry purge does not restore a draft that posted while it waited", a
     status: "posting" as const,
     command: expense,
   };
-  await writeDocument("owner", { v: 2, drafts: [expired, live] });
+  await writeDocument("owner", { v: 3, drafts: [expired, live] });
   const lease = new LocalInputLease("owner", "session");
   let release!: () => void;
   const hold = runLocalInputWrite(
@@ -601,7 +601,7 @@ test("a draft posted or removed by another editor is gone, never recreated under
 test("batch-owned posting drafts stay out of the one-entry session and survive other draft operations", () => {
   const queued = { id: "batch-row", command: expense };
   const batch = { queue: [queued], receipts: { count: 0, net: 0 } };
-  const document: LocalEntryDocument = { v: 2, drafts: [], postingBatches: { workspace: batch } };
+  const document: LocalEntryDocument = { v: 3, drafts: [], postingBatches: { workspace: batch } };
   const begun = beginPostIn(document, { command: expense }, now, newId);
   // The queue's idempotency key owns the saved draft even before its draftId is persisted.
   expect(restoreFromDocument(begun.document, { workspaceId: "workspace", currency: "COP" }, now)).toEqual({ kind: "blank" });

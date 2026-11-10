@@ -7,7 +7,7 @@ import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { useT } from "../../i18n";
 import { formatMoney, minorUnitFactor } from "../money";
 import { AmountField } from "../amount/AmountField";
-import { amountMinorUnits, amountOfMinorUnits } from "../amount/session";
+import { amountOfMinorUnits, displayedMinorUnits } from "../amount/session";
 import { jarPresentation, type BudgetCategory } from "./model";
 import type { useBudgetEditor } from "./useBudgetEditor";
 
@@ -33,7 +33,7 @@ export function BudgetComposer(props: Props) {
   const ui = useUi();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { t } = useT();
-  const limit = amountMinorUnits(props.amount) ?? 0;
+  const limit = displayedMinorUnits(props.amount) ?? 0;
   const { status, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
   const over = status === "over";
   const money = (minorUnits: number) => formatMoney({ currency: props.currency, minorUnits }, { hideZeroDecimals: true });

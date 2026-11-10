@@ -12,6 +12,9 @@ export const amount = {
   hintNoDecimals: "{currency} amounts have no decimals, for example {example}",
   hintNotNumber: "Type only digits and separators, for example {example}",
   hintTooLarge: "This amount is too large.",
-  noticeConverted: "Saved earlier as {previous}. Check that {current} is right.",
+  reviewConverted: "You saved this as {previous}. It now shows as {amount}.",
+  reviewPasted: "You pasted {amount}. Make sure it's right before you continue.",
+  reviewConfirm: "Confirm {amount}",
+  reviewRequired: "Confirm the amount before you continue.",
   noticeReenter: "We couldn't read the amount saved earlier ({previous}). Type it again.",
 } as const;

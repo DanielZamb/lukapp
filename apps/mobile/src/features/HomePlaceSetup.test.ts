@@ -99,6 +99,9 @@ test("the second place replaces the entire stack with its saved name after confi
   await act(async () => input("Place name").props.onChangeText("Savings"));
   await act(async () => input("Balance today").props.onChangeText("12.500"));
   await act(async () => button("Add this place").props.onPress());
+  expect(state.post).not.toHaveBeenCalled();
+  await act(async () => button("Confirm COP 12.500,00").props.onPress());
+  await act(async () => button("Add this place").props.onPress());
   expect(state.post).toHaveBeenCalledOnce();
   expect(state.post.mock.calls[0]).toEqual([{
     kind: "setup", target: { kind: "source" }, payload: {

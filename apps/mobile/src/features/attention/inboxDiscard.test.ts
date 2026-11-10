@@ -66,7 +66,7 @@ beforeEach(async () => {
   f = fixture();
   f.setPages([{ captures: [capture, { ...capture, captureId: "capture-2", description: "Bakery" }], nextCursor: null }]);
   await f.service.refresh();
-  const taxi = keepIn({ v: 2, drafts: [] }, { facts }, now, () => "taxi");
+  const taxi = keepIn({ v: 3, drafts: [] }, { facts }, now, () => "taxi");
   const lunch = keepIn(taxi.document, { facts: { ...facts, description: "Lunch" } }, now, () => "lunch");
   const posting = beginPostIn(lunch.document, { command: { kind: "expense", payload: {
     workspaceId: "workspace-1", financialAccountProfileId: "account-1", amount: { currency: "COP", minorUnits: 900000 },

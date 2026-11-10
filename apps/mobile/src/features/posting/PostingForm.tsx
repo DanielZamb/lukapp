@@ -173,9 +173,7 @@ function postingFormStyles(theme: Theme, layout: ReadableLayout) {
 export function PostingForm(props: PostingFormProps) {
   const { t } = useT();
   const signOnly = /^[+−-]$/.test(props.amount.editor.text.trim());
-  const notice = props.amountNotice?.kind === "converted"
-    ? t("amount.noticeConverted", { previous: props.amountNotice.previous, current: props.amount.editor.text })
-    : props.amountNotice?.kind === "reenter" ? t("amount.noticeReenter", { previous: props.amountNotice.previous }) : null;
+  const notice = props.amountNotice?.kind === "reenter" ? t("amount.noticeReenter", { previous: props.amountNotice.previous }) : null;
   const ui = useUi();
   const theme = useTheme();
   const layout = useReadableLayout();

@@ -12,7 +12,8 @@ import { usePostingEditor, type PostingTransport } from "../posting/usePostingEd
 import { createCandidateBinding } from "../intake/postingBinding";
 import { emptyState, ingest, serializeState, type ActiveCandidate } from "../intake/durableState";
 import { capture, fixture, mapping, now } from "../intake/service.testSupport";
-import { openAmount } from "./session";
+import { nativeTextChange, nativeTrackOf } from "./nativeEdit";
+import { confirmAmount, editAmountSession, openAmount, toggleAmountSign } from "./session";
 
 let root: ReactTestRenderer | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
@@ -71,15 +72,23 @@ const savedBefore = (currency: string, amountText: string) => parseLocalEntryDoc
 
 test.each([
   ["COP", "-1.234,50", "-1.234,50", null],
-  ["USD", "-1.234,50", "-1,234.50", { kind: "converted", previous: "-1.234,50" }],
-  ["USD", "-1.234", "-1,234.00", { kind: "converted", previous: "-1.234" }],
-])("a %s Draft saved before the update as %s reopens as %s with the same money", async (currency, saved, shown, notice) => {
+  ["USD", "-1.234,50", "-1,234.50", { reason: "converted", previous: "-1.234,50", minorUnits: 123450 }],
+  ["USD", "-1.234", "-1,234.00", { reason: "converted", previous: "-1.234", minorUnits: 123400 }],
+])("a %s Draft saved before the update as %s reopens as %s and posts the same money once confirmed", async (currency, saved, shown, review) => {
   const { api, posted } = transport();
   const { value } = port(savedBefore(currency, saved));
   const { editor } = await openEditor({ currency, drafts: value, draftId: "old", api });
   expect(editor().amount.editor.text).toBe(shown);
-  expect(editor().amountNotice).toEqual(notice);
+  expect(editor().amount.review).toEqual(review);
   expect(editor().unsaved).toBe(false);
+  expect(editor().canSubmit).toBe(review === null);
+  if (review) {
+    await act(async () => { await editor().submit(); });
+    expect(editor().captureForBatch()).toBeNull();
+    expect(posted).toEqual([]);
+    await act(async () => { editor().setAmount(confirmAmount(editor().amount)); });
+    expect(editor().canSubmit).toBe(true);
+  }
   await act(async () => { await editor().submit(); });
   expect(posted.map((command) => [command.kind, command.payload.amount])).toEqual([
     ["expense", { currency, minorUnits: saved === "-1.234" ? 123400 : 123450 }],
@@ -184,6 +193,12 @@ test.each([["COP", "-1.234,50"], ["USD", "-1,234.50"]] as const)("a %s Candidate
   const editor = await openCandidate(f.service, currency, dispatch);
   expect(editor().amount.editor.text).toBe(shown);
   await act(async () => { editor().setDescription("Market"); });
+  if (currency === "USD") {
+    expect(editor().canSubmit).toBe(false);
+    await act(async () => { await editor().submit(); });
+    expect(dispatch).not.toHaveBeenCalled();
+    await act(async () => { editor().setAmount(confirmAmount(editor().amount)); });
+  }
   await act(async () => { await editor().submit(); });
   expect(dispatch.mock.calls.map(([command]) => command.confirmed.amount)).toEqual([{ currency, minorUnits: 123450 }]);
 });
@@ -198,4 +213,76 @@ test("a Candidate edit whose saved text and saved amount disagree asks for re-en
   await act(async () => { await editor().submit(); });
   expect(dispatch).not.toHaveBeenCalled();
   expect(serializeState(f.state())).toContain("\"reviewAmountReenter\":true");
+});
+
+test("a rewritten Draft awaits confirmation until confirmed, through keeping, a sign change and reopening", async () => {
+  const { api, posted } = transport();
+  const store = port(savedBefore("USD", "-1.234"));
+  let opened = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
+  await act(async () => { await opened.editor().keepDraft(); });
+  expect(store.kept.at(-1)?.facts).toMatchObject({ amountText: "-1.234", amountFormat: "pre-currency" });
+  expect(store.kept.at(-1)?.facts.amountReview).toBeUndefined();
+  await act(async () => root?.unmount()); root = undefined;
+  opened = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
+  expect(opened.editor().amount.review).toEqual({ reason: "converted", previous: "-1.234", minorUnits: 123400 });
+  await act(async () => { opened.editor().setAmount(toggleAmountSign(opened.editor().amount)); });
+  expect(opened.editor().amount.editor.text).toBe("+1,234.00");
+  await act(async () => { await opened.editor().keepDraft(); });
+  expect(store.kept.at(-1)?.facts).toMatchObject({ amountText: "+1,234.00", amountFormat: "usd/1",
+    amountReview: { reason: "converted", previous: "-1.234" } });
+  await act(async () => root?.unmount()); root = undefined;
+  opened = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
+  expect(opened.editor().amount.editor.text).toBe("+1,234.00");
+  expect(opened.editor().amount.review).toEqual({ reason: "converted", previous: "-1.234", minorUnits: 123400 });
+  expect(opened.editor().canSubmit).toBe(false);
+  await act(async () => { opened.editor().setAmount(confirmAmount(opened.editor().amount)); });
+  await act(async () => { await opened.editor().keepDraft(); });
+  expect(store.kept.at(-1)?.facts.amountReview).toBeUndefined();
+  await act(async () => root?.unmount()); root = undefined;
+  opened = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
+  expect(opened.editor().amount.review).toBeNull();
+  await act(async () => { await opened.editor().submit(); });
+  expect(posted.map((command) => [command.kind, command.payload.amount])).toEqual([["income", { currency: "USD", minorUnits: 123400 }]]);
+});
+
+test("an amount edited and restored to the same characters is saved as the session holds it, in the current format", async () => {
+  const { api } = transport();
+  const store = port(savedBefore("USD", "-1.234,50"));
+  const { editor } = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
+  expect(editor().amount.editor.text).toBe("-1,234.50");
+  await act(async () => { editor().setAmount(editAmountSession(editor().amount, { kind: "delete", direction: "backward" })); });
+  expect(editor().amount.editor.text).toBe("-1,234.5");
+  await act(async () => { editor().setAmount(editAmountSession(editor().amount, { kind: "type", character: "0" })); });
+  expect(editor().amount.editor.text).toBe("-1,234.50");
+  await act(async () => { await editor().keepDraft(); });
+  expect(store.kept.at(-1)?.facts).toMatchObject({ amountText: "-1,234.50", amountFormat: "usd/1",
+    amountReview: { reason: "converted", previous: "-1.234,50" } });
+});
+
+test("a pasted amount kept in a Draft reopens still awaiting confirmation", async () => {
+  const { api } = transport();
+  const store = port([]);
+  const first = await openEditor({ currency: "USD", drafts: store.value, api });
+  const blank = first.editor().amount;
+  await act(async () => { first.editor().setAmount(nativeTextChange(blank, nativeTrackOf(blank), "-1,234").session); });
+  await act(async () => { first.editor().setDescription("Rent"); });
+  expect(first.editor().canSubmit).toBe(false);
+  await act(async () => { await first.editor().keepDraft(); });
+  expect(store.kept.at(-1)?.facts).toMatchObject({ amountText: "-1,234", amountFormat: "usd/1", amountReview: { reason: "pasted", previous: null } });
+  await act(async () => root?.unmount()); root = undefined;
+  const reopened = await openEditor({ currency: "USD", drafts: store.value, draftId: "new", api });
+  expect(reopened.editor().amount.review).toEqual({ reason: "pasted", previous: null, minorUnits: 123400 });
+  expect(reopened.editor().canSubmit).toBe(false);
+});
+
+test("a sent command with an unknown outcome retries unchanged and never asks for confirmation", async () => {
+  const { api, posted } = transport();
+  const command: PendingPosting = { kind: "expense", payload: { workspaceId: "workspace", financialAccountProfileId: "cash",
+    amount: { currency: "USD", minorUnits: 123400 }, accountingDate: "2026-11-01", description: "Rent", idempotencyKey: "sent-key" } };
+  const { editor } = await openEditor({ currency: "USD", api: { ...api, load: async () => ({ kind: "pending", id: "sent", command }) } });
+  expect(editor().pending).toBe(true);
+  expect(editor().amount.review).toBeNull();
+  expect(editor().canSubmit).toBe(true);
+  await act(async () => { await editor().submit(); });
+  expect(posted).toEqual([command]);
 });

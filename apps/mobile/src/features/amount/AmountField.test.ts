@@ -54,6 +54,7 @@ async function rerender(currency: string, language: "en" | "es") {
 
 const input = () => root!.root.find((node) => node.type === "input" && node.props.accessibilityLabel === "Amount");
 const button = (label: string) => root!.root.findByProps({ accessibilityLabel: label, accessibilityRole: "button" });
+const texts = () => root!.root.findAll((node) => node.type === "text").map((node) => node.children.join(""));
 const alerts = () => root!.root.findAll((node) => node.type === "text" && node.props.accessibilityRole === "alert")
   .map((node) => node.children.join(""));
 
@@ -136,19 +137,27 @@ for (const language of ["en", "es"] as const) {
 }
 
 test.each([
-  ["COP", "1.234", 123400, 123400], ["COP", "1,234", null, null], ["COP", "12.50", null, null], ["COP", "12,50", 1250, 1250],
-  ["USD", "1.234", null, null], ["USD", "1,234", 123400, 123400], ["USD", "12.50", 1250, 1250], ["USD", "12,50", null, null],
-] as const)("thousand-fold text %s %s through the field: typed sends %s, pasted sends %s", async (currency, text, typedMinor, pastedMinor) => {
+  ["COP", "1.234", 123400, "COP 1.234,00"], ["COP", "1,234", null, null], ["COP", "12.50", null, null], ["COP", "12,50", 1250, "COP 12,50"],
+  ["USD", "1.234", null, null], ["USD", "1,234", 123400, "USD 1,234.00"], ["USD", "12.50", 1250, "USD 12.50"], ["USD", "12,50", null, null],
+] as const)("thousand-fold text %s %s through the field: typed sends %s; pasted, it sends only after %s is confirmed", async (currency, text, minorUnits, shown) => {
   await render(currency, "en");
   await type(text);
   expect(input().props.value).toBe(text);
   await press("Send");
-  expect(sent).toEqual(typedMinor === null ? [] : [{ currency, minorUnits: typedMinor }]);
+  expect(sent).toEqual(minorUnits === null ? [] : [{ currency, minorUnits }]);
   await render(currency, "en");
   await paste(text);
   expect(input().props.value).toBe(text);
   await press("Send");
-  expect(sent).toEqual(pastedMinor === null ? [] : [{ currency, minorUnits: pastedMinor }]);
+  expect(sent).toEqual([]);
+  if (shown === null) {
+    expect(root!.root.findAll((node) => node.type === "button" && String(node.props.accessibilityLabel).startsWith("Confirm"))).toEqual([]);
+    return;
+  }
+  expect(texts()).toContain(`You pasted ${shown}. Make sure it's right before you continue.`);
+  await press(`Confirm ${shown}`);
+  await press("Send");
+  expect(sent).toEqual([{ currency, minorUnits }]);
 });
 
 test("a language switch mid-entry keeps the text, the value and the session", async () => {
@@ -226,4 +235,61 @@ test("Backspace on an automatic separator removes the digit before it, and a sta
   await press("Type a decimal point for USD");
   expect(input().props.value).toBe("1.,234");
   expect(alerts()).toEqual(["Write the amount like this: 1,234.50"]);
+});
+
+test("a pasted amount with a separator waits for confirmation through a re-render and a language change, then sends", async () => {
+  await render("USD", "en");
+  await paste("1,234");
+  await press("Send");
+  expect(sent).toEqual([]);
+  expect(texts()).toContain("You pasted USD 1,234.00. Make sure it's right before you continue.");
+  await rerender("USD", "en");
+  expect(button("Confirm USD 1,234.00")).toBeTruthy();
+  await press("Spanish");
+  expect(texts()).toContain("Pegaste USD 1,234.00. Revisa que esté bien antes de seguir.");
+  await press("Send");
+  expect(sent).toEqual([]);
+  await press("Confirmar USD 1,234.00");
+  expect(root!.root.findAll((node) => node.type === "button" && String(node.props.accessibilityLabel).startsWith("Confirmar"))).toEqual([]);
+  await press("Send");
+  expect(sent).toEqual([{ currency: "USD", minorUnits: 123400 }]);
+});
+
+test("digits pasted without a separator need no confirmation; a sign and the caret changes keep a confirmation", async () => {
+  await render("USD", "en");
+  await paste("1234");
+  expect(input().props.value).toBe("1,234");
+  await press("Send");
+  expect(sent).toEqual([{ currency: "USD", minorUnits: 123400 }]);
+  await render("COP", "en");
+  await paste("1.234,5");
+  await press("Switch the amount between minus and plus");
+  await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: { start: 1, end: 1 } } }));
+  expect(input().props.value).toBe("-1.234,5");
+  await press("Send");
+  expect(sent).toEqual([]);
+  await press("Confirm COP 1.234,50");
+  await press("Send");
+  expect(sent).toEqual([{ currency: "COP", minorUnits: -123450 }]);
+});
+
+test("typing the amount into another number clears the confirmation, since the person typed it", async () => {
+  await render("USD", "en");
+  await paste("1,234");
+  await type("5");
+  expect(input().props.value).toBe("12,345");
+  expect(root!.root.findAll((node) => node.type === "button" && String(node.props.accessibilityLabel).startsWith("Confirm"))).toEqual([]);
+  await press("Send");
+  expect(sent).toEqual([{ currency: "USD", minorUnits: 1234500 }]);
+});
+
+test("a currency change clears the field and its pending confirmation", async () => {
+  await render("USD", "en");
+  await paste("1,234");
+  await rerender("COP", "en");
+  expect(input().props.value).toBe("");
+  expect(root!.root.findAll((node) => node.type === "button" && String(node.props.accessibilityLabel).startsWith("Confirm"))).toEqual([]);
+  await type("1234");
+  await press("Send");
+  expect(sent).toEqual([{ currency: "COP", minorUnits: 123400 }]);
 });
