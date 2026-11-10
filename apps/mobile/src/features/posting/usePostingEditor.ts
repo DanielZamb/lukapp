@@ -24,6 +24,8 @@ import type {
 import { intakeConfirmOutcome } from "../../../../../src/notificationIntake/outcome";
 import { useT } from "../../i18n";
 import { rejectionMessage } from "./rejection";
+import { legacyAmountConvention, currencyMinorUnitDigits } from "../../../../../src/accounting/currencies";
+import { openStoredAmountText, type StoredAmountText } from "../amount/storedText";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -86,8 +88,20 @@ export type PostingDraftsSession = {
 
 /** Equal keys mean the person has nothing new to keep. */
 function factsKey(facts: LocalEntryFacts) {
-  return JSON.stringify([facts.workspaceId, facts.currency, facts.entryType, facts.amountText, facts.accountingDate,
-    facts.description, facts.profileId, facts.destinationId, facts.categories.ids, facts.categories.primaryId]);
+  return JSON.stringify([facts.workspaceId, facts.currency, facts.entryType, facts.amountText, facts.amountFormat,
+    facts.amountReenter === true, facts.accountingDate, facts.description, facts.profileId, facts.destinationId,
+    facts.categories.ids, facts.categories.primaryId]);
+}
+
+function storedAmountOf(facts: LocalEntryFacts): StoredAmountText {
+  return { text: facts.amountText, format: facts.amountFormat, ...(facts.amountReenter ? { reenter: true } : {}) };
+}
+
+function editorText(stored: StoredAmountText, currency: string) {
+  if (stored.format === "pre-currency" && !stored.reenter) return stored.text;
+  return openStoredAmountText(stored, currency, {
+    convention: legacyAmountConvention, precision: currencyMinorUnitDigits(currency),
+  }).text;
 }
 
 function categoryAmount(value: string, nature: CategoryNature) {
@@ -105,6 +119,7 @@ export function usePostingEditor(
   const intake = session.intake ?? null;
   const isolate = session.intakeRoute === true || intake !== null;
   const [amount, setAmount] = useState("-");
+  const [openedAmount, setOpenedAmount] = useState<{ text: string; stored: StoredAmountText } | null>(null);
   const [description, setDescription] = useState("");
   const [classification, setClassification] = useState<{
     value: TransactionCategories;
@@ -155,6 +170,7 @@ export function usePostingEditor(
     !intake?.frozen;
   function hydrateFromCommand(value: PendingPosting) {
     const payload = value.payload;
+    setOpenedAmount(null);
     setDate(payload.accountingDate);
     setAmount(
       formatMoney({
@@ -202,7 +218,10 @@ export function usePostingEditor(
       }, value.kind === "income" ? "Income" : value.kind === "expense" ? "Expense" : null);
   }
   function hydrateFromFacts(facts: LocalEntryFacts) {
-    setAmount(facts.amountText);
+    const stored = storedAmountOf(facts);
+    const text = editorText(stored, facts.currency);
+    setAmount(text);
+    setOpenedAmount({ text, stored });
     setDescription(facts.description);
     setDate(facts.accountingDate);
     setEntryType(facts.entryType);
@@ -212,7 +231,7 @@ export function usePostingEditor(
     setCategories({
       ids: [...facts.categories.ids],
       primaryId: facts.categories.primaryId,
-    }, facts.entryType === "normal" ? (/^[\-−]/.test(facts.amountText.trim()) ? "Expense" : "Income") : null);
+    }, facts.entryType === "normal" ? (/^[\-−]/.test(text.trim()) ? "Expense" : "Income") : null);
     setSetup(null);
   }
   function assertSameWorkspace(draft: LocalEntryDraft) {
@@ -248,6 +267,7 @@ export function usePostingEditor(
   function resetComposer() {
     const today = defaultAccountingDate(account.timeZone);
     setAmount("-");
+    setOpenedAmount(null);
     setDescription("");
     setCategories({ ids: [], primaryId: null });
     setDate(today);
@@ -283,6 +303,7 @@ export function usePostingEditor(
       currency: account.currency,
       entryType: "normal",
       amountText: "-",
+      amountFormat: "pre-currency",
       accountingDate,
       description: "",
       profileId: account.financialAccountProfileId,
@@ -291,11 +312,14 @@ export function usePostingEditor(
     };
   }
   function snapshotFacts(): LocalEntryFacts {
+    const kept = openedAmount?.text === amount ? openedAmount.stored : null;
     return {
       workspaceId: account.workspaceId,
       currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
       entryType: entryType === "transfer" ? "transfer" : "normal",
-      amountText: amount,
+      amountText: kept ? kept.text : amount,
+      amountFormat: kept ? kept.format : "pre-currency",
+      ...(kept?.reenter ? { amountReenter: true } : {}),
       accountingDate: date,
       description,
       profileId,
@@ -620,7 +644,9 @@ export function usePostingEditor(
       setAmount(entryType === "initial" ? "0" : "-");
       setDescription("");
       setCategories({ ids: [], primaryId: null });
-      setSavedFacts(factsKey({ ...snapshotFacts(), amountText: "-", description: "", categories: { ids: [], primaryId: null } }));
+      setOpenedAmount(null);
+      setSavedFacts(factsKey({ ...snapshotFacts(), amountText: "-", amountFormat: "pre-currency", amountReenter: undefined,
+        description: "", categories: { ids: [], primaryId: null } }));
       setPosted(receipt);
     } catch (error) {
       if (transport.reportFailure?.(error)) return;

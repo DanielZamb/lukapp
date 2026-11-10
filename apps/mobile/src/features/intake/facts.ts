@@ -9,14 +9,20 @@ export function factsFromCandidate(candidate: IntakeCandidate): LocalEntryFacts 
     candidate.suggestion.direction === "out"
       ? -Math.abs(known)
       : Math.abs(known);
+  const typed = candidate.reviewAmount;
   return {
     workspaceId: candidate.workspaceId,
     currency: candidate.currency,
     entryType: "normal",
-    amountText: candidate.reviewAmountText ?? (signed === null || candidate.suggestion.direction === null ? "" : formatMoney({
-      currency: candidate.currency,
-      minorUnits: signed,
-    }).replace(`${candidate.currency} `, "")),
+    ...(typed ? {
+      amountText: typed.text, amountFormat: typed.format, ...(typed.reenter ? { amountReenter: true } : {}),
+    } : {
+      amountText: signed === null || candidate.suggestion.direction === null ? "" : formatMoney({
+        currency: candidate.currency,
+        minorUnits: signed,
+      }).replace(`${candidate.currency} `, ""),
+      amountFormat: "pre-currency",
+    }),
     accountingDate: candidate.suggestion.accountingDate,
     description: candidate.suggestion.description,
     profileId: candidate.suggestion.financialAccountProfileId,

@@ -85,7 +85,7 @@ test.each([
         userCategoryIds: [], primaryUserCategoryId: null },
     };
     expect(factsFromCandidate(candidate).amountText).toBe(amountText);
-    expect(factsFromCandidate({ ...candidate, reviewAmountText: "kept 12.50" }).amountText).toBe("kept 12.50");
+    expect(factsFromCandidate({ ...candidate, reviewAmount: { text: "kept 12.50", format: "pre-currency" } }).amountText).toBe("kept 12.50");
     expect(factsFromCandidate({ ...candidate, suggestion: { ...candidate.suggestion, amountMinorUnits: null } }).amountText).toBe("");
   }
 });

@@ -154,7 +154,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
     setBusy(true); setError("");
     try {
       const draftId = await drafts.port.keep({ facts: {
-        workspaceId, currency, entryType: "normal", amountText: `${direction === "out" ? "-" : ""}${formatAmount(minor, currency, { hideZeroDecimals: true })}`,
+        workspaceId, currency, entryType: "normal", amountText: `${direction === "out" ? "-" : ""}${formatAmount(minor, currency, { hideZeroDecimals: true })}`, amountFormat: "pre-currency",
         accountingDate: calendarDate(new Date(arrival.at), timeZone), description: description.slice(0, 120), profileId, destinationId: null,
         categories: { ids: [], primaryId: null },
       } });

@@ -3,7 +3,7 @@ import { intakeConfirmOutcome, intakeErrorMessage } from "../../../../../src/not
 import { requiresLocalWipe } from "../../local-auth/accessFailure";
 import type { LocalEntryFacts } from "../localEntryDrafts";
 import type { IntakeBinding, PostingReceipt } from "../posting/usePostingEditor";
-import { parseMoney } from "../money";
+import { storedAmountMinorUnits, type StoredAmountText } from "../amount/storedText";
 import { formatDateTime, type Translator } from "../../i18n";
 import { evidenceFor, notificationOf, projectCandidate, type ActiveCandidate } from "./durableState";
 import { factsFromCandidate } from "./facts";
@@ -33,14 +33,14 @@ export function createCandidateBinding(input: {
     if (current.status.kind !== "review") return;
     if (facts.workspaceId !== current.workspaceId || facts.currency !== current.currency || facts.entryType !== "normal")
       throw new Error("Candidate review belongs to another workspace");
-    let amount: number | null = null;
-    try { amount = parseMoney(facts.amountText, "es-CO", current.currency); } catch {}
+    const typed: StoredAmountText = { text: facts.amountText, format: facts.amountFormat, ...(facts.amountReenter ? { reenter: true } : {}) };
+    const amount = storedAmountMinorUnits(typed, current.currency);
     seen = await service.updateReview(candidateId, current.recordRevision, {
       direction: amount === null || amount === 0 ? current.review.direction : amount < 0 ? "out" : "in",
       description: facts.description, amountMinorUnits: amount === null ? null : Math.abs(amount), accountingDate: facts.accountingDate,
       financialAccountProfileId: facts.profileId, userCategoryIds: facts.categories.ids,
       primaryUserCategoryId: facts.categories.primaryId,
-    }, { amountText: facts.amountText, currencyReviewed });
+    }, { amount: typed, currencyReviewed });
   }
   return {
     id: candidateId,

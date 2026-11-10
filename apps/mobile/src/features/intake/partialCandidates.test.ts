@@ -95,7 +95,7 @@ test("deleted partial captures do not resurrect through document migration or re
   const state = f.state();
   f.setValue(JSON.stringify({ ...state, v: 2 }));
   const reopened = new IntakeService(f.deps); await reopened.refresh();
-  expect(f.state().v).toBe(3); expect(reopened.candidates()).toEqual([]);
+  expect(f.state().v).toBe(4); expect(reopened.candidates()).toEqual([]);
   expect(f.state().records[0]).toMatchObject({ kind: "terminal", reason: "deleted" });
   f.setPages([{ captures: [{ ...partials[0], amountMinorUnits: 99 }], nextCursor: null }]);
   const acks = f.events.filter((event) => event === "ack").length;

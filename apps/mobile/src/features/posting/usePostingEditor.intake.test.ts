@@ -31,7 +31,7 @@ const facts: LocalEntryFacts = {
   workspaceId: "workspace",
   currency: "COP",
   entryType: "normal",
-  amountText: "-1.264,00",
+  amountText: "-1.264,00", amountFormat: "pre-currency",
   accountingDate: "2026-10-17",
   description: "Groceries",
   profileId: "daily",
@@ -283,7 +283,7 @@ test("the account door explicitly refuses intake without changing its facts or w
 test("partial original evidence opens the existing editor with no amount and correction uses the reviewed workspace currency", async () => {
   const confirm = vi.fn(async () => ({ description: "Reviewed", amount: { currency: "COP", minorUnits: -1230 } }));
   const persistReview = vi.fn(async () => {});
-  const editor = await open({ id: "partial", facts: { ...facts, amountText: "", description: "", categories: { ids: [], primaryId: null } },
+  const editor = await open({ id: "partial", facts: { ...facts, amountText: "", amountFormat: "pre-currency", description: "", categories: { ids: [], primaryId: null } },
     originalSuggestion: { ...suggestion, direction: null, description: "", amount: { currency: null, minorUnits: null } },
     frozen: false, persistReview, confirm, discard: vi.fn(async () => "discarded" as const) });
   expect(editor().amount).toBe(""); expect(editor().canSubmit).toBe(false);

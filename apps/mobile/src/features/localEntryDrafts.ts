@@ -18,6 +18,7 @@ import {
 } from "./localEntryDraftErrors";
 import { postingBatchSchema, type StoredPostingBatch } from "./posting/postingBatchSchema";
 import type { DiscardOutcome } from "./discardOutcome";
+import { amountTextFormatSchema, type AmountTextFormat } from "./amount/storedText";
 export { LocalEntryDraftFrozenError, LocalEntryDraftGoneError };
 
 export const LOCAL_ENTRY_DRAFT_TTL_MS = 15 * 24 * 60 * 60 * 1000;
@@ -29,6 +30,8 @@ export type LocalEntryFacts = {
   currency: string;
   entryType: "normal" | "transfer";
   amountText: string;
+  amountFormat: AmountTextFormat;
+  amountReenter?: true;
   accountingDate: string;
   description: string;
   profileId: string;
@@ -50,7 +53,7 @@ export type PostingDraft = DraftMeta & {
 };
 export type LocalEntryDraft = OpenDraft | PostingDraft;
 export type LocalEntryDocument = {
-  v: 1;
+  v: 2;
   drafts: LocalEntryDraft[];
   postingBatches?: Record<string, StoredPostingBatch>;
 };
@@ -104,7 +107,7 @@ const categoriesSchema = z
     )
       ctx.addIssue({ code: "custom", message: "Invalid category selection" });
   });
-const factsSchema = z.object({
+const factsFields = {
   workspaceId: z.string().min(1),
   currency: currencySchema,
   entryType: z.enum(["normal", "transfer"]),
@@ -114,27 +117,39 @@ const factsSchema = z.object({
   profileId: z.string(),
   destinationId: z.string().min(1).nullable(),
   categories: categoriesSchema,
+};
+const factsSchema = z.object({
+  ...factsFields,
+  amountFormat: amountTextFormatSchema,
+  amountReenter: z.literal(true).optional(),
 });
 const metaSchema = {
   id: z.string().min(1),
   createdAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(),
 };
+const postingDraftSchema = z.object({
+  ...metaSchema,
+  status: z.literal("posting"),
+  command: pendingPostingSchema,
+});
 const localEntryDocumentSchema = z.object({
+  v: z.literal(2),
+  postingBatches: z.record(z.string(), postingBatchSchema).optional(),
+  drafts: z.array(
+    z.discriminatedUnion("status", [
+      z.object({ ...metaSchema, status: z.literal("open"), facts: factsSchema }),
+      postingDraftSchema,
+    ]),
+  ),
+});
+const preCurrencyDocumentSchema = z.object({
   v: z.literal(1),
   postingBatches: z.record(z.string(), postingBatchSchema).optional(),
   drafts: z.array(
     z.discriminatedUnion("status", [
-      z.object({
-        ...metaSchema,
-        status: z.literal("open"),
-        facts: factsSchema,
-      }),
-      z.object({
-        ...metaSchema,
-        status: z.literal("posting"),
-        command: pendingPostingSchema,
-      }),
+      z.object({ ...metaSchema, status: z.literal("open"), facts: z.object(factsFields) }),
+      postingDraftSchema,
     ]),
   ),
 });
@@ -167,9 +182,9 @@ export function parseLocalEntryDocument(
   now: number,
 ): ParsedDocument {
   if (raw === null || raw === undefined)
-    return { document: { v: 1, drafts: [] }, dirty: false };
+    return { document: { v: 2, drafts: [] }, dirty: false };
   if (typeof raw === "object" && raw !== null && "v" in raw) {
-    const document = localEntryDocumentSchema.parse(raw);
+    const document = raw.v === 1 ? fromPreCurrencyDocument(preCurrencyDocumentSchema.parse(raw)) : localEntryDocumentSchema.parse(raw);
     const drafts = document.drafts.filter((draft) => draft.expiresAt > now);
     return {
       document: { ...document, drafts },
@@ -179,7 +194,7 @@ export function parseLocalEntryDocument(
   const command = parsePendingPosting(raw);
   return {
     document: {
-      v: 1,
+      v: 2,
       drafts: [
         {
           id: command.payload.idempotencyKey,
@@ -191,6 +206,16 @@ export function parseLocalEntryDocument(
       ],
     },
     dirty: true,
+  };
+}
+
+/** Version 1 Drafts kept their amount text in the pre-currency grammar. It stays verbatim, tagged as such. */
+function fromPreCurrencyDocument(document: z.infer<typeof preCurrencyDocumentSchema>): LocalEntryDocument {
+  return {
+    ...document,
+    v: 2,
+    drafts: document.drafts.map((draft) =>
+      draft.status === "open" ? { ...draft, facts: { ...draft.facts, amountFormat: "pre-currency" } } : draft),
   };
 }
 
@@ -427,6 +452,7 @@ export function factsFromCommand(command: PostableCommand): LocalEntryFacts {
         `${payload.amount.currency} `,
         "",
       ),
+      amountFormat: "pre-currency",
       accountingDate: payload.accountingDate,
       description: payload.description,
       profileId: payload.sourceFinancialAccountProfileId,
@@ -452,6 +478,7 @@ export function factsFromCommand(command: PostableCommand): LocalEntryFacts {
       ...payload.amount,
       minorUnits: signed,
     }).replace(`${payload.amount.currency} `, ""),
+    amountFormat: "pre-currency",
     accountingDate: payload.accountingDate,
     description: payload.description,
     profileId: payload.financialAccountProfileId,

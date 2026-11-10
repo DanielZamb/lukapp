@@ -117,7 +117,7 @@ const openDraft: LocalEntryDraft = {
     workspaceId: "workspace",
     currency: "COP",
     entryType: "normal",
-    amountText: "",
+    amountText: "", amountFormat: "pre-currency",
     accountingDate: "2026-10-16",
     description: "Taxi",
     profileId: "cash",
@@ -129,7 +129,7 @@ const groceriesFacts = {
   workspaceId: "workspace" as const,
   currency: "COP" as const,
   entryType: "normal" as const,
-  amountText: "-2,00",
+  amountText: "-2,00", amountFormat: "pre-currency" as const,
   accountingDate: "2026-10-16",
   description: "Groceries",
   profileId: "cash",
@@ -137,7 +137,7 @@ const groceriesFacts = {
   categories: { ids: [] as string[], primaryId: null },
 };
 function sharedStore() {
-  let document: LocalEntryDocument = { v: 1, drafts: [] };
+  let document: LocalEntryDocument = { v: 2, drafts: [] };
   const lease = new LocalInputLease("two-editors", "session");
   let nextId = 0;
   const kept = keepIn(
@@ -252,7 +252,7 @@ test("Keep as Draft stores incomplete amount text and never posts", async () => 
   });
   expect(notebook.keep).toHaveBeenCalledOnce();
   expect(notebook.keep.mock.calls[0][0].facts).toMatchObject({
-    amountText: "-",
+    amountText: "-", amountFormat: "pre-currency",
     description: "Snacks",
     entryType: "normal",
   });

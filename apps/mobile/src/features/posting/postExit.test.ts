@@ -156,7 +156,7 @@ import { beginPostIn, keepIn, parseLocalEntryDocument, readRaw, writeDocument, t
 let root: ReactTestRenderer | undefined;
 let f: ReturnType<typeof fixture>;
 const taxi: LocalEntryFacts = {
-  workspaceId: "workspace-1", currency: "COP", entryType: "normal", amountText: "-12.000", accountingDate: "2026-10-20",
+  workspaceId: "workspace-1", currency: "COP", entryType: "normal", amountText: "-12.000", amountFormat: "pre-currency", accountingDate: "2026-10-20",
   description: "Taxi", profileId: "wallet", destinationId: null, categories: { ids: ["food"], primaryId: null },
 };
 
@@ -242,7 +242,7 @@ test("Keep draft keeps an incomplete entry, returns to the caller and lists it i
   await act(async () => button("Keep draft").props.onPress());
   expect(nav.stack).toEqual(["drafts"]);
   const [kept] = await stored();
-  expect(kept).toMatchObject({ status: "open", facts: { description: "Taxi", amountText: "-12.000", profileId: "account-1", categories: { ids: [], primaryId: null } } });
+  expect(kept).toMatchObject({ status: "open", facts: { description: "Taxi", amountText: "-12.000", amountFormat: "pre-currency", profileId: "account-1", categories: { ids: [], primaryId: null } } });
   await closePost();
   await act(async () => { root = create(providers(createElement(DraftsRoute))); });
   expect(text()).toContain("Taxi");
@@ -250,7 +250,7 @@ test("Keep draft keeps an incomplete entry, returns to the caller and lists it i
 });
 
 test("reopening a Draft restores every fact, and saving changes updates that same Draft", async () => {
-  await seed(keepIn({ v: 1, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
+  await seed(keepIn({ v: 2, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
   await openPost({ draftId: "taxi" });
   expect(props()).toMatchObject({ amount: "-12.000", description: "Taxi", entryType: "normal", place: "👛 Wallet", category: "F Food", date: "October 20, 2026" });
   await act(async () => props().onDescriptionChange("Taxi home"));
@@ -268,7 +268,7 @@ test("reopening a Draft restores every fact, and saving changes updates that sam
 });
 
 test("Discard changes leaves the earlier Draft as it was", async () => {
-  await seed(keepIn({ v: 1, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
+  await seed(keepIn({ v: 2, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
   await openPost({ draftId: "taxi" });
   await act(async () => props().onDescriptionChange("Taxi home"));
   await act(async () => props().onBack());
@@ -278,7 +278,7 @@ test("Discard changes leaves the earlier Draft as it was", async () => {
 });
 
 test("the leave prompt appears only with unsaved input", async () => {
-  await seed(keepIn({ v: 1, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
+  await seed(keepIn({ v: 2, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
   await openPost({ draftId: "taxi" });
   expect(has("Save changes")).toBe(false);
   await act(async () => props().onBack());
@@ -296,7 +296,7 @@ test("the leave prompt appears only with unsaved input", async () => {
 });
 
 test("Discard draft in the editor removes only that Draft after confirmation", async () => {
-  const two = keepIn(keepIn({ v: 1, drafts: [] }, { facts: taxi }, now, () => "taxi").document,
+  const two = keepIn(keepIn({ v: 2, drafts: [] }, { facts: taxi }, now, () => "taxi").document,
     { facts: { ...taxi, description: "Lunch" } }, now, () => "lunch");
   await seed(two.document);
   await openPost({ draftId: "taxi" });
@@ -317,7 +317,7 @@ test("Discard draft in the editor removes only that Draft after confirmation", a
 });
 
 test("a Draft whose posting outcome is unknown offers no keep or discard and leaves without a prompt", async () => {
-  const posting = beginPostIn({ v: 1, drafts: [] }, { command: { kind: "expense", payload: {
+  const posting = beginPostIn({ v: 2, drafts: [] }, { command: { kind: "expense", payload: {
     workspaceId: "workspace-1", financialAccountProfileId: "account-1", amount: { currency: "COP", minorUnits: 900000 },
     accountingDate: "2026-10-23", description: "Rent", idempotencyKey: "rent-key",
   } } }, now, () => "rent");
@@ -423,7 +423,7 @@ test("native dismissal is prevented only while the entry has unsaved input", asy
   expect(sheet()).toBeNull();
   expect(nav.stack).toEqual(["drafts"]);
   await closePost();
-  const posting = beginPostIn({ v: 1, drafts: [] }, { command: { kind: "expense", payload: {
+  const posting = beginPostIn({ v: 2, drafts: [] }, { command: { kind: "expense", payload: {
     workspaceId: "workspace-1", financialAccountProfileId: "account-1", amount: { currency: "COP", minorUnits: 900000 },
     accountingDate: "2026-10-23", description: "Rent", idempotencyKey: "rent-key",
   } } }, now, () => "rent");
@@ -464,7 +464,7 @@ test.each([
 });
 
 test("Save changes on a Draft another screen already sent shows that entry and leaves it frozen", async () => {
-  await seed(keepIn({ v: 1, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
+  await seed(keepIn({ v: 2, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
   await openPost({ draftId: "taxi" });
   await act(async () => props().onDescriptionChange("Taxi home"));
   const sent = parseLocalEntryDocument(await readRaw("owner"), now).document;
