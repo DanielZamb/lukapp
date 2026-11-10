@@ -161,3 +161,13 @@ test("suggested nature is visible and the question permits an override", async (
   expect(value.onAnswer).toHaveBeenCalledWith("spend");
   expect(choices.some((node) => node.props.accessibilityLabel === "I receive it")).toBe(false);
 });
+
+test("category options draw a stored exact color, outlining one that would vanish", async () => {
+  const tree = await render(props({ options: [
+    { key: "gym", name: "Gym", style: { emoji: "🏋️", tone: "primary", color: "#2E7D32" }, selected: false },
+    { key: "pale", name: "Pale", style: { emoji: "🧁", tone: "primary", color: "#FFF3B0" }, selected: false },
+  ] }));
+  const disc = (label: string) => tree.findAllByType("button").find((node) => node.props.accessibilityLabel === label)?.findAllByType("view")[0];
+  expect(disc("Gym")?.props.style).toContainEqual({ backgroundColor: "#2E7D322e", borderColor: "#2E7D32" });
+  expect(disc("Pale")?.props.style).toContainEqual({ backgroundColor: "#FFF3B02e", borderColor: "#8a8a8a" });
+});
