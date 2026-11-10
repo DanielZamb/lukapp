@@ -554,6 +554,9 @@ test.each(["2026-10-02T12:00:00Z", "2026-10-01T02:00:00Z"])("cancellation uses i
     ? { status: "active", dueMinorUnits: 230_000, remainingMinorUnits: 1_380_000, cancellation }
     : { status: "cancelled", dueMinorUnits: 0, remainingMinorUnits: 0, cancellation });
   expect(october).toMatchObject({ status: "cancelled", dueMinorUnits: 0, remainingMinorUnits: 0, cancellation });
+  expect((await s.read("2026-09")).candidates).toEqual(eventTime === "2026-10-02T12:00:00Z"
+    ? [] : [expect.objectContaining({ journalEntryId: s.expenseId, amountMinorUnits: 1_200_000 })]);
+  expect(september).toMatchObject({ canCancel: false, acceptsContributions: false });
 });
 
 test("all-time action facts agree with commands while month-scoped completion stays historical", async () => {

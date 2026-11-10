@@ -16,9 +16,11 @@ export async function renameAccount(store: AccountingStore, input: {
     throw new AccountingError("financial_account_profile_not_found");
   const name = input.name.trim();
   if (!name) throw new AccountingError("name_required");
+  if (name.length > 80) throw new AccountingError("account_name_too_long");
   if (name === profile.name) return toProfile(profile);
   if (input.expectedName !== profile.name) throw new AccountingError("account_name_stale");
-  const normalized = (value: string) => value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const normalized = (value: string) => value.normalize("NFKC").trim().replace(/\s+/gu, " ")
+    .normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   if ((await store.listProfiles(input.workspaceId)).some((other) =>
     other.id !== profile.id && normalized(other.name) === normalized(name)))
     throw new AccountingError("account_name_conflict");

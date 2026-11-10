@@ -29,6 +29,7 @@ export const plan = v.object({
   impliedAnnualRateBps: v.number(), activationMonth: v.string(), currency: v.string(),
   recoveredMinorUnits: v.number(), remainingMinorUnits: v.number(), targetMinorUnits: v.number(),
   dueMinorUnits: v.number(),
+  canCancel: v.boolean(), acceptsContributions: v.boolean(),
   cancellation: v.optional(cancellation),
   replacesPlanId: v.optional(v.string()), replacedByPlanId: v.optional(v.string()),
   contributionHistory: v.array(v.object({ ...contribution.fields,
@@ -60,6 +61,7 @@ export const activateResult = v.object({
     impliedAnnualRateBps: v.number(), currency: v.string(), activationMonth: v.string(),
     idempotencyKey: v.string(), createdBy: v.string(), createdAt: v.number(),
     replacesPlanId: v.optional(v.string()),
+    replacementLinkInferred: v.optional(v.boolean()),
   }),
   replay: v.boolean(),
 });

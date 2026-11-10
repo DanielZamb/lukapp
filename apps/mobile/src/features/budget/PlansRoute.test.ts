@@ -83,7 +83,7 @@ test.each(["active", "suspended"] as const)("Plans shows only an active recovery
   state.recovery = {
     ...state.recovery!,
     plans: [{
-      cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
+      canCancel: true, acceptsContributions: status === "active", cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
       status, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
       destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
       installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
@@ -99,7 +99,7 @@ test.each(["active", "suspended"] as const)("Plans shows only an active recovery
 
 test("Plans summarizes several recovery plans", async () => {
   const plan = {
-    cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
+    canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
     status: "active" as const, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
     installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
@@ -118,7 +118,7 @@ test.each([
   { activeCount: 2, detail: "2 plans" },
 ])("Plans excludes completed plans when $activeCount active plans remain", async ({ activeCount, detail }) => {
   const plan = {
-    cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
+    canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
     status: "active" as const, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
     installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
@@ -127,7 +127,7 @@ test.each([
   state.recovery = {
     ...state.recovery!,
     plans: [
-      { ...plan, id: "completed", title: "Completed repair", recoveredMinorUnits: 120_00, remainingMinorUnits: 0, dueMinorUnits: 0 },
+      { ...plan, canCancel: false, acceptsContributions: false, id: "completed", title: "Completed repair", recoveredMinorUnits: 120_00, remainingMinorUnits: 0, dueMinorUnits: 0 },
       ...Array.from({ length: activeCount }, (_, index) => ({ ...plan, id: `active-${index}` })),
     ],
   };

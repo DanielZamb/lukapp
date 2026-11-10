@@ -11,6 +11,7 @@ export type RecoveryPlan = {
   currency: string;
   activationMonth: string;
   replacesPlanId?: string;
+  replacementLinkInferred?: boolean;
   idempotencyKey: string;
   createdBy: string;
   createdAt: number;
