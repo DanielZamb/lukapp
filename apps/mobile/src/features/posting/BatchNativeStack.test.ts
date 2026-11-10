@@ -306,3 +306,36 @@ test("One shows the waiting count and the modal saves to batch without a posted 
     root!.root.findAllByProps({ accessibilityRole: "tablist" }),
   ).toHaveLength(0);
 });
+
+async function renderSpanish(value: ReturnType<typeof usePostingBatch>) {
+  const { LanguageProvider } = await import("../../i18n");
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(BatchNativeStack, { ...props, batch: value })));
+  });
+}
+
+test("the batch reads in Spanish with counted drafts and a counted receipt", async () => {
+  await renderSpanish({ ...batch(), queue: [out, incoming] });
+  const shown = copy();
+  expect(shown).toContain("Lote");
+  expect(shown).toContain("2 borradores guardados en este celular. Todavía no se ha registrado nada.");
+  expect(shown).toContain("Sin título");
+  expect(shown).toContain("Sale\n−$10\nEntra\n+$30\nNETO");
+  expect(root!.root.findByProps({ accessibilityLabel: "Editar borrador sin título" })).toBeTruthy();
+  expect(root!.root.findAllByProps({ label: "Registrar 2" }).length).toBeGreaterThan(0);
+  for (const english of ["Batch", "drafts held", "Untitled", "Out", "NET", "Add one"]) expect(shown).not.toMatch(new RegExp(`\\b${english}\\b`));
+
+  await act(async () => root?.unmount());
+  await renderSpanish({ ...batch(), queue: [out] });
+  expect(copy()).toContain("1 borrador guardado en este celular.");
+  await act(async () => root?.unmount());
+  await renderSpanish({ ...batch(), posted: { count: 1, net: -1000 } });
+  expect(copy()).toContain("1 registrado\nNeto −$10 · este mes\nListo");
+});
+
+test("batch rows name a missing category and account in the reader's language", () => {
+  const rowFor = (language: "en" | "es") => batchRowFor({ item: out, categories: [], profiles: [], t: createTranslator(language).t });
+  expect(rowFor("en")).toMatchObject({ category: "No category", place: "No account" });
+  expect(rowFor("es")).toMatchObject({ category: "Sin categoría", place: "Sin cuenta" });
+});

@@ -388,3 +388,79 @@ test("Other notifications is folded, counted, and each row opens its Candidate",
   await act(async () => { button("Review Aprovecha 30% de descuento este fin de semana").props.onPress(); });
   expect(onOpenCandidate).toHaveBeenCalledWith("promo");
 });
+
+async function mountSpanish(props: React.ComponentProps<typeof DraftsScreen>) {
+  const { LanguageProvider } = await import("../i18n");
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(DraftsScreen, props)));
+  });
+}
+
+const englishInboxCopy = ["Candidates", "NOTIFICATION INTAKE", "Sources", "ready to add", "Confirm all Ready", "Needs you now",
+  "Can wait", "Retry posting", "Draft on this device", "Preview Month Close warning", "Needs review"];
+
+test("the inbox reads as one Spanish list: Por revisar, Atender ya, Puede esperar and the Ready set", async () => {
+  await mountSpanish(render({ drafts, now: [candidate], ready: [candidate], readyTotal: 126400, segment: "now", month: "octubre" }));
+  const shown = text();
+  for (const copy of ["Por revisar", "LECTURA DE NOTIFICACIONES", "Fuentes", "1 listo para agregar", "Atender ya", "Puede esperar",
+    "Revisa lo que hay que atender ya o confirma todos los que están listos.", "Reintentar registro", "Ver el aviso del Cierre de mes", "Daily money"])
+    expect(shown).toContain(copy);
+  for (const copy of englishInboxCopy) expect(shown).not.toContain(copy);
+  expect(button("Revisar Groceries")).toBeTruthy();
+  expect(button("Atender ya, 2")).toBeTruthy();
+  expect(root?.root.findAllByProps({ label: "Confirmar los listos" }).length).toBeGreaterThan(0);
+
+  await act(async () => button("Ver el aviso del Cierre de mes").props.onPress());
+  expect(text()).toContain("Cerrar octubre");
+  expect(text()).toContain("movimiento por revisar en este celular todavía necesita una decisión");
+  expect(text()).toContain("Revisa ahora los movimientos de octubre.");
+});
+
+test("the Spanish inbox counts Ready Candidates and confirmed records", async () => {
+  await mountSpanish(render({ now: [candidate, { ...candidate, id: "second" }], ready: [candidate, { ...candidate, id: "second" }] }));
+  expect(text()).toContain("2 listos para agregar");
+  await act(async () => root?.unmount());
+  await mountSpanish(render({ now: [candidate], confirmedCount: 1 }));
+  expect(text()).toContain("Movimiento registrado");
+  expect(root?.root.findAllByProps({ label: "Volver a Por revisar" }).length).toBeGreaterThan(0);
+  await act(async () => root?.unmount());
+  await mountSpanish(render({ confirmedCount: 3 }));
+  expect(text()).toContain("3 movimientos registrados");
+  expect(root?.root.findAllByProps({ label: "Seguir al Cierre de mes" }).length).toBeGreaterThan(0);
+});
+
+test("stored Candidate errors and currency mismatches read in Spanish, never as raw codes", async () => {
+  await mountSpanish(render({ now: [
+    { ...candidate, id: "usd", currency: "USD" },
+    { ...candidate, id: "locked", error: "Locked Period" },
+    { ...candidate, id: "conflict", error: "idempotency_key_conflict" },
+    { ...candidate, id: "pending", error: "Confirmation pending. Open to retry." },
+    { ...candidate, id: "unknown", error: "Something the server said" },
+  ] }));
+  const shown = text();
+  expect(shown).toContain("Está en USD. Este espacio usa COP.");
+  expect(shown).toContain("Ese mes ya está cerrado.");
+  expect(shown).toContain("Este movimiento ya se había enviado con otros datos.");
+  expect(shown).toContain("La confirmación está pendiente. Ábrelo para reintentar.");
+  expect(shown).toContain("No se aceptó este movimiento");
+  for (const raw of ["Locked Period", "idempotency_key_conflict", "Confirmation pending", "Something the server said"]) expect(shown).not.toContain(raw);
+});
+
+test("discarded notices and other notifications show Spanish reasons and Colombian dates", async () => {
+  const { formatDateTime, formatShortDate } = await import("../i18n");
+  const at = Date.UTC(2026, 10, 10, 15, 30);
+  await mountSpanish(render({
+    now: [candidate],
+    discardNotices: [{ reason: "Security alert", time: at }],
+    otherNotifications: [{ ...candidate, id: "promo", notification: { text: "Banco\nTienes un descuento", packageName: "bank.app", at } }],
+  }));
+  await act(async () => button("Otras notificaciones, 1").props.onPress());
+  expect(text()).toContain("Tienes un descuento");
+  expect(text()).toContain(`Banco · ${formatShortDate("es", at)}`);
+  expect(formatShortDate("es", at)).toMatch(/^\d{1,2} nov$/);
+  await act(async () => root?.root.findAllByProps({ label: "Notificaciones descartadas" })[0]!.props.onPress());
+  expect(text()).toContain("NO QUEDARON POR REVISAR");
+  expect(text()).toContain("Alerta de seguridad");
+  expect(text()).toContain(formatDateTime("es", at));
+  expect(text()).not.toContain("Security alert");
+});

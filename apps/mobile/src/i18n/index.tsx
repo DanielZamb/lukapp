@@ -16,6 +16,7 @@ import {
   type Translator,
 } from "../../../../src/i18n";
 import { readLanguagePreference, writeLanguagePreference } from "./languageStorage";
+import { setActiveTranslator } from "./active";
 
 export type { Language, LanguagePreference, MessageKey, Translator } from "../../../../src/i18n";
 export { languageNames, languages } from "../../../../src/i18n";
@@ -34,15 +35,7 @@ type LanguageContextValue = Translator & {
   setPreference: (preference: LanguagePreference) => void;
 };
 
-let active: Translator = createTranslator("en");
-
-/**
- * The translator for code that runs outside React, such as a thrown validation
- * message. Components use `useT()` so they re-render when the language changes.
- */
-export function activeTranslator(): Translator {
-  return active;
-}
+export { activeTranslator } from "./active";
 
 const fallback: LanguageContextValue = {
   ...createTranslator("en"),
@@ -73,7 +66,7 @@ export function LanguageProvider({
   const language: Language = resolveLanguage(preference, locale ?? deviceLocale());
   const value = useMemo(() => {
     const translator = createTranslator(language);
-    active = translator;
+    setActiveTranslator(translator);
     return { ...translator, preference, setPreference };
   }, [language, preference, setPreference]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

@@ -407,3 +407,41 @@ test("sources saved under an older disclosure are offered the update, re-saved w
   expect((await f.native.getStatus() as NativeStatus).consentVersion).toBe(INTAKE_DISCLOSURE_VERSION);
   expect(text()).not.toContain("See each notification with its suggestion");
 });
+
+async function mountSpanish() {
+  const { LanguageProvider } = await import("../../i18n");
+  await f.service.refresh().catch(() => {});
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, tree())); });
+}
+
+test("setup reads in Spanish and names Android's own Acceso a notificaciones setting", async () => {
+  statusFields.access = "not_granted";
+  await mountSpanish();
+  expect(text()).toContain("Antes de activarla");
+  expect(text()).toContain("Solo las apps que elijas");
+  expect(text()).toContain("El siguiente paso es permitir el Acceso a notificaciones");
+  await press("Leí el aviso de la lectura de notificaciones");
+  await press("Continuar");
+  const shown = text();
+  for (const copy of ["Lectura de notificaciones", "ALERTAS DE COMPRAS", "Permite el Acceso a notificaciones", "Apps que Lukapp lee",
+    "Este celular", "Acceso a notificaciones", "No permitido", "Personal · COP · Bogota"])
+    expect(shown).toContain(copy);
+  expect(has("Acceso a notificaciones, No permitido")).toBe(false);
+  expect(root?.root.findAllByProps({ label: "Permitir el Acceso a notificaciones" }).length).toBeGreaterThan(0);
+  expect(root?.root.findAllByProps({ label: "Abrir Acceso a notificaciones" }).length).toBeGreaterThan(0);
+  for (const english of ["Notification intake", "Allow notification access", "This phone", "Not granted", "Apps you read from"])
+    expect(shown).not.toContain(english);
+});
+
+test("choosing where an app's alerts go reads in Spanish around the stored app label", async () => {
+  await mountSpanish();
+  await press("Leí el aviso de la lectura de notificaciones");
+  await press("Continuar");
+  await act(async () => { root!.root.findAllByProps({ label: "Agregar una app" })[0]!.props.onPress(); });
+  expect(root?.root.findByProps({ accessibilityLabel: "Buscar apps" }).props.placeholder).toBe("Buscar por nombre");
+  await press("Bank");
+  expect(text()).toContain("¿A dónde van las alertas de Bank?");
+  expect(text()).toContain("Ahorros");
+  expect(text()).toContain("Efectivo");
+  expect(text()).toContain("Puedes cambiarlo después. Los otros espacios conservan su propio lugar para Bank.");
+});

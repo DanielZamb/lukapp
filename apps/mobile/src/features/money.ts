@@ -1,4 +1,4 @@
-import { activeTranslator } from "../i18n";
+import { activeTranslator } from "../i18n/active";
 import { currencyMinorUnitDigits } from "../../../../src/accounting/currencies";
 
 export function formatMoneyInput(raw: string, currency: string): string {

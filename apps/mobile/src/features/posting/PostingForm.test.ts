@@ -5,7 +5,7 @@ import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { PostingForm } from "./PostingForm";
-import { emptyPostingForm } from "./PostingForm.fixtures";
+import { emptyPostingForm, transferPostingForm } from "./PostingForm.fixtures";
 import { ListRow } from "../../ui/core";
 import { PlaceSheet } from "./PlaceSheet";
 import { AccountSetupForm } from "./AccountSetupForm";
@@ -374,4 +374,40 @@ test("transfer confirmation and its blocking reason are inside the posting scree
   await act(async () => scroll.findByProps({ accessibilityLabel: "Swap From and To", accessibilityRole: "button" }).props.onPress());
   expect(onConfirm).toHaveBeenCalledOnce();
   expect(onSwap).toHaveBeenCalledOnce();
+});
+
+const englishFormCopy = ["Post money", "NEW ENTRY", "Description", "Date occurred", "Initial balance", "Swap From and To", "Move money between places"];
+
+test("the form reads in Colombian Spanish with no English labels left", async () => {
+  const { LanguageProvider } = await import("../../i18n");
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(PostingForm, { ...transferPostingForm, ...handlers, transferReview: { required: true, canConfirm: true, onSwap: vi.fn(), onConfirm: vi.fn() } })));
+  });
+  const shown = text();
+  for (const copy of ["Registrar plata", "NUEVO MOVIMIENTO", "Descripción", "Fecha del movimiento", "Saldo inicial", "Transferencia",
+    "De", "Para", "Invertir De y Para", "Confirmar De y Para", "Registrar"])
+    expect(shown).toContain(copy);
+  expect(shown).toContain("Pasa plata entre tus lugares.");
+  for (const copy of englishFormCopy) expect(shown).not.toContain(copy);
+  expect(root?.root.findByProps({ accessibilityLabel: "Monto con signo" }).props.placeholder).toBe("-0");
+  expect(root?.root.findByProps({ accessibilityLabel: "Descripción" }).props.placeholder).toBe("¿Qué fue?");
+});
+
+test("adding a place reads in Spanish, including the debt balance question", async () => {
+  const { LanguageProvider } = await import("../../i18n");
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(AccountSetupForm, {
+      sheetRef: createRef<BottomSheetModal>(),
+      value: { name: "", productKind: "creditCard", emoji: "💳", amount: "0", date: "2026-11-10" },
+      currency: "COP", editable: true, busy: false, pending: true, error: "", canSubmit: true,
+      onChange: vi.fn(), onSubmit: vi.fn(), onDismiss: vi.fn(),
+    })));
+  });
+  const shown = text();
+  for (const copy of ["Agregar un lugar", "OTRO LUGAR", "Un nombre que reconozcas", "Tarjeta de crédito", "Préstamo",
+    "¿Cuánto debes todavía?", "Reintentar", "Esta configuración quedó guardada para reintentar."])
+    expect(shown).toContain(copy);
+  for (const copy of ["Add a place", "Name you recognize", "Credit card", "How much do you still owe?", "Retry setup"])
+    expect(shown).not.toContain(copy);
 });
