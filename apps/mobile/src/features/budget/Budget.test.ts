@@ -693,3 +693,41 @@ test("a new limit refuses a typed zero with a message and offers neither removal
   expect(alerts(screen)).toEqual([]);
   expect([save.mock.calls, spendNothing.mock.calls, removeLimit.mock.calls]).toEqual([[], [], []]);
 });
+
+test("a workspace currency change closes an open limit editor, and the limit typed afterwards is sent in the new currency", async () => {
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Set a October limit" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
+  const monthly = () => screen.findByProps({ accessibilityLabel: "Monthly limit" });
+  async function typeMonthly(text: string) {
+    await act(async () => monthly().props.onSelectionChange({ nativeEvent: { selection: { start: 0, end: String(monthly().props.value).length } } }));
+    for (const key of text) {
+      const { value, selection } = monthly().props as { value: string; selection: { start: number; end: number } };
+      await act(async () => monthly().props.onChangeText(value.slice(0, selection.start) + key + value.slice(selection.end)));
+    }
+  }
+  await typeMonthly("1234");
+  expect(monthly().props.value).toBe("1.234");
+  board = { ...board!, currency: "USD" };
+  await act(async () => root?.update(createElement(BudgetRoute)));
+  expect(screen.findAllByProps({ accessibilityLabel: "Monthly limit" })).toHaveLength(0);
+  expect(save).not.toHaveBeenCalled();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Set a October limit" }).props.onPress());
+  await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
+  await typeMonthly("1234");
+  expect(monthly().props.value).toBe("1,234");
+  await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
+  expect(save.mock.calls.map(([request]) => request.limit)).toEqual([{ currency: "USD", minorUnits: 123400 }]);
+});
+
+test("a workspace currency change closes an open limit sheet before anything typed in the old currency can be saved", async () => {
+  limitJar();
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  await typeLimit(screen, "275.000");
+  board = { ...board!, currency: "USD" };
+  await act(async () => root?.update(createElement(BudgetRoute)));
+  expect(screen.findAllByProps({ accessibilityLabel: "New limit in COP" })).toHaveLength(0);
+  expect(screen.findAllByType(BottomSheetModal)).toHaveLength(0);
+  expect(save).not.toHaveBeenCalled();
+});

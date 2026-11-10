@@ -46,7 +46,6 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   const unlockingSave = useRef<boolean | null>(null);
   const { showUnlocked } = useLevelNavigation();
   const [name, setName] = useState("");
-  const [balance, setBalance] = useState(() => openAmount(workspace.functionalCurrency));
   const [kind, setKind] = useState<PlaceKind>("Savings");
   const [emojiChanged, setEmojiChanged] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -116,9 +115,9 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
         </View>
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>{t("home.addPlaceBalance")}</Text>
-          <AmountField session={balance} editable={editor.editable} inputAccessibilityLabel={t("home.addPlaceBalance")}
+          <AmountField session={setup.amount} editable={editor.editable} inputAccessibilityLabel={t("home.addPlaceBalance")}
             placeholder="0" InputComponent={BottomSheetTextInput} inputStyle={styles.input}
-            onChange={(value: AmountSession) => { interact(); setBalance(value);
+            onChange={(value: AmountSession) => { interact();
               editor.setSetup({ ...setup, amount: value.editor.text.trim() ? value : openAmount(value.currency, "0") });
             }} />
         </View>

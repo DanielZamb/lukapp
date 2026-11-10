@@ -62,6 +62,8 @@ export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { w
   }, [board, initialCategoryId, workspaceId]);
   const activity = usePostedActivity(workspaceId, timeZone);
   const interact = useLocalEntryInteraction();
+  if (board && editor && editor.seed.currency !== board.currency) setEditor(null);
+  if (board && creation && creation.seed.currency !== board.currency) setCreation(null);
   if (!board || !categories || !activity) return <Screen><ActivityIndicator accessibilityLabel={t("budget.loading")} /></Screen>;
   const categoryColors = new Map(categories.map((category) => [category.id, categoryColor(category.style, mode)]));
   if (creation) return <BudgetCreation key={creation.key} seed={creation.seed} categories={creation.categories}

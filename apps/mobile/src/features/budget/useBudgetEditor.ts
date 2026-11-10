@@ -79,6 +79,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
   const { t } = translator;
   const [categoryId, setCategoryId] = useState<string | null>(seed.jar?.category.id ?? seed.initialCategoryId ?? null);
   const [amount, setAmount] = useState(() => startingAmount(seed));
+  if (amount.currency !== seed.currency) setAmount(startingAmount(seed));
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingAct, setPendingAct] = useState<LimitAct | null>(null);

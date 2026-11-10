@@ -280,3 +280,24 @@ test.each([
     await act(async () => button("Add this place").props.onPress());
     expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency, minorUnits: 123450 });
   });
+
+test("a workspace currency change while the balance is typed shows and sends the same amount in the new currency", async () => {
+  await act(async () => { root = create(createElement(HomePlaceSetup, props(true, "COP"))); });
+  for (const key of "12500") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+  expect(input("Balance today").props.value).toBe("12.500");
+  await act(async () => root.update(createElement(HomePlaceSetup, props(true, "USD"))));
+  expect(input("Balance today").props.value).toBe("0");
+  expect(button("Type a decimal point for USD")).toBeTruthy();
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency: "USD", minorUnits: 0 });
+});
+
+test("after a workspace currency change the balance typed in the new currency is the one sent", async () => {
+  await act(async () => { root = create(createElement(HomePlaceSetup, props(true, "COP"))); });
+  for (const key of "12500") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+  await act(async () => root.update(createElement(HomePlaceSetup, props(true, "USD"))));
+  for (const key of "1234") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+  expect(input("Balance today").props.value).toBe("1,234");
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency: "USD", minorUnits: 123400 });
+});
