@@ -56,7 +56,7 @@ beforeEach(() => {
   provider.categoryId = "food";
   entries = [entry("Groceries", "2026-10-02", 150000)];
   budget = {
-    month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true,
+    month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true, removedLimits: [],
     jars: [{ category: { id: "food", name: "Food", emoji: "🍋" }, revisionId: "revision", limitMinorUnits: 200000, consumptionMinorUnits: 150000 }],
     availableCategories: [],
   };

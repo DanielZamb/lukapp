@@ -39,7 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   defaults = "ready";
   state.month = "2026-10";
-  evaluation = { currency: "COP", month: "2026-10", currentMonth: "2026-10", totalsOverlap: true,
+  evaluation = { currency: "COP", month: "2026-10", currentMonth: "2026-10", totalsOverlap: true, removedLimits: [],
     jars: [], availableCategories: [{ id: "unlimited", name: "Unlimited", emoji: "🏷️" }] };
   state.query.mockImplementation((reference) => {
     if (getFunctionName(reference) !== "budget:evaluate") throw new Error(`Unexpected query ${getFunctionName(reference)}`);

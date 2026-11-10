@@ -65,7 +65,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   queries.mockClear(); save.mockReset(); back.mockClear(); reset.mockClear(); accountCount = 1;
   month = "2026-10";
-  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, jars: [],
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, removedLimits: [], jars: [],
     availableCategories: [{ id: "food", name: "Food", emoji: "🛒" }] };
   totals = { month, currency: "COP", totalsOverlap: true, categories: [{ categoryId: "food", name: "Food", nature: "Expense", minorUnits: 86_000_000 }] };
   categories = [{ id: "food", style: { emoji: "🛒", tone: "positive" } }];
@@ -174,7 +174,7 @@ test("the first limit still unlocks when live data updates before its receipt ar
 });
 
 test("the under-jars control offers only unlimited categories and both creation pages go back to the board", async () => {
-  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true,
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, removedLimits: [],
     availableCategories: [{ id: "food", name: "Food", emoji: "🛒" }],
     jars: [{ category: { id: "travel", name: "Travel", emoji: "✈️" }, revisionId: "travel-revision", limitMinorUnits: 20_000_000, consumptionMinorUnits: 0 }] };
   const screen = await render();
@@ -219,7 +219,7 @@ test("composer waits for spending and preserves a failed save for a safe retry",
 });
 
 test("editing an existing limit closes and refreshes the board with a saved confirmation without navigating", async () => {
-  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, availableCategories: [], jars: [{
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, removedLimits: [], availableCategories: [], jars: [{
     category: { id: "food", name: "Food", emoji: "🛒" }, revisionId: "live-revision", limitMinorUnits: 10_000_000, consumptionMinorUnits: 8_000_000,
   }] };
   const screen = await render();
@@ -248,7 +248,7 @@ test("editing an existing limit closes and refreshes the board with a saved conf
 });
 
 test("a jar tap updates an overdrawn jar and Close leaves Set another limit on the category composer", async () => {
-  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true,
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, removedLimits: [],
     availableCategories: [{ id: "travel", name: "Travel", emoji: "✈️" }], jars: [{
     category: { id: "food", name: "Food", emoji: "🛒" }, revisionId: "revision", limitMinorUnits: 40_000_000, consumptionMinorUnits: 45_000_000,
   }] };
@@ -273,7 +273,7 @@ test("a jar tap updates an overdrawn jar and Close leaves Set another limit on t
 test.each([20_000_000, -20_000_000, -30_000_000])("duplicate or non-positive spend suggestion for %s is dropped, and missing prior activity displays zero", async (consumptionMinorUnits) => {
   month = "2027-01";
   priorTotals = { month: "2026-12", currency: "COP", totalsOverlap: true, categories: [] };
-  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, availableCategories: [], jars: [{
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, removedLimits: [], availableCategories: [], jars: [{
     category: { id: "food", name: "Food", emoji: "🛒" }, revisionId: "revision", limitMinorUnits: 40_000_000, consumptionMinorUnits,
   }] };
   const screen = await render();
@@ -290,7 +290,7 @@ test.each([20_000_000, -20_000_000, -30_000_000])("duplicate or non-positive spe
 
 test("prior spend loads without a fabricated zero, and uncertain saves freeze chips and dismissal until retry", async () => {
   priorTotals = undefined;
-  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, availableCategories: [], jars: [{
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, removedLimits: [], availableCategories: [], jars: [{
     category: { id: "food", name: "Food", emoji: "🛒" }, revisionId: "revision", limitMinorUnits: 40_000_000, consumptionMinorUnits: 20_000_000,
   }] };
   const screen = await render();
@@ -320,14 +320,14 @@ test("loading waits for live data and rollover requests the new workspace month"
   const screen = await render();
   expect(screen.find((node) => String(node.type) === "ActivityIndicator").props.accessibilityLabel).toBe("Loading Budget");
   month = "2026-11";
-  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, availableCategories: [], jars: [] };
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, removedLimits: [], availableCategories: [], jars: [] };
   await act(async () => root?.update(createElement(BudgetRoute)));
   expect(queries.mock.calls).toContainEqual(["budget:evaluate", { workspaceId: "workspace", month: "2026-11", refreshKey: expect.any(String) }]);
   expect(screen.findByProps({ accessibilityLabel: "Set a November limit" }).props.disabled).toBeFalsy();
 });
 
 function limitJar(limitMinorUnits = 40_000_000, revisionId = "revision") {
-  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, availableCategories: [], jars: [{
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, removedLimits: [], availableCategories: [], jars: [{
     category: { id: "food", name: "Food", emoji: "🛒" }, revisionId, limitMinorUnits, consumptionMinorUnits: 20_000_000,
   }] };
 }
