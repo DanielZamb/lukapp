@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { PrimaryButton, SecondaryButton, Screen, useTheme, useUi } from "../../ui/core";
 import { font, spacing } from "../../ui/tokens";
 import { LookChip } from "../categories/LookChip";
+import { FeedbackIntroCard } from "../feedback/FeedbackIntroCard";
 import { formatMoney } from "../money";
 import { currencyName } from "./currencies";
 import type { SetupSummary } from "./model";
@@ -71,6 +72,7 @@ export function SetupCompletion({
           {summary.wantsBudgets ? " Budgets stay one door away." : ""}
         </Text>
         {summary.purchaseAlertsConsent ? <SecondaryButton label="Set up notification intake" onPress={onNotificationSetup} /> : null}
+        <FeedbackIntroCard placement="completion" />
         <PrimaryButton
           label="Go to home"
           trailingIcon="home-outline"

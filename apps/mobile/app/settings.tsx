@@ -4,6 +4,7 @@ import { router, Redirect } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
+import { FeedbackSettings } from "../src/features/feedback/FeedbackSettings";
 import { useT } from "../src/i18n";
 import { BrandLogo } from "../src/ui/Brand";
 import {
@@ -82,6 +83,7 @@ function SettingsContent({
         />
       </ListGroup>
       {!profiles || !categories ? <ActivityIndicator /> : null}
+      <FeedbackSettings />
       <SecondaryButton label={t("settings.signOut")} onPress={() => void signOut()} />
       <View style={{ alignItems: "center", paddingTop: 24 }}>
         <BrandLogo width={112} />

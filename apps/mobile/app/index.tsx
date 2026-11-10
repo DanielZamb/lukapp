@@ -9,6 +9,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { usePersonalDefaults, usePostedActivity } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { HomePlaceSetup } from "../src/features/HomePlaceSetup";
+import { FeedbackIntroCard } from "../src/features/feedback/FeedbackIntroCard";
 import { experienceLevel } from "../src/features/levelDoor/model";
 import { formatMoney } from "../src/features/money";
 import { Setup } from "../src/features/Setup";
@@ -153,6 +154,7 @@ function Home({
           <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
         </Pressable>
       )}
+      <FeedbackIntroCard placement="home" />
       <BottomSheetModal ref={actions} enablePanDownToClose
         backdropComponent={(props) => <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} />}
         backgroundStyle={styles.sheetSurface}
