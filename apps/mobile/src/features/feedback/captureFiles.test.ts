@@ -9,8 +9,18 @@ vi.mock("expo-file-system", async () => {
 });
 vi.mock("react-native-view-shot", () => view);
 vi.mock("react-native", () => ({ PixelRatio: { get: () => 3 } }));
+vi.mock("expo-crypto", async () => {
+  const { createHash } = await import("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digest: async (_algorithm: string, data: ArrayBuffer) => {
+      const hash = createHash("sha256").update(new Uint8Array(data)).digest();
+      return hash.buffer.slice(hash.byteOffset, hash.byteOffset + hash.byteLength);
+    },
+  };
+});
 
-import { captureMaxAgeMs, deleteAllCaptures, deleteCapture, sweepCaptures } from "./captureFiles";
+import { captureMaxAgeMs, deleteAllCaptures, deleteCapture, readCapture, sweepCaptures } from "./captureFiles";
 import { looksBlank, snapshotView } from "./snapshot";
 
 const memory = () => {
@@ -47,6 +57,30 @@ test("a failed, blank or unmounted capture yields no file and a text-only report
   expect(await snapshotView({ current: null }, screenSize, "unmounted")).toBeNull();
   expect(await snapshotView(mounted, { width: 0, height: 0 }, "unlaid")).toBeNull();
   expect(memory().files.size).toBe(0);
+});
+
+test("a capture that finishes after it stopped being allowed is never written", async () => {
+  view.captureRef.mockResolvedValue(realScreen);
+  let allowed = true;
+  view.captureRef.mockImplementationOnce(async () => {
+    allowed = false;
+    return realScreen;
+  });
+  expect(await snapshotView(mounted, screenSize, "late", { allowed: () => allowed })).toBeNull();
+  expect(memory().files.size).toBe(0);
+  allowed = true;
+  expect(await snapshotView(mounted, screenSize, "in-time", { allowed: () => allowed })).not.toBeNull();
+  expect([...memory().files.keys()]).toEqual(["file:///cache/lukapp-feedback/in-time.png"]);
+});
+
+test("reading a capture returns its exact bytes and their SHA-256", async () => {
+  new (memory().module.File)("file:///cache/lukapp-feedback/shot.png").write("png-bytes");
+  const image = await readCapture("file:///cache/lukapp-feedback/shot.png");
+  expect(new TextDecoder().decode(image?.bytes)).toBe("png-bytes");
+  expect(image?.sha256).toBe("ea80334363eed145dfeee51ebae7dc3f1cd7d0c7879f8bfd2070c061d3c33f56");
+  expect(await readCapture("file:///cache/lukapp-feedback/missing.png")).toBeNull();
+  new (memory().module.File)("file:///cache/lukapp-entry-install-v1.json").write("{}");
+  expect(await readCapture("file:///cache/lukapp-entry-install-v1.json")).toBeNull();
 });
 
 test("the blank check separates a flat render from a real screen", () => {

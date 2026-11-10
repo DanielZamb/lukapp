@@ -19,17 +19,19 @@ export function looksBlank(base64: string, pixels: number) {
  * draws the React view tree in process (Android `View.draw` on a bitmap,
  * iOS `drawViewHierarchyInRect`), so it never asks the OS to screenshot the
  * window, and the base64 result keeps the image off external storage.
- * Returns null when the render fails or, for a screen capture, comes back blank.
+ * Returns null when the render fails, when `allowed` no longer holds once it
+ * finishes, or, for a screen capture, when it comes back blank.
  */
 export async function snapshotView(
   view: RefObject<View | null>,
   size: { width: number; height: number },
   name: string,
-  { rejectBlank = true }: { rejectBlank?: boolean } = {},
+  { rejectBlank = true, allowed = () => true }: { rejectBlank?: boolean; allowed?: () => boolean } = {},
 ): Promise<Screenshot | null> {
   if (!view.current || size.width <= 0 || size.height <= 0) return null;
   try {
     const base64 = await captureRef(view, { format: "png", result: "base64" });
+    if (!allowed()) return null;
     const scale = PixelRatio.get();
     if (rejectBlank && looksBlank(base64, size.width * scale * size.height * scale)) return null;
     const directory = captureDirectory();

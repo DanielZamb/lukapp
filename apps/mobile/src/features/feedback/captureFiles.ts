@@ -1,4 +1,6 @@
+import * as Crypto from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
+import type { ScreenshotImage } from "./report";
 
 export const captureMaxAgeMs = 24 * 60 * 60 * 1000;
 
@@ -20,6 +22,21 @@ export async function deleteCapture(uri: string) {
     if (file.exists) file.delete();
   } catch {
     // A capture that cannot be deleted now is removed by the next startup sweep.
+  }
+}
+
+/** The capture's exact bytes and their SHA-256, or null when it is gone or outside the capture directory. */
+export async function readCapture(uri: string): Promise<ScreenshotImage | null> {
+  if (!insideCaptureDirectory(uri)) return null;
+  try {
+    const file = new File(uri);
+    if (!file.exists) return null;
+    const view = await file.bytes();
+    const bytes = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+    const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
+    return { bytes, sha256: Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("") };
+  } catch {
+    return null;
   }
 }
 
