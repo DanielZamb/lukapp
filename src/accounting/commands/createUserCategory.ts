@@ -1,4 +1,5 @@
 import { AccountingError } from "../errors";
+import { hasVisibleText } from "../names";
 import { requireWorkspace } from "../membership";
 import {
   accountForConcept,
@@ -29,7 +30,7 @@ export async function createUserCategory(
     selection.kind === "preset"
       ? selection.name?.trim() || requireCategoryPreset(selection.presetId).name
       : selection.name.trim();
-  if (!name) throw new AccountingError("name_required");
+  if (!hasVisibleText(name)) throw new AccountingError("name_required");
   if (name.length > 80) throw new AccountingError("category_name_too_long");
   if (
     selection.kind === "custom" &&

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hasVisibleText } from "../../../../../src/accounting/names";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
@@ -27,7 +28,7 @@ export function usePlaceRename(
   const { t } = useT();
   const [name, setName] = useState(seed.initialName);
   const command = useFrozenCommand({ send: transport.rename, reportFailure: transport.reportFailure, onDone: transport.onRenamed });
-  const trimmed = name.trim();
+  const trimmed = hasVisibleText(name) ? name.trim() : "";
   const { state } = command;
   const error = state.name === "uncertain" ? t("planning.renameUncertain")
     : state.name === "open" && state.refusal

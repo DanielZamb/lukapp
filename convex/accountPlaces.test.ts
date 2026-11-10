@@ -131,6 +131,8 @@ test("rename trims names, rejects blanks and accent-insensitive duplicates, and 
   const args = { workspaceId: workspace.id, financialAccountProfileId: daily.id, expectedName: "Daily", name: " CAFÉ " };
   await expect(t.action(api.accounting.renameAccount, args)).rejects.toMatchObject({ data: { code: "account_name_conflict" } });
   await expect(t.action(api.accounting.renameAccount, { ...args, name: " " })).rejects.toMatchObject({ data: { code: "name_required" } });
+  for (const invisible of ["\u200B", "\u200B \u200D", "\uFEFF", "\u0301"])
+    await expect(t.action(api.accounting.renameAccount, { ...args, name: invisible })).rejects.toMatchObject({ data: { code: "name_required" } });
   const other = await createOwnedWorkspace(t);
   await expect(t.action(api.accounting.renameAccount, { ...args, workspaceId: other.id })).rejects.toMatchObject({ data: { code: "financial_account_profile_not_found" } });
   expect(await t.action(api.accounting.renameAccount, { ...args, name: "Cafe", workspaceId: workspace.id }).catch(e => e.data.code)).toBe("account_name_conflict");

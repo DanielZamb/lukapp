@@ -373,3 +373,17 @@ test.each([["JPY", 100], ["BHD", 1234]] satisfies [string, number][])(
       .toMatchObject([{ balance: { currency: functionalCurrency, minorUnits: startingMinorUnits } }]);
   },
 );
+
+test("a setup retry that changes a preset category's name is a different request, and one recorded before names existed still replays", async () => {
+  const t = await convexAccounting(modules);
+  const style = { emoji: "🛒", tone: "primary" as const };
+  const base = { functionalCurrency: "COP", startingMinorUnits: 0, timeZone: "America/Bogota" };
+  const unnamed = { ...base, categories: [{ kind: "preset" as const, presetId: "groceries", style }] };
+  const first = await t.action(api.accounting.ensurePersonalDefaults, unnamed);
+  expect(await t.action(api.accounting.ensurePersonalDefaults, unnamed)).toEqual(first);
+  await expect(t.action(api.accounting.ensurePersonalDefaults, {
+    ...base, categories: [{ kind: "preset" as const, presetId: "groceries", style, name: "Comida" }],
+  })).rejects.toMatchObject({ data: { code: "setup_conflict" } });
+  const categories = await t.query(api.accounting.listUserCategories, { workspaceId: first.workspace.id });
+  expect(categories.map((category) => category.name)).toEqual(["Food"]);
+});

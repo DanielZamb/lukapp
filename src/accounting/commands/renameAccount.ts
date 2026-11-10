@@ -1,4 +1,5 @@
 import { AccountingError } from "../errors";
+import { hasVisibleText } from "../names";
 import { requireWorkspace } from "../membership";
 import { toProfile } from "../views";
 import type { AccountingStore, Actor } from "../types";
@@ -15,7 +16,7 @@ export async function renameAccount(store: AccountingStore, input: {
   if (!profile || profile.workspaceId !== input.workspaceId)
     throw new AccountingError("financial_account_profile_not_found");
   const name = input.name.trim();
-  if (!name) throw new AccountingError("name_required");
+  if (!hasVisibleText(name)) throw new AccountingError("name_required");
   if (name.length > 80) throw new AccountingError("account_name_too_long");
   if (name === profile.name) return toProfile(profile);
   if (input.expectedName !== profile.name) throw new AccountingError("account_name_stale");

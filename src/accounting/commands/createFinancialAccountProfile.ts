@@ -1,4 +1,5 @@
 import { chartTemplate, nextAuxiliaryCode, normalSideOf } from "../chartOfAccounts";
+import { hasVisibleText } from "../names";
 import { classifyFinancialAccountProfile } from "../classification";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
@@ -28,7 +29,7 @@ export async function createFinancialAccountProfile(
 ): Promise<FinancialAccountProfile> {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
   const name = input.name.trim();
-  if (!name) {
+  if (!hasVisibleText(name)) {
     throw new AccountingError("name_required");
   }
   if (name.length > 80) throw new AccountingError("account_name_too_long");

@@ -70,6 +70,7 @@ export async function ensurePersonalDefaults(
         selection.style.emoji,
         selection.style.tone,
         ...(selection.style.color ? [selection.style.color] : []),
+        ...(selection.kind === "preset" && selection.name?.trim() ? [`name:${selection.name.trim()}`] : []),
       ])
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   );
