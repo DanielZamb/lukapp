@@ -1,4 +1,5 @@
 import { useLocalEntryInteraction } from "../src/local-auth/interaction";
+import { formatLongDate, useT } from "../src/i18n";
 import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import type { AccountSetupRequest } from "../src/features/categories/model";
 import { useAuth } from "@clerk/expo";
@@ -60,6 +61,8 @@ function PostMoney({
   draftId?: string;
   candidateId?: string;
 }) {
+  const translator = useT();
+  const { t, language } = translator;
   const ui = useUi();
   const navigation = useNavigation();
   const leavingCandidate = useRef(false);
@@ -101,8 +104,8 @@ function PostMoney({
     const row = intake.service.read(candidateId);
     if (!row || row.workspaceId !== workspace.id) { setMissingCandidate(true); return; }
     setMissingCandidate(false);
-    setBinding(createCandidateBinding({ service: intake.service, candidateId, workspaceId: workspace.id, dispatch: confirmOne }));
-  }, [candidateId, confirmOne, intake.service, intake.count, binding?.id, workspace.id]);
+    setBinding(createCandidateBinding({ service: intake.service, candidateId, workspaceId: workspace.id, dispatch: confirmOne, translator }));
+  }, [candidateId, confirmOne, intake.service, intake.count, binding?.id, workspace.id, translator]);
   const [appLabel, setAppLabel] = useState<string | undefined>();
   const notificationPackage = binding?.notification?.packageName;
   useEffect(() => {
@@ -135,7 +138,7 @@ function PostMoney({
     Keyboard.dismiss();
     return new Promise<boolean>((resolve) => {
       batchDecision.current = resolve;
-      setImpact({ description: "Batch", hits });
+      setImpact({ description: t("posting.batchImpactTitle"), hits });
     });
   });
   const [mode, setMode] = useState<"one" | "batch">("one");
@@ -238,16 +241,16 @@ function PostMoney({
     action();
   }
   const sourceNote = candidateId
-    ? binding?.reviewNote ?? "From Candidate"
+    ? binding?.reviewNote ?? t("posting.fromCandidate")
     : draftId
-      ? "Draft on this device"
+      ? t("posting.draftOnDevice")
       : undefined;
   if (candidateId && missingCandidate)
     return (
       <Screen>
-        <Header title="Post money" onBack={() => router.back()} />
+        <Header title={t("posting.title")} onBack={() => router.back()} />
         <Text accessibilityRole="alert" style={ui.error}>
-          This Candidate is no longer on this device.
+          {t("posting.candidateMissing")}
         </Text>
       </Screen>
     );
@@ -258,13 +261,13 @@ function PostMoney({
       </Screen>
     );
   const completeEntry = editor.description.trim().length > 0 && categoryValid && placesValid;
-  const blockedReason = !editor.description.trim() ? "Add a description before posting."
-    : !profile ? "Choose the place this money moves from."
-    : editor.entryType === "transfer" && !destination ? "Choose where the money goes in To."
-    : editor.entryType === "transfer" && editor.transferReviewRequired ? "Confirm From and To before posting."
-    : !categoryValid ? "Choose a category and, if requested, its primary category."
-    : !editor.canSubmit ? "Enter a valid amount before posting."
-    : needsBudgetCheck && budget === undefined ? "Checking your budget…" : undefined;
+  const blockedReason = !editor.description.trim() ? t("posting.blockedDescription")
+    : !profile ? t("posting.blockedPlace")
+    : editor.entryType === "transfer" && !destination ? t("posting.blockedDestination")
+    : editor.entryType === "transfer" && editor.transferReviewRequired ? t("posting.blockedTransferReview")
+    : !categoryValid ? t("posting.blockedCategory")
+    : !editor.canSubmit ? t("posting.blockedAmount")
+    : needsBudgetCheck && budget === undefined ? t("posting.checkingBudget") : undefined;
   const canQueue =
     editor.canSubmit &&
     !setup &&
@@ -309,11 +312,11 @@ function PostMoney({
         saveToBatch={mode === "batch"}
         lockEntryType={editor.lockEntryType}
         currency={workspace.functionalCurrency}
-        place={profile ? `${profile.emoji ?? "💰"} ${profile.name}` : "Pick"}
+        place={profile ? `${profile.emoji ?? "💰"} ${profile.name}` : t("posting.pick")}
         destination={
           destination
             ? `${destination.emoji ?? "💰"} ${destination.name}`
-            : "Pick"
+            : t("posting.pick")
         }
         category={
           editor.categories.ids
@@ -323,9 +326,9 @@ function PostMoney({
               );
               return category
                 ? `${category.style.emoji} ${category.name}`
-                : "Saved category";
+                : t("posting.savedCategory");
             })
-            .join(" · ") || "Pick"
+            .join(" · ") || t("posting.pick")
         }
         categoryEnabled={categoryEnabled}
         blockedReason={blockedReason}
@@ -351,12 +354,13 @@ function PostMoney({
               editor.canSubmit &&
               (editor.pending || completeEntry)
         }
-        date={new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(
-          new Date(`${editor.date}T12:00:00`),
-        )}
+        date={formatLongDate(language, new Date(`${editor.date}T12:00:00`))}
         posted={
           mode !== "batch" && editor.posted
-            ? `${editor.posted.description || "Entry"} · ${editor.posted.amount.minorUnits > 0 ? "+" : ""}${formatMoney(editor.posted.amount)}`
+            ? t("posting.postedSummary", {
+              description: editor.posted.description || t("posting.untitledEntry"),
+              amount: `${editor.posted.amount.minorUnits > 0 ? "+" : ""}${formatMoney(editor.posted.amount)}`,
+            })
             : null
         }
         onAmountChange={(value) => interaction(() => editor.setAmount(value))}
@@ -427,7 +431,7 @@ function PostMoney({
       )}
       <PlaceSheet
         sheetRef={placeSheet}
-        title={placeTarget === "source" ? "From" : "To"}
+        title={placeTarget === "source" ? t("posting.formFrom") : t("posting.formTo")}
         search={search}
         onSearch={(value) => interaction(() => setSearch(value))}
         places={profiles}
@@ -500,7 +504,7 @@ function PostMoney({
         enableDynamicSizing={false}
       >
         <BottomSheetView style={{ padding: spacing.xxl, gap: spacing.xl }}>
-          <Header title="Date occurred" />
+          <Header title={t("posting.dateSheetTitle")} />
           <DateTimePicker
             value={new Date(`${editor.date}T12:00:00`)}
             mode="date"
@@ -512,7 +516,7 @@ function PostMoney({
             }}
           />
           <SecondaryButton
-            label="Done"
+            label={t("common.done")}
             onPress={() => dateSheet.current?.dismiss()}
           />
         </BottomSheetView>
@@ -569,7 +573,7 @@ function PostMoney({
           editor.resetComposer();
           setMode("one");
         }}
-        rowFor={(item) => batchRowFor({ item, categories, profiles })}
+        rowFor={(item) => batchRowFor({ item, categories, profiles, t })}
       />
       {impactSheet}
     </>

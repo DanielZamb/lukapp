@@ -1,3 +1,5 @@
+import type { MessageKey, Translator } from "../../i18n";
+
 // Presentation helpers for installed apps and accounts on the intake screens.
 
 const BANK_WORDS = /(^|[^a-z])(bank|banco|bancolombia|davivienda|daviplata|nequi|nu|nubank|bbva|scotiabank|colpatria|itau|avvillas|popular|occidente|falabella|lulo|rappipay|movii|tarjeta|credito|credit|card|wallet|pay|finanz|financ)([^a-z]|$)/;
@@ -21,12 +23,13 @@ export function appInitial(label: string): string {
   return (label.trim()[0] ?? "?").toLocaleUpperCase();
 }
 
-const KIND_LABELS: Record<string, string> = {
-  cash: "Cash", bankAccount: "Bank account", savingsAccount: "Savings", creditCard: "Credit card", loan: "Loan",
+const KIND_LABELS: Record<string, MessageKey> = {
+  cash: "inbox.kindCash", bankAccount: "inbox.kindBankAccount", savingsAccount: "inbox.kindSavings",
+  creditCard: "inbox.kindCreditCard", loan: "inbox.kindLoan",
 };
 
-export function productKindLabel(kind: string): string {
-  return KIND_LABELS[kind] ?? "Account";
+export function productKindLabel(t: Translator["t"], kind: string): string {
+  return t(KIND_LABELS[kind] ?? "inbox.kindOther");
 }
 
 /** "America/Bogota" → "Bogota". */

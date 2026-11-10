@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import type { Theme } from "../../ui/tokens";
 import { useReadableLayout } from "../../ui/themeContext";
+import { useT } from "../../i18n";
 import type { ReadableLayout } from "../../ui/layout";
 import { Header, ListGroup, ListRow, PrimaryButton, SecondaryButton, Screen, useUi, useTheme } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
@@ -164,6 +165,7 @@ function postingFormStyles(theme: Theme, layout: ReadableLayout) {
 }
 
 export function PostingForm(props: PostingFormProps) {
+  const { t } = useT();
   const ui = useUi();
   const theme = useTheme();
   const layout = useReadableLayout();
@@ -186,24 +188,24 @@ export function PostingForm(props: PostingFormProps) {
               />
             </View>
             <View style={{ flex: 1, gap: spacing.xs }}>
-              <Text style={styles.bannerTitle}>Posted</Text>
-              <Text style={styles.detail} numberOfLines={1}>
+              <Text style={styles.bannerTitle}>{t("posting.formPosted")}</Text>
+              <Text style={styles.detail} numberOfLines={2}>
                 {props.posted}
               </Text>
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Done"
+              accessibilityLabel={t("common.done")}
               onPress={props.onDone}
               style={styles.done}
             >
-              <Text style={styles.segmentText}>Done</Text>
+              <Text style={styles.segmentText}>{t("common.done")}</Text>
             </Pressable>
           </View>
         ) : null
       }
     >
-      <Header title="Post money" eyebrow="NEW ENTRY" onBack={props.onBack} />
+      <Header title={t("posting.title")} eyebrow={t("posting.eyebrow")} onBack={props.onBack} />
       {props.notification ?? (props.sourceNote ? (
         <Text style={styles.detail}>{props.sourceNote}</Text>
       ) : null)}
@@ -222,7 +224,7 @@ export function PostingForm(props: PostingFormProps) {
           {props.currency === "COP" ? "$" : props.currency}
         </Text>
         <TextInput
-          accessibilityLabel="Signed amount"
+          accessibilityLabel={t("posting.formAmountA11y")}
           value={props.amount === "-" ? "-0" : props.amount}
           onChangeText={(value) => props.onAmountChange(formatMoneyInput(value, props.currency))}
           editable={props.editable}
@@ -240,14 +242,14 @@ export function PostingForm(props: PostingFormProps) {
       </View>
       <View
         accessibilityRole="radiogroup"
-        accessibilityLabel="Entry type"
+        accessibilityLabel={t("posting.formEntryTypeA11y")}
         style={styles.types}
       >
         {(
           [
-            ["normal", "Normal"],
-            ["initial", "Initial balance"],
-            ["transfer", "Transfer"],
+            ["normal", t("posting.formTypeNormal")],
+            ["initial", t("posting.formTypeInitial")],
+            ["transfer", t("posting.formTypeTransfer")],
           ] satisfies Array<[EntryType, string]>
         ).map(([value, label]) => (
           <Pressable
@@ -280,13 +282,13 @@ export function PostingForm(props: PostingFormProps) {
         ))}
       </View>
       <View style={styles.openField}>
-        <Text style={styles.fieldLabel}>Description</Text>
+        <Text style={styles.fieldLabel}>{t("posting.formDescription")}</Text>
         <TextInput
-          accessibilityLabel="Description"
+          accessibilityLabel={t("posting.formDescription")}
           value={props.description}
           onChangeText={props.onDescriptionChange}
           editable={props.editable}
-          placeholder="What was it"
+          placeholder={t("posting.formDescriptionPlaceholder")}
           maxLength={500}
           multiline
           placeholderTextColor={theme.mutedForeground}
@@ -295,7 +297,7 @@ export function PostingForm(props: PostingFormProps) {
       </View>
       <ListGroup>
         <ListRow
-          title={props.entryType === "transfer" ? "From" : "Place"}
+          title={props.entryType === "transfer" ? t("posting.formFrom") : t("posting.formPlace")}
           titleStyle={styles.rowTitle}
           valueStyle={styles.rowValue}
           value={props.place}
@@ -303,8 +305,8 @@ export function PostingForm(props: PostingFormProps) {
         />
         {props.entryType === "transfer" && (
           <ListRow
-            title="To"
-            value={props.destination ?? "Choose a place"}
+            title={t("posting.formTo")}
+            value={props.destination ?? t("posting.formChoosePlace")}
             onPress={props.editable ? props.onDestination : undefined}
             titleStyle={styles.rowTitle}
             valueStyle={styles.rowValue}
@@ -312,7 +314,7 @@ export function PostingForm(props: PostingFormProps) {
         )}
         {(props.entryType ?? "normal") === "normal" && (
           <ListRow
-            title="Category"
+            title={t("posting.formCategory")}
             value={props.category}
             onPress={
               props.editable && props.categoryEnabled !== false
@@ -324,7 +326,7 @@ export function PostingForm(props: PostingFormProps) {
           />
         )}
         <ListRow
-          title="Date occurred"
+          title={t("posting.formDate")}
           titleStyle={styles.rowTitle}
           valueStyle={styles.rowValue}
           value={props.date}
@@ -332,18 +334,18 @@ export function PostingForm(props: PostingFormProps) {
         />
       </ListGroup>
       {props.entryType === "transfer" && <View style={ui.section}>
-        <Text style={styles.detail}>Move money between places. To repay a loan, choose your existing loan in To. Transfers do not need a category.</Text>
+        <Text style={styles.detail}>{t("posting.formTransferHelp")}</Text>
         {props.transferReview && <>
-          <SecondaryButton label="Swap From and To" disabled={!props.editable || !props.transferReview.canConfirm}
+          <SecondaryButton label={t("posting.formSwap")} disabled={!props.editable || !props.transferReview.canConfirm}
             onPress={props.transferReview.onSwap} />
-          {props.transferReview.required && <PrimaryButton label="Confirm From and To"
+          {props.transferReview.required && <PrimaryButton label={t("posting.formConfirmPlaces")}
             disabled={!props.editable || !props.transferReview.canConfirm} onPress={props.transferReview.onConfirm} />}
         </>}
       </View>}
       {!!props.blockedReason && !props.canSubmit && !props.pending && <Text style={styles.detail}>{props.blockedReason}</Text>}
       {props.categoryNeedsPrimary && (
         <Text style={styles.detail}>
-          Open Category to choose which category is primary.
+          {t("posting.formPrimaryHint")}
         </Text>
       )}
       {props.loading && <ActivityIndicator color={theme.primary} />}
@@ -354,20 +356,19 @@ export function PostingForm(props: PostingFormProps) {
       )}
       {props.pending && (
         <Text style={styles.detail}>
-          This entry is saved for retry. Its answers stay fixed until posting is
-          confirmed.
+          {t("posting.formPendingNote")}
         </Text>
       )}
       {props.posted === null && (
         <PrimaryButton
           label={
             props.saveToBatch
-              ? "Add to batch"
+              ? t("posting.formAddToBatch")
               : props.busy
-                ? "Posting…"
+                ? t("posting.formPosting")
                 : props.pending
-                  ? "Retry posting"
-                  : "Post"
+                  ? t("posting.formRetry")
+                  : t("posting.formPost")
           }
           trailingIcon="checkmark"
           disabled={!props.canSubmit}

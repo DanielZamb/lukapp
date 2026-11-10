@@ -11,13 +11,14 @@ import { Field, Header, PrimaryButton, useTheme, useUi } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import type { PlaceDraft } from "./usePostingEditor";
 import type { PlaceKind } from "./pendingPostingSchema";
+import { useT, type MessageKey } from "../../i18n";
 
-const assetKinds: Array<[PlaceKind, string]> = [
-  ["bankAccount", "Checking"],
-  ["savingsAccount", "Savings"],
-  ["cash", "Wallet"],
+const assetKinds: Array<[PlaceKind, MessageKey]> = [
+  ["bankAccount", "posting.setupKindChecking"],
+  ["savingsAccount", "posting.setupKindSavings"],
+  ["cash", "posting.setupKindWallet"],
 ];
-const debtKinds: Array<[PlaceKind, string]> = [["creditCard", "Credit card"], ["loan", "Loan"]];
+const debtKinds: Array<[PlaceKind, MessageKey]> = [["creditCard", "posting.setupKindCreditCard"], ["loan", "posting.setupKindLoan"]];
 const emojis = ["💰", "🏦", "👛", "💳", "🏠", "💼", "🪙", "🐷", "✨", "🚗"];
 
 export function AccountSetupForm(props: {
@@ -33,6 +34,7 @@ export function AccountSetupForm(props: {
   onSubmit: () => void;
   onDismiss: () => void;
 }) {
+  const { t } = useT();
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => accountSetupStyles(theme), [theme]);
@@ -42,7 +44,7 @@ export function AccountSetupForm(props: {
   const value = props.value;
   const debt = value !== null && (value.productKind === null || value.productKind === "creditCard" || value.productKind === "loan");
   const kinds = debt ? debtKinds : assetKinds;
-  const balanceLabel = debt ? "How much do you still owe?" : "Balance today";
+  const balanceLabel = debt ? t("posting.setupOwed") : t("posting.setupBalance");
   const hasValue = value !== null;
   useEffect(() => {
     if (Platform.OS !== "android" || !hasValue) return;
@@ -77,27 +79,27 @@ export function AccountSetupForm(props: {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.content}
           >
-            <Header title="Add a place" eyebrow="ANOTHER PLACE" />
+            <Header title={t("posting.setupTitle")} eyebrow={t("posting.setupEyebrow")} />
             <Field
-              label="Name you recognize"
-              accessibilityLabel="Account name"
-              placeholder="Savings"
+              label={t("posting.setupName")}
+              accessibilityLabel={t("posting.setupNameA11y")}
+              placeholder={t("posting.setupNamePlaceholder")}
               value={value.name}
               editable={props.editable}
               onChangeText={(name) => props.onChange({ ...value, name })}
               InputComponent={BottomSheetTextInput}
             />
             <View style={styles.field}>
-              <Text style={styles.label}>Type</Text>
+              <Text style={styles.label}>{t("posting.setupType")}</Text>
               <View
                 style={styles.chips}
                 accessibilityRole="radiogroup"
-                accessibilityLabel="Place type"
+                accessibilityLabel={t("posting.setupTypeA11y")}
               >
-                {kinds.map(([productKind, label]) => (
+                {kinds.map(([productKind, labelKey]) => (
                   <Pressable
                     key={productKind}
-                    accessibilityLabel={label}
+                    accessibilityLabel={t(labelKey)}
                     accessibilityRole="radio"
                     accessibilityState={{
                       checked: value.productKind === productKind,
@@ -110,16 +112,16 @@ export function AccountSetupForm(props: {
                       value.productKind === productKind && styles.selected,
                     ]}
                   >
-                    <Text style={ui.body}>{label}</Text>
+                    <Text style={ui.body}>{t(labelKey)}</Text>
                   </Pressable>
                 ))}
               </View>
             </View>
             <View style={styles.field}>
-              <Text style={styles.label}>Look</Text>
+              <Text style={styles.label}>{t("posting.setupLook")}</Text>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Choose emoji"
+                accessibilityLabel={t("posting.setupChooseEmoji")}
                 disabled={!props.editable}
                 onPress={() => {
                   setLookEmoji(value.emoji ?? "💰");
@@ -129,7 +131,7 @@ export function AccountSetupForm(props: {
                 style={styles.look}
               >
                 <Text style={styles.emoji}>{value.emoji ?? "💰"}</Text>
-                <Text style={ui.muted}>Change</Text>
+                <Text style={ui.muted}>{t("posting.setupChange")}</Text>
               </Pressable>
             </View>
             <Field
@@ -149,17 +151,16 @@ export function AccountSetupForm(props: {
             )}
             {props.pending && (
               <Text style={ui.muted}>
-                This setup is saved for retry. Its answers stay fixed until
-                confirmed.
+                {t("posting.setupPendingNote")}
               </Text>
             )}
             <PrimaryButton
               label={
                 props.busy
-                  ? "Adding…"
+                  ? t("posting.setupAdding")
                   : props.pending
-                    ? "Retry setup"
-                    : "Add this place"
+                    ? t("posting.setupRetry")
+                    : t("posting.setupSubmit")
               }
               trailingIcon="checkmark"
               disabled={!props.canSubmit}
@@ -196,13 +197,13 @@ export function AccountSetupForm(props: {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.content}
           >
-            <Header title="Look" />
+            <Header title={t("posting.setupLook")} />
             <View style={styles.chips}>
               {emojis.map((emoji) => (
                 <Pressable
                   key={emoji}
                   accessibilityRole="radio"
-                  accessibilityLabel={`Emoji ${emoji}`}
+                  accessibilityLabel={t("posting.setupEmojiA11y", { emoji })}
                   accessibilityState={{
                     checked: lookEmoji === emoji,
                   }}
@@ -218,19 +219,19 @@ export function AccountSetupForm(props: {
               ))}
             </View>
             <BottomSheetTextInput
-              accessibilityLabel="Custom emoji"
+              accessibilityLabel={t("posting.setupCustomEmoji")}
               editable={props.editable}
               value={emojis.includes(lookEmoji) ? "" : lookEmoji}
               onChangeText={(input) => {
                 const emoji = [...input][0];
                 if (emoji) setLookEmoji(emoji);
               }}
-              placeholder="Or type your own"
+              placeholder={t("posting.setupCustomEmojiPlaceholder")}
               placeholderTextColor={theme.mutedForeground}
               style={styles.customEmojiInput}
             />
             <PrimaryButton
-              label="Use this"
+              label={t("posting.setupUseThis")}
               trailingIcon="checkmark"
               disabled={!props.editable}
               onPress={() => {

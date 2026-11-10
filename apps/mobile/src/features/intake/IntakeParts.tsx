@@ -109,8 +109,8 @@ export function Card({ children }: PropsWithChildren) {
   return <View style={styles.card}>{children}</View>;
 }
 
-/** A row inside a Card: tile, title, one status line, chevron when it opens something. */
-export function NavRow({ leading, title, status, statusTone, statusLines = 2, accessibilityLabel, onPress, disabled, last }: {
+/** A row inside a Card: tile, title, a status that wraps unless `statusLines` clamps it, chevron when it opens something. */
+export function NavRow({ leading, title, status, statusTone, statusLines, accessibilityLabel, onPress, disabled, last }: {
   leading?: ReactNode; title: string; status?: string; statusTone?: Tone; statusLines?: number; accessibilityLabel: string;
   onPress?: () => void; disabled?: boolean; last?: boolean;
 }) {

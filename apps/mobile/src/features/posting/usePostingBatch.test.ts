@@ -235,7 +235,7 @@ test("an uncertain partial batch locks edits and retries only the unconfirmed ex
 test("a definitive rejection reopens the saved draft for correction", async () => {
   const api = transport();
   api.post.mockRejectedValueOnce(
-    new ConvexError({ kind: "accounting", message: "Period is locked" }),
+    new ConvexError({ kind: "accounting", code: "locked_period", message: "Locked Period" }),
   );
   const session = await open(api);
   await queueEntry(session, "-10", "Taxi");
@@ -244,7 +244,7 @@ test("a definitive rejection reopens the saved draft for correction", async () =
   });
   expect(api.abort).toHaveBeenCalledOnce();
   expect(session.get().batch.editable).toBe(true);
-  expect(session.get().batch.error).toBe("Period is locked");
+  expect(session.get().batch.error).toBe("Locked Period");
   expect(session.get().batch.queue[0].draftId).toBe("key-1");
   expect(session.get().batch.posted).toBeNull();
 });

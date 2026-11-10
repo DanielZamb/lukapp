@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { DraftsScreen, type InboxSegment } from "../src/features/DraftsScreen";
-import { monthLabel } from "../src/features/monthClose/model";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { readyTotalMinorUnits } from "../src/features/intake/applyBatch";
@@ -15,6 +14,8 @@ import { api } from "../src/features/api";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import { clearDiscardNotices, DISCARD_NOTICE_TTL_MS, readDiscardNotices, type DiscardNotice } from "../src/features/localDiscardNotices";
 import { Screen } from "../src/ui/core";
+import { formatMonthName, useT } from "../src/i18n";
+import { intakeActionError } from "../src/features/intake/presentation";
 
 function inboxSegmentFromParam(param: string | undefined): InboxSegment | null {
   if (param === "wait") return "wait";
@@ -37,6 +38,7 @@ function Drafts({
   profileId: string;
   timeZone: string;
 }) {
+  const { t, language } = useT();
   const { segment: segmentParam } = useLocalSearchParams<{ segment?: string | string[] }>();
   const requestedSegment = Array.isArray(segmentParam) ? segmentParam[0] : segmentParam;
   const paramSegment = inboxSegmentFromParam(requestedSegment);
@@ -105,9 +107,9 @@ function Drafts({
       currency={currency}
       segment={segment}
       readyToShow={drafts.count !== null && (intake.count !== null || !!intake.error)}
-      error={drafts.error || intake.error}
+      error={drafts.error || (intake.error ? intakeActionError(t, new Error(intake.error)) : "")}
       confirming={confirming}
-      month={monthLabel(period)}
+      month={formatMonthName(language, Date.UTC(period.year, period.month - 1, 1), { timeZone: "UTC", capitalize: false })}
       places={places ?? []}
       confirmedCount={confirmedCount}
       onContinueAfterConfirmation={() => setConfirmedCount(null)}

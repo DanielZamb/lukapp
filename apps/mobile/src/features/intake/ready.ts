@@ -1,9 +1,12 @@
+import type { Translator } from "../../i18n";
+
 export function currencyMismatchReason(
+  t: Translator["t"],
   candidateCurrency: string,
   workspaceCurrency: string,
 ) {
   if (candidateCurrency === workspaceCurrency) return null;
-  return `Uses ${candidateCurrency}. This workspace uses ${workspaceCurrency}.`;
+  return t("inbox.currencyMismatch", { candidate: candidateCurrency, workspace: workspaceCurrency });
 }
 
 export function isReadyCandidate(

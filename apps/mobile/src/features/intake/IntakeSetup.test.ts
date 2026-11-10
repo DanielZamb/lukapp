@@ -4,6 +4,8 @@ import { FlatList } from "react-native";
 import { getFunctionName } from "convex/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
+import { formatDateTime } from "../../../../../src/i18n/format";
 import type { NativeStatus, UnsupportedStatus } from "../../../modules/notification-intake";
 import { IntakeContext } from "./IntakeProvider";
 import { INTAKE_ACKNOWLEDGEMENT, INTAKE_DISCLOSURE_VERSION, IntakeSetup } from "./IntakeSetup";
@@ -132,7 +134,7 @@ test("the disclosure comes first, gates OS settings and never configures or enab
   statusFields.access = "granted"; statusFields.connection = "disconnected"; statusFields.checkedAt = now + 1234;
   await act(async () => { await f.service.refresh(); });
   expect(text()).toContain("Granted"); expect(text()).toContain("Disconnected");
-  expect(text()).toContain(new Date(now + 1234).toLocaleString()); expect(text()).not.toContain("just now");
+  expect(text()).toContain(formatDateTime("en", now + 1234)); expect(text()).not.toContain("just now");
   expect(text()).toContain("Listener isn't connected");
   expect(button("Add an app").props.accessibilityState.disabled).toBe(false);
   const retry = vi.spyOn(f.native, "retryConnection");
@@ -254,10 +256,10 @@ test("observed content-free notices dismiss through the service while recovery g
     statusFields.notices = statusFields.notices?.filter((row) => !noticeIds.includes(row.id));
   });
   await mount(); await acknowledge();
-  expect(text()).toContain(`Intake was recovering since ${new Date(now - 5000).toLocaleString()}. 2 captures rejected.`);
+  expect(text()).toContain(`Intake was recovering since ${formatDateTime("en", now - 5000)}. 2 captures rejected.`);
   expect(text()).toContain("Too many alerts at once");
-  expect(text()).toContain(`3 alerts · ${new Date(now - 4000).toLocaleString()} to ${new Date(now - 2000).toLocaleString()}`);
-  expect(intakeWarning(f.service.getSnapshot())).toContain("recovery gap since");
+  expect(text()).toContain(`3 alerts · ${formatDateTime("en", now - 4000)} to ${formatDateTime("en", now - 2000)}`);
+  expect(intakeWarning(f.service.getSnapshot(), createTranslator("en"))).toContain("recovery gap since");
   await press("Dismiss overflow notice");
   expect(dismiss).toHaveBeenCalledWith({ expectedEpoch: "a".repeat(22), noticeIds: ["notice-1"] });
   expect(text()).not.toContain("Too many alerts at once"); expect(text()).toContain("Activity may be missing");
@@ -404,4 +406,42 @@ test("sources saved under an older disclosure are offered the update, re-saved w
   expect(f.state().mappings).toEqual([mapping]);
   expect((await f.native.getStatus() as NativeStatus).consentVersion).toBe(INTAKE_DISCLOSURE_VERSION);
   expect(text()).not.toContain("See each notification with its suggestion");
+});
+
+async function mountSpanish() {
+  const { LanguageProvider } = await import("../../i18n");
+  await f.service.refresh().catch(() => {});
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, tree())); });
+}
+
+test("setup reads in Spanish and names Android's own Acceso a notificaciones setting", async () => {
+  statusFields.access = "not_granted";
+  await mountSpanish();
+  expect(text()).toContain("Antes de activarla");
+  expect(text()).toContain("Solo las apps que elijas");
+  expect(text()).toContain("El siguiente paso es permitir el Acceso a notificaciones");
+  await press("Leí el aviso de la lectura de notificaciones");
+  await press("Continuar");
+  const shown = text();
+  for (const copy of ["Lectura de notificaciones", "ALERTAS DE COMPRAS", "Permite el Acceso a notificaciones", "Apps que Lukapp lee",
+    "Este celular", "Acceso a notificaciones", "No permitido", "Personal · COP · Bogota"])
+    expect(shown).toContain(copy);
+  expect(has("Acceso a notificaciones, No permitido")).toBe(false);
+  expect(root?.root.findAllByProps({ label: "Permitir el Acceso a notificaciones" }).length).toBeGreaterThan(0);
+  expect(root?.root.findAllByProps({ label: "Abrir Acceso a notificaciones" }).length).toBeGreaterThan(0);
+  for (const english of ["Notification intake", "Allow notification access", "This phone", "Not granted", "Apps you read from"])
+    expect(shown).not.toContain(english);
+});
+
+test("choosing where an app's alerts go reads in Spanish around the stored app label", async () => {
+  await mountSpanish();
+  await press("Leí el aviso de la lectura de notificaciones");
+  await press("Continuar");
+  await act(async () => { root!.root.findAllByProps({ label: "Agregar una app" })[0]!.props.onPress(); });
+  expect(root?.root.findByProps({ accessibilityLabel: "Buscar apps" }).props.placeholder).toBe("Buscar por nombre");
+  await press("Bank");
+  expect(text()).toContain("¿A dónde van las alertas de Bank?");
+  expect(text()).toContain("Ahorros");
+  expect(text()).toContain("Efectivo");
+  expect(text()).toContain("Puedes cambiarlo después. Los otros espacios conservan su propio lugar para Bank.");
 });

@@ -69,3 +69,19 @@ test("a tapped amount keeps the form's sign", () => {
   expect(signedAmountText(3_200_000, "COP", "-", "in")).toBe("-32.000");
   expect(signedAmountText(3_200_000, "COP", "", "out")).toBe("-32.000");
 });
+
+test("the card reads in Spanish while the bank's text and app name stay as captured", async () => {
+  const { LanguageProvider, formatDateTime } = await import("../../i18n");
+  const at = Date.UTC(2026, 10, 10, 17, 5);
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(NotificationCard, {
+    notification: { text, packageName: "com.nu.production", at }, appLabel: "Nu", currency: "COP", amount: "-32.000", editable: true, onUseAmount, onUseDescription }))); });
+  expect(all()).toContain("Notificación original");
+  expect(all()).toContain("Nu");
+  expect(all()).toContain(formatDateTime("es", at));
+  expect(all()).toContain("Toca un monto para usarlo, o toca dos palabras para la descripción. Los montos subrayados con rayas parecen saldos.");
+  expect(all()).toContain("TIENDA");
+  expect(root?.root.findByProps({ accessibilityLabel: "Notificación de Nu" })).toBeTruthy();
+  expect(texts().some((node) => node.props.accessibilityLabel === "Usar $32.000 como monto")).toBe(true);
+  expect(texts().some((node) => node.props.accessibilityLabel === text)).toBe(true);
+  for (const english of ["Original notification", "Tap an amount", "Dashed amounts"]) expect(all()).not.toContain(english);
+});

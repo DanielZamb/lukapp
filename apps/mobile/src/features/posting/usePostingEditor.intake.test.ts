@@ -213,7 +213,7 @@ test.each(["intake", "accounting"])("an idempotency conflict from %s retains the
     await editor().submit();
   });
   expect(editor().posted).toBeNull();
-  expect(editor().error).toBe("idempotency_key_conflict");
+  expect(editor().error).toBe("Idempotency key already used");
   expect(editor().description).toBe("Groceries");
   expect(editor().amount).toBe(facts.amountText);
   expect(editor().categories).toEqual(facts.categories);
@@ -247,7 +247,7 @@ test("a definite accounting rejection fails the Candidate and never aborts a Dra
       confirm: vi.fn(async () => {
         throw new ConvexError({
           kind: "accounting",
-          code: "period_locked",
+          code: "locked_period",
           message: "Locked Period",
         });
       }),

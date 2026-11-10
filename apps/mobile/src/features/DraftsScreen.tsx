@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { ConfirmationScreen, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useTheme, useUi } from "../ui/core";
 import { ConfirmSheet } from "../ui/ConfirmSheet";
-import { useT } from "../i18n";
+import { formatDateTime, formatShortDate, useT, type MessageKey, type Translator } from "../i18n";
+import { candidateErrorText } from "./posting/rejection";
 import type { DiscardOutcome } from "./discardOutcome";
 import { font, fontSize, radius, spacing, touchTarget } from "../ui/tokens";
 import { formatMoney } from "./money";
@@ -22,16 +23,26 @@ type DiscardTarget =
   | { kind: "candidate"; id: IntakeCandidateId; revision: number; title: string; value: string }
   | { kind: "draft"; id: LocalEntryDraftId; title: string };
 
+const discardReasons: Record<DiscardNotice["reason"], MessageKey> = {
+  "Missing amount or direction": "inbox.reasonMissing",
+  "Security alert": "inbox.reasonSecurity",
+  "Multiple amounts": "inbox.reasonMultiple",
+  "Ambiguous amount": "inbox.reasonAmbiguous",
+  "Queue full": "inbox.reasonQueueFull",
+  "Conflicting capture": "inbox.reasonConflict",
+};
+
 function candidateDetail(
+  t: Translator["t"],
   candidate: IntakeCandidate,
   workspaceCurrency: string,
   places: { id: string; name: string }[],
 ) {
-  const mismatch = currencyMismatchReason(candidate.currency, workspaceCurrency);
+  const mismatch = currencyMismatchReason(t, candidate.currency, workspaceCurrency);
   if (mismatch) return mismatch;
-  if (candidate.error) return candidate.error;
-  if (!isReadyCandidate(candidate, workspaceCurrency)) return "Needs review";
-  return places.find((place) => place.id === candidate.suggestion.financialAccountProfileId)?.name ?? "Saved place";
+  if (candidate.error) return candidateErrorText(t, candidate.error);
+  if (!isReadyCandidate(candidate, workspaceCurrency)) return t("inbox.needsReview");
+  return places.find((place) => place.id === candidate.suggestion.financialAccountProfileId)?.name ?? t("inbox.savedPlace");
 }
 
 function InboxRow({ title, detail, value, accessibilityLabel, onPress, discardLabel, onDiscard, isLast }: {
@@ -73,8 +84,8 @@ function InboxRow({ title, detail, value, accessibilityLabel, onPress, discardLa
   );
 }
 
-function candidateValue(candidate: IntakeCandidate) {
-  return candidate.suggestion.amountMinorUnits === null ? "Amount needed" : formatMoney({
+function candidateValue(t: Translator["t"], candidate: IntakeCandidate) {
+  return candidate.suggestion.amountMinorUnits === null ? t("inbox.amountNeeded") : formatMoney({
     currency: candidate.currency,
     minorUnits: Math.abs(candidate.suggestion.amountMinorUnits),
   });
@@ -127,7 +138,7 @@ export function DraftsScreen({
   const [dismissing, setDismissing] = useState(false);
   const [discardError, setDiscardError] = useState("");
   const [showOtherNotifications, setShowOtherNotifications] = useState(false);
-  const { t } = useT();
+  const { t, tn, language } = useT();
   const [discardTarget, setDiscardTarget] = useState<DiscardTarget | null>(null);
   const [discardBusy, setDiscardBusy] = useState(false);
   const [discardFailure, setDiscardFailure] = useState("");
@@ -163,7 +174,7 @@ export function DraftsScreen({
   function discardCandidate(candidate: IntakeCandidate, title: string) {
     const status = candidate.status;
     if (!onDiscardCandidate || status?.kind !== "review") return undefined;
-    return () => askDiscard({ kind: "candidate", id: candidate.id, revision: status.revision, title, value: candidateValue(candidate) });
+    return () => askDiscard({ kind: "candidate", id: candidate.id, revision: status.revision, title, value: candidateValue(t, candidate) });
   }
   const empty = drafts.length === 0 && now.length === 0 && wait.length === 0;
   const candidateRows = segment === "now" ? now : wait;
@@ -175,9 +186,9 @@ export function DraftsScreen({
   if (confirmedCount !== null) {
     return (
       <ConfirmationScreen
-        title={confirmedCount === 1 ? "Record added" : `${confirmedCount} records added`}
-        detail="The server validated and posted each record. Local notification content was deleted after acknowledgement."
-        buttonLabel={empty ? "Continue to Month Close" : "Back to Candidates"}
+        title={tn("inbox.confirmed", confirmedCount)}
+        detail={t("inbox.confirmedDetail")}
+        buttonLabel={empty ? t("inbox.continueMonthClose") : t("inbox.backToCandidates")}
         onContinue={empty ? onCompleteMonth : onContinueAfterConfirmation}
       />
     );
@@ -191,20 +202,20 @@ export function DraftsScreen({
   if (screen === "discard") {
     return (
       <Screen>
-        <Header title="Discarded notifications" eyebrow="NOT SAVED AS CANDIDATES" onBack={backToInbox} />
-        <Text style={styles.body}>These notices contain no notification text. They disappear after 15 days.</Text>
+        <Header title={t("inbox.discardedTitle")} eyebrow={t("inbox.discardedEyebrow")} onBack={backToInbox} />
+        <Text style={styles.body}>{t("inbox.discardedBody")}</Text>
         <ListGroup>
           {discardNotices.map((notice, index) => (
             <ListRow
               key={`${notice.time}-${index}`}
-              title={notice.reason}
-              detail={new Date(notice.time).toLocaleString()}
+              title={t(discardReasons[notice.reason])}
+              detail={formatDateTime(language, notice.time)}
               isLast={index === discardNotices.length - 1}
             />
           ))}
         </ListGroup>
         {discardError ? <Text accessibilityRole="alert" style={ui.error}>{discardError}</Text> : null}
-        <PrimaryButton label="OK" disabled={dismissing} pending={dismissing} onPress={() => {
+        <PrimaryButton label={t("inbox.discardedOk")} disabled={dismissing} pending={dismissing} onPress={() => {
           void (async () => {
             if (dismissing) return;
             setDismissing(true);
@@ -213,7 +224,7 @@ export function DraftsScreen({
               await onDismissDiscardNotices?.();
               backToInbox();
             } catch {
-              setDiscardError("Could not remove discarded notification notices. Try again.");
+              setDiscardError(t("inbox.discardedClearFailed"));
             } finally {
               setDismissing(false);
             }
@@ -227,71 +238,69 @@ export function DraftsScreen({
     <Screen>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Header title="Candidates" eyebrow="NOTIFICATION INTAKE" onBack={onBack} />
+          <Header title={t("inbox.title")} eyebrow={t("inbox.eyebrow")} onBack={onBack} />
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Sources" onPress={onSources} style={styles.sources}>
-          <Text style={styles.linkText}>Sources</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("inbox.sources")} onPress={onSources} style={styles.sources}>
+          <Text style={styles.linkText}>{t("inbox.sources")}</Text>
         </Pressable>
       </View>
       {error ? <Text accessibilityRole="alert" style={ui.error}>{error}</Text> : null}
       {discardNotice ? <Text accessibilityRole="alert" style={ui.error}>{discardNotice}</Text> : null}
-      {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{intakeWarning} Open Sources for observed details and capture notices.</Text> : null}
+      {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{t("inbox.warningWithSources", { warning: intakeWarning })}</Text> : null}
       {!readyToShow ? (
-        <ActivityIndicator accessibilityLabel="Loading Candidates and drafts" />
+        <ActivityIndicator accessibilityLabel={t("inbox.loadingA11y")} />
       ) : empty && !error ? (
         <>
           <View style={styles.hero}>
-            <Text style={styles.kicker}>Candidate inbox</Text>
-            <Text style={styles.amount}>Nothing waiting</Text>
-            <Text style={styles.body}>
-              Notifications from enabled sources become Candidates here for review. No Candidates are waiting; this does not confirm capture. Remaining local Candidates never block Month Close.
-            </Text>
+            <Text style={styles.kicker}>{t("inbox.emptyKicker")}</Text>
+            <Text style={styles.amount}>{t("inbox.emptyTitle")}</Text>
+            <Text style={styles.body}>{t("inbox.emptyBody")}</Text>
           </View>
-          <PrimaryButton label="Continue to Month Close" onPress={() => setScreen("month-close")} />
+          <PrimaryButton label={t("inbox.continueMonthClose")} onPress={() => setScreen("month-close")} />
         </>
       ) : (
         <>
           <View style={styles.hero}>
             <View style={styles.kickerRow}>
-              <Text style={styles.kicker}>{ready.length} ready to add</Text>
+              <Text style={styles.kicker}>{tn("inbox.readyCount", ready.length)}</Text>
               {!warningViewed && <WarningIconButton onPress={() => setScreen("warning")} />}
             </View>
             <Text style={styles.amount}>{formatMoney({ currency, minorUnits: readyTotal })}</Text>
-            <Text style={styles.body}>Review what needs you now, or confirm every Ready Candidate.</Text>
+            <Text style={styles.body}>{t("inbox.heroBody")}</Text>
           </View>
-          <PrimaryButton label="Confirm all Ready" disabled={ready.length === 0 || confirming} pending={confirming} onPress={onConfirmReady} />
+          <PrimaryButton label={t("inbox.confirmAllReady")} disabled={ready.length === 0 || confirming} pending={confirming} onPress={onConfirmReady} />
         </>
       )}
       {readyToShow && !empty && (
         <>
           <View style={styles.track} accessibilityRole="radiogroup">
             {([
-              { id: "now", label: "Needs you now", count: now.length + postingDrafts.length },
-              { id: "wait", label: "Can wait", count: wait.length + otherDrafts.length },
+              { id: "now", label: t("inbox.segmentNow"), count: now.length + postingDrafts.length },
+              { id: "wait", label: t("inbox.segmentWait"), count: wait.length + otherDrafts.length },
             ] satisfies { id: InboxSegment; label: string; count: number }[]).map((item) => (
               <Pressable
                 key={item.id}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: segment === item.id, checked: segment === item.id }}
-                accessibilityLabel={`${item.label}, ${item.count}`}
+                accessibilityLabel={t("inbox.segmentA11y", { label: item.label, count: item.count })}
                 onPress={() => onSegment(item.id)}
                 style={[styles.segment, segment === item.id && styles.selectedSegment]}
               >
-                <Text numberOfLines={1} style={[styles.segmentLabel, segment === item.id && styles.selectedLabel]}>{item.label}</Text>
+                <Text style={[styles.segmentLabel, segment === item.id && styles.selectedLabel]}>{item.label}</Text>
                 {item.count > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{item.count}</Text></View>}
               </Pressable>
             ))}
           </View>
           <ListGroup>
             {candidateRows.map((candidate) => {
-              const title = candidate.suggestion.description.trim() || candidate.notification?.text.trim() || "Needs review";
+              const title = candidate.suggestion.description.trim() || candidate.notification?.text.trim() || t("inbox.needsReview");
               return (
                 <InboxRow
                   key={candidate.id}
                   title={title}
-                  accessibilityLabel={`Review ${title}`}
-                  detail={candidateDetail(candidate, currency, places)}
-                  value={candidateValue(candidate)}
+                  accessibilityLabel={t("inbox.reviewA11y", { title })}
+                  detail={candidateDetail(t, candidate, currency, places)}
+                  value={candidateValue(t, candidate)}
                   onPress={() => onOpenCandidate(candidate.id)}
                   discardLabel={t("drafts.discardCandidateA11y", { title })}
                   onDiscard={discardCandidate(candidate, title)}
@@ -304,7 +313,7 @@ export function DraftsScreen({
                 <InboxRow
                   key={item.id}
                   title={title}
-                  detail={item.status === "posting" ? "Retry posting" : "Draft on this device"}
+                  detail={item.status === "posting" ? t("inbox.draftRetry") : t("inbox.draftOnDevice")}
                   onPress={() => onResumeDraft(item.id)}
                   discardLabel={t("drafts.discardDraftA11y", { title })}
                   onDiscard={item.status === "open" && onDiscardDraft
@@ -314,7 +323,7 @@ export function DraftsScreen({
             })}
             {candidateRows.length === 0 && draftRows.length === 0 && (
               <View style={styles.emptyList}>
-                <Text style={styles.body}>{segment === "now" ? "Nothing needs you now." : "Nothing waiting later."}</Text>
+                <Text style={styles.body}>{segment === "now" ? t("inbox.emptyNow") : t("inbox.emptyWait")}</Text>
               </View>
             )}
           </ListGroup>
@@ -322,11 +331,11 @@ export function DraftsScreen({
       )}
       {readyToShow && otherNotifications.length > 0 ? (
         <View style={ui.section}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Other notifications, ${otherNotifications.length}`} accessibilityState={{ expanded: showOtherNotifications }}
-            accessibilityHint="App notices and promotions. Open any notification to review it." onPress={() => setShowOtherNotifications((value) => !value)} style={styles.fold}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("inbox.otherA11y", { count: otherNotifications.length })} accessibilityState={{ expanded: showOtherNotifications }}
+            accessibilityHint={t("inbox.otherHint")} onPress={() => setShowOtherNotifications((value) => !value)} style={styles.fold}>
             <View style={styles.candidateCopy}>
-              <Text style={styles.candidateTitle}>Other notifications · {otherNotifications.length}</Text>
-              <Text style={styles.candidateDetail}>App notices and promotions. Open any item to review it.</Text>
+              <Text style={styles.candidateTitle}>{t("inbox.otherTitle", { count: otherNotifications.length })}</Text>
+              <Text style={styles.candidateDetail}>{t("inbox.otherDetail")}</Text>
             </View>
             <Ionicons name={showOtherNotifications ? "chevron-up" : "chevron-down"} size={20} color={theme.mutedForeground} />
           </Pressable>
@@ -335,9 +344,10 @@ export function DraftsScreen({
               {otherNotifications.map((candidate) => {
                 const lines = candidate.notification?.text.split("\n") ?? [];
                 const body = (lines.length > 1 ? lines.slice(1) : lines).join(" ");
-                const title = body || "Notification";
-                return <InboxRow key={candidate.id} title={title} accessibilityLabel={`Review ${title}`}
-                  detail={`${lines.length > 1 ? `${lines[0]} · ` : ""}${new Date(candidate.notification?.at ?? candidate.createdAt).toLocaleDateString()}`}
+                const title = body || t("inbox.otherFallbackTitle");
+                const date = formatShortDate(language, candidate.notification?.at ?? candidate.createdAt);
+                return <InboxRow key={candidate.id} title={title} accessibilityLabel={t("inbox.reviewA11y", { title })}
+                  detail={lines.length > 1 ? t("inbox.otherRowDetail", { title: lines[0]!, date }) : date}
                   onPress={() => onOpenCandidate(candidate.id)}
                   discardLabel={t("drafts.discardCandidateA11y", { title })} onDiscard={discardCandidate(candidate, title)} />;
               })}
@@ -345,11 +355,11 @@ export function DraftsScreen({
           ) : null}
         </View>
       ) : null}
-      {readyToShow && discardNotices.length > 0 ? <SecondaryButton label="Notifications discarded" onPress={() => setScreen("discard")} /> : null}
+      {readyToShow && discardNotices.length > 0 ? <SecondaryButton label={t("inbox.discardedButton")} onPress={() => setScreen("discard")} /> : null}
       {readyToShow && !empty ? (
         <>
-          <Pressable accessibilityRole="button" accessibilityLabel="Preview Month Close warning" onPress={() => setScreen("month-close")} style={styles.footer}>
-            <Text style={styles.linkText}>Preview Month Close warning</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("inbox.previewMonthClose")} onPress={() => setScreen("month-close")} style={styles.footer}>
+            <Text style={styles.linkText}>{t("inbox.previewMonthClose")}</Text>
             <Ionicons name="arrow-forward" size={16} color={theme.primary} />
           </Pressable>
         </>
@@ -408,10 +418,10 @@ function createStyles(theme: Theme, layout: ReadableLayout) {
   kicker: { color: theme.primary, fontSize: 14, fontFamily: font.bold },
   amount: { color: theme.foreground, fontSize: 38, lineHeight: 43, fontFamily: font.extrabold, letterSpacing: -0.8 },
   body: { maxWidth: 330, color: theme.mutedForeground, fontSize: 15, lineHeight: 22, fontFamily: font.regular },
-  track: { flexDirection: "row", padding: 3, borderRadius: radius.full, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border },
+  track: { flexDirection: layout.reflow ? "column" : "row", padding: 3, borderRadius: layout.reflow ? radius.lg : radius.full, backgroundColor: theme.secondary, borderWidth: 1, borderColor: theme.border },
   segment: { flex: 1, minHeight: touchTarget, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, borderRadius: radius.full, paddingHorizontal: spacing.sm },
   selectedSegment: { backgroundColor: theme.background, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  segmentLabel: { color: theme.mutedForeground, fontSize: 13, fontFamily: font.medium, flexShrink: 1 },
+  segmentLabel: { color: theme.mutedForeground, fontSize: 13, fontFamily: font.medium, flexShrink: 1, textAlign: "center" },
   selectedLabel: { color: theme.foreground, fontFamily: font.bold },
   badge: { minWidth: 20, minHeight: 20, paddingHorizontal: 5, borderRadius: radius.full, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center" },
   badgeText: { color: theme.primaryForeground, fontSize: 11, fontFamily: font.bold },

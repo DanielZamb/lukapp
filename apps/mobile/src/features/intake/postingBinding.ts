@@ -4,6 +4,7 @@ import { requiresLocalWipe } from "../../local-auth/accessFailure";
 import type { LocalEntryFacts } from "../localEntryDrafts";
 import type { IntakeBinding, PostingReceipt } from "../posting/usePostingEditor";
 import { parseMoney } from "../money";
+import { formatDateTime, type Translator } from "../../i18n";
 import { evidenceFor, notificationOf, projectCandidate, type ActiveCandidate } from "./durableState";
 import { factsFromCandidate } from "./facts";
 import { discardCandidate } from "./discard";
@@ -14,6 +15,7 @@ export function createCandidateBinding(input: {
   candidateId: string;
   workspaceId: string;
   dispatch(command: ConfirmCandidateInput): Promise<ConfirmCandidateResult>;
+  translator: Translator;
 }): IntakeBinding {
   const { service, candidateId } = input;
   function row() {
@@ -43,7 +45,7 @@ export function createCandidateBinding(input: {
   return {
     id: candidateId,
     facts: factsFromCandidate(projectCandidate(row())),
-    reviewNote: row().origin.kind === "native" ? reviewNote(row()) : "Imported Candidate. Review all facts before posting.",
+    reviewNote: reviewNote(row(), input.translator),
     notification: notificationOf(row()),
     originalSuggestion: evidenceFor(row()),
     get frozen() { const current = service.read(candidateId); return !current || current.status.kind !== "review"; },
@@ -82,10 +84,19 @@ export function createCandidateBinding(input: {
   };
 }
 
-function reviewNote(row: ActiveCandidate): string {
-  if (row.origin.kind !== "native") return "Imported Candidate";
+/** What the notification said, around its stored package name, amount and currency. */
+function reviewNote(row: ActiveCandidate, { t, language, locale }: Translator): string {
+  if (row.origin.kind !== "native") return t("inbox.reviewImported");
   const capture = row.origin.capture;
-  const amount = capture.amountMinorUnits === null ? "Amount unresolved" : `Original amount ${capture.amountMinorUnits / 100} ${capture.currency ?? "currency unresolved"}`;
-  const direction = capture.direction === null ? "Direction unresolved. Enter a signed amount." : `Original direction ${capture.direction}`;
-  return `Source ${row.origin.mapping.packageName}. Captured ${new Date(capture.capturedAt).toLocaleString()}. ${amount}. ${direction}. Review currency ${row.currency}.`;
+  const amount = capture.amountMinorUnits === null ? t("inbox.reviewAmountUnresolved") : t("inbox.reviewAmount", {
+    amount: new Intl.NumberFormat(locale, { useGrouping: false, maximumFractionDigits: 2 }).format(capture.amountMinorUnits / 100),
+    currency: capture.currency ?? t("inbox.reviewCurrencyUnresolved"),
+  });
+  const direction = t(capture.direction === null ? "inbox.reviewDirectionUnresolved"
+    : capture.direction === "in" ? "inbox.reviewDirectionIn" : "inbox.reviewDirectionOut");
+  return t("inbox.reviewNote", {
+    source: row.origin.mapping.packageName,
+    captured: formatDateTime(language, capture.capturedAt),
+    amount, direction, currency: row.currency,
+  });
 }
