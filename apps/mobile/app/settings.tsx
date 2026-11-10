@@ -72,6 +72,12 @@ function SettingsContent({
           detail={t("settings.intakeDetail")}
           icon="notifications-outline"
           onPress={() => router.push("/intake")}
+        />
+        <ListRow
+          title={t("lifecycle.devicesRow")}
+          detail={t("lifecycle.devicesRowDetail")}
+          icon="phone-portrait-outline"
+          onPress={() => router.push("/devices")}
           isLast
         />
       </ListGroup>

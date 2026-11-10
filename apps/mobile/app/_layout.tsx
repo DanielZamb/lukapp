@@ -136,6 +136,7 @@ function Admission() {
       <Stack.Screen name="budget" />
       <Stack.Screen name="recovery" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="devices" />
       <Stack.Screen name="categories" />
       <Stack.Screen name="oauth-callback" />
     </Stack>
