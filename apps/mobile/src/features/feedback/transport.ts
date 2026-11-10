@@ -1,7 +1,6 @@
 import Constants from "expo-constants";
 import { ConvexError } from "convex/values";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { Platform } from "react-native";
 import { z } from "zod";
 import { api } from "../api";
@@ -18,11 +17,6 @@ import {
 } from "./report";
 import type { ReportField } from "./validation";
 
-const attachScreenshot = makeFunctionReference<"action", { reportKey: string; image: ArrayBuffer }, { sha256: string }>(
-  "feedback:attachScreenshot",
-);
-const removeScreenshot = makeFunctionReference<"mutation", { reportKey: string }, null>("feedback:removeScreenshot");
-const submit = makeFunctionReference<"action", SubmitArgs, SubmitResult>("feedback:submit");
 
 /**
  * Every backend name the report flow uses lives here, so the merge with the
@@ -33,9 +27,9 @@ export function convexFeedbackTransport(client: ConvexReactClient): FeedbackTran
 } {
   return {
     destination: () => client.query(api.feedback.destination, {}),
-    attachScreenshot: (args) => client.action(attachScreenshot, args),
-    removeScreenshot: (args) => client.mutation(removeScreenshot, args),
-    submit: (args) => client.action(submit, args),
+    attachScreenshot: (args) => client.action(api.feedback.attachScreenshot, args),
+    removeScreenshot: (args) => client.mutation(api.feedback.removeScreenshot, args),
+    submit: (args) => client.action(api.feedback.submit, args),
   };
 }
 
