@@ -232,10 +232,10 @@ test("a legacy setup gets an immutable receipt and frozen Place creation dates b
   await expect(s.t.action(api.accounting.ensurePersonalDefaults, { ...setupAnswers, functionalCurrency: "USD" })).rejects.toMatchObject({ data: { code: "setup_conflict" } });
 });
 
-async function recoveryAtMonthEnd() {
-  const s = await setup();
+async function recoveryAtMonthEnd(now = monthEnd, date = "2026-10-31") {
+  const s = await setup(0, "America/Bogota", now);
   const destination = await createProfile(s.t, s.workspaceId, "Savings", "savingsAccount");
-  const entry = await expense(s.t, s.workspaceId, s.profileId);
+  const entry = await expense(s.t, s.workspaceId, s.profileId, date);
   const activation = await s.t.action(api.savingsRecovery.activatePlan, { workspaceId: s.workspaceId, sourceJournalEntryId: entry.id, destinationFinancialAccountProfileId: destination.id, installmentCount: 4, installmentMinorUnits: 25, idempotencyKey: "plan" });
   const contribution = { workspaceId: s.workspaceId, planId: activation.plan.id, sourceFinancialAccountProfileId: s.profileId, amount: { currency: "COP", minorUnits: 25 }, accountingDate: "2026-10-31", description: "Recovery", idempotencyKey: "contribution" };
   return { ...s, activation, contribution };
@@ -251,17 +251,44 @@ test("Recovery's stored activation month and existing contribution dates stay in
   expect(await s.t.action(api.savingsRecovery.recordContribution, s.contribution)).toEqual({ ...contribution, replay: true });
 });
 
-test("coordinator gap witness: the current Recovery activation-day guard incorrectly rejects an October contribution", async () => {
+test.each(["Pacific/Auckland", "America/Los_Angeles"])("Recovery keeps its activation day after changing to %s", async targetZone => {
   const s = await recoveryAtMonthEnd();
-  await zone(s);
-  await expect(s.t.action(api.savingsRecovery.recordContribution, s.contribution)).rejects.toMatchObject({ data: { code: "transfer_predates_activation" } });
+  vi.setSystemTime(monthEnd.getTime() + 1000);
+  await zone(s, targetZone);
+  await expect(s.t.action(api.savingsRecovery.recordContribution, { ...s.contribution, accountingDate: "2026-10-30", idempotencyKey: "too-early" }))
+    .rejects.toMatchObject({ data: { code: "transfer_predates_activation" } });
+  expect(await s.t.action(api.savingsRecovery.recordContribution, s.contribution)).toMatchObject({ contribution: { contributionDate: "2026-10-31" } });
 });
 
-test("coordinator gap witness: the current Recovery cancellation read incorrectly moves cancellation out of October", async () => {
-  const s = await recoveryAtMonthEnd();
+test.each([
+  ["Pacific/Auckland", "2026-10-02T00:30:00-05:00"],
+  ["America/Los_Angeles", "2026-10-02T00:30:00-05:00"],
+  ["Pacific/Auckland", "2026-10-31T23:30:00-05:00"],
+  ["America/Los_Angeles", "2026-10-01T00:30:00-05:00"],
+])("Recovery keeps a past cancellation month after changing to %s at %s", async (targetZone, cancelledAt) => {
+  const s = await recoveryAtMonthEnd(new Date("2026-09-01T12:00:00-05:00"), "2026-09-01");
+  vi.setSystemTime(new Date(cancelledAt));
   await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: s.activation.plan.id, idempotencyKey: "cancel" });
-  await zone(s);
-  expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: s.workspaceId, month: "2026-10" })).toMatchObject({ plans: [{ status: "active" }] });
+  vi.setSystemTime(new Date("2026-11-02T12:00:00Z"));
+  await zone(s, targetZone);
+  expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: s.workspaceId, month: "2026-09" })).toMatchObject({ plans: [{ status: "active" }] });
+  expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: s.workspaceId, month: "2026-10" })).toMatchObject({ plans: [{ status: "cancelled" }] });
+});
+
+test.each(["Pacific/Auckland", "America/Los_Angeles"])("Recovery activation after a change follows %s", async targetZone => {
+  const s = await setup();
+  await zone(s, targetZone);
+  vi.setSystemTime(monthEnd.getTime() + 1000);
+  const destination = await createProfile(s.t, s.workspaceId, "Savings", "savingsAccount");
+  const entry = await expense(s.t, s.workspaceId, s.profileId);
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, { workspaceId: s.workspaceId, sourceJournalEntryId: entry.id, destinationFinancialAccountProfileId: destination.id, installmentCount: 4, installmentMinorUnits: 25, idempotencyKey: "plan" });
+  const date = targetZone === "Pacific/Auckland" ? "2026-11-01" : "2026-10-31";
+  const previousDate = targetZone === "Pacific/Auckland" ? "2026-10-31" : "2026-10-30";
+  const contribution = { workspaceId: s.workspaceId, planId: plan.id, sourceFinancialAccountProfileId: s.profileId, amount: { currency: "COP", minorUnits: 25 }, accountingDate: date, description: "Recovery", idempotencyKey: "gift" };
+  expect(plan.activationMonth).toBe(date.slice(0, 7));
+  await expect(s.t.action(api.savingsRecovery.recordContribution, { ...contribution, accountingDate: previousDate, idempotencyKey: "early" }))
+    .rejects.toMatchObject({ data: { code: "transfer_predates_activation" } });
+  expect(await s.t.action(api.savingsRecovery.recordContribution, contribution)).toMatchObject({ contribution: { contributionDate: date } });
 });
 
 test("a retry key compares the exact zone request and expected value, and cannot switch command kinds", async () => {
