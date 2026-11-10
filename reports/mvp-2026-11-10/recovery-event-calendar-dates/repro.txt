@@ -1,0 +1,121 @@
+ DEPRECATED  "environmentMatchGlobs" is deprecated. Use `test.projects` to define different configurations instead.
+
+ RUN  v3.2.7 /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-29e689b9-4f82e5a5cd395965
+
+ ❯ convex/workspaceSettings.test.ts (31 tests | 3 failed) 373ms
+   ✓ Default Place is an explicit preselection, with compare-and-set and immutable replay 131ms
+   ✓ Default Place rejects missing, malformed and foreign Places 8ms
+   ✓ time zone changes today immediately, keeps October facts and Budget consumption, and replays exactly 38ms
+   ✓ zone boundary America/Bogota to Pacific/Auckland preserves locks and permits the other month 6ms
+   ✓ zone boundary Pacific/Auckland to America/Bogota preserves locks and permits the other month 6ms
+   ✓ zone changes preserve a Place creation date even without an opening marker 5ms
+   ✓ currency can change once with a zero start, retains setup replay, and new entries use the new currency 9ms
+   ✓ currency permanently refuses after opening 4ms
+   ✓ currency permanently refuses after expense 5ms
+   ✓ currency permanently refuses after reversed 8ms
+   ✓ a Budget limit blocks currency before the first entry 4ms
+   ✓ invalid settings and empty keys have structured errors and no effects 4ms
+   ✓ every settings command denies signed-out, including retries 4ms
+   ✓ every settings command denies non-member, including retries 5ms
+   ✓ every settings command denies revoked, including retries 4ms
+   ✓ every settings command denies session-inactive, including retries 4ms
+   ✓ zero account setup and opening retries retain their request currency after the functional currency changes 5ms
+   ✓ a legacy setup gets an immutable receipt and frozen Place creation dates before settings change 8ms
+   ✓ Recovery's stored activation month and existing contribution dates stay in October 33ms
+   × Recovery keeps its activation day after changing to Pacific/Auckland 9ms
+     → {"kind":"recovery","code":"transfer_predates_activation"}
+   ✓ Recovery keeps its activation day after changing to America/Los_Angeles 7ms
+   ✓ Recovery keeps a past cancellation month after changing to Pacific/Auckland at 2026-10-02T00:30:00-05:00 9ms
+   ✓ Recovery keeps a past cancellation month after changing to America/Los_Angeles at 2026-10-02T00:30:00-05:00 7ms
+   × Recovery keeps a past cancellation month after changing to Pacific/Auckland at 2026-10-31T23:30:00-05:00 11ms
+     → expected { candidates: [], …(6) } to match object { plans: [ { status: 'cancelled' } ] }
+(34 matching properties omitted from actual)
+   × Recovery keeps a past cancellation month after changing to America/Los_Angeles at 2026-10-01T00:30:00-05:00 7ms
+     → expected { candidates: [ { …(6) } ], …(6) } to match object { plans: [ { status: 'active' } ] }
+(34 matching properties omitted from actual)
+   ✓ Recovery activation after a change follows Pacific/Auckland 8ms
+   ✓ Recovery activation after a change follows America/Los_Angeles 8ms
+   ✓ a retry key compares the exact zone request and expected value, and cannot switch command kinds 4ms
+   ✓ currency no-op leaves its single actual change available 3ms
+   ✓ a retained Recovery plan blocks currency even in a legacy workspace without journal rows 5ms
+   ✓ a retained currency-denominated ledger summary blocks a currency change without journal rows 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  convex/workspaceSettings.test.ts > Recovery keeps its activation day after changing to Pacific/Auckland
+ConvexError: {"kind":"recovery","code":"transfer_predates_activation"}
+ ❯ runRecovery convex/savingsRecoveryErrors.ts:7:47
+      5|   try { return await work(); }
+      6|   catch (error) {
+      7|     if (error instanceof RecoveryError) throw new ConvexError({ kind: …
+       |                                               ^
+      8|     throw error;
+      9|   }
+ ❯ run convex/accountingErrors.ts:6:12
+ ❯ invokeFunction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:90:14
+ ❯ invokeMutation node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:70:18
+ ❯ runMutationWithHandler node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:1989:31
+ ❯ Object.mutationFromPath node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2133:32
+ ❯ Object.runMutation node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2158:20
+ ❯ invokeFunction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:90:14
+ ❯ invokeAction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:513:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  convex/workspaceSettings.test.ts > Recovery keeps a past cancellation month after changing to Pacific/Auckland at 2026-10-31T23:30:00-05:00
+AssertionError: expected { candidates: [], …(6) } to match object { plans: [ { status: 'cancelled' } ] }
+(34 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "plans": [
+      {
+-       "status": "cancelled",
++       "status": "active",
+      },
+    ],
+  }
+
+ ❯ convex/workspaceSettings.test.ts:275:107
+    273|   await zone(s, targetZone);
+    274|   expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: …
+    275|   expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: …
+       |                                                                                                           ^
+    276| });
+    277|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  convex/workspaceSettings.test.ts > Recovery keeps a past cancellation month after changing to America/Los_Angeles at 2026-10-01T00:30:00-05:00
+AssertionError: expected { candidates: [ { …(6) } ], …(6) } to match object { plans: [ { status: 'active' } ] }
+(34 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "plans": [
+      {
+-       "status": "active",
++       "status": "cancelled",
+      },
+    ],
+  }
+
+ ❯ convex/workspaceSettings.test.ts:274:107
+    272|   vi.setSystemTime(new Date("2026-11-02T12:00:00Z"));
+    273|   await zone(s, targetZone);
+    274|   expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: …
+       |                                                                                                           ^
+    275|   expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: …
+    276| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 28 passed (31)
+   Start at  13:15:17
+   Duration  694ms (transform 177ms, setup 12ms, collect 139ms, tests 373ms, environment 13ms, prepare 29ms)

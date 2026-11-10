@@ -1,0 +1,15 @@
+ DEPRECATED  "environmentMatchGlobs" is deprecated. Use `test.projects` to define different configurations instead.
+
+ RUN  v3.2.7 /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-29e689b9-4f82e5a5cd395965
+
+ ✓ src/savingsRecovery/policy.test.ts (4 tests) 2ms
+ ✓ src/savingsRecovery/eventCalendarDate.test.ts (3 tests) 11ms
+ ✓ src/savingsRecovery/recovery.test.ts (20 tests) 27ms
+ ✓ convex/workspaceSettings.test.ts (31 tests) 340ms
+ ✓ convex/savingsRecoveryCalendarDates.test.ts (7 tests) 420ms
+ ✓ convex/savingsRecovery.test.ts (49 tests) 647ms
+
+ Test Files  6 passed (6)
+      Tests  114 passed (114)
+   Start at  13:18:45
+   Duration  1.08s (transform 415ms, setup 54ms, collect 947ms, tests 1.45s, environment 61ms, prepare 284ms)

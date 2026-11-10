@@ -1,6 +1,6 @@
 import { workspaceTimeZone } from "../src/accounting/timeZone";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type {
   RecoveryLedgerEntry,
   RecoveryPlan,
@@ -9,15 +9,32 @@ import type {
 } from "../src/savingsRecovery/types";
 import { RecoveryError } from "../src/savingsRecovery/policy";
 import { convexReadStore } from "./store";
+import { resolveEventCalendarDate } from "../src/savingsRecovery/eventCalendarDate";
 
-function planView({ _id, _creationTime, ...plan }: Doc<"savingsRecoveryPlans">): RecoveryPlan {
-  return { id: _id, ...plan };
+export function recoveryEventDateResolver(ctx: Pick<QueryCtx, "db">, workspaceId: Id<"workspaces">) {
+  let history: Promise<{
+    currentTimeZone: string;
+    changes: Doc<"workspaceSettingChanges">[];
+  }> | undefined;
+  return async (eventTime: number) => {
+    history ??= Promise.all([
+      ctx.db.get(workspaceId),
+      ctx.db.query("workspaceSettingChanges")
+        .withIndex("by_workspace_setting", q => q.eq("workspaceId", workspaceId).eq("setting", "timeZone"))
+        .filter(q => q.eq(q.field("changed"), true)).collect(),
+    ]).then(([workspace, changes]) => {
+      if (!workspace) throw new RecoveryError("workspace_not_found");
+      return { currentTimeZone: workspaceTimeZone(workspace), changes };
+    });
+    return resolveEventCalendarDate({ ...await history, eventTime });
+  };
 }
 
 export function recoveryReadStore(ctx: Pick<QueryCtx, "db">, workspaceId: string): RecoveryReadStore {
   const id = ctx.db.normalizeId("workspaces", workspaceId);
   if (!id) throw new RecoveryError("workspace_not_found");
   const accounting = convexReadStore(ctx.db);
+  const eventDate = recoveryEventDateResolver(ctx, id);
   async function ledger() {
     const [entries, accounts, profiles] = await Promise.all([
       accounting.listJournalEntries(workspaceId),
@@ -39,14 +56,23 @@ export function recoveryReadStore(ctx: Pick<QueryCtx, "db">, workspaceId: string
       if (!workspace) throw new RecoveryError("workspace_not_found");
       return workspaceTimeZone(workspace);
     },
-    listCancellations: async () => (await ctx.db.query("savingsRecoveryCancellations")
-      .withIndex("by_workspace", q => q.eq("workspaceId", id)).collect())
-      .map(({ _id, _creationTime, ...item }) => ({ id: _id, ...item })),
+    listCancellations: async () => {
+      const items = await ctx.db.query("savingsRecoveryCancellations")
+        .withIndex("by_workspace", q => q.eq("workspaceId", id)).collect();
+      return Promise.all(items.map(async ({ _id, _creationTime, ...item }) => ({
+        id: _id, ...item, cancellationDate: item.cancellationDate ?? await eventDate(item.eventTime),
+      })));
+    },
     listCorrections: async () => (await ctx.db.query("savingsRecoveryCorrections")
       .withIndex("by_workspace", q => q.eq("workspaceId", id)).collect())
       .map(({ _id, _creationTime, ...item }) => ({ id: _id, ...item })),
-    listPlans: async () => (await ctx.db.query("savingsRecoveryPlans")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", id)).collect()).map(planView),
+    listPlans: async () => {
+      const items = await ctx.db.query("savingsRecoveryPlans")
+        .withIndex("by_workspace", q => q.eq("workspaceId", id)).collect();
+      return Promise.all(items.map(async ({ _id, _creationTime, ...plan }): Promise<RecoveryPlan> => ({
+        id: _id, ...plan, activationDate: plan.activationDate ?? await eventDate(plan.createdAt),
+      })));
+    },
     listContributions: async () => (await ctx.db.query("savingsRecoveryContributions")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", id)).collect())
       .map(({ _id, _creationTime, ...contribution }) => ({ id: _id, ...contribution })),
@@ -105,7 +131,9 @@ export function recoveryWriteStore(ctx: Pick<MutationCtx, "db">, workspaceId: st
     findPlanRequest: async (key) => {
       const plan = await ctx.db.query("savingsRecoveryPlans")
         .withIndex("by_workspace_request", (q) => q.eq("workspaceId", id).eq("idempotencyKey", key)).unique();
-      return plan ? planView(plan) : null;
+      if (!plan) return null;
+      const { _id, _creationTime, activationDate: _activationDate, ...receipt } = plan;
+      return { id: _id, ...receipt };
     },
     findContributionRequest: async (key) => {
       const contribution = await ctx.db.query("savingsRecoveryContributions")

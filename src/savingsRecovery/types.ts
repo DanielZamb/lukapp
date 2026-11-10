@@ -9,6 +9,7 @@ export type RecoveryPlan = {
   installmentMinorUnits: number;
   impliedAnnualRateBps: number;
   currency: string;
+  activationDate: string;
   activationMonth: string;
   replacesPlanId?: string;
   replacementLinkInferred?: boolean;
@@ -16,6 +17,8 @@ export type RecoveryPlan = {
   createdBy: string;
   createdAt: number;
 };
+
+export type RecoveryPlanReceipt = Omit<RecoveryPlan, "activationDate">;
 
 export type RecoveryContribution = {
   id: string;
@@ -93,7 +96,7 @@ export type RecoveryReadStore = {
 export type RecoveryWriteStore = RecoveryReadStore & {
   insertCancellation: (decision: Omit<RecoveryCancellation, "id">) => Promise<RecoveryCancellation>;
   insertCorrection: (decision: Omit<RecoveryCorrection, "id">) => Promise<RecoveryCorrection>;
-  findPlanRequest: (key: string) => Promise<RecoveryPlan | null>;
+  findPlanRequest: (key: string) => Promise<RecoveryPlanReceipt | null>;
   findContributionRequest: (key: string) => Promise<RecoveryContribution | null>;
   insertPlan: (plan: Omit<RecoveryPlan, "id">) => Promise<RecoveryPlan>;
   insertContribution: (
@@ -109,6 +112,7 @@ export type RecoveryCancellation = {
   idempotencyKey: string;
   createdBy: string;
   eventTime: number;
+  cancellationDate: string;
   recordedAt: number;
   origin?: RecoveryCancellationOrigin;
 };

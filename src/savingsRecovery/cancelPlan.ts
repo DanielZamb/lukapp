@@ -1,4 +1,5 @@
 import { ALL_MONTHS, planProgress } from "./progress";
+import { calendarDate } from "../accounting/timeZone";
 import { RecoveryError, requireIdempotencyKey } from "./policy";
 import type { CancelPlan, RecoveryWriteStore } from "./types";
 
@@ -9,7 +10,8 @@ export async function cancelPlan(store: RecoveryWriteStore, input: CancelPlan & 
   const prior = cancellations.find(item => item.idempotencyKey === input.idempotencyKey);
   if (prior) {
     if (prior.origin?.kind === "automatic" || prior.planId !== input.planId || prior.reason !== reason) throw new RecoveryError("idempotency_key_conflict");
-    return { cancellation: { ...prior, origin: prior.origin ?? { kind: "person" as const } }, replay: true };
+    const { cancellationDate: _cancellationDate, ...receipt } = prior;
+    return { cancellation: { ...receipt, origin: prior.origin ?? { kind: "person" as const } }, replay: true };
   }
   if (reason !== undefined && (!reason || reason.length > 1000)) throw new RecoveryError("reason_invalid");
   const plan = (await store.listPlans()).find(item => item.id === input.planId && item.workspaceId === input.workspaceId);
@@ -22,7 +24,9 @@ export async function cancelPlan(store: RecoveryWriteStore, input: CancelPlan & 
     workspaceId: input.workspaceId, planId: plan.id, ...(reason === undefined ? {} : { reason }),
     idempotencyKey: input.idempotencyKey, createdBy: input.actorId,
     eventTime: input.now, recordedAt: input.now,
+    cancellationDate: calendarDate(new Date(input.now), await store.timeZone()),
     origin: { kind: "person" },
   });
-  return { cancellation: { ...cancellation, origin: { kind: "person" as const } }, replay: false };
+  const { cancellationDate: _cancellationDate, ...receipt } = cancellation;
+  return { cancellation: { ...receipt, origin: { kind: "person" as const } }, replay: false };
 }

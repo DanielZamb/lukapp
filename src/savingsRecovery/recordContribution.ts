@@ -32,7 +32,7 @@ export async function recordContribution(
     throw new RecoveryError("source_must_be_asset");
   if (!destination || !isAssetProductKind(destination.productKind))
     throw new RecoveryError("destination_must_be_asset");
-  await requireContributionDate(store, plan, transfer.accountingDate);
+  requireContributionDate(plan, transfer.accountingDate);
   const contributions = await store.listContributions();
   const corrections = await store.listCorrections();
   const claimed = activeAttributions(contributions, corrections)

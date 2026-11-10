@@ -37,7 +37,7 @@ export async function recordRecoveryMove(
     throw new RecoveryError("plan_not_found");
   if (!prior) {
     await requireContributablePlan(store, plan.id, input.workspaceId);
-    await requireContributionDate(store, plan, input.accountingDate);
+    requireContributionDate(plan, input.accountingDate);
     const progress = await planProgress(plan, await store.listContributions(), async id =>
       Boolean(await store.findReversalOf(id)), ALL_MONTHS, await store.listCorrections());
     if (progress.remainingMinorUnits === 0) throw new RecoveryError("plan_already_complete");

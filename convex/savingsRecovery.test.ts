@@ -336,6 +336,45 @@ test.each([false, true])("planning correction preserves journals and balances ac
   expect(await s.move(plan.id, "saved")).toEqual({ ...gift, replay: true });
 });
 
+test.each(["Pacific/Auckland", "America/Los_Angeles"])("correction history keeps the transfer date and recording instant after changing to %s", async timeZone => {
+  const s = await setup();
+  vi.setSystemTime(Date.parse("2026-10-31T23:30:00-05:00"));
+  const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
+  const target = await secondPlan(s);
+  const gift = await s.move(plan.id, "month-end-gift", 230_000, "2026-10-31");
+  vi.setSystemTime(Date.parse("2026-11-01T04:31:00Z"));
+  await s.t.action(api.accounting.changeWorkspaceTimeZone, { workspaceId: s.workspaceId, timeZone, expectedTimeZone: "America/Bogota", idempotencyKey: "zone" });
+  const args = { workspaceId: s.workspaceId, contributionId: gift.contribution.id, reason: "Wrong plan", targetPlanId: target.id, idempotencyKey: "correct" };
+  const receipt = await s.t.action(api.savingsRecovery.correctContribution, args);
+  expect(receipt.correction).toMatchObject({ contributionDate: "2026-10-31", recordedAt: Date.parse("2026-11-01T04:31:00Z") });
+  expect(receipt.replacementContribution).toMatchObject({ contributionDate: "2026-10-31", recordedAt: Date.parse("2026-11-01T04:31:00Z") });
+  const view = await s.read("2026-10");
+  expect(view.plans.find(p => p.id === plan.id)?.contributionHistory[0]).toMatchObject({ contributionDate: "2026-10-31", recordedAt: gift.contribution.recordedAt, correction: receipt.correction });
+  expect(view.plans.find(p => p.id === target.id)).toMatchObject({ activationDate: "2026-10-31", recoveredMinorUnits: 230_000,
+    contributionHistory: [{ contributionDate: "2026-10-31", recordedAt: receipt.correction.recordedAt }] });
+  expect(await s.t.action(api.savingsRecovery.correctContribution, args)).toEqual({ ...receipt, replay: true });
+});
+
+test.each(["reversal", "correction"])("automatic cancellation from %s stores its event date across a later zone change", async release => {
+  const s = await setup();
+  const { gift, replacement } = await cancelledWithReplacement(s);
+  const completed = await s.move(replacement.id, "finish", 1_000_000, "2026-09-18");
+  await s.t.action(api.savingsRecovery.correctContribution, { workspaceId: s.workspaceId, contributionId: gift.contribution.id, reason: "Ordinary savings", idempotencyKey: "release-first" });
+  await s.t.action(api.savingsRecovery.activatePlan, { ...s.activate, installmentCount: 4, installmentMinorUnits: 50_000, idempotencyKey: "newer" });
+  vi.setSystemTime(Date.parse("2026-10-31T23:30:00-05:00"));
+  if (release === "reversal") {
+    await s.t.action(api.accounting.reversePostedEntry, { workspaceId: s.workspaceId, journalEntryId: completed.transfer.id, idempotencyKey: "release" });
+  } else {
+    await s.t.action(api.savingsRecovery.correctContribution, { workspaceId: s.workspaceId, contributionId: completed.contribution.id, reason: "Ordinary savings", idempotencyKey: "release" });
+  }
+  expect((await s.t.run(ctx => ctx.db.query("savingsRecoveryCancellations").collect())).find(c => c.planId === replacement.id))
+    .toMatchObject({ cancellationDate: "2026-10-31", origin: { kind: "automatic" } });
+  vi.setSystemTime(Date.parse("2026-11-01T04:31:00Z"));
+  await s.t.action(api.accounting.changeWorkspaceTimeZone, { workspaceId: s.workspaceId, timeZone: "Pacific/Auckland", expectedTimeZone: "America/Bogota", idempotencyKey: "zone" });
+  expect((await s.read("2026-10")).plans.find(p => p.id === replacement.id)).toMatchObject({ status: "cancelled", cancellation: { cancellationDate: "2026-10-31" } });
+  expect((await s.read("2026-09")).plans.find(p => p.id === replacement.id)?.status).toBe("active");
+});
+
 test("a reversed contribution is void in history and cannot be corrected; cancelling does not erase it", async () => {
   const s = await setup();
   const { plan } = await s.t.action(api.savingsRecovery.activatePlan, s.activate);
@@ -608,7 +647,7 @@ test("cancellation rows without an origin read and replay as the person's withou
     if (!row) throw Error("Missing cancellation");
     await ctx.db.patch(row._id, { origin: undefined });
   });
-  expect((await s.read()).plans[0].cancellation).toEqual({ ...receipt.cancellation, origin: { kind: "person" } });
+  expect((await s.read()).plans[0].cancellation).toEqual({ ...receipt.cancellation, cancellationDate: "2026-09-17", origin: { kind: "person" } });
   expect(await s.t.action(api.savingsRecovery.cancelPlan, args)).toEqual({ ...receipt, replay: true });
   expect((await s.t.run(ctx => ctx.db.query("savingsRecoveryCancellations").unique()))?.origin).toBeUndefined();
 });

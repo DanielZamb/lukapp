@@ -1,4 +1,5 @@
 import { ALL_MONTHS, planProgress } from "./progress";
+import { calendarDate } from "../accounting/timeZone";
 import type { RecoveryInvalidation, RecoveryWriteStore } from "./types";
 
 export async function cancelReopenedPlans(
@@ -41,6 +42,7 @@ export async function cancelReopenedPlans(
       workspaceId: input.workspaceId, planId: state.plan.id,
       idempotencyKey: `automatic:${cause.kind}:${eventId}:${state.plan.id}`,
       createdBy: input.actorId, eventTime: input.now, recordedAt: input.now,
+      cancellationDate: calendarDate(new Date(input.now), await store.timeZone()),
       origin: { kind: "automatic", cause, unfinishedPlanId: unfinished.plan.id },
     });
   }

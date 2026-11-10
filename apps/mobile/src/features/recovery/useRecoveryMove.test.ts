@@ -13,7 +13,7 @@ const plan: RecoveryPlanView = {
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 230_000,
-  impliedAnnualRateBps: 150, activationMonth: "2026-09", currency: "COP",
+  impliedAnnualRateBps: 150, activationDate: "2026-09-01", activationMonth: "2026-09", currency: "COP",
   recoveredMinorUnits: 0, remainingMinorUnits: 1_380_000, targetMinorUnits: 1_380_000,
   dueMinorUnits: 230_000,
 };

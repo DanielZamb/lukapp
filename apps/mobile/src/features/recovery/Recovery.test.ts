@@ -77,7 +77,7 @@ const plan: RecoveryPlanView = {
   id: "repair", title: "Emergency repair", sourceJournalEntryId: "expense-repair", sourceTitle: "Emergency repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 300_000_000, installmentCount: 10, installmentMinorUnits: 30_000_000,
-  impliedAnnualRateBps: 0, activationMonth: "2026-05", currency: "COP",
+  impliedAnnualRateBps: 0, activationDate: "2026-05-01", activationMonth: "2026-05", currency: "COP",
   recoveredMinorUnits: 180_000_000, remainingMinorUnits: 120_000_000, targetMinorUnits: 300_000_000,
   dueMinorUnits: 30_000_000,
 };
@@ -413,7 +413,7 @@ const repair: RecoveryPlanView = {
 };
 const appliance: RecoveryPlanView = {
   ...plan, id: "appliance", title: "Home appliance", sourceJournalEntryId: "expense-appliance",
-  activationMonth: "2026-06", remainingMinorUnits: 200_000_000, recoveredMinorUnits: 0, contributionHistory: [],
+  activationDate: "2026-06-01", activationMonth: "2026-06", remainingMinorUnits: 200_000_000, recoveredMinorUnits: 0, contributionHistory: [],
 };
 const repairCandidate: RecoveryCandidate = {
   journalEntryId: "expense-repair", title: "Emergency repair", accountingDate: "2026-05-02",
@@ -421,7 +421,7 @@ const repairCandidate: RecoveryCandidate = {
 };
 const cancellation = {
   id: "cancel-1", workspaceId: "workspace", planId: "repair", reason: "Income changed", idempotencyKey: "cancel-key",
-  createdBy: "owner", eventTime: Date.UTC(2026, 9, 5, 15), recordedAt: Date.UTC(2026, 9, 5, 15),
+  createdBy: "owner", cancellationDate: "2026-10-05", eventTime: Date.UTC(2026, 9, 5, 15), recordedAt: Date.UTC(2026, 9, 5, 15),
   origin: { kind: "person" as const },
 };
 const cancelledRepair: RecoveryPlanView = {
@@ -764,7 +764,7 @@ test("a cancelled plan with nothing left to recover explains that no replacement
 const correctionRecordedAt = Date.UTC(2026, 9, 2, 20, 30);
 const others: RecoveryPlanView[] = [
   { ...appliance, id: "card", title: "Card fee", destinationFinancialAccountProfileId: "wallet", destinationName: "Wallet" },
-  { ...appliance, id: "trip", title: "Trip", activationMonth: "2026-10" },
+  { ...appliance, id: "trip", title: "Trip", activationDate: "2026-10-01", activationMonth: "2026-10" },
   { ...appliance, id: "small", title: "Small fix", remainingMinorUnits: 10_000_000 },
   { ...appliance, id: "paused", title: "Paused", acceptsContributions: false, status: "suspended" },
   { ...appliance, id: "ended", title: "Ended", canCancel: false, acceptsContributions: false, status: "cancelled", cancellation: { ...cancellation, planId: "ended" } },

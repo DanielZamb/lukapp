@@ -29,7 +29,7 @@ export async function correctContribution(store: RecoveryWriteStore, input: Corr
     const originalPlan = (await store.listPlans()).find(item => item.id === original.planId);
     if (originalPlan?.sourceJournalEntryId === target.sourceJournalEntryId)
       throw new RecoveryError("correction_target_same_expense");
-    await requireContributionDate(store, target, original.contributionDate);
+    requireContributionDate(target, original.contributionDate);
     if (target.destinationFinancialAccountProfileId !== transfer.destinationFinancialAccountProfileId)
       throw new RecoveryError("transfer_destination_mismatch");
     const progress = await planProgress(target, contributions, async id =>

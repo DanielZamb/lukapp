@@ -1,4 +1,3 @@
-import { calendarDate } from "../accounting/timeZone";
 import { ALL_MONTHS, planProgress } from "./progress";
 import { RecoveryError, planTargetMinorUnits } from "./policy";
 import type { RecoveryContribution, RecoveryCorrection, RecoveryPlan, RecoveryReadStore } from "./types";
@@ -30,7 +29,7 @@ export async function requireContributablePlan(store: RecoveryReadStore, planId:
   return plan;
 }
 
-export async function requireContributionDate(store: RecoveryReadStore, plan: RecoveryPlan, date: string) {
-  if (date < calendarDate(new Date(plan.createdAt), await store.timeZone()))
+export function requireContributionDate(plan: RecoveryPlan, date: string) {
+  if (date < plan.activationDate)
     throw new RecoveryError("transfer_predates_activation");
 }
