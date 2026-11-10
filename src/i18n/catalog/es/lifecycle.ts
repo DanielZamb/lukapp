@@ -6,7 +6,6 @@ export const lifecycle: Messages<typeof en> = {
   limitInputA11y: "Nuevo tope en {currency}",
   limitShortcuts: "Atajos",
   limitEmpty: "Escribe el nuevo tope.",
-  limitInvalid: "Revisa el monto. Usa puntos para los miles y coma para los centavos.",
   limitNotPositive: "El tope tiene que ser mayor que cero.",
   limitUnchanged: "Este es el tope actual. Escribe otro monto o toca un atajo.",
 
