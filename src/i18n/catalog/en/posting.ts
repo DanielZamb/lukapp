@@ -119,6 +119,7 @@ export const posting = {
   reviewSaveFailed: "Could not save Candidate review. Retry before leaving.",
   clearFailed: "Could not clear the saved entry. Retry to check its status.",
   alreadyPosting: "A posting is already in progress. Finish it from Drafts.",
+  alreadySent: "This entry was already sent and its result is not known yet. Post again to check it.",
   candidateConfirmFailed: "Could not confirm this Candidate.",
   confirmUncertain: "Could not confirm posting. Retry to safely check the same entry.",
   draftGonePosted: "This draft was already posted or removed. Nothing was posted again.",
@@ -128,6 +129,8 @@ export const posting = {
   batchRejected: "Entry was rejected. Edit the draft and try again.",
   batchClearFailed: "Could not clear the saved entry. Post again to check its status.",
   batchConfirmUncertain: "Could not confirm the batch. Post again to safely retry the remaining drafts.",
+  batchWaiting: "An entry in this batch was sent and its result is not known yet. Post again to check it before changing the batch.",
+  batchChanged: "This batch changed on another screen. Check it and try again.",
 
   amountDecimals: "Enter an amount with up to {precision} decimal places.",
   amountSeparators: "Check the thousands separators.",

@@ -12,7 +12,10 @@ import type {
   LocalEntryFacts,
 } from "../localEntryDrafts";
 import { pendingExpenseSchema } from "../pendingExpenseSchema";
-import { LocalEntryDraftGoneError } from "../localEntryDraftErrors";
+import {
+  LocalEntryDraftFrozenError,
+  LocalEntryDraftGoneError,
+} from "../localEntryDraftErrors";
 import type { DiscardOutcome } from "../discardOutcome";
 import type { EntryType } from "./PostingForm";
 import type {
@@ -224,18 +227,22 @@ export function usePostingEditor(
     if (workspaceId !== account.workspaceId || currency !== account.currency)
       throw new Error("Pending entry belongs to another workspace");
   }
+  function showSent(id: LocalEntryDraftId, command: PendingPosting) {
+    hydrateFromCommand(command);
+    setPending(command);
+    setDraftId(id);
+    appliedDraft.current = id;
+  }
   function resume(draft: LocalEntryDraft): "applied" | "blocked-by-pending" {
     if (pending || loading || blocked) return "blocked-by-pending";
     assertSameWorkspace(draft);
-    if (draft.status === "posting") {
-      hydrateFromCommand(draft.command);
-      setPending(draft.command);
-    } else {
+    if (draft.status === "posting") showSent(draft.id, draft.command);
+    else {
       hydrateFromFacts(draft.facts);
       setSavedFacts(factsKey(draft.facts));
+      setDraftId(draft.id);
+      appliedDraft.current = draft.id;
     }
-    setDraftId(draft.id);
-    appliedDraft.current = draft.id;
     return "applied";
   }
   function resetComposer() {
@@ -490,6 +497,15 @@ export function usePostingEditor(
         setError(t("posting.draftGoneKeep"));
         return;
       }
+      if (error instanceof LocalEntryDraftFrozenError) {
+        const stored = await drafts.read(error.draftId).catch(() => null);
+        if (!mounted.active) return;
+        if (stored?.status === "posting") {
+          showSent(stored.id, stored.command);
+          setError(t("posting.alreadySent"));
+          return;
+        }
+      }
       setError(t("posting.keepFailed"));
     } finally {
       opLock.current = false;
@@ -566,6 +582,13 @@ export function usePostingEditor(
       }
       const built = pending ?? buildEntry();
       const saved = await transport.save(built, draftId);
+      if (saved.command.payload.idempotencyKey !== built.payload.idempotencyKey) {
+        if (mounted.active) {
+          showSent(saved.id, saved.command);
+          setError(t("posting.alreadySent"));
+        }
+        return;
+      }
       if (mounted.active) {
         setPending(saved.command);
         setDraftId(saved.id);

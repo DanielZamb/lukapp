@@ -8,3 +8,11 @@ export class LocalEntryDraftGoneError extends Error {
     this.name = "LocalEntryDraftGoneError";
   }
 }
+
+// The row was sent and its outcome is unknown, so its command is frozen until it settles.
+export class LocalEntryDraftFrozenError extends Error {
+  constructor(readonly draftId: string) {
+    super("Cannot edit a posting draft");
+    this.name = "LocalEntryDraftFrozenError";
+  }
+}

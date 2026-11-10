@@ -1,3 +1,4 @@
+import { usePreventRemove } from "@react-navigation/native";
 import { router, useNavigation } from "expo-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Text } from "react-native";
@@ -32,7 +33,8 @@ function amountLabel(amount: string, currency: string) {
 
 /**
  * Leaving, keeping and discarding one entry. Every exit returns to the screen that opened this one.
- * Leaving with unsaved input asks first; a frozen posting or confirmation offers no discard.
+ * Leaving with unsaved input asks first, including the iOS back swipe, which only usePreventRemove can hold.
+ * A frozen posting or confirmation offers no discard.
  */
 export function useEntryExit({ editor, currency, enabled, candidateRoute, onCandidateLeave, refresh }: {
   editor: ExitEditor;
@@ -52,14 +54,14 @@ export function useEntryExit({ editor, currency, enabled, candidateRoute, onCand
   const [failure, setFailure] = useState("");
   const [notice, setNotice] = useState("");
   const leaving = useRef(false);
-  const guarded = useRef(false);
-  guarded.current = enabled && !candidateRoute && editor.unsaved;
-  useEffect(() => navigation.addListener("beforeRemove", (event) => {
-    if (leaving.current || !guarded.current) return;
-    event.preventDefault();
+  usePreventRemove(enabled && !candidateRoute && editor.unsaved, ({ data }) => {
+    if (leaving.current) return navigation.dispatch(data.action);
     setFailure("");
-    setSheet({ kind: "leave", resume: () => navigation.dispatch(event.data.action) });
-  }), [navigation]);
+    setSheet({ kind: "leave", resume: () => navigation.dispatch(data.action) });
+  });
+  useEffect(() => {
+    if (editor.pending) setSheet((open) => (open?.kind === "leave" ? null : open));
+  }, [editor.pending]);
 
   function leave(resume?: () => void) {
     leaving.current = true;

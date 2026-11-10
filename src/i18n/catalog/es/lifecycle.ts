@@ -50,6 +50,12 @@ export const lifecycle: Messages<typeof en> = {
   signingOutOthers: "Cerrando sesiones…",
   signOutOthersFailed: "No se cerraron las demás sesiones. Intenta de nuevo.",
   signedOutOthers: "Estamos cerrando las demás sesiones.",
+  renameUncertain: "Todavía no se confirma el nombre nuevo. Envíalo otra vez o revisa tus dispositivos para ver el nombre que quedó guardado.",
+  removeUncertain: "Todavía no se confirma que {name} haya perdido el acceso. Envíalo otra vez o revisa tus dispositivos para ver si sigue en la lista.",
+  signOutOthersUncertain: "Todavía no se confirma el cierre de las demás sesiones. La lista de abajo muestra tus dispositivos ahora. Si todavía lo necesitas, ciérralas otra vez.",
+  sendAgain: "Enviar otra vez",
+  checkDevices: "Revisar dispositivos",
+  devicesChecked: "Esta lista muestra tus dispositivos como están guardados ahora.",
 
   customColor: "Color personalizado",
   customColorValue: "Color personalizado {hex}",

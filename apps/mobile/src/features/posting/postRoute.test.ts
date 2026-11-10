@@ -49,6 +49,7 @@ const intakeActions = { get count() { return 1; }, get service() { return candid
 
 
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
+vi.mock("@react-navigation/native", () => ({ usePreventRemove: () => {} }));
 vi.mock("expo-router", () => ({
   router: { back: routeBack, replace: vi.fn(), setParams: vi.fn() },
   Redirect: "redirect",
@@ -111,7 +112,7 @@ vi.mock("./usePostingTransport", () => {
 vi.mock("./postingBatchStorage", () => {
   const storage = {
     load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }),
-    update: writes.batchUpdate,
+    apply: writes.batchUpdate,
   };
   return { usePostingBatchStorage: () => storage };
 });
@@ -688,4 +689,40 @@ test("an existing unresolved incoming Candidate shows its body and can use its u
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
   expect(candidateService.read("capture-1")?.review).toMatchObject({ amountMinorUnits: 4_500, direction: "in" });
   expect(candidateService.read("capture-1")?.originalSuggestion.amountMinorUnits).toBeNull();
+});
+
+test("a batch save refused because a stored entry awaits its result closes the composer to show that entry", async () => {
+  queryData.categories = [{
+    id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food",
+    nature: "Expense", natureSource: "answered",
+    classification: { kind: "fallback", version: "test" },
+    style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
+  }];
+  const sent = { id: "taxi", command: { kind: "expense" as const, payload: {
+    workspaceId: "workspace", financialAccountProfileId: "daily", amount: { currency: "COP", minorUnits: 1000 },
+    accountingDate: "2026-10-20", description: "Taxi", idempotencyKey: "taxi",
+  } } };
+  writes.batchUpdate.mockResolvedValueOnce({
+    batch: { queue: [sent], pendingItemId: "taxi", receipts: { count: 0, net: 0 } },
+    applied: false,
+  });
+  await mount();
+  await act(async () => { formProps().onBatch?.(); });
+  await act(async () => { root?.root.findByType(BatchNativeStack).props.onAdd(); });
+  await act(async () => { formProps().onAmountChange("-1"); formProps().onDescriptionChange("Lunch"); });
+  await act(async () => formProps().onCategory());
+  const sheet = root?.root.find((node) => String(node.type) === "category-sheet");
+  await act(async () => sheet?.props.onSelect("food"));
+  await act(async () => sheet?.props.onDone());
+  await act(async () => { formProps().onPost(); });
+  const shown = root?.root.findByType(BatchNativeStack).props;
+  expect({
+    composing: shown?.composing,
+    rows: shown?.batch.queue.map((row: { id: string }) => row.id),
+    error: shown?.batch.error,
+  }).toEqual({
+    composing: false,
+    rows: ["taxi"],
+    error: "An entry in this batch was sent and its result is not known yet. Post again to check it before changing the batch.",
+  });
 });

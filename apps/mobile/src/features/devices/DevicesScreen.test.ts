@@ -160,13 +160,13 @@ test("signing out all other sessions needs a confirmation; Cancel and header Bac
   expect(texts(screen)).toContain("Other sessions are being signed out.");
 });
 
-test("failures keep the screen usable: a failed list retries and a failed removal stays open for another try", async () => {
+test("failures keep the screen usable: a failed list retries and a refused removal stays open for another try", async () => {
   env.list.mockRejectedValueOnce(new Error("offline"));
   const screen = await open();
   expect(alerts(screen)).toEqual(["Could not load your devices. Check your connection and try again."]);
   await press(screen, "Try again");
   expect(texts(screen)).toContain("Old iPhone");
-  env.revoke.mockRejectedValueOnce(new Error("offline"));
+  env.revoke.mockRejectedValueOnce(new ConvexError({ code: "session_owner_mismatch" }));
   await press(screen, "Remove access for Old iPhone");
   await press(screen, "Remove access");
   expect(alerts(screen)).toEqual(["Access was not removed. Try again."]);
@@ -190,4 +190,109 @@ test("when this device loses access mid-screen, the access-failure handler takes
   const reopened = await open();
   expect(env.report.mock.calls).toEqual([[revoked], [revoked]]);
   expect(alerts(reopened)).toEqual([]);
+});
+
+const nameField = (screen: ReactTestInstance) => screen.findByProps({ accessibilityLabel: "Device name" });
+const lostReply = () => new Error("Response lost");
+
+test("a lost rename reply keeps the sent name locked, and Send again repeats exactly that request", async () => {
+  env.register.mockRejectedValueOnce(lostReply());
+  const screen = await open();
+  await press(screen, "Rename Work Pixel");
+  await act(async () => nameField(screen).props.onChangeText("Daily phone"));
+  await press(screen, "Save name");
+  await act(async () => nameField(screen).props.onChangeText("Phone 2"));
+  const afterLoss = {
+    alerts: alerts(screen),
+    value: nameField(screen).props.value,
+    editable: nameField(screen).props.editable,
+    cancel: buttonsLabelled(screen, "Cancel").length,
+  };
+  expect(afterLoss).toEqual({
+    alerts: ["The new name is not confirmed yet. Send it again, or check your devices to see the name saved now."],
+    value: "Daily phone",
+    editable: false,
+    cancel: 0,
+  });
+  devices = [{ ...pixel, label: "Daily phone" }, iphone];
+  await press(screen, "Send again");
+  expect(env.register.mock.calls.map(([request]) => request)).toEqual([
+    { installId: "install-0123456789abcdef", label: "Daily phone", platform: "android", appVersion: "0.4.2" },
+    { installId: "install-0123456789abcdef", label: "Daily phone", platform: "android", appVersion: "0.4.2" },
+  ]);
+  expect(texts(screen)).toEqual(expect.arrayContaining(["Name saved.", "Daily phone"]));
+});
+
+test("after a lost rename reply, a different name can only be sent from the name the list now shows", async () => {
+  env.register.mockRejectedValueOnce(lostReply());
+  const screen = await open();
+  await press(screen, "Rename Work Pixel");
+  await act(async () => nameField(screen).props.onChangeText("Daily phone"));
+  await press(screen, "Save name");
+  devices = [{ ...pixel, label: "Daily phone" }, iphone];
+  await press(screen, "Check devices");
+  expect(env.list).toHaveBeenCalledTimes(2);
+  expect(texts(screen)).toEqual(expect.arrayContaining(["This list shows your devices as they are saved now.", "Daily phone"]));
+  expect(texts(screen)).not.toContain("Name saved.");
+  await press(screen, "Rename Daily phone");
+  expect(nameField(screen).props.value).toBe("Daily phone");
+  await act(async () => nameField(screen).props.onChangeText("Phone 2"));
+  await press(screen, "Save name");
+  expect(env.register.mock.calls.map(([request]) => request.label)).toEqual(["Daily phone", "Phone 2"]);
+});
+
+test("a lost removal reply never says access was or was not removed; the list settles it", async () => {
+  env.revoke.mockRejectedValueOnce(lostReply());
+  const screen = await open();
+  await press(screen, "Remove access for Old iPhone");
+  await press(screen, "Remove access");
+  const afterLoss = { alerts: alerts(screen), keep: buttonsLabelled(screen, "Keep access").length };
+  devices = [pixel, { ...iphone, revoked: true }];
+  await act(async () => { expect(env.backListeners.at(-1)?.()).toBe(true); });
+  const shown = texts(screen);
+  expect(afterLoss).toEqual({
+    alerts: ["Removing Old iPhone is not confirmed yet. Send it again, or check your devices to see if it is still listed."],
+    keep: 0,
+  });
+  expect(shown).toContain("This list shows your devices as they are saved now.");
+  expect(shown).not.toContain("Old iPhone");
+  expect(shown).not.toContain("Old iPhone no longer has access.");
+  expect(shown).not.toContain("Access was not removed. Try again.");
+  expect(env.revoke.mock.calls).toEqual([[{ deviceId: "iphone" }]]);
+});
+
+test("a lost removal reply retried with Send again removes the same device", async () => {
+  env.revoke.mockRejectedValueOnce(lostReply());
+  const screen = await open();
+  await press(screen, "Remove access for Old iPhone");
+  await press(screen, "Remove access");
+  devices = [pixel, { ...iphone, revoked: true }];
+  await press(screen, "Send again");
+  expect(env.revoke.mock.calls).toEqual([[{ deviceId: "iphone" }], [{ deviceId: "iphone" }]]);
+  expect(texts(screen)).toContain("Old iPhone no longer has access.");
+});
+
+test("a lost sign-out-others reply is not resent; a session added since then needs a new confirmation", async () => {
+  const tablet: Device = { deviceId: "tablet" as Device["deviceId"], label: "New tablet", platform: "android", current: false, revoked: false, clerkActive: true };
+  env.revokeOthers.mockRejectedValueOnce(lostReply());
+  const screen = await open();
+  await press(screen, "Sign out all other sessions");
+  devices = [pixel, iphone, tablet];
+  await press(screen, "Sign out others");
+  const afterLoss = {
+    sent: env.revokeOthers.mock.calls.length,
+    listed: env.list.mock.calls.length,
+    confirmButtons: buttonsLabelled(screen, "Sign out others").length,
+    retryButtons: buttonsLabelled(screen, "Send again").length,
+    shown: texts(screen),
+  };
+  expect(afterLoss).toMatchObject({ sent: 1, listed: 2, confirmButtons: 0, retryButtons: 0 });
+  expect(afterLoss.shown).toEqual(expect.arrayContaining([
+    "Signing out other sessions is not confirmed yet. The list below shows your devices now. Sign them out again if you still need to.",
+    "New tablet",
+  ]));
+  await press(screen, "Sign out all other sessions");
+  expect(texts(screen)).toContain("Sign out all other sessions?");
+  await press(screen, "Sign out others");
+  expect(env.revokeOthers.mock.calls).toEqual([[{}], [{}]]);
 });

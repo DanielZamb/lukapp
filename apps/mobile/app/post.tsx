@@ -163,6 +163,9 @@ function PostMoney({
     placeSheet.current?.dismiss();
     setupSheet.current?.dismiss();
   }, []);
+  useEffect(() => {
+    if (composing && batch.waiting) closeCompose();
+  }, [composing, batch.waiting, closeCompose]);
   const editor = usePostingEditor(
     {
       workspaceId: workspace.id,

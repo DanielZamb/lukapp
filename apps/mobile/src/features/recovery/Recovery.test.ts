@@ -603,29 +603,106 @@ test("cancelled and completed plans sit in a quieter past group after current pl
   expect(groups[1].findAllByType(ListRow).every((row) => row.props.titleStyle && row.props.valueStyle)).toBe(true);
 });
 
-test.each(["android", "ios"])("%s back returns from linked plans to the list without stacking, twice", async (platform) => {
-  const back = () => platform === "android" ? stack.goBack() : stack.dispatch(StackActions.pop(1));
-  const replacement = { ...appliance, id: "repair-2", title: "Emergency repair again", replacesPlanId: "repair" };
-  const { screen } = await open([{ ...cancelledRepair, replacedByPlanId: "repair-2" }, replacement], true, "plans", [candidate]);
-  await act(async () => { screen.findAllByType(ListRow)[1].props.onPress(); });
-  expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
-  expect(labels(screen)).toEqual(["Find another expense"]);
+const secondRepair: RecoveryPlanView = {
+  ...cancelledRepair, id: "repair-2", title: "Emergency repair again", replacesPlanId: "repair", replacedByPlanId: "repair-3",
+};
+const thirdRepair: RecoveryPlanView = { ...appliance, id: "repair-3", title: "Emergency repair third", replacesPlanId: "repair-2" };
+const shownPlan = () => root?.root.findByType(RecoveryPlanScreen).props.plan.id;
+const routeNames = () => stack.getRootState()?.routes.map((route) => route.name);
+async function follow(title: "Replaced by" | "Replaces") {
+  const row = root?.root.find((node) => node.type === ListRow && node.props.title === title);
+  await act(async () => { row?.props.onPress(); });
+}
+async function openFromList(title: string) {
+  const row = root?.root.find((node) => node.type === ListRow && node.props.title === title);
+  await act(async () => { row?.props.onPress(); });
+}
+async function goBack(method: "android" | "ios" | "header") {
+  await act(async () => {
+    if (method === "header") root?.root.findAllByType(Header)[0].props.onBack();
+    else if (method === "android") stack.goBack();
+    else stack.dispatch(StackActions.pop(1));
+  });
+}
+
+test.each(["android", "ios", "header"] as const)("%s back from a linked plan returns to the plan it was opened from, twice", async (method) => {
+  await open([{ ...cancelledRepair, replacedByPlanId: "repair-2" }, { ...appliance, id: "repair-2", title: "Emergency repair again", replacesPlanId: "repair" }], true, "plans", [candidate]);
+  await openFromList("Emergency repair");
   for (const round of [1, 2]) {
-    const replacedBy = screen.find((node) => node.type === ListRow && node.props.title === "Replaced by");
-    expect(replacedBy.props.value).toBe("Emergency repair again");
-    await act(async () => { replacedBy.props.onPress(); });
-    expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair-2");
-    const replaces = screen.find((node) => node.type === ListRow && node.props.title === "Replaces");
-    expect(replaces.props.value).toBe("Emergency repair");
-    await act(async () => { replaces.props.onPress(); });
-    expect(screen.findAllByType(RecoveryPlanScreen)).toHaveLength(1);
-    expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
-    expect(round).toBeGreaterThan(0);
+    await follow("Replaced by");
+    expect(shownPlan()).toBe("repair-2");
+    await goBack(method);
+    expect({ round, plan: shownPlan(), routes: routeNames() }).toEqual({ round, plan: "repair", routes: ["index", "plans", "recovery"] });
   }
-  await act(async () => { back(); });
-  expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(2);
-  await act(async () => { back(); });
-  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans"]);
+  await goBack(method);
+  expect(root?.root.findByType(RecoveryPlanList).props.plans).toHaveLength(2);
+  await goBack(method);
+  expect(routeNames()).toEqual(["index", "plans"]);
+});
+
+test.each(["android", "ios", "header"] as const)("the reciprocal link on a linked plan returns to its caller instead of stepping forward, twice (%s)", async (method) => {
+  await open([{ ...cancelledRepair, replacedByPlanId: "repair-2" }, { ...appliance, id: "repair-2", title: "Emergency repair again", replacesPlanId: "repair" }], true, "plans", [candidate]);
+  await openFromList("Emergency repair");
+  for (const round of [1, 2]) {
+    await follow("Replaced by");
+    await follow("Replaces");
+    expect({ round, plan: shownPlan(), screens: root?.root.findAllByType(RecoveryPlanScreen).length }).toEqual({ round, plan: "repair", screens: 1 });
+  }
+  await goBack(method);
+  expect(root?.root.findAllByType(RecoveryPlanScreen)).toHaveLength(0);
+  expect(root?.root.findByType(RecoveryPlanList).props.plans).toHaveLength(2);
+  await goBack(method);
+  expect(routeNames()).toEqual(["index", "plans"]);
+});
+
+test.each(["android", "ios", "header"] as const)("a chain of linked plans returns step by step and never adds a plan twice (%s)", async (method) => {
+  await open([{ ...cancelledRepair, replacedByPlanId: "repair-2" }, secondRepair, thirdRepair], true, "plans", [candidate]);
+  for (const round of [1, 2]) {
+    await openFromList("Emergency repair");
+    await follow("Replaced by");
+    await follow("Replaced by");
+    expect(shownPlan()).toBe("repair-3");
+    await follow("Replaces");
+    expect(shownPlan()).toBe("repair-2");
+    await follow("Replaced by");
+    await act(async () => { root?.root.findByType(RecoveryPlanScreen).props.onPlan("repair"); });
+    expect(shownPlan()).toBe("repair");
+    await follow("Replaced by");
+    await follow("Replaced by");
+    const steps: (string | undefined)[] = [];
+    for (let back = 0; back < 3; back += 1) {
+      await goBack(method);
+      steps.push(root?.root.findAllByType(RecoveryPlanScreen)[0]?.props.plan.id ?? "list");
+    }
+    expect({ round, steps, routes: routeNames() }).toEqual({ round, steps: ["repair-2", "repair", "list"], routes: ["index", "plans", "recovery"] });
+  }
+  await goBack(method);
+  expect(routeNames()).toEqual(["index", "plans"]);
+});
+
+test("returning from a linked plan keeps the caller's notice", async () => {
+  const { screen } = await open([repair, appliance], true);
+  await openFromList("Emergency repair");
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  await act(async () => { field(screen, "Reason for cancelling").props.onChangeText("Income changed"); });
+  remote.cancel.mockImplementationOnce(async (request) => {
+    remote.query.mockReturnValue({
+      ...evaluation,
+      plans: [{ ...cancelledRepair, replacedByPlanId: "repair-2" }, { ...appliance, id: "repair-2", title: "Emergency repair again", replacesPlanId: "repair" }],
+      candidates: [candidate],
+    });
+    return cancelReceipt(request);
+  });
+  await act(async () => { button(screen, "Cancel plan").props.onPress(); });
+  expect(alerts()).toEqual(["Plan cancelled. The money you moved stays in savings."]);
+  for (const round of [1, 2]) {
+    await follow("Replaced by");
+    expect(alerts()).toEqual([]);
+    await goBack("android");
+    expect({ round, plan: shownPlan(), alerts: alerts() }).toEqual({
+      round, plan: "repair", alerts: ["Plan cancelled. The money you moved stays in savings."],
+    });
+  }
 });
 
 test.each(["android", "ios", "header"])("declining a replacement draft with %s back returns to the cancelled plan, twice", async (method) => {
@@ -762,6 +839,9 @@ test("Fix attribution lists only plans that can take the contribution and sends 
   expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("appliance");
   const moved = screen.find((node) => node.type === ListRow && node.props.title === "COP 300.000");
   expect([moved.props.value, moved.props.detail]).toEqual(["Counted", "September 18, 2026\nMoved from Emergency repair"]);
+  await act(async () => { stack.goBack(); });
+  expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+  expect(alerts()).toEqual(["Attribution corrected. No money moved."]);
   await act(async () => { stack.goBack(); });
   expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(7);
 });

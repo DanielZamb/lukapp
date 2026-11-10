@@ -66,6 +66,7 @@ function batch(): ReturnType<typeof usePostingBatch> {
     queue: [],
     busy: false,
     editable: true,
+    waiting: false,
     error: "",
     posted: null,
     keep: vi.fn(),

@@ -540,3 +540,72 @@ test("an accounting rejection keeps money facts in the store as an open draft", 
     false,
   );
 });
+
+async function sendGroceriesWithLostReply(shared: ReturnType<typeof sharedStore>) {
+  const first = shared.transportFor("first");
+  first.post.mockRejectedValueOnce(new Error("Response lost"));
+  const editor1 = await open(first, shared.port, "groceries");
+  const second = shared.transportFor("second");
+  const stale = await open(second, shared.port, "groceries");
+  await act(async () => {
+    await editor1().submit();
+  });
+  expect(editor1().pending).toBe(true);
+  await act(async () => {
+    stale().setDescription("Groceries edited");
+  });
+  return { second, stale };
+}
+
+test("a stale screen's Post shows the sent entry before anything is sent again", async () => {
+  const shared = sharedStore();
+  const { second, stale } = await sendGroceriesWithLostReply(shared);
+  await act(async () => {
+    await stale().submit();
+  });
+  const afterFirstPress = {
+    sent: second.post.mock.calls.length,
+    description: stale().description,
+    pending: stale().pending,
+    error: stale().error,
+  };
+  await act(async () => {
+    await stale().submit();
+  });
+  expect(afterFirstPress).toEqual({
+    sent: 0,
+    description: "Groceries",
+    pending: true,
+    error: "This entry was already sent and its result is not known yet. Post again to check it.",
+  });
+  expect(second.post.mock.calls.map(([command]) => command.payload)).toEqual([
+    expect.objectContaining({ description: "Groceries", idempotencyKey: "first-1" }),
+  ]);
+});
+
+test("a stale screen's Keep shows the sent entry instead of a storage failure", async () => {
+  const shared = sharedStore();
+  const { second, stale } = await sendGroceriesWithLostReply(shared);
+  let kept: string | undefined;
+  await act(async () => {
+    kept = await stale().keepDraft();
+  });
+  expect({
+    kept,
+    description: stale().description,
+    pending: stale().pending,
+    unsaved: stale().unsaved,
+    error: stale().error,
+  }).toEqual({
+    kept: undefined,
+    description: "Groceries",
+    pending: true,
+    unsaved: false,
+    error: "This entry was already sent and its result is not known yet. Post again to check it.",
+  });
+  expect(shared.read().drafts.find((draft) => draft.id === "groceries")).toMatchObject({
+    status: "posting",
+    command: { payload: { description: "Groceries", idempotencyKey: "first-1" } },
+  });
+  expect(second.post).not.toHaveBeenCalled();
+});

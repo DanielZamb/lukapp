@@ -47,6 +47,12 @@ export const lifecycle = {
   signingOutOthers: "Signing out…",
   signOutOthersFailed: "Other sessions were not signed out. Try again.",
   signedOutOthers: "Other sessions are being signed out.",
+  renameUncertain: "The new name is not confirmed yet. Send it again, or check your devices to see the name saved now.",
+  removeUncertain: "Removing {name} is not confirmed yet. Send it again, or check your devices to see if it is still listed.",
+  signOutOthersUncertain: "Signing out other sessions is not confirmed yet. The list below shows your devices now. Sign them out again if you still need to.",
+  sendAgain: "Send again",
+  checkDevices: "Check devices",
+  devicesChecked: "This list shows your devices as they are saved now.",
 
   customColor: "Custom color",
   customColorValue: "Custom color {hex}",
