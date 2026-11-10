@@ -1,0 +1,45 @@
+import type { Messages } from "../../types";
+import type { places as en } from "../en/places";
+
+export const places: Messages<typeof en> = {
+  title: "Lugares",
+  eyebrowMany: "TUS LUGARES",
+  eyebrowOne: "TODO JUNTO",
+  now: "Lo que tienes hoy",
+  across_one: "En {count} lugar",
+  across_other: "En {count} lugares",
+  onePool: "Lo del banco y lo del bolsillo todavía van juntos. Agrega un lugar cuando tengas plata aparte.",
+  historyA11y: "Historial de {name}",
+  empty: "Todavía no tienes lugares.",
+  loading: "Cargando lugares",
+  add: "Agregar otro lugar",
+
+  accountEyebrow: "LUGAR",
+  accountPosted: "✓ Registrado",
+  accountChangeLook: "Cambiar el ícono",
+  accountBalance: "Saldo actual",
+  accountSeeHistory: "Ver en el historial",
+  accountType: "Tipo",
+  accountCurrency: "Moneda",
+  accountTracking: "Seguimiento desde",
+  accountNotStarted: "Todavía no empieza",
+  accountRecent: "Movimientos recientes",
+  accountNoActivity: "Todavía no hay movimientos",
+  accountNoActivityDetail: "Los movimientos nuevos van a aparecer aquí",
+  accountReversed: "Reversado",
+  accountLoadingRecent: "Cargando movimientos recientes",
+  accountNotFound: "No encontramos este lugar.",
+  accountLoading: "Cargando el lugar",
+
+  kindBankAccount: "Cuenta bancaria",
+  kindSavingsAccount: "Ahorros",
+  kindCash: "Efectivo",
+  kindCreditCard: "Tarjeta de crédito",
+  kindLoan: "Préstamo",
+
+  lookTitle: "Ícono",
+  lookCustomA11y: "Emoji personalizado",
+  lookPlaceholder: "O escribe el tuyo",
+  lookUse: "Usar este",
+  lookFailed: "No pudimos guardar el ícono. Inténtalo otra vez.",
+};

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
+import { useT } from "../../i18n";
 import { Screen } from "../../ui/core";
 import { api } from "../api";
 import {
@@ -61,6 +62,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   const [view, setView] = useState<View>({ name: "entry" });
   const board = useQuery(api.savingsRecovery.evaluate, { workspaceId, refreshKey });
   const interact = useLocalEntryInteraction();
+  const { t } = useT();
   const back = () => {
     if (view.name === "candidates" && view.parentPlanId) {
       setView({ name: "plan", id: view.parentPlanId });
@@ -76,7 +78,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
       || (view.name === "plan" && !!board && board.plans.length > 1)
       ? back : null,
   );
-  if (!board) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+  if (!board) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
   if (view.name === "draft") {
     return (
       <Draft
@@ -109,10 +111,10 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   }
   if (view.name === "moved") {
     const live = board.plans.find((item) => item.id === view.planId);
-    if (!live) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    if (!live) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <RecoveryMoved
-        title={`${recoveryMoney({ currency: view.currency, minorUnits: view.movedMinorUnits })} moved`}
+        title={t("recovery.movedTitle", { amount: recoveryMoney({ currency: view.currency, minorUnits: view.movedMinorUnits }) })}
         detail={movedCopy({
           currency: view.currency,
           title: view.title,
@@ -120,7 +122,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
           countedMinorUnits: view.countedMinorUnits,
           recoveredMinorUnits: live.recoveredMinorUnits,
           targetMinorUnits: live.targetMinorUnits,
-        })}
+        }, t)}
         onViewPlan={() => setView({ name: "plan", id: view.planId })}
         onHome={onHome}
       />
@@ -128,7 +130,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   }
   if (view.name === "move") {
     const plan = board.plans.find((item) => item.id === view.id);
-    if (!plan) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <Move
         key={view.key}
@@ -153,7 +155,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   }
   if (view.name === "cancel") {
     const plan = board.plans.find((item) => item.id === view.id);
-    if (!plan) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <Cancel
         key={view.key}
@@ -170,7 +172,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   if (view.name === "correct") {
     const plan = board.plans.find((item) => item.id === view.id);
     const contribution = plan?.contributionHistory.find((item) => item.id === view.contributionId);
-    if (!plan || !contribution) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    if (!plan || !contribution) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <Correct
         key={view.key}
@@ -188,7 +190,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   }
   if (view.name === "plan" || (view.name === "entry" && board.plans.length === 1)) {
     const plan = view.name === "plan" ? board.plans.find((item) => item.id === view.id) : board.plans[0];
-    if (!plan) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     const replacement = board.candidates.find((item) => item.journalEntryId === plan.sourceJournalEntryId) ?? null;
     return (
       <RecoveryPlanScreen

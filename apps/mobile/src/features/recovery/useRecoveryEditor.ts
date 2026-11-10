@@ -94,11 +94,9 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
         request.current = null;
         setPending(false);
         const replacement = replacementRefusals[parsed.data.code];
-        setError(parsed.data.code === "expense_already_recovered"
-          ? "This expense already has a recovery plan."
-          : replacement ? t(replacement)
-            : "The plan was not activated. Check the monthly amount and destination, then try again.");
-      } else setError("Could not confirm activation. Retry to safely check the same plan.");
+        setError(t(parsed.data.code === "expense_already_recovered" ? "recovery.draftAlreadyRecovered"
+          : replacement ?? "recovery.draftRejected"));
+      } else setError(t("recovery.draftUncertain"));
     } finally {
       submitting.current = false;
       if (mounted.active) setBusy(false);

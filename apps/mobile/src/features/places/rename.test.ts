@@ -234,7 +234,7 @@ test.each([
   state.accounts = [{ ...daily, name: "My money" }];
   state.rename.mockResolvedValue({ ...receipt, name: label });
   await render();
-  expect(texts().slice(0, 2)).toEqual(["PLACE", label]);
+  expect(texts().slice(0, 2)).toEqual([lang === "es" ? "LUGAR" : "PLACE", label]);
   const row = tree().find((node) => typeof node.props.onPress === "function" && node.props.value === label);
   await act(async () => row.props.onPress());
   expect(input().props.value).toBe(label);
@@ -265,4 +265,39 @@ test("history resolves a renamed place by its unchanged id", () => {
   };
   expect(historyListRow(row, [], [{ id: "daily", name: "Daily" }], "2026-10-18").placeName).toBe("Daily");
   expect(historyListRow(row, [], [{ id: "daily", name: "Everyday" }], "2026-10-18").placeName).toBe("Everyday");
+});
+
+test.each([
+  { lang: "en" as const, rows: { Type: "Checking", Currency: "COP", "Tracking from": "September 24, 2026" },
+    copy: ["PLACE", "Current balance", "Recent activity"] },
+  { lang: "es" as const, rows: { Tipo: "Cuenta bancaria", Moneda: "COP", "Seguimiento desde": "24 de septiembre de 2026" },
+    copy: ["LUGAR", "Saldo actual", "Movimientos recientes"] },
+])("the account page reads in $lang with product kind and tracking date as app copy", async ({ lang, rows, copy }) => {
+  language = lang;
+  await render();
+  for (const [title, value] of Object.entries(rows)) {
+    expect(tree().find((node) => node.props.title === title && "value" in node.props).props.value).toBe(value);
+  }
+  expect(texts()).toEqual(expect.arrayContaining([...copy, "Daily"]));
+  if (lang === "es") {
+    const visible = texts().join("\n");
+    for (const english of ["PLACE", "Current balance", "Recent activity", "No activity yet", "Type", "Tracking from"]) {
+      expect(visible).not.toContain(english);
+    }
+    expect(tree().find((node) => node.props.title === "Todavía no hay movimientos").props.detail)
+      .toBe("Los movimientos nuevos van a aparecer aquí");
+    expect(button("Ver en el historial")).toBeDefined();
+    expect(button("Cambiar el ícono")).toBeDefined();
+  }
+});
+
+test("a place that has not started tracking says so in both languages", async () => {
+  state.accounts = [{ ...daily, trackingFrom: null }, savings];
+  for (const [lang, title, value] of [["en", "Tracking from", "Not started yet"], ["es", "Seguimiento desde", "Todavía no empieza"]] as const) {
+    language = lang;
+    await render();
+    expect(tree().find((node) => node.props.title === title && "value" in node.props).props.value).toBe(value);
+    await act(async () => root?.unmount());
+  }
+  root = undefined;
 });

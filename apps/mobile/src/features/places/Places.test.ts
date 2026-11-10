@@ -80,13 +80,39 @@ test.each([
 ])("a sole place named $name is titled $title in $language", async ({ language, name, title }) => {
   state.accounts = [{ ...daily, name }];
   await render(language);
-  expect(texts().slice(0, 2)).toEqual(["ONE POOL", title]);
+  expect(texts().slice(0, 2)).toEqual([language === "es" ? "TODO JUNTO" : "ONE POOL", title]);
   expect(button(title).findAllByType("text").map((node) => node.children.join(""))).toEqual(["💰", title, "COP 100"]);
 });
 test("with several places a place still named My money shows its stored name in Spanish", async () => {
   state.accounts = [{ ...daily, name: "My money" }, { ...daily, financialAccountProfileId: "savings", name: "Ahorros" }];
   await render("es");
-  expect(texts().slice(0, 2)).toEqual(["YOUR PLACES", "Places"]);
+  expect(texts().slice(0, 2)).toEqual(["TUS LUGARES", "Lugares"]);
   expect(texts()).toContain("My money");
   expect(texts()).not.toContain("Mi plata");
+});
+test.each([
+  { language: undefined, places: 1, title: "My money" },
+  { language: "es" as const, places: 1, title: "Mi plata" },
+  { language: undefined, places: 2, title: "Mi plata" },
+])("a place set up in Spanish as Mi plata follows the app language only while it is the sole place ($places, $language)",
+  async ({ language, places, title }) => {
+    state.accounts = [{ ...daily, name: "Mi plata" }, ...(places === 2 ? [{ ...daily, financialAccountProfileId: "savings", name: "Ahorros" }] : [])];
+    await render(language);
+    expect(button(title).findAllByType("text").map((node) => node.children.join(""))[1]).toBe(title);
+  });
+test("the Places page reads in Spanish around the stored place names", async () => {
+  state.accounts.push({ ...daily, financialAccountProfileId: "card", name: "Visa", nature: "Liability", productKind: "creditCard",
+    balance: { currency: "COP", minorUnits: 2500 } });
+  await render("es");
+  expect(texts()).toEqual(["TUS LUGARES", "Lugares", "Lo que tienes hoy", "COP 75", "En 2 lugares",
+    "💰", "Daily", "COP 100", "💳", "Visa", "COP 25", "Agregar otro lugar"]);
+  expect(button("Historial de Visa")).toBeDefined();
+  state.accounts = [{ ...daily, name: "My money" }];
+  await act(async () => root.unmount());
+  await render("es");
+  expect(texts()).toContain("Lo del banco y lo del bolsillo todavía van juntos. Agrega un lugar cuando tengas plata aparte.");
+  const visible = texts().join("\n");
+  for (const english of ["What you have now", "Add another place", "ONE POOL", "Bank and pocket", "My money"]) {
+    expect(visible).not.toContain(english);
+  }
 });

@@ -23,7 +23,8 @@ function Account({ workspaceId, profileId, timeZone }: {
   const theme = useTheme();
   const activity = usePostedActivity(workspaceId, timeZone);
   const recent = useRecentActivity(workspaceId, 3, profileId);
-  const { t } = useT();
+  const translator = useT();
+  const { t } = translator;
   const changeLook = useAction(api.accounting.changeAccountLook);
   const rename = useAction(api.accounting.renameAccount);
   const [emoji, setEmoji] = useState<string | null>(null);
@@ -32,38 +33,38 @@ function Account({ workspaceId, profileId, timeZone }: {
   const account = activity?.accounts.find((a) => a.financialAccountProfileId === profileId);
   const title = account ? placeTitle(account.name, activity?.accounts.length ?? 0, t) : "";
   return <Screen contentStyle={styles.page}>
-    <Header titleStyle={styles.pageTitle} title={title} eyebrow="PLACE" onBack={() => router.back()} />
-    {posted && <Text accessibilityRole="alert" style={ui.body}>✓ Posted</Text>}
+    <Header titleStyle={styles.pageTitle} title={title} eyebrow={t("places.accountEyebrow")} onBack={() => router.back()} />
+    {posted && <Text accessibilityRole="alert" style={ui.body}>{t("places.accountPosted")}</Text>}
     {account ? <>
       <View style={styles.hero}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Change look" onPress={() => setEmoji(accountEmoji(account))}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("places.accountChangeLook")} onPress={() => setEmoji(accountEmoji(account))}>
           <Text style={styles.heroEmoji}>{accountEmoji(account)}</Text>
         </Pressable>
-        <Text style={styles.muted}>Current balance</Text>
+        <Text style={styles.muted}>{t("places.accountBalance")}</Text>
         <Text adjustsFontSizeToFit numberOfLines={1} style={styles.detailAmount}>
           {formatMoney(account.balance, { hideZeroDecimals: true })}
         </Text>
       </View>
-      <PrimaryButton label="See in tx history" trailingIcon="receipt-outline"
+      <PrimaryButton label={t("places.accountSeeHistory")} trailingIcon="receipt-outline"
         onPress={() => router.push({ pathname: "/history", params: { profileId } })} />
       <ListGroup>
         <ListRow title={t("planning.nameRow")} value={title} onPress={() => setRenaming(true)} />
-        <ListRow title="Type" value={accountKinds[account.productKind]} />
-        <ListRow title="Currency" value={account.balance.currency} />
-        <ListRow title="Tracking from" value={trackingDate(account.trackingFrom)} />
+        <ListRow title={t("places.accountType")} value={t(accountKinds[account.productKind])} />
+        <ListRow title={t("places.accountCurrency")} value={account.balance.currency} />
+        <ListRow title={t("places.accountTracking")} value={trackingDate(account.trackingFrom, translator)} />
       </ListGroup>
-      <Text style={ui.title}>Recent activity</Text>
+      <Text style={ui.title}>{t("places.accountRecent")}</Text>
       {recent ? <ListGroup>
-        {recent.page.length === 0 ? <ListRow title="No activity yet" detail="New entries will appear here" />
+        {recent.page.length === 0 ? <ListRow title={t("places.accountNoActivity")} detail={t("places.accountNoActivityDetail")} />
           : recent.page.slice(0, 3).map((row) => <ListRow key={row.id} title={row.title} detail={row.date}
-            value={row.reversed ? "Reversed" : formatActivityAmount(row.amount)}
+            value={row.reversed ? t("places.accountReversed") : formatActivityAmount(row.amount)}
             valueStyle={{ color: row.reversed ? theme.mutedForeground : row.amount.minorUnits > 0 ? theme.primary : theme.foreground }} />)}
-      </ListGroup> : <ActivityIndicator accessibilityLabel="Loading recent activity" />}
+      </ListGroup> : <ActivityIndicator accessibilityLabel={t("places.accountLoadingRecent")} />}
       {emoji !== null && <EmojiSheet emoji={emoji} onPick={setEmoji} onDismiss={() => setEmoji(null)}
         onUse={async () => { await changeLook({ workspaceId, financialAccountProfileId: profileId, emoji }); }} />}
       {renaming && <RenameSheet rename={rename} onDismiss={() => setRenaming(false)}
         seed={{ workspaceId, profileId, storedName: account.name, initialName: title }} />}
-    </> : activity ? <Text style={ui.muted}>Place not found.</Text> : <ActivityIndicator accessibilityLabel="Loading place" />}
+    </> : activity ? <Text style={ui.muted}>{t("places.accountNotFound")}</Text> : <ActivityIndicator accessibilityLabel={t("places.accountLoading")} />}
   </Screen>;
 }
 export default function AccountRoute() {

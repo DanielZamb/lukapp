@@ -6,7 +6,7 @@ import { Choice, Header, ListGroup, ListRow, PrimaryButton, Screen } from "../..
 import { afterEach, expect, test, vi } from "vitest";
 import type { RecoveryCandidate, RecoveryContribution, RecoveryPlace, RecoveryPlanView } from "./model";
 import { LanguageProvider } from "../../i18n";
-import { RecoveryCandidates, RecoveryDraft, RecoveryMoveScreen, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
+import { RecoveryActivated, RecoveryCandidates, RecoveryDraft, RecoveryMoveScreen, RecoveryMoved, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
 
 vi.mock("react-native", () => ({
   Platform: { OS: "ios" },
@@ -274,4 +274,141 @@ test("Spanish history uses Colombian dates and money", async () => {
     ["COP 2.500", "Anulado", "18 de agosto de 2026\nNo cuenta porque la transferencia se reversó.", false],
     ["COP 2.000", "Corregido", "5 de julio de 2026\nPasó a Fridge\nMotivo: Wrong plan\nRegistrado el 2 de oct de 2026, 3:30 p. m.", true],
   ]);
+});
+
+const copyProps = ["title", "eyebrow", "label", "detail", "value", "helperText", "error", "accessibilityLabel"] as const;
+function visibleCopy(screen: ReactTestRenderer["root"]) {
+  const copy = new Set<string>();
+  for (const node of screen.findAll(() => true)) {
+    if (node.type === Text) copy.add(node.children.join(""));
+    for (const prop of copyProps) if (typeof node.props[prop] === "string") copy.add(node.props[prop]);
+  }
+  return [...copy];
+}
+const spanish = (node: React.ReactElement) => render(createElement(LanguageProvider, { initialPreference: "es" }, node));
+const englishCopy = [
+  "Savings recovery", "PLANS", "moved back to savings", "Expenses to recover", "CLOSE", "Choose an expense",
+  "Plan the recovery", "DRAFT", "Amount to replenish", "MONTHS", "months", "each", "Monthly amount", "Each month must",
+  "Activate plan", "Activation fixes", "Recovered so far", "complete", "left", "Due this month", "Destination",
+  "Original plan", "Move money", "Find another expense", "Recovery is a saving plan", "RECOVERY CONTRIBUTION",
+  "Amount", "From", "Counts toward", "Post transfer", "Progress changes", "View recovery plan", "Back home",
+  "Recovery plan active", "will begin", "View Plans",
+];
+function expectNoEnglish(copy: string[]) {
+  for (const english of englishCopy) expect(copy.filter((text) => text.includes(english))).toEqual([]);
+}
+
+test("Spanish plan list and candidates read as one voice with Colombian dates", async () => {
+  const list = await spanish(createElement(RecoveryPlanList, { plans: [plan], onBack: () => {}, onPlan: () => {} }));
+  expect(visibleCopy(list)).toEqual(expect.arrayContaining(["Recuperar ahorros", "PLANES", "COP 2.300 de COP 13.800 devueltos al ahorro"]));
+  expectNoEnglish(visibleCopy(list));
+  await act(async () => root?.unmount());
+  const candidates = await spanish(createElement(RecoveryCandidates, {
+    currency: "COP", month: "2026-10", candidates: [candidate], onBack: () => {}, onStart: () => {},
+  }));
+  const copy = visibleCopy(candidates);
+  expect(copy).toEqual(expect.arrayContaining([
+    "Gastos por recuperar", "CIERRE DE OCTUBRE", "9 de septiembre · Daily",
+    "Escoge un gasto que quieras reponer ahorrando de a poquito. El gasto queda registrado tal como pasó.",
+  ]));
+  expect(copy).toContain("Laptop repair");
+  expectNoEnglish(copy);
+});
+
+test("Spanish proposal editor explains months, the monthly range and the extra saving with exact amounts", async () => {
+  const screen = await spanish(createElement(RecoveryDraft, {
+    candidate, currency: "COP", destinations, installmentCount: 4, amount: "3.300,00", destinationId: "savings",
+    suggestion: {
+      installmentMinorUnits: 330_000, minInstallmentMinorUnits: 300_000, maxInstallmentMinorUnits: 1_200_000,
+      premiumMinorUnits: 120_000, targetMinorUnits: 1_320_000, valid: true,
+    },
+    editable: true, busy: false, pending: false, canSubmit: true, canDismiss: true, error: "",
+    onMonths: () => {}, onAmount: () => {}, onDestination: () => {}, onSave: () => {}, onBack: () => {},
+  }));
+  expect(screen.findByType(Header).props).toMatchObject({ title: "Arma tu plan", eyebrow: "LAPTOP REPAIR · BORRADOR" });
+  expect(screen.findAllByType(Choice).slice(0, 4).map((choice) => [choice.props.label, choice.props.detail])).toEqual([
+    ["4 meses", "COP 3.300 al mes · COP 1.200 de ahorro extra"],
+    ["6 meses", "COP 2.000 al mes · COP 0 de ahorro extra"],
+    ["8 meses", "COP 1.500 al mes · COP 0 de ahorro extra"],
+    ["12 meses", "COP 1.000 al mes · COP 0 de ahorro extra"],
+  ]);
+  const field = screen.find((node) => node.props.accessibilityLabel === "Cuánto pasas cada mes, en COP" && "helperText" in node.props);
+  expect(field.props.helperText)
+    .toBe("Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan terminas ahorrando COP 1.200 de más.");
+  const copy = visibleCopy(screen);
+  expect(copy).toEqual(expect.arrayContaining(["Lo que vas a reponer", "MESES", "DESTINO", "Activar plan"]));
+  expectNoEnglish(copy);
+});
+
+test("Spanish proposal editor shows the range error when the monthly amount is out of bounds", async () => {
+  const screen = await spanish(createElement(RecoveryDraft, {
+    candidate, currency: "COP", destinations: destinations.slice(0, 1), replacing: true, installmentCount: 4, amount: "1",
+    destinationId: "savings",
+    suggestion: {
+      installmentMinorUnits: 100, minInstallmentMinorUnits: 300_000, maxInstallmentMinorUnits: 1_200_000,
+      premiumMinorUnits: 0, targetMinorUnits: 1_200_000, valid: false,
+    },
+    editable: true, busy: false, pending: false, canSubmit: false, canDismiss: true, error: "",
+    onMonths: () => {}, onAmount: () => {}, onDestination: () => {}, onSave: () => {}, onBack: () => {},
+  }));
+  expect(screen.findByType(Header).props.eyebrow).toBe("LAPTOP REPAIR · REEMPLAZO");
+  expect(visibleCopy(screen)).toEqual(expect.arrayContaining([
+    "Escribe un valor por mes entre COP 3.000 y COP 12.000.",
+    "Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan repones justo lo del gasto, sin nada de más.",
+    "Destino",
+  ]));
+});
+
+test("Spanish plan page and Move money keep stored names and translate everything around them", async () => {
+  const page = await spanish(createElement(RecoveryPlanScreen, {
+    ...planDefaults, plan, month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }));
+  const pageCopy = visibleCopy(page);
+  expect(pageCopy).toEqual(expect.arrayContaining([
+    "Recuperar ahorros", "LAPTOP REPAIR", "Recuperado hasta ahora", "17% completado", "Faltan COP 11.500",
+    "Avance para recuperar Laptop repair", "Para pasar este mes", "Destino", "Savings", "Plan original", "6 meses",
+    "Pasar la plata de octubre", "Buscar otro gasto", "Cancelar plan",
+  ]));
+  expectNoEnglish(pageCopy);
+  await act(async () => root?.unmount());
+  const move = await spanish(createElement(RecoveryMoveScreen, {
+    plan, sources: destinations, sourceId: "daily", amount: "2.300,00",
+    editable: true, busy: false, pending: false, canSubmit: true, canDismiss: true, error: "",
+    onSource: () => {}, onAmount: () => {}, submit: async () => {}, onBack: () => {},
+  }));
+  expect(move.findByType(Header).props).toMatchObject({ title: "Pasar plata", eyebrow: "APORTE AL PLAN" });
+  expect(move.findByType(ListGroup).findAllByType(ListRow).map((row) => [row.props.title, row.props.value])).toEqual([
+    ["Desde", "Daily"], ["Hacia", "Savings"], ["Cuenta para", "Laptop repair"],
+  ]);
+  const moveCopy = visibleCopy(move);
+  expect(moveCopy).toEqual(expect.arrayContaining(["Valor", "Valor en COP", "Registrar transferencia"]));
+  expectNoEnglish(moveCopy);
+});
+
+test("Spanish completion screens name the month and amounts inside one sentence", async () => {
+  const activated = await spanish(createElement(RecoveryActivated, {
+    title: "Laptop repair", currency: "COP", installmentMinorUnits: 230_000, activationMonth: "2026-11",
+    onViewPlans: () => {}, onHome: () => {},
+  }));
+  const activatedCopy = visibleCopy(activated);
+  expect(activatedCopy).toEqual(expect.arrayContaining([
+    "Tu plan quedó activo", "Laptop repair empieza con un aporte de COP 2.300 en noviembre.", "Ver planes", "Volver al inicio",
+  ]));
+  expectNoEnglish(activatedCopy);
+  await act(async () => root?.unmount());
+  const moved = await spanish(createElement(RecoveryMoved, {
+    title: "Pasaste COP 2.300", detail: "detalle", onViewPlan: () => {}, onHome: () => {},
+  }));
+  expect(visibleCopy(moved)).toEqual(expect.arrayContaining(["Ver el plan", "Volver al inicio"]));
+  expectNoEnglish(visibleCopy(moved));
+});
+
+test("English completion copy is unchanged", async () => {
+  const activated = await render(createElement(RecoveryActivated, {
+    title: "Laptop repair", currency: "COP", installmentMinorUnits: 230_000, activationMonth: "2026-11",
+    onViewPlans: () => {}, onHome: () => {},
+  }));
+  expect(visibleCopy(activated)).toEqual(expect.arrayContaining([
+    "Recovery plan active", "Laptop repair will begin with a COP 2.300 contribution in November.", "View Plans", "Back home",
+  ]));
 });

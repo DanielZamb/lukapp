@@ -1,7 +1,9 @@
+import * as React from "react";
 import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
+import { LanguageProvider } from "../../i18n";
 import { useRecoveryEditor, type RecoveryEditorSeed, type RecoveryEditorTransport } from "./useRecoveryEditor";
 
 const seed: RecoveryEditorSeed = {
@@ -35,11 +37,13 @@ function transport() {
     onSaved: vi.fn(), newKey: () => `activate-${++sequence}`, reportFailure: vi.fn(() => false),
   } satisfies RecoveryEditorTransport;
 }
-async function open(api: RecoveryEditorTransport, initial = seed) {
+async function open(api: RecoveryEditorTransport, initial = seed, language?: "es") {
+  vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let editor: ReturnType<typeof useRecoveryEditor> | undefined;
   function Harness() { editor = useRecoveryEditor(initial, api); return null; }
-  await act(async () => { root = create(createElement(Harness)); });
+  const node = language ? createElement(LanguageProvider, { initialPreference: language }, createElement(Harness)) : createElement(Harness);
+  await act(async () => { root = create(node); });
   return () => { if (!editor) throw new Error("Editor not mounted"); return editor; };
 }
 
@@ -98,4 +102,26 @@ test("a three-decimal recovery plan keeps the edited installment in exact minor 
   await act(async () => { editor().onMonths(4); editor().onAmount("0,400"); });
   await act(async () => { await editor().submit(); });
   expect(api.save.mock.calls[0][0].installmentMinorUnits).toBe(400);
+});
+
+test.each([
+  { failure: new ConvexError({ kind: "recovery", code: "expense_already_recovered" }), en: "This expense already has a recovery plan.",
+    es: "Este gasto ya tiene un plan para recuperarlo." },
+  { failure: new ConvexError({ kind: "recovery", code: "replacement_already_exists" }), en: "The cancelled plan already has a replacement.",
+    es: "El plan cancelado ya tiene un reemplazo." },
+  { failure: new ConvexError({ kind: "recovery", code: "installment_out_of_range" }),
+    en: "The plan was not activated. Check the monthly amount and destination, then try again.",
+    es: "No se activó el plan. Revisa el valor por mes y el destino, y vuelve a intentarlo." },
+  { failure: new Error("lost acknowledgement"), en: "Could not confirm activation. Retry to safely check the same plan.",
+    es: "No pudimos confirmar la activación. Reintenta para revisar el mismo plan sin riesgo." },
+])("activation failure $failure.message maps to a catalog message in both languages", async ({ failure, en, es }) => {
+  for (const [language, message] of [[undefined, en], ["es", es]] as const) {
+    const api = transport();
+    api.save.mockRejectedValueOnce(failure);
+    const editor = await open(api, seed, language);
+    await act(async () => { await editor().submit(); });
+    expect(editor().error).toBe(message);
+    await act(async () => root?.unmount());
+  }
+  root = undefined;
 });

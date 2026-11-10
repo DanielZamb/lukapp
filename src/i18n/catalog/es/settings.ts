@@ -10,6 +10,7 @@ export const settings: Messages<typeof en> = {
   language: "Idioma",
   languageSystem: "Del celular",
   languageSystemA11y: "Usar el idioma del celular",
+  workspacePersonal: "Personal",
   myFinances: "Mis finanzas",
   myMoney: "Mi plata",
   places_one: "{count} lugar",

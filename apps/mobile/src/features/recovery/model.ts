@@ -1,4 +1,5 @@
 import type { FunctionReturnType } from "convex/server";
+import { formatDayMonth, formatMonthName, type Translator } from "../../i18n";
 import type { api } from "../api";
 import { formatMoney } from "../money";
 
@@ -13,15 +14,26 @@ export function recoveryMoney(amount: Parameters<typeof formatMoney>[0]) {
   return formatMoney(amount, { hideZeroDecimals: true });
 }
 
-export function recoveryMonthName(month: string) {
-  return new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" })
-    .format(new Date(`${month}-01T12:00:00Z`));
+export function recoveryMonthName(month: string, { language }: Pick<Translator, "language">) {
+  return formatMonthName(language, new Date(`${month}-01T12:00:00Z`), { timeZone: "UTC", capitalize: false });
 }
 
-export function candidateDetail(candidate: Pick<RecoveryCandidate, "accountingDate" | "placeName">) {
-  const date = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", timeZone: "UTC" })
-    .format(new Date(`${candidate.accountingDate}T12:00:00Z`));
-  return candidate.placeName ? `${date} · ${candidate.placeName}` : date;
+export function candidateDetail(
+  candidate: Pick<RecoveryCandidate, "accountingDate" | "placeName">,
+  { t, language }: Pick<Translator, "t" | "language">,
+) {
+  const date = formatDayMonth(language, new Date(`${candidate.accountingDate}T12:00:00Z`), "UTC");
+  return candidate.placeName ? t("recovery.candidateDetail", { date, place: candidate.placeName }) : date;
+}
+
+export function plansDoorDetail(
+  plans: readonly Pick<RecoveryPlanView, "title" | "remainingMinorUnits" | "status">[],
+  { t, tn }: Pick<Translator, "t" | "tn">,
+) {
+  const activePlans = plans.filter((plan) => plan.status === "active" && plan.remainingMinorUnits > 0);
+  if (activePlans.length === 0) return t("recovery.doorRecoveryEmpty");
+  if (activePlans.length === 1) return activePlans[0].title;
+  return tn("recovery.doorRecoveryPlans", activePlans.length);
 }
 
 export function minInstallment(principalMinorUnits: number, installmentCount: number) {
@@ -57,25 +69,26 @@ export function progressRatio(plan: Pick<RecoveryPlanView, "recoveredMinorUnits"
 export function limitsCopy(
   currency: string,
   suggestion: ReturnType<typeof suggestionFor>,
+  t: Translator["t"],
 ) {
   const min = recoveryMoney({ currency, minorUnits: suggestion.minInstallmentMinorUnits });
   const max = recoveryMoney({ currency, minorUnits: suggestion.maxInstallmentMinorUnits });
   const extra = recoveryMoney({ currency, minorUnits: suggestion.premiumMinorUnits });
   return {
-    range: `Each month must be at least ${min} and at most ${max}.`,
+    range: t("recovery.limitsRange", { min, max }),
     extra: suggestion.premiumMinorUnits > 0
-      ? `This schedule saves ${extra} extra.`
-      : "This schedule replenishes the expense with no extra.",
-    invalid: `Enter a monthly amount between ${min} and ${max}.`,
+      ? t("recovery.limitsExtra", { extra })
+      : t("recovery.limitsNoExtra"),
+    invalid: t("recovery.limitsInvalid", { min, max }),
   };
 }
 
-export function progressCopy(plan: RecoveryPlanView) {
+export function progressCopy(plan: RecoveryPlanView, t: Translator["t"]) {
   const recovered = recoveryMoney({ currency: plan.currency, minorUnits: plan.recoveredMinorUnits });
   const target = recoveryMoney({ currency: plan.currency, minorUnits: plan.targetMinorUnits });
   return plan.status === "suspended"
-    ? `Suspended · ${recovered} moved back to savings`
-    : `${recovered} of ${target} moved back to savings`;
+    ? t("recovery.progressSuspended", { recovered })
+    : t("recovery.progress", { recovered, target });
 }
 
 export function movedCopy(input: {
@@ -85,15 +98,16 @@ export function movedCopy(input: {
   countedMinorUnits: number;
   recoveredMinorUnits: number;
   targetMinorUnits: number;
-}) {
+}, t: Translator["t"]) {
   const percent = Math.round(progressRatio({
     recoveredMinorUnits: input.recoveredMinorUnits,
     targetMinorUnits: input.targetMinorUnits,
   }) * 100);
-  const recovered = `Your ${input.title} plan is now ${percent}% complete. The Savings account balance remains separate from plan progress.`;
-  if (input.movedMinorUnits === input.countedMinorUnits) return recovered;
+  if (input.movedMinorUnits === input.countedMinorUnits) {
+    return t("recovery.movedProgress", { title: input.title, percent });
+  }
   const counted = recoveryMoney({ currency: input.currency, minorUnits: input.countedMinorUnits });
-  return `${counted} counted toward ${input.title}. ${recovered}`;
+  return t("recovery.movedCounted", { counted, title: input.title, percent });
 }
 
 export type RecoveryContribution = RecoveryPlanView["contributionHistory"][number];
