@@ -554,6 +554,38 @@ export function discardOpenIn(
   return { document: removeIn(document, id), outcome: "discarded" };
 }
 
+/**
+ * Input typed in a Workspace currency that is no longer the Workspace's cannot be posted into the new one.
+ * Removes that Workspace's open Drafts and unsent batch rows in `currency`. A sent command keeps its frozen
+ * retry, which the server refuses in the new currency. `dropped` counts each piece of input once.
+ */
+export function dropUnsentInCurrency(
+  document: LocalEntryDocument,
+  workspaceId: string,
+  currency: string,
+): { document: LocalEntryDocument; dropped: number } {
+  const sent = new Set(document.drafts.flatMap((draft) =>
+    draft.status === "posting" ? [draft.command.payload.idempotencyKey] : []));
+  const batch = document.postingBatches?.[workspaceId];
+  const unsent = (row: StoredPostingBatch["queue"][number]) => row.id !== batch?.pendingItemId &&
+    !sent.has(row.command.payload.idempotencyKey) && row.command.payload.amount.currency === currency;
+  const rows = batch?.queue.filter(unsent) ?? [];
+  const rowDrafts = new Set(rows.flatMap((row) => row.draftId ? [row.draftId] : []));
+  const stale = (draft: LocalEntryDraft) => draft.status === "open" &&
+    draft.facts.workspaceId === workspaceId && draft.facts.currency === currency;
+  const drafts = document.drafts.filter((draft) => !stale(draft));
+  const loose = document.drafts.filter((draft) => stale(draft) && !rowDrafts.has(draft.id)).length;
+  return {
+    dropped: rows.length + loose,
+    document: {
+      ...document,
+      drafts,
+      ...(batch ? { postingBatches: { ...document.postingBatches,
+        [workspaceId]: { ...batch, queue: batch.queue.filter((row) => !unsent(row)) } } } : {}),
+    },
+  };
+}
+
 export function discardLocalEntryDraft(
   lease: LocalInputLease,
   subject: string,

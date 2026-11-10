@@ -48,7 +48,8 @@ vi.mock("react-native", () => ({
     props.data.length ? props.data.map((item, index) => createElement("row", { key: item.id }, props.renderItem({ item, index }))) : props.ListEmptyComponent, props.ListFooterComponent),
 }));
 vi.mock("../activity", () => ({
-  usePersonalDefaults: () => ({ workspace: { id: "ws", timeZone: "America/Bogota", functionalCurrency: "COP" } }),
+  usePersonalDefaults: () => ({ workspace: { id: "ws", timeZone: "America/Bogota", functionalCurrency: "COP" },
+    financialAccountProfile: { id: "daily" } }),
   usePostedActivity: () => ({ accounts: [{
     financialAccountProfileId: "daily", name: "Daily", productKind: "cash", nature: "Asset",
     balance: { currency: "COP", minorUnits: 0 }, trackingFrom: "2026-10-01",

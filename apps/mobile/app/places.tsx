@@ -44,11 +44,15 @@ function Places({ defaults, subject }: {
         <Text style={styles.muted}>{many ? tn("places.across", activity.accounts.length) : t("places.onePool")}</Text>
       </View>
       <View style={styles.group}>
-        {activity.accounts.map((account) => { const name = placeTitle(account.name, count, t); return <View key={account.financialAccountProfileId} style={styles.row}>
-          <Pressable accessibilityRole="button" accessibilityLabel={name} style={styles.placeButton}
+        {activity.accounts.map((account) => { const name = placeTitle(account.name, count, t);
+          const isDefault = many && account.financialAccountProfileId === defaults.financialAccountProfile.id;
+          return <View key={account.financialAccountProfileId} style={styles.row}>
+          <Pressable accessibilityRole="button" accessibilityLabel={isDefault ? t("workspace.defaultPlaceA11y", { name }) : name}
+            style={styles.placeButton}
             onPress={() => router.push({ pathname: "/account", params: { profileId: account.financialAccountProfileId } })}>
             <Text style={styles.placeGlyph}>{accountEmoji(account)}</Text>
             <Text style={styles.name}>{name}</Text>
+            {isDefault && <Text style={styles.badge}>{t("workspace.defaultBadge")}</Text>}
             <Text style={styles.value}>{formatMoney(account.balance, { hideZeroDecimals: true })}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={t("places.historyA11y", { name })} style={styles.icon}

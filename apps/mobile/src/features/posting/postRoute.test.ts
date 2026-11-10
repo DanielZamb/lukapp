@@ -41,7 +41,8 @@ const navigation = vi.hoisted(() => {
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
 const queryData = vi.hoisted(() => {
-  const state: { categories: Category[]; profiles: Array<{ id: string; name: string }>; currency: string } = { categories: [], profiles: [], currency: "COP" };
+  const state: { categories: Category[]; profiles: Array<{ id: string; name: string }>; currency: string; defaultProfileId: string } =
+    { categories: [], profiles: [], currency: "COP", defaultProfileId: "daily" };
   return state;
 });
 let candidateService: ReturnType<typeof intakeFixture>["service"];
@@ -86,7 +87,7 @@ vi.mock("../activity", () => ({
       functionalCurrency: queryData.currency,
       timeZone: "America/Bogota",
     },
-    financialAccountProfile: { id: "daily", name: "My money" },
+    financialAccountProfile: { id: queryData.defaultProfileId },
   }),
 }));
 vi.mock("../../local-auth/interaction", () => ({
@@ -192,6 +193,7 @@ beforeEach(() => {
   queryData.categories = [];
   queryData.profiles = [{ id: "daily", name: "My money" }, { id: "wallet", name: "Wallet" }];
   queryData.currency = "COP";
+  queryData.defaultProfileId = "daily";
   back.handler = undefined;
   vi.clearAllMocks();
   platform.os = "ios";
@@ -725,4 +727,19 @@ test("a batch save refused because a stored entry awaits its result closes the c
     rows: ["taxi"],
     error: "An entry in this batch was sent and its result is not known yet. Post again to check it before changing the batch.",
   });
+});
+
+test("Post pre-selects the default place from the current defaults read, and a place passed by the caller still wins", async () => {
+  queryData.defaultProfileId = "wallet";
+  await mount();
+  expect(formProps().place).toBe("💰 Wallet");
+  await act(async () => root?.unmount());
+  queryData.defaultProfileId = "daily";
+  await mount();
+  expect(formProps().place).toBe("💰 My money");
+  await act(async () => root?.unmount());
+  queryData.defaultProfileId = "wallet";
+  route.profileId = "daily";
+  await mount();
+  expect(formProps().place).toBe("💰 My money");
 });

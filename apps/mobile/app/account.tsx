@@ -13,9 +13,10 @@ import { usePlaceStyles } from "../src/features/places/styles";
 import { useT } from "../src/i18n";
 import { Header, ListGroup, ListRow, PrimaryButton, Screen, useTheme, useUi } from "../src/ui/core";
 
-function Account({ workspaceId, profileId, timeZone }: {
+function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   workspaceId: string;
   profileId: string;
+  defaultProfileId: string;
   timeZone: string;
 }) {
   const styles = usePlaceStyles();
@@ -44,6 +45,8 @@ function Account({ workspaceId, profileId, timeZone }: {
         <Text adjustsFontSizeToFit numberOfLines={1} style={styles.detailAmount}>
           {formatMoney(account.balance, { hideZeroDecimals: true })}
         </Text>
+        {profileId === defaultProfileId && (activity?.accounts.length ?? 0) > 1 &&
+          <Text style={[styles.badge, { alignSelf: "flex-start" }]}>{t("workspace.defaultBadge")}</Text>}
       </View>
       <PrimaryButton label={t("places.accountSeeHistory")} trailingIcon="receipt-outline"
         onPress={() => router.push({ pathname: "/history", params: { profileId } })} />
@@ -71,6 +74,7 @@ export default function AccountRoute() {
   const defaults = usePersonalDefaults();
   const { profileId } = useLocalSearchParams<{ profileId?: string }>();
   return defaults ? <Account key={profileId ?? defaults.financialAccountProfile.id} workspaceId={defaults.workspace.id}
-    profileId={profileId ?? defaults.financialAccountProfile.id} timeZone={defaults.workspace.timeZone} />
+    profileId={profileId ?? defaults.financialAccountProfile.id} defaultProfileId={defaults.financialAccountProfile.id}
+    timeZone={defaults.workspace.timeZone} />
     : defaults === null ? <Redirect href="/" /> : <Screen><ActivityIndicator /></Screen>;
 }

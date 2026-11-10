@@ -4,7 +4,8 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ profiles: [] as { id: string; name: string }[] }));
-vi.mock("expo-router", () => ({ router: { push: vi.fn(), back: vi.fn() }, Redirect: "redirect" }));
+const router = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn() }));
+vi.mock("expo-router", () => ({ router, Redirect: "redirect" }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => ({ workspace: { id: "ws", kind: "Personal", functionalCurrency: "COP", timeZone: "America/Bogota" } }),
 }));
@@ -84,3 +85,20 @@ function flatten(style: unknown): Record<string, unknown> {
   if (Array.isArray(style)) return Object.assign({}, ...style.map(flatten));
   return style && typeof style === "object" ? style as Record<string, unknown> : {};
 }
+
+test.each([
+  { language: "en" as const, title: "Workspace", detail: "Default place, time zone and currency" },
+  { language: "es" as const, title: "Espacio", detail: "Lugar por defecto, zona horaria y moneda" },
+])("the $title row opens the workspace screen and nothing else each time", async ({ language, title, detail }) => {
+  router.push.mockClear();
+  state.profiles = [{ id: "daily", name: "Daily" }];
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: language }, createElement(SettingsRoute)));
+  });
+  const row = root!.root.find((node) => node.props.title === title && typeof node.props.onPress === "function");
+  expect(row.props.detail).toBe(detail);
+  await act(async () => row.props.onPress());
+  await act(async () => row.props.onPress());
+  expect(router.push.mock.calls).toEqual([["/workspace"], ["/workspace"]]);
+  expect(router.back).not.toHaveBeenCalled();
+});

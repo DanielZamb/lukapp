@@ -14,5 +14,6 @@ import { recovery } from "./recovery";
 import { review } from "./review";
 import { settings } from "./settings";
 import { setup } from "./setup";
+import { workspace } from "./workspace";
 
-export const en = { access, budget, categories, common, drafts, feedback, home, inbox, lifecycle, places, planning, posting, recovery, review, settings, setup } as const;
+export const en = { access, budget, categories, common, drafts, feedback, home, inbox, lifecycle, places, planning, posting, recovery, review, settings, setup, workspace } as const;

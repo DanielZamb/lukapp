@@ -65,6 +65,12 @@ function SettingsContent({
           onPress={() => router.push("/overview")}
         />
         <ListRow
+          title={t("workspace.settingsRow")}
+          detail={t("workspace.settingsRowDetail")}
+          icon="options-outline"
+          onPress={() => router.push("/workspace")}
+        />
+        <ListRow
           title={t("settings.categories")}
           detail={categories ? draftCategories : undefined}
           icon="pricetag-outline"

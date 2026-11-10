@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Place } from "./model";
 
-const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), accounts: [] as Place[], hasLimit: false }));
+const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), accounts: [] as Place[], hasLimit: false, defaultId: "daily" }));
 vi.mock("expo-router", () => ({ router: { push: state.push, back: state.back }, Redirect: "redirect" }));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
 vi.mock("convex/react", () => ({ useQuery: () => ({ jars: state.hasLimit ? [{}] : [] }) }));
@@ -12,7 +12,7 @@ vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ month
 vi.mock("../HomePlaceSetup", () => ({ HomePlaceSetup: "add-place" }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => ({ workspace: { id: "ws", functionalCurrency: "COP", timeZone: "America/Bogota" },
-    financialAccountProfile: { id: "daily" } }),
+    financialAccountProfile: { id: state.defaultId } }),
   usePostedActivity: () => ({ accounts: state.accounts }),
 }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
@@ -29,7 +29,7 @@ const daily: Place = { financialAccountProfileId: "daily", name: "Daily", nature
   trackingFrom: "2026-09-24", balance: { currency: "COP", minorUnits: 10000 } };
 beforeEach(() => {
   vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.clearAllMocks(); state.accounts = [daily]; state.hasLimit = false;
+  vi.clearAllMocks(); state.accounts = [daily]; state.hasLimit = false; state.defaultId = "daily";
 });
 afterEach(async () => { await act(async () => root?.unmount()); vi.unstubAllGlobals(); });
 async function render(language?: "es") {
@@ -98,14 +98,15 @@ test.each([
   async ({ language, places, title }) => {
     state.accounts = [{ ...daily, name: "Mi plata" }, ...(places === 2 ? [{ ...daily, financialAccountProfileId: "savings", name: "Ahorros" }] : [])];
     await render(language);
-    expect(button(title).findAllByType("text").map((node) => node.children.join(""))[1]).toBe(title);
+    expect(button(places === 2 ? `${title}, default place` : title).findAllByType("text").map((node) => node.children.join(""))[1])
+      .toBe(title);
   });
 test("the Places page reads in Spanish around the stored place names", async () => {
   state.accounts.push({ ...daily, financialAccountProfileId: "card", name: "Visa", nature: "Liability", productKind: "creditCard",
     balance: { currency: "COP", minorUnits: 2500 } });
   await render("es");
   expect(texts()).toEqual(["TUS LUGARES", "Lugares", "Lo que tienes hoy", "COP 75", "En 2 lugares",
-    "💰", "Daily", "COP 100", "💳", "Visa", "COP 25", "Agregar otro lugar"]);
+    "💰", "Daily", "Por defecto", "COP 100", "💳", "Visa", "COP 25", "Agregar otro lugar"]);
   expect(button("Historial de Visa")).toBeDefined();
   state.accounts = [{ ...daily, name: "My money" }];
   await act(async () => root.unmount());
@@ -115,4 +116,22 @@ test("the Places page reads in Spanish around the stored place names", async () 
   for (const english of ["What you have now", "Add another place", "ONE POOL", "Bank and pocket", "My money"]) {
     expect(visible).not.toContain(english);
   }
+});
+test.each([
+  { language: undefined, badge: "Default", a11y: "Card, default place" },
+  { language: "es" as const, badge: "Por defecto", a11y: "Card, lugar por defecto" },
+])("with several places only the current default place carries a quiet label ($badge) and no way to change it", async ({ language, badge, a11y }) => {
+  state.accounts.push({ ...daily, financialAccountProfileId: "card", name: "Card" });
+  state.defaultId = "card";
+  await render(language);
+  expect(button(a11y).findAllByType("text").map((node) => node.children.join(""))).toEqual(["💰", "Card", badge, "COP 100"]);
+  expect(button("Daily").findAllByType("text").map((node) => node.children.join(""))).toEqual(["💰", "Daily", "COP 100"]);
+  expect(texts().filter((text) => text === badge)).toEqual([badge]);
+  await act(async () => button(a11y).props.onPress());
+  expect(state.push.mock.calls).toEqual([[{ pathname: "/account", params: { profileId: "card" } }]]);
+});
+test("a sole place carries no default label", async () => {
+  await render();
+  expect(button("Daily").findAllByType("text").map((node) => node.children.join(""))).toEqual(["💰", "Daily", "COP 100"]);
+  expect(texts()).not.toContain("Default");
 });
