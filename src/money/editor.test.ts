@@ -194,3 +194,21 @@ test("selection and generated separator offsets use UTF-16 even while invalid Un
   expect(recovered.text).toBe("1.234");
   expect(recovered.kind).toBe("complete");
 });
+
+for (const format of formats) {
+  const g = format.convention.group;
+  test(`${format.convention.id}/${format.precision} a sign typed before automatic grouping keeps that grouping automatic`, () => {
+    let state = typeText(createAmountEditor(format), "12345");
+    expect(state.text).toBe(`12${g}345`);
+    state = editAmount(at(state, 0), { kind: "type", character: "-" });
+    expect(state.text).toBe(`-12${g}345`);
+    state = typeText(at(state, state.text.length), "6");
+    expect(state.text).toBe(`-123${g}456`);
+    expect(state.kind).toBe("complete");
+    state = editAmount(at(state, 0, 1), { kind: "type", character: "+" });
+    expect(state.text).toBe(`+123${g}456`);
+    state = typeText(at(state, state.text.length), "7");
+    expect(state.text).toBe(`+1${g}234${g}567`);
+    expect(state).toMatchObject({ kind: "complete", minorUnits: 1234567 * 10 ** format.precision });
+  });
+}

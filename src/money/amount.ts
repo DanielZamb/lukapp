@@ -229,7 +229,7 @@ export function editAmount(previous: AmountEditorState, edit: AmountEdit): Amoun
   let next = text.slice(0, start) + insertion + text.slice(end);
   let caret = start + insertion.length;
   let generatedGroups = previous.generatedGroups.flatMap(at => at < start ? [at] : at >= end ? [at + insertion.length - (end - start)] : []);
-  const digitEdit = edit.kind === "delete" || (edit.kind === "type" && /^\d$/.test(insertion)) || edit.kind === "decimal" || (edit.kind === "type" && insertion === convention.decimal);
+  const digitEdit = edit.kind === "delete" || (edit.kind === "type" && /^[\d+−-]$/.test(insertion)) || edit.kind === "decimal" || (edit.kind === "type" && insertion === convention.decimal);
   if (digitEdit) {
     const ungrouped = next.split("").filter((_, i) => !generatedGroups.includes(i)).join("");
     const candidate = parseAmount(ungrouped, format);
