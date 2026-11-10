@@ -74,18 +74,21 @@ const buttonsLabelled = (screen: ReactTestInstance, label: string) =>
 const alerts = (screen: ReactTestInstance) =>
   screen.findAll((node) => node.type === "text" && node.props.accessibilityRole === "alert").map((node) => node.children.join(""));
 
-test("Settings opens Devices after Notification intake, and Devices returns to Settings without pushing it", async () => {
-  const settings = await open(SettingsRoute);
-  const rows = settings.findAllByType("button").map((node) => node.findAllByType("text")[0]?.children.join(""));
-  expect(rows.slice(rows.indexOf("Notification intake"), rows.indexOf("Notification intake") + 2)).toEqual(["Notification intake", "Devices"]);
-  await act(async () => settings.findAllByType("button").find((node) => node.findAllByType("text")[0]?.children.join("") === "Devices")?.props.onPress());
-  expect(env.push.mock.calls).toEqual([["/devices"]]);
-  await act(async () => root?.unmount());
-  const screen = await open();
-  expect(env.backListeners.at(-1)?.()).toBe(false);
-  await press(screen, "Back");
-  expect(env.back).toHaveBeenCalledOnce();
-  expect(env.push.mock.calls).toEqual([["/devices"]]);
+test("Settings opens Devices after Notification intake, and Devices returns to Settings without pushing it, twice", async () => {
+  for (const round of [1, 2]) {
+    const settings = await open(SettingsRoute);
+    const rows = settings.findAllByType("button").map((node) => node.findAllByType("text")[0]?.children.join(""));
+    expect(rows.slice(rows.indexOf("Notification intake"), rows.indexOf("Notification intake") + 2)).toEqual(["Notification intake", "Devices"]);
+    await act(async () => settings.findAllByType("button").find((node) => node.findAllByType("text")[0]?.children.join("") === "Devices")?.props.onPress());
+    await act(async () => root?.unmount());
+    const screen = await open();
+    expect(env.backListeners.at(-1)?.()).toBe(false);
+    await press(screen, "Back");
+    await act(async () => root?.unmount());
+    expect(env.push.mock.calls).toEqual(Array.from({ length: round }, () => ["/devices"]));
+    expect(env.back).toHaveBeenCalledTimes(round);
+    expect(env.backListeners).toHaveLength(0);
+  }
 });
 
 test("lists active devices with this device first and marked, offering rename only for it", async () => {
