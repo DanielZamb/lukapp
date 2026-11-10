@@ -154,7 +154,7 @@ function versionThree(state: ReturnType<typeof emptyState>) {
 }
 
 function reviewed(currency: "COP" | "USD", text: string | null, review: Partial<ActiveCandidate["review"]>) {
-  const state = ingest(emptyState(), { ...capture, currency }, { ...mapping, currency }, "a".repeat(64));
+  const state = ingest(emptyState(), { ...capture, currency }, { ...mapping, currency }, "a".repeat(64), mapping.timeZone);
   const row = state.records[0] as ActiveCandidate;
   return { ...state, records: [{ ...row, review: { ...row.review, ...review }, reviewAmountText: text, reviewAmountFormat: text === null ? null : "pre-currency" as const }] };
 }

@@ -289,6 +289,8 @@ test.each([
   { setting: "defaultPlace", code: "financial_account_profile_not_found", message: "That place is no longer available. Choose another one." },
   { setting: "timeZone", code: "time_zone_stale", message: "The time zone was changed somewhere else. It’s now Bogotá." },
   { setting: "timeZone", code: "time_zone_invalid", message: "Lukapp doesn’t recognize that time zone. Choose another one." },
+  { setting: "timeZone", code: "time_zone_month_behind",
+    message: "It’s still last month in that time zone, and your workspace is already in the new month. Try again once the month has started there." },
   { setting: "functionalCurrency", code: "functional_currency_stale", message: "The currency was changed somewhere else. It’s now COP." },
   { setting: "functionalCurrency", code: "functional_currency_invalid", message: "Lukapp can’t use that currency. Choose another one." },
   { setting: "functionalCurrency", code: "functional_currency_has_entries", message: "It can’t change anymore because this workspace already has movements." },
@@ -364,6 +366,28 @@ test.each([
   expect(sheets()).toEqual([]);
   await refresh({ timeZone: "Europe/Madrid" });
   expect(row(copy[lang].zone).value).toBe("Madrid");
+});
+
+test.each([
+  { lang: "en" as const, title: "Change the time zone to Los Angeles?", today: "With this time zone, today is October 31, 2026.",
+    behind: "It’s still last month in that time zone, and your workspace is already in the new month. Try again once the month has started there." },
+  { lang: "es" as const, title: "¿Cambiar la zona horaria a Los Ángeles?", today: "Con esta zona horaria, hoy es 31 de octubre de 2026.",
+    behind: "En esa zona horaria todavía es el mes pasado, y tu espacio ya está en el mes nuevo. Intenta de nuevo cuando el mes haya empezado allá." },
+])("a zone still in the previous month is explained before sending and its change cannot be sent in $lang", async ({ lang, title, today, behind }) => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-01T00:30:00-05:00"));
+  language = lang;
+  await render();
+  await press(row(copy[lang].zone));
+  await press(control("radio", /^America\/Los_Angeles, /));
+  expect(sheets()).toEqual([title]);
+  expect(texts()).toEqual(expect.arrayContaining([today, behind]));
+  const change = control("button", copy[lang].changeZone);
+  expect(change.props.accessibilityState).toMatchObject({ disabled: true });
+  await press(change);
+  expect(state.timeZone).not.toHaveBeenCalled();
+  await press(control("button", copy[lang].cancel));
+  expect(sheets()).toEqual([]);
 });
 
 test("a zone with the same date today says nothing about today", async () => {

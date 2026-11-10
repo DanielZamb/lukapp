@@ -152,7 +152,7 @@ function confirmed(command: ConfirmCandidateInput): ConfirmCandidateResult {
 
 async function candidateSavedBefore(currency: "COP" | "USD", reviewText: string, reviewMinorUnits: number) {
   const f = fixture();
-  const state = ingest(emptyState(), { ...capture, currency, description: "Market" }, { ...mapping, currency }, "a".repeat(64));
+  const state = ingest(emptyState(), { ...capture, currency, description: "Market" }, { ...mapping, currency }, "a".repeat(64), mapping.timeZone);
   const row = state.records[0] as ActiveCandidate;
   const { reviewAmountFormat: _format, ...versionThree } = { ...row, reviewAmountText: reviewText,
     review: { ...row.review, amountMinorUnits: reviewMinorUnits, direction: "out" as const } };

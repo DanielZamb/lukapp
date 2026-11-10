@@ -148,9 +148,11 @@ function ZoneConfirm({ seed, value, onClose }: { seed: Seed; value: string; onCl
   const now = new Date();
   const today = calendarDate(now, value) === calendarDate(now, seed.current) ? null
     : t("workspace.timeZoneToday", { date: formatLongDate(language, now, value) });
+  const monthBehind = calendarDate(now, value).slice(0, 7) < calendarDate(now, seed.current).slice(0, 7);
   return <ConfirmBody sheet={sheet} change={change} value={value} current={seed.current} onClose={onClose}
     title={t("workspace.timeZoneTitle", { zone })} confirmLabel={t("workspace.timeZoneConfirm")}
-    lines={[t("workspace.timeZoneBody", { zone }), ...(today ? [today] : [])]} ready />;
+    lines={[t("workspace.timeZoneBody", { zone }), ...(today ? [today] : []),
+      ...(monthBehind && !change.error ? [t("workspace.timeZoneMonthBehind")] : [])]} ready={!monthBehind} />;
 }
 
 function CurrencyConfirm({ seed, value, lock, onClose }: { seed: Seed; value: string; lock: string | null; onClose: () => void }) {
@@ -195,6 +197,7 @@ function ConfirmBody({ sheet, change, value, current, title, lines, confirmLabel
   const interact = useLocalEntryInteraction();
   const confirm = () => {
     interact();
+    if (!change.uncertain && !ready) return;
     if (!change.uncertain && value === current) return sheet.current?.dismiss();
     void change.submit(value);
   };

@@ -46,7 +46,7 @@ function Home({
   const [placeOpen, setPlaceOpen] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const accountCount = activity?.accounts.length ?? 0;
-  const level = experienceLevel(accountCount, budget?.jars.length ?? 0);
+  const level = experienceLevel(accountCount, budget);
   const month = formatMonthName(language, calendar.now, { timeZone, capitalize: false });
   const draftsDetail = inboxCount ? t("home.toReview", { count: inboxCount }) : t("home.nothingWaiting");
   const plansDetail = t("home.plansDetail", { month });

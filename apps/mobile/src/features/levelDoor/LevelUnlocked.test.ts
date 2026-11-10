@@ -66,20 +66,38 @@ test("the limit door shows its saved look, currency-code amount and alerts copy"
   expect(root.root.findAllByType("button")).toHaveLength(1);
 });
 
-test.each([{}, { door: "ask" }, { door: "budget", limitMinorUnits: "no" }])("an incomplete unlock link returns home (%j)", async (params) => {
+test.each([
+  { lang: "en" as const, category: "Delivery", texts: ["Limit is on", "🛵", "Delivery · Spend nothing",
+    "Alerts will watch this line. You can add another place whenever money lives in more than one.", "Back to the month"] },
+  { lang: "es" as const, category: "Domicilios", texts: ["Tope activado", "🛵", "Domicilios · Sin gastos",
+    "Las alertas van a vigilar este tope. Puedes agregar otro lugar cuando tengas plata en más de uno.", "Volver al mes"] },
+])("a spend-nothing first limit unlocks with its own wording in $lang", async ({ lang, category, texts: expected }) => {
+  state.params = { door: "budget", category, emoji: "🛵", color: "#047857", currency: "COP", limitMinorUnits: "0" };
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: lang }, createElement(LevelUnlockedRoute)));
+  });
+  expect(texts()).toEqual(expected);
+});
+
+test.each([{}, { door: "ask" }, { door: "budget", limitMinorUnits: "no" },
+  { door: "budget", category: "Food", emoji: "🍋", color: "#047857", currency: "COP", limitMinorUnits: "-1" },
+])("an incomplete unlock link returns home (%j)", async (params) => {
   await render(params);
   expect(root.root.find((node) => String(node.type) === "redirect").props.href).toBe("/");
 });
 
 test.each([
-  { accounts: 1, limits: 0, level: 0 },
-  { accounts: 2, limits: 0, level: 1 },
-  { accounts: 3, limits: 0, level: 1 },
-  { accounts: 1, limits: 1, level: 1 },
-  { accounts: 1, limits: 2, level: 1 },
-  { accounts: 2, limits: 1, level: 1 },
-])("level derives from $accounts accounts and $limits limits", ({ accounts, limits, level }) => {
-  expect(experienceLevel(accounts, limits)).toBe(level);
+  { accounts: 1, limits: 0, removed: 0, level: 0 },
+  { accounts: 2, limits: 0, removed: 0, level: 1 },
+  { accounts: 3, limits: 0, removed: 0, level: 1 },
+  { accounts: 1, limits: 1, removed: 0, level: 1 },
+  { accounts: 1, limits: 2, removed: 0, level: 1 },
+  { accounts: 2, limits: 1, removed: 0, level: 1 },
+  { accounts: 1, limits: 0, removed: 1, level: 1 },
+])("level derives from $accounts accounts, $limits limits and $removed removed limits", ({ accounts, limits, removed, level }) => {
+  const budget = { jars: Array.from({ length: limits }, () => ({})), removedLimits: Array.from({ length: removed }, () => ({})) };
+  expect(experienceLevel(accounts, budget)).toBe(level);
+  expect(experienceLevel(accounts, undefined)).toBe(accounts >= 2 ? 1 : 0);
 });
 
 test.each([

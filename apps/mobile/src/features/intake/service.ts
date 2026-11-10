@@ -18,7 +18,12 @@ export type IntakeDependencies = {
   ownerScope(): Promise<string>;
   newMutationId(): string;
   now(): number;
-  validateMapping(mapping: Pick<SourceMapping, "workspaceId" | "financialAccountProfileId" | "currency"> & Partial<Pick<SourceMapping, "timeZone">>): Promise<boolean>;
+  /**
+   * The workspace's current time zone while the mapping's workspace, Place and currency still hold, or null.
+   * A mapping's own zone is the one it was set up under and is not compared: a capture is dated in the zone current
+   * when it becomes a Candidate, and a Candidate keeps that date (ADR 0093).
+   */
+  validateMapping(mapping: Pick<SourceMapping, "workspaceId" | "financialAccountProfileId" | "currency">): Promise<{ timeZone: string } | null>;
   readLegacy(): Promise<unknown>;
   deleteLegacy(): Promise<void>;
   deleteNotices(): Promise<void>;
@@ -164,12 +169,13 @@ export class IntakeService {
       do {
         const loaded = await this.load(generation);
         const page = await this.wait(this.deps.native.listPending({ expectedEpoch: loaded.status.epoch, cursor, limit: 50 }), generation);
-        const ready: Array<{ capture: NativeCapture; mapping: SourceMapping; digest: string }> = [];
+        const ready: Array<{ capture: NativeCapture; mapping: SourceMapping; timeZone: string; digest: string }> = [];
         for (const capture of page.captures) {
           const mapping = loaded.state.mappings.find((m) => m.sourceSelectionId === capture.sourceSelectionId);
-          if (!mapping || !await this.wait(this.deps.validateMapping(mapping), generation)) { report.unresolved += 1; continue; }
+          const workspace = mapping ? await this.wait(this.deps.validateMapping(mapping), generation) : null;
+          if (!mapping || !workspace) { report.unresolved += 1; continue; }
           if (capture.expiresAt <= this.deps.now()) continue;
-          ready.push({ capture, mapping, digest: await this.wait(this.deps.hash(JSON.stringify(capture)), generation) });
+          ready.push({ capture, mapping, timeZone: workspace.timeZone, digest: await this.wait(this.deps.hash(JSON.stringify(capture)), generation) });
         }
         if (ready.length) {
           const ids = await this.change(generation, (state) => {
@@ -178,7 +184,7 @@ export class IntakeService {
             for (const item of ready) {
               const prior = next.records.find((r) => r.id === item.capture.captureId);
               if (prior && prior.digest !== item.digest) continue;
-              next = ingest(next, item.capture, item.mapping, item.digest);
+              next = ingest(next, item.capture, item.mapping, item.digest, item.timeZone);
               ids.push(item.capture.captureId);
             }
             return { state: next, result: ids };
@@ -249,7 +255,6 @@ export class IntakeService {
       const current = this.activeRow(loaded.state, id);
       if (current.status.kind === "review" && !await this.wait(this.deps.validateMapping({
         workspaceId: current.workspaceId, financialAccountProfileId: current.review.financialAccountProfileId, currency: current.currency,
-        ...(current.origin.kind === "native" ? { timeZone: current.origin.mapping.timeZone } : {}),
       }), generation)) throw new Error("Candidate account mapping is unavailable");
       return this.change(generation, (state) => {
       const row = this.activeRow(state, id);

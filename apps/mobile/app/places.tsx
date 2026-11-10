@@ -32,7 +32,7 @@ function Places({ defaults, subject }: {
   const many = count > 1;
   const title = !activity ? "" : many ? t("places.title") : activity.accounts[0] ? placeTitle(activity.accounts[0].name, count, t) : t("planning.myMoney");
   const ready = activity !== undefined && budget !== undefined;
-  const unlocking = ready && activity.accounts.length === 1 && experienceLevel(activity.accounts.length, budget.jars.length) === 0;
+  const unlocking = ready && activity.accounts.length === 1 && experienceLevel(activity.accounts.length, budget) === 0;
   return <Screen contentStyle={styles.page}>
     <Header titleStyle={styles.pageTitle} title={title} eyebrow={many ? t("places.eyebrowMany") : t("places.eyebrowOne")} onBack={() => router.back()} />
     {activity ? <>

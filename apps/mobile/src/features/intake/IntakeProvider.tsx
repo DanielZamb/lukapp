@@ -48,11 +48,12 @@ export function IntakeProvider({ children }: { children: ReactNode }) {
         try {
           const workspace = await convex.query(api.accounting.openWorkspace, { workspaceId: mapping.workspaceId });
           if (!isCurrent()) throw new Error("Intake admission ended");
-          if (workspace.functionalCurrency !== mapping.currency || (mapping.timeZone !== undefined && workspace.timeZone !== mapping.timeZone) ||
-              (workspace.functionalCurrency !== "COP" && workspace.functionalCurrency !== "USD")) return false;
+          if (workspace.functionalCurrency !== mapping.currency ||
+              (workspace.functionalCurrency !== "COP" && workspace.functionalCurrency !== "USD")) return null;
           const profiles = await convex.query(api.accounting.listFinancialAccountProfiles, { workspaceId: mapping.workspaceId });
           if (!isCurrent()) throw new Error("Intake admission ended");
-          return profiles.some((p) => p.id === mapping.financialAccountProfileId && p.workspaceId === mapping.workspaceId);
+          return profiles.some((p) => p.id === mapping.financialAccountProfileId && p.workspaceId === mapping.workspaceId)
+            ? { timeZone: workspace.timeZone } : null;
         } catch (error) {
           if (requiresLocalWipe(error)) report(error);
           throw error;

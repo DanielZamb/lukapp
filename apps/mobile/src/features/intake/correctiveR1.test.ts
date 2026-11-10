@@ -120,10 +120,10 @@ async function pendingConfigure() {
 }
 
 test("SEN90-R1-04 pending replay validates current mapping and later retries the identical control", async () => {
-  const { f, configure, frozen } = await pendingConfigure(); const denied = vi.fn(async () => false); f.deps.validateMapping = denied;
+  const { f, configure, frozen } = await pendingConfigure(); const denied = vi.fn(async () => null); f.deps.validateMapping = denied;
   await expect(f.service.retryConfigure()).rejects.toThrow("Mapping unavailable");
   expect(denied).toHaveBeenCalledOnce(); expect(configure).toHaveBeenCalledOnce(); expect(f.state().pendingConfigure).toEqual(frozen);
-  f.deps.validateMapping = async () => true; await f.service.retryPendingControl();
+  f.deps.validateMapping = async () => ({ timeZone: mapping.timeZone }); await f.service.retryPendingControl();
   expect(configure.mock.calls[1]?.[0]).toEqual(frozen); expect(f.state().activeSelectionIds).toEqual(["selection-2"]);
 });
 
@@ -135,7 +135,7 @@ test("SEN90-R1-04 a missing saved mapping cannot be replayed or replaced", async
 });
 
 test("SEN90-R1-04 lock during mapping revalidation prevents native replay", async () => {
-  const { f, configure, frozen } = await pendingConfigure(); f.deps.validateMapping = async () => { f.service.stop(); return true; };
+  const { f, configure, frozen } = await pendingConfigure(); f.deps.validateMapping = async () => { f.service.stop(); return { timeZone: mapping.timeZone }; };
   await expect(f.service.retryConfigure()).rejects.toThrow("Intake admission ended");
   expect(configure).toHaveBeenCalledOnce(); expect(f.state().pendingConfigure).toEqual(frozen);
 });
