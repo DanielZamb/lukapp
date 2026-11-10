@@ -1,5 +1,5 @@
-import { useMemo, useRef, type ComponentProps, type ComponentType, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { useMemo, useRef, type ComponentProps, type ComponentType } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
 import { useT } from "../../i18n";
 import { useThemeContext } from "../../ui/themeContext";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
@@ -18,14 +18,11 @@ export type AmountFieldProps = {
   placeholder?: string;
   /** A control that sets the sign, for fields that accept a negative amount. */
   sign?: { disabled?: boolean };
-  /** Shown before the input, such as the currency. */
-  leading?: ReactNode;
   /** The owner's own message, shown when the text itself has no refusal to explain. */
   message?: { error?: string; helper?: string };
   notice?: string | null;
   InputComponent?: ComponentType<ComponentProps<typeof TextInput>>;
   inputStyle?: StyleProp<TextStyle>;
-  rowStyle?: StyleProp<ViewStyle>;
 };
 
 /**
@@ -53,8 +50,7 @@ export function AmountField(props: AmountFieldProps) {
   return (
     <View style={styles.field}>
       {props.label ? <Text style={shared.fieldLabel}>{props.label}</Text> : null}
-      <View style={[styles.row, props.rowStyle]}>
-        {props.leading}
+      <View style={styles.row}>
         <Input
           accessibilityLabel={props.inputAccessibilityLabel}
           value={editor.text}

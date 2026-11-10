@@ -50,10 +50,6 @@ export function amountMinorUnits(session: AmountSession): number | null {
   return session.editor.kind === "complete" ? session.editor.minorUnits : null;
 }
 
-export function amountText(session: AmountSession) {
-  return session.editor.text;
-}
-
 /** The text to save for this session, with the grammar it was typed in. */
 export function storedAmountOf(session: AmountSession): StoredAmountText {
   return { text: session.editor.text, format: amountTextFormatOf(session.editor.format.convention) };

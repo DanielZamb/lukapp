@@ -10,7 +10,7 @@ export type TextChange = Readonly<{ start: number; end: number; inserted: string
  * shared prefix and suffix. Both explanations produce exactly the new text; they differ at most in which of several
  * identical neighbouring characters was the new one.
  */
-export function textChange(previous: string, selection: AmountSelection, next: string): TextChange {
+function textChange(previous: string, selection: AmountSelection, next: string): TextChange {
   const tail = previous.length - selection.end;
   const inserted = next.length - selection.start - tail;
   if (inserted >= 0 && next.startsWith(previous.slice(0, selection.start)) && next.endsWith(previous.slice(selection.end)))
