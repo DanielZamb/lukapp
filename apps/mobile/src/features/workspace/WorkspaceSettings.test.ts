@@ -537,6 +537,17 @@ test("an unconfirmed currency change stays locked, retries the identical request
   expect(await storedInput()).toEqual({ drafts: ["elsewhere", "sent"], queue: ["dispatched"] });
 });
 
+test("a currency that becomes read-only while its confirmation is open says why and cannot be sent", async () => {
+  await render();
+  await press(row("Currency"));
+  await press(control("radio", "USD, US Dollar"));
+  await refresh({ canChangeFunctionalCurrency: false, currencyChangeBlockedReason: "functional_currency_has_records" });
+  expect(texts()).toContain("It can’t change anymore because amounts in COP are already saved, like a Budget limit or a starting balance.");
+  expect(control("button", "Use USD").props.accessibilityState.disabled).toBe(true);
+  await press(control("button", "Cancel"));
+  expect(state.currency).not.toHaveBeenCalled();
+});
+
 test("a refused currency change keeps every draft on the phone", async () => {
   await storeDeviceInput();
   state.currency.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "functional_currency_has_entries" }));

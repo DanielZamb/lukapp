@@ -75,7 +75,7 @@ export function WorkspaceSettings({ workspaceId, onBack }: { workspaceId: string
         <ZoneConfirm seed={seed(settings.timeZone, zoneName)} value={step.value} onClose={close} />}
       {step.kind === "confirm" && step.setting === "functionalCurrency" &&
         <CurrencyConfirm seed={seed(settings.functionalCurrency, (code) => code)} value={step.value}
-          open={settings.canChangeFunctionalCurrency} onClose={close} />}
+          lock={lock && t(lock, { currency: settings.functionalCurrency })} onClose={close} />}
     </Screen>
   );
 }
@@ -153,7 +153,7 @@ function ZoneConfirm({ seed, value, onClose }: { seed: Seed; value: string; onCl
     lines={[t("workspace.timeZoneBody", { zone }), ...(today ? [today] : [])]} ready />;
 }
 
-function CurrencyConfirm({ seed, value, open, onClose }: { seed: Seed; value: string; open: boolean; onClose: () => void }) {
+function CurrencyConfirm({ seed, value, lock, onClose }: { seed: Seed; value: string; lock: string | null; onClose: () => void }) {
   const { t, tn } = useT();
   const lease = useLocalInputLease();
   const reportFailure = useDeviceAccessFailure();
@@ -175,7 +175,8 @@ function CurrencyConfirm({ seed, value, open, onClose }: { seed: Seed; value: st
     : drops ? [tn("workspace.currencyDrops", drops, { currency: seed.current })] : [];
   return <ConfirmBody sheet={sheet} change={change} value={value} current={seed.current} onClose={onClose}
     title={t("workspace.currencyTitle", { currency: value })} confirmLabel={t("workspace.currencyConfirm", { currency: value })}
-    lines={[t("workspace.currencyBody"), ...local]} ready={open && typeof drops === "number"} />;
+    lines={[t("workspace.currencyBody"), ...local, ...(lock && !change.error ? [lock] : [])]}
+    ready={!lock && typeof drops === "number"} />;
 }
 
 function ConfirmBody({ sheet, change, value, current, title, lines, confirmLabel, ready, onClose }: {
