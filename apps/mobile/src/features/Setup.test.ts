@@ -22,6 +22,7 @@ import { currencyOptions } from "./setup/currencies";
 import { functionalCurrencyCodes } from "../../../../src/accounting/currencies";
 import { catalogs, createTranslator } from "../../../../src/i18n";
 import { LanguageProvider } from "../i18n";
+import { ThemeProvider } from "../ui/themeContext";
 import type { SetupSummary } from "./setup/model";
 
 const backend = vi.hoisted(() => ({ ensure: vi.fn(), place: vi.fn(), save: vi.fn(), clear: vi.fn(), key: 0, suggestions: {} as Record<string, NatureAnswer | null> }));
@@ -645,4 +646,26 @@ test("the setup completion recap reads in Spanish as whole sentences around stor
   );
   expect(node("Ir al inicio")).toBeDefined();
   expect(nodes("Configurar la lectura de notificaciones")).toHaveLength(0);
+});
+
+test("at the largest text the purchase-alert choices stack and size to their Spanish copy", async () => {
+  const render = async (reflow: boolean) => {
+    await act(async () => root?.unmount());
+    await act(async () => {
+      root = create(createElement(LanguageProvider, { initialPreference: "es" },
+        createElement(ThemeProvider, { layout: { reflow, pagePadding: 16 } },
+          createElement(Setup, { subject: "owner", onComplete: vi.fn(), onCancel: vi.fn() }))));
+    });
+    await act(async () => root?.root.findByType(SetupCategories).props.onChange([{ ...starterCategories[0], source: "starter" }]));
+    await press("COP");
+    const card = node("Usarlas, Las alertas pueden quedar como movimientos por revisar después de configurar el celular");
+    return { card: card.props.style[0], row: card.parent?.props.style };
+  };
+  const wide = await render(false);
+  expect(wide.row).toMatchObject({ flexDirection: "row" });
+  expect(wide.card).toMatchObject({ flex: 1, minHeight: 120 });
+  const large = await render(true);
+  expect(large.row).toMatchObject({ flexDirection: "column" });
+  expect(large.card.flex).toBeUndefined();
+  expect(large.card.minHeight).toBe(120);
 });

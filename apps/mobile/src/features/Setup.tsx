@@ -362,7 +362,7 @@ export function Setup({
                     }}
                     style={[
                       {
-                        flex: 1,
+                        flex: layout.reflow ? undefined : 1,
                         minHeight: 120,
                         padding: spacing.lg,
                         gap: spacing.sm,
