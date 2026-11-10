@@ -17,7 +17,7 @@ const october = { year: 2026, month: 10 };
 test("a dated draft in the month blocks close and Candidates never do", () => {
   expect(
     evaluateMonthClose({
-    language: "en",
+      language: "en",
       period: october,
       periodStatus: "open",
       draftCount: 1,
@@ -35,7 +35,7 @@ test("a dated draft in the month blocks close and Candidates never do", () => {
   });
   expect(
     evaluateMonthClose({
-    language: "en",
+      language: "en",
       period: october,
       periodStatus: "not_opened",
       draftCount: 0,
@@ -56,7 +56,7 @@ test("a dated draft in the month blocks close and Candidates never do", () => {
 test("a locked month is already finished even when leftover drafts remain", () => {
   expect(
     evaluateMonthClose({
-    language: "en",
+      language: "en",
       period: october,
       periodStatus: "locked",
       draftCount: 2,
@@ -84,7 +84,7 @@ test("a device month that is not the workspace month cannot lock", () => {
   expect(status).toBe("mismatch");
   expect(
     evaluateMonthClose({
-    language: "en",
+      language: "en",
       period: september,
       periodStatus: status,
       draftCount: 0,

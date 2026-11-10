@@ -21,7 +21,7 @@ vi.mock("react-native", () => ({
 }));
 
 const october = evaluateMonthClose({
-    language: "en",
+  language: "en",
   period: { year: 2026, month: 10 },
   periodStatus: "open",
   draftCount: 0,
@@ -83,7 +83,7 @@ async function show(
 test("a dated draft blocks close and sending the user back to Drafts", async () => {
   const handlers = await show(
     evaluateMonthClose({
-    language: "en",
+      language: "en",
       period: { year: 2026, month: 10 },
       periodStatus: "open",
       draftCount: 2,

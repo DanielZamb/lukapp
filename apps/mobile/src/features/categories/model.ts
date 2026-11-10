@@ -1,5 +1,6 @@
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
-import type { MessageKey } from "../../../../../src/i18n";
+import { ConvexError } from "convex/values";
+import type { MessageKey, Translator } from "../../../../../src/i18n";
 import { api } from "../api";
 
 export type CategorySelection = FunctionArgs<
@@ -58,4 +59,16 @@ export function selectionKey(selection: CategorySelection) {
   return selection.kind === "preset"
     ? `preset:${selection.presetId}`
     : `custom:${categoryNameKey(selection.name)}`;
+}
+
+export function categoryFailureMessage(error: unknown, { t }: Translator) {
+  if (error instanceof ConvexError && typeof error.data === "object" && error.data && "code" in error.data) {
+    switch (error.data.code) {
+      case "name_required": return t("categories.errorNameRequired");
+      case "category_name_too_long": return t("categories.errorNameTooLong");
+      case "category_name_conflict": return t("categories.errorNameConflict");
+      case "category_not_found": return t("categories.errorNotFound");
+    }
+  }
+  return t("categories.errorSaveChange");
 }

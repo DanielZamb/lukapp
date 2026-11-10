@@ -1,29 +1,16 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useAction, useQuery } from "convex/react";
-import { ConvexError } from "convex/values";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, BackHandler, Text, View } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Field, Header, ListGroup, ListRow, PrimaryButton, Screen, useUi } from "../../ui/core";
-import { useT, type Translator } from "../../i18n";
+import { useT } from "../../i18n";
 import { api } from "../api";
 import { DeferredAccountSetup } from "../setup/DeferredAccountSetup";
 import { CategorySheet } from "./CategorySheet";
-import { categoryNameKey, defaultCategoryStyle, natureLabel, type AccountSetupRequest, type Category, type EditableCategory } from "./model";
+import { categoryFailureMessage, categoryNameKey, defaultCategoryStyle, natureLabel, type AccountSetupRequest, type Category, type EditableCategory } from "./model";
 import { useNatureSuggestion } from "./useNatureSuggestion";
-
-export function categoryFailureMessage(error: unknown, { t }: Translator) {
-  if (error instanceof ConvexError && typeof error.data === "object" && error.data && "code" in error.data) {
-    switch (error.data.code) {
-      case "name_required": return t("categories.errorNameRequired");
-      case "category_name_too_long": return t("categories.errorNameTooLong");
-      case "category_name_conflict": return t("categories.errorNameConflict");
-      case "category_not_found": return t("categories.errorNotFound");
-    }
-  }
-  return t("categories.errorSaveChange");
-}
 
 export function CategoryManager({ workspaceId, subject, profileId, currency, timeZone, initialCategoryId, onBack }: {
   workspaceId: string; subject: string; profileId: string; currency: string; timeZone: string;

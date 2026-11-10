@@ -147,7 +147,7 @@ test("a retry after midnight still locks the month that was requested", async ()
   });
   await page.change(
     evaluateMonthClose({
-    language: "en",
+      language: "en",
       period: { year: 2026, month: 11 },
       periodStatus: "open",
       draftCount: 0,

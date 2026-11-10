@@ -75,7 +75,8 @@ export function compactAmount(minorUnits: number, currency: string, language: La
   return `${sign}${language === "es" ? String(amount).replace(".", ",") : amount}`;
 }
 
+/** Spanish keeps the unit on the same line as the number with a no-break space, as Intl does. */
 export function compactBody(body: string, scale: "thousands" | "millions", language: Language) {
-  if (language === "es") return `${body.replace(".", ",")} ${scale === "millions" ? "M" : "mil"}`;
+  if (language === "es") return `${body.replace(".", ",")}\u00a0${scale === "millions" ? "M" : "mil"}`;
   return `${body}${scale === "millions" ? "M" : "K"}`;
 }
