@@ -1,5 +1,5 @@
 import { useConvex, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { api } from "../api";
 import { addUndoPage, type UndoPreview, type UndoTotals } from "./model";
@@ -23,7 +23,9 @@ export type UndoPreviewRead = {
  */
 export function useUndoPreview(workspaceId: string, profileId: string, enabled: boolean): UndoPreviewRead {
   const convex = useConvex();
-  const reportFailure = useDeviceAccessFailure();
+  const report = useDeviceAccessFailure();
+  const reportFailure = useRef(report);
+  reportFailure.current = report;
   const first = useQuery(api.accounting.previewUndoPlace, enabled ? { workspaceId, financialAccountProfileId: profileId, cursor: null } : "skip");
   const [read, setRead] = useState<{ totals: UndoTotals | null; settled: boolean; failed: boolean }>({ totals: null, settled: false, failed: false });
   const [attempt, setAttempt] = useState(0);
@@ -48,12 +50,12 @@ export function useUndoPreview(workspaceId: string, profileId: string, enabled: 
         setRead({ totals, settled: true, failed: false });
       } catch (error) {
         if (!current) return;
-        reportFailure(error);
+        reportFailure.current(error);
         setRead({ totals, settled: false, failed: true });
       }
     })();
     return () => { current = false; };
     // The signature stands for the first page's content; a new object with the same page must not restart the pass.
-  }, [signature, attempt, convex, workspaceId, profileId, reportFailure]);
+  }, [signature, attempt, convex, workspaceId, profileId]);
   return { first, ...read, retry: () => setAttempt((value) => value + 1) };
 }
