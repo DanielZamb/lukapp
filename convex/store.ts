@@ -1,7 +1,7 @@
 import type { UserCategory } from "../src/accounting/categories/types";
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import { AccountingError } from "../src/accounting/errors";
-import { workspaceTimeZone } from "../src/accounting/timeZone";
+import { calendarDate, workspaceTimeZone } from "../src/accounting/timeZone";
 import { applyJournalSummary, readAccountTotals, readFirstActivityDate } from "./ledgerSummary";
 import type {
   AccountingPeriod,
@@ -88,6 +88,7 @@ function toLedgerAccount(doc: Doc<"ledgerAccounts">): LedgerAccount {
 function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
   return {
     createdAt: doc._creationTime,
+    ...(doc.createdAccountingDate ? { createdAccountingDate: doc.createdAccountingDate } : {}),
     id: doc._id,
     workspaceId: doc.workspaceId,
     name: doc.name,
@@ -100,6 +101,7 @@ function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
 
 function toOpening(doc: Doc<"financialAccountOpenings">): StoredOpeningMarker {
   return {
+    ...(doc.originalCurrency ? { originalCurrency: doc.originalCurrency } : {}),
     workspaceId: doc.workspaceId,
     financialAccountProfileId: doc.financialAccountProfileId,
     accountingDate: doc.accountingDate,
@@ -445,7 +447,10 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
     },
 
     async insertProfile(profile) {
+      const workspace = await db.get(storedId<"workspaces">(profile.workspaceId));
+      if (!workspace) throw new AccountingError("workspace_membership_required");
       const id = await db.insert("financialAccountProfiles", {
+        createdAccountingDate: calendarDate(new Date(), workspaceTimeZone(workspace)),
         ...profile,
         workspaceId: storedId<"workspaces">(profile.workspaceId),
         postingAccountId: storedId<"ledgerAccounts">(profile.postingAccountId),

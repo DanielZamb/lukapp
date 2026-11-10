@@ -44,6 +44,7 @@ export async function postedActivity(
       if (!profile) throw new AccountingError("financial_account_profile_not_found");
       const opening = await findActiveOpening(store, workspace.id, profile.id);
       const trackingFrom = opening?.accountingDate
+        ?? profile.createdAccountingDate
         ?? (profile.createdAt === undefined ? null : calendarDate(new Date(profile.createdAt), workspace.timeZone));
       return {
         productKind: profile.productKind,

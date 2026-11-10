@@ -1,3 +1,4 @@
+import { defaults, workspaceSettingFields } from "./accountingValues";
 import { intakeEvidence } from "./notificationIntakeValues";
 import { categoryFields } from "./categoryValidators";
 import { defineSchema, defineTable } from "convex/server";
@@ -35,6 +36,7 @@ export default defineSchema({
     journalEntryId: v.id("journalEntries"),
   }).index("by_entry", ["journalEntryId"]),
   financialAccountSetups: defineTable({
+    originalCurrency: v.optional(v.string()),
     workspaceId: v.id("workspaces"),
     idempotencyKey: v.string(),
     name: v.string(),
@@ -46,6 +48,7 @@ export default defineSchema({
     openingJournalEntryId: v.optional(v.id("journalEntries")),
   }).index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"]),
   financialAccountOpenings: defineTable({
+    originalCurrency: v.optional(v.string()),
     workspaceId: v.id("workspaces"),
     financialAccountProfileId: v.id("financialAccountProfiles"),
     accountingDate: v.string(),
@@ -153,7 +156,13 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     reason: v.optional(v.union(v.literal("superseded"), v.literal("replaced"))),
   }).index("by_session", ["clerkSessionId"]),
+  workspaceSettingChanges: defineTable({
+    ...workspaceSettingFields,
+    workspaceId: v.id("workspaces"),
+  }).index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_workspace_setting", ["workspaceId", "setting"]),
   personalDefaults: defineTable({
+    setupResult: v.optional(defaults),
     ownerSubject: v.string(),
     workspaceId: v.id("workspaces"),
     financialAccountProfileId: v.id("financialAccountProfiles"),
@@ -168,6 +177,7 @@ export default defineSchema({
     functionalCurrency: v.string(),
     chartOfAccountsTemplate: v.string(),
     timeZone: v.optional(v.string()),
+    defaultFinancialAccountProfileId: v.optional(v.id("financialAccountProfiles")),
     ledgerSummaryVersion: v.optional(v.literal(1)),
     ledgerSummaryCursor: v.optional(v.union(v.string(), v.null())),
   }),
@@ -187,6 +197,7 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_code", ["workspaceId", "code"]),
   financialAccountProfiles: defineTable({
+    createdAccountingDate: v.optional(v.string()),
     workspaceId: v.id("workspaces"),
     name: v.string(),
     emoji: v.optional(v.string()),

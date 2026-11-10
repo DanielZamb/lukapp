@@ -1,4 +1,11 @@
 export const accountingErrorMessages = {
+  default_place_stale: "The Default Place changed. Refresh before choosing it",
+  time_zone_stale: "The workspace time zone changed. Refresh before changing it",
+  functional_currency_stale: "The Functional Currency changed. Refresh before changing it",
+  functional_currency_has_entries: "Functional Currency cannot change after any posted entry",
+  functional_currency_has_records: "Functional Currency cannot change after currency amounts have been recorded",
+  functional_currency_already_changed: "Functional Currency can change only once",
+
   ledger_summary_not_ready: "Ledger totals are being prepared. Try again after the migration completes",
   ledger_totals_out_of_range: "Ledger totals exceed the supported amount range",
   account_name_conflict: "Another place already uses this name",

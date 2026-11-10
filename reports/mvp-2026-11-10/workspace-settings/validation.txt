@@ -1,0 +1,29 @@
+Branch: t3/workspace-settings-after-setup
+Base: f968044
+Implementation commit: 02b5b2d0f38fadff28fab32eeaf7ac1f07fe294b
+Final tested implementation commit: 27c85b97fefb01c2af6640b15317fa83565ef768
+
+pnpm install --frozen-lockfile --offline
+Exit 0. Frozen lockfile unchanged. No dependency additions.
+
+pnpm vitest run
+Exit 0. 159 test files passed. 1939 tests passed.
+Baseline supplied by coordinator: 1914 tests passed.
+Added: 25 public Convex settings tests.
+Two of the 25 are explicitly named coordinator-gap defect witnesses.
+They assert observed incorrect Recovery behavior pending the separate fixes.
+No tests are skipped or marked expected-failure.
+Complete final output: tests.txt.
+
+pnpm typecheck
+Exit 0. Root tsc --noEmit and @lukapp/mobile tsc --noEmit passed.
+Complete final output: typecheck.txt.
+
+git diff --check
+Exit 0.
+
+Local evidence only. No deployment, real Clerk admission, authenticated
+development API execution or UI/device acceptance was performed.
+No development or production database was modified.
+The authoritative private provider gate is absent in this fresh checkout.
+Coordinator must update its retained gate after real-provider acceptance.

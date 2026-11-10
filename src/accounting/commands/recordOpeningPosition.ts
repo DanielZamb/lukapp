@@ -22,7 +22,7 @@ function sameOpening(
   return (
     marker.financialAccountProfileId === input.financialAccountProfileId &&
     marker.accountingDate === input.accountingDate &&
-    marker.amount.currency === input.amount.currency &&
+    (marker.originalCurrency ?? marker.amount.currency) === input.amount.currency &&
     marker.amount.minorUnits === input.amount.minorUnits &&
     marker.description === input.description &&
     marker.policy === policy
@@ -43,8 +43,6 @@ export async function recordOpeningPosition(
   const amount = input.amount.minorUnits;
   if (!Number.isSafeInteger(amount) || amount < 0)
     throw new AccountingError("opening_amount_invalid");
-  if (input.amount.currency !== workspace.functionalCurrency)
-    throw new AccountingError("currency_mismatch");
   periodFromAccountingDate(input.accountingDate);
   if (!input.idempotencyKey)
     throw new AccountingError("idempotency_key_required");
@@ -81,6 +79,8 @@ export async function recordOpeningPosition(
       },
     );
   }
+  if (input.amount.currency !== workspace.functionalCurrency)
+    throw new AccountingError("currency_mismatch");
   if (amount === 0) {
     if (
       await store.findJournalEntryByIdempotencyKey(

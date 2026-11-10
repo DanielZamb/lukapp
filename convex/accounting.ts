@@ -14,6 +14,7 @@ import {
 } from "./lib/deviceAuthorization";
 import { run } from "./accountingErrors";
 import {
+  defaultPlaceChange, timeZoneChange, functionalCurrencyChange, workspaceSettingReceipt,
   accountSetup,
   accountLook,
   accountRename,
@@ -24,7 +25,7 @@ import {
   categoryUpdate,
   categoryDelete,
   cashActivity,
-  defaults,
+  defaults, workspaceSettings as workspaceSettingsValue,
   inWorkspace,
   periodLock,
   personalSetup,
@@ -48,7 +49,7 @@ import { categoryTotals as readCategoryTotals } from "../src/accounting/queries/
 import { createAccountingCore } from "../src/accounting";
 import { convexHistoryStore } from "./historyStore";
 import { convexReadStore } from "./store";
-import { readPersonalDefaults } from "./personalDefaults";
+import { readWorkspaceSettings, readWorkspaceSettingHistory, readPersonalDefaults } from "./personalDefaults";
 import {
   accountBalance,
   productKind,
@@ -472,4 +473,39 @@ export const setupFinancialAccountProfile = action({
       session,
     });
   },
+});
+
+export const changeDefaultPlace = action({
+  args: defaultPlaceChange, returns: workspaceSettingReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof workspaceSettingReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.changeDefaultPlace, { ...args, session });
+  },
+});
+
+export const changeWorkspaceTimeZone = action({
+  args: timeZoneChange, returns: workspaceSettingReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof workspaceSettingReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.changeWorkspaceTimeZone, { ...args, session });
+  },
+});
+
+export const changeFunctionalCurrency = action({
+  args: functionalCurrencyChange, returns: workspaceSettingReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof workspaceSettingReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.changeFunctionalCurrency, { ...args, session });
+  },
+});
+
+export const workspaceSettings = query({
+  args: inWorkspace, returns: workspaceSettingsValue,
+  handler: async (ctx, args) => run(async () => readWorkspaceSettings(ctx,
+    await requireWorkspacePermission(ctx, { ...args, permission: "workspace:read" }), args.workspaceId)),
+});
+export const workspaceSettingHistory = query({
+  args: inWorkspace, returns: v.array(workspaceSettingReceipt),
+  handler: async (ctx, args) => run(async () => readWorkspaceSettingHistory(ctx,
+    await requireWorkspacePermission(ctx, { ...args, permission: "workspace:read" }), args.workspaceId)),
 });
