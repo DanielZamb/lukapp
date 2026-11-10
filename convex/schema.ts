@@ -4,6 +4,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { mobilePlatform } from "./lib/securityValues";
 import { revisionFields } from "./budgetValues";
+import { reportFields, reservationFields } from "./feedbackValues";
 import {
   accountNature,
   normalSide,
@@ -13,6 +14,11 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  feedbackReports: defineTable(reportFields)
+    .index("by_user_key", ["userId", "reportKey"]),
+  feedbackReservations: defineTable(reservationFields)
+    .index("by_user_key", ["userId", "reportKey"])
+    .index("by_user_time", ["userId", "reservedAt"]),
   ledgerAccountTotals: defineTable({
     workspaceId: v.id("workspaces"),
     ledgerAccountId: v.id("ledgerAccounts"),
