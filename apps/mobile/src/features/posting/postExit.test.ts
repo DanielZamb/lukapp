@@ -8,16 +8,24 @@ import type { PostingFormProps } from "./PostingForm";
 const memory = vi.hoisted(() => new Map<string, string>());
 const back = await vi.hoisted(async () => (await import("../../ui/bottomSheet.testSupport")).backHandlers());
 const nav = vi.hoisted(() => {
-  type Removal = { data: { action: { type: string } }; preventDefault(): void };
+  type Action = { type: string; visited?: true };
+  type Removal = { data: { action: Action }; preventDefault(): void };
   const listeners = new Set<(event: Removal) => void>();
   const stack: string[] = [];
-  function remove(action: { type: string }) {
+  const preventing = new Set<string>();
+  function emit(action: Action) {
     let prevented = false;
-    for (const listener of [...listeners]) listener({ data: { action }, preventDefault: () => { prevented = true; } });
-    if (!prevented) stack.pop();
+    const marked: Action = { ...action, visited: true };
+    for (const listener of [...listeners]) listener({ data: { action: marked }, preventDefault: () => { prevented = true; } });
+    return prevented;
+  }
+  /** Like React Navigation, an action re-dispatched from its beforeRemove event is not emitted to this screen again. */
+  function remove(action: Action) {
+    if (action.visited || !emit(action)) stack.pop();
   }
   return {
     stack,
+    preventing,
     navigation: {
       addListener: (_name: string, listener: (event: Removal) => void) => {
         listeners.add(listener);
@@ -28,6 +36,17 @@ const nav = vi.hoisted(() => {
     router: { back: () => remove({ type: "GO_BACK" }), canGoBack: () => stack.length > 1, push: vi.fn(), replace: vi.fn(), setParams: vi.fn() },
     /** Android system Back: a screen handler first, otherwise the stack pops the screen. */
     systemBack: () => { if (!back.press()) remove({ type: "GO_BACK" }); },
+    /** The native stack's preventNativeDismiss, set while any usePreventRemove on this screen prevents removal. */
+    nativeDismissPrevented: () => preventing.size > 0,
+    /**
+     * iOS back swipe. With preventNativeDismiss the gesture is cancelled natively and arrives as a pop that
+     * can be prevented. Without it the screen is already gone before JavaScript hears about the pop.
+     */
+    swipeBack: () => {
+      if (preventing.size > 0) return remove({ type: "POP" });
+      stack.pop();
+      emit({ type: "POP" });
+    },
   };
 });
 const params = vi.hoisted(() => ({ draftId: undefined as string | undefined, candidateId: undefined as string | undefined }));
@@ -51,6 +70,25 @@ vi.mock("expo-router", async () => {
     router: nav.router, Redirect: "redirect", useNavigation: () => nav.navigation,
     useLocalSearchParams: () => ({ draftId: params.draftId, candidateId: params.candidateId }),
     useFocusEffect: (effect: () => void) => useEffect(effect, [effect]),
+  };
+});
+vi.mock("@react-navigation/native", async () => {
+  const { useEffect, useId, useRef } = await import("react");
+  return {
+    usePreventRemove: (prevent: boolean, callback: (options: { data: { action: { type: string } } }) => void) => {
+      const id = useId();
+      const latest = useRef({ prevent, callback });
+      latest.current = { prevent, callback };
+      useEffect(() => {
+        if (prevent) nav.preventing.add(id);
+        return () => { nav.preventing.delete(id); };
+      }, [id, prevent]);
+      useEffect(() => nav.navigation.addListener("beforeRemove", (event) => {
+        if (!latest.current.prevent) return;
+        event.preventDefault();
+        latest.current.callback({ data: event.data });
+      }), []);
+    },
   };
 });
 const queries = vi.hoisted(() => ({
@@ -372,4 +410,55 @@ test("a Candidate with a dispatched confirmation offers no discard in its form",
   await closePost();
   await openPost({ candidateId: "capture-2" });
   expect(has("Discard this Candidate")).toBe(true);
+});
+
+test("native dismissal is prevented only while the entry has unsaved input", async () => {
+  await openPost();
+  expect(nav.nativeDismissPrevented()).toBe(false);
+  await type("-5.000", "Coffee");
+  expect(nav.nativeDismissPrevented()).toBe(true);
+  await type("-", "");
+  expect(nav.nativeDismissPrevented()).toBe(false);
+  await act(async () => { nav.swipeBack(); });
+  expect(sheet()).toBeNull();
+  expect(nav.stack).toEqual(["drafts"]);
+  await closePost();
+  const posting = beginPostIn({ v: 1, drafts: [] }, { command: { kind: "expense", payload: {
+    workspaceId: "workspace-1", financialAccountProfileId: "account-1", amount: { currency: "COP", minorUnits: 900000 },
+    accountingDate: "2026-10-23", description: "Rent", idempotencyKey: "rent-key",
+  } } }, now, () => "rent");
+  await seed(posting.document);
+  await openPost({ draftId: "rent" });
+  expect(nav.nativeDismissPrevented()).toBe(false);
+  await act(async () => { nav.swipeBack(); });
+  expect(sheet()).toBeNull();
+  expect(nav.stack).toEqual(["drafts"]);
+  expect((await stored()).map((draft) => [draft.id, draft.status])).toEqual([["rent", "posting"]]);
+});
+
+test.each([
+  ["iOS swipe", "Keep draft"], ["iOS swipe", "Discard"], ["iOS swipe", "Continue editing"],
+  ["router.back()", "Keep draft"], ["router.back()", "Discard"], ["router.back()", "Continue editing"],
+] as const)("%s with unsaved input asks first; %s removes the screen once, twice in a row", async (route, choice) => {
+  const leave = () => (route === "iOS swipe" ? nav.swipeBack() : nav.router.back());
+  for (const round of [1, 2]) {
+    await openPost();
+    await type("-5.000", `Coffee ${round}`);
+    await act(async () => { leave(); });
+    expect({ stack: [...nav.stack], asked: text().includes("Keep this entry as a draft?") }).toEqual({ stack: ["drafts", "post"], asked: true });
+    await act(async () => button(choice).props.onPress());
+    if (choice === "Continue editing") {
+      expect(sheet()).toBeNull();
+      expect(nav.stack).toEqual(["drafts", "post"]);
+      expect(props().description).toBe(`Coffee ${round}`);
+      await act(async () => { leave(); });
+      await act(async () => button("Discard").props.onPress());
+    }
+    expect(nav.stack).toEqual(["drafts"]);
+    await closePost();
+  }
+  const descriptions = (await stored()).map((draft) => draft.status === "open" ? draft.facts.description : "");
+  expect(descriptions).toEqual(choice === "Keep draft" ? ["Coffee 1", "Coffee 2"] : []);
+  expect(nav.router.push).not.toHaveBeenCalled();
+  expect(nav.router.replace).not.toHaveBeenCalled();
 });
