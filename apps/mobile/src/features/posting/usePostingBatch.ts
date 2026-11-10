@@ -176,6 +176,7 @@ export function usePostingBatch(
     queue: state.queue,
     busy,
     editable,
+    waiting: !!state.pendingItemId,
     error,
     posted,
     keep: (draft: BatchDraft, editingId?: string) =>
