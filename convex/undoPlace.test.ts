@@ -105,12 +105,12 @@ test("bounded pages and multiple scheduler batches include the last post before 
     expect(preview.page.scannedLines).toBeLessThanOrEqual(UNDO_BATCH_SIZE);
     cursor = preview.page.isDone ? undefined : preview.page.continueCursor;
   } while (cursor);
-  expect([count, skipped, pages]).toEqual([46, 1, 3]);
+  expect([count, skipped, pages]).toEqual([46, 1, 5]);
   const final = await s.expense("immediately-before", 7);
   const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
   const id = receipt.operation.id as Id<"placeUndoOperations">;
   await Promise.all([s.t.mutation(internal.accountingUndo.drive, { operationId: id, version: 0 }), s.t.mutation(internal.accountingUndo.drive, { operationId: id, version: 0 })]);
-  expect(await s.status()).toMatchObject({ state: { kind: "running" }, version: 1, reversedCount: 18, alreadyReversedCount: 1 });
+  expect(await s.status()).toMatchObject({ state: { kind: "running" }, version: 1, reversedCount: 8, alreadyReversedCount: 1 });
   const after = await state(s.t);
   await s.t.mutation(internal.accountingUndo.drive, { operationId: id, version: 0 });
   expect(await state(s.t)).toEqual(after);
@@ -131,7 +131,6 @@ test("Start replay retains operation identity and refuses changed payload, other
   for (const change of [{ financialAccountProfileId: s.other.id }, { replacementDefaultFinancialAccountProfileId: s.other.id }])
     await expect(s.t.action(api.accounting.startUndoPlace, { ...s.start, ...change })).rejects.toThrow("idempotency_key_conflict");
   await expect(s.t.action(api.accounting.startUndoPlace, { ...s.start, idempotencyKey: "other" })).rejects.toThrow("place_undo_in_progress");
-  await expect(s.t.action(api.accounting.startUndoPlace, { ...s.start, financialAccountProfileId: s.other.id, idempotencyKey: "other" })).rejects.toThrow("place_undo_in_progress");
   expect(await s.t.query(api.accounting.placeClosure, s.target)).toMatchObject({ status: "undoing", canClose: false, blockers: [{ code: "place_undo_in_progress" }] });
   await expect(s.t.action(api.accounting.closePlace, { ...s.start, lines: [] })).rejects.toThrow("place_undo_in_progress");
   await expect(s.expense("during")).rejects.toThrow("place_undo_in_progress");
@@ -164,7 +163,7 @@ test("locked-month entries reverse today, preserving old totals and Budget consu
   await expectReconciled(s.t, s.workspace.id);
 });
 
-test("locked current month refuses Start without writes, and a mid-operation lock pauses until a new open month", async () => {
+test("locked current month refuses Start without writes and a mid-operation lock is refused", async () => {
   const s = await setup();
   for (let i = 0; i < 22; i++) await s.expense(`entry-${i}`, 1);
   await lock(s.t, s.workspace.id, { year: 2026, month: 9 });
@@ -176,10 +175,8 @@ test("locked current month refuses Start without writes, and a mid-operation loc
   const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
   const operationId = receipt.operation.id as Id<"placeUndoOperations">;
   await s.t.mutation(internal.accountingUndo.drive, { operationId, version: 0 });
-  expect(await s.status()).toMatchObject({ reversedCount: 20, version: 1 });
-  await lock(s.t, s.workspace.id, { year: 2026, month: 10 });
-  await s.t.mutation(internal.accountingUndo.drive, { operationId, version: 1 });
-  expect(await s.status()).toMatchObject({ state: { kind: "paused", code: "place_undo_current_period_locked" }, reversedCount: 20 });
+  expect(await s.status()).toMatchObject({ reversedCount: 10, version: 1 });
+  await expect(lock(s.t, s.workspace.id, { year: 2026, month: 10 })).rejects.toThrow("period_lock_undo_in_progress");
   expect((await state(s.t)).endings).toHaveLength(0);
   vi.setSystemTime(new Date("2026-11-02T15:00:00Z"));
   await s.finish();
@@ -199,7 +196,7 @@ test("a failed reversal rolls back its batch, reports the entry, and can continu
   fault.mockImplementationOnce(realReverse).mockRejectedValueOnce(new AccountingError("ledger_totals_out_of_range"));
   await s.t.mutation(internal.accountingUndo.drive, { operationId, version: 1 });
   fault.mockRestore();
-  expect(await s.status()).toMatchObject({ state: { kind: "needs_attention", code: "ledger_totals_out_of_range", detail: "Ledger totals exceed the supported amount range", journalEntryId: expect.any(String) }, reversedCount: 20 });
+  expect(await s.status()).toMatchObject({ state: { kind: "needs_attention", code: "ledger_totals_out_of_range", detail: "Ledger totals exceed the supported amount range", journalEntryId: expect.any(String) }, reversedCount: 10 });
   expect((await state(s.t)).entries).toEqual(before.entries);
   expect((await state(s.t)).endings).toHaveLength(0);
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ operation: { state: { kind: "needs_attention" } }, closure: { status: "undoing" } });
@@ -389,24 +386,23 @@ test("preview and progress read legacy journal lines without the History project
   }
 });
 
-test("a future-dated original pauses rather than ending and resumes on its date", async () => {
+test("a future-dated original refuses Start and becomes eligible on its date", async () => {
   const s = await setup();
   await s.t.action(api.accounting.recordCashExpense, { ...s.target, amount: money(10), accountingDate: "2026-10-02", description: "Future", idempotencyKey: "future" });
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
-  await s.t.mutation(internal.accountingUndo.drive, { operationId: receipt.operation.id as Id<"placeUndoOperations">, version: 0 });
-  expect(await s.status()).toMatchObject({ state: { kind: "paused", code: "reversal_date_before_original" }, reversedCount: 0 });
+  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_future_entries");
+  expect(await s.status()).toBeNull();
   expect((await state(s.t)).endings).toHaveLength(0);
   vi.setSystemTime(new Date("2026-10-02T15:00:00Z"));
+  await s.t.action(api.accounting.startUndoPlace, s.start);
   await s.finish();
   expect(await s.status()).toMatchObject({ state: { kind: "done" }, reversedCount: 2 });
 });
 
-test("a previously closed transfer counterparty stops the operation with the exact failed entry", async () => {
+test("a previously closed transfer counterparty refuses Start before any reversal", async () => {
   const s = await setup();
   const transfer = await s.transfer("to-ended", s.place.id, s.other.id, 100);
   await s.t.action(api.accounting.closePlace, { ...s.start, financialAccountProfileId: s.other.id, idempotencyKey: "close-other", lines: [{ kind: "adjustment", amount: money(100) }] });
-  await s.t.action(api.accounting.startUndoPlace, s.start);
-  await s.finish();
-  expect(await s.status()).toMatchObject({ state: { kind: "needs_attention", code: "financial_account_profile_ended", journalEntryId: transfer.id }, reversedCount: 0 });
+  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_undo_ended_counterparty");
+  expect(await s.status()).toBeNull();
   expect((await state(s.t)).endings.map(e => e.act)).toEqual(["close"]);
 });

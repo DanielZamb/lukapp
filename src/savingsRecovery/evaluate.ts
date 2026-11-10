@@ -41,6 +41,10 @@ export async function evaluateWorkspace(
         Boolean(await store.findReversalOf(entryId)), ALL_MONTHS, corrections);
       const source = await store.getEntry(plan.sourceJournalEntryId);
       const sourceReversed = Boolean(await store.findReversalOf(plan.sourceJournalEntryId));
+      const sourcePlace = profiles.find(p => p.id === source?.financialAccountProfileId);
+      const sourceUnavailable = Boolean(sourcePlace?.undoOperationId || sourcePlace?.ending?.act === "undo");
+      const destination = profiles.find(p => p.id === plan.destinationFinancialAccountProfileId);
+      const destinationAvailable = Boolean(destination && !destination.ending && !destination.undoOperationId);
       const decision = cancelled.get(plan.id);
       const cancellation = decision && { ...decision, origin: decision.origin ?? { kind: "person" as const } };
       const cancelledInMonth = cancellation !== undefined && month >= cancellation.cancellationDate.slice(0, 7);
@@ -57,7 +61,7 @@ export async function evaluateWorkspace(
           const contributionStatus: "active" | "voided" | "corrected" = correction ? "corrected" : voided ? "voided" : "active";
           return { ...item, status: contributionStatus, transferReversed: voided, correction };
         }));
-      const destination = profiles.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
+
       return {
         id: plan.id,
         title: plan.title,
@@ -75,7 +79,7 @@ export async function evaluateWorkspace(
         ...progress,
         status,
         canCancel,
-        acceptsContributions: canCancel && !sourceReversed,
+        acceptsContributions: canCancel && !sourceReversed && !sourceUnavailable && destinationAvailable,
         cancellation,
         replacesPlanId: plan.replacesPlanId,
         replacedByPlanId: plans.find(item => item.replacesPlanId === plan.id)?.id,

@@ -1,3 +1,4 @@
+import { AccountingError } from "../accounting/errors";
 import { requireOpenPlace } from "../accounting/placeState";
 import {
   isAssetProductKind,
@@ -33,6 +34,9 @@ export async function activatePlan(
     throw new RecoveryError("expense_not_found");
   if (source.reversesEntryId || await store.findReversalOf(source.id))
     throw new RecoveryError("expense_not_recoverable");
+  const sourcePlace = (await store.listProfiles()).find(p => p.id === source.financialAccountProfileId);
+  if (sourcePlace?.undoOperationId) throw new AccountingError("place_undo_in_progress");
+  if (sourcePlace?.ending?.act === "undo") throw new RecoveryError("expense_not_recoverable");
   const plans = await store.listPlans();
   const cancellations = await store.listCancellations();
   const cancelled = new Set(cancellations.map(item => item.planId));

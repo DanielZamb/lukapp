@@ -2,9 +2,9 @@ import { v } from "convex/values";
 import { accountNature, money, placeStatus, postedJournalEntry } from "./validators";
 
 export const closingLine = v.union(
-  v.object({ kind: v.literal("transfer"), otherFinancialAccountProfileId: v.string(), amount: money }),
-  v.object({ kind: v.literal("expense"), userCategoryId: v.string(), amount: money }),
-  v.object({ kind: v.literal("adjustment"), amount: money }),
+  v.object({ kind: v.literal("transfer"), otherFinancialAccountProfileId: v.string(), amount: money, description: v.optional(v.string()) }),
+  v.object({ kind: v.literal("expense"), userCategoryId: v.string(), amount: money, description: v.optional(v.string()) }),
+  v.object({ kind: v.literal("adjustment"), amount: money, description: v.optional(v.string()) }),
 );
 export const closePlace = {
   workspaceId: v.string(), financialAccountProfileId: v.string(), idempotencyKey: v.string(),
@@ -23,6 +23,9 @@ export const placeEndingFields = {
 export const placeEnding = v.object({ id: v.string(), ...placeEndingFields });
 export const closePlaceReceipt = v.object({ ending: placeEnding, replay: v.boolean() });
 export const placeCloseBlocker = v.union(
+  v.object({ code: v.literal("place_future_entries"), latestAccountingDate: v.string() }),
+  v.object({ code: v.literal("place_ending_scan_limit") }),
+  v.object({ code: v.literal("place_undo_dependency"), places: v.array(v.object({ id: v.string(), name: v.string() })) }),
   v.object({ code: v.literal("place_undo_in_progress") }),
   v.object({ code: v.literal("financial_account_profile_ended") }),
   v.object({ code: v.literal("place_last_open") }),

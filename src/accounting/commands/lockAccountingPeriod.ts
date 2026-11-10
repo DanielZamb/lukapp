@@ -1,3 +1,5 @@
+import { AccountingError } from "../errors";
+import { calendarDate, workspaceTimeZone } from "../timeZone";
 import { requireWorkspace } from "../membership";
 import { requirePeriodKey } from "../period";
 import type {
@@ -17,8 +19,11 @@ export async function lockAccountingPeriod(
   clock: AccountingClock,
   input: { actor: Actor; workspaceId: string; period: PeriodKey; reason?: string },
 ): Promise<AccountingPeriod> {
-  await requireWorkspace(store, input.workspaceId, input.actor);
+  const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
   const period = requirePeriodKey(input.period);
+  const current = calendarDate(clock.now(), workspaceTimeZone(workspace)).slice(0, 7);
+  if (current === `${period.year}-${String(period.month).padStart(2, "0")}` && (await store.listProfiles(input.workspaceId)).some(p => p.undoOperationId))
+    throw new AccountingError("period_lock_undo_in_progress");
   const stored = await store.getAccountingPeriod(input.workspaceId, period);
   if (stored?.status === "locked") {
     return stored;

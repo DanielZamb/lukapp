@@ -1,0 +1,330 @@
+ DEPRECATED  "environmentMatchGlobs" is deprecated. Use `test.projects` to define different configurations instead.
+
+ RUN  v3.2.7 /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-41f451c3-0371e9bdadb2a777
+
+ ❯ convex/placeHardening.test.ts (13 tests | 13 failed) 581ms
+   × ended closing counterparty refuses Undo before freezing and names it 120ms
+     → expected { blockers: [], canUndo: true, …(3) } to match object { canUndo: false, …(1) }
+(22 matching properties omitted from actual)
+   × only the target freezes; concurrent endings preserve the last open Place 11ms
+     → {"kind":"accounting","code":"place_undo_in_progress","message":"A Place is being undone. Wait for it to finish"}
+   × legacy category without nature is refused at preview and Start 11ms
+     → expected { blockers: [], canUndo: true, …(3) } to match object { canUndo: false, …(1) }
+(22 matching properties omitted from actual)
+   × future entries refuse preview, Start and Close with latest date 10ms
+     → expected { blockers: [], canUndo: true, …(3) } to match object { blockers: ArrayContaining{…} }
+(23 matching properties omitted from actual)
+   × Recovery remains fundable after closing its expense's Place 36ms
+     → {"kind":"accounting","code":"financial_account_profile_ended","message":"This Place has ended. Choose an open Place"}
+   × funded destination refuses Undo even cancelled=false 14ms
+     → expected { blockers: [], canUndo: true, …(3) } to match object { canUndo: false, …(1) }
+(22 matching properties omitted from actual)
+   × funded destination refuses Undo even cancelled=true 13ms
+     → expected { blockers: [], canUndo: true, …(3) } to match object { canUndo: false, …(1) }
+(22 matching properties omitted from actual)
+   × Recovery flags follow an undoing source and an ended destination 11ms
+     → expected { acceptsContributions: true, …(20) } to match object { acceptsContributions: false, …(1) }
+(19 matching properties omitted from actual)
+   × locking current month cannot interrupt an Undo 7ms
+     → promise resolved "{ month: 9, status: 'locked', …(1) }" instead of rejecting
+   × nonpositional line numbers cannot skip originals at completion 10ms
+     → expected { alreadyReversedCount: +0, …(13) } to match object { state: { kind: 'done' }, …(1) }
+(12 matching properties omitted from actual)
+   × caller descriptions survive Close, Undo and History, and changed text conflicts 5ms
+     → Validator error: Expected one of object, object, object, got `{"amount":{"currency":"COP","minorUnits":200},"description":"Pasar saldo","kind":"transfer","otherFinancialAccountProfileId":"00010010financialAccountProfiles"}`
+   × a batch dying before its error handler is resumed by the independent watchdog 8ms
+     → expected { alreadyReversedCount: +0, …(13) } to match object { state: { kind: 'done' }, …(1) }
+(12 matching properties omitted from actual)
+   × a 50-Place batch has bounded store reads and actually commits ten reversals 325ms
+     → expected { alreadyReversedCount: +0, …(13) } to match object { state: { kind: 'running' }, …(2) }
+(11 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  convex/placeHardening.test.ts > ended closing counterparty refuses Undo before freezing and names it
+AssertionError: expected { blockers: [], canUndo: true, …(3) } to match object { canUndo: false, …(1) }
+(22 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "blockers": ArrayContaining [
+-     {
+-       "code": "place_undo_ended_counterparty",
+-       "places": [
+-         {
+-           "id": "00010010financialAccountProfiles",
+-           "name": "Other",
+-         },
+-       ],
+-     },
+-   ],
+-   "canUndo": false,
++   "blockers": [],
++   "canUndo": true,
+  }
+
+ ❯ convex/placeHardening.test.ts:43:68
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > only the target freezes; concurrent endings preserve the last open Place
+ConvexError: {"kind":"accounting","code":"place_undo_in_progress","message":"A Place is being undone. Wait for it to finish"}
+ ❯ run convex/accountingErrors.ts:9:13
+      7|   } catch (error) {
+      8|     if (error instanceof AccountingError) {
+      9|       throw new ConvexError({
+       |             ^
+     10|         kind: "accounting",
+     11|         code: error.code,
+ ❯ invokeFunction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:90:14
+ ❯ invokeMutation node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:70:18
+ ❯ runMutationWithHandler node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:1989:31
+ ❯ Object.mutationFromPath node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2133:32
+ ❯ Object.runMutation node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2158:20
+ ❯ invokeFunction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:90:14
+ ❯ invokeAction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:513:18
+ ❯ node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2069:35
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > legacy category without nature is refused at preview and Start
+AssertionError: expected { blockers: [], canUndo: true, …(3) } to match object { canUndo: false, …(1) }
+(22 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "blockers": ArrayContaining [
+-     ObjectContaining {
+-       "code": "place_undo_invalid_entry",
+-       "reason": "category_nature_required",
+-     },
+-   ],
+-   "canUndo": false,
++   "blockers": [],
++   "canUndo": true,
+  }
+
+ ❯ convex/placeHardening.test.ts:60:68
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > future entries refuse preview, Start and Close with latest date
+AssertionError: expected { blockers: [], canUndo: true, …(3) } to match object { blockers: ArrayContaining{…} }
+(23 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "blockers": ArrayContaining [
+-     {
+-       "code": "place_future_entries",
+-       "latestAccountingDate": "2027-12-15",
+-     },
+-   ],
++   "blockers": [],
+  }
+
+ ❯ convex/placeHardening.test.ts:66:118
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > Recovery remains fundable after closing its expense's Place
+ConvexError: {"kind":"accounting","code":"financial_account_profile_ended","message":"This Place has ended. Choose an open Place"}
+ ❯ run convex/accountingErrors.ts:9:13
+      7|   } catch (error) {
+      8|     if (error instanceof AccountingError) {
+      9|       throw new ConvexError({
+       |             ^
+     10|         kind: "accounting",
+     11|         code: error.code,
+ ❯ invokeFunction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:90:14
+ ❯ invokeMutation node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:70:18
+ ❯ runMutationWithHandler node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:1989:31
+ ❯ Object.mutationFromPath node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2133:32
+ ❯ Object.runMutation node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2158:20
+ ❯ invokeFunction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:90:14
+ ❯ invokeAction node_modules/.pnpm/convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2.3__react@19.2.3__@_353f03c6f2630d359abf98118947f163/node_modules/convex/src/server/impl/registration_impl.ts:513:18
+ ❯ node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2069:35
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > funded destination refuses Undo even cancelled=false
+ FAIL  convex/placeHardening.test.ts > funded destination refuses Undo even cancelled=true
+AssertionError: expected { blockers: [], canUndo: true, …(3) } to match object { canUndo: false, …(1) }
+(22 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "blockers": ArrayContaining [
+-     {
+-       "code": "place_recovery_contributed_destination",
+-       "plans": [
+-         {
+-           "id": "000000010033savingsRecoveryPlans",
+-           "title": "recover",
+-         },
+-       ],
+-     },
+-   ],
+-   "canUndo": false,
++   "blockers": [],
++   "canUndo": true,
+  }
+
+ ❯ convex/placeHardening.test.ts:87:66
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > Recovery flags follow an undoing source and an ended destination
+AssertionError: expected { acceptsContributions: true, …(20) } to match object { acceptsContributions: false, …(1) }
+(19 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "acceptsContributions": false,
++   "acceptsContributions": true,
+    "canCancel": true,
+  }
+
+ ❯ convex/placeHardening.test.ts:92:96
+     90| test("Recovery flags follow an undoing source and an ended destination…
+     91|  const s=await setup();await recovery(s);await s.t.action(api.accounti…
+     92|  expect((await s.t.query(api.savingsRecovery.evaluate,{workspaceId:s.w…
+       |                                                                                                ^
+     93| });
+     94| test("locking current month cannot interrupt an Undo",async()=>{
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > locking current month cannot interrupt an Undo
+AssertionError: promise resolved "{ month: 9, status: 'locked', …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "month": 9,
++   "status": "locked",
++   "year": 2026,
+  }
+
+ ❯ convex/placeHardening.test.ts:96:59
+     94| test("locking current month cannot interrupt an Undo",async()=>{
+     95|  const s=await setup();await s.t.action(api.accounting.startUndoPlace,…
+     96|  await expect(lock(s.t,s.workspace.id,{year:2026,month:9})).rejects.to…
+       |                                                           ^
+     97| });
+     98| test("nonpositional line numbers cannot skip originals at completion",…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > nonpositional line numbers cannot skip originals at completion
+AssertionError: expected { alreadyReversedCount: +0, …(13) } to match object { state: { kind: 'done' }, …(1) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "reversedCount": 2,
++   "reversedCount": 0,
+    "state": {
+      "kind": "done",
+    },
+  }
+
+ ❯ convex/placeHardening.test.ts:103:27
+    101|  await s.t.run(async ctx=>{for(const line of await ctx.db.query("journ…
+    102|  await s.t.action(api.accounting.startUndoPlace,s.start);await s.finis…
+    103|  expect(await s.status()).toMatchObject({state:{kind:"done"},reversedC…
+       |                           ^
+    104|  const entries=await s.t.query(api.accounting.listJournalEntries,{work…
+    105|  expect(entries.filter(e=>e.reversesEntryId===exp.id)).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > caller descriptions survive Close, Undo and History, and changed text conflicts
+Error: Validator error: Expected one of object, object, object, got `{"amount":{"currency":"COP","minorUnits":200},"description":"Pasar saldo","kind":"transfer","otherFinancialAccountProfileId":"00010010financialAccountProfiles"}`
+ ❯ validateValidator node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:903:23
+ ❯ validateValidator node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:886:17
+ ❯ validateValidator node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:921:21
+ ❯ validateFunctionArgs node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2337:5
+ ❯ Object.actionFromPath node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2146:13
+ ❯ action node_modules/.pnpm/convex-test@0.0.59_convex@1.46.0_@clerk+clerk-react@5.61.10_react-dom@19.3.0_react@19.2_d8bd819f0c5a127a04a455624a0263db/node_modules/convex-test/dist/index.js:2188:20
+ ❯ convex/placeHardening.test.ts:111:16
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > a batch dying before its error handler is resumed by the independent watchdog
+AssertionError: expected { alreadyReversedCount: +0, …(13) } to match object { state: { kind: 'done' }, …(1) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "reversedCount": 1,
++   "reversedCount": 0,
+    "state": {
+-     "kind": "done",
++     "kind": "pending",
+    },
+  }
+
+ ❯ convex/placeHardening.test.ts:133:27
+    131|  expect(await s.status()).toMatchObject({state:{kind:"pending"},revers…
+    132|  await s.finish();
+    133|  expect(await s.status()).toMatchObject({state:{kind:"done"},reversedC…
+       |                           ^
+    134|  expect((await s.t.query(api.accounting.listJournalEntries,{workspaceI…
+    135| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  convex/placeHardening.test.ts > a 50-Place batch has bounded store reads and actually commits ten reversals
+AssertionError: expected { alreadyReversedCount: +0, …(13) } to match object { state: { kind: 'running' }, …(2) }
+(11 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "reversedCount": 10,
++   "reversedCount": 20,
+    "state": {
+      "kind": "running",
+    },
+    "version": 1,
+  }
+
+ ❯ convex/placeHardening.test.ts:148:27
+    146|  const r=vi.spyOn(stores,"convexReadStore").mockImplementation(db=>rea…
+    147|  try{await s.t.mutation(internal.accountingUndo.drive,{operationId:rec…
+    148|  expect(await s.status()).toMatchObject({state:{kind:"running"},revers…
+       |                           ^
+    149|  expect(calls).toBeLessThan(500);expect(documents).toBeLessThan(3000);…
+    150|  console.info(JSON.stringify({places:50,batchReversals:10,storeReadCal…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  13 failed (13)
+   Start at  16:27:34
+   Duration  957ms (transform 185ms, setup 12ms, collect 184ms, tests 581ms, environment 15ms, prepare 46ms)

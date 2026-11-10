@@ -1,4 +1,14 @@
 export const accountingErrorMessages = {
+  place_undo_invalid_entry: "A stored entry needs repair before Undo",
+  place_future_entries: "This Place has future entries. Wait until their accounting date",
+  place_ending_scan_limit: "This Place needs a paged integrity review before it can end",
+  place_undo_dependency: "This Place shares entries with a Place being undone",
+  place_undo_ended_counterparty: "An entry touches an ended Place. Use Close instead",
+  place_recovery_contributed_destination: "A Recovery plan with contributions uses this Place as destination",
+  place_undo_originals_remain: "Unreversed entries still touch this Place",
+  place_undo_abort_forbidden: "Only the authorizing owner can abort an unstarted Undo needing attention",
+  period_lock_undo_in_progress: "The current month cannot lock while an Undo is in progress",
+  description_invalid: "Use a visible description of at most 1000 characters",
   place_undo_in_progress: "A Place is being undone. Wait for it to finish",
   place_recovery_covered_expenses: "A Recovery plan has contributions for an expense in this Place",
   place_undo_current_period_locked: "Undo needs the current month to be open",
@@ -77,7 +87,7 @@ export type AccountingErrorCode = keyof typeof accountingErrorMessages;
 export class AccountingError extends Error {
   readonly code: AccountingErrorCode;
 
-  constructor(code: AccountingErrorCode) {
+  constructor(code: AccountingErrorCode, readonly context?: Record<string, string | number | Array<{ id: string; name: string } | { id: string; title: string }>>) {
     super(accountingErrorMessages[code]);
     this.name = "AccountingError";
     this.code = code;

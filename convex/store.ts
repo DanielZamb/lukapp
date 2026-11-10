@@ -287,8 +287,9 @@ function readStore(db: ReadDb): ReadMethods {
       const id = idFor(db, "financialAccountProfiles", profileId);
       const doc = id && (await db.get(id));
       const ending = doc && await db.query("placeEndings").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
-      const operation = doc && await db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
-      return doc ? toProfile(doc, ending ?? undefined, operation && operation.state.kind !== "done" ? operation._id : undefined) : undefined;
+      const operations = doc ? await db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).collect() : [];
+      const operation = operations.find(o => o.state.kind !== "done" && o.state.kind !== "aborted");
+      return doc ? toProfile(doc, ending ?? undefined, operation?._id) : undefined;
     },
 
     async listProfiles(workspaceId) {
@@ -300,10 +301,9 @@ function readStore(db: ReadDb): ReadMethods {
         .collect();
       const endings = await db.query("placeEndings").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).collect();
       const byProfile = new Map(endings.map(ending => [ending.financialAccountProfileId, ending]));
-      return Promise.all(docs.map(async doc => {
-        const operation = await db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
-        return toProfile(doc, byProfile.get(doc._id), operation && operation.state.kind !== "done" ? operation._id : undefined);
-      }));
+      const operations = await db.query("placeUndoOperations").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).collect();
+      const active = new Map(operations.filter(o => o.state.kind !== "done" && o.state.kind !== "aborted").map(o => [o.financialAccountProfileId, o._id]));
+      return docs.map(doc => toProfile(doc, byProfile.get(doc._id), active.get(doc._id)));
     },
 
     async getJournalEntry(entryId) {
@@ -375,7 +375,7 @@ function readStore(db: ReadDb): ReadMethods {
   };
 }
 
-function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
+function writeStore(db: WriteDb, preparedProfiles?: StoredProfile[]): Pick<AccountingStore, WriteMethod> {
   return {
     async insertPlaceEnding(ending) {
       const id = await db.insert("placeEndings", { ...ending, workspaceId: storedId<"workspaces">(ending.workspaceId), financialAccountProfileId: storedId<"financialAccountProfiles">(ending.financialAccountProfileId) });
@@ -522,7 +522,7 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
           creditMinorUnits: line.creditMinorUnits,
         });
       }
-      const profiles = await db
+      const profiles = preparedProfiles?.map(p => ({ _id: storedId<"financialAccountProfiles">(p.id), postingAccountId: p.postingAccountId })) ?? await db
         .query("financialAccountProfiles")
         .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
         .collect();
@@ -621,6 +621,6 @@ export function convexReadStore(db: ReadDb): AccountingStore {
   return { ...readStore(db), ...readOnlyWrites() };
 }
 
-export function convexStore(db: WriteDb): AccountingStore {
-  return { ...readStore(db), ...writeStore(db) };
+export function convexStore(db: WriteDb, preparedProfiles?: StoredProfile[]): AccountingStore {
+  return { ...readStore(db), ...writeStore(db, preparedProfiles) };
 }

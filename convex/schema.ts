@@ -248,6 +248,7 @@ export default defineSchema({
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_entry", ["journalEntryId", "lineNumber"])
+    .index("by_entry_account", ["journalEntryId", "ledgerAccountId"])
     .index("by_workspace_account", ["workspaceId", "ledgerAccountId"]),
   accountingPeriods: defineTable({
     workspaceId: v.id("workspaces"),

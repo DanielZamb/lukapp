@@ -1,4 +1,5 @@
 import { requireOpenPlace } from "../accounting/placeState";
+import { AccountingError } from "../accounting/errors";
 import { ALL_MONTHS, planProgress } from "./progress";
 import { RecoveryError, planTargetMinorUnits } from "./policy";
 import type { RecoveryContribution, RecoveryCorrection, RecoveryPlan, RecoveryReadStore } from "./types";
@@ -28,8 +29,13 @@ export async function requireContributablePlan(store: RecoveryReadStore, planId:
   if (await store.findReversalOf(plan.sourceJournalEntryId))
     throw new RecoveryError("expense_not_recoverable");
   const expense = await store.getEntry(plan.sourceJournalEntryId);
-  const profile = (await store.listProfiles()).find(item => item.id === expense?.financialAccountProfileId);
-  if (profile) requireOpenPlace(profile);
+  const profiles = await store.listProfiles();
+  const destination = profiles.find(p => p.id === plan.destinationFinancialAccountProfileId);
+  if (!destination) throw new RecoveryError("destination_not_found");
+  requireOpenPlace(destination);
+  const profile = profiles.find(item => item.id === expense?.financialAccountProfileId);
+  if (profile?.undoOperationId) throw new AccountingError("place_undo_in_progress");
+  if (profile?.ending?.act === "undo") throw new RecoveryError("expense_not_recoverable");
   return plan;
 }
 

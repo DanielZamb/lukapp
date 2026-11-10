@@ -38,6 +38,7 @@ export const periodLock = {
   reason: v.optional(v.string()),
 };
 export const reversal = {
+  reversalDescriptionPrefix: v.optional(v.string()),
   ...inWorkspace,
   journalEntryId: v.string(),
   accountingDate: v.optional(v.string()),

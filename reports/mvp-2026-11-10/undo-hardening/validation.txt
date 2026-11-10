@@ -1,0 +1,15 @@
+Source 1250f254007fadaf4231124733b24d0bfc15f81a
+
+ Test Files  178 passed (178)
+      Tests  2896 passed (2896)
+   Start at  16:39:05
+   Duration  19.54s (transform 5.30s, setup 1.92s, collect 37.37s, tests 69.61s, environment 1.06s, prepare 11.89s)
+
+
+
+> lukapp@ typecheck /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-41f451c3-0371e9bdadb2a777
+> tsc --noEmit && pnpm --filter @lukapp/mobile typecheck
+
+
+> @lukapp/mobile@0.1.0 typecheck /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-41f451c3-0371e9bdadb2a777/apps/mobile
+> tsc --noEmit
