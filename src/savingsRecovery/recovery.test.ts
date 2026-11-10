@@ -1,5 +1,6 @@
 import { cancelPlan } from "./cancelPlan";
 import { correctContribution } from "./correctContribution";
+import { cancelReopenedPlans } from "./cancelReopenedPlans";
 import { expect, test } from "vitest";
 import { activatePlan } from "./activatePlan";
 import { evaluateWorkspace } from "./evaluate";
@@ -343,4 +344,120 @@ test("re-attribution refuses a transfer whose existing active claims already exc
     .rejects.toMatchObject({ code: "transfer_capacity_exceeded" });
   expect(await s.store.listCorrections()).toEqual([]);
   expect(await s.store.listContributions()).toHaveLength(2);
+});
+
+async function completedReplacement(s: ReturnType<typeof memory>, transferAmount = 1_000_000) {
+  const { plan: a } = await s.activate();
+  s.transfer("partial-a");
+  const partial = await s.contribute("partial-a");
+  await cancelPlan(s.store, cancelInput(a.id, "cancel-a"));
+  const { plan: b } = await s.activate({ replacesPlanId: a.id, idempotencyKey: "activate-b",
+    installmentCount: 4, installmentMinorUnits: 250_000 });
+  s.transfer("complete-b", transferAmount);
+  const completed = await recordContribution(s.store, { ...cancelInput(b.id, "complete-b"), transferJournalEntryId: "complete-b" });
+  await correctContribution(s.store, { ...correctInput(partial.contribution.id), idempotencyKey: "release-a" });
+  return { a, b, completed };
+}
+
+test.each(["reversal", "correction"])("%s appends one automatic cancellation for reopened B in an A/B/C chain", async kind => {
+  const s = memory();
+  const { a, b, completed } = await completedReplacement(s);
+  const { plan: c } = await s.activate({ idempotencyKey: "activate-c", installmentCount: 4, installmentMinorUnits: 50_000 });
+  const now = Date.UTC(2026, 10, 2, 12);
+  if (kind === "reversal") {
+    s.put({ id: "reverse-b", workspaceId: "ws", policy: "reversal@1", description: "Reverse B transfer",
+      accountingDate: "2026-11-02", amountMinorUnits: 1_000_000, reversesEntryId: "complete-b" });
+    const input = { workspaceId: "ws", actorId: "owner", now,
+      cause: { kind: "transfer_reversed" as const, transferJournalEntryId: "complete-b", reversalJournalEntryId: "reverse-b" } };
+    await cancelReopenedPlans(s.store, input);
+    await cancelReopenedPlans(s.store, input);
+  } else {
+    const input = { ...correctInput(completed.contribution.id), now, idempotencyKey: "remove-b" };
+    const receipt = await correctContribution(s.store, input);
+    expect(await correctContribution(s.store, input)).toEqual({ ...receipt, replay: true });
+  }
+  const view = await evaluateWorkspace(s.store, { now });
+  expect(view.plans.find(p => p.id === a.id)).toMatchObject({ status: "cancelled", cancellation: { origin: { kind: "person" } } });
+  expect(view.plans.find(p => p.id === b.id)).toMatchObject({ status: "cancelled", recoveredMinorUnits: 0, remainingMinorUnits: 0,
+    cancellation: { eventTime: now, recordedAt: now, origin: { kind: "automatic", unfinishedPlanId: c.id,
+      cause: kind === "reversal"
+        ? { kind: "transfer_reversed", transferJournalEntryId: "complete-b", reversalJournalEntryId: "reverse-b" }
+        : { kind: "contribution_corrected", contributionId: completed.contribution.id },
+    } },
+  });
+  expect(view.plans.find(p => p.id === c.id)).toMatchObject({ status: "active", principalMinorUnits: 200_000,
+    installmentCount: 4, installmentMinorUnits: 50_000, remainingMinorUnits: 200_000, cancellation: undefined });
+  expect(view.plans.filter(p => p.status === "active" || p.status === "suspended").map(p => p.id)).toEqual([c.id]);
+  expect(await s.store.listCancellations()).toHaveLength(2);
+  await expect(cancelPlan(s.store, cancelInput(b.id, "manual-b"))).rejects.toMatchObject({ code: "plan_already_cancelled" });
+  await cancelPlan(s.store, cancelInput(c.id, "cancel-c"));
+  expect((await evaluateWorkspace(s.store, { now })).candidates).toMatchObject([{ amountMinorUnits: 1_200_000 }]);
+});
+
+test.each(["reversal", "correction"])("the latest completed plan reopens after %s without another unfinished plan", async kind => {
+  const s = memory();
+  const { b, completed } = await completedReplacement(s);
+  if (kind === "reversal") {
+    s.put({ id: "reverse-b", workspaceId: "ws", policy: "reversal@1", description: "Reverse",
+      accountingDate: "2026-10-02", amountMinorUnits: 1_000_000, reversesEntryId: "complete-b" });
+    await cancelReopenedPlans(s.store, { workspaceId: "ws", actorId: "owner", now: Date.UTC(2026, 9, 2),
+      cause: { kind: "transfer_reversed", transferJournalEntryId: "complete-b", reversalJournalEntryId: "reverse-b" } });
+  } else {
+    await correctContribution(s.store, { ...correctInput(completed.contribution.id), idempotencyKey: "remove-b" });
+  }
+  expect((await s.read()).plans.find(p => p.id === b.id)).toMatchObject({ status: "active", recoveredMinorUnits: 0,
+    remainingMinorUnits: 1_000_000, canCancel: true, cancellation: undefined });
+  expect(await s.store.listCancellations()).toHaveLength(1);
+});
+
+test.each(["reversal", "correction"])("%s of an unfinished plan does not append a cancellation", async kind => {
+  const s = memory();
+  const { plan } = await s.activate();
+  s.transfer();
+  const gift = await s.contribute("xfer-1");
+  if (kind === "reversal") {
+    s.put({ id: "reverse", workspaceId: "ws", policy: "reversal@1", description: "Reverse",
+      accountingDate: "2026-09-18", amountMinorUnits: 230_000, reversesEntryId: "xfer-1" });
+    await cancelReopenedPlans(s.store, { workspaceId: "ws", actorId: "owner", now: Date.UTC(2026, 9, 2),
+      cause: { kind: "transfer_reversed", transferJournalEntryId: "xfer-1", reversalJournalEntryId: "reverse" } });
+  } else {
+    await correctContribution(s.store, correctInput(gift.contribution.id));
+  }
+  expect((await s.read()).plans[0]).toMatchObject({ id: plan.id, status: "active", recoveredMinorUnits: 0, remainingMinorUnits: 1_380_000 });
+  expect(await s.store.listCancellations()).toEqual([]);
+});
+
+test("one transfer reopening two completed plans retains the most recently activated plan", async () => {
+  const s = memory();
+  const { b } = await completedReplacement(s, 1_200_000);
+  const { plan: c } = await s.activate({ idempotencyKey: "activate-c", installmentCount: 4, installmentMinorUnits: 50_000,
+    now: Date.UTC(2026, 8, 18) });
+  const gift = await recordContribution(s.store, { ...cancelInput(c.id, "complete-c"), transferJournalEntryId: "complete-b" });
+  expect(gift.contribution.amountMinorUnits).toBe(200_000);
+  expect((await s.read()).plans.filter(p => p.status === "completed").map(p => p.id)).toEqual([c.id, b.id]);
+  s.put({ id: "reverse-both", workspaceId: "ws", policy: "reversal@1", description: "Reverse shared transfer",
+    accountingDate: "2026-10-02", amountMinorUnits: 1_200_000, reversesEntryId: "complete-b" });
+  await cancelReopenedPlans(s.store, { workspaceId: "ws", actorId: "owner", now: Date.UTC(2026, 9, 2),
+    cause: { kind: "transfer_reversed", transferJournalEntryId: "complete-b", reversalJournalEntryId: "reverse-both" } });
+  const view = await evaluateWorkspace(s.store, { now: Date.UTC(2026, 9, 2) });
+  expect(view.plans.find(p => p.id === b.id)).toMatchObject({ status: "cancelled", cancellation: { origin: { kind: "automatic", unfinishedPlanId: c.id } } });
+  expect(view.plans.filter(p => p.status === "active").map(p => p.id)).toEqual([c.id]);
+});
+
+test("an already unfinished plan stays even if the next reopened plan was activated more recently", async () => {
+  const s = memory();
+  const { b } = await completedReplacement(s);
+  const { plan: c } = await s.activate({ idempotencyKey: "activate-c", installmentCount: 4, installmentMinorUnits: 50_000,
+    now: Date.UTC(2026, 8, 18) });
+  s.transfer("complete-c", 200_000);
+  await recordContribution(s.store, { ...cancelInput(c.id, "complete-c"), transferJournalEntryId: "complete-c" });
+  for (const [transferId, reversalId] of [["complete-b", "reverse-b"], ["complete-c", "reverse-c"]]) {
+    s.put({ id: reversalId, workspaceId: "ws", policy: "reversal@1", description: "Reverse",
+      accountingDate: "2026-10-02", amountMinorUnits: transferId === "complete-b" ? 1_000_000 : 200_000, reversesEntryId: transferId });
+    await cancelReopenedPlans(s.store, { workspaceId: "ws", actorId: "owner", now: Date.UTC(2026, 9, 2),
+      cause: { kind: "transfer_reversed", transferJournalEntryId: transferId, reversalJournalEntryId: reversalId } });
+  }
+  const view = await evaluateWorkspace(s.store, { now: Date.UTC(2026, 9, 2) });
+  expect(view.plans.find(p => p.id === c.id)).toMatchObject({ status: "cancelled", cancellation: { origin: { kind: "automatic", unfinishedPlanId: b.id } } });
+  expect(view.plans.filter(p => p.status === "active").map(p => p.id)).toEqual([b.id]);
 });
