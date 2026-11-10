@@ -59,3 +59,29 @@ test("Budget and Home roll to the next Workspace month at midnight and on foregr
   });
   expect(calendar().month).toBe("2026-12");
 });
+
+test("a time zone change reads the clock again instead of reusing the old zone's last tick", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.setSystemTime(new Date("2026-10-31T10:00:00-05:00"));
+  let calendar: ReturnType<typeof useWorkspaceCalendar> | undefined;
+  function Harness({ timeZone }: { timeZone: string }) {
+    calendar = useWorkspaceCalendar(timeZone);
+    return null;
+  }
+  await act(async () => {
+    root = create(createElement(Harness, { timeZone: "America/Bogota" }));
+  });
+  expect(calendar?.date).toBe("2026-10-31");
+  vi.setSystemTime(new Date("2026-10-31T20:00:00-05:00"));
+  await act(async () => {
+    root?.update(createElement(Harness, { timeZone: "Europe/Madrid" }));
+  });
+  expect(calendar?.date).toBe("2026-11-01");
+  expect(calendar?.month).toBe("2026-11");
+  await act(async () => {
+    root?.update(createElement(Harness, { timeZone: "America/Bogota" }));
+  });
+  expect(calendar?.date).toBe("2026-10-31");
+  expect(calendar?.month).toBe("2026-10");
+});
