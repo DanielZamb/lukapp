@@ -66,3 +66,26 @@ test("Spanish alerts read as whole sentences with the stored category name and c
   expect(two.home).toEqual({ title: "2 categorías se pasaron del tope", detail: "COP 125 de más en total" });
   expect(two.bellLabel).toBe("Alertas, 2 categorías se pasaron del tope");
 });
+
+test("a spend-nothing jar alerts as soon as anything is spent and names the zero limit in each language", () => {
+  const zero = { ...food, category: { id: "delivery", name: "Domicilios", emoji: "🛵" }, limitMinorUnits: 0 };
+  const es = createTranslator("es");
+  for (const consumptionMinorUnits of [0, -20_00])
+    expect(budgetAttention({ currency: "COP", jars: [{ ...zero, consumptionMinorUnits }] }, es).rows).toEqual([]);
+  expect(budgetAttention({ currency: "COP", jars: [{ ...zero, consumptionMinorUnits: 35_00 }] }, es)).toEqual({
+    rows: [{ id: "delivery", title: "🛵  Domicilios se pasó del tope", detail: "Sin gastos · llevas COP 35 gastados",
+      destination: { pathname: "/category-look", params: { categoryId: "delivery" } } }],
+    home: { title: "Domicilios se pasó del tope sin gastos", detail: "COP 35 de más" },
+    bellLabel: "Alertas, 1 categoría se pasó del tope",
+  });
+  expect(budgetAttention({ currency: "COP", jars: [{ ...zero, consumptionMinorUnits: 35_00 }, food] }, en)).toEqual({
+    rows: [
+      { id: "food", title: "🍋  Food is over", detail: "COP 150 of COP 100",
+        destination: { pathname: "/category-look", params: { categoryId: "food" } } },
+      { id: "delivery", title: "🛵  Domicilios is over", detail: "Spend nothing · COP 35 spent",
+        destination: { pathname: "/category-look", params: { categoryId: "delivery" } } },
+    ],
+    home: { title: "2 categories are over their limits", detail: "COP 85 over in total" },
+    bellLabel: "Alerts, 2 over the limit",
+  });
+});

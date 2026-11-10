@@ -22,7 +22,7 @@ async function render(props: Partial<BudgetBoardProps> = {}) {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const defaults: BudgetBoardProps = {
-    month: "2026-10", currency: "COP", saved: false, canAdd: true, jars: [], categoryColors: new Map(),
+    month: "2026-10", currency: "COP", notice: null, canAdd: true, jars: [], categoryColors: new Map(),
     onBack: () => {}, onAdd: () => {}, onEdit: () => {},
   };
   await act(async () => {
@@ -100,4 +100,33 @@ test("a board with every category limited omits extra creation", async () => {
   expect(text(screen)).toContain("Change October's limit");
   expect(text(screen)).not.toContain("Budget saved");
   expect(screen.findAllByProps({ accessibilityLabel: "Set another limit" })).toHaveLength(0);
+});
+
+test("spend-nothing jars are labelled, calm at zero or after a refund, and over by everything spent", async () => {
+  const jars = [jar("Delivery", 0, 0), jar("Bets", 4_500_000, 0), jar("Gifts", -2_000_000, 0)];
+  const screen = await render({ jars, categoryColors: new Map(jars.map((jar) => [jar.category.id, "#047857"])) });
+  expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join(""))).toEqual([
+    "OCTOBER", "Budgets", "Open Bets",
+    "🛒", "Delivery", "Spend nothing", "Nothing spent",
+    "🛒", "Bets", "Spend nothing", "45K over",
+    "🛒", "Gifts", "Spend nothing", "Nothing spent", "Set another limit",
+  ]);
+  const buttons = screen.findAll((node) => String(node.type) === "Pressable").filter((node) => node.props.accessibilityLabel?.endsWith("Edit Budget."));
+  expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual([
+    "Delivery: spend nothing. Nothing spent this month. Edit Budget.",
+    "Bets: COP 45.000,00 over a spend-nothing limit. Edit Budget.",
+    "Gifts: spend nothing. Nothing spent this month. Edit Budget.",
+  ]);
+  expect(buttons.map((button) => Object.assign({}, ...button.props.style({ pressed: false })))).toEqual([
+    expect.objectContaining({ borderColor: "#047857", backgroundColor: theme.secondary }),
+    expect.objectContaining({ borderColor: theme.danger, backgroundColor: `${theme.danger}18` }),
+    expect.objectContaining({ borderColor: "#047857", backgroundColor: theme.secondary }),
+  ]);
+  expect(screen.findAll((node) => String(node.type) === "View" && node.props.pointerEvents === "none")).toHaveLength(0);
+});
+
+test("a removed limit is confirmed by name and month above the remaining jars", async () => {
+  const screen = await render({ jars: [jar("Travel", 0)], notice: { kind: "removed", name: "Food" } });
+  expect(screen.findAll((node) => String(node.type) === "Text" && node.props.accessibilityRole === "alert")
+    .map((node) => node.children.join(""))).toEqual(["Limit for Food removed from October."]);
 });

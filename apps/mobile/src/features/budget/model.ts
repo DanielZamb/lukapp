@@ -7,13 +7,21 @@ import type { api } from "../api";
 type Evaluation = FunctionReturnType<typeof api.budget.evaluate>;
 export type BudgetCategory = Evaluation["availableCategories"][number];
 export type BudgetJar = Omit<Evaluation["jars"][number], "revisionId">;
+export type RemovedLimit = Evaluation["removedLimits"][number];
 
+/**
+ * A zero limit means spend nothing. Any net spending is over by that amount. No spending, or a net
+ * refund, reads as calm rather than as room left to spend.
+ */
 export function jarPresentation(jar: BudgetJar) {
+  const spendNothing = jar.limitMinorUnits === 0;
   const left = jar.limitMinorUnits - jar.consumptionMinorUnits;
+  const status: "left" | "over" | "clear" = left < 0 ? "over" : spendNothing ? "clear" : "left";
   return {
-    over: left < 0,
-    amount: Math.abs(left),
-    fill: jar.limitMinorUnits > 0 ? Math.max(0, Math.min(1, left / jar.limitMinorUnits)) : 0,
+    status,
+    spendNothing,
+    amount: status === "clear" ? 0 : Math.abs(left),
+    fill: status === "left" ? Math.max(0, Math.min(1, left / jar.limitMinorUnits)) : 0,
   };
 }
 
@@ -38,7 +46,7 @@ export function nextAction(jars: BudgetJar[], month: string, { t, language }: Tr
   const over = jars.filter((jar) => jar.consumptionMinorUnits > jar.limitMinorUnits)
     .sort((a, b) => (a.limitMinorUnits - a.consumptionMinorUnits) - (b.limitMinorUnits - b.consumptionMinorUnits))[0];
   if (over) return { kind: "edit", label: t("budget.nextOpen", { name: over.category.name }), jar: over };
-  const hot = jars.filter((jar) => jar.consumptionMinorUnits / jar.limitMinorUnits >= 0.8)
+  const hot = jars.filter((jar) => jar.limitMinorUnits > 0 && jar.consumptionMinorUnits / jar.limitMinorUnits >= 0.8)
     .sort((a, b) => b.consumptionMinorUnits / b.limitMinorUnits - a.consumptionMinorUnits / a.limitMinorUnits)[0];
   if (hot) return { kind: "edit", label: t("budget.nextHot", { name: hot.category.name }), jar: hot };
   const first = jars[0];

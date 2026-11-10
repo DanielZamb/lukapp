@@ -48,13 +48,18 @@ async function renderSheet(currency: string, previousSpendMinorUnits = 7_312_345
       amountIssue: null,
       busy: false,
       pending: false,
+      pendingAct: null,
       editable: true,
       canSubmit: true,
+      canSend: () => true,
       canDismiss: true,
       error: "",
       onLimit: () => {},
       onAmount: () => {},
+      onResetAmount: () => {},
       onSave: () => {},
+      onSpendNothing: () => {},
+      onRemove: () => {},
       onDismiss: () => {},
     }), {
       createNodeMock: (element) => {

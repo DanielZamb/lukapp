@@ -1,6 +1,6 @@
 import { toMajorUnits, minorUnitFactor } from "../money";
 import * as Crypto from "expo-crypto";
-import { useAction, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useLayoutEffect, useRef } from "react";
 import { ActivityIndicator, Text } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
@@ -11,7 +11,7 @@ import { api } from "../api";
 import { useLevelNavigation } from "../levelDoor/navigation";
 import { BudgetComposer, limitSuggestions } from "./BudgetComposer";
 import type { BudgetCategory } from "./model";
-import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
+import { useBudgetEditor, useSendLimitCommand, type BudgetEditorSeed } from "./useBudgetEditor";
 
 export function BudgetCreation({ seed, categories, categoryColors, unlocking, onClose, onSaved }: {
   seed: BudgetEditorSeed;
@@ -24,13 +24,13 @@ export function BudgetCreation({ seed, categories, categoryColors, unlocking, on
   const theme = useTheme();
   const ui = useUi();
   const { t } = useT();
-  const save = useAction(api.budget.setCategoryLimit);
+  const send = useSendLimitCommand();
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
   const navigation = useLevelNavigation();
   const unlockingSave = useRef<boolean | null>(null);
   const editor = useBudgetEditor(seed, {
-    save: (request) => { unlockingSave.current ??= unlocking; return save(request); },
+    send: (command) => { unlockingSave.current ??= unlocking; return send(command); },
     reportFailure, newKey: Crypto.randomUUID,
     onSaved: ({ revision }) => {
       onSaved();

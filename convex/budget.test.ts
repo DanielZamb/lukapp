@@ -187,8 +187,8 @@ test("zero and removed overlapping jars feed Alerts and posting impact without c
   const entry = await s.t.action(api.accounting.recordCashExpense, queued);
   expect((await s.read()).jars).toMatchObject([{ category: { id: family }, limitMinorUnits: 0, consumptionMinorUnits: 150000 }]);
   expect(attention(await s.read())).toEqual({
-    rows: [{ id: family, title: "🛒  Family is over", detail: "COP 1.500 of COP 0", destination: { pathname: "/category-look", params: { categoryId: family } } }],
-    home: { title: "Family is over its limit", detail: "COP 1.500 over" }, bellLabel: "Alerts, 1 over the limit",
+    rows: [{ id: family, title: "🛒  Family is over", detail: "Spend nothing · COP 1.500 spent", destination: { pathname: "/category-look", params: { categoryId: family } } }],
+    home: { title: "Family is over its spend-nothing limit", detail: "COP 1.500 over" }, bellLabel: "Alerts, 1 over the limit",
   });
   expect((await s.t.query(api.accounting.postedActivity, { workspaceId: s.workspaceId, month: "2026-09" })).monthSpendMinorUnits).toBe(150000);
   await s.t.action(api.accounting.lockAccountingPeriod, { workspaceId: s.workspaceId, period: { year: 2026, month: 9 } });

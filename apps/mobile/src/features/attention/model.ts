@@ -18,12 +18,14 @@ export function budgetAttention({ currency, jars }: Pick<BudgetEvaluation, "curr
     rows: over.map(({ category, consumptionMinorUnits, limitMinorUnits }) => ({
       id: category.id,
       title: t("home.alertOver", { emoji: category.emoji, name: category.name }),
-      detail: t("home.alertSpent", { spent: money(consumptionMinorUnits), limit: money(limitMinorUnits) }),
+      detail: limitMinorUnits === 0 ? t("budget.alertSpendNothing", { spent: money(consumptionMinorUnits) })
+        : t("home.alertSpent", { spent: money(consumptionMinorUnits), limit: money(limitMinorUnits) }),
       destination: { pathname: "/category-look", params: { categoryId: category.id } } satisfies AlertDestination,
     })),
     home: first ? {
-      title: over.length === 1 ? t("home.overOne", { name: first.category.name })
-        : t("home.overMany", { count: over.length }),
+      title: over.length > 1 ? t("home.overMany", { count: over.length })
+        : first.limitMinorUnits === 0 ? t("budget.homeOverSpendNothing", { name: first.category.name })
+        : t("home.overOne", { name: first.category.name }),
       detail: t(over.length === 1 ? "home.overAmount" : "home.overTotal", { amount: excess }),
     } : null,
     bellLabel: over.length > 0 ? tn("home.bellOver", over.length) : t("home.bellNone"),
