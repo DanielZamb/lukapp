@@ -67,7 +67,7 @@ test("counted review rows agree in number in Spanish and keep English as it was"
 
 test("a rejected close shows a translated message, never the server's English text", () => {
   const rejected = new ConvexError({ kind: "accounting", code: "accounting_period_invalid", message: "Accounting Period must be a real year and month" });
-  expect(lockFailureMessage(rejected, es)).toBe("El mes no se cerró. Revisa que siga abierto y vuelve a intentar.");
+  expect(lockFailureMessage(rejected, es)).toBe("No pudimos cerrar el mes. Revisa que siga abierto y vuelve a intentar.");
   expect(lockFailureMessage(rejected, en)).toBe("The month was not locked. Check that it is still open and try again.");
   expect(lockFailureMessage(new Error("offline"), es)).toBe("No pudimos confirmar el cierre. Reintenta: revisamos el mismo mes sin cerrarlo dos veces.");
   expect(lockFailureMessage(new Error("offline"), en)).toBe("Could not confirm the close. Retry to lock the same month safely.");

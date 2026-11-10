@@ -364,8 +364,8 @@ test.each([false, true])("posting replaces the form and View recovery plan shows
   expect(screen.findAllByType(Header)).toHaveLength(0);
   expect(JSON.stringify(root?.toJSON())).toContain(capped ? "COP 1.500.000 moved" : "COP 300.000 moved");
   expect(JSON.stringify(root?.toJSON())).toContain(capped
-    ? "COP 1.200.000 counted toward Emergency repair. Your Emergency repair plan is now 100% complete. The Savings account balance remains separate from plan progress."
-    : "Your Emergency repair plan is now 70% complete. The Savings account balance remains separate from plan progress.");
+    ? "COP 1.200.000 counted toward Emergency repair. Your Emergency repair plan is now 100% complete. Your savings place's balance is separate from plan progress."
+    : "Your Emergency repair plan is now 70% complete. Your savings place's balance is separate from plan progress.");
   expect(screen.findByType(PrimaryButton).props).toMatchObject({ label: "View recovery plan", trailingIcon: "trending-up-outline" });
   expect(screen.findByType(SecondaryButton).props.label).toBe("Back home");
   await act(async () => { stack.goBack(); stack.dispatch(StackActions.pop(1)); });
@@ -799,7 +799,7 @@ function choose(screen: ReactTestInstance, label: string) {
 
 test("Fix attribution lists only plans that can take the contribution and sends one planning-only correction", async () => {
   const { screen } = await openFix();
-  expect(screen.findByType(Header).props).toMatchObject({ title: "Fix attribution", eyebrow: "EMERGENCY REPAIR" });
+  expect(screen.findByType(Header).props).toMatchObject({ title: "Change the plan it counts toward", eyebrow: "EMERGENCY REPAIR" });
   expect(texts()).toEqual(expect.arrayContaining([
     "COP 300.000", "September 18, 2026 · counts toward Emergency repair",
     "This changes only which plan the transfer counts toward. It does not move money or reverse the transfer.",
@@ -831,7 +831,7 @@ test("Fix attribution lists only plans that can take the contribution and sends 
     workspaceId: "workspace", contributionId: "sep", reason: "Wrong plan", targetPlanId: "appliance", idempotencyKey: "fix-key",
   }]]);
   expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
-  expect(alerts()).toEqual(["Attribution corrected. No money moved."]);
+  expect(alerts()).toEqual(["Contribution now counts toward the right plan. No money moved."]);
   const row = screen.find((node) => node.type === ListRow && node.props.title === "COP 300.000");
   expect([row.props.value, row.props.detail]).toEqual([
     "Corrected", "September 18, 2026\nMoved to Home appliance\nReason: Wrong plan\nRecorded Oct 2, 2026, 3:30 PM",
@@ -842,7 +842,7 @@ test("Fix attribution lists only plans that can take the contribution and sends 
   expect([moved.props.value, moved.props.detail]).toEqual(["Counted", "September 18, 2026\nMoved from Emergency repair"]);
   await act(async () => { stack.goBack(); });
   expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
-  expect(alerts()).toEqual(["Attribution corrected. No money moved."]);
+  expect(alerts()).toEqual(["Contribution now counts toward the right plan. No money moved."]);
   await act(async () => { stack.goBack(); });
   expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(7);
 });

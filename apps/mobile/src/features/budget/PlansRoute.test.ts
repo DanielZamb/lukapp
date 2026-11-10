@@ -65,7 +65,7 @@ test("Plans matches the settled landing using the workspace month with separate 
   const screen = root.root;
   expect(textCopy(screen)).toEqual([
     "LOOKING AHEAD", "Plans", "October budget", "This month's limits", "Savings recovery", "Start from an expense",
-    "Budget is the October plan. Recovery is a sibling destination. It is not a budget row.",
+    "Budget is your plan for October. Savings recovery is separate.",
   ]);
   expect(screen.findAll((node) => String(node.type) === "Icon").map((node) => node.props.name)).toEqual([
     "chevron-back", "flag-outline", "chevron-forward", "trending-up-outline", "chevron-forward",
@@ -147,7 +147,7 @@ test("Plans keeps the recovery row visible while evaluate is loading", async () 
   const copy = textCopy(root.root);
   expect(copy).toEqual([
     "LOOKING AHEAD", "Plans", "October budget", "This month's limits", "Savings recovery", "",
-    "Budget is the October plan. Recovery is a sibling destination. It is not a budget row.",
+    "Budget is your plan for October. Savings recovery is separate.",
   ]);
   expect(copy).not.toContain("Emergency repair");
   root.root.findByProps({ accessibilityLabel: "Savings recovery, " });

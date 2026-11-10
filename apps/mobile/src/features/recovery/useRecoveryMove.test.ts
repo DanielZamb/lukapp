@@ -211,7 +211,7 @@ test("a Spanish movement stores a Spanish description and a retry repeats it unc
 test.each([
   { failure: new ConvexError({ kind: "accounting", code: "insufficient_funds" }),
     en: "The movement was rejected. Check the source and amount, then try again.",
-    es: "No se hizo la transferencia. Revisa el origen y el valor, y vuelve a intentarlo." },
+    es: "No pudimos hacer la transferencia. Revisa el origen y el monto, y vuelve a intentarlo." },
   { failure: new Error("lost acknowledgement"),
     en: "Could not confirm the transfer. Retry to safely check the same movement.",
     es: "No pudimos confirmar la transferencia. Reintenta: revisamos la misma transferencia sin duplicarla." },

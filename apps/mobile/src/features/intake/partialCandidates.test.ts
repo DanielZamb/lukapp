@@ -175,6 +175,6 @@ test("the review note is one sentence per language around the stored source, amo
     + "Original amount 45123.45 COP. Original direction out. Review currency COP.");
   expect(await noteFor(complete, "es")).toBe(`Fuente ${mapping.packageName}. Leída el ${formatDateTime("es", capture.capturedAt)}. `
     + "Monto original 45123,45 COP. Según la notificación, la plata sale. Moneda a revisar: COP.");
-  expect(await noteFor(partials[0]!, "es")).toContain("No se pudo leer el monto. Según la notificación, la plata entra.");
+  expect(await noteFor(partials[0]!, "es")).toContain("No pudimos leer el monto. Según la notificación, la plata entra.");
   expect(await noteFor(partials[1]!, "es")).toContain("No se sabe si la plata entra o sale. Escribe el monto con signo.");
 });

@@ -51,7 +51,7 @@ export const budget: Messages<typeof en> = {
   saveMonth: "Guardar para {month}",
 
   errorStale: "Este tope o el mes cambió. Cierra y vuelve a abrir el presupuesto para usar el tope más reciente.",
-  errorRejected: "El presupuesto no se guardó. Revisa la categoría y que el tope sea mayor que cero, y vuelve a intentar.",
+  errorRejected: "No pudimos guardar el presupuesto. Revisa la categoría y que el tope sea mayor que cero, y vuelve a intentar.",
   errorUnknown: "No pudimos confirmar si se guardó. Reintenta: revisamos el mismo presupuesto sin duplicarlo.",
 
   impactEyebrow: "TE PASARÍAS DEL TOPE",

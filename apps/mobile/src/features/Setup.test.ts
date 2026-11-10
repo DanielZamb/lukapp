@@ -154,7 +154,7 @@ async function open() {
 async function reveal() {
   await press("Food");
   await press("COP");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
 }
 
 const starterSelection = ({ name, style }: { name: string; style: (typeof starterCategories)[number]["style"] }) =>
@@ -173,7 +173,7 @@ test("only categories open; choices reveal currency, alerts, then empty amount a
   ).toHaveLength(1);
   await press("COP");
   expect(nodes("Starting amount")).toHaveLength(0);
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   expect(node("Starting amount").props).toMatchObject({
     value: "",
     placeholder: "0",
@@ -397,7 +397,7 @@ test("completion shows six look chips and exact summary, then goes home", async 
   });
   expect(text()).toContain("You're set");
   expect(text()).toContain("Purchase alerts can become Candidates after device setup. Device access and review are still required.");
-  expect(text()).toContain("Budgets stay one door away.");
+  expect(text()).toContain("Budgets are one step away.");
   expect(text()).not.toContain("Shopping");
   expect(
     root?.root
@@ -434,7 +434,7 @@ test("the actual custom setup editor blocks unknown names, resets answers and pr
   await press("I receive it");
   await press("Add category");
   await press("COP");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   await press("Start tracking");
   expect(backend.ensure.mock.calls[0][0].categories).toEqual([
     { kind: "custom", name: "Another income", answer: "receive", style: expect.any(Object) },
@@ -472,7 +472,7 @@ test("deferred accounts never enter categories; defaults succeed first and accou
   backend.place.mockRejectedValueOnce(new Error("lost place reply"));
   await press("Add this place");
   expect(nodes("Add later")).toHaveLength(0);
-  expect(node("Account name").props.editable).toBe(false);
+  expect(node("Place name").props.editable).toBe(false);
   await press("Retry setup");
   expect(backend.ensure).toHaveBeenCalledTimes(2);
   expect(backend.place).toHaveBeenCalledTimes(2);
@@ -508,7 +508,7 @@ test("setup shows an overridable name suggestion and keeps the confirmed flow an
   await press("I receive it");
   await press("Add category");
   await press("COP");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   await press("Start tracking");
   expect(backend.ensure.mock.calls[0][0].categories[0]).toMatchObject({ kind: "custom", name: "Savings", answer: "receive" });
   expect(backend.place).not.toHaveBeenCalled();
@@ -521,7 +521,7 @@ test("a deferred place uses the selected non-COP workspace currency without subs
   await press("More currencies");
   await type("Search currencies", "CAD");
   await press("CAD, Canadian Dollar");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   await press("Start tracking");
   await type("Balance today", "12,34");
   await press("Add this place");
@@ -563,7 +563,7 @@ test("uncertain defaults keep account queue, categories and currency read-only t
   await press("Start tracking");
   expect(backend.ensure.mock.calls[1][0]).toEqual(backend.ensure.mock.calls[0][0]);
   expect(backend.ensure.mock.calls[1][0]).toMatchObject({ functionalCurrency: "COP", startingMinorUnits: 1200 });
-  expect(node("Account name").props.value).toBe("Reserve A");
+  expect(node("Place name").props.value).toBe("Reserve A");
   await press("Add this place");
   expect(backend.place).toHaveBeenCalledOnce();
   expect(backend.place.mock.calls[0][0].payload.name).toBe("Reserve A");
@@ -584,7 +584,7 @@ async function openInSpanish() {
 test("the setup sheet reads in Spanish through every stage and its errors", async () => {
   await openInSpanish();
   expect(text()).toContain("¿En qué se te va la plata?");
-  expect(text()).toContain("CONFIGURACIÓN · UNA HOJA");
+  expect(text()).toContain("CONFIGURACIÓN");
   expect(text()).toContain("Moneda");
   expect(text()).toContain("Zona horaria");
   expect(node("Cancelar la configuración")).toBeDefined();

@@ -311,7 +311,7 @@ test("the Month Close preview counts Candidates, returns to review, and continue
   await act(async () => button("Preview Month Close warning").props.onPress());
   expect(text()).toContain("Complete October");
   expect(text()).toContain("2");
-  expect(text()).toContain("local Candidates still need a decision");
+  expect(text()).toContain("Candidates on this phone still need a decision");
   expect(text()).toContain("Review any October activity now.");
   expect(text()).toContain("this does not block Month Close.");
   expect(onCompleteMonth).not.toHaveBeenCalled();
@@ -342,7 +342,7 @@ test.each([1, 3])("acknowledged confirmation shows the %i record count and delet
   const onContinueAfterConfirmation = vi.fn();
   await act(async () => { root = create(createElement(DraftsScreen, render({ confirmedCount: count, drafts, onContinueAfterConfirmation }))); });
   expect(text()).toContain(count === 1 ? "Record added" : "3 records added");
-  expect(text()).toContain("The server validated and posted each record. Local notification content was deleted after acknowledgement.");
+  expect(text()).toContain("Lukapp checked and posted each one. The notification text was deleted from this phone after confirmation.");
   await act(async () => button("Back to Candidates").props.onPress());
   expect(onContinueAfterConfirmation).toHaveBeenCalledOnce();
 });
@@ -442,7 +442,7 @@ test("stored Candidate errors and currency mismatches read in Spanish, never as 
   expect(shown).toContain("Ese mes ya está cerrado.");
   expect(shown).toContain("Este movimiento ya se había enviado con otros datos.");
   expect(shown).toContain("La confirmación está pendiente. Ábrelo para reintentar.");
-  expect(shown).toContain("No se aceptó este movimiento");
+  expect(shown).toContain("No pudimos registrar este movimiento");
   for (const raw of ["Locked Period", "idempotency_key_conflict", "Confirmation pending", "Something the server said"]) expect(shown).not.toContain(raw);
 });
 

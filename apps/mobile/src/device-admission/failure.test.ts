@@ -19,12 +19,12 @@ test("each server code keeps its kind and its own message in both languages", ()
       "Otro celular ya usa este cupo. Revisa cuál es el celular activo e intenta de nuevo."],
     device_revoked: ["denied", "This device’s access was revoked.", "Este celular ya no tiene acceso."],
     owner_required: ["denied", "This account no longer has access.", "Esta cuenta ya no tiene acceso."],
-    session_inactive: ["denied", "This session cannot be admitted. Sign out and sign in again.",
-      "No se puede autorizar esta sesión. Cierra sesión y vuelve a iniciarla."],
+    session_inactive: ["denied", "We couldn't authorize this session. Sign out and sign in again.",
+      "No pudimos autorizar esta sesión. Cierra sesión y vuelve a iniciarla."],
     device_conflict: ["denied", "This session is registered to another installation. Sign out and sign in again.",
       "Esta sesión está registrada en otra instalación. Cierra sesión y vuelve a iniciarla."],
-    device_metadata_invalid: ["denied", "This build could not identify the installation. Check the app build before trying again.",
-      "Esta versión de la app no pudo identificar la instalación. Revisa la versión de la app antes de intentar de nuevo."],
+    device_metadata_invalid: ["denied", "We couldn't identify this installation with this version of the app. Check the app version before trying again.",
+      "No pudimos identificar la instalación con esta versión de la app. Revisa la versión de la app antes de intentar de nuevo."],
   };
   for (const [code, [kind, english, spanish]] of Object.entries(expected)) {
     expect(failure(code, "en"), code).toEqual({ kind, message: english });

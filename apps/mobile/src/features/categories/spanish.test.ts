@@ -95,7 +95,7 @@ test("the picker counts the selection and offers the encompassing category in Sp
   })));
   const shown = text();
   expect(shown).toContain("Nada coincide con “zz”.");
-  expect(shown).toContain("3 de 3 elegidas. Cada una cuenta el valor completo.");
+  expect(shown).toContain("3 de 3 elegidas. Cada una cuenta el monto completo.");
   expect(shown).toContain("Elige máximo tres categorías. Quita una o crea una categoría que las abarque.");
   expect(labels()).toEqual(expect.arrayContaining(["Buscar categorías", "Agregar la tuya", "Crear una categoría que las abarque", "Listo"]));
 });

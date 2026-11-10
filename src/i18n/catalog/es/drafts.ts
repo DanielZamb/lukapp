@@ -13,7 +13,7 @@ export const drafts: Messages<typeof en> = {
   candidateChanged: "Este movimiento por revisar cambió desde que lo abriste. Revísalo y vuelve a intentarlo.",
   candidateFrozen: "Su confirmación ya se envió, así que no se puede descartar. Ábrelo para reintentar.",
   draftFrozen: "Este borrador se está registrando, así que no se puede descartar. Reintenta el registro para terminarlo.",
-  discardFailed: "No se pudo descartar. Vuelve a intentarlo.",
+  discardFailed: "No pudimos descartarlo. Vuelve a intentarlo.",
   incompleteDraft: "Borrador incompleto",
   unnamedCandidate: "Movimiento por revisar sin descripción",
   keepDraft: "Guardar borrador",
@@ -25,5 +25,5 @@ export const drafts: Messages<typeof en> = {
   leaveDraftBody: "Si no los guardas, el borrador se queda como estaba.",
   discardChanges: "Descartar cambios",
   continueEditing: "Seguir editando",
-  keepFailed: "No se pudo guardar el borrador en este celular. Vuelve a intentarlo.",
+  keepFailed: "No pudimos guardar el borrador en este celular. Vuelve a intentarlo.",
 };

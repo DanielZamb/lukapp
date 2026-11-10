@@ -129,7 +129,7 @@ test("history matches the prototype row, uses primary for money in, and navigate
   const cashRow = { ...detail.row, financialAccountProfileId: "cash", reversed: true };
   const props = { ...historyProps(), rows: [cashRow], scopedRows: [cashRow], total: 3, initialProfileId: "cash" };
   await act(async () => { root = create(createElement(HistoryScreen, props)); });
-  expect(text()).toContain("ACROSS ALL PLACES\nTx history");
+  expect(text()).toContain("ACROSS ALL PLACES\nHistory");
   expect(text()).toContain("1 of 3");
   expect(text()).toContain("October 17 · 🥑 Food · Daily · Reversed");
   expect(text()).toContain("−$1.500");

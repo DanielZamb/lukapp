@@ -331,7 +331,7 @@ test("a setup saves all classification facts before posting and leaves a definit
   );
   expect(editor().editable).toBe(true);
   expect(editor().setup?.name).toBe("Card");
-  expect(editor().error).toBe("Locked Period");
+  expect(editor().error).toBe("That month is already closed");
 });
 
 test("a late setup acknowledgement cannot clear a new admission's saved transfer", async () => {

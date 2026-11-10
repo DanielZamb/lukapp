@@ -12,13 +12,15 @@ import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import type { PlaceDraft } from "./usePostingEditor";
 import type { PlaceKind } from "./pendingPostingSchema";
 import { useT, type MessageKey } from "../../i18n";
+import { kindDetails, placeKinds, type PlaceKind as PlaceChoice } from "../places/model";
 
-const assetKinds: Array<[PlaceKind, MessageKey]> = [
-  ["bankAccount", "posting.setupKindChecking"],
-  ["savingsAccount", "posting.setupKindSavings"],
-  ["cash", "posting.setupKindWallet"],
-];
-const debtKinds: Array<[PlaceKind, MessageKey]> = [["creditCard", "posting.setupKindCreditCard"], ["loan", "posting.setupKindLoan"]];
+type KindChip = readonly [id: string, productKind: PlaceKind, label: MessageKey];
+const assetLabels: Record<PlaceChoice, MessageKey> = {
+  Checking: "posting.setupKindChecking", Savings: "posting.setupKindSavings",
+  DigitalWallet: "posting.setupKindDigitalWallet", Cash: "posting.setupKindWallet",
+};
+const assetKinds: KindChip[] = placeKinds.map((choice) => [choice, kindDetails[choice].productKind, assetLabels[choice]]);
+const debtKinds: KindChip[] = [["creditCard", "creditCard", "posting.setupKindCreditCard"], ["loan", "loan", "posting.setupKindLoan"]];
 const emojis = ["💰", "🏦", "👛", "💳", "🏠", "💼", "🪙", "🐷", "✨", "🚗"];
 
 export function AccountSetupForm(props: {
@@ -41,9 +43,12 @@ export function AccountSetupForm(props: {
   const lookSheet = useRef<BottomSheetModal>(null);
   const [lookEmoji, setLookEmoji] = useState("💰");
   const [lookOpen, setLookOpen] = useState(false);
+  const [chosen, setChosen] = useState<string | null>(null);
   const value = props.value;
   const debt = value !== null && (value.productKind === null || value.productKind === "creditCard" || value.productKind === "loan");
   const kinds = debt ? debtKinds : assetKinds;
+  const selected = kinds.find(([id, productKind]) => id === chosen && productKind === value?.productKind)?.[0]
+    ?? kinds.find(([, productKind]) => productKind === value?.productKind)?.[0];
   const balanceLabel = debt ? t("posting.setupOwed") : t("posting.setupBalance");
   const hasValue = value !== null;
   useEffect(() => {
@@ -96,20 +101,23 @@ export function AccountSetupForm(props: {
                 accessibilityRole="radiogroup"
                 accessibilityLabel={t("posting.setupTypeA11y")}
               >
-                {kinds.map(([productKind, labelKey]) => (
+                {kinds.map(([id, productKind, labelKey]) => (
                   <Pressable
-                    key={productKind}
+                    key={id}
                     accessibilityLabel={t(labelKey)}
                     accessibilityRole="radio"
                     accessibilityState={{
-                      checked: value.productKind === productKind,
+                      checked: selected === id,
                       disabled: !props.editable,
                     }}
                     disabled={!props.editable}
-                    onPress={() => props.onChange({ ...value, productKind })}
+                    onPress={() => {
+                      setChosen(id);
+                      props.onChange({ ...value, productKind });
+                    }}
                     style={[
                       styles.chip,
-                      value.productKind === productKind && styles.selected,
+                      selected === id && styles.selected,
                     ]}
                   >
                     <Text style={ui.body}>{t(labelKey)}</Text>

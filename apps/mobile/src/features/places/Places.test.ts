@@ -49,7 +49,7 @@ test("one pool matches the prototype and row and receipt have separate destinati
   expect(texts()).toEqual(["ONE POOL", "My money", "What you have now", "COP 100",
     "Bank and pocket are still one pool. Add a place when money lives apart.", "💰", "My money", "COP 100", "Add another place"]);
   await act(async () => button("My money").props.onPress());
-  await act(async () => button("Tx history for My money").props.onPress());
+  await act(async () => button("History for My money").props.onPress());
   expect(state.push.mock.calls).toEqual([
     [{ pathname: "/account", params: { profileId: "daily" } }],
     [{ pathname: "/history", params: { profileId: "daily" } }],

@@ -15,6 +15,6 @@ export const settings = {
   categories: "Categories",
   noCategories: "No categories yet",
   intake: "Notification intake",
-  intakeDetail: "Device access, source apps, accounts and Candidates",
+  intakeDetail: "Device access, source apps, places and Candidates",
   signOut: "Sign out",
 } as const;

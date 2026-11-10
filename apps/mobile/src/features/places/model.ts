@@ -5,12 +5,13 @@ import type { api } from "../api";
 import { formatMoney, parseMoney } from "../money";
 
 export type Place = FunctionReturnType<typeof api.accounting.postedActivity>["accounts"][number];
-export const placeKinds = ["Checking", "Savings", "Wallet"] as const;
+export const placeKinds = ["Checking", "Savings", "DigitalWallet", "Cash"] as const;
 export type PlaceKind = typeof placeKinds[number];
 export const kindDetails = {
   Checking: { productKind: "bankAccount", emoji: "💰" },
   Savings: { productKind: "savingsAccount", emoji: "🏦" },
-  Wallet: { productKind: "cash", emoji: "👛" },
+  DigitalWallet: { productKind: "savingsAccount", emoji: "📱" },
+  Cash: { productKind: "cash", emoji: "👛" },
 } as const;
 export const accountKinds: Record<Place["productKind"], MessageKey> = {
   bankAccount: "places.kindBankAccount", savingsAccount: "places.kindSavingsAccount", cash: "places.kindCash",

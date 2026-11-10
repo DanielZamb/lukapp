@@ -247,7 +247,7 @@ test("a partial batch reports only acknowledged records and keeps the failed Can
   await act(async () => button("Back to Candidates").props.onPress());
   expect(text()).toContain("Candidates");
   await act(async () => button("Needs you now, 1").props.onPress());
-  expect(text()).toContain("Locked Period");
+  expect(text()).toContain("That month is already closed");
 });
 
 test("confirmation counts successful records across Convex batches", async () => {

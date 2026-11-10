@@ -319,7 +319,7 @@ async function renderSpanish(value: ReturnType<typeof usePostingBatch>) {
 test("the batch reads in Spanish with counted drafts and a counted receipt", async () => {
   await renderSpanish({ ...batch(), queue: [out, incoming] });
   const shown = copy();
-  expect(shown).toContain("Lote");
+  expect(shown).toContain("Uno\nVarios");
   expect(shown).toContain("2 borradores guardados en este celular. Todavía no se ha registrado nada.");
   expect(shown).toContain("Sin título");
   expect(shown).toContain("Sale\n−$10\nEntra\n+$30\nNETO");
@@ -337,6 +337,6 @@ test("the batch reads in Spanish with counted drafts and a counted receipt", asy
 
 test("batch rows name a missing category and account in the reader's language", () => {
   const rowFor = (language: "en" | "es") => batchRowFor({ item: out, categories: [], profiles: [], t: createTranslator(language).t });
-  expect(rowFor("en")).toMatchObject({ category: "No category", place: "No account" });
+  expect(rowFor("en")).toMatchObject({ category: "No category", place: "No place" });
   expect(rowFor("es")).toMatchObject({ category: "Sin categoría", place: "Sin lugar" });
 });

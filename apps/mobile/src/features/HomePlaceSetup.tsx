@@ -15,7 +15,8 @@ import { useT, type MessageKey } from "../i18n";
 import { defaultAccountingDate } from "./timeZones";
 
 const kindLabels: Record<PlaceKind, MessageKey> = {
-  Checking: "home.placeKindChecking", Savings: "home.placeKindSavings", Wallet: "home.placeKindWallet",
+  Checking: "home.placeKindChecking", Savings: "home.placeKindSavings",
+  DigitalWallet: "home.placeKindDigitalWallet", Cash: "home.placeKindWallet",
 };
 
 export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {

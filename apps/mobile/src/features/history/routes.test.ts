@@ -318,7 +318,7 @@ test("place history counts the loaded scope, and clear removes both place and se
   provider.place = { results: [corpus[100]], status: "Exhausted" };
   await act(async () => { root = create(createElement(HistoryRoute)); });
   await act(async () => root?.update(createElement(HistoryRoute)));
-  expect(text()).toContain("ACROSS ALL PLACES\nTx history");
+  expect(text()).toContain("ACROSS ALL PLACES\nHistory");
   expect(text()).toContain("1 of 1");
   expect(text()).not.toContain("Newer posting");
   await act(async () => root?.root.findByType("input").props.onChangeText("missing"));
@@ -334,14 +334,14 @@ test("place history counts the loaded scope, and clear removes both place and se
 
 test("overview and account use primary receipt buttons and pass the account selection", async () => {
   await act(async () => { root = create(createElement(OverviewRoute)); });
-  const overview = button("Go to tx history");
+  const overview = button("Go to history");
   expect(overview.findByType(Ionicons).props.name).toBe("receipt-outline");
   expect(overview.props.style({ pressed: false })[0].backgroundColor).toBe("#6d28d9");
   await act(async () => overview.props.onPress());
   expect(provider.push).toHaveBeenLastCalledWith("/history");
   provider.params = { profileId: "daily" };
   await act(async () => root?.update(createElement(AccountRoute)));
-  const account = button("See in tx history");
+  const account = button("See in history");
   expect(account.findByType(Ionicons).props.name).toBe("receipt-outline");
   expect(account.props.style({ pressed: false })[0].backgroundColor).toBe("#6d28d9");
   await act(async () => account.props.onPress());

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement, createRef } from "react";
+import { createElement, createRef, useState } from "react";
 import { ScrollView } from "react-native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -11,6 +11,7 @@ import { PlaceSheet } from "./PlaceSheet";
 import { AccountSetupForm } from "./AccountSetupForm";
 import type { PlaceDraft } from "./usePostingEditor";
 import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
+import { LanguageProvider } from "../../i18n";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({
@@ -255,7 +256,7 @@ test("From searches trimmed names and emoji, excludes To, and adds a place", asy
   expect(text()).toBe("To\n🐷\nSavings\nAdd a place");
 });
 
-test("Add a place offers the three mapped types, emoji look, and balance today", async () => {
+test("Add a place offers the four mapped types, emoji look, and balance today", async () => {
   const value: PlaceDraft = {
     name: "Travel",
     productKind: "bankAccount",
@@ -282,7 +283,7 @@ test("Add a place offers the three mapped types, emoji look, and balance today",
     );
   });
   expect(text()).toContain(
-    "Add a place\nName you recognize\nType\nChecking\nSavings\nWallet\nLook\n🐷\nChange\nBalance today\nAdd this place",
+    "Add a place\nName you recognize\nType\nChecking account\nSavings account\nDigital wallet\nCash\nLook\n🐷\nChange\nBalance today\nAdd this place",
   );
   const types = root!.root
     .findByProps({ accessibilityLabel: "Place type" })
@@ -292,6 +293,7 @@ test("Add a place offers the three mapped types, emoji look, and balance today",
   }
   expect(onChange.mock.calls.map(([draft]) => draft.productKind)).toEqual([
     "bankAccount",
+    "savingsAccount",
     "savingsAccount",
     "cash",
   ]);
@@ -306,6 +308,36 @@ test("Add a place offers the three mapped types, emoji look, and balance today",
       .find((node) => node.props.accessibilityLabel === "Balance today")?.props
       .value,
   ).toBe("0");
+});
+
+test.each([
+  { language: "en" as const, group: "Place type", labels: ["Checking account", "Savings account", "Digital wallet", "Cash"] },
+  { language: "es" as const, group: "Tipo de lugar", labels: ["Cuenta corriente", "Cuenta de ahorro", "Billetera digital", "Efectivo"] },
+])("each Place kind reads in $language, sends its stored kind and stays the only one selected", async ({ language, group, labels }) => {
+  const sent: string[] = [];
+  function Host() {
+    const [value, setValue] = useState<PlaceDraft>({ name: "Travel", productKind: "bankAccount", emoji: "🐷", amount: "0", date: "2026-10-18" });
+    return createElement(AccountSetupForm, {
+      sheetRef: createRef<BottomSheetModal>(), value, currency: "COP", editable: true, busy: false, pending: false, error: "",
+      canSubmit: true, onSubmit: vi.fn(), onDismiss: vi.fn(),
+      onChange: (next: PlaceDraft) => { sent.push(next.productKind ?? "none"); setValue(next); },
+    });
+  }
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: language }, createElement(Host)));
+  });
+  const chips = () => root!.root.findByProps({ accessibilityLabel: group }).findAllByType("button");
+  const checked = () => chips().filter((node) => node.props.accessibilityState.checked).map((node) => node.props.accessibilityLabel);
+  expect(chips().map((node) => node.props.accessibilityLabel)).toEqual(labels);
+  expect(checked()).toEqual([labels[0]]);
+  const selections: string[][] = [];
+  for (const label of [...labels].reverse()) {
+    await act(async () => chips().find((node) => node.props.accessibilityLabel === label)!.props.onPress());
+    selections.push(checked());
+  }
+  expect(sent).toEqual(["cash", "savingsAccount", "savingsAccount", "bankAccount"]);
+  expect(selections).toEqual([...labels].reverse().map((label) => [label]));
+  expect(root!.root.findByProps({ accessibilityLabel: group }).props.style).toMatchObject({ flexDirection: "row", flexWrap: "wrap" });
 });
 
 test("source note is optional and sits under the header", async () => {

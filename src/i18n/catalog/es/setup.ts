@@ -2,7 +2,7 @@ import type { Messages } from "../../types";
 import type { setup as en } from "../en/setup";
 
 export const setup: Messages<typeof en> = {
-  eyebrow: "CONFIGURACIÓN · UNA HOJA",
+  eyebrow: "CONFIGURACIÓN",
   title: "¿En qué se te va la plata?",
   cancel: "Cancelar la configuración",
   savedTitle: "La configuración básica quedó guardada",
@@ -33,7 +33,7 @@ export const setup: Messages<typeof en> = {
   budgetsOff: "Ya conozco mis gastos. Quiero presupuestos.",
   conflict: "La configuración ya se guardó con otras respuestas. Puedes editar tus respuestas o cancelar.",
   unconfirmed: "No pudimos confirmar la configuración. Reintenta con las mismas respuestas. Lo que enviaste no se puede editar hasta que se confirme.",
-  failed: "No se pudo terminar la configuración.",
+  failed: "No pudimos terminar la configuración.",
 
   deferredAdd: "Agrega {name}. Su saldo va aparte de Mi plata.",
   deferredBlocked: "Termina el movimiento guardado en Borradores antes de agregar este lugar.",

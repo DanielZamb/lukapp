@@ -48,11 +48,11 @@ function button(label: string) {
 }
 test("account shows the real place metadata, empty activity and filtered history", async () => {
   await render();
-  expect(texts()).toEqual(["PLACE", "Card", "💳", "Current balance", "COP 100", "See in tx history",
+  expect(texts()).toEqual(["PLACE", "Card", "💳", "Current balance", "COP 100", "See in history",
     "Name", "Card", "Type", "Credit card", "Currency", "COP", "Tracking from", "September 24, 2026",
     "Recent activity", "No activity yet", "New entries will appear here"]);
   expect(state.recent).toHaveBeenCalledWith("ws", 3, "card-profile");
-  await act(async () => button("See in tx history").props.onPress());
+  await act(async () => button("See in history").props.onPress());
   expect(state.push).toHaveBeenCalledWith({ pathname: "/history", params: { profileId: "card-profile" } });
   await act(async () => button("Back").props.onPress());
   expect(state.back).toHaveBeenCalledOnce();

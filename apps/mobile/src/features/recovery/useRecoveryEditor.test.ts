@@ -111,7 +111,7 @@ test.each([
     es: "El plan cancelado ya tiene un reemplazo." },
   { failure: new ConvexError({ kind: "recovery", code: "installment_out_of_range" }),
     en: "The plan was not activated. Check the monthly amount and destination, then try again.",
-    es: "No se activó el plan. Revisa el valor por mes y el destino, y vuelve a intentarlo." },
+    es: "No pudimos activar el plan. Revisa el monto por mes y el destino, y vuelve a intentarlo." },
   { failure: new Error("lost acknowledgement"), en: "Could not confirm activation. Retry to safely check the same plan.",
     es: "No pudimos confirmar la activación. Reintenta: revisamos el mismo plan sin duplicarlo." },
 ])("activation failure $failure.message maps to a catalog message in both languages", async ({ failure, en, es }) => {

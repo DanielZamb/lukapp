@@ -110,8 +110,8 @@ test("Candidates warn without blocking confirmation and completion opens overvie
     candidateCount: 3,
   });
   const handlers = await show(warned, { kind: "review" });
-  expect(text()).toContain("CANDIDATES STILL LOCAL");
-  expect(text()).toContain("3 still local. Intake is not a statement.");
+  expect(text()).toContain("CANDIDATES STILL WAITING");
+  expect(text()).toContain("3 are still only on this phone. Notifications don't replace your statement.");
   expect(text()).toContain("Warns");
   const candidates = root?.root.findAllByType("button").find((node) =>
     node.findAllByType("text").some((label) => label.children.join("") === "Notification Candidates"),
@@ -180,9 +180,9 @@ test("the review shows spending, checked accounts, recovery due and the exact fo
   expect(text()).toContain("October spending\nCOP 1.250,50");
   expect(text()).toContain("This review locks the month; it does not move money or change balances.");
   expect(text()).toContain("Notification Candidates\nNone waiting\nDone");
-  expect(text()).toContain("Account balances\n3 Financial Accounts checked\nReviewed");
+  expect(text()).toContain("Place balances\n3 places checked\nReviewed");
   expect(text()).toContain("Savings recovery\nCOP 230,00 due this month\nReview");
-  expect(text()).toContain("Remaining Candidates warn. They do not block Month Close. If recovery is not funded, the close records a planning shortfall; it never fabricates a transfer.");
+  expect(text()).toContain("Remaining Candidates only warn you. They do not block Month Close. If you didn't move the Savings recovery money, the close records it as a plan shortfall; it never makes up a transfer.");
   const rows = root?.root.findAllByType("button").filter((node) => !node.props.accessibilityLabel) ?? [];
   expect(rows).toHaveLength(2);
   await act(async () => rows[0].props.onPress());

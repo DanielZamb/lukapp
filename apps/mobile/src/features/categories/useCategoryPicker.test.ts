@@ -275,7 +275,7 @@ test.each(["stillMine", "payDebt"] as const)("%s routes to account setup without
   expect(provider.create).not.toHaveBeenCalled();
   expect(provider.account).toHaveBeenCalledWith({ name: "My place", answer, style: { emoji: "✨", tone: "primary", color: "h270" } });
   expect(picker.sheet().editor?.kind).toBe("custom");
-  expect(picker.sheet().error).toContain("unavailable");
+  expect(picker.sheet().error).toContain("You can't add a place here");
   expect(picker.close).not.toHaveBeenCalled();
   provider.account.mockReturnValueOnce(true);
   await act(async () => picker.sheet().onConfirm());

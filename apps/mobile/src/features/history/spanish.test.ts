@@ -110,7 +110,7 @@ test("reversal failures map each server code to a message in the reader's langua
   const failure = (code: string) => new ConvexError({ kind: "accounting", code, message: "Journal Entry already reversed" });
   expect(reversalFailureMessage(failure("journal_entry_already_reversed"), es)).toBe("Este movimiento ya tiene una reversión. Abre la reversión vinculada.");
   expect(reversalFailureMessage(failure("reversal_cannot_be_reversed"), es)).toBe("Una reversión no se puede reversar. Mejor registra un movimiento nuevo.");
-  expect(reversalFailureMessage(failure("locked_period"), es)).toBe("No se pudo reversar. Revisa el movimiento y que haya un mes abierto.");
+  expect(reversalFailureMessage(failure("locked_period"), es)).toBe("No pudimos hacer la reversión. Revisa el movimiento y que haya un mes abierto.");
   expect(reversalFailureMessage(new Error("offline"), es)).toBe("No pudimos confirmar la reversión. Reintenta: revisamos la misma reversión sin duplicarla.");
   expect(reversalFailureMessage(failure("journal_entry_already_reversed"), en)).toBe("This entry already has a reversal. Open its linked reversal.");
   expect(reversalFailureMessage(failure("locked_period"), es)).not.toContain("Journal Entry");
@@ -128,7 +128,7 @@ test("the History screen reads in Spanish with its filters and dates", async () 
     "Los filtros y los totales cubren solo los movimientos cargados."])
     expect(shown).toContain(spanish);
   expect(labels()).toEqual(expect.arrayContaining(["Volver", "Buscar movimientos"]));
-  for (const english of ["Tx history", "ACROSS ALL PLACES", "All places", "Newest first", "loaded", "Load more", "October"])
+  for (const english of ["History", "ACROSS ALL PLACES", "All places", "Newest first", "loaded", "Load more", "October"])
     expect(`${shown}\n${labels().join("\n")}`).not.toContain(english);
 });
 
