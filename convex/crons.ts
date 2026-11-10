@@ -3,6 +3,6 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-crons.daily("delete unclaimed report screenshots", { hourUTC: 9, minuteUTC: 0 }, internal.feedbackStore.sweepUnclaimedUploads, {});
+crons.daily("delete unreferenced report screenshots", { hourUTC: 9, minuteUTC: 0 }, internal.feedbackStore.sweepUnclaimedUploads, {});
 
 export default crons;
