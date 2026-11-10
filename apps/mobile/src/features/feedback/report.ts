@@ -278,7 +278,6 @@ export class ReportMachine {
       this.set({ ...phase, confirm: null });
   }
 
-  /** Cancel: the capture is deleted, the stored draft cleared, and nothing touches the network. */
   async discard() {
     const phase = this.snapshot.phase;
     this.generation++;
@@ -293,7 +292,6 @@ export class ReportMachine {
     for (const report of reports) if (report.screenshot) await this.deps.deleteCapture(report.screenshot.uri);
   }
 
-  /** Leaves a failed report saved on this phone to retry from Settings later. */
   keepForLater() {
     if (this.snapshot.phase.kind !== "failed") return;
     this.generation++;

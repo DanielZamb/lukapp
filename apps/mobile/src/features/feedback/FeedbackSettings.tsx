@@ -5,7 +5,6 @@ import { ListGroup, ListRow, useTheme, useUi } from "../../ui/core";
 import { useThemeContext } from "../../ui/themeContext";
 import { useFeedback } from "./controls";
 
-/** The Settings entries: the report form without shaking, the guide, and the shake switch. */
 export function FeedbackSettings() {
   const ui = useUi();
   const { t } = useT();

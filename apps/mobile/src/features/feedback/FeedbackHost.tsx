@@ -314,7 +314,7 @@ export function FeedbackHost({ children }: PropsWithChildren) {
                 step={guide}
                 destination={destination}
                 onStep={setGuide}
-                onClose={() => setGuide(null)}
+                onBack={() => setGuide(null)}
                 onTryIt={() => machine.openPractice()}
               />
             ) : null}

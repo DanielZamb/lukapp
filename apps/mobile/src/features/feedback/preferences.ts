@@ -3,7 +3,6 @@ import * as SecureStore from "expo-secure-store";
 const shakeKey = "lukapp.feedback.shake";
 const guideKey = "lukapp.feedback.guide";
 
-/** Shake to report is on unless this phone stored an explicit "off". */
 export async function readShakeEnabled(): Promise<boolean> {
   return (await SecureStore.getItemAsync(shakeKey)) !== "off";
 }

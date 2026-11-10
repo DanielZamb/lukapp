@@ -23,7 +23,6 @@ export async function deleteCapture(uri: string) {
   }
 }
 
-/** Startup cleanup: removes captures older than a day unless a saved report still holds them. */
 export async function sweepCaptures(keep: readonly string[], now: number) {
   try {
     const directory = captureDirectory();

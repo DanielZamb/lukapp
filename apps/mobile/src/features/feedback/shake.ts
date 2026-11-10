@@ -31,7 +31,6 @@ export function createShakeDetector(config: ShakeConfig = shakeConfig) {
   let window: { at: number; vigorous: boolean }[] = [];
   let quietUntil = -Infinity;
   return {
-    /** Returns true exactly once per shake gesture. */
     push(sample: MotionSample): boolean {
       if (sample.at < quietUntil) return false;
       const magnitude = Math.hypot(sample.x, sample.y, sample.z);

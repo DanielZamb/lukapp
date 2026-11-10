@@ -36,7 +36,6 @@ const reportSchema = z.object({
 });
 const documentSchema = z.object({ v: z.literal(1), report: reportSchema });
 
-/** Reads the saved report, dropping it (and its capture) once it is a week old or unreadable. */
 export async function readReportDraft(
   subject: string,
   now: number,
@@ -62,11 +61,7 @@ export function clearReportDraft(subject: string) {
   return SecureStore.deleteItemAsync(reportDraftKey(subject));
 }
 
-/**
- * The machine's draft store for one unlocked admission. Saves coalesce while
- * the person types; a clear cancels any pending save so a discarded report
- * never comes back. Every write goes through the admission's lease.
- */
+/** A clear cancels any pending save, so a discarded report never comes back. */
 export function createReportDraftStore({
   lease,
   now,

@@ -30,13 +30,13 @@ export function ReportGuide({
   step,
   destination,
   onStep,
-  onClose,
+  onBack,
   onTryIt,
 }: {
   step: number;
   destination: DestinationState;
   onStep: (step: number) => void;
-  onClose: () => void;
+  onBack: () => void;
   onTryIt: () => void;
 }) {
   const ui = useUi();
@@ -51,7 +51,7 @@ export function ReportGuide({
       <Header
         title={t("feedback.guideTitle")}
         eyebrow={t("feedback.guideStep", { step: step + 1, total: all.length })}
-        onBack={onClose}
+        onBack={onBack}
       />
       <View
         style={{
@@ -73,12 +73,12 @@ export function ReportGuide({
         {last ? (
           <>
             <PrimaryButton label={t("feedback.tryIt")} trailingIcon="play-outline" onPress={onTryIt} />
-            <SecondaryButton label={t("common.done")} onPress={onClose} />
+            <SecondaryButton label={t("common.done")} onPress={onBack} />
           </>
         ) : (
           <>
             <PrimaryButton label={t("feedback.next")} onPress={() => onStep(step + 1)} />
-            <SecondaryButton label={t("feedback.skip")} onPress={onClose} />
+            <SecondaryButton label={t("feedback.skip")} onPress={onBack} />
           </>
         )}
         {step > 0 ? <SecondaryButton label={t("common.back")} onPress={() => onStep(step - 1)} /> : null}
