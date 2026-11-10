@@ -19,6 +19,7 @@ import { ActivityIndicator, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "../src/features/api";
+import { LanguageProvider } from "../src/i18n";
 import { LocalEntryGate } from "../src/local-auth/LocalEntryGate";
 import { PrebuiltSignIn } from "../src/local-auth/PrebuiltSignIn";
 import { IntakeProvider } from "../src/features/intake/IntakeProvider";
@@ -54,9 +55,11 @@ function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
 export function ErrorBoundary(props: ErrorBoundaryProps) {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
+      <LanguageProvider>
+        <ThemeProvider>
         <ErrorFallback {...props} />
       </ThemeProvider>
+        </LanguageProvider>
     </SafeAreaProvider>
   );
 }
@@ -154,15 +157,18 @@ export default function Layout() {
   if (!convex || !publishableKey)
     return (
       <SafeAreaProvider>
+        <LanguageProvider>
         <ThemeProvider>
           <ConfigNeeded />
         </ThemeProvider>
+        </LanguageProvider>
       </SafeAreaProvider>
     );
   if (!loaded && !error) return null;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <LanguageProvider>
         <ThemeProvider>
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
           <LocalEntryGate
@@ -178,6 +184,7 @@ export default function Layout() {
           </LocalEntryGate>
         </ClerkProvider>
         </ThemeProvider>
+        </LanguageProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
