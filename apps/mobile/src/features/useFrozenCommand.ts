@@ -4,16 +4,25 @@ import { z } from "zod";
 
 const refusal = z.object({ kind: z.union([z.literal("recovery"), z.literal("accounting")]), code: z.string() });
 
+function planningRefusal(error: unknown) {
+  const parsed = refusal.safeParse(error instanceof ConvexError ? error.data : null);
+  return parsed.success ? parsed.data.code : null;
+}
+
 export type CommandTransport<Request, Receipt> = {
   send: (request: Request) => Promise<Receipt>;
   reportFailure: (error: unknown) => boolean;
   onDone: (receipt: Receipt) => void;
+  /** The code of a definite refusal, or null when the server may have applied the request. */
+  refusalCode?: (error: unknown) => string | null;
 };
 
 export type CommandState<Request> =
   | { name: "open"; refusal: { code: string; request: Request } | null }
   | { name: "sending" }
   | { name: "uncertain" };
+
+export type CommandOutcome = "done" | "refused" | "uncertain";
 
 export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<Request, Receipt>) {
   const [state, setState] = useState<CommandState<Request>>({ name: "open", refusal: null });
@@ -25,7 +34,7 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  async function submit(build: () => Request | null) {
+  async function submit(build: () => Request | null): Promise<CommandOutcome | undefined> {
     const mounted = lifetime.current;
     if (!mounted.active || sending.current) return;
     const request = frozen.current ?? build();
@@ -39,14 +48,18 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
       frozen.current = null;
       setState({ name: "open", refusal: null });
       transport.onDone(receipt);
+      return "done";
     } catch (caught) {
       const handled = transport.reportFailure(caught);
       if (!mounted.active) return;
-      const parsed = handled ? null : refusal.safeParse(caught instanceof ConvexError ? caught.data : null);
-      if (parsed?.success) {
+      const code = handled ? null : (transport.refusalCode ?? planningRefusal)(caught);
+      if (code !== null) {
         frozen.current = null;
-        setState({ name: "open", refusal: { code: parsed.data.code, request } });
-      } else setState({ name: "uncertain" });
+        setState({ name: "open", refusal: { code, request } });
+        return "refused";
+      }
+      setState({ name: "uncertain" });
+      return "uncertain";
     } finally {
       sending.current = false;
     }
@@ -57,5 +70,11 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
     frozen: state.name !== "open",
     canEdit: () => lifetime.current.active && !sending.current && !frozen.current,
     submit,
+    /** Drops an unknown outcome once the caller has re-read what the server now holds. */
+    release: () => {
+      if (sending.current) return;
+      frozen.current = null;
+      setState({ name: "open", refusal: null });
+    },
   };
 }
