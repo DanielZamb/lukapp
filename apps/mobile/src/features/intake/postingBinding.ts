@@ -6,6 +6,7 @@ import type { IntakeBinding, PostingReceipt } from "../posting/usePostingEditor"
 import { parseMoney } from "../money";
 import { evidenceFor, notificationOf, projectCandidate, type ActiveCandidate } from "./durableState";
 import { factsFromCandidate } from "./facts";
+import { discardCandidate } from "./discard";
 import type { IntakeService } from "./service";
 
 export function createCandidateBinding(input: {
@@ -20,6 +21,7 @@ export function createCandidateBinding(input: {
     if (!value || value.workspaceId !== input.workspaceId) throw new Error("Candidate unavailable");
     return value;
   }
+  let seen = row().recordRevision;
   function receipt(result: ConfirmCandidateResult, command: ConfirmCandidateInput): PostingReceipt {
     return { description: result.posted.description, amount: { currency: result.posted.amount.currency,
       minorUnits: (command.confirmed.direction === "out" ? -1 : 1) * Math.abs(result.posted.amount.minorUnits) } };
@@ -31,7 +33,7 @@ export function createCandidateBinding(input: {
       throw new Error("Candidate review belongs to another workspace");
     let amount: number | null = null;
     try { amount = parseMoney(facts.amountText, "es-CO", current.currency); } catch {}
-    await service.updateReview(candidateId, current.recordRevision, {
+    seen = await service.updateReview(candidateId, current.recordRevision, {
       direction: amount === null || amount === 0 ? current.review.direction : amount < 0 ? "out" : "in",
       description: facts.description, amountMinorUnits: amount === null ? null : Math.abs(amount), accountingDate: facts.accountingDate,
       financialAccountProfileId: facts.profileId, userCategoryIds: facts.categories.ids,
@@ -46,6 +48,7 @@ export function createCandidateBinding(input: {
     originalSuggestion: evidenceFor(row()),
     get frozen() { const current = service.read(candidateId); return !current || current.status.kind !== "review"; },
     persistReview,
+    discard: () => discardCandidate(service, candidateId, seen),
     async confirm(confirmed: IntakeSuggestion) {
       let current = row();
       if (current.status.kind === "outcome") {

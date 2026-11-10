@@ -36,6 +36,7 @@ import {
 } from "../src/features/posting/usePostingEditor";
 import { usePostingBatchStorage } from "../src/features/posting/postingBatchStorage";
 import { usePostingTransport } from "../src/features/posting/usePostingTransport";
+import { useEntryExit } from "../src/features/posting/useEntryExit";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { createCandidateBinding } from "../src/features/intake/postingBinding";
@@ -185,6 +186,14 @@ function PostMoney({
       }).catch((error: unknown) => { transport.reportFailure?.(error); });
     });
   }, [candidateId, navigation, editor.saveCandidateReview, transport]);
+  const exit = useEntryExit({
+    editor,
+    currency: workspace.functionalCurrency,
+    enabled: mode === "one",
+    candidateRoute: !!candidateId,
+    onCandidateLeave: () => { leavingCandidate.current = true; },
+    refresh: intake.refresh,
+  });
   const profile = profiles?.find((place) => place.id === editor.profileId);
   const destination = profiles?.find(
     (place) => place.id === editor.destinationId,
@@ -320,6 +329,7 @@ function PostMoney({
         }
         categoryEnabled={categoryEnabled}
         blockedReason={blockedReason}
+        secondaryActions={exit.actions}
         transferReview={editor.entryType === "transfer" ? {
           required: editor.transferReviewRequired,
           canConfirm: placesValid && !!editor.destinationId && editor.destinationId !== editor.profileId,
@@ -532,6 +542,7 @@ function PostMoney({
       <>
         {form}
         {impactSheet}
+        {exit.sheet}
       </>
     );
   return (

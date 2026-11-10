@@ -53,6 +53,8 @@ export type PostingFormProps = {
   onBatch?: () => void;
   saveToBatch?: boolean;
   blockedReason?: string;
+  /** Actions under Post, such as keeping or discarding this entry. */
+  secondaryActions?: ReactNode;
   transferReview?: {
     required: boolean;
     canConfirm: boolean;
@@ -372,6 +374,7 @@ export function PostingForm(props: PostingFormProps) {
           onPress={props.onPost}
         />
       )}
+      {props.secondaryActions}
     </Screen>
   );
 }

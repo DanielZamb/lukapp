@@ -13,6 +13,7 @@ import type {
 } from "../localEntryDrafts";
 import { pendingExpenseSchema } from "../pendingExpenseSchema";
 import { LocalEntryDraftGoneError } from "../localEntryDraftErrors";
+import type { DiscardOutcome } from "../discardOutcome";
 import type { EntryType } from "./PostingForm";
 import type {
   IntakeSuggestion, IntakeEvidence,
@@ -71,6 +72,8 @@ export type IntakeBinding = {
   readonly frozen: boolean;
   persistReview(facts: LocalEntryFacts): Promise<void>;
   confirm(confirmed: IntakeSuggestion): Promise<PostingReceipt>;
+  /** Discards the Candidate at the last revision this form saw or saved. */
+  discard(): Promise<DiscardOutcome>;
 };
 export type PostingDraftsSession = {
   drafts?: LocalEntryDraftsPort | null;
@@ -78,6 +81,12 @@ export type PostingDraftsSession = {
   intake?: IntakeBinding | null;
   intakeRoute?: boolean;
 };
+
+/** Equal keys mean the person has nothing new to keep. */
+function factsKey(facts: LocalEntryFacts) {
+  return JSON.stringify([facts.workspaceId, facts.currency, facts.entryType, facts.amountText, facts.accountingDate,
+    facts.description, facts.profileId, facts.destinationId, facts.categories.ids, facts.categories.primaryId]);
+}
 
 function categoryAmount(value: string, nature: CategoryNature) {
   return `${nature === "Income" ? "+" : "-"}${value.replace(/^[+\-−]/, "")}`;
@@ -105,9 +114,8 @@ export function usePostingEditor(
   function setCategories(value: TransactionCategories, nature: CategoryNature | null = null) {
     setClassification({ value, nature: value.ids.length ? nature : null });
   }
-  const [date, setDate] = useState(() =>
-    defaultAccountingDate(account.timeZone),
-  );
+  const [startDate] = useState(() => defaultAccountingDate(account.timeZone));
+  const [date, setDate] = useState(startDate);
   const [entryType, setEntryType] = useState<EntryType>("normal");
   const [profileId, setProfileId] = useState(account.financialAccountProfileId);
   const [destinationId, setDestinationId] = useState<string | null>(null);
@@ -122,6 +130,7 @@ export function usePostingEditor(
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<PostingReceipt | null>(null);
   const [setupPosted, setSetupPosted] = useState<PostingReceipt | null>(null);
+  const [savedFacts, setSavedFacts] = useState(() => factsKey(blankFacts(startDate)));
   const opLock = useRef(false);
   const submitting = useRef(false);
   const appliedDraft = useRef<LocalEntryDraftId | undefined>(undefined);
@@ -221,16 +230,21 @@ export function usePostingEditor(
     if (draft.status === "posting") {
       hydrateFromCommand(draft.command);
       setPending(draft.command);
-    } else hydrateFromFacts(draft.facts);
+    } else {
+      hydrateFromFacts(draft.facts);
+      setSavedFacts(factsKey(draft.facts));
+    }
     setDraftId(draft.id);
     appliedDraft.current = draft.id;
     return "applied";
   }
   function resetComposer() {
+    const today = defaultAccountingDate(account.timeZone);
     setAmount("-");
     setDescription("");
     setCategories({ ids: [], primaryId: null });
-    setDate(defaultAccountingDate(account.timeZone));
+    setDate(today);
+    setSavedFacts(factsKey(blankFacts(today)));
     setEntryType("normal");
     setProfileId(account.financialAccountProfileId);
     setDestinationId(null);
@@ -254,6 +268,19 @@ export function usePostingEditor(
       financialAccountProfileId: profileId,
       userCategoryIds: [...categories.ids],
       primaryUserCategoryId: categories.primaryId,
+    };
+  }
+  function blankFacts(accountingDate: string): LocalEntryFacts {
+    return {
+      workspaceId: account.workspaceId,
+      currency: account.currency,
+      entryType: "normal",
+      amountText: "-",
+      accountingDate,
+      description: "",
+      profileId: account.financialAccountProfileId,
+      destinationId: null,
+      categories: { ids: [], primaryId: null },
     };
   }
   function snapshotFacts(): LocalEntryFacts {
@@ -452,13 +479,12 @@ export function usePostingEditor(
     setKeeping(true);
     setError("");
     try {
-      const id = await drafts.keep({
-        draftId,
-        facts: snapshotFacts(),
-      });
+      const facts = snapshotFacts();
+      const id = await drafts.keep({ draftId, facts });
       if (!mounted.active) return;
       setDraftId(id);
       appliedDraft.current = id;
+      setSavedFacts(factsKey(facts));
       return id;
     } catch (error) {
       if (transport.reportFailure?.(error) || !mounted.active) return;
@@ -474,6 +500,18 @@ export function usePostingEditor(
     } finally {
       opLock.current = false;
       if (mounted.active) setKeeping(false);
+    }
+  }
+  async function discardDraft() {
+    if (!drafts || !draftId || intake || opLock.current) return undefined;
+    opLock.current = true;
+    try {
+      return await drafts.discard(draftId);
+    } catch (error) {
+      if (transport.reportFailure?.(error)) return undefined;
+      throw error;
+    } finally {
+      opLock.current = false;
     }
   }
   const reviewWrites = useRef<Promise<void>>(Promise.resolve());
@@ -503,6 +541,11 @@ export function usePostingEditor(
       if (!transport.reportFailure?.(error) && lifetime.current.active) setError("Could not save Candidate review. Retry before leaving.");
       throw error;
     }
+  }
+  async function discardCandidate() {
+    if (!intake) return undefined;
+    await reviewWrites.current.catch(() => {});
+    return intake.discard();
   }
   async function submit() {
     const mounted = lifetime.current;
@@ -562,6 +605,7 @@ export function usePostingEditor(
       setAmount(entryType === "initial" ? "0" : "-");
       setDescription("");
       setCategories({ ids: [], primaryId: null });
+      setSavedFacts(factsKey({ ...snapshotFacts(), amountText: "-", description: "", categories: { ids: [], primaryId: null } }));
       setPosted(receipt);
     } catch (error) {
       if (transport.reportFailure?.(error)) return;
@@ -623,6 +667,14 @@ export function usePostingEditor(
       if (mounted.active) setBusy(false);
     }
   }
+  const unsaved =
+    drafts !== null &&
+    intake === null &&
+    editable &&
+    !setup &&
+    entryType !== "initial" &&
+    posted === null &&
+    factsKey(snapshotFacts()) !== savedFacts;
   return {
     amount,
     setAmount: (value: string) => {
@@ -744,6 +796,9 @@ export function usePostingEditor(
     draftId,
     blockedByPendingPostings: blocked,
     keepDraft,
+    unsaved,
+    discardDraft,
+    discardCandidate,
     captureForBatch: () => {
       if (!canEdit() || !canSubmit || setup || intake) return null;
       return { command: buildEntry(), draftId };

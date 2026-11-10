@@ -52,8 +52,11 @@ vi.mock("./useIntakeCandidates", () => ({ useIntakeCandidates: () => ({
 }) }));
 vi.mock("../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => vi.fn() }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+const back = await vi.hoisted(async () => (await import("../ui/bottomSheet.testSupport")).backHandlers());
+vi.mock("@gorhom/bottom-sheet", () => import("../ui/bottomSheet.testSupport"));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 vi.mock("react-native", () => ({
+  BackHandler: back.BackHandler,
   KeyboardAvoidingView: "keyboard-viewport",
   Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },

@@ -98,7 +98,7 @@ test("a Candidate prefills the shared posting form", async () => {
   const editor = await open({
     id: "candidate-groceries",
     facts,
-    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), discard: vi.fn(async () => "discarded" as const),
     confirm: vi.fn(),
   });
   expect(editor().description).toBe("Groceries");
@@ -117,7 +117,7 @@ test("confirming a Candidate displays its receipt once", async () => {
   const editor = await open({
     id: "candidate-groceries",
     facts,
-    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), discard: vi.fn(async () => "discarded" as const),
     confirm,
   });
   await act(async () => {
@@ -155,7 +155,7 @@ test("a Candidate route is blocked when a posting Draft exists and never touches
     {
       id: "candidate-groceries",
       facts,
-      originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
+      originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), discard: vi.fn(async () => "discarded" as const),
       confirm,
     },
     api,
@@ -178,7 +178,7 @@ test("a bound Candidate stays a cash in or out and refuses setup", async () => {
   const editor = await open({
     id: "candidate-groceries",
     facts,
-    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), discard: vi.fn(async () => "discarded" as const),
     confirm: vi.fn(),
   });
   expect(editor().lockEntryType).toBe(true);
@@ -206,7 +206,7 @@ test.each(["intake", "accounting"])("an idempotency conflict from %s retains the
   const editor = await open({
     id: "candidate-groceries",
     facts,
-    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), discard: vi.fn(async () => "discarded" as const),
     confirm,
   });
   await act(async () => {
@@ -226,7 +226,7 @@ test.each(["intake", "accounting"])("an idempotency conflict from %s retains the
   const retry = await open({
     id: "candidate-groceries",
     facts,
-    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
+    originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), discard: vi.fn(async () => "discarded" as const),
     confirm: timeout,
   });
   await act(async () => {
@@ -243,7 +243,7 @@ test("a definite accounting rejection fails the Candidate and never aborts a Dra
     {
       id: "candidate-groceries",
       facts,
-      originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}),
+      originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), discard: vi.fn(async () => "discarded" as const),
       confirm: vi.fn(async () => {
         throw new ConvexError({
           kind: "accounting",
@@ -264,7 +264,7 @@ test("a definite accounting rejection fails the Candidate and never aborts a Dra
 
 test("the account door explicitly refuses intake without changing its facts or writing", async () => {
   const api = transport();
-  const binding = { id: "candidate-groceries", facts, originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), confirm: vi.fn() };
+  const binding = { id: "candidate-groceries", facts, originalSuggestion: suggestion, frozen: false, persistReview: vi.fn(async () => {}), discard: vi.fn(async () => "discarded" as const), confirm: vi.fn() };
   const editor = await open(binding, api, { intakeRoute: true });
   let accepted = true;
   await act(async () => {
@@ -285,7 +285,7 @@ test("partial original evidence opens the existing editor with no amount and cor
   const persistReview = vi.fn(async () => {});
   const editor = await open({ id: "partial", facts: { ...facts, amountText: "", description: "", categories: { ids: [], primaryId: null } },
     originalSuggestion: { ...suggestion, direction: null, description: "", amount: { currency: null, minorUnits: null } },
-    frozen: false, persistReview, confirm });
+    frozen: false, persistReview, confirm, discard: vi.fn(async () => "discarded" as const) });
   expect(editor().amount).toBe(""); expect(editor().canSubmit).toBe(false);
   await act(async () => { await editor().submit(); }); expect(confirm).not.toHaveBeenCalled();
   await act(async () => { editor().setAmount("-12,30"); editor().setDescription("Reviewed"); });
