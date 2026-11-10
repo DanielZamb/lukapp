@@ -1,0 +1,28 @@
+Implementation source dd2f9601c1c828827ebfe3779b409f82d898f0a3
+
+pnpm vitest run
+Exit code: 0
+ Test Files  159 passed (159)
+      Tests  1940 passed (1940)
+   Start at  13:07:16
+   Duration  26.55s (transform 9.42s, setup 3.77s, collect 63.13s, tests 56.29s, environment 984ms, prepare 18.73s)
+
+
+pnpm typecheck
+Exit code: 0
+
+> lukapp@ typecheck /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-25cd3fea-da33ce8838ca24fd
+> tsc --noEmit && pnpm --filter @lukapp/mobile typecheck
+
+
+> @lukapp/mobile@0.1.0 typecheck /Users/zambamon/.t3/worktrees/finance-tracker-v2/t3-25cd3fea-da33ce8838ca24fd/apps/mobile
+> tsc --noEmit
+
+
+Focused: pnpm vitest run src/budget convex/budget.test.ts convex/attention.test.ts
+Exit code: 0
+Test Files 3 passed (3)
+Tests 38 passed (38)
+
+git diff --check
+Exit code: 0
