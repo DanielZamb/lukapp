@@ -37,14 +37,12 @@ export function ReportLayer({
   destination,
   offline,
   shakeEnabled,
-  notice,
   ...actions
 }: Actions & {
   phase: Exclude<ReportPhase, { kind: "idle" } | { kind: "capturing" }>;
   destination: DestinationState;
   offline: boolean;
   shakeEnabled: boolean;
-  notice: "redactFailed" | null;
 }) {
   const { t } = useT();
   if (phase.kind === "sent")
@@ -63,7 +61,6 @@ export function ReportLayer({
       destination={destination}
       offline={offline}
       shakeEnabled={shakeEnabled}
-      notice={notice}
       {...actions}
     />
   );
@@ -123,9 +120,11 @@ function failureText(failure: SendFailure, t: ReturnType<typeof useT>["t"], tn: 
     case "rate_limited":
       return tn("feedback.rateLimited", Math.max(1, Math.ceil((failure.retryAt - Date.now()) / 60_000)));
     case "invalid_report":
-      return t("feedback.invalidReport");
+      return t(failure.field === "screenshot" ? "feedback.invalidScreenshot" : "feedback.invalidReport");
     case "changed_report":
       return t("feedback.changedReport");
+    case "report_expired":
+      return t("feedback.reportExpired");
   }
 }
 
@@ -134,7 +133,6 @@ function ReportForm({
   destination,
   offline,
   shakeEnabled,
-  notice,
   machine,
   interact,
   onRedact,
@@ -145,7 +143,6 @@ function ReportForm({
   destination: DestinationState;
   offline: boolean;
   shakeEnabled: boolean;
-  notice: "redactFailed" | null;
 }) {
   const ui = useUi();
   const theme = useTheme();
@@ -154,6 +151,7 @@ function ReportForm({
   const practice = phase.kind === "editing" && phase.practice;
   const editable = phase.kind === "editing" && !phase.confirm;
   const failure = phase.kind === "failed" ? phase.failure : phase.kind === "editing" ? phase.notice : null;
+  const screenshotNotice = phase.kind === "sending" ? null : phase.screenshotNotice;
   const showErrors = phase.kind === "editing" && phase.showErrors;
   const errors = showErrors ? validateReport(report.fields) : {};
   const serverField = failure?.code === "invalid_report" ? failure.field : null;
@@ -222,7 +220,11 @@ function ReportForm({
       </View>
       <View style={ui.section}>
         <Text style={ui.sectionHeading}>{t("feedback.screenshotHeading")}</Text>
-        {notice === "redactFailed" ? <Banner tone="danger">{t("feedback.redactFailed")}</Banner> : null}
+        {screenshotNotice ? (
+          <Banner tone="danger">
+            {t(screenshotNotice === "redactFailed" ? "feedback.redactFailed" : "feedback.screenshotMissing")}
+          </Banner>
+        ) : null}
         {practice ? (
           <Text style={ui.body}>{t("feedback.practiceScreenshot")}</Text>
         ) : report.screenshot ? (

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import * as React from "react";
 import { createElement, useState, type ReactNode } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
@@ -49,9 +50,11 @@ const device = vi.hoisted(() => {
 const backend = vi.hoisted(() => ({
   audience: "public" as "public" | "private",
   calls: [] as [string, unknown][],
-  upload: [] as [string, RequestInit][],
+  /** Answers one action call in place of the default when it returns a promise. */
+  respond: null as null | ((name: string, args: unknown) => Promise<unknown> | undefined),
 }));
 const view = vi.hoisted(() => ({ captureRef: vi.fn(), onCapture: [] as (() => void)[] }));
+const gate = vi.hoisted(() => ({ unlocked: true }));
 const fs = vi.hoisted(() => ({ current: null as null | ReturnType<typeof import("./fileSystem.testSupport").memoryFileSystem> }));
 
 vi.mock("react-native", () => ({
@@ -85,18 +88,22 @@ vi.mock("react-native-safe-area-context", () => ({
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
-vi.mock("expo-crypto", () => ({ randomUUID: () => `uuid-${++device.uuid}` }));
+vi.mock("expo-crypto", async () => {
+  const { createHash: hash } = await import("node:crypto");
+  return {
+    randomUUID: () => `uuid-${++device.uuid}`,
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digest: async (_algorithm: string, data: ArrayBuffer) => {
+      const value = hash("sha256").update(new Uint8Array(data)).digest();
+      return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+    },
+  };
+});
 vi.mock("expo-router", () => ({ usePathname: () => "/settings" }));
 vi.mock("expo-sensors", () => ({ Accelerometer: device.accelerometer }));
 vi.mock("expo-constants", () => ({ default: { expoConfig: { version: "0.1.0" } } }));
 vi.mock("react-native-view-shot", () => view);
 vi.mock("../intake/cleanup", () => ({ clearNativeIntake: async () => {} }));
-vi.mock("expo/fetch", () => ({
-  fetch: async (url: string, init: RequestInit) => {
-    backend.upload.push([url, init]);
-    return { ok: true, json: async () => ({ storageId: "storage-1" }) };
-  },
-}));
 vi.mock("expo-file-system", async () => {
   const { memoryFileSystem } = await import("./fileSystem.testSupport");
   fs.current = memoryFileSystem();
@@ -110,10 +117,17 @@ vi.mock("convex/react", () => {
     },
     mutation: async (ref: never, args: unknown) => {
       backend.calls.push([getFunctionName(ref), args]);
-      return { uploadUrl: "https://upload.example/1" };
+      return null;
     },
     action: async (ref: never, args: unknown) => {
-      backend.calls.push([getFunctionName(ref), args]);
+      const name = getFunctionName(ref);
+      backend.calls.push([name, args]);
+      const answer = backend.respond?.(name, args);
+      if (answer) return answer;
+      if (name === "feedback:attachScreenshot") {
+        const { createHash: hash } = await import("node:crypto");
+        return { sha256: hash("sha256").update(new Uint8Array((args as { image: ArrayBuffer }).image)).digest("hex") };
+      }
       return { reference: "LK-7Q2", issueNumber: 123, url: "https://github.com/owner/lukapp/issues/123" };
     },
   };
@@ -146,7 +160,7 @@ beforeEach(() => {
   vi.mocked(SecureStore.deleteItemAsync).mockImplementation(async (key) => void secure.delete(key));
   backend.audience = "public";
   backend.calls = [];
-  backend.upload = [];
+  backend.respond = null;
   view.onCapture = [];
   view.captureRef.mockReset().mockImplementation(async () => {
     for (const inspect of view.onCapture) inspect();
@@ -155,6 +169,7 @@ beforeEach(() => {
   fs.current?.files.clear();
   device.appState.currentState = "active";
   device.uuid = 0;
+  gate.unlocked = true;
 });
 afterEach(async () => {
   await act(async () => root?.unmount());
@@ -170,6 +185,7 @@ function Caller() {
 }
 
 async function render(children: ReactNode, { admitted = true, unlocked = true, language = "en" as "en" | "es" } = {}) {
+  gate.unlocked = unlocked;
   const lease = new LocalInputLease("owner", "session");
   await act(async () => {
     root = create(
@@ -181,7 +197,7 @@ async function render(children: ReactNode, { admitted = true, unlocked = true, l
         { value: lease },
         createElement(
           IntakeAdmission.Provider,
-          { value: () => unlocked },
+          { value: () => gate.unlocked },
           createElement(FeedbackHost, null, admitted ? createElement(FeedbackAdmission) : null, children),
         ),
       ),
@@ -250,7 +266,10 @@ test("Settings opens a text report without a screenshot, sends it, and Done retu
   expect(view.captureRef).not.toHaveBeenCalled();
   expect(layerText()).toContain("This report is text only.");
   expect(layerText()).toContain(
-    "This report becomes a public issue in owner/lukapp on GitHub. Anyone on the internet can read it",
+    "This report becomes a public issue in owner/lukapp on GitHub. Anyone on the internet can read it. If you include the screenshot, Lukapp keeps it on its server for a limited time, links it from the issue and then deletes it.",
+  );
+  expect(layerText()).toContain(
+    "The report also includes the app version, platform, system version, language and screen name. Nothing else from your account goes with it.",
   );
   expect(layerText()).toContain("Don't include account numbers, passwords or codes.");
   await press("Send feedback");
@@ -385,9 +404,8 @@ test("a shake captures the caller screen before the report appears; public repor
   await type("Title", "Total is off");
   await type("What happened", "Home and Overview differ.");
   await press("Send report");
-  expect(backend.upload).toEqual([]);
   expect(backend.calls.map(([name]) => name)).toEqual(["feedback:destination", "feedback:submit"]);
-  expect((backend.calls[1][1] as { screenshotStorageId?: string }).screenshotStorageId).toBeUndefined();
+  expect((backend.calls[1][1] as { screenshotSha256?: string }).screenshotSha256).toBeUndefined();
   expect([...fs.current!.files.keys()]).toEqual([]);
   await press("Done");
   expect(device.sensor.size).toBe(1);
@@ -410,7 +428,7 @@ test("cancelling a shake report deletes its capture and sends nothing", async ()
   expect(backend.calls.map(([name]) => name)).toEqual(["feedback:destination"]);
 });
 
-test("blacking out flattens boxes into a new file, deletes the original and uploads only the flattened image", async () => {
+test("blacking out flattens boxes into a new file, deletes the original and sends only the flattened image's digest", async () => {
   backend.audience = "private";
   await render(createElement(Caller));
   await shake();
@@ -451,19 +469,88 @@ test("blacking out flattens boxes into a new file, deletes the original and uplo
     uri: "file:///cache/lukapp-feedback/uuid-3.png",
   });
   expect(layerText()).toContain("Parts of this image are blacked out.");
+  const previewed = previewedFileDigest();
   await type("Title", "Hidden numbers");
   await type("What happened", "Testing the black boxes.");
   await press("Send report");
-  expect(backend.upload).toHaveLength(1);
-  const [url, init] = backend.upload[0];
-  expect(url).toBe("https://upload.example/1");
-  expect(new TextDecoder().decode(init.body as Uint8Array)).toBe(realScreen);
   expect(backend.calls.map(([name]) => name)).toEqual([
     "feedback:destination",
-    "feedback:prepareScreenshotUpload",
+    "feedback:attachScreenshot",
     "feedback:submit",
   ]);
-  expect((backend.calls[2][1] as { screenshotStorageId?: string }).screenshotStorageId).toBe("storage-1");
+  const attached = backend.calls[1][1] as { reportKey: string; image: ArrayBuffer };
+  expect(attached.reportKey).toBe("uuid-2");
+  expect(new TextDecoder().decode(attached.image)).toBe(realScreen);
+  expect((backend.calls[2][1] as { screenshotSha256?: string }).screenshotSha256).toBe(previewed);
+});
+
+/** Hashes, independently of the app, the bytes of the file the preview is showing. */
+function previewedFileDigest() {
+  const { uri } = control("Screenshot of the screen you were on").props.source as { uri: string };
+  const file = fs.current!.files.get(uri);
+  if (!file) throw new Error(`Preview file missing: ${uri}`);
+  return createHash("sha256").update(file.content).digest("hex");
+}
+
+test("from the press of Send until the attempt resolves, the screenshot controls are disabled and change nothing", async () => {
+  backend.audience = "private";
+  let release = () => {};
+  backend.respond = (name) =>
+    name === "feedback:attachScreenshot"
+      ? new Promise((resolve) => {
+          release = () => resolve({ sha256: previewed });
+        })
+      : undefined;
+  await render(createElement(Caller));
+  await shake();
+  const previewed = previewedFileDigest();
+  await type("Title", "Total is off");
+  await type("What happened", "Home and Overview differ.");
+  await press("Send report");
+  expect(layerText()).toContain("Uploading screenshot…");
+  for (const label of ["Include the screenshot", "Black out parts", "Remove screenshot", "Title"])
+    expect([label, control(label).props.disabled ?? !control(label).props.editable]).toEqual([label, true]);
+  await act(async () => control("Include the screenshot").props.onValueChange(false));
+  await act(async () => control("Remove screenshot").props.onPress());
+  await act(async () => release());
+  expect(backend.calls.map(([name]) => name)).toEqual([
+    "feedback:destination",
+    "feedback:attachScreenshot",
+    "feedback:submit",
+  ]);
+  expect(backend.calls[2][1]).toMatchObject({ title: "Total is off", screenshotSha256: previewed });
+  expect(layerText()).toContain("Report #123 sent");
+});
+
+test("an expired report says so, keeps the text and screenshot, and Send goes again under a new key", async () => {
+  backend.audience = "private";
+  const { ConvexError } = await import("convex/values");
+  let expired = true;
+  backend.respond = (name) => {
+    if (name !== "feedback:submit" || !expired) return undefined;
+    expired = false;
+    return Promise.reject(new ConvexError({ code: "report_expired" }));
+  };
+  await render(createElement(Caller));
+  await shake();
+  await type("Title", "Total is off");
+  await type("What happened", "Home and Overview differ.");
+  await press("Send report");
+  expect(layerText()).toContain(
+    "The earlier attempt expired before it reached the team. Your report is still here, so you can send it again.",
+  );
+  expect(control("Title").props.value).toBe("Total is off");
+  expect(control("Screenshot of the screen you were on").props.source).toEqual({ uri: "file:///cache/lukapp-feedback/uuid-1.png" });
+  await press("Send report");
+  expect(backend.calls.map(([name, args]) => [name, (args as { reportKey?: string }).reportKey])).toEqual([
+    ["feedback:destination", undefined],
+    ["feedback:attachScreenshot", "uuid-2"],
+    ["feedback:submit", "uuid-2"],
+    ["feedback:removeScreenshot", "uuid-2"],
+    ["feedback:attachScreenshot", "uuid-3"],
+    ["feedback:submit", "uuid-3"],
+  ]);
+  expect(layerText()).toContain("Report #123 sent");
 });
 
 test("no motion is read before admission, in the background, or with shake turned off", async () => {
@@ -535,4 +622,38 @@ test("the local input wipe deletes report captures along with the saved report",
   await clearLocalInput("owner");
   expect(fs.current!.files.size).toBe(0);
   expect(secure.has("lukapp.feedback.report.owner")).toBe(false);
+});
+
+function heldCapture() {
+  let release = () => {};
+  view.captureRef.mockImplementationOnce(
+    () =>
+      new Promise<string>((resolve) => {
+        release = () => resolve(realScreen);
+      }),
+  );
+  return () => release();
+}
+
+test("a capture that finishes after the app went to the background is deleted and opens nothing", async () => {
+  await render(createElement(Caller));
+  const release = heldCapture();
+  await shake();
+  expect(view.captureRef).toHaveBeenCalledTimes(1);
+  await act(async () => device.emitApp("change", "background"));
+  await act(async () => release());
+  await act(async () => device.emitApp("change", "active"));
+  expect(layer()).toBeUndefined();
+  expect([...fs.current!.files.keys()]).toEqual([]);
+  expect(device.sensor.size).toBe(1);
+});
+
+test("a capture that finishes after sign-out is deleted and opens nothing", async () => {
+  await render(createElement(Caller));
+  const release = heldCapture();
+  await shake();
+  gate.unlocked = false;
+  await act(async () => release());
+  expect(layer()).toBeUndefined();
+  expect([...fs.current!.files.keys()]).toEqual([]);
 });

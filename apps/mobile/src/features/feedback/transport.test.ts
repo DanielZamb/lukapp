@@ -1,23 +1,13 @@
 import { ConvexError } from "convex/values";
 import { getFunctionName } from "convex/server";
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 
-const http = vi.hoisted(() => ({ fetch: vi.fn() }));
-const fs = vi.hoisted(() => ({ current: null as null | ReturnType<typeof import("./fileSystem.testSupport").memoryFileSystem> }));
-vi.mock("expo/fetch", () => http);
-vi.mock("expo-file-system", async () => {
-  const { memoryFileSystem } = await import("./fileSystem.testSupport");
-  fs.current = memoryFileSystem();
-  return fs.current.module;
-});
 vi.mock("expo-constants", () => ({ default: { expoConfig: { version: "0.1.0" } } }));
 vi.mock("react-native", () => ({ Platform: { OS: "ios", Version: "18.4" } }));
 
-import { SendTimeout } from "./report";
+import { ScreenshotNotStored, SendTimeout } from "./report";
 import { classifySendError, convexFeedbackTransport, deviceContext, screenName } from "./transport";
 import { validateReport } from "./validation";
-
-beforeEach(() => http.fetch.mockReset());
 
 const classify = (error: unknown, wipe = false) => {
   const seen: unknown[] = [];
@@ -35,9 +25,11 @@ test.each([
   [{ code: "not_configured" }, { code: "not_configured" }],
   [{ code: "invalid_report", field: "title" }, { code: "invalid_report", field: "title" }],
   [{ code: "invalid_report", field: "accountNumber" }, { code: "invalid_report", field: null }],
+  [{ code: "invalid_report", field: "screenshot" }, { code: "invalid_report", field: "screenshot" }],
   [{ code: "rate_limited", retryAfterMs: 60_000 }, { code: "rate_limited", retryAt: 65_000 }],
   [{ code: "changed_report" }, { code: "changed_report" }],
   [{ code: "destination_unavailable" }, { code: "unknown" }],
+  [{ code: "report_expired" }, { code: "report_expired" }],
 ])("feedback error %j is shown as %j without the access handler", (data, expected) => {
   const { failure, seen } = classify(new ConvexError(data));
   expect(failure).toEqual(expected);
@@ -51,38 +43,13 @@ test("device and session errors flow to the existing access-failure handling", (
   expect(classify(inactive, false)).toEqual({ failure: { code: "unknown" }, seen: [inactive] });
 });
 
-test("network failures and timeouts are outcomes to retry with the same key", () => {
+test("network failures, timeouts and a mismatched attach are outcomes to retry with the same key", () => {
   expect(classify(new TypeError("Network request failed")).failure).toEqual({ code: "unknown" });
-  expect(classify(new SendTimeout()).failure).toEqual({ code: "unknown" });
+  expect(classify(new SendTimeout())).toEqual({ failure: { code: "unknown" }, seen: [] });
+  expect(classify(new ScreenshotNotStored())).toEqual({ failure: { code: "unknown" }, seen: [] });
 });
 
-test("the upload posts the image bytes with its type and returns the storage id", async () => {
-  new (fs.current!.module.File)("file:///cache/lukapp-feedback/shot.png").write("png-bytes");
-  http.fetch.mockResolvedValue({ ok: true, json: async () => ({ storageId: "kg2abc" }) });
-  const transport = convexFeedbackTransport({} as never);
-  const result = await transport.upload("https://upload.example/1", {
-    uri: "file:///cache/lukapp-feedback/shot.png", width: 1, height: 1, redacted: false,
-  });
-  expect(result).toEqual({ storageId: "kg2abc" });
-  const [url, init] = http.fetch.mock.calls[0];
-  expect(url).toBe("https://upload.example/1");
-  expect(init.method).toBe("POST");
-  expect(init.headers).toEqual({ "Content-Type": "image/png" });
-  expect(new TextDecoder().decode(init.body)).toBe("png-bytes");
-});
-
-test("a rejected upload is a retryable failure, not a success", async () => {
-  new (fs.current!.module.File)("file:///cache/lukapp-feedback/shot.png").write("png-bytes");
-  http.fetch.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) });
-  const transport = convexFeedbackTransport({} as never);
-  const upload = transport.upload("https://upload.example/1", {
-    uri: "file:///cache/lukapp-feedback/shot.png", width: 1, height: 1, redacted: false,
-  });
-  await expect(upload).rejects.toThrow("503");
-  expect(classify(await upload.catch((error: unknown) => error)).failure).toEqual({ code: "unknown" });
-});
-
-test("the backend calls go to feedback.destination, prepareScreenshotUpload and submit", async () => {
+test("the backend calls go to feedback.destination, attachScreenshot, removeScreenshot and submit", async () => {
   const seen: [string, string, unknown][] = [];
   const client = {
     query: async (ref: never, args: unknown) => void seen.push(["query", getFunctionName(ref), args]),
@@ -90,14 +57,22 @@ test("the backend calls go to feedback.destination, prepareScreenshotUpload and 
     action: async (ref: never, args: unknown) => void seen.push(["action", getFunctionName(ref), args]),
   };
   const transport = convexFeedbackTransport(client as never);
+  const image = new TextEncoder().encode("png-bytes").buffer as ArrayBuffer;
   await transport.destination();
-  await transport.prepareScreenshotUpload({ reportKey: "report-1" });
+  await transport.attachScreenshot({ reportKey: "report-1", image });
+  await transport.removeScreenshot({ reportKey: "report-1" });
   const context = { appVersion: "0.1.0", platform: "ios", osVersion: "18.4", language: "es" } as const;
-  await transport.submit({ reportKey: "report-1", kind: "bug", title: "Title", whatHappened: "Text", context });
+  const digest = "ea80334363eed145dfeee51ebae7dc3f1cd7d0c7879f8bfd2070c061d3c33f56";
+  await transport.submit({ reportKey: "report-1", kind: "bug", title: "Title", whatHappened: "Text", screenshotSha256: digest, context });
   expect(seen).toEqual([
     ["query", "feedback:destination", {}],
-    ["mutation", "feedback:prepareScreenshotUpload", { reportKey: "report-1" }],
-    ["action", "feedback:submit", { reportKey: "report-1", kind: "bug", title: "Title", whatHappened: "Text", context }],
+    ["action", "feedback:attachScreenshot", { reportKey: "report-1", image }],
+    ["mutation", "feedback:removeScreenshot", { reportKey: "report-1" }],
+    [
+      "action",
+      "feedback:submit",
+      { reportKey: "report-1", kind: "bug", title: "Title", whatHappened: "Text", screenshotSha256: digest, context },
+    ],
   ]);
 });
 

@@ -20,7 +20,7 @@ import { LocalInput } from "../../local-auth/localInput";
 import { useTheme } from "../../ui/core";
 import { IntakeAdmission } from "../intake/admission";
 import { wipeFilesWithLocalInput } from "../clearLocalInput";
-import { deleteAllCaptures, deleteCapture, sweepCaptures } from "./captureFiles";
+import { deleteAllCaptures, deleteCapture, readCapture, sweepCaptures } from "./captureFiles";
 import { snapshotView } from "./snapshot";
 import { FeedbackAdmissionSignal, FeedbackContext, type FeedbackControls } from "./controls";
 import { createReportDraftStore } from "./draftStore";
@@ -70,11 +70,22 @@ export function FeedbackHost({ children }: PropsWithChildren) {
   const [savedReport, setSavedReport] = useState(false);
   const [guide, setGuide] = useState<number | null>(null);
   const [redacting, setRedacting] = useState(false);
-  const [notice, setNotice] = useState<"redactFailed" | null>(null);
   const content = useRef<View>(null);
   const contentSize = useRef({ width: 0, height: 0 });
-  const live = useRef({ language, connection, reportAccessFailure, unlocked, foreground, pathname });
-  live.current = { language, connection, reportAccessFailure, unlocked, foreground, pathname };
+  const live = useRef({ language, connection, reportAccessFailure, unlocked, lease, pathname });
+  live.current = { language, connection, reportAccessFailure, unlocked, lease, pathname };
+  // The privacy cover doesn't hide the app from an in-process render, so this guard is what protects a capture.
+  // The refs are set by the events themselves, not on the next render, so a capture resolving in between sees them.
+  const admittedNow = useRef(false);
+  const foregroundNow = useRef(true);
+  const captureAllowed = useCallback(
+    () => admittedNow.current && live.current.lease !== null && live.current.unlocked() && foregroundNow.current,
+    [],
+  );
+  const signalAdmission = useCallback((value: boolean) => {
+    admittedNow.current = value;
+    setAdmitted(value);
+  }, []);
   const transport = useMemo(() => convexFeedbackTransport(convex), [convex]);
   const transportRef = useRef(transport);
   transportRef.current = transport;
@@ -89,19 +100,19 @@ export function FeedbackHost({ children }: PropsWithChildren) {
       new ReportMachine({
         newKey: Crypto.randomUUID,
         now: Date.now,
-        capture: async () => {
-          if (!live.current.unlocked() || !live.current.foreground) return null;
-          return snapshotView(content, contentSize.current, Crypto.randomUUID());
-        },
+        capture: () => snapshotView(content, contentSize.current, Crypto.randomUUID(), { allowed: captureAllowed }),
+        captureAllowed,
+        readScreenshot: readCapture,
         deleteCapture,
         drafts: {
           read: () => draftsRef.current?.read() ?? Promise.resolve(null),
           save: (report) => draftsRef.current?.save(report),
+          saveNow: (report) => draftsRef.current?.saveNow(report) ?? Promise.resolve(),
           clear: () => draftsRef.current?.clear(),
         },
         transport: {
-          prepareScreenshotUpload: (args) => transportRef.current.prepareScreenshotUpload(args),
-          upload: (url, screenshot) => transportRef.current.upload(url, screenshot),
+          attachScreenshot: (args) => transportRef.current.attachScreenshot(args),
+          removeScreenshot: (args) => transportRef.current.removeScreenshot(args),
           submit: (args) => transportRef.current.submit(args),
         },
         context: () => deviceContext(live.current.language),
@@ -141,6 +152,7 @@ export function FeedbackHost({ children }: PropsWithChildren) {
     let focused = true;
     const update = () => {
       const active = state === "active" && focused;
+      foregroundNow.current = active;
       setForeground(active);
       if (state === "background") void draftsRef.current?.flush();
     };
@@ -193,10 +205,7 @@ export function FeedbackHost({ children }: PropsWithChildren) {
     if (layerOpen) loadDestination();
   }, [layerOpen, loadDestination]);
   useEffect(() => {
-    if (phase.kind === "idle") {
-      setRedacting(false);
-      setNotice(null);
-    }
+    if (phase.kind === "idle") setRedacting(false);
   }, [phase.kind]);
 
   const back = () => {
@@ -261,16 +270,13 @@ export function FeedbackHost({ children }: PropsWithChildren) {
 
   const finishRedaction = async (result: RedactionResult) => {
     if (result.kind === "flattened") await machine.replaceScreenshot(result.screenshot);
-    if (result.kind === "failed") {
-      await machine.removeScreenshot();
-      setNotice("redactFailed");
-    }
+    if (result.kind === "failed") await machine.redactionFailed();
     setRedacting(false);
   };
 
   const screenshot = phase.kind === "editing" ? phase.report.screenshot : null;
   return (
-    <FeedbackAdmissionSignal.Provider value={setAdmitted}>
+    <FeedbackAdmissionSignal.Provider value={signalAdmission}>
       <FeedbackContext.Provider value={controls}>
         <View
           ref={content}
@@ -302,7 +308,6 @@ export function FeedbackHost({ children }: PropsWithChildren) {
                 destination={destination}
                 offline={connection.hasEverConnected && !connection.isWebSocketConnected}
                 shakeEnabled={shakeEnabled !== false}
-                notice={notice}
                 machine={machine}
                 interact={interact}
                 onRedact={() => setRedacting(true)}

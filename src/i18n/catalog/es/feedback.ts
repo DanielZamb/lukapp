@@ -45,13 +45,14 @@ export const feedback: Messages<typeof en> = {
   boxCount_one: "{count} recuadro",
   boxCount_other: "{count} recuadros",
   redactFailed: "No se pudo tapar la imagen, así que quitamos la captura de pantalla.",
+  screenshotMissing: "La captura de pantalla guardada con este reporte ya no está en este celular o cambió, así que la quitamos.",
 
   audienceLoading: "Revisando a dónde llegan los reportes…",
-  audiencePublic: "Este reporte se publica como un issue público en {repository} en GitHub. Cualquier persona en internet puede leerlo, y también la captura de pantalla si la incluyes.",
-  audiencePrivate: "Este reporte llega a {repository} en GitHub, un repositorio privado. Solo el equipo de Lukapp puede leerlo.",
+  audiencePublic: "Este reporte se publica como un issue público en {repository} en GitHub. Cualquier persona en internet puede leerlo. Si incluyes la captura de pantalla, Lukapp la guarda en su servidor por un tiempo limitado, la enlaza desde el issue y luego la borra. Mientras tanto, cualquiera puede verla.",
+  audiencePrivate: "Este reporte llega a {repository} en GitHub, un repositorio privado. Solo el equipo de Lukapp puede leerlo. Si incluyes la captura de pantalla, Lukapp la guarda en su servidor por un tiempo limitado, la enlaza desde el issue y luego la borra.",
   audienceUnavailable: "Lukapp no puede revisar ahora a dónde llegan los reportes.",
   checkAgain: "Revisar otra vez",
-  automaticContext: "Lukapp también agrega la versión de la app, la plataforma, la versión del sistema, el idioma y el nombre de la pantalla. Nada más de tu cuenta.",
+  automaticContext: "El reporte también incluye la versión de la app, la plataforma, la versión del sistema, el idioma y el nombre de la pantalla. No lleva nada más de tu cuenta.",
 
   send: "Enviar reporte",
   uploading: "Subiendo la captura de pantalla…",
@@ -69,7 +70,9 @@ export const feedback: Messages<typeof en> = {
   notConfigured: "Los reportes no están disponibles en esta versión.",
   accessFailure: "El acceso a Lukapp cambió en este celular, así que el reporte no se envió.",
   invalidReport: "Revisa el campo marcado y envíalo otra vez.",
+  invalidScreenshot: "No se pudo enviar la captura de pantalla. Quítala y vuelve a enviar el reporte.",
   changedReport: "Este reporte ya no coincide con lo que se envió primero. Edítalo y envíalo como un reporte nuevo.",
+  reportExpired: "El intento anterior venció antes de llegarle al equipo. Tu reporte sigue aquí, así que puedes enviarlo otra vez.",
 
   errorTitleShort: "Escribe un título de al menos 3 caracteres.",
   errorTitleLong: "Usa máximo 120 caracteres.",

@@ -15,9 +15,9 @@ const report: Report = {
   screenshot: { uri: "file:///cache/lukapp-feedback/shot-1.png", width: 390, height: 844, redacted: false },
   captureFailed: false,
   screenshotChoice: "default",
-  uploaded: null,
+  attached: null,
   context: null,
-  frozen: false,
+  frozen: null,
   createdAt: 10 * day,
 };
 
@@ -53,7 +53,7 @@ test("a saved report survives a restart under the owner's key, with its report k
   const { drafts } = open();
   drafts.save(report);
   await drafts.flush();
-  expect(JSON.parse(store.get("lukapp.feedback.report.owner") ?? "null")).toEqual({ v: 1, report });
+  expect(JSON.parse(store.get("lukapp.feedback.report.owner") ?? "null")).toEqual({ v: 2, report });
   const restarted = open();
   expect(await restarted.drafts.read()).toEqual(report);
 });
@@ -68,6 +68,31 @@ test("typing coalesces into one encrypted write of the latest text", async () =>
   expect(vi.mocked(SecureStore.setItemAsync).mock.calls.map(([, value]) => JSON.parse(value).report.fields.title)).toEqual([
     "Balance looks wrong",
   ]);
+});
+
+test("an immediate save is written before it resolves and an older pending save can't land after it", async () => {
+  const { drafts } = open();
+  drafts.save({ ...report, fields: { ...report.fields, title: "Older" } });
+  const redacted = { ...report, screenshot: { ...report.screenshot!, uri: "file:///cache/lukapp-feedback/flat-1.png", redacted: true } };
+  await drafts.saveNow(redacted);
+  expect(JSON.parse(store.get(reportDraftKey("owner")) ?? "null").report.screenshot.uri).toBe(
+    "file:///cache/lukapp-feedback/flat-1.png",
+  );
+  await vi.advanceTimersByTimeAsync(1_000);
+  await drafts.flush();
+  expect(vi.mocked(SecureStore.setItemAsync)).toHaveBeenCalledTimes(1);
+  expect(await open().drafts.read()).toEqual(redacted);
+});
+
+test("a report saved by the earlier upload flow is dropped like any unreadable one", async () => {
+  store.set(
+    reportDraftKey("owner"),
+    JSON.stringify({ v: 1, report: { ...report, attached: undefined, uploaded: { storageId: "kg2abc", uri: report.screenshot!.uri }, frozen: false } }),
+  );
+  const deleted: string[] = [];
+  expect(await readReportDraft("owner", 10 * day, async (uri) => void deleted.push(uri))).toBeNull();
+  expect(store.has(reportDraftKey("owner"))).toBe(false);
+  expect(deleted).toEqual([]);
 });
 
 test("discard removes the saved report, and a save still waiting cannot bring it back", async () => {

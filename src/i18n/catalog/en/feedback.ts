@@ -42,13 +42,14 @@ export const feedback = {
   boxCount_one: "{count} box",
   boxCount_other: "{count} boxes",
   redactFailed: "Couldn't black out the image, so the screenshot was removed.",
+  screenshotMissing: "The screenshot saved with this report is missing or changed on this phone, so it was removed.",
 
   audienceLoading: "Checking where reports go…",
-  audiencePublic: "This report becomes a public issue in {repository} on GitHub. Anyone on the internet can read it, and the screenshot too if you include it.",
-  audiencePrivate: "This report goes to {repository} on GitHub, a private repository. Only the Lukapp team can read it.",
+  audiencePublic: "This report becomes a public issue in {repository} on GitHub. Anyone on the internet can read it. If you include the screenshot, Lukapp keeps it on its server for a limited time, links it from the issue and then deletes it. Until then, anyone can see it.",
+  audiencePrivate: "This report goes to {repository} on GitHub, a private repository. Only the Lukapp team can read it. If you include the screenshot, Lukapp keeps it on its server for a limited time, links it from the issue and then deletes it.",
   audienceUnavailable: "Lukapp can't check where reports go right now.",
   checkAgain: "Check again",
-  automaticContext: "Lukapp also adds the app version, platform, system version, language and screen name. Nothing else from your account.",
+  automaticContext: "The report also includes the app version, platform, system version, language and screen name. Nothing else from your account goes with it.",
 
   send: "Send report",
   uploading: "Uploading screenshot…",
@@ -66,7 +67,9 @@ export const feedback = {
   notConfigured: "Reporting isn't available in this build.",
   accessFailure: "Access to Lukapp changed on this phone, so the report wasn't sent.",
   invalidReport: "Check the marked field and send again.",
+  invalidScreenshot: "The screenshot couldn't be sent. Remove it, then send the report again.",
   changedReport: "This report no longer matches what was first sent. Edit it, then send it as a new report.",
+  reportExpired: "The earlier attempt expired before it reached the team. Your report is still here, so you can send it again.",
 
   errorTitleShort: "Write a title of at least 3 characters.",
   errorTitleLong: "Use 120 characters or fewer.",

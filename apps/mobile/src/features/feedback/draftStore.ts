@@ -10,6 +10,7 @@ export function reportDraftKey(subject: string) {
 }
 
 const text = z.string().max(20_000);
+const digest = z.string().regex(/^[0-9a-f]{64}$/);
 const reportSchema = z.object({
   reportKey: z.string().min(1).max(100),
   kind: z.enum(["bug", "feedback"]),
@@ -21,7 +22,7 @@ const reportSchema = z.object({
     .nullable(),
   captureFailed: z.boolean(),
   screenshotChoice: z.enum(["default", "included", "excluded"]),
-  uploaded: z.object({ storageId: z.string(), uri: z.string() }).nullable(),
+  attached: z.union([z.object({ sha256: digest }), z.literal("unconfirmed")]).nullable(),
   context: z
     .object({
       appVersion: z.string(),
@@ -31,10 +32,11 @@ const reportSchema = z.object({
       screen: z.string().optional(),
     })
     .nullable(),
-  frozen: z.boolean(),
+  frozen: z.object({ screenshotSha256: digest.nullable() }).nullable(),
   createdAt: z.number(),
 });
-const documentSchema = z.object({ v: z.literal(1), report: reportSchema });
+/** Version 1 named server uploads by storage id; those drafts are dropped like any unreadable one. */
+const documentSchema = z.object({ v: z.literal(2), report: reportSchema });
 
 export async function readReportDraft(
   subject: string,
@@ -61,7 +63,11 @@ export function clearReportDraft(subject: string) {
   return SecureStore.deleteItemAsync(reportDraftKey(subject));
 }
 
-/** A clear cancels any pending save, so a discarded report never comes back. */
+/**
+ * A clear cancels any pending save, so a discarded report never comes back.
+ * Writes run in call order, and `saveNow` replaces a pending save, so an older
+ * report can't land after a newer one.
+ */
 export function createReportDraftStore({
   lease,
   now,
@@ -90,7 +96,7 @@ export function createReportDraftStore({
     if (!report) return last;
     onChange?.(true);
     return write(() =>
-      SecureStore.setItemAsync(reportDraftKey(lease.subject), JSON.stringify({ v: 1, report })),
+      SecureStore.setItemAsync(reportDraftKey(lease.subject), JSON.stringify({ v: 2, report })),
     );
   };
   return {
@@ -102,6 +108,10 @@ export function createReportDraftStore({
       pending = report;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => void flush(), debounceMs);
+    },
+    saveNow(report) {
+      pending = report;
+      return flush();
     },
     clear() {
       if (timer) clearTimeout(timer);
