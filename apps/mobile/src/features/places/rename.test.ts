@@ -9,6 +9,11 @@ const state = vi.hoisted(() => ({
   back: vi.fn(), push: vi.fn(), rename: vi.fn(), changeLook: vi.fn(), present: vi.fn(), dismiss: vi.fn(),
   reportFailure: vi.fn((_error: unknown) => false), accounts: [] as Place[], listeners: [] as (() => boolean)[], defaultId: "daily",
 }));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("expo-router", () => ({
   router: { push: state.push, back: state.back }, Redirect: "redirect", useLocalSearchParams: () => ({ profileId: "daily" }),
 }));

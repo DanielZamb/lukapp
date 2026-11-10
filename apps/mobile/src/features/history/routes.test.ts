@@ -17,6 +17,11 @@ const provider = vi.hoisted(() => ({
   details: new Map<string, EntryDetail>(), post: vi.fn<ReversalTransport["post"]>(),
   detailQuery: vi.fn(), present: vi.fn(), dismiss: vi.fn(), hardwareBack: undefined as (() => boolean) | undefined,
 }));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("expo-router", () => ({
   router: { push: provider.push, back: provider.back }, Redirect: "redirect", useLocalSearchParams: () => provider.params,
 }));

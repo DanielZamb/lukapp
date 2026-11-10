@@ -2,14 +2,14 @@ import { usePreventRemove } from "@react-navigation/native";
 import { useAction, useQuery } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { useNavigation } from "expo-router";
-import { useRef, useState } from "react";
-import { formatLongDate, useT } from "../../i18n";
+import { useEffect, useRef, useState } from "react";
+import { formatLongDate, useT, type MessageKey } from "../../i18n";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { amountOfMinorUnits, openAmount, type AmountSession } from "../amount/session";
 import { api } from "../api";
 import { formatMoney } from "../money";
-import { useFrozenCommand } from "../useFrozenCommand";
+import { refusalCodeOf, useFrozenCommand } from "../useFrozenCommand";
 import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import {
   answerSpec, balanceCase, categoryChoice, closeRequest, everyPlace, keepAllowed, lineComplete, placeChoice, refusalMessage, refusalOf,
@@ -19,9 +19,17 @@ import {
 } from "./model";
 import {
   BlockersScreen, ChooseScreen, DefaultScreen, EndedScreen, LinesScreen, LoadingScreen, PickScreen, ReceiptScreen, ReviewScreen,
-  UndoConfirmScreen, type PickOption,
+  UndoConfirmScreen, UnreadableScreen, UnresolvedScreen, type PickOption,
 } from "./PlaceEndingScreens";
 import { useSourceBlocker } from "./sources";
+import { useUnresolvedEnding, type UnresolvedEnding } from "./unresolved";
+
+/** A resent request refused as stale was never recorded; the person starts a fresh review. */
+const staleResend: Record<string, MessageKey> = {
+  place_close_balance_stale: "placeEnding.unresolvedStaleBalance",
+  place_close_date_stale: "placeEnding.unresolvedStaleDate",
+  place_undo_preview_stale: "placeEnding.unresolvedStaleUndo",
+};
 
 type Step =
   | { name: "choose" }
@@ -82,6 +90,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const [notice, setNotice] = useState<StaleNotice | null>(null);
   const [shownPreview, setShownPreview] = useState<string | null>(null);
   const [previewChanged, setPreviewChanged] = useState(false);
+  const [resolvedNotice, setResolvedNotice] = useState<string | null>(null);
   const nextLine = useRef(0);
   const leaving = useRef(false);
   const categories = useQuery(api.accounting.listUserCategories, act === "close" ? { workspaceId } : "skip");
@@ -89,12 +98,34 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const sources = useSourceBlocker(workspaceId, profileId);
   const refusal = useRef<ReturnType<typeof refusalOf>>(null);
   const refusalCode = (error: unknown) => { refusal.current = refusalOf(error); return refusal.current?.code ?? null; };
+  const unresolved = useUnresolvedEnding(workspaceId, profileId);
+  const pending = unresolved.stored && unresolved.stored !== "unreadable" ? unresolved.stored : null;
+  const endedStatus = places?.find((item) => item.id === profileId)?.status;
+  const { settle } = unresolved;
+  useEffect(() => {
+    // The backend reports the Place as ended, so whatever the stored request did, it has nothing left to do.
+    if (pending && (endedStatus === "closed" || endedStatus === "undone")) void settle(pending.request).catch(() => {});
+  }, [pending, endedStatus, settle]);
+  /** The request is on the phone before it leaves, and forgotten only once its outcome is known. */
+  async function recorded<Receipt>(ending: UnresolvedEnding, send: () => Promise<Receipt>) {
+    await unresolved.keep(ending).catch(() => {});
+    try {
+      const receipt = await send();
+      await settle(ending.request).catch(() => {});
+      return receipt;
+    } catch (error) {
+      if (refusalCodeOf(error) !== null) await settle(ending.request).catch(() => {});
+      throw error;
+    }
+  }
+  const closeAction = useAction(api.accounting.closePlace);
+  const undoAction = useAction(api.accounting.startUndoPlace);
   const close = useFrozenCommand<CloseRequest, CloseReceipt>({
-    send: useAction(api.accounting.closePlace), reportFailure, refusalCode,
+    send: (request) => recorded({ act: "close", request }, () => closeAction(request)), reportFailure, refusalCode,
     onDone: (done) => { setReceipt(done); setSteps([{ name: "review" }]); },
   });
   const undo = useFrozenCommand<UndoRequest, UndoReceipt>({
-    send: useAction(api.accounting.startUndoPlace), reportFailure, refusalCode,
+    send: (request) => recorded({ act: "undo", request }, () => undoAction(request)), reportFailure, refusalCode,
     onDone: () => leave(onStarted),
   });
   const command = act === "undo" ? undo : close;
@@ -178,6 +209,9 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   }
   function choose(chosen: Act) {
     interact();
+    if (close.state.name === "open" && close.state.refusal) close.release();
+    if (undo.state.name === "open" && undo.state.refusal) undo.release();
+    setResolvedNotice(null);
     if (chosen !== act) { setLines([]); setTyped(""); setAdding(false); }
     setAct(chosen);
     setReviewed(chosen === "close" ? live : null);
@@ -187,12 +221,29 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     setSteps([{ name: "choose" }, sequence(chosen)[0]!]);
   }
 
+  if (unresolved.stored === undefined) return <LoadingScreen onBack={back} />;
+  if (unresolved.stored === "unreadable") return <UnreadableScreen onRetry={() => { interact(); unresolved.retryRead(); }} onBack={back} />;
   if (receipt) return <ReceiptScreen name={name} receipt={receipt} onDone={back} />;
+  if (pending && endedStatus !== "closed" && endedStatus !== "undone") {
+    const resending = pending.act === "close" ? close : undo;
+    const resend = () => {
+      interact();
+      const outcome = pending.act === "close" ? close.submit(() => pending.request) : undo.submit(() => pending.request);
+      void outcome.then((result) => {
+        if (result !== "refused" || !refusal.current) return;
+        const stale = staleResend[refusal.current.code];
+        setResolvedNotice(stale ? t(stale) : t("placeEnding.unresolvedRefused", { reason: refusalMessage(refusal.current, pending.act, translator) }));
+      });
+    };
+    return <UnresolvedScreen ending={pending} name={name} workspaceId={workspaceId} nature={closure.nature} places={places}
+      busy={resending.busy} error={resending.state.name === "uncertain" ? t(pending.act === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain") : ""}
+      onSend={resend} onBack={locked ? undefined : back} />;
+  }
   if (!locked && place.status !== "open")
     return <EndedScreen title={t(place.status === "undoing" ? "placeEnding.blockUndoingTitle" : "placeEnding.blockEndedTitle")}
       detail={t(place.status === "undoing" ? "placeEnding.blockUndoingDetail" : "placeEnding.blockEndedDetail")} onBack={back} />;
   if (step.name === "choose" || !act)
-    return <ChooseScreen name={name} onBack={back} onClose={() => choose("close")} onUndo={() => choose("undo")} />;
+    return <ChooseScreen name={name} notice={resolvedNotice} onBack={back} onClose={() => choose("close")} onUndo={() => choose("undo")} />;
 
   if (!locked) {
     const server = act === "undo" ? preview?.blockers : closure.blockers;

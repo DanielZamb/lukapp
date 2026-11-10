@@ -1,3 +1,4 @@
+import { useQuery } from "convex/react";
 import { useMemo } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { formatLongDate, useT } from "../../i18n";
@@ -6,10 +7,13 @@ import { useReadableLayout } from "../../ui/themeContext";
 import { font, radius, spacing } from "../../ui/tokens";
 import { AmountField } from "../amount/AmountField";
 import type { AmountSession } from "../amount/session";
+import { api } from "../api";
 import { formatMoney } from "../money";
+import type { UnresolvedEnding } from "./unresolved";
 import {
-  answerSpec, answersFor, blockerView, lineMinorUnits, remainingMinorUnits, signedMoney, situationCopy,
-  type Act, type Answer, type BalanceCase, type Blocker, type ChoiceView, type Closure, type CloseReceipt, type LineDraft, type UndoSnapshot,
+  answerSpec, answersFor, balanceCase, blockerView, closingLineReview, lineMinorUnits, placeChoice, remainingMinorUnits, signedMoney, situationCopy,
+  type Act, type Answer, type BalanceCase, type Blocker, type ChoiceView, type Closure, type CloseReceipt, type LineDraft, type PlaceProfile,
+  type UndoSnapshot,
 } from "./model";
 
 type Money = Closure["balance"];
@@ -53,14 +57,15 @@ export function EndedScreen({ title, detail, onBack }: { title: string; detail: 
   </Screen>;
 }
 
-export function ChooseScreen({ name, onBack, onClose, onUndo }: {
-  name: string; onBack: () => void; onClose: () => void; onUndo: () => void;
+export function ChooseScreen({ name, notice, onBack, onClose, onUndo }: {
+  name: string; notice?: string | null; onBack: () => void; onClose: () => void; onUndo: () => void;
 }) {
   const ui = useUi();
   const styles = useStyles();
   const { t } = useT();
   return <Screen>
     <Header title={t("placeEnding.chooseTitle", { name })} eyebrow={t("placeEnding.eyebrow")} onBack={onBack} />
+    <Notice lines={notice ? [notice] : []} />
     <Text style={ui.body}>{t("placeEnding.chooseIntro")}</Text>
     <View style={styles.card}>
       <Text accessibilityRole="header" style={ui.title}>{t("placeEnding.closeTitle")}</Text>
@@ -305,5 +310,60 @@ export function UndoConfirmScreen({ name, balance, snapshot, changed, replacemen
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     <PrimaryButton label={uncertain ? t("placeEnding.undoRetry") : t("placeEnding.undoConfirm", { name })}
       trailingIcon={uncertain ? "refresh" : "arrow-undo"} pending={busy} disabled={!canConfirm} onPress={onConfirm} />
+  </Screen>;
+}
+
+/**
+ * What an unconfirmed Close or Undo contained, from the stored request and today's names. Nothing but the request is
+ * stored, so a category deleted since reads as unavailable.
+ */
+export function UnresolvedSummary({ ending, workspaceId, nature, places }: {
+  ending: UnresolvedEnding; workspaceId: string; nature: Closure["nature"]; places: readonly Pick<PlaceProfile, "id" | "name" | "status">[];
+}) {
+  const ui = useUi();
+  const { t, language } = useT();
+  const close = ending.act === "close" ? ending.request : null;
+  const categories = useQuery(api.accounting.listUserCategories, close?.lines.some((line) => line.kind === "expense") ? { workspaceId } : "skip");
+  const replacement = ending.request.replacementDefaultFinancialAccountProfileId;
+  const situation = close ? balanceCase({ nature, balance: close.reviewedBalance }) : "zero";
+  const target = (line: NonNullable<typeof close>["lines"][number]) => line.kind === "transfer" ? placeChoice(line.otherFinancialAccountProfileId, places, t).label
+    : line.kind === "expense" ? categories?.find((category) => category.id === line.userCategoryId)?.name ?? t("categories.unavailableCategory") : "";
+  return <>
+    {close && (close.lines.length === 0
+      ? <Text style={ui.body}>{t("placeEnding.reviewZero", { name: placeChoice(close.financialAccountProfileId, places, t).label, amount: money(close.reviewedBalance) })}</Text>
+      : <>
+        <Text style={ui.body}>{t("placeEnding.unresolvedDated", { date: formatLongDate(language, Date.parse(`${close.reviewedAccountingDate}T12:00:00Z`), "UTC") })}</Text>
+        <ListGroup>
+          {close.lines.map((line, index) => <ListRow key={index} title={t(closingLineReview(line.kind, situation), { target: target(line) })} value={money(line.amount)} />)}
+        </ListGroup>
+      </>)}
+    {replacement && <Text style={ui.body}>{t("placeEnding.reviewDefault", { place: placeChoice(replacement, places, t).label })}</Text>}
+  </>;
+}
+
+export function UnresolvedScreen({ ending, name, workspaceId, nature, places, busy, error, onSend, onBack }: {
+  ending: UnresolvedEnding; name: string; workspaceId: string; nature: Closure["nature"];
+  places: readonly Pick<PlaceProfile, "id" | "name" | "status">[]; busy: boolean; error: string; onSend: () => void; onBack?: () => void;
+}) {
+  const ui = useUi();
+  const { t } = useT();
+  const close = ending.act === "close";
+  return <Screen>
+    <Header title={t(close ? "placeEnding.unresolvedCloseTitle" : "placeEnding.unresolvedUndoTitle", { name })} eyebrow={t("placeEnding.eyebrow")} onBack={onBack} />
+    <Text style={ui.body}>{t(close ? "placeEnding.unresolvedCloseBody" : "placeEnding.unresolvedUndoBody")}</Text>
+    <UnresolvedSummary ending={ending} workspaceId={workspaceId} nature={nature} places={places} />
+    {busy && <ActivityIndicator accessibilityLabel={t(close ? "placeEnding.closing" : "placeEnding.undoStarting")} />}
+    {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
+    <PrimaryButton label={t("placeEnding.unresolvedSend")} trailingIcon="refresh" pending={busy} onPress={onSend} />
+  </Screen>;
+}
+
+export function UnreadableScreen({ onRetry, onBack }: { onRetry: () => void; onBack: () => void }) {
+  const ui = useUi();
+  const { t } = useT();
+  return <Screen>
+    <Header title={t("placeEnding.unreadableTitle")} eyebrow={t("placeEnding.eyebrow")} onBack={onBack} />
+    <Text style={ui.body}>{t("placeEnding.unreadableBody")}</Text>
+    <PrimaryButton label={t("placeEnding.unreadableRetry")} trailingIcon="refresh" onPress={onRetry} />
   </Screen>;
 }

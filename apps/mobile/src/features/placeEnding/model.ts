@@ -223,6 +223,13 @@ export function closeRequest(input: {
   };
 }
 
+/** The confirmation label of a sent closing line: its direction follows the reviewed balance's sign, as when it was built. */
+export function closingLineReview(kind: LineKind, situation: BalanceCase): MessageKey {
+  const answer = answersFor[situation].find((item) => answers[item].kind === kind);
+  return answer ? answers[answer].review : kind === "transfer" ? "placeEnding.reviewTransferTo"
+    : kind === "expense" ? "placeEnding.reviewExpense" : "placeEnding.reviewAdjustmentExpense";
+}
+
 export function undoRequest(input: {
   workspaceId: string; placeId: string; replacement: string | null; idempotencyKey: string; previewFingerprint: string;
 }, t: Translator["t"]): UndoRequest {

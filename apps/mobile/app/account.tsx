@@ -1,6 +1,6 @@
 import { useAction, useQuery } from "convex/react";
 import { router, Redirect, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { usePersonalDefaults, usePostedActivity, useRecentActivity } from "../src/features/activity";
 import { api } from "../src/features/api";
@@ -12,6 +12,8 @@ import { RenameSheet } from "../src/features/places/RenameSheet";
 import { usePlaceStyles } from "../src/features/places/styles";
 import { everyPlace, refusalMessage, refusalOf, type UndoOperation } from "../src/features/placeEnding/model";
 import { UndoStatusCard, useUndoStatus } from "../src/features/placeEnding/UndoStatus";
+import { UnresolvedSummary } from "../src/features/placeEnding/PlaceEndingScreens";
+import { useUnresolvedEnding } from "../src/features/placeEnding/unresolved";
 import { useFrozenCommand } from "../src/features/useFrozenCommand";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import { formatLongDate, useT } from "../src/i18n";
@@ -47,6 +49,13 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   const open = status === "open";
   const openCount = profiles?.filter((profile) => profile.status === "open").length ?? 0;
   const undo = useUndoStatus(workspaceId, profileId, status === "undoing" || status === "undone");
+  const unresolved = useUnresolvedEnding(workspaceId, profileId);
+  const stored = unresolved.stored && unresolved.stored !== "unreadable" ? unresolved.stored : null;
+  const { settle } = unresolved;
+  // Once the backend reports the Place as ended, or shows the stored Undo as the one that started, its outcome is known.
+  const known = status === "closed" || status === "undone" || (stored?.act === "undo" && undo?.idempotencyKey === stored.request.idempotencyKey);
+  useEffect(() => { if (stored && known) void settle(stored.request).catch(() => {}); }, [stored, known, settle]);
+  const unconfirmed = stored && !known ? stored : null;
   const title = account ? placeTitle(account.name, open ? openCount : 0, t) : "";
   const ready = activity !== undefined && profiles !== undefined;
   return <Screen contentStyle={styles.page}>
@@ -75,6 +84,14 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
         : undo === undefined ? <ActivityIndicator accessibilityLabel={t("placeEnding.loading")} /> : null)}
       {status === "undone" && <Text style={ui.body}>{t("placeEnding.accountUndone")}</Text>}
       {status === "undoing" && <Text style={ui.body}>{t("placeEnding.accountUndoing")}</Text>}
+      {unconfirmed && <View style={ui.section}>
+        <Text accessibilityRole="header" style={ui.title}>{t(unconfirmed.act === "close" ? "placeEnding.unresolvedCloseTitle" : "placeEnding.unresolvedUndoTitle",
+          { name: account.name })}</Text>
+        <Text style={ui.body}>{t(unconfirmed.act === "close" ? "placeEnding.unresolvedCloseBody" : "placeEnding.unresolvedUndoBody")}</Text>
+        <UnresolvedSummary ending={unconfirmed} workspaceId={workspaceId} nature={account.nature} places={profiles ?? []} />
+        <PrimaryButton label={t("placeEnding.unresolvedOpen")} trailingIcon="refresh"
+          onPress={() => router.push({ pathname: "/place-ending", params: { profileId } })} />
+      </View>}
       <PrimaryButton label={t("places.accountSeeHistory")} trailingIcon="receipt-outline"
         onPress={() => router.push({ pathname: "/history", params: { profileId } })} />
       <ListGroup>
@@ -90,7 +107,7 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
             value={row.reversed ? t("places.accountReversed") : formatActivityAmount(row.amount)}
             valueStyle={{ color: row.reversed ? theme.mutedForeground : row.amount.minorUnits > 0 ? theme.primary : theme.foreground }} />)}
       </ListGroup> : <ActivityIndicator accessibilityLabel={t("places.accountLoadingRecent")} />}
-      {open && <SecondaryButton label={t("placeEnding.endAction")}
+      {open && !unconfirmed && <SecondaryButton label={t("placeEnding.endAction")}
         onPress={() => router.push({ pathname: "/place-ending", params: { profileId } })} />}
       {open && emoji !== null && <EmojiSheet emoji={emoji} onPick={setEmoji} onDismiss={() => setEmoji(null)}
         onUse={async () => { await changeLook({ workspaceId, financialAccountProfileId: profileId, emoji }); }} />}

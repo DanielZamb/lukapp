@@ -5,8 +5,19 @@ import { act, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { emptyState } from "../intake/durableState";
-import { mountStack, screenHelpers } from "./flow.testSupport";
+import { mountStack, screenHelpers, settle } from "./flow.testSupport";
 
+const phone = vi.hoisted(() => new Map<string, string>());
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: async (key: string) => phone.get(key) ?? null,
+  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
+  deleteItemAsync: async (key: string) => { phone.delete(key); },
+}));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("react-native", () => ({
   Platform: { OS: "android" }, KeyboardAvoidingView: "KeyboardAvoidingView",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput",
@@ -99,6 +110,7 @@ const receipt = (entries: unknown[] = []) => ({ ending: { id: "ending", act: "cl
 let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
 beforeEach(() => {
+  phone.clear();
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   keys.next = 0;
@@ -707,4 +719,124 @@ test("in Spanish a deleted category and a closed place read as such", async () =
   expect(ui.disabled("Revisar")).toBe(true);
   await act(async () => serverChange(() => { remote.closure = closure("Asset", 4_000_000); }));
   expect(ui.texts()).toContain("El saldo de Wallet cambió de COP 50.000 a COP 40.000. Revisa tus respuestas con el saldo nuevo y vuelve a revisar el cierre.");
+});
+
+const storedKey = "lukapp.placeEnding.unresolved.owner";
+const closeUncertain = "We couldn't confirm whether the place closed. Retry: we send exactly the same closing and nothing is recorded twice.";
+const unresolvedBody = "The closing was sent, but its answer never reached this phone, so it may already be recorded. Send it again exactly as it was: if it was recorded, you'll see what was recorded; if not, it's recorded now.";
+const sentTransfer = {
+  workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(5_000_000), reviewedAccountingDate: "2026-11-10",
+  lines: [{ kind: "transfer", otherFinancialAccountProfileId: "savings", amount: closing(5_000_000), description: "Closing Wallet" }],
+};
+const storeOnPhone = (request: unknown, act = "close") => phone.set(storedKey, JSON.stringify({ v: 1, endings: [{ act, request }] }));
+async function restart() {
+  await act(async () => mounted!.root.unmount());
+  await open();
+  await settle();
+}
+
+test("an unconfirmed closing survives a restart, shows what it contained and resends the identical request under its key", async () => {
+  remote.close.mockRejectedValueOnce(new Error("network lost")).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual([closeUncertain]);
+  expect(remote.close.mock.calls[0]![0]).toEqual(sentTransfer);
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "close", request: sentTransfer }] });
+  await restart();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "We couldn't confirm whether Wallet closed", unresolvedBody,
+    "Recorded on November 10, 2026:", "Transfer to Savings", "COP 50.000", "Send it again"]);
+  expect(ui.has("Close Wallet")).toBe(false);
+  expect(ui.has("Undo Wallet")).toBe(false);
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
+  expect(ui.texts()).toContain("Wallet is closed");
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test("a resend whose outcome is unknown again stays stored and locked, and the next try sends the same request", async () => {
+  storeOnPhone(sentTransfer);
+  remote.close.mockRejectedValueOnce(new Error("still offline")).mockResolvedValueOnce(receipt());
+  await open();
+  await settle();
+  await ui.press("Send it again");
+  await settle();
+  expect(ui.alerts()).toEqual([closeUncertain]);
+  expect(ui.has("Back")).toBe(false);
+  await systemBack();
+  expect(mounted!.routes()).toEqual(["index", "places", "account", "place-ending"]);
+  expect(JSON.parse(phone.get(storedKey)!).endings[0].request).toEqual(sentTransfer);
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test.each([
+  { code: "place_close_balance_stale", notice: "It wasn't closed because its balance changed since. Start a new review." },
+  { code: "place_close_date_stale", notice: "It wasn't closed because the day changed since. Start a new review." },
+  { code: "locked_period", notice: "The earlier request wasn't recorded. This month is closed, so the closing can't be recorded today." },
+])("a resent closing refused with $code is forgotten and the person starts a fresh review under a new key", async ({ code, notice }) => {
+  storeOnPhone({ ...sentTransfer, idempotencyKey: "from-before" });
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code, message: "x" })).mockResolvedValueOnce(receipt());
+  await open();
+  await settle();
+  await ui.press("Send it again");
+  await settle();
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.texts().slice(1, 3)).toEqual(["What happened to Wallet?", notice]);
+  await ui.press("Close Wallet");
+  expect(ui.alerts()).toEqual([]);
+  await ui.press("I don't know / adjustment");
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["from-before", "key-1"]);
+});
+
+test("a request is on the phone while it is sent and forgotten after a receipt or a refusal", async () => {
+  const seen: Array<string | undefined> = [];
+  remote.close.mockImplementationOnce(async () => { seen.push(phone.get(storedKey)); throw new ConvexError({ kind: "accounting", code: "locked_period", message: "x" }); })
+    .mockImplementationOnce(async () => { seen.push(phone.get(storedKey)); return receipt(); });
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  expect(phone.has(storedKey)).toBe(false);
+  await ui.press("Close Wallet");
+  await settle();
+  expect(seen.map((raw) => JSON.parse(raw!).endings[0].request.idempotencyKey)).toEqual(["key-1", "key-2"]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.texts()).toContain("Wallet is closed");
+});
+
+test("a stored request is forgotten once the backend reports the Place as ended, and another Place's request is kept", async () => {
+  const otherPlace = { ...sentTransfer, financialAccountProfileId: "daily", idempotencyKey: "daily-key" };
+  phone.set(storedKey, JSON.stringify({ v: 1, endings: [{ act: "close", request: sentTransfer }, { act: "close", request: otherPlace }] }));
+  remote.places = [{ ...wallet, status: "closed" }, daily, savings];
+  await open();
+  await settle();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "This place has already ended", "Its history stays under Closed places."]);
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "close", request: otherPlace }] });
+  expect(remote.close).not.toHaveBeenCalled();
+});
+
+test("an unreadable saved request blocks a new attempt until it is read", async () => {
+  phone.set(storedKey, "{not json");
+  await open();
+  await settle();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "We couldn't read this phone's saved request",
+    "An earlier closing or undo of this place may be waiting on this phone. Try reading it again before starting anything new.", "Try again"]);
+  storeOnPhone(sentTransfer);
+  await ui.press("Try again");
+  await settle();
+  expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet closed");
+});
+
+test("in Spanish an unconfirmed closing reads as such", async () => {
+  storeOnPhone({ ...sentTransfer, lines: [{ kind: "expense", userCategoryId: "groceries", amount: closing(5_000_000), description: "Cierre de Wallet" }] });
+  remote.categories = [{ id: "groceries", name: "Mercado", nature: "Expense", style: { emoji: "🛒" } }];
+  await open("es");
+  await settle();
+  expect(ui.texts()).toEqual(["CERRAR O DESHACER", "No pudimos confirmar si Wallet quedó cerrado",
+    "El cierre se envió, pero la respuesta nunca llegó a este celular, así que puede que ya esté registrado. Envíalo otra vez tal como estaba: si ya se registró, verás lo que quedó registrado; si no, se registra ahora.",
+    "Se registra el 10 de noviembre de 2026:", "Gasto en Mercado", "COP 50.000", "Enviar otra vez"]);
 });

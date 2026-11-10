@@ -44,6 +44,17 @@ vi.mock("../activity", () => ({
 }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
+const phone = vi.hoisted(() => new Map<string, string>());
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: async (key: string) => phone.get(key) ?? null,
+  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
+  deleteItemAsync: async (key: string) => { phone.delete(key); },
+}));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("react-native", () => ({
   Platform: { OS: "android" }, KeyboardAvoidingView: "KeyboardAvoidingView",
   Text: "Text", View: "View", Pressable: "Pressable", ScrollView: "ScrollView", ActivityIndicator: "ActivityIndicator",
@@ -72,6 +83,7 @@ const retryAt = Date.UTC(2026, 10, 10, 20, 30);
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => {
+  phone.clear();
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
@@ -277,4 +289,36 @@ test("the closed section reads in Spanish", async () => {
   await act(async () => root!.unmount());
   await render(PlacesRoute, "es");
   expect(texts().slice(-2)).toEqual(["Billetera", "Deshecho el 9 de noviembre de 2026"]);
+});
+
+const storedKey = "lukapp.placeEnding.unresolved.owner";
+const storedClose = { workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "k1", reviewedBalance: cop(5_000_000),
+  reviewedAccountingDate: "2026-11-10", lines: [{ kind: "transfer", otherFinancialAccountProfileId: "daily", amount: cop(5_000_000), description: "Closing Wallet" }] };
+const settleReads = async () => { await act(async () => { for (let index = 0; index < 50; index++) await Promise.resolve(); }); };
+
+test("a Place's page shows an unconfirmed closing with what it contained and offers only to send it again", async () => {
+  phone.set(storedKey, JSON.stringify({ v: 1, endings: [{ act: "close", request: storedClose }] }));
+  await render(AccountRoute);
+  await settleReads();
+  expect(texts()).toEqual(expect.arrayContaining(["We couldn't confirm whether Wallet closed", "Recorded on November 10, 2026:",
+    "Transfer to Daily", "COP 50.000", "See it and send it again"]));
+  expect(buttons()).not.toContain("Close or undo this place");
+  await act(async () => root!.root.find((node) => String(node.type) === "Pressable" && node.props.accessibilityLabel === "See it and send it again").props.onPress());
+  expect(state.push.mock.calls).toEqual([[{ pathname: "/place-ending", params: { profileId: "wallet" } }]]);
+});
+
+test.each([
+  { name: "the Place is closed", status: "closed" as const, undo: null, act: "close", kept: false },
+  { name: "the stored Undo is the one running", status: "undoing" as const, undo: operation({ kind: "running" }, 1, { idempotencyKey: "k1" }), act: "undo", kept: false },
+  { name: "another Undo is running", status: "undoing" as const, undo: operation({ kind: "running" }, 1, { idempotencyKey: "other" }), act: "undo", kept: true },
+])("the page forgets a stored request only once its outcome is known: $name", async ({ status, undo, act: kind, kept }) => {
+  const request = kind === "close" ? storedClose
+    : { workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "k1", previewFingerprint: "f", reversalDescriptionPrefix: "Reversal:" };
+  phone.set(storedKey, JSON.stringify({ v: 1, endings: [{ act: kind, request }] }));
+  state.statuses = { wallet: status };
+  state.undo = undo ? { wallet: undo } : {};
+  await render(AccountRoute);
+  await settleReads();
+  expect(phone.has(storedKey)).toBe(kept);
+  expect(texts().includes("We couldn't confirm whether Wallet started undoing")).toBe(kept);
 });

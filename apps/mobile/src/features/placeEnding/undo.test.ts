@@ -7,6 +7,17 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { emptyState } from "../intake/durableState";
 import { mountStack, screenHelpers, settle } from "./flow.testSupport";
 
+const phone = vi.hoisted(() => new Map<string, string>());
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: async (key: string) => phone.get(key) ?? null,
+  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
+  deleteItemAsync: async (key: string) => { phone.delete(key); },
+}));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("react-native", () => ({
   Platform: { OS: "android" }, KeyboardAvoidingView: "KeyboardAvoidingView",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput",
@@ -99,6 +110,7 @@ function snapshot(values: Partial<Snapshot> = {}): Snapshot {
 let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
 beforeEach(() => {
+  phone.clear();
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   keys.next = 0;
@@ -358,4 +370,50 @@ test("backing out of Undo twice sends nothing and returns to the account page", 
   await act(async () => { mounted!.stack.goBack(); });
   expect(mounted!.routes()).toEqual(["index", "places", "account"]);
   expect(remote.undo).not.toHaveBeenCalled();
+});
+
+const storedKey = "lukapp.placeEnding.unresolved.owner";
+test("an unconfirmed start survives a restart and resends the identical request, then follows it on the Place's page", async () => {
+  remote.closure = closure({ isDefault: true, requiresReplacementDefault: true });
+  remote.undo.mockRejectedValueOnce(new Error("timeout")).mockResolvedValueOnce(operation({ kind: "running" }));
+  await openUndo();
+  await ui.press("Daily");
+  await ui.press("Continue");
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  const sent = { workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", previewFingerprint: "reviewed-snapshot",
+    reversalDescriptionPrefix: "Reversal:", replacementDefaultFinancialAccountProfileId: "daily" };
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "undo", request: sent }] });
+  await act(async () => mounted!.root.unmount());
+  mounted = await mountStack(router, () => createElement(PlaceEndingRoute));
+  await settle();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "We couldn't confirm whether Wallet started undoing",
+    "The undo was sent, but its answer never reached this phone, so it may already have started. Send it again exactly as it was: if it started, you'll follow it on this place's page; if not, it starts now.",
+    "Daily becomes your default place.", "Send it again"]);
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.undo.mock.calls).toEqual([[sent], [sent]]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a resent start refused as stale is forgotten and a fresh confirmation follows", async () => {
+  phone.set(storedKey, JSON.stringify({ v: 1, endings: [{ act: "undo", request: { workspaceId: "ws", financialAccountProfileId: "wallet",
+    idempotencyKey: "old", previewFingerprint: "old-snapshot", reversalDescriptionPrefix: "Reversal:" } }] }));
+  remote.undo.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" }))
+    .mockResolvedValueOnce(operation({ kind: "pending" }));
+  mounted = await mountStack(router, () => createElement(PlaceEndingRoute));
+  await settle();
+  await ui.press("Send it again");
+  await settle();
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.texts().slice(1, 3)).toEqual(["What happened to Wallet?",
+    "It didn't start undoing because this place's movements changed since. Start a new review."]);
+  await ui.press("Undo Wallet");
+  await settle();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  expect(remote.undo.mock.calls.map(([request]) => [request.idempotencyKey, request.previewFingerprint]))
+    .toEqual([["old", "old-snapshot"], ["key-1", "reviewed-snapshot"]]);
 });
