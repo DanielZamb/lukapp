@@ -46,7 +46,7 @@ export function setupSelections(
   });
 }
 export function startingAmount(text: string, currency: string, { t }: Translator) {
-  const minorUnits = text.trim() ? parseMoney(text, "es-CO", currency) : 0;
+  const minorUnits = text.trim() ? parseMoney(text, currency) : 0;
   if (minorUnits < 0) throw new Error(t("setup.startingNegative"));
   return minorUnits;
 }

@@ -1,5 +1,7 @@
 import { activeTranslator } from "../i18n/active";
 import { currencyMinorUnitDigits } from "../../../../src/accounting/currencies";
+import { formatMinorUnits } from "../../../../src/money/amount";
+import { amountFormat } from "./amount/policy";
 
 export function formatMoneyInput(raw: string, currency: string): string {
   const digits = currencyMinorUnitDigits(currency);
@@ -54,16 +56,10 @@ export function currencyDisplayPrefix(currency: string) {
   return /^[A-Z]{3}$/.test(symbol) ? `${symbol} ` : symbol;
 }
 
-function localeSeparators(locale: string): { group: string; decimal: string } {
-  if (locale === "en-US") {
-    return { group: ",", decimal: "." };
-  }
-  return { group: ".", decimal: "," };
-}
-
-export function parseMoney(text: string, locale = "es-CO", currency = "COP"): number {
+export function parseMoney(text: string, currency: string): number {
   const precision = currencyMinorUnitDigits(currency);
-  const { group, decimal } = localeSeparators(locale);
+  const group = ".";
+  const decimal = ",";
   const normalized = text.trim().replace(/^−/, "-");
   const sign = normalized.startsWith("-") ? -1 : 1;
   const unsigned = normalized.replace(/^[+-]/, "");
@@ -103,12 +99,7 @@ export function toMajorUnits(minorUnits: number, currency: string): number {
 }
 
 export function formatAmount(minorUnits: number, currency: string, options?: FormatMoneyOptions): string {
-  const digits = currencyMinorUnitDigits(currency);
-  const raw = String(Math.abs(minorUnits)).padStart(digits + 1, "0");
-  const whole = digits === 0 ? raw : raw.slice(0, -digits);
-  const fraction = digits === 0 ? "" : raw.slice(-digits);
-  const showFraction = digits > 0 && !(options?.hideZeroDecimals && Number(fraction) === 0);
-  return `${minorUnits < 0 ? "−" : ""}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}${showFraction ? `,${fraction}` : ""}`;
+  return formatMinorUnits(minorUnits, amountFormat(currency), options);
 }
 
 export function formatMoney(

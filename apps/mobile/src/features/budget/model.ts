@@ -1,6 +1,6 @@
 import type { Language, Translator } from "../../../../../src/i18n";
 import { formatMonthName } from "../../../../../src/i18n/format";
-import { toMajorUnits } from "../money";
+import { compactMoney } from "../amount/compact";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../api";
 
@@ -57,24 +57,5 @@ export function nextAction(jars: BudgetJar[], month: string, { t, language }: Tr
 
 /** "1.23M" / "354K" in English; "1,23 M" / "354 mil" in Spanish. Rounding is the same in both. */
 export function compactAmount(minorUnits: number, currency: string, language: Language) {
-  const amount = toMajorUnits(Math.abs(minorUnits), currency);
-  const sign = minorUnits < 0 ? "−" : "";
-  if (amount >= 1_000_000) {
-    const millions = amount / 1_000_000;
-    const body = millions >= 10 || millions % 1 === 0 ? millions.toFixed(0)
-      : Math.round(millions * 100) % 10 === 0 ? millions.toFixed(1) : millions.toFixed(2);
-    return `${sign}${compactBody(body, "millions", language)}`;
-  }
-  if (amount >= 1000) {
-    const thousands = amount / 1000;
-    const body = thousands >= 10 || thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1);
-    return `${sign}${compactBody(body, "thousands", language)}`;
-  }
-  return `${sign}${language === "es" ? String(amount).replace(".", ",") : amount}`;
-}
-
-/** Spanish keeps the unit on the same line as the number with a no-break space, as Intl does. */
-export function compactBody(body: string, scale: "thousands" | "millions", language: Language) {
-  if (language === "es") return `${body.replace(".", ",")}\u00a0${scale === "millions" ? "M" : "mil"}`;
-  return `${body}${scale === "millions" ? "M" : "K"}`;
+  return compactMoney(minorUnits, currency, language, "budget");
 }

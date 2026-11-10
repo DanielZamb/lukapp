@@ -289,7 +289,7 @@ export function usePostingEditor(
       description: description.trim(),
       amount: {
         currency,
-        minorUnits: Math.abs(parseMoney(amount, "es-CO", account.currency)),
+        minorUnits: Math.abs(parseMoney(amount, account.currency)),
       },
       accountingDate: date,
       financialAccountProfileId: profileId,
@@ -399,7 +399,7 @@ export function usePostingEditor(
 
   let minorUnits: number | null = null;
   try {
-    minorUnits = parseMoney(amount, "es-CO", account.currency);
+    minorUnits = parseMoney(amount, account.currency);
   } catch {
     /* Incomplete edits stay editable. */
   }
@@ -424,7 +424,7 @@ export function usePostingEditor(
           productKind: setup.productKind,
           amount: {
             currency: account.currency,
-            minorUnits: parseMoney(setup.amount, "es-CO", account.currency),
+            minorUnits: parseMoney(setup.amount, account.currency),
           },
           accountingDate: setup.date,
           idempotencyKey: transport.newKey(),
@@ -435,7 +435,7 @@ export function usePostingEditor(
       workspaceId: account.workspaceId,
       amount: {
         currency: account.currency,
-        minorUnits: Math.abs(parseMoney(amount, "es-CO", account.currency)),
+        minorUnits: Math.abs(parseMoney(amount, account.currency)),
       },
       accountingDate: date,
       description: description.trim(),
@@ -477,7 +477,7 @@ export function usePostingEditor(
   }
   let setupValid = false;
   try {
-    setupValid = !!setup?.name.trim() && setup.productKind !== null && parseMoney(setup.amount, "es-CO", account.currency) >= 0;
+    setupValid = !!setup?.name.trim() && setup.productKind !== null && parseMoney(setup.amount, account.currency) >= 0;
   } catch {
     /* Keep incomplete setup editable. */
   }
@@ -710,7 +710,7 @@ export function usePostingEditor(
         }
         let nextDirection = direction;
         try {
-          nextDirection = parseMoney(value, "es-CO", account.currency) > 0 ? "in" : "out";
+          nextDirection = parseMoney(value, account.currency) > 0 ? "in" : "out";
         } catch {
           /* Preserve the selection during incomplete edits. */
         }

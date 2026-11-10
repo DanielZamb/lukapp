@@ -24,7 +24,7 @@ type ExitSheet = { kind: "leave"; resume: () => void } | { kind: "discard-draft"
 
 function amountLabel(amount: string, currency: string) {
   try {
-    const minorUnits = parseMoney(amount, "es-CO", currency);
+    const minorUnits = parseMoney(amount, currency);
     return minorUnits ? formatMoney({ currency, minorUnits: Math.abs(minorUnits) }) : "";
   } catch {
     return "";

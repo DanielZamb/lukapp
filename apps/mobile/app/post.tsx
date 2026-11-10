@@ -402,7 +402,7 @@ function PostMoney({
             const hits = postingBudgetImpact({
               jars: budget.jars,
               categoryIds: editor.categories.ids,
-              expenseMinorUnits: -parseMoney(editor.amount, "es-CO", workspace.functionalCurrency),
+              expenseMinorUnits: -parseMoney(editor.amount, workspace.functionalCurrency),
             });
             if (hits.length) {
               Keyboard.dismiss();

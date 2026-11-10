@@ -54,8 +54,8 @@ for (const currency of ["COP", "USD", "BHD"]) {
     ["", null, null], ["-", null, null], ["90.071.992.547.409,92", null, null],
   ])(`legacy ${currency} parser fixture %s`, (raw, two, three) => {
     const expected = currency === "BHD" ? three : two;
-    if (expected === null) expect(() => parseMoney(raw, "es-CO", currency)).toThrow();
-    else expect(parseMoney(raw, "es-CO", currency)).toBe(expected);
+    if (expected === null) expect(() => parseMoney(raw, currency)).toThrow();
+    else expect(parseMoney(raw, currency)).toBe(expected);
   });
 }
 

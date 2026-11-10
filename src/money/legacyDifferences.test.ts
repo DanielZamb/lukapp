@@ -44,7 +44,7 @@ const cases: readonly Case[] = [
 
 const receipts: object[] = [];
 function legacyParse(text: string, currency: string): number | "refused" {
-  try { return parseMoney(text, "es-CO", currency); } catch { return "refused"; }
+  try { return parseMoney(text, currency); } catch { return "refused"; }
 }
 
 test.each(cases)("Colombian policy difference p=%s input=%s", (precision, text, oldEditing, oldParsed, expected, why) => {

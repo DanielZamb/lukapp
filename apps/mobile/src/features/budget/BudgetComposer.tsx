@@ -32,7 +32,7 @@ export function BudgetComposer(props: Props) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { t } = useT();
   let limit = 0;
-  try { limit = parseMoney(props.amount, "es-CO", props.currency); } catch { /* Incomplete input stays editable. */ }
+  try { limit = parseMoney(props.amount, props.currency); } catch { /* Incomplete input stays editable. */ }
   const { status, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
   const over = status === "over";
   const money = (minorUnits: number) => formatMoney({ currency: props.currency, minorUnits }, { hideZeroDecimals: true });

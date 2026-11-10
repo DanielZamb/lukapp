@@ -45,7 +45,7 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
   const [revealed, setRevealed] = useState(false);
   const [anchor, setAnchor] = useState<number | null>(null);
   const accent = dark ? DARK_PRIMARY_TEXT : theme.primary;
-  const current = (() => { try { return Math.abs(parseMoney(amount, "es-CO", currency)); } catch { return null; } })();
+  const current = (() => { try { return Math.abs(parseMoney(amount, currency)); } catch { return null; } })();
   const chosen = suggestion.amounts.find((mention) => mention.minor === current) ?? null;
   const hidden = suggestion.sensitive !== null && !revealed;
   const label = appLabel ?? notification.packageName;

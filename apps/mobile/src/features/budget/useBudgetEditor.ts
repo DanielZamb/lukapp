@@ -54,7 +54,7 @@ function readAmount(text: string, currency: string, currentMinorUnits: number | 
   { minorUnits: number; issue: AmountIssue | null } {
   if (!text.trim()) return { minorUnits: 0, issue: "empty" };
   let minorUnits: number;
-  try { minorUnits = parseMoney(text, "es-CO", currency); } catch { return { minorUnits: 0, issue: "invalid" }; }
+  try { minorUnits = parseMoney(text, currency); } catch { return { minorUnits: 0, issue: "invalid" }; }
   if (minorUnits === 0) return { minorUnits, issue: "zero" };
   if (minorUnits < 0) return { minorUnits, issue: "notPositive" };
   return { minorUnits, issue: minorUnits === currentMinorUnits ? "unchanged" : null };

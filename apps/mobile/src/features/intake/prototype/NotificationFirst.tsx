@@ -134,7 +134,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
   const [error, setError] = useState("");
   const hidden = suggestion.sensitive !== null && !revealed;
   // parseMoney returns minor units and throws while the text is incomplete.
-  const minor = (() => { try { return parseMoney(amountText || "0", "es-CO", currency); } catch { return 0; } })();
+  const minor = (() => { try { return parseMoney(amountText || "0", currency); } catch { return 0; } })();
   const foreign = chosen?.currency && chosen.currency !== currency;
   const accent = dark ? "#c4b5fd" : theme.primary;
 

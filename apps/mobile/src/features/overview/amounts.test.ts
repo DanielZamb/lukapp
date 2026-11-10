@@ -7,7 +7,7 @@ test.each([
   [10_500, "11K"], [999_999, "1000K"], [1_000_000, "1M"],
   [1_250_000, "1.3M"], [10_500_000, "11M"], [-108_000_000, "−108M"],
 ])("compacts %s major units as %s like the prototype", (amount, expected) => {
-  expect(compactAmount(amount, "en")).toBe(expected);
+  expect(compactAmount(amount * 100, "USD", "en")).toBe(expected);
 });
 
 test("symbol amounts convert minor units once and use es-CO grouping", () => {

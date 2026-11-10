@@ -28,7 +28,7 @@ export function placesTotal(accounts: Pick<Place, "nature" | "balance">[], curre
 }
 export function placeBalanceInput(value: string, currency: string) {
   let minorUnits = 0;
-  try { minorUnits = parseMoney(value, "es-CO", currency); } catch { minorUnits = 0; }
+  try { minorUnits = parseMoney(value, currency); } catch { minorUnits = 0; }
   return formatMoney({ currency, minorUnits }).replace(`${currency} `, "");
 }
 export function trackingDate(value: string | null, { t, language }: Translator) {

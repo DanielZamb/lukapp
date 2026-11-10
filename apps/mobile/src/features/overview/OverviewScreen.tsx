@@ -1,4 +1,3 @@
-import { toMajorUnits } from "../money";
 import type { Theme } from "../../ui/tokens";
 import { useReadableLayout } from "../../ui/themeContext";
 import type { ReadableLayout } from "../../ui/layout";
@@ -26,7 +25,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   const { t, language } = useT();
-  const compact = (minorUnits: number) => compactAmount(toMajorUnits(minorUnits, data?.currency ?? "COP"), language);
+  const compact = (minorUnits: number, currency: string) => compactAmount(minorUnits, currency, language);
   const [view, setView] = useState<"list" | "spend" | "remaining">("list");
   const symbol = data ? currencyDisplayPrefix(data.currency) : "$";
   const categories = data?.categories ?? [];
@@ -63,7 +62,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
                   <View style={styles.trail}>
                     <Text style={styles.value} numberOfLines={layout.reflow ? undefined : 1}>{symbolAmount(category.spendMinorUnits, symbol, "grouped", data.currency, language)}</Text>
                     {left !== null && <Text style={[styles.left, { color: over ? theme.danger : categoryInk(color, mode) }]}>
-                      {t(over ? "review.amountOver" : "review.amountLeft", { amount: compact(Math.abs(left)) })}
+                      {t(over ? "review.amountOver" : "review.amountLeft", { amount: compact(Math.abs(left), data.currency) })}
                     </Text>}
                   </View>
                 </View>
@@ -81,8 +80,8 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
             const color = over ? theme.danger : categoryColor(category.style, mode);
             const fill = showRemaining ? remainingFill(category) : Math.max(0, Math.min(1, category.spendMinorUnits / maxSpend));
             const value = showRemaining && left !== null
-              ? over ? t("review.amountOver", { amount: compact(Math.abs(left)) }) : compact(Math.abs(left))
-              : compact(category.spendMinorUnits);
+              ? over ? t("review.amountOver", { amount: compact(Math.abs(left), data.currency) }) : compact(Math.abs(left), data.currency)
+              : compact(category.spendMinorUnits, data.currency);
             return (
               <Pressable key={category.id} accessibilityRole="button"
                 accessibilityLabel={showRemaining ? t("review.barWhatsLeftA11y", { name: category.name }) : category.name}

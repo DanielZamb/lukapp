@@ -160,11 +160,11 @@ for (const precision of [0, 2, 3] as const) {
     for (let value = -200000; value <= 200000; value++) {
       const text = formatAmount(value, currency);
       assertReading(text, format, value);
-      if (parseMoney(text, "es-CO", currency) !== value) throw new Error(`Legacy mismatch for ${text}`);
+      if (parseMoney(text, currency) !== value) throw new Error(`Legacy mismatch for ${text}`);
     }
     for (const value of generatedSpread()) for (const sign of [1, -1]) {
       const text = formatAmount(value * sign, currency);
-      expect(parseAmount(text, format)).toEqual({ kind: "parsed", minorUnits: parseMoney(text, "es-CO", currency) || 0 });
+      expect(parseAmount(text, format)).toEqual({ kind: "parsed", minorUnits: parseMoney(text, currency) || 0 });
     }
   }, 30000);
 }

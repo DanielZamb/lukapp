@@ -14,7 +14,7 @@ afterEach(async () => { await act(async () => root?.unmount()); root = undefined
 async function inLanguage(language: "en" | "es") {
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: language }, null)); });
 }
-const failure = (text: string, currency = "COP") => { try { parseMoney(text, "es-CO", currency); return null; } catch (error) { return (error as Error).message; } };
+const failure = (text: string, currency = "COP") => { try { parseMoney(text, currency); return null; } catch (error) { return (error as Error).message; } };
 
 test("amount validation speaks the chosen language and accepts and rejects the same input", async () => {
   await inLanguage("es");
@@ -22,11 +22,11 @@ test("amount validation speaks the chosen language and accepts and rejects the s
   expect(failure("12.34", "USD")).toBe("Revisa los separadores de miles.");
   expect(failure("12a")).toBe("Escribe un monto válido.");
   expect(failure("99999999999999999")).toBe("El monto es demasiado grande.");
-  expect(parseMoney("-1.250.300", "es-CO", "COP")).toBe(-125_030_000);
-  expect(parseMoney("12,34", "es-CO", "USD")).toBe(1234);
+  expect(parseMoney("-1.250.300", "COP")).toBe(-125_030_000);
+  expect(parseMoney("12,34", "USD")).toBe(1234);
   await act(async () => root?.unmount());
   await inLanguage("en");
   expect(failure("1,234", "COP")).toBe("Enter an amount with up to 2 decimal places.");
   expect(failure("12a")).toBe("Enter a valid amount.");
-  expect(parseMoney("-1.250.300", "es-CO", "COP")).toBe(-125_030_000);
+  expect(parseMoney("-1.250.300", "COP")).toBe(-125_030_000);
 });
