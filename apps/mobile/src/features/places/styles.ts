@@ -43,5 +43,7 @@ export function usePlaceStyles() {
   emojiChip: { width: touchTarget, height: touchTarget, alignItems: "center", justifyContent: "center", borderWidth: 1,
     borderColor: theme.border, borderRadius: radius.full, backgroundColor: theme.secondary },
   look: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: touchTarget },
+  badge: { alignSelf: "center", maxWidth: "100%", paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.full,
+    borderWidth: 1, borderColor: theme.border, color: theme.mutedForeground, fontFamily: font.semibold, fontSize: 12, lineHeight: 16 },
   }), [theme, ui, layout]);
 }

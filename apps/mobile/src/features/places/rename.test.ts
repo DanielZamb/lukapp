@@ -7,7 +7,7 @@ import type { Place } from "./model";
 
 const state = vi.hoisted(() => ({
   back: vi.fn(), push: vi.fn(), rename: vi.fn(), changeLook: vi.fn(), present: vi.fn(), dismiss: vi.fn(),
-  reportFailure: vi.fn((_error: unknown) => false), accounts: [] as Place[], listeners: [] as (() => boolean)[],
+  reportFailure: vi.fn((_error: unknown) => false), accounts: [] as Place[], listeners: [] as (() => boolean)[], defaultId: "daily",
 }));
 vi.mock("expo-router", () => ({
   router: { push: state.push, back: state.back }, Redirect: "redirect", useLocalSearchParams: () => ({ profileId: "daily" }),
@@ -44,7 +44,7 @@ vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () =>
 vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () => () => {} }));
 vi.mock("../activity", () => ({
   usePersonalDefaults: () => ({ workspace: { id: "ws", functionalCurrency: "COP", timeZone: "America/Bogota" },
-    financialAccountProfile: { id: "daily" } }),
+    financialAccountProfile: { id: state.defaultId } }),
   usePostedActivity: () => ({ accounts: state.accounts }),
   useRecentActivity: () => ({ page: [] }),
 }));
@@ -65,6 +65,7 @@ beforeEach(() => {
   state.reportFailure.mockImplementation(() => false);
   state.accounts = [daily, savings];
   state.listeners = [];
+  state.defaultId = "daily";
   language = "en";
 });
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
@@ -301,4 +302,18 @@ test("a place that has not started tracking says so in both languages", async ()
     await act(async () => root?.unmount());
   }
   root = undefined;
+});
+
+test.each([
+  { lang: "en" as const, defaultId: "daily", places: 2, label: ["Default"] },
+  { lang: "es" as const, defaultId: "daily", places: 2, label: ["Por defecto"] },
+  { lang: "en" as const, defaultId: "savings", places: 2, label: [] },
+  { lang: "en" as const, defaultId: "daily", places: 1, label: [] },
+])("the account page marks the default place quietly ($lang, default $defaultId, $places places)", async ({ lang, defaultId, places, label }) => {
+  language = lang;
+  state.defaultId = defaultId;
+  state.accounts = places === 2 ? [daily, savings] : [daily];
+  await render();
+  expect(texts().filter((text) => ["Default", "Por defecto"].includes(text))).toEqual(label);
+  expect(tree().findAll((node) => typeof node.props.title === "string" && /default|defecto/i.test(node.props.title))).toEqual([]);
 });
