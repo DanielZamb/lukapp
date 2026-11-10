@@ -34,7 +34,7 @@ export const home: Messages<typeof en> = {
   alertsEmpty: "Nada se pasó del tope",
   alertsEmptyDetail: "Los topes se mantienen",
   alertsNow: "Ahora",
-  alertOver: "{emoji}  {name} se pasó",
+  alertOver: "{emoji}  {name} se pasó del tope",
   alertSpent: "{spent} de {limit}",
   overOne: "{name} se pasó del tope",
   overMany: "{count} categorías se pasaron del tope",

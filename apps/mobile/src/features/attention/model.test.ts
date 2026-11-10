@@ -51,3 +51,18 @@ test("currency-code formatting retains cents and groups thousands", () => {
     home: { detail: "USD 100,50 over" },
   });
 });
+
+test("Spanish alerts read as whole sentences with the stored category name and counted bell label", () => {
+  const es = createTranslator("es");
+  expect(budgetAttention({ currency: "COP", jars: [] }, es).bellLabel).toBe("Alertas, nada pendiente");
+  expect(budgetAttention({ currency: "COP", jars: [food] }, es)).toEqual({
+    rows: [{ id: "food", title: "🍋  Food se pasó del tope", detail: "COP 150 de COP 100",
+      destination: { pathname: "/category-look", params: { categoryId: "food" } } }],
+    home: { title: "Food se pasó del tope", detail: "COP 50 de más" },
+    bellLabel: "Alertas, 1 se pasó del tope",
+  });
+  const two = budgetAttention({ currency: "COP", jars: [food,
+    { ...food, category: { id: "travel", name: "Viajes", emoji: "🚕" }, consumptionMinorUnits: 175_00 }] }, es);
+  expect(two.home).toEqual({ title: "2 categorías se pasaron del tope", detail: "COP 125 de más en total" });
+  expect(two.bellLabel).toBe("Alertas, 2 se pasaron del tope");
+});

@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import LevelUnlockedRoute from "../../../app/level-unlocked";
 import { experienceLevel } from "./model";
+import { LanguageProvider } from "../../i18n";
 
 const state = vi.hoisted(() => {
   const params: Record<string, unknown> = {};
@@ -79,4 +80,28 @@ test.each([
   { accounts: 2, limits: 1, level: 1 },
 ])("level derives from $accounts accounts and $limits limits", ({ accounts, limits, level }) => {
   expect(experienceLevel(accounts, limits)).toBe(level);
+});
+
+test.each([
+  { params: { door: "account", accountName: "Ahorros Bancolombia" }, expected: [
+    "Un segundo lugar",
+    "Ya tienes Ahorros Bancolombia. Ahora puedes pasar plata entre lugares y ponerle tope a cualquier categoría.",
+    "Volver al mes",
+  ] },
+  { params: { door: "account" }, expected: [
+    "Un segundo lugar",
+    "Ya tienes El lugar nuevo. Ahora puedes pasar plata entre lugares y ponerle tope a cualquier categoría.",
+    "Volver al mes",
+  ] },
+  { params: { door: "budget", category: "Mercado", emoji: "🍋", color: "#047857", currency: "COP", limitMinorUnits: "150000000" }, expected: [
+    "Tope activado", "🍋", "Mercado · COP 1.500.000",
+    "Las alertas van a vigilar este tope. Puedes agregar otro lugar cuando tengas plata en más de uno.", "Volver al mes",
+  ] },
+])("the $params.door door reads in Spanish and keeps the stored name", async ({ params, expected }) => {
+  state.params = params;
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(LevelUnlockedRoute)));
+  });
+  expect(texts()).toEqual(expected);
+  expect(root.root.findAllByType("button").map((node) => node.props.accessibilityLabel)).toEqual(["Volver al mes"]);
 });

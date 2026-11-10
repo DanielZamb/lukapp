@@ -269,3 +269,27 @@ test(
     gate.dispose();
   },
 );
+
+test("the OS unlock prompt reads in the language chosen when it opens", async () => {
+  const React = await import("react");
+  const { act, create } = await import("react-test-renderer");
+  const { LanguageProvider } = await import("../i18n");
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("React", React);
+  const prompts = () => os.getSentinel.mock.calls.map(([, options]) => (options as { authenticationPrompt: string }).authenticationPrompt);
+  const choose = async (language: "en" | "es") => {
+    let root: ReturnType<typeof create> | undefined;
+    await act(async () => { root = create(React.createElement(LanguageProvider, { initialPreference: language })); });
+    await act(async () => root?.unmount());
+  };
+  try {
+    await choose("es");
+    await unlockBiometry(marker, "owner");
+    await choose("en");
+    await unlockBiometry(marker, "owner");
+    expect(prompts()).toEqual(["Desbloquear Lukapp", "Unlock Lukapp"]);
+  } finally {
+    await choose("en");
+    vi.unstubAllGlobals();
+  }
+});
