@@ -25,6 +25,9 @@ export async function correctContribution(store: RecoveryWriteStore, input: Corr
   if (input.targetPlanId !== undefined) {
     if (input.targetPlanId === original.planId) throw new RecoveryError("correction_target_same_plan");
     const target = await requireContributablePlan(store, input.targetPlanId, input.workspaceId);
+    const originalPlan = (await store.listPlans()).find(item => item.id === original.planId);
+    if (originalPlan?.sourceJournalEntryId === target.sourceJournalEntryId)
+      throw new RecoveryError("correction_target_same_expense");
     await requireContributionDate(store, target, original.contributionDate);
     if (target.destinationFinancialAccountProfileId !== transfer.destinationFinancialAccountProfileId)
       throw new RecoveryError("transfer_destination_mismatch");

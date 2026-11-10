@@ -31,6 +31,7 @@ export async function createFinancialAccountProfile(
   if (!name) {
     throw new AccountingError("name_required");
   }
+  if (name.length > 80) throw new AccountingError("account_name_too_long");
   if (input.emoji && !input.emoji.trim())
     throw new AccountingError("account_emoji_required");
   const classified = classifyFinancialAccountProfile(

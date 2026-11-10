@@ -83,6 +83,7 @@ export default defineSchema({
     currency: v.string(),
     activationMonth: v.string(),
     replacesPlanId: v.optional(v.id("savingsRecoveryPlans")),
+    replacementLinkInferred: v.optional(v.boolean()),
     idempotencyKey: v.string(),
     createdBy: v.string(),
     createdAt: v.number(),

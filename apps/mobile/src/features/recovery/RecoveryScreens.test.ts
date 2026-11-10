@@ -22,7 +22,7 @@ const candidate: RecoveryCandidate = {
   amountMinorUnits: 1_200_000, financialAccountProfileId: "daily", placeName: "Daily",
 };
 const plan: RecoveryPlanView = {
-  cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
+  canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
   status: "active",
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
@@ -128,7 +128,7 @@ test("a completed plan has a neutral zero due and no movement button", async () 
 
 test("a suspended plan explains its reversed expense and offers no movement", async () => {
   const screen = await render(createElement(RecoveryPlanScreen, {
-    plan: { ...plan, status: "suspended", dueMinorUnits: 0 },
+    plan: { ...plan, acceptsContributions: false, status: "suspended", dueMinorUnits: 0 },
     month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
   }));
   expect(screen.findAll((node) => node.type === Text && node.children.join("") ===

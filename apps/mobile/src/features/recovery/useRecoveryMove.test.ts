@@ -6,7 +6,7 @@ import type { RecoveryPlace, RecoveryPlanView } from "./model";
 import { useRecoveryMove, type RecoveryMoveTransport } from "./useRecoveryMove";
 
 const plan: RecoveryPlanView = {
-  cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
+  canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
   status: "active",
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
@@ -62,7 +62,7 @@ test("the due amount posts one guarded movement under one key", async () => {
 test("a suspended plan cannot start a movement even when its handler is called", async () => {
   const api = transport();
   const move = await open(api, { workspaceId: "workspace", timeZone: "America/Bogota", sources,
-    plan: { ...plan, status: "suspended" },
+    plan: { ...plan, acceptsContributions: false, status: "suspended" },
   });
   expect(move().canSubmit).toBe(false);
   await act(async () => { await move().submit(); });

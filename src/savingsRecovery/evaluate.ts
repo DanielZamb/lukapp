@@ -6,7 +6,7 @@ import type {
   RecoveryLedgerEntry,
   RecoveryReadStore,
 } from "./types";
-import { planProgress } from "./progress";
+import { ALL_MONTHS, planProgress } from "./progress";
 
 export async function evaluateWorkspace(
   store: RecoveryReadStore,
@@ -25,7 +25,7 @@ export async function evaluateWorkspace(
     store.listCorrections(),
   ]);
   const cancelled = new Map(cancellations.map(item => [item.planId, item]));
-  const reserved = new Set(plans.filter(plan => !cancelled.has(plan.id)).map(plan => plan.sourceJournalEntryId));
+  const reserved = new Set<string>();
   const assets = profiles.filter((profile) => isAssetProductKind(profile.productKind));
   const destinations = assets
     .slice()
@@ -37,9 +37,16 @@ export async function evaluateWorkspace(
     .map(async (plan) => {
       const progress = await planProgress(plan, contributions, async (entryId) =>
         Boolean(await store.findReversalOf(entryId)), month, corrections);
+      const allTimeProgress = await planProgress(plan, contributions, async entryId =>
+        Boolean(await store.findReversalOf(entryId)), ALL_MONTHS, corrections);
       const source = await store.getEntry(plan.sourceJournalEntryId);
-      const status: "active" | "suspended" | "cancelled" | "completed" = cancelled.has(plan.id) ? "cancelled" :
-        await store.findReversalOf(plan.sourceJournalEntryId) ? "suspended" :
+      const sourceReversed = Boolean(await store.findReversalOf(plan.sourceJournalEntryId));
+      const cancellation = cancelled.get(plan.id);
+      const cancelledInMonth = cancellation !== undefined && month >= currentRecoveryMonth(cancellation.eventTime, timeZone);
+      if (!cancelledInMonth && allTimeProgress.remainingMinorUnits > 0) reserved.add(plan.sourceJournalEntryId);
+      const canCancel = cancellation === undefined && allTimeProgress.remainingMinorUnits > 0;
+      const status: "active" | "suspended" | "cancelled" | "completed" = cancelledInMonth ? "cancelled" :
+        sourceReversed ? "suspended" :
         progress.remainingMinorUnits === 0 ? "completed" : "active";
       const contributionHistory = await Promise.all(contributions.filter(item => item.planId === plan.id)
         .sort((a, b) => a.contributionDate.localeCompare(b.contributionDate) || a.recordedAt - b.recordedAt || a.id.localeCompare(b.id))
@@ -65,7 +72,9 @@ export async function evaluateWorkspace(
         currency: plan.currency,
         ...progress,
         status,
-        cancellation: cancelled.get(plan.id),
+        canCancel,
+        acceptsContributions: canCancel && !sourceReversed,
+        cancellation,
         replacesPlanId: plan.replacesPlanId,
         replacedByPlanId: plans.find(item => item.replacesPlanId === plan.id)?.id,
         contributionHistory,
