@@ -37,6 +37,8 @@ export const recovery = {
   destination: "Destination",
   destinationLabel: "DESTINATION",
   draftNoDestination: "Add a savings place from Home or Places before you can start Savings recovery.",
+  placeUnavailable: "{name} (unavailable)",
+  placeGone: "{name} is no longer available. Choose another place.",
   draftActivate: "Activate plan",
   draftActivating: "Activating…",
   draftRetry: "Retry activation",

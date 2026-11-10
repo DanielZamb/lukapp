@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ConvexError } from "convex/values";
-import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT } from "../../i18n";
 import type { api } from "../api";
 import { amountMinorUnits, amountOfMinorUnits, type AmountSession } from "../amount/session";
 import { defaultAccountingDate } from "../timeZones";
+import { refusalCodeOf } from "../useFrozenCommand";
 import type { RecoveryPlace, RecoveryPlanView } from "./model";
+import { endedPlaceRefusal, useChosenPlace } from "./useChosenPlace";
 
 type Request = FunctionArgs<typeof api.savingsRecovery.recordContribution>;
 type Receipt = FunctionReturnType<typeof api.savingsRecovery.recordContribution>;
@@ -16,7 +16,6 @@ export type RecoveryMoveTransport = {
   reportFailure: (error: unknown) => boolean;
   onMoved: (receipt: Receipt) => void;
 };
-const rejection = z.object({ kind: z.union([z.literal("recovery"), z.literal("accounting")]), code: z.string() });
 
 export function useRecoveryMove(
   seed: { workspaceId: string; timeZone: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
@@ -25,7 +24,8 @@ export function useRecoveryMove(
   const { t } = useT();
   const defaultSource = seed.sources.find((place) => place.id !== seed.plan.destinationFinancialAccountProfileId)
     ?? null;
-  const [sourceId, setSourceId] = useState(defaultSource?.id ?? null);
+  const source = useChosenPlace(seed.sources, defaultSource?.id ?? null);
+  const sourceId = source.id;
   const [amount, setAmount] = useState(() => amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }));
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
@@ -49,6 +49,7 @@ export function useRecoveryMove(
       setError(t("recovery.moveSameSource"));
       return;
     }
+    if (!request.current && source.unavailable) return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -71,11 +72,14 @@ export function useRecoveryMove(
       transport.onMoved(receipt);
     } catch (caught) {
       if (transport.reportFailure(caught) || !mounted.active) return;
-      const parsed = rejection.safeParse(caught instanceof ConvexError ? caught.data : null);
-      if (parsed.success) {
+      const code = refusalCodeOf(caught);
+      const sent = request.current;
+      if (code !== null && sent) {
         request.current = null;
         setPending(false);
-        setError(t("recovery.moveRejected"));
+        const ended = endedPlaceRefusal(code);
+        if (ended) source.refuse(sent.sourceFinancialAccountProfileId, ended);
+        else setError(t("recovery.moveRejected"));
       } else setError(t("recovery.moveUncertain"));
     } finally {
       submitting.current = false;
@@ -84,10 +88,11 @@ export function useRecoveryMove(
   }
   const canEdit = () => lifetime.current.active && !submitting.current && !request.current;
   return {
-    sourceId, amount, busy, pending, error, editable,
-    canSubmit: !busy && (pending || (seed.plan.status === "active" && !!sourceId && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
+    sourceId, unavailable: source.unavailable, amount, busy, pending, error, editable,
+    canSubmit: !busy && (pending || (seed.plan.status === "active" && !!sourceId && !source.unavailable
+      && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
     canDismiss: !busy && !pending,
-    onSource: (id: string) => { if (canEdit()) setSourceId(id); },
+    onSource: (id: string) => { if (canEdit()) source.choose(id); },
     onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.plan.currency) setAmount(value); },
     submit,
   };

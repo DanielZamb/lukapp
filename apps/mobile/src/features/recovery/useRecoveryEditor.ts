@@ -1,9 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ConvexError } from "convex/values";
-import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
+import { refusalCodeOf } from "../useFrozenCommand";
 import { amountMinorUnits, amountOfMinorUnits, displayedMinorUnits, type AmountSession } from "../amount/session";
 import {
   DEFAULT_INSTALLMENT_COUNT,
@@ -13,6 +12,7 @@ import {
   type RecoveryCandidate,
   type RecoveryPlace,
 } from "./model";
+import { endedPlaceRefusal, useChosenPlace } from "./useChosenPlace";
 
 type MonthCount = (typeof INSTALLMENT_COUNTS)[number];
 
@@ -31,7 +31,6 @@ export type RecoveryEditorTransport = {
   reportFailure: (error: unknown) => boolean;
   onSaved: (receipt: Receipt) => void;
 };
-const rejection = z.object({ kind: z.literal("recovery"), code: z.string() });
 const replacementRefusals: Record<string, MessageKey> = {
   replacement_already_exists: "planning.replacementExists",
   replacement_plan_not_latest: "planning.replacementUnavailable",
@@ -46,7 +45,8 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     ?? seed.destinations[0] ?? null;
   const [installmentCount, setInstallmentCount] = useState<MonthCount>(DEFAULT_INSTALLMENT_COUNT);
   const [amount, setAmount] = useState(() => installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)));
-  const [destinationId, setDestinationId] = useState(defaultDestination?.id ?? null);
+  const destination = useChosenPlace(seed.destinations, defaultDestination?.id ?? null);
+  const destinationId = destination.id;
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -64,7 +64,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   async function submit() {
     const mounted = lifetime.current;
     const selected = request.current?.destinationFinancialAccountProfileId ?? destinationId;
-    if (!mounted.active || submitting.current || !selected || (!request.current && !ready)) return;
+    if (!mounted.active || submitting.current || !selected || (!request.current && (!ready || destination.unavailable))) return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -87,13 +87,15 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
       transport.onSaved(receipt);
     } catch (caught) {
       if (transport.reportFailure(caught) || !mounted.active) return;
-      const parsed = rejection.safeParse(caught instanceof ConvexError ? caught.data : null);
-      if (parsed.success) {
+      const code = refusalCodeOf(caught);
+      const sent = request.current;
+      if (code !== null && sent) {
         request.current = null;
         setPending(false);
-        const replacement = replacementRefusals[parsed.data.code];
-        setError(t(parsed.data.code === "expense_already_recovered" ? "recovery.draftAlreadyRecovered"
-          : replacement ?? "recovery.draftRejected"));
+        const ended = endedPlaceRefusal(code);
+        if (ended) destination.refuse(sent.destinationFinancialAccountProfileId, ended);
+        else setError(t(code === "expense_already_recovered" ? "recovery.draftAlreadyRecovered"
+          : replacementRefusals[code] ?? "recovery.draftRejected"));
       } else setError(t("recovery.draftUncertain"));
     } finally {
       submitting.current = false;
@@ -102,8 +104,8 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   }
   const canEdit = () => lifetime.current.active && !submitting.current && !request.current;
   return {
-    installmentCount, amount, destinationId, busy, pending, error, editable, suggestion,
-    canSubmit: !busy && (pending || (!!destinationId && ready)),
+    installmentCount, amount, destinationId, unavailable: destination.unavailable, busy, pending, error, editable, suggestion,
+    canSubmit: !busy && (pending || (!!destinationId && !destination.unavailable && ready)),
     canDismiss: !busy && !pending,
     onMonths: (count: MonthCount) => {
       if (!canEdit()) return;
@@ -111,7 +113,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
       setAmount(installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, count)));
     },
     onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.currency) setAmount(value); },
-    onDestination: (id: string) => { if (canEdit()) setDestinationId(id); },
+    onDestination: (id: string) => { if (canEdit()) destination.choose(id); },
     submit,
   };
 }

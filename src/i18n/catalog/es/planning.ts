@@ -97,6 +97,8 @@ export const planning: Messages<typeof en> = {
   fixDestination: "Esta transferencia llegó a un lugar distinto al que usa {plan}. Elige otro plan o haz que no cuente.",
   fixPredates: "Esta transferencia es de antes de que empezara el plan {plan}, así que no puede contar para ese plan. Elige otro plan o haz que no cuente.",
   fixPlanCancelled: "El plan {plan} está cancelado. Elige otro plan o haz que no cuente.",
+  fixPlaceEnded: "{plan} ahorra en un lugar que está cerrado, así que no puede recibir este aporte. Elige otro plan o haz que no cuente.",
+  fixPlaceUndoing: "{plan} ahorra en un lugar que se está deshaciendo, así que no puede recibir este aporte. Elige otro plan o haz que no cuente.",
   fixPlanSuspended: "El gasto del plan {plan} se reversó, así que ahora no puede recibir aportes. Elige otro plan o haz que no cuente.",
   fixPlanMissing: "Ese plan ya no está disponible. Elige otro plan o haz que no cuente.",
   fixCapacity: "Otros planes ya cuentan parte de esta transferencia, así que no se puede pasar todo el monto. Elige otro plan o haz que no cuente.",

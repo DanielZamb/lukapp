@@ -42,6 +42,8 @@ const correctionRefusals: Record<string, MessageKey> = {
   transfer_destination_mismatch: "planning.fixDestination",
   transfer_predates_activation: "planning.fixPredates",
   plan_cancelled: "planning.fixPlanCancelled",
+  financial_account_profile_ended: "planning.fixPlaceEnded",
+  place_undo_in_progress: "planning.fixPlaceUndoing",
   expense_not_recoverable: "planning.fixPlanSuspended",
   plan_not_found: "planning.fixPlanMissing",
   transfer_capacity_exceeded: "planning.fixCapacity",

@@ -40,6 +40,8 @@ export const recovery: Messages<typeof en> = {
   destination: "Destino",
   destinationLabel: "DESTINO",
   draftNoDestination: "Para recuperar ahorros, primero agrega un lugar de ahorro desde Inicio o Lugares.",
+  placeUnavailable: "{name} (no disponible)",
+  placeGone: "{name} ya no está disponible. Elige otro lugar.",
   draftActivate: "Activar plan",
   draftActivating: "Activando…",
   draftRetry: "Reintentar activación",

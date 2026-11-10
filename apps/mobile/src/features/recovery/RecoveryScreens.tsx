@@ -31,6 +31,7 @@ import {
 } from "./model";
 import { ContributionHistory } from "./RecoveryLifecycleScreens";
 import { createRecoveryStyles } from "./styles";
+import type { UnavailablePlace } from "./useChosenPlace";
 import { AmountField } from "../amount/AmountField";
 import type { AmountSession } from "../amount/session";
 
@@ -126,6 +127,11 @@ export function RecoveryCandidates(props: {
   );
 }
 
+/** The chosen Place that can no longer be used, kept in the list where it was chosen and marked, never sent. */
+function UnavailableChoice({ place }: { place: UnavailablePlace }) {
+  return <Choice label={place.label} detail={place.detail} selected disabled onPress={() => {}} />;
+}
+
 export function RecoveryDraft(props: {
   candidate: RecoveryCandidate;
   currency: string;
@@ -134,6 +140,7 @@ export function RecoveryDraft(props: {
   installmentCount: number;
   amount: AmountSession;
   destinationId: string | null;
+  unavailable?: UnavailablePlace | null;
   suggestion: ReturnType<typeof suggestionFor>;
   editable: boolean;
   busy: boolean;
@@ -152,6 +159,7 @@ export function RecoveryDraft(props: {
   const ui = useUi();
   const { t, tn, locale } = useT();
   const limits = limitsCopy(props.currency, props.suggestion, t);
+  const destinations = props.destinations.filter((place) => place.id !== props.unavailable?.id);
   const limitsHelp = `${limits.range} ${limits.extra}`;
   const principal = recoveryMoney({
     currency: props.currency,
@@ -202,23 +210,23 @@ export function RecoveryDraft(props: {
         }}
       />
       {(props.error || !props.suggestion.valid) ? <Text style={ui.muted}>{limitsHelp}</Text> : null}
-      {props.destinations.length === 1 ? (
+      {destinations.length === 1 && destinations[0].id === props.destinationId && !props.unavailable ? (
         <ListGroup>
-          <ListRow title={t("recovery.destination")} value={props.destinations[0].name} icon="wallet-outline" />
+          <ListRow title={t("recovery.destination")} value={destinations[0].name} icon="wallet-outline" />
         </ListGroup>
       ) : (
         <View style={ui.section}>
           <Text style={ui.label}>{t("recovery.destinationLabel")}</Text>
-          {props.destinations.length ? props.destinations.map((place) => (
+          {destinations.map((place) => (
             <Choice
               key={place.id}
               label={place.name}
               selected={place.id === props.destinationId}
               onPress={() => { if (props.editable) props.onDestination(place.id); }}
             />
-          )) : (
-            <Text style={ui.muted}>{t("recovery.draftNoDestination")}</Text>
-          )}
+          ))}
+          {props.unavailable ? <UnavailableChoice place={props.unavailable} />
+            : destinations.length ? null : <Text style={ui.muted}>{t("recovery.draftNoDestination")}</Text>}
         </View>
       )}
       <PrimaryButton
@@ -337,6 +345,7 @@ export function RecoveryMoveScreen(props: {
   plan: RecoveryPlanView;
   sources: RecoveryPlace[];
   sourceId: string | null;
+  unavailable?: UnavailablePlace | null;
   amount: AmountSession;
   editable: boolean;
   busy: boolean;
@@ -353,7 +362,8 @@ export function RecoveryMoveScreen(props: {
   const styles = useMemo(() => createRecoveryStyles(theme), [theme]);
   const ui = useUi();
   const { t } = useT();
-  const places = props.sources.filter((place) => place.id !== props.plan.destinationFinancialAccountProfileId);
+  const places = props.sources.filter((place) => place.id !== props.plan.destinationFinancialAccountProfileId
+    && place.id !== props.unavailable?.id);
   return (
     <Screen>
       <Header
@@ -378,22 +388,22 @@ export function RecoveryMoveScreen(props: {
         {props.error ? <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text> : null}
       </View>
       <ListGroup>
-        {places.length === 1 ? (
+        {places.length === 1 && places[0].id === props.sourceId && !props.unavailable ? (
           <ListRow title={t("recovery.moveFrom")} value={places[0].name} icon="arrow-up-circle-outline" />
         ) : (
           <View>
             <ListRow title={t("recovery.moveFrom")} icon="arrow-up-circle-outline" />
             <View style={styles.sources}>
-              {places.length ? places.map((place) => (
+              {places.map((place) => (
                 <Choice
                   key={place.id}
                   label={place.name}
                   selected={place.id === props.sourceId}
                   onPress={() => { if (props.editable) props.onSource(place.id); }}
                 />
-              )) : (
-                <Text style={ui.muted}>{t("recovery.moveNoSource")}</Text>
-              )}
+              ))}
+              {props.unavailable ? <UnavailableChoice place={props.unavailable} />
+                : places.length ? null : <Text style={ui.muted}>{t("recovery.moveNoSource")}</Text>}
             </View>
           </View>
         )}
@@ -402,7 +412,7 @@ export function RecoveryMoveScreen(props: {
       </ListGroup>
       <PrimaryButton
         label={props.busy ? t("recovery.moveBusy") : props.pending ? t("recovery.moveRetry") : t("recovery.moveSubmit")}
-        disabled={!props.canSubmit || places.length === 0}
+        disabled={!props.canSubmit || (places.length === 0 && !props.pending)}
         pending={props.busy}
         onPress={() => { void props.submit(); }}
         trailingIcon="checkmark"
