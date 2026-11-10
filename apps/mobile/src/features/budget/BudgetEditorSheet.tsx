@@ -5,6 +5,7 @@ import { Choice, Header, PrimaryButton, SecondaryButton, useUi, useTheme } from 
 import { useT } from "../../i18n";
 import { spacing } from "../../ui/tokens";
 import type { BudgetCategory } from "./model";
+import type { AmountIssue } from "./useBudgetEditor";
 
 export type BudgetEditorSheetProps = {
   title: string;
@@ -16,6 +17,7 @@ export type BudgetEditorSheetProps = {
   categoryFixed: boolean;
   search: string;
   amount: string;
+  amountIssue: AmountIssue | null;
   busy: boolean;
   pending: boolean;
   editable: boolean;
@@ -76,6 +78,8 @@ export function BudgetEditorSheet(props: BudgetEditorSheetProps) {
           placeholder="0" placeholderTextColor={theme.mutedForeground} value={props.amount}
           onChangeText={props.onAmount} editable={props.editable} style={[ui.input, ui.hero]} />
         <Text style={ui.muted}>{props.policyCopy}</Text>
+        {props.editable && (props.amountIssue === "zero" || props.amountIssue === "notPositive")
+          && <Text accessibilityRole="alert" style={ui.error}>{t("lifecycle.limitNotPositive")}</Text>}
         {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}
         <PrimaryButton label={props.busy ? t("budget.saving") : props.pending ? t("budget.retrySave") : t("budget.saveBudget")} disabled={!props.canSubmit} onPress={props.onSave} />
         {props.canDismiss && <SecondaryButton label={t("common.cancel")} onPress={() => sheet.current?.dismiss()} />}

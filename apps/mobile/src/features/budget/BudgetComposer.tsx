@@ -10,7 +10,7 @@ import { jarPresentation, type BudgetCategory } from "./model";
 import type { useBudgetEditor } from "./useBudgetEditor";
 
 type Props = Pick<ReturnType<typeof useBudgetEditor>,
-  "amount" | "editable" | "busy" | "pending" | "canSubmit" | "canDismiss" | "error" | "onAmount"> & {
+  "amount" | "amountIssue" | "editable" | "busy" | "pending" | "canSubmit" | "canDismiss" | "error" | "onAmount"> & {
   category: BudgetCategory;
   currency: string;
   spentMinorUnits: number;
@@ -33,7 +33,8 @@ export function BudgetComposer(props: Props) {
   const { t } = useT();
   let limit = 0;
   try { limit = parseMoney(props.amount, "es-CO", props.currency); } catch { /* Incomplete input stays editable. */ }
-  const { over, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
+  const { status, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
+  const over = status === "over";
   const money = (minorUnits: number) => formatMoney({ currency: props.currency, minorUnits }, { hideZeroDecimals: true });
   return (
     <Screen contentStyle={styles.page}>
@@ -64,6 +65,8 @@ export function BudgetComposer(props: Props) {
           </Pressable>
         ))}
       </View>
+      {props.editable && (props.amountIssue === "zero" || props.amountIssue === "notPositive")
+        && <Text accessibilityRole="alert" style={ui.error}>{t("lifecycle.limitNotPositive")}</Text>}
       {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}
       <PrimaryButton label={props.busy ? t("budget.saving") : props.pending ? t("budget.retrySave") : t("budget.saveLimit")}
         trailingIcon="checkmark" disabled={!props.canSubmit} pending={props.busy} onPress={props.onSave} />

@@ -39,9 +39,59 @@ test.each([
 });
 
 test.each([
-  [0, { over: false, amount: 1000, fill: 1 }], [500, { over: false, amount: 500, fill: 0.5 }],
-  [1000, { over: false, amount: 0, fill: 0 }], [1500, { over: true, amount: 500, fill: 0 }],
-  [-1500, { over: false, amount: 2500, fill: 1 }],
+  [0, { status: "left", spendNothing: false, amount: 1000, fill: 1 }],
+  [500, { status: "left", spendNothing: false, amount: 500, fill: 0.5 }],
+  [1000, { status: "left", spendNothing: false, amount: 0, fill: 0 }],
+  [1500, { status: "over", spendNothing: false, amount: 500, fill: 0 }],
+  [-1500, { status: "left", spendNothing: false, amount: 2500, fill: 1 }],
 ])("jar remaining fill follows consumption %s", (consumed, expected) => {
   expect(jarPresentation(jar("Food", 1000, consumed))).toEqual(expected);
+});
+
+test("a spend-nothing jar is calm at zero or a net refund and over by everything spent, through every model function that takes a jar", async () => {
+  const { postingBudgetImpact, batchPostingBudgetImpact } = await import("./postingImpact");
+  const { budgetAttention } = await import("../attention/model");
+  const zero = (consumptionMinorUnits: number) => jar("Delivery", 0, consumptionMinorUnits);
+  const outputs = [0, 5_000_000, -5_000_000].map((consumed) => {
+    const jars = [zero(consumed)];
+    return {
+      presentation: jarPresentation(jars[0]),
+      action: nextAction(jars, "2026-10", en).label,
+      impact: postingBudgetImpact({ jars, categoryIds: ["Delivery"], expenseMinorUnits: 2_000_000 }),
+      alerts: budgetAttention({ currency: "COP", jars: jars.map((item) => ({ ...item, revisionId: "zero" })) }, en),
+    };
+  });
+  expect(outputs).toEqual([
+    { presentation: { status: "clear", spendNothing: true, amount: 0, fill: 0 }, action: "Change October's limit",
+      impact: [{ category: { id: "Delivery", name: "Delivery", emoji: "🛒" }, overMinorUnits: 2_000_000 }],
+      alerts: { rows: [], home: null, bellLabel: "Alerts, nothing needs attention" } },
+    { presentation: { status: "over", spendNothing: true, amount: 5_000_000, fill: 0 }, action: "Open Delivery",
+      impact: [],
+      alerts: {
+        rows: [{ id: "Delivery", title: "🛒  Delivery is over", detail: "Spend nothing · COP 50.000 spent",
+          destination: { pathname: "/category-look", params: { categoryId: "Delivery" } } }],
+        home: { title: "Delivery is over its spend-nothing limit", detail: "COP 50.000 over" },
+        bellLabel: "Alerts, 1 over the limit",
+      } },
+    { presentation: { status: "clear", spendNothing: true, amount: 0, fill: 0 }, action: "Change October's limit",
+      impact: [],
+      alerts: { rows: [], home: null, bellLabel: "Alerts, nothing needs attention" } },
+  ]);
+  const numbers = (value: unknown): unknown[] => typeof value === "number" ? [value]
+    : value && typeof value === "object" ? Object.values(value).flatMap(numbers) : [];
+  expect(numbers(outputs).filter((value) => !Number.isFinite(value))).toEqual([]);
+  expect(numbers({ broken: { ratio: 0 / 0 } })).toEqual([NaN]);
+  expect(postingBudgetImpact({ jars: [zero(-5_000_000)], categoryIds: ["Delivery"], expenseMinorUnits: 7_000_000 }))
+    .toEqual([{ category: { id: "Delivery", name: "Delivery", emoji: "🛒" }, overMinorUnits: 2_000_000 }]);
+  expect(await batchPostingBudgetImpact([{ kind: "expense", payload: {
+    workspaceId: "workspace", financialAccountProfileId: "cash", accountingDate: "2026-10-17", description: "Pizza",
+    idempotencyKey: "pizza", amount: { currency: "COP", minorUnits: 1 }, userCategoryIds: ["Delivery"],
+  } }], async () => ({ jars: [zero(0)] }))).toEqual([{ category: { id: "Delivery", name: "Delivery", emoji: "🛒" }, overMinorUnits: 1 }]);
+});
+
+test("spend-nothing jars never rank as hot and never displace a hot positive jar", () => {
+  const hot = jar("Food", 1000, 900);
+  expect(nextAction([jar("Delivery", 0, 0), hot, jar("Gifts", 0, -300)], "2026-10", en)).toEqual({ kind: "edit", label: "Food hit 80%", jar: hot });
+  const over = jar("Delivery", 0, 50);
+  expect(nextAction([hot, over], "2026-10", en)).toEqual({ kind: "edit", label: "Open Delivery", jar: over });
 });
