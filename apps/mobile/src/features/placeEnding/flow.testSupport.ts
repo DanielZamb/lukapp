@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import {
   BaseNavigationContainer, createNavigationContainerRef, createNavigatorFactory, StackActions, StackRouter, useNavigationBuilder,
-  type NavigationContainerRef, type ParamListBase,
+  type ParamListBase,
 } from "@react-navigation/native";
 import { ListRow } from "../../ui/core";
 import { LanguageProvider } from "../../i18n";
@@ -22,7 +22,7 @@ export type RouterDouble = {
 /** Index → Places → a Place's page → the ending flow, with expo-router's imperative calls bound to this stack. */
 export async function mountStack(router: { [K in keyof RouterDouble]: { mockImplementation(fn: RouterDouble[K]): unknown } },
   screen: () => ReactNode, language?: "es") {
-  const stack: NavigationContainerRef<ParamListBase> = createNavigationContainerRef();
+  const stack = createNavigationContainerRef<ParamListBase>();
   router.back.mockImplementation(() => stack.goBack());
   router.canGoBack.mockImplementation(() => stack.canGoBack());
   router.dismissTo.mockImplementation((href: unknown) => stack.dispatch(StackActions.popTo(String(href).replace("/", ""))));
@@ -46,19 +46,19 @@ export async function mountStack(router: { [K in keyof RouterDouble]: { mockImpl
   await act(async () => {
     root = create(language ? createElement(LanguageProvider, { initialPreference: language }, tree) : tree);
   });
-  if (!root) throw new Error("Stack not mounted");
-  const mounted = root;
+  const mounted: ReactTestRenderer | undefined = root;
+  if (!mounted) throw new Error("Stack not mounted");
   return {
     root: mounted,
     stack,
-    routes: () => stack.getRootState().routes.map((route) => route.name),
+    routes: () => (stack.getRootState()?.routes ?? []).map((route) => route.name),
   };
 }
 
 export function screenHelpers(root: () => ReactTestRenderer) {
   const all = () => root().root;
-  const texts = () => all().findAll((node) => node.type === "Text").map((node) => node.children.join(""));
-  const pressables = (label: string) => all().findAll((node) => node.type === "Pressable" && node.props.accessibilityLabel === label);
+  const texts = () => all().findAll((node) => String(node.type) === "Text").map((node) => node.children.join(""));
+  const pressables = (label: string) => all().findAll((node) => String(node.type) === "Pressable" && node.props.accessibilityLabel === label);
   function pressable(label: string) {
     const found = pressables(label)[0];
     if (!found) throw new Error(`Missing control ${label}. Visible: ${texts().join(" | ")}`);
@@ -70,7 +70,7 @@ export function screenHelpers(root: () => ReactTestRenderer) {
     await act(async () => found.props.onPress());
   }
   function input(label: string): ReactTestInstance {
-    const found = all().findAll((node) => node.type === "TextInput" && node.props.accessibilityLabel === label)[0];
+    const found = all().findAll((node) => String(node.type) === "TextInput" && node.props.accessibilityLabel === label)[0];
     if (!found) throw new Error(`Missing input ${label}`);
     return found;
   }
@@ -82,7 +82,7 @@ export function screenHelpers(root: () => ReactTestRenderer) {
     if (!found?.props.onPress) throw new Error(`Missing row ${title}`);
     await act(async () => found.props.onPress());
   }
-  const alerts = () => all().findAll((node) => node.type === "Text" && node.props.accessibilityRole === "alert").map((node) => node.children.join(""));
+  const alerts = () => all().findAll((node) => String(node.type) === "Text" && node.props.accessibilityRole === "alert").map((node) => node.children.join(""));
   const disabled = (label: string) => !!pressable(label).props.disabled;
   const has = (label: string) => pressables(label).length > 0;
   return { texts, press, input, type, row, alerts, disabled, has, pressable };

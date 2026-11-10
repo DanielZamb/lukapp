@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { formatLongDate, useT } from "../../i18n";
 import { Choice, Field, Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useTheme, useUi } from "../../ui/core";
 import { useReadableLayout } from "../../ui/themeContext";
-import { font, radius, spacing, touchTarget } from "../../ui/tokens";
+import { font, radius, spacing } from "../../ui/tokens";
 import { AmountField } from "../amount/AmountField";
 import type { AmountSession } from "../amount/session";
 import { formatMoney } from "../money";
@@ -24,8 +24,6 @@ function useStyles() {
     warningCard: { gap: spacing.sm, padding: spacing.lg, borderWidth: 1, borderColor: theme.danger, borderRadius: radius.lg },
     strong: { ...ui.body, fontFamily: font.semibold },
     warning: { ...ui.body, color: theme.danger },
-    option: { minHeight: touchTarget, flexDirection: layout.reflow ? "column" : "row", alignItems: layout.reflow ? "flex-start" : "center",
-      gap: spacing.sm, paddingVertical: spacing.sm },
     footer: { gap: spacing.sm, paddingHorizontal: layout.pagePadding, paddingVertical: spacing.md,
       borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.background },
     remaining: { ...ui.body, fontFamily: font.semibold },

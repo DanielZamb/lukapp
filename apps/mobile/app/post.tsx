@@ -42,7 +42,7 @@ import { useEntryExit } from "../src/features/posting/useEntryExit";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { createCandidateBinding } from "../src/features/intake/postingBinding";
-import { placeLabel, unavailablePlaceReason } from "../src/features/placeEnding/model";
+import { everyPlace, placeLabel, unavailablePlaceReason } from "../src/features/placeEnding/model";
 import { NotificationCard, signedAmount } from "../src/features/intake/NotificationCard";
 import {
   canPostCategories,
@@ -85,7 +85,7 @@ function PostMoney({
   // Pickers offer open Places only; this read names a Place a Draft or Candidate kept after it ended.
   const allProfiles = useQuery(api.accounting.listFinancialAccountProfiles, {
     workspaceId: defaults.workspace.id,
-    status: "all",
+    ...everyPlace,
   });
   const dateSheet = useRef<BottomSheetModal>(null);
   const placeSheet = useRef<BottomSheetModal>(null);

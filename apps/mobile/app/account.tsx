@@ -10,6 +10,7 @@ import { EmojiSheet } from "../src/features/places/EmojiSheet";
 import { accountEmoji, accountKinds, placeTitle, trackingDate } from "../src/features/places/model";
 import { RenameSheet } from "../src/features/places/RenameSheet";
 import { usePlaceStyles } from "../src/features/places/styles";
+import { everyPlace } from "../src/features/placeEnding/model";
 import { UndoStatusCard, useUndoStatus } from "../src/features/placeEnding/UndoStatus";
 import { useT } from "../src/i18n";
 import { Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
@@ -24,7 +25,7 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   const ui = useUi();
   const theme = useTheme();
   const activity = usePostedActivity(workspaceId, timeZone, "all");
-  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, status: "all" });
+  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, ...everyPlace });
   const recent = useRecentActivity(workspaceId, 3, profileId);
   const translator = useT();
   const { t } = translator;

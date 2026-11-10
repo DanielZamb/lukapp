@@ -11,6 +11,7 @@ import { readyTotalMinorUnits } from "../src/features/intake/applyBatch";
 import { confirmReadyCandidates, handleReadyBatchError } from "../src/features/intake/confirmReady";
 import { discardCandidate } from "../src/features/intake/discard";
 import { api } from "../src/features/api";
+import { everyPlace } from "../src/features/placeEnding/model";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import { clearDiscardNotices, DISCARD_NOTICE_TTL_MS, readDiscardNotices, type DiscardNotice } from "../src/features/localDiscardNotices";
 import { Screen } from "../src/ui/core";
@@ -66,7 +67,7 @@ function Drafts({
     return () => { active = false; clearTimeout(timer); };
   }, [subject, discardRevision]);
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
-  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, status: "all" });
+  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, ...everyPlace });
   // A Candidate naming a Place that ended or is being undone waits for the person to pick another; it is never confirmed in bulk.
   const unavailable = new Set(places?.filter((place) => place.status !== undefined && place.status !== "open").map((place) => place.id));
   const ready = places ? intake.ready.filter((candidate) => candidate.status?.kind === "pending"

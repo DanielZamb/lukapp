@@ -10,7 +10,7 @@ import { amountOfMinorUnits, openAmount, type AmountSession } from "../amount/se
 import { api } from "../api";
 import { useFrozenCommand } from "../useFrozenCommand";
 import {
-  answerSpec, balanceCase, closeRequest, lineComplete, refusalMessage, refusalOf, remainingMinorUnits, typedNameMatches, undoRequest,
+  answerSpec, balanceCase, closeRequest, everyPlace, lineComplete, refusalMessage, refusalOf, remainingMinorUnits, typedNameMatches, undoRequest,
   type Act, type Answer, type Blocker, type CloseReceipt, type CloseRequest, type LineDraft, type UndoReceipt, type UndoRequest,
 } from "./model";
 import {
@@ -52,7 +52,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
   const interact = useLocalEntryInteraction();
   const navigation = useNavigation();
   const reportFailure = useDeviceAccessFailure();
-  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, status: "all" });
+  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, ...everyPlace });
   const closure = useQuery(api.accounting.placeClosure, { workspaceId, financialAccountProfileId: profileId });
   const [act, setAct] = useState<Act | null>(null);
   const [steps, setSteps] = useState<Step[]>([{ name: "choose" }]);

@@ -45,7 +45,8 @@ const navigation = vi.hoisted(() => {
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
 const queryData = vi.hoisted(() => {
-  const state: { categories: Category[]; profiles: Array<{ id: string; name: string }>; currency: string; defaultProfileId: string } =
+  const state: { categories: Category[]; profiles: Array<{ id: string; name: string; status?: string }>; currency: string; defaultProfileId: string;
+    allProfiles?: Array<{ id: string; name: string; status?: string }> } =
     { categories: [], profiles: [], currency: "COP", defaultProfileId: "daily" };
   return state;
 });
@@ -68,10 +69,10 @@ vi.mock("expo-router", () => ({
 vi.mock("convex/react", () => ({
   useAction: () => confirmOne,
   useConvex: () => ({ query: vi.fn() }),
-  useQuery: (reference: Parameters<typeof getFunctionName>[0]) => {
+  useQuery: (reference: Parameters<typeof getFunctionName>[0], args?: { status?: string }) => {
     const name = getFunctionName(reference);
     if (name.endsWith(":listUserCategories")) return queryData.categories;
-    if (name.endsWith(":listFinancialAccountProfiles")) return queryData.profiles;
+    if (name.endsWith(":listFinancialAccountProfiles")) return args?.status === "all" ? queryData.allProfiles ?? queryData.profiles : queryData.profiles;
     if (name.endsWith(":evaluate")) return { jars: [] };
     return [];
   },
@@ -196,6 +197,7 @@ beforeEach(() => {
   form.props = undefined;
   queryData.categories = [];
   queryData.profiles = [{ id: "daily", name: "My money" }, { id: "wallet", name: "Wallet" }];
+  queryData.allProfiles = undefined;
   queryData.currency = "COP";
   queryData.defaultProfileId = "daily";
   back.handler = undefined;
@@ -746,4 +748,49 @@ test("Post pre-selects the default place from the current defaults read, and a p
   route.profileId = "daily";
   await mount();
   expect(formProps().place).toBe("💰 My money");
+});
+
+
+const closedWallet = () => {
+  queryData.profiles = [{ id: "daily", name: "Daily", status: "open" }, { id: "savings", name: "Savings", status: "open" }];
+  queryData.allProfiles = [...queryData.profiles, { id: "wallet", name: "Wallet", status: "closed" }, { id: "card", name: "Card", status: "undoing" }];
+};
+function placeSheetIds() {
+  if (!root) throw new Error("Post route is not mounted");
+  return (root.root.find((node) => String(node.type) === "place-sheet").props.places as { id: string }[]).map((place) => place.id);
+}
+
+test("an entry that names a closed Place keeps it visible as closed and posts nothing until another open Place is chosen", async () => {
+  closedWallet();
+  route.profileId = "wallet";
+  await mount();
+  await act(async () => {
+    formProps().onAmountChange(money("-7"));
+    formProps().onDescriptionChange("Taxi");
+  });
+  expect(formProps()).toMatchObject({ place: "💰 Wallet (closed)", blockedReason: "Wallet is closed. Choose another place.", canSubmit: false });
+  await act(async () => formProps().onPlace());
+  expect(placeSheetIds()).toEqual(["daily", "savings"]);
+  await act(async () => root!.root.find((node) => String(node.type) === "place-sheet").props.onSelect("savings"));
+  expect(formProps().place).toBe("💰 Savings");
+  expect(formProps().blockedReason).not.toBe("Wallet is closed. Choose another place.");
+  expect(writes.post).not.toHaveBeenCalled();
+});
+
+test("an entry naming a Place being undone says why it cannot post there", async () => {
+  closedWallet();
+  route.profileId = "card";
+  await mount();
+  expect(formProps()).toMatchObject({ place: "💰 Card (being undone)",
+    blockedReason: "Card is being undone and takes no new movements. Choose another place.", canSubmit: false });
+});
+
+test("a Candidate whose source maps to a closed Place shows it as closed and is not confirmed until re-pointed", async () => {
+  closedWallet();
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "wallet" }] }));
+  await candidate.service.refresh(); candidateService = candidate.service; route.candidateId = "capture-1"; await mount();
+  expect(formProps()).toMatchObject({ place: "💰 Wallet (closed)", blockedReason: "Wallet is closed. Choose another place.", canSubmit: false });
+  expect(candidateService.read("capture-1")).toBeDefined();
+  expect(confirmOne).not.toHaveBeenCalled();
 });

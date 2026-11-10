@@ -22,6 +22,9 @@ export type SourceBlocker = { code: "notification_sources"; apps: string[] } | {
 export type Blocker = UndoBlocker | SourceBlocker;
 export type Act = "close" | "undo";
 
+/** The Place list filter for readers that must also see ended and undoing Places; pickers keep the default, open. */
+export const everyPlace = { status: "all" } as const;
+
 export function isEnded(status: PlaceStatus) {
   return status === "closed" || status === "undone";
 }

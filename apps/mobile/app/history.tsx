@@ -7,7 +7,7 @@ import { api } from "../src/features/api";
 import { HistoryScreen } from "../src/features/history/HistoryScreen";
 import { EntryDetailSheet } from "../src/features/history/EntryDetailSheet";
 import { usePostedHistory } from "../src/features/history/usePostedHistory";
-import { placeLabel } from "../src/features/placeEnding/model";
+import { everyPlace, placeLabel } from "../src/features/placeEnding/model";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { useT } from "../src/i18n";
 import { Screen } from "../src/ui/core";
@@ -25,7 +25,7 @@ function History({ workspaceId, profileId, timeZone, currency }: {
   const activePage = scopedProfileId !== undefined ? scoped : all;
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
   const { t } = useT();
-  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, status: "all" });
+  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, ...everyPlace });
   const places = useMemo(() => profiles?.map((place) => ({ ...place, name: placeLabel(place, t) })), [profiles, t]);
   const { date } = useWorkspaceCalendar(timeZone);
   const scopedReady = scopedProfileId === undefined || scopedRows !== undefined;

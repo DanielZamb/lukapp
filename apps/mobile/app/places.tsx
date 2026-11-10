@@ -12,6 +12,7 @@ import { formatMoney } from "../src/features/money";
 import { formatLongDate, useT } from "../src/i18n";
 import { accountEmoji, placesTotal, placeTitle, type Place } from "../src/features/places/model";
 import { usePlaceStyles } from "../src/features/places/styles";
+import { everyPlace } from "../src/features/placeEnding/model";
 import { undoStatusLine, useUndoStatus } from "../src/features/placeEnding/UndoStatus";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
 import { Header, PrimaryButton, Screen, useTheme, useUi } from "../src/ui/core";
@@ -67,7 +68,7 @@ function Places({ defaults, subject }: {
   const { t, tn } = useT();
   const { workspace } = defaults;
   const activity = usePostedActivity(workspace.id, workspace.timeZone, "all");
-  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId: workspace.id, status: "all" });
+  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId: workspace.id, ...everyPlace });
   const { month } = useWorkspaceCalendar(workspace.timeZone);
   const budget = useQuery(api.budget.evaluate, { workspaceId: workspace.id, month });
   const [placeOpen, setPlaceOpen] = useState(false);
