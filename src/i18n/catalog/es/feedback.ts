@@ -110,6 +110,7 @@ export const feedback: Messages<typeof en> = {
   guideAudienceUnknown: "Antes de enviar, el reporte muestra a dónde llega y quién puede leerlo.",
   guideSettingsTitle: "También en Ajustes",
   guideSettingsBody: "En Ajustes también está Reportar un problema, y ahí puedes desactivar lo de agitar el celular.",
+  previous: "Anterior",
   next: "Siguiente",
   skip: "Omitir",
   tryIt: "Probarlo",

@@ -24,8 +24,6 @@ function steps(destination: DestinationState): Step[] {
   ];
 }
 
-export const guideStepCount = 5;
-
 export function ReportGuide({
   step,
   destination,
@@ -81,7 +79,7 @@ export function ReportGuide({
             <SecondaryButton label={t("feedback.skip")} onPress={onBack} />
           </>
         )}
-        {step > 0 ? <SecondaryButton label={t("common.back")} onPress={() => onStep(step - 1)} /> : null}
+        {step > 0 ? <SecondaryButton label={t("feedback.previous")} onPress={() => onStep(step - 1)} /> : null}
       </View>
     </Screen>
   );

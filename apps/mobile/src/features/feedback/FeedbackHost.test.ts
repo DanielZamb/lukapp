@@ -123,6 +123,7 @@ vi.mock("convex/react", () => {
   };
 });
 
+import { LanguageProvider } from "../../i18n";
 import { LocalInput, LocalInputLease } from "../../local-auth/localInput";
 import { clearLocalInput } from "../clearLocalInput";
 import { IntakeAdmission } from "../intake/admission";
@@ -168,11 +169,14 @@ function Caller() {
   return createElement("input", { accessibilityLabel: "Amount", value: amount, onChangeText: setAmount });
 }
 
-async function render(children: ReactNode, { admitted = true, unlocked = true } = {}) {
+async function render(children: ReactNode, { admitted = true, unlocked = true, language = "en" as "en" | "es" } = {}) {
   const lease = new LocalInputLease("owner", "session");
   await act(async () => {
     root = create(
       createElement(
+        LanguageProvider,
+        { initialPreference: language },
+        createElement(
         LocalInput.Provider,
         { value: lease },
         createElement(
@@ -180,6 +184,7 @@ async function render(children: ReactNode, { admitted = true, unlocked = true } 
           { value: () => unlocked },
           createElement(FeedbackHost, null, admitted ? createElement(FeedbackAdmission) : null, children),
         ),
+      ),
       ),
       { createNodeMock: () => ({}) },
     );
@@ -272,6 +277,20 @@ test("Settings opens a text report without a screenshot, sends it, and Done retu
   expect(secure.has("lukapp.feedback.report.owner")).toBe(false);
 });
 
+test("in Spanish the Settings path reads from the Colombian catalog and sends the language as context", async () => {
+  backend.audience = "private";
+  await render(createElement(FeedbackSettings), { language: "es" });
+  expect(screenText()).toContain("Agitar para reportar");
+  await pressRow("Reportar un problema");
+  expect(layerText()).toContain("Este reporte va solo con texto.");
+  expect(layerText()).toContain("Este reporte llega a owner/lukapp en GitHub, un repositorio privado.");
+  await type("Título", "Saldo raro");
+  await type("Qué pasó", "El total no cuadra.");
+  await press("Enviar reporte");
+  expect((backend.calls.at(-1)?.[1] as { context: { language: string } }).context.language).toBe("es");
+  expect(layerText()).toContain("Reporte #123 enviado");
+});
+
 test("form messages follow the backend limits before anything is sent", async () => {
   await render(createElement(FeedbackSettings));
   await pressRow("Report a problem");
@@ -288,6 +307,9 @@ test("the guide replays from Settings, practice never submits, and its Back retu
   expect(secure.get("lukapp.feedback.guide")).toBe("seen");
   expect(layerText()).toContain("Step 1 of 5");
   expect(layerText()).toContain("Shake the phone");
+  await press("Next");
+  await press("Previous");
+  expect(layerText()).toContain("Step 1 of 5");
   for (const step of [2, 3, 4, 5]) {
     await press("Next");
     expect(layerText()).toContain(`Step ${step} of 5`);

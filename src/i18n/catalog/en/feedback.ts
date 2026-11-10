@@ -107,6 +107,7 @@ export const feedback = {
   guideAudienceUnknown: "Before you send, the report shows where it goes and who can read it.",
   guideSettingsTitle: "Also in Settings",
   guideSettingsBody: "Settings has Report a problem too, and you can turn shaking off there.",
+  previous: "Previous",
   next: "Next",
   skip: "Skip",
   tryIt: "Try it",
