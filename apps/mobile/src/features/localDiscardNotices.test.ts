@@ -22,6 +22,7 @@ import { addDiscardNotice } from "./localDiscardNotices.testSupport";
 import { addDiscardNotice as addAdmittedNotice } from "./localDiscardNotices";
 import { LocalInputLease } from "../local-auth/localInput";
 import { clearLocalInput } from "./clearLocalInput";
+import { formatDateTime } from "../../../../src/i18n/format";
 
 const state = vi.hoisted(() => ({
   memory: new Map<string, string>(),
@@ -205,8 +206,8 @@ test("the route places the notice below the list and above Month Close, with ful
   expect(text()).toContain("These notices contain no notification text. They disappear after 15 days.");
   expect(text()).toContain("Missing amount or direction");
   expect(text()).toContain("Security alert");
-  expect(text()).toContain(new Date(now).toLocaleString());
-  expect(text()).toContain(new Date(now - 1000).toLocaleString());
+  expect(text()).toContain(formatDateTime("en", now));
+  expect(text()).toContain(formatDateTime("en", now - 1000));
   expect(text()).not.toContain("Private draft");
   expect(text()).not.toContain("COP");
   expect(text()).not.toContain("Preview Month Close warning");

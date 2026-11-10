@@ -1,3 +1,4 @@
+import { activeTranslator } from "../i18n";
 import { currencyMinorUnitDigits } from "../../../../src/accounting/currencies";
 
 export function formatMoneyInput(raw: string, currency: string): string {
@@ -68,16 +69,16 @@ export function parseMoney(text: string, locale = "es-CO", currency = "COP"): nu
   const unsigned = normalized.replace(/^[+-]/, "");
   const [whole, fraction = "", ...extra] = unsigned.split(decimal);
   if (!whole || extra.length || (!/^\d*$/.test(fraction) || fraction.length > precision))
-    throw new Error(`Enter an amount with up to ${precision} decimal places.`);
+    throw new Error(activeTranslator().t("posting.amountDecimals", { precision }));
   const groups = whole.split(group);
   if (
     groups.length > 1 &&
     (!/^\d{1,3}$/.test(groups[0]) ||
       groups.slice(1).some((g) => !/^\d{3}$/.test(g)))
   )
-    throw new Error("Check the thousands separators.");
+    throw new Error(activeTranslator().t("posting.amountSeparators"));
   const digits = groups.join("");
-  if (!/^\d+$/.test(digits)) throw new Error("Enter a valid amount.");
+  if (!/^\d+$/.test(digits)) throw new Error(activeTranslator().t("posting.amountInvalid"));
   const minorDigits =
     `${digits}${fraction.padEnd(precision, "0")}`.replace(/^0+/, "") || "0";
   const max = String(Number.MAX_SAFE_INTEGER);
@@ -85,7 +86,7 @@ export function parseMoney(text: string, locale = "es-CO", currency = "COP"): nu
     minorDigits.length > max.length ||
     (minorDigits.length === max.length && minorDigits > max)
   )
-    throw new Error("Amount is too large.");
+    throw new Error(activeTranslator().t("posting.amountTooLarge"));
   return sign * Number(minorDigits);
 }
 

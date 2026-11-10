@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { ScrollView } from "react-native";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
 import { BatchNativeStack, batchRowFor } from "./BatchNativeStack";
 import { PostingForm } from "./PostingForm";
 import { emptyPostingForm } from "./PostingForm.fixtures";
@@ -192,7 +193,7 @@ test("batch chips use the primary category palette colour and update after a res
     { id: "food", name: "Food", style: { emoji: "🍜", tone: "primary", color: "h0" } },
     { id: "travel", name: "Travel", style: { emoji: "🚌", tone: "primary", color: "h120" } },
   ] satisfies NonNullable<Parameters<typeof batchRowFor>[0]["categories"]>;
-  const rowFor = () => batchRowFor({ item, categories, profiles: [{ id: "wallet", name: "Wallet" }] });
+  const rowFor = () => batchRowFor({ item, categories, profiles: [{ id: "wallet", name: "Wallet" }], t: createTranslator("en").t });
   await render({ ...batch(), queue: [item] }, { rowFor });
   const chip = () => root!.root.findAllByType("text").find((node) => node.children.join("") === "🚌")!.parent!;
   expect(chip().props.style).toContainEqual({ backgroundColor: "#218c2122" });

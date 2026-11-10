@@ -4,6 +4,7 @@ import { usePersonalDefaults } from "../src/features/activity";
 import { EntryDetailScreen } from "../src/features/history/EntryDetailScreen";
 import { useEntryDetail } from "../src/features/history/useEntryDetail";
 import { Header, Screen } from "../src/ui/core";
+import { useT } from "../src/i18n";
 
 function Entry({ workspaceId, entryId }: { workspaceId: string; entryId: string }) {
   const { detail, reversal } = useEntryDetail(workspaceId, entryId);
@@ -13,9 +14,10 @@ function Entry({ workspaceId, entryId }: { workspaceId: string; entryId: string 
     onReverse={reversal.request} onCancel={reversal.cancel} onConfirm={() => void reversal.confirm()} />;
 }
 export default function EntryRoute() {
+  const { t } = useT();
   const defaults = usePersonalDefaults();
   const { entryId } = useLocalSearchParams<{ entryId?: string }>();
-  if (!entryId) return <Screen><Header title="Posted entry" onBack={() => router.back()} /><Text>Choose an entry from history.</Text></Screen>;
+  if (!entryId) return <Screen><Header title={t("posting.entryTitle")} onBack={() => router.back()} /><Text>{t("posting.entryMissing")}</Text></Screen>;
   return defaults ? <Entry key={`${defaults.workspace.id}:${entryId}`} workspaceId={defaults.workspace.id} entryId={entryId} /> :
     defaults === null ? <Redirect href="/" /> : <Screen><ActivityIndicator /></Screen>;
 }

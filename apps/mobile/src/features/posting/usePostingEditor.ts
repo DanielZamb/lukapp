@@ -18,10 +18,9 @@ import type { EntryType } from "./PostingForm";
 import type {
   IntakeSuggestion, IntakeEvidence,
 } from "../../../../../src/notificationIntake/types";
-import {
-  intakeConfirmOutcome,
-  intakeErrorMessage,
-} from "../../../../../src/notificationIntake/outcome";
+import { intakeConfirmOutcome } from "../../../../../src/notificationIntake/outcome";
+import { useT } from "../../i18n";
+import { rejectionMessage } from "./rejection";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -97,6 +96,7 @@ export function usePostingEditor(
   transport: PostingTransport,
   session: PostingDraftsSession = {},
 ) {
+  const { t } = useT();
   const drafts = session.drafts ?? null;
   const requestedId = session.draftId;
   const intake = session.intake ?? null;
@@ -332,9 +332,7 @@ export function usePostingEditor(
       })
       .catch((error: unknown) => {
         if (mounted.active && !transport.reportFailure?.(error))
-          setError(
-            "Could not restore your pending entry. Reopen this page to try again.",
-          );
+          setError(t("posting.restoreFailed"));
       });
     return () => {
       mounted.active = false;
@@ -350,16 +348,14 @@ export function usePostingEditor(
       .then((draft) => {
         if (!mounted.active) return;
         if (!draft) {
-          setError("This draft is no longer on this device.");
+          setError(t("posting.draftMissing"));
           return;
         }
         resume(draft);
       })
       .catch((error: unknown) => {
         if (mounted.active && !transport.reportFailure?.(error))
-          setError(
-            "Could not restore this draft. Reopen this page to try again.",
-          );
+          setError(t("posting.draftRestoreFailed"));
       });
   }, [loading, requestedId, drafts, pending, blocked, transport]);
   useLayoutEffect(() => {
@@ -491,12 +487,10 @@ export function usePostingEditor(
       if (error instanceof LocalEntryDraftGoneError) {
         setDraftId(undefined);
         appliedDraft.current = undefined;
-        setError(
-          "This draft was already posted or removed. Keep again to save it as a new draft.",
-        );
+        setError(t("posting.draftGoneKeep"));
         return;
       }
-      setError("Could not keep this draft on this device.");
+      setError(t("posting.keepFailed"));
     } finally {
       opLock.current = false;
       if (mounted.active) setKeeping(false);
@@ -530,7 +524,7 @@ export function usePostingEditor(
     reviewWrites.current = write;
     void write.catch((error: unknown) => {
       if (transport.reportFailure?.(error)) return;
-      if (lifetime.current.active) setError("Could not save Candidate review. Retry before leaving.");
+      if (lifetime.current.active) setError(t("posting.reviewSaveFailed"));
     });
   }, [intake, reviewValue, transport]);
   async function saveCandidateReview() {
@@ -538,7 +532,7 @@ export function usePostingEditor(
       await reviewWrites.current.catch(() => {});
       if (intake && !intake.frozen && latestReview.current) await intake.persistReview(latestReview.current);
     } catch (error) {
-      if (!transport.reportFailure?.(error) && lifetime.current.active) setError("Could not save Candidate review. Retry before leaving.");
+      if (!transport.reportFailure?.(error) && lifetime.current.active) setError(t("posting.reviewSaveFailed"));
       throw error;
     }
   }
@@ -558,7 +552,7 @@ export function usePostingEditor(
     try {
       if (intake) {
         if (pending) {
-          setError("A posting is already in progress. Finish it from Drafts.");
+          setError(t("posting.alreadyPosting"));
           return;
         }
         await saveCandidateReview();
@@ -582,9 +576,7 @@ export function usePostingEditor(
         await transport.clear();
       } catch {
         if (mounted.active)
-          setError(
-            "Could not clear the saved entry. Retry to check its status.",
-          );
+          setError(t("posting.clearFailed"));
         return;
       }
       if (!mounted.active) return;
@@ -610,16 +602,11 @@ export function usePostingEditor(
     } catch (error) {
       if (transport.reportFailure?.(error)) return;
       if (intake) {
-        const message = intakeErrorMessage(
-          error,
-          "Could not confirm this Candidate.",
-        );
-        const outcome = intakeConfirmOutcome(error);
         if (mounted.active)
           setError(
-            outcome === "fail"
-              ? message
-              : "Could not confirm posting. Retry to safely check the same entry.",
+            intakeConfirmOutcome(error) === "fail"
+              ? rejectionMessage(t, error, "posting.candidateConfirmFailed")
+              : t("posting.confirmUncertain"),
           );
         return;
       }
@@ -628,9 +615,7 @@ export function usePostingEditor(
         setPending(null);
         setDraftId(undefined);
         appliedDraft.current = undefined;
-        setError(
-          "This draft was already posted or removed. Nothing was posted again.",
-        );
+        setError(t("posting.draftGonePosted"));
         return;
       }
       const data: unknown = error instanceof ConvexError ? error.data : null;
@@ -647,20 +632,11 @@ export function usePostingEditor(
           setPending(null);
         } catch {
           if (mounted.active)
-            setError(
-              "Could not clear the saved entry. Retry to check its status.",
-            );
+            setError(t("posting.clearFailed"));
           return;
         }
-        setError(
-          "message" in data && typeof data.message === "string"
-            ? data.message
-            : "Entry was rejected. Check the places, category, amount and date.",
-        );
-      } else if (mounted.active)
-        setError(
-          "Could not confirm posting. Retry to safely check the same entry.",
-        );
+        setError(rejectionMessage(t, error, "posting.rejected"));
+      } else if (mounted.active) setError(t("posting.confirmUncertain"));
     } finally {
       opLock.current = false;
       submitting.current = false;

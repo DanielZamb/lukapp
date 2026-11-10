@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
+import { useT } from "../../i18n";
+import { rejectionMessage } from "./rejection";
 import type { PendingPosting } from "./pendingPostingSchema";
 import type { PostingTransport } from "./usePostingEditor";
 import type {
@@ -23,6 +25,7 @@ export function usePostingBatch(
   storage: PostingBatchStorage,
   beforePost?: (queue: BatchDraft[]) => Promise<boolean>,
 ) {
+  const { t } = useT();
   const [state, setState] = useState<StoredPostingBatch>({
     queue: [],
     receipts: { count: 0, net: 0 },
@@ -52,9 +55,7 @@ export function usePostingBatch(
       })
       .catch((failure: unknown) => {
         if (owner.active && !transport.reportFailure?.(failure))
-          setError(
-            "Could not restore the batch on this device. Reopen this page to try again.",
-          );
+          setError(t("posting.batchRestoreFailed"));
       });
     return () => {
       owner.active = false;
@@ -89,7 +90,7 @@ export function usePostingBatch(
     } catch (failure) {
       if (!owner.active) return false;
       if (!transport.reportFailure?.(failure))
-        setError("Could not save the batch on this device. Try again.");
+        setError(t("posting.batchSaveFailed"));
       return false;
     } finally {
       if (owner.active) {
@@ -181,21 +182,13 @@ export function usePostingBatch(
             ),
           }));
           if (!owner.active) return;
-          setError(
-            "message" in data && typeof data.message === "string"
-              ? data.message
-              : "Entry was rejected. Edit the draft and try again.",
-          );
+          setError(rejectionMessage(t, failure, "posting.batchRejected"));
         } catch {
           if (!owner.active) return;
-          setError(
-            "Could not clear the saved entry. Post again to check its status.",
-          );
+          setError(t("posting.batchClearFailed"));
         }
       } else {
-        setError(
-          "Could not confirm the batch. Post again to safely retry the remaining drafts.",
-        );
+        setError(t("posting.batchConfirmUncertain"));
       }
     } finally {
       if (owner.active) {

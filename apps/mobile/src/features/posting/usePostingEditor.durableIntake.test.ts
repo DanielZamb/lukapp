@@ -2,6 +2,7 @@ import { createElement, useMemo, useSyncExternalStore } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
 import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
@@ -29,7 +30,7 @@ async function open(service: IntakeService, dispatch: (command: ConfirmCandidate
   let value: ReturnType<typeof usePostingEditor> | undefined;
   function Harness() {
     useSyncExternalStore(service.subscribe, service.getSnapshot);
-    const intake = useMemo(() => createCandidateBinding({ service, candidateId: "capture-1", workspaceId: "workspace-1", dispatch }), [service]);
+    const intake = useMemo(() => createCandidateBinding({ service, candidateId: "capture-1", workspaceId: "workspace-1", dispatch, translator: createTranslator("en") }), [service]);
     value = usePostingEditor({ workspaceId: "workspace-1", financialAccountProfileId: "account-1", currency: "COP", timeZone: "America/Bogota" },
       { ...transport, reportFailure }, { intake, intakeRoute: true });
     return null;

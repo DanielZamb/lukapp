@@ -4,8 +4,10 @@ import { useMemo, useEffect, useRef } from "react";
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Header, PrimaryButton, Screen, SecondaryButton, useTheme } from "../../ui/core";
 import { font, radius, spacing } from "../../ui/tokens";
+import { useT } from "../../i18n";
 
 export function WarningIconButton({ onPress }: { onPress: () => void }) {
+  const { t } = useT();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const pulse = useRef(new Animated.Value(0)).current;
@@ -43,8 +45,8 @@ export function WarningIconButton({ onPress }: { onPress: () => void }) {
       />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Open reconciliation warning"
-        accessibilityHint="Explains why notification activity must be reconciled"
+        accessibilityLabel={t("inbox.warningA11y")}
+        accessibilityHint={t("inbox.warningHint")}
         hitSlop={11}
         onPress={onPress}
         style={styles.warningButton}
@@ -56,24 +58,23 @@ export function WarningIconButton({ onPress }: { onPress: () => void }) {
 }
 
 export function ReconciliationWarning({ onBack }: { onBack: () => void }) {
+  const { t } = useT();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <Screen>
-      <Header title="Reconciliation warning" eyebrow="READ BEFORE USING INTAKE" onBack={onBack} />
+      <Header title={t("inbox.reconcileTitle")} eyebrow={t("inbox.reconcileEyebrow")} onBack={onBack} />
       <View style={styles.detail}>
         <Ionicons name="alert-circle-outline" size={36} color={theme.foreground} />
-        <Text style={styles.detailTitle}>Notifications are a shortcut, not a statement</Text>
-        <Text style={styles.warningCopy}>
-          Notification Intake may miss, delay, or duplicate activity. Reconcile against your financial accounts.
-        </Text>
+        <Text style={styles.detailTitle}>{t("inbox.reconcileHeadline")}</Text>
+        <Text style={styles.warningCopy}>{t("inbox.reconcileBody")}</Text>
       </View>
       <View style={styles.facts}>
-        <Text style={styles.body}>A missing notification can leave activity out.</Text>
-        <Text style={styles.body}>A delayed or repeated notification can create the wrong review queue.</Text>
-        <Text style={styles.body}>Only your account history can settle the difference.</Text>
+        <Text style={styles.body}>{t("inbox.reconcileMissing")}</Text>
+        <Text style={styles.body}>{t("inbox.reconcileDelayed")}</Text>
+        <Text style={styles.body}>{t("inbox.reconcileHistory")}</Text>
       </View>
-      <PrimaryButton label="I understand" onPress={onBack} />
+      <PrimaryButton label={t("inbox.reconcileOk")} onPress={onBack} />
     </Screen>
   );
 }
@@ -89,21 +90,20 @@ export function MonthCloseWarning({
   onBack: () => void;
   onContinue: () => void;
 }) {
+  const { t, tn } = useT();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <Screen>
-      <Header title={`Complete ${month}`} eyebrow="BEFORE YOU CONTINUE" onBack={onBack} />
+      <Header title={t("inbox.monthCloseTitle", { month })} eyebrow={t("inbox.monthCloseEyebrow")} onBack={onBack} />
       <View style={styles.monthMessage}>
         <Text style={styles.monthCount}>{count}</Text>
-        <Text style={styles.monthTitle}>local Candidates still need a decision</Text>
-        <Text style={styles.body}>
-          Review any {month} activity now. Notification Intake is incomplete evidence, so this does not block Month Close.
-        </Text>
+        <Text style={styles.monthTitle}>{tn("inbox.monthCloseCount", count)}</Text>
+        <Text style={styles.body}>{t("inbox.monthCloseBody", { month })}</Text>
       </View>
       <View style={styles.actions}>
-        <PrimaryButton label="Review Candidates" onPress={onBack} />
-        <SecondaryButton label="Continue Month Close anyway" onPress={onContinue} />
+        <PrimaryButton label={t("inbox.monthCloseReview")} onPress={onBack} />
+        <SecondaryButton label={t("inbox.monthCloseAnyway")} onPress={onContinue} />
       </View>
     </Screen>
   );

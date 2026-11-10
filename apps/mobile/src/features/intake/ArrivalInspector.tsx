@@ -5,10 +5,11 @@ import { radius, spacing } from "../../ui/tokens";
 import { useIntakeService, useIntakeSnapshot } from "./IntakeProvider";
 import type { DiagnosticList, DiagnosticRecord } from "../../../modules/notification-intake";
 import { ActionBar, AlertLine, Card, FactRow, IconTile, Muted, NavRow, SectionHeading } from "./IntakeParts";
-
-const when = (time: number) => new Date(time).toLocaleString();
+import { formatDateTime, useT } from "../../i18n";
 
 export function ArrivalInspector({ onBack }: { onBack(): void }) {
+  const { t, language } = useT();
+  const when = (time: number) => formatDateTime(language, time);
   const ui = useUi();
   const theme = useTheme();
   const service = useIntakeService();
@@ -23,25 +24,25 @@ export function ArrivalInspector({ onBack }: { onBack(): void }) {
     let current = true;
     if (!enabled) return;
     void service.listDiagnostics().then((value) => { if (current) setList(value); })
-      .catch(() => { if (current) setError("Could not read encrypted diagnostics. Refresh or clear the diagnostic store."); });
+      .catch(() => { if (current) setError(t("inbox.inspectReadFailed")); });
     return () => { current = false; };
   }, [service, revision, enabled]);
   async function perform(action: () => Promise<void>) {
     if (busy) return;
     setBusy(true); setError("");
     try { await action(); service.assertAdmitted(); setRevision((value) => value + 1); }
-    catch { setDetail(null); setError("Diagnostic action unavailable. Unlock and refresh intake before retrying."); }
+    catch { setDetail(null); setError(t("inbox.inspectActionFailed")); }
     finally { setBusy(false); }
   }
 
   if (detail) return <Screen footer={<ActionBar>
-    <SecondaryButton label="Delete this raw arrival" tone="danger" disabled={busy}
+    <SecondaryButton label={t("inbox.inspectDelete")} tone="danger" disabled={busy}
       onPress={() => { void perform(async () => { await service.deleteDiagnostic(detail.id); setDetail(null); }); }} />
   </ActionBar>}>
-    <Header title={detail.packageName} eyebrow="RAW ARRIVAL" onBack={() => setDetail(null)} />
+    <Header title={detail.packageName} eyebrow={t("inbox.inspectEyebrowDetail")} onBack={() => setDetail(null)} />
     {error ? <AlertLine>{error}</AlertLine> : null}
-    <Muted>{`${detail.parser.outcome} · ${detail.parser.reasons.join(", ") || "no reasons"}`}</Muted>
-    <Text selectable style={ui.muted}>Capture {detail.captureId} · arrival {detail.id} · {when(detail.capturedAt)}</Text>
+    <Muted>{t("inbox.inspectOutcome", { outcome: detail.parser.outcome, reasons: detail.parser.reasons.join(", ") || t("inbox.inspectNoReasons") })}</Muted>
+    <Text selectable style={ui.muted}>{t("inbox.inspectIds", { capture: detail.captureId, arrival: detail.id, when: when(detail.capturedAt) })}</Text>
     <View style={{ backgroundColor: theme.secondary, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, padding: spacing.lg }}>
       <Text selectable style={[ui.body, { fontFamily: Platform.OS === "android" ? "monospace" : "Menlo", fontSize: 13, lineHeight: 19 }]}>
         {JSON.stringify(detail, null, 2)}
@@ -50,30 +51,31 @@ export function ArrivalInspector({ onBack }: { onBack(): void }) {
   </Screen>;
 
   return <Screen footer={enabled ? <ActionBar>
-    <SecondaryButton label="Refresh arrivals" disabled={busy} onPress={() => setRevision((value) => value + 1)} />
-    <SecondaryButton label="Clear all raw diagnostics" tone="danger" disabled={busy}
+    <SecondaryButton label={t("inbox.inspectRefresh")} disabled={busy} onPress={() => setRevision((value) => value + 1)} />
+    <SecondaryButton label={t("inbox.inspectClear")} tone="danger" disabled={busy}
       onPress={() => { void perform(async () => { await service.clearDiagnostics(); }); }} />
   </ActionBar> : null}>
-    <Header title="Arrival diagnostics" eyebrow="BETA · ON THIS PHONE" onBack={onBack} />
-    {!enabled ? <AlertLine>Raw diagnostics are disabled in this native build.</AlertLine> : <>
+    <Header title={t("inbox.inspectTitle")} eyebrow={t("inbox.inspectEyebrow")} onBack={onBack} />
+    {!enabled ? <AlertLine>{t("inbox.inspectDisabled")}</AlertLine> : <>
       <View style={{ gap: spacing.xl }}>
-        <FactRow icon="lock-closed-outline" title="Original text, encrypted for 24 hours"
-          detail="Includes security messages from the apps you chose. Never uploaded, and never posts money." />
-        <FactRow icon="layers-outline" tone="neutral" title="Up to 32 arrivals"
-          detail="512 KiB each, 4 MiB in total. A full store doesn't stop candidate capture." />
+        <FactRow icon="lock-closed-outline" title={t("inbox.inspectOriginal")}
+          detail={t("inbox.inspectOriginalDetail")} />
+        <FactRow icon="layers-outline" tone="neutral" title={t("inbox.inspectLimit")}
+          detail={t("inbox.inspectLimitDetail")} />
       </View>
       {error ? <AlertLine>{error}</AlertLine> : null}
       <View style={ui.section}>
-        <SectionHeading title="Arrivals" meta={list
-          ? `${list.health.state} · ${list.health.recordCount} records · ${list.health.byteCount} bytes · ${list.health.overflowCount} overflow · ${list.health.errorCount} storage errors`
+        <SectionHeading title={t("inbox.inspectArrivals")} meta={list
+          ? t("inbox.inspectHealth", { state: list.health.state, records: list.health.recordCount, bytes: list.health.byteCount,
+            overflow: list.health.overflowCount, errors: list.health.errorCount })
           : undefined} />
-        {!list ? <ActivityIndicator accessibilityLabel="Loading arrivals" />
-          : !list.records.length ? <Muted>No arrivals stored right now.</Muted>
+        {!list ? <ActivityIndicator accessibilityLabel={t("inbox.inspectLoadingA11y")} />
+          : !list.records.length ? <Muted>{t("inbox.inspectNone")}</Muted>
           : <Card>{list.records.map((row, index) => <NavRow key={row.id} last={index === list.records.length - 1}
               leading={<IconTile icon={row.parser.outcome === "normalized" ? "checkmark-circle" : row.parser.outcome === "discarded" ? "eye-off-outline" : "alert-circle"}
                 tone={row.parser.outcome === "normalized" ? "positive" : row.parser.outcome === "discarded" ? "neutral" : "warning"} />}
-              title={row.packageName} status={`${row.parser.outcome} · ${when(row.capturedAt)}`}
-              accessibilityLabel={`Inspect arrival ${row.id}`} disabled={busy}
+              title={row.packageName} status={t("inbox.inspectRowStatus", { outcome: row.parser.outcome, when: when(row.capturedAt) })}
+              accessibilityLabel={t("inbox.inspectRowA11y", { id: row.id })} disabled={busy}
               onPress={() => { void perform(async () => { setDetail(await service.readDiagnostic(row.id)); }); }} />)}</Card>}
       </View>
     </>}

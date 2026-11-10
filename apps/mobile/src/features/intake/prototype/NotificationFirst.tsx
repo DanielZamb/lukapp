@@ -18,6 +18,7 @@ import { useLocalEntryDrafts } from "../../useLocalEntryDrafts";
 import { IntakeContext } from "../IntakeProvider";
 import { ActionBar, AlertLine, Card, IconTile, Muted, NavRow, SectionHeading } from "../IntakeParts";
 import { appInitial, productKindLabel } from "../appCatalog";
+import { useT } from "../../../i18n";
 import { arrivalText } from "./arrivalText";
 import corpus from "../suggestSamples.json";
 import { pieces, suggest, type Direction, type Mention, type Suggestion } from "../suggest";
@@ -111,6 +112,7 @@ export function NotificationFirst(props: Props) {
 }
 
 function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultProfileId, onBack }: Props & { arrival: Arrival }) {
+  const { t } = useT();
   const ui = useUi();
   const theme = useTheme();
   const dark = useThemeMode() === "dark";
@@ -262,7 +264,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
       <SectionHeading title="Place" meta={mapped ? "From this app's intake setting" : "Your default place"} />
       {!profiles ? <ActivityIndicator accessibilityLabel="Loading places" /> : <View style={{ gap: spacing.sm }}>
         {profiles.filter((profile) => profile.workspaceId === workspaceId).map((profile) => <Choice key={profile.id} label={profile.name}
-          detail={productKindLabel(profile.productKind)} selected={profileId === profile.id} onPress={() => setProfileId(profile.id)} />)}
+          detail={productKindLabel(t, profile.productKind)} selected={profileId === profile.id} onPress={() => setProfileId(profile.id)} />)}
       </View>}
     </View> : null}
     <Muted>Prototype. Starting a Draft saves a normal Draft on this phone and opens Post, where you choose categories and post.</Muted>

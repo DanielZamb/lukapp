@@ -1,4 +1,5 @@
 import { expect, test, vi } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
 import type { NativeCapture } from "../../../modules/notification-intake";
@@ -55,7 +56,7 @@ test("the Candidate binding starts with an empty amount, persists edits and free
   const f = fixture(); const partial = partials[0];
   f.setPages([{ captures: [partial], nextCursor: null }]); await f.service.refresh();
   const dispatch = vi.fn(async (command: ConfirmCandidateInput) => resultFor(command));
-  const binding = createCandidateBinding({ service: f.service, candidateId: capture.captureId, workspaceId: mapping.workspaceId, dispatch });
+  const binding = createCandidateBinding({ service: f.service, candidateId: capture.captureId, workspaceId: mapping.workspaceId, dispatch, translator: createTranslator("en") });
   expect(binding.facts.amountText).toBe("");
   expect(binding.originalSuggestion).toMatchObject({ direction: "in", amount: { currency: null, minorUnits: null } });
   await binding.persistReview({ ...binding.facts, amountText: "-12,30", description: "Reviewed market" });
