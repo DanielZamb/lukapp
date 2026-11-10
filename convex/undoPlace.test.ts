@@ -1,3 +1,4 @@
+import { submitClose, submitUndo } from "../src/accounting/endingTestInputs";
 import { AccountingError } from "../src/accounting/errors";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -70,7 +71,7 @@ test.each(["co-puc-personal@1", "us-gaap-personal@1"])("%s Undo mirrors opening,
     page: { entriesToReverse: 5, alreadyReversed: 0, lockedMonthEntries: 0, isDone: true,
       otherPlaces: [{ financialAccountProfileId: s.other.id, name: "Other", balanceChange: money(-200) }, { financialAccountProfileId: s.third.id, name: "Third", balanceChange: money(70) }],
       currentMonthExpenseChange: money(-120), currentMonthIncomeChange: money(-30) } });
-  const started = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const started = await submitUndo(s.t, s.start);
   expect(started).toMatchObject({ replay: false, operation: { state: { kind: "pending" }, reversedCount: 0 } });
   expect(await s.t.query(api.accounting.listFinancialAccountProfiles, { workspaceId: s.workspace.id, status: "undoing" })).toEqual([{ ...s.place, status: "undoing" }]);
   await s.finish();
@@ -84,7 +85,7 @@ test.each(["co-puc-personal@1", "us-gaap-personal@1"])("%s Undo mirrors opening,
       .toEqual(original.lines.map(l => [l.ledgerAccountId, l.userCategoryId, l.creditMinorUnits, l.debitMinorUnits]));
   }
   expect((await s.t.query(api.accounting.balances, { workspaceId: s.workspace.id })).map(p => p.balance)).toEqual([money(0), money(0), money(0)]);
-  expect(await s.t.query(api.accounting.listFinancialAccountProfiles, { workspaceId: s.workspace.id, status: "undone" })).toEqual([{ ...s.place, status: "undone" }]);
+  expect(await s.t.query(api.accounting.listFinancialAccountProfiles, { workspaceId: s.workspace.id, status: "undone" })).toEqual([{ ...s.place, status: "undone", endedAt: Date.now() }]);
   const ending = (await state(s.t)).endings[0];
   expect(ending).toMatchObject({ act: "undo", undoOperationId: started.operation.id, entries: [] });
   await expect(s.expense("after")).rejects.toThrow("financial_account_profile_ended");
@@ -107,7 +108,7 @@ test("bounded pages and multiple scheduler batches include the last post before 
   } while (cursor);
   expect([count, skipped, pages]).toEqual([46, 1, 5]);
   const final = await s.expense("immediately-before", 7);
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const id = receipt.operation.id as Id<"placeUndoOperations">;
   await Promise.all([s.t.mutation(internal.accountingUndo.drive, { operationId: id, version: 0 }), s.t.mutation(internal.accountingUndo.drive, { operationId: id, version: 0 })]);
   expect(await s.status()).toMatchObject({ state: { kind: "running" }, version: 1, reversedCount: 8, alreadyReversedCount: 1 });
@@ -125,14 +126,14 @@ test("bounded pages and multiple scheduler batches include the last post before 
 test("Start replay retains operation identity and refuses changed payload, other Starts, Close and new activity", async () => {
   const s = await setup();
   const expense = await s.expense("before");
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const before = await state(s.t);
-  expect(await s.t.action(api.accounting.startUndoPlace, s.start)).toEqual({ ...receipt, replay: true });
+  expect(await submitUndo(s.t, s.start)).toEqual({ ...receipt, replay: true });
   for (const change of [{ financialAccountProfileId: s.other.id }, { replacementDefaultFinancialAccountProfileId: s.other.id }])
-    await expect(s.t.action(api.accounting.startUndoPlace, { ...s.start, ...change })).rejects.toThrow("idempotency_key_conflict");
-  await expect(s.t.action(api.accounting.startUndoPlace, { ...s.start, idempotencyKey: "other" })).rejects.toThrow("place_undo_in_progress");
+    await expect(submitUndo(s.t, { ...s.start, ...change })).rejects.toThrow("idempotency_key_conflict");
+  await expect(submitUndo(s.t, { ...s.start, idempotencyKey: "other" })).rejects.toThrow("place_undo_in_progress");
   expect(await s.t.query(api.accounting.placeClosure, s.target)).toMatchObject({ status: "undoing", canClose: false, blockers: [{ code: "place_undo_in_progress" }] });
-  await expect(s.t.action(api.accounting.closePlace, { ...s.start, lines: [] })).rejects.toThrow("place_undo_in_progress");
+  await expect(submitClose(s.t, { ...s.start, lines: [] })).rejects.toThrow("place_undo_in_progress");
   await expect(s.expense("during")).rejects.toThrow("place_undo_in_progress");
   await expect(s.transfer("during-in", s.other.id, s.place.id, 1)).rejects.toThrow("place_undo_in_progress");
   await expect(s.transfer("during-out", s.place.id, s.other.id, 1)).rejects.toThrow("place_undo_in_progress");
@@ -141,7 +142,7 @@ test("Start replay retains operation identity and refuses changed payload, other
   expect(await state(s.t)).toEqual(before);
   await s.finish();
   const done = await state(s.t);
-  expect((await s.t.action(api.accounting.startUndoPlace, s.start)).operation.state.kind).toBe("done");
+  expect((await submitUndo(s.t, s.start)).operation.state.kind).toBe("done");
   expect(await state(s.t)).toEqual(done);
 });
 
@@ -153,7 +154,7 @@ test("locked-month entries reverse today, preserving old totals and Budget consu
   const before = (await state(s.t)).totals.filter(t => t.period === "2026-09");
   vi.setSystemTime(new Date("2026-10-20T15:00:00Z"));
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ page: { lockedMonthEntries: 2, currentMonthExpenseChange: money(-120) } });
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   await s.finish();
   expect((await state(s.t)).totals.filter(t => t.period === "2026-09")).toEqual(before);
   const reversals = (await s.t.query(api.accounting.listJournalEntries, { workspaceId: s.workspace.id })).filter(e => e.reversesEntryId);
@@ -168,11 +169,11 @@ test("locked current month refuses Start without writes and a mid-operation lock
   for (let i = 0; i < 22; i++) await s.expense(`entry-${i}`, 1);
   await lock(s.t, s.workspace.id, { year: 2026, month: 9 });
   const before = await state(s.t);
-  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_undo_current_period_locked");
+  await expect(submitUndo(s.t, s.start)).rejects.toThrow("place_undo_current_period_locked");
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ canUndo: false, blockers: [{ code: "place_undo_current_period_locked" }] });
   expect(await state(s.t)).toEqual(before);
   vi.setSystemTime(new Date("2026-10-02T15:00:00Z"));
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const operationId = receipt.operation.id as Id<"placeUndoOperations">;
   await s.t.mutation(internal.accountingUndo.drive, { operationId, version: 0 });
   expect(await s.status()).toMatchObject({ reversedCount: 10, version: 1 });
@@ -186,7 +187,7 @@ test("locked current month refuses Start without writes and a mid-operation lock
 test("a failed reversal rolls back its batch, reports the entry, and can continue after repair", async () => {
   const s = await setup();
   for (let i = 0; i < 21; i++) await s.expense(`entry-${i}`, 1);
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const operationId = receipt.operation.id as Id<"placeUndoOperations">;
   await s.t.mutation(internal.accountingUndo.drive, { operationId, version: 0 });
   const before = await state(s.t);
@@ -207,7 +208,7 @@ test("a failed reversal rolls back its batch, reports the entry, and can continu
 
 test("zero-balance invariant prevents an ending if a stored total is corrupted", async () => {
   const s = await setup();
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   await s.t.run(async ctx => {
     const total = await ctx.db.query("ledgerAccountTotals").filter(q => q.and(q.eq(q.field("ledgerAccountId"), s.place.ledgerAccountId), q.eq(q.field("period"), "*"))).unique();
     if (!total) throw new Error("Missing total");
@@ -220,26 +221,26 @@ test("zero-balance invariant prevents an ending if a stored total is corrupted",
 
 test("authorized batches finish after membership removal and device revocation; public replay still checks authorization", async () => {
   const s = await setup();
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   await s.t.run(async ctx => {
     for (const membership of await ctx.db.query("workspaceMemberships").collect()) await ctx.db.delete(membership._id);
     const device = await ctx.db.get(s.deviceId);
     if (device) await ctx.db.patch(device._id, { revokedAt: Date.now() });
   });
-  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow();
+  await expect(submitUndo(s.t, s.start)).rejects.toThrow();
   await s.finish();
   expect((await state(s.t)).operations[0]).toMatchObject({ _id: receipt.operation.id, state: { kind: "done" }, reversedCount: 1 });
 });
 
 test("last open Place, ended Places and invalid targets refuse without writes", async () => {
   const s = await setup(undefined, 0);
-  await s.t.action(api.accounting.closePlace, { ...s.start, financialAccountProfileId: s.other.id, idempotencyKey: "close-other", lines: [] });
-  await s.t.action(api.accounting.closePlace, { ...s.start, financialAccountProfileId: s.third.id, idempotencyKey: "close-third", lines: [] });
+  await submitClose(s.t, { ...s.start, financialAccountProfileId: s.other.id, idempotencyKey: "close-other", lines: [] });
+  await submitClose(s.t, { ...s.start, financialAccountProfileId: s.third.id, idempotencyKey: "close-third", lines: [] });
   const before = await state(s.t);
-  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_last_open");
+  await expect(submitUndo(s.t, s.start)).rejects.toThrow("place_last_open");
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ canUndo: false, blockers: [{ code: "place_last_open" }] });
-  await expect(s.t.action(api.accounting.startUndoPlace, { ...s.start, financialAccountProfileId: s.other.id })).rejects.toThrow("financial_account_profile_ended");
-  await expect(s.t.action(api.accounting.startUndoPlace, { ...s.start, financialAccountProfileId: "bad" })).rejects.toThrow("financial_account_profile_not_found");
+  await expect(submitUndo(s.t, { ...s.start, financialAccountProfileId: s.other.id })).rejects.toThrow("financial_account_profile_ended");
+  await expect(submitUndo(s.t, { ...s.start, financialAccountProfileId: "bad" })).rejects.toThrow("financial_account_profile_not_found");
   expect(await state(s.t)).toEqual(before);
 });
 
@@ -253,18 +254,18 @@ test("Undo replaces the default atomically, reserves its name until completion a
   const args = { ...target, idempotencyKey: "default-undo" };
   expect(await t.query(api.accounting.previewUndoPlace, target)).toMatchObject({ closure: { isDefault: true, requiresReplacementDefault: true } });
   const before = await state(t);
-  await expect(t.action(api.accounting.startUndoPlace, args)).rejects.toThrow("place_default_replacement_required");
-  await expect(t.action(api.accounting.startUndoPlace, { ...args, replacementDefaultFinancialAccountProfileId: place.id })).rejects.toThrow("place_default_replacement_invalid");
-  await expect(t.action(api.accounting.startUndoPlace, { ...args, replacementDefaultFinancialAccountProfileId: "bad" })).rejects.toThrow("financial_account_profile_not_found");
+  await expect(submitUndo(t, args)).rejects.toThrow("place_default_replacement_required");
+  await expect(submitUndo(t, { ...args, replacementDefaultFinancialAccountProfileId: place.id })).rejects.toThrow("place_default_replacement_invalid");
+  await expect(submitUndo(t, { ...args, replacementDefaultFinancialAccountProfileId: "bad" })).rejects.toThrow("financial_account_profile_not_found");
   expect(await state(t)).toEqual(before);
   const request = { ...args, replacementDefaultFinancialAccountProfileId: other.id };
-  const started = await t.action(api.accounting.startUndoPlace, request);
+  const started = await submitUndo(t, request);
   expect(await t.query(api.accounting.workspaceSettings, { workspaceId: workspace.id })).toMatchObject({ defaultFinancialAccountProfileId: other.id });
   await expect(createProfile(t, workspace.id, place.name, "cash")).rejects.toThrow("account_name_conflict");
-  expect(await t.action(api.accounting.startUndoPlace, request)).toEqual({ ...started, replay: true });
+  expect(await submitUndo(t, request)).toEqual({ ...started, replay: true });
   await root.finishAllScheduledFunctions(() => vi.runAllTimers());
   expect(await t.query(api.accounting.placeUndoStatus, target)).toMatchObject({ state: { kind: "done" }, replacementDefaultFinancialAccountProfileId: other.id });
-  await expect(t.action(api.accounting.startUndoPlace, args)).rejects.toThrow("idempotency_key_conflict");
+  await expect(submitUndo(t, args)).rejects.toThrow("idempotency_key_conflict");
   expect((await state(t)).settings).toHaveLength(1);
 });
 
@@ -279,7 +280,7 @@ test.each([false, true])("Recovery destination blocks Undo, including suspended=
   if (suspended) await reverse(s.t, s.workspace.id, source.id);
   const before = await state(s.t);
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ canUndo: false, blockers: [{ code: "place_recovery_destination", plans: [{ id: saved.plan.id, title: "Recover" }] }] });
-  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_recovery_destination");
+  await expect(submitUndo(s.t, s.start)).rejects.toThrow("place_recovery_destination");
   expect(await state(s.t)).toEqual(before);
 });
 
@@ -290,10 +291,10 @@ test("a funded Recovery expense blocks Undo even after plan cancellation", async
   await s.t.action(api.savingsRecovery.recordContribution, { workspaceId: s.workspace.id, planId: saved.plan.id, sourceFinancialAccountProfileId: s.other.id, amount: money(20), accountingDate: "2026-09-24", description: "Progress", idempotencyKey: "progress" });
   const before = await state(s.t);
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ canUndo: false, blockers: [{ code: "place_recovery_covered_expenses", plans: [{ id: saved.plan.id, title: "covered" }] }] });
-  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_recovery_covered_expenses");
+  await expect(submitUndo(s.t, s.start)).rejects.toThrow("place_recovery_covered_expenses");
   expect(await state(s.t)).toEqual(before);
   await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspace.id, planId: saved.plan.id, idempotencyKey: "cancel" });
-  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_recovery_covered_expenses");
+  await expect(submitUndo(s.t, s.start)).rejects.toThrow("place_recovery_covered_expenses");
 });
 
 test("an unfunded source plan is allowed and suspends; its first contribution cannot race Undo", async () => {
@@ -301,7 +302,7 @@ test("an unfunded source plan is allowed and suspends; its first contribution ca
   const expense = await s.expense("covered");
   const saved = await plan(s, expense.id, s.third.id);
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ canUndo: true });
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   const before = await state(s.t);
   await expect(s.t.action(api.savingsRecovery.recordContribution, { workspaceId: s.workspace.id, planId: saved.plan.id, sourceFinancialAccountProfileId: s.other.id, amount: money(10), accountingDate: "2026-09-24", description: "Too late", idempotencyKey: "late" })).rejects.toThrow("place_undo_in_progress");
   expect(await state(s.t)).toEqual(before);
@@ -313,22 +314,22 @@ test.each(["co-puc-personal@1", "us-gaap-personal@1"])("%s Close creates adjustm
   const s = await setup(template);
   const names = { closingAdjustmentExpenseName: "  Ajuste de cierre (gasto)  ", closingAdjustmentIncomeName: "Ajuste de cierre (ingreso)" };
   const args = { ...s.start, ...names, lines: [{ kind: "adjustment" as const, amount: money(1000) }] };
-  const receipt = await s.t.action(api.accounting.closePlace, args);
+  const receipt = await submitClose(s.t, args);
   expect(receipt.ending.entries[0]?.lines[0]?.userCategoryName).toBe("Ajuste de cierre (gasto)");
-  expect(await s.t.action(api.accounting.closePlace, { ...args, closingAdjustmentExpenseName: names.closingAdjustmentExpenseName.trim() })).toEqual({ ...receipt, replay: true });
-  await expect(s.t.action(api.accounting.closePlace, { ...args, closingAdjustmentIncomeName: "Changed" })).rejects.toThrow("idempotency_key_conflict");
+  expect(await submitClose(s.t, { ...args, closingAdjustmentExpenseName: names.closingAdjustmentExpenseName.trim() })).toEqual({ ...receipt, replay: true });
+  await expect(submitClose(s.t, { ...args, closingAdjustmentIncomeName: "Changed" })).rejects.toThrow("idempotency_key_conflict");
   await s.t.action(api.accounting.recordOpeningPosition, { workspaceId: s.workspace.id, financialAccountProfileId: s.other.id, amount: money(10), accountingDate: "2026-09-24", description: "Other", idempotencyKey: "other-opening" });
-  const second = await s.t.action(api.accounting.closePlace, { ...args, financialAccountProfileId: s.other.id, idempotencyKey: "other-close", closingAdjustmentExpenseName: "Keep the original", lines: [{ kind: "adjustment", amount: money(10) }] });
+  const second = await submitClose(s.t, { ...args, financialAccountProfileId: s.other.id, idempotencyKey: "other-close", closingAdjustmentExpenseName: "Keep the original", lines: [{ kind: "adjustment", amount: money(10) }] });
   expect(second.ending.entries[0]?.lines[0]?.userCategoryName).toBe("Ajuste de cierre (gasto)");
   const debt = await createProfile(s.t, s.workspace.id, "Debt", "creditCard");
   await s.t.action(api.accounting.recordOpeningPosition, { workspaceId: s.workspace.id, financialAccountProfileId: debt.id, amount: money(30), accountingDate: "2026-09-24", description: "Debt", idempotencyKey: "debt-opening" });
-  const income = await s.t.action(api.accounting.closePlace, { ...args, financialAccountProfileId: debt.id, idempotencyKey: "debt-close", lines: [{ kind: "adjustment", amount: money(30) }] });
+  const income = await submitClose(s.t, { ...args, financialAccountProfileId: debt.id, idempotencyKey: "debt-close", lines: [{ kind: "adjustment", amount: money(30) }] });
   expect(income.ending.entries[0]?.lines[1]?.userCategoryName).toBe("Ajuste de cierre (ingreso)");
 });
 test.each(["", "\u200b", "x".repeat(81)])("Close refuses invalid stored adjustment names without writes: %s", async name => {
   const s = await setup();
   const before = await state(s.t);
-  await expect(s.t.action(api.accounting.closePlace, { ...s.start, lines: [{ kind: "adjustment", amount: money(1000) }], closingAdjustmentExpenseName: name })).rejects.toThrow(name.length > 80 ? "category_name_too_long" : "name_required");
+  await expect(submitClose(s.t, { ...s.start, lines: [{ kind: "adjustment", amount: money(1000) }], closingAdjustmentExpenseName: name })).rejects.toThrow(name.length > 80 ? "category_name_too_long" : "name_required");
   expect(await state(s.t)).toEqual(before);
 });
 
@@ -344,7 +345,7 @@ test("Undo applies Recovery's automatic cancellation when reversing a completed 
   const completed = await contribution(replacement.plan.id, "complete", s.place.id, 1000);
   await s.t.action(api.savingsRecovery.correctContribution, { workspaceId: s.workspace.id, contributionId: gift.contribution.id, reason: "Ordinary saving", idempotencyKey: "remove-first" });
   const unfinished = await s.t.action(api.savingsRecovery.activatePlan, { ...activate, installmentCount: 4, installmentMinorUnits: 50, idempotencyKey: "newer" });
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   await s.finish();
   expect(await s.status()).toMatchObject({ state: { kind: "done" }, reversedCount: 2 });
   const recovery = await s.t.query(api.savingsRecovery.evaluate, { workspaceId: s.workspace.id });
@@ -358,7 +359,7 @@ test("Undo applies Recovery's automatic cancellation when reversing a completed 
 test("an empty zero opening has no journal to reverse and still ends", async () => {
   const s = await setup(undefined, 0);
   expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ page: { entriesToReverse: 0, isDone: true } });
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   await expect(s.t.action(api.accounting.recordOpeningPosition, { ...s.target, amount: money(0), accountingDate: "2026-09-24", description: "Try opening", idempotencyKey: "new-opening" })).rejects.toThrow("place_undo_in_progress");
   await s.finish();
   expect(await s.status()).toMatchObject({ state: { kind: "done" }, reversedCount: 0 });
@@ -378,7 +379,7 @@ test("preview and progress read legacy journal lines without the History project
   const writeFault = vi.spyOn(storeModule, "convexStore").mockImplementation(db => ({ ...realWriteStore(db), listJournalEntries: noScan }));
   try {
     expect(await s.t.query(api.accounting.previewUndoPlace, s.target)).toMatchObject({ page: { entriesToReverse: 2, currentMonthExpenseChange: money(-80) } });
-    await s.t.action(api.accounting.startUndoPlace, s.start);
+    await submitUndo(s.t, s.start);
     await s.finish();
     expect(await s.status()).toMatchObject({ state: { kind: "done" }, reversedCount: 2 });
   } finally {
@@ -389,11 +390,11 @@ test("preview and progress read legacy journal lines without the History project
 test("a future-dated original refuses Start and becomes eligible on its date", async () => {
   const s = await setup();
   await s.t.action(api.accounting.recordCashExpense, { ...s.target, amount: money(10), accountingDate: "2026-10-02", description: "Future", idempotencyKey: "future" });
-  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_future_entries");
+  await expect(submitUndo(s.t, s.start)).rejects.toThrow("place_future_entries");
   expect(await s.status()).toBeNull();
   expect((await state(s.t)).endings).toHaveLength(0);
   vi.setSystemTime(new Date("2026-10-02T15:00:00Z"));
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   await s.finish();
   expect(await s.status()).toMatchObject({ state: { kind: "done" }, reversedCount: 2 });
 });
@@ -401,8 +402,8 @@ test("a future-dated original refuses Start and becomes eligible on its date", a
 test("a previously closed transfer counterparty refuses Start before any reversal", async () => {
   const s = await setup();
   const transfer = await s.transfer("to-ended", s.place.id, s.other.id, 100);
-  await s.t.action(api.accounting.closePlace, { ...s.start, financialAccountProfileId: s.other.id, idempotencyKey: "close-other", lines: [{ kind: "adjustment", amount: money(100) }] });
-  await expect(s.t.action(api.accounting.startUndoPlace, s.start)).rejects.toThrow("place_undo_ended_counterparty");
+  await submitClose(s.t, { ...s.start, financialAccountProfileId: s.other.id, idempotencyKey: "close-other", lines: [{ kind: "adjustment", amount: money(100) }] });
+  await expect(submitUndo(s.t, s.start)).rejects.toThrow("place_undo_ended_counterparty");
   expect(await s.status()).toBeNull();
   expect((await state(s.t)).endings.map(e => e.act)).toEqual(["close"]);
 });

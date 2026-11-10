@@ -68,6 +68,7 @@ export const workspace = v.object({
 export const placeStatus = v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("undoing"));
 
 export const financialAccountProfile = v.object({
+  endedAt: v.optional(v.number()),
   status: placeStatus,
   id: v.string(),
   workspaceId: v.string(),
@@ -130,6 +131,7 @@ export const postedJournalEntry = v.object({
 });
 
 export const accountBalance = v.object({
+  status: placeStatus, endedAt: v.optional(v.number()),
   financialAccountProfileId: v.string(),
   name: v.string(),
   nature: accountNature,

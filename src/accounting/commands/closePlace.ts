@@ -45,7 +45,7 @@ export async function placeClosure(store: AccountingStore, clock: AccountingCloc
   blockers.push(...await services.endingBlockers(profile.id, accountingDate));
   const isDefault = defaultId === profile.id;
   return {
-    financialAccountProfileId: profile.id, status: placeStatus(profile), canClose: blockers.length === 0,
+    financialAccountProfileId: profile.id, ...(profile.ending ? { endedAt: profile.ending.occurredAt } : {}), status: placeStatus(profile), canClose: blockers.length === 0,
     blockers, isDefault, requiresReplacementDefault: isDefault, openPlaceCount,
     balance: balance.balance, nature: balance.nature, accountingDate,
   };
@@ -64,6 +64,8 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
   const request = JSON.stringify({
     ...(names.expense !== undefined ? { closingAdjustmentExpenseName: names.expense } : {}),
     ...(names.income !== undefined ? { closingAdjustmentIncomeName: names.income } : {}),
+    reviewedBalance: { currency: input.reviewedBalance.currency, minorUnits: input.reviewedBalance.minorUnits },
+    reviewedAccountingDate: input.reviewedAccountingDate,
     act: "close", financialAccountProfileId: input.financialAccountProfileId,
     replacementDefaultFinancialAccountProfileId: input.replacementDefaultFinancialAccountProfileId ?? null,
     lines: lines.map(line => ({ ...(line.description !== undefined ? { description: line.description } : {}), ...(line.kind === "transfer"
@@ -79,6 +81,9 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
   const closure = await placeClosure(store, clock, services, input);
   const blocker = closure.blockers[0];
   if (blocker) throw new AccountingError(blocker.code, blocker);
+  if (input.reviewedBalance.currency !== closure.balance.currency || !Number.isSafeInteger(input.reviewedBalance.minorUnits)
+    || input.reviewedBalance.minorUnits !== closure.balance.minorUnits) throw new AccountingError("place_close_balance_stale");
+  if (input.reviewedAccountingDate !== closure.accountingDate) throw new AccountingError("place_close_date_stale");
   const replacement = input.replacementDefaultFinancialAccountProfileId;
   if (closure.isDefault && !replacement) throw new AccountingError("place_default_replacement_required");
   if (replacement !== undefined) {
@@ -86,11 +91,11 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
       throw new AccountingError("place_default_replacement_invalid");
     await requireSelectableDefaultPlace(store, { ...input, financialAccountProfileId: replacement });
   }
-  const credit = (closure.nature === "Asset") === (closure.balance.minorUnits > 0);
+  const credit = (closure.nature === "Asset") === (input.reviewedBalance.minorUnits > 0);
   let sum = 0n;
   for (const line of input.lines) {
     sum += BigInt(requireFunctionalAmount(workspace, line.amount));
-    if (line.kind === "expense" && !(closure.nature === "Asset" && closure.balance.minorUnits > 0))
+    if (line.kind === "expense" && !(closure.nature === "Asset" && input.reviewedBalance.minorUnits > 0))
       throw new AccountingError("place_close_line_invalid");
     if (line.kind === "transfer") {
       if (line.otherFinancialAccountProfileId === input.financialAccountProfileId)
@@ -100,11 +105,11 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
       requireOpenPlace(other);
     }
   }
-  if (sum !== BigInt(Math.abs(closure.balance.minorUnits))) throw new AccountingError("place_close_balance_mismatch");
+  if (sum !== BigInt(Math.abs(input.reviewedBalance.minorUnits))) throw new AccountingError("place_close_balance_mismatch");
   const entries: PostedJournalEntry[] = [];
   for (const [index, line] of lines.entries()) {
     const common = { actor: input.actor, workspaceId: workspace.id, amount: line.amount,
-      accountingDate: closure.accountingDate, description: line.description ?? (line.kind === "adjustment" ? "Closing Adjustment" : "Closing a Place"), idempotencyKey: `place-close:${JSON.stringify([input.idempotencyKey, index])}` };
+      accountingDate: input.reviewedAccountingDate, description: line.description ?? (line.kind === "adjustment" ? "Closing Adjustment" : "Closing a Place"), idempotencyKey: `place-close:${JSON.stringify([input.idempotencyKey, index])}` };
     // Internal keys must never adopt a journal submitted independently of this close.
     if (await store.findJournalEntryByIdempotencyKey(workspace.id, common.idempotencyKey)
       || await store.findOpeningMarkerByIdempotencyKey(workspace.id, common.idempotencyKey))
@@ -128,7 +133,7 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
   const now = clock.now().getTime();
   const ending = await store.insertPlaceEnding({
     act: "close", workspaceId: workspace.id, financialAccountProfileId: input.financialAccountProfileId,
-    occurredAt: now, recordedAt: now, endedBy: input.actor.userId, idempotencyKey: input.idempotencyKey,
+    accountingDate: input.reviewedAccountingDate, occurredAt: now, recordedAt: now, endedBy: input.actor.userId, idempotencyKey: input.idempotencyKey,
     request, entries, ...(replacement ? { replacementDefaultFinancialAccountProfileId: replacement } : {}),
   });
   return { ending, replay: false };

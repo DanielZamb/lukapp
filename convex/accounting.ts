@@ -1,4 +1,4 @@
-import { undoPlace, undoReceipt, undoPreview, undoOperation } from "./accountingUndoValues";
+import { abortUndo, undoPlace, undoReceipt, undoPreview, undoOperation } from "./accountingUndoValues";
 import { previewUndo, readUndoStatus } from "./accountingUndo";
 import { closePlace as closePlaceArgs, closePlaceReceipt, placeClosure as placeClosureValue } from "./accountingPlaceValues";
 import { placeClosure as readPlaceClosure } from "../src/accounting/commands/closePlace";
@@ -58,6 +58,7 @@ import { readWorkspaceSettings, readWorkspaceSettingHistory, readPersonalDefault
 import {
   accountBalance,
   productKind,
+  placeStatus,
   accountNature,
   accountSetupResult,
   accountingPeriod,
@@ -317,6 +318,7 @@ export const postedActivity = query({
   returns: v.object({
     accounts: v.array(
       v.object({
+        status: placeStatus, endedAt: v.optional(v.number()),
         financialAccountProfileId: v.string(),
         name: v.string(),
         nature: accountNature,
@@ -531,6 +533,13 @@ export const placeClosure = query({
   }),
 });
 
+export const abortUndoPlace = action({
+  args: abortUndo, returns: undoReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof undoReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.abortUndoPlace, { ...args, session });
+  },
+});
 export const startUndoPlace = action({
   args: undoPlace, returns: undoReceipt,
   handler: async (ctx, args): Promise<Infer<typeof undoReceipt>> => {

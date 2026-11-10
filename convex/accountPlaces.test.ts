@@ -18,7 +18,7 @@ test.each([
   expect(retry.financialAccountProfile.id).toBe(first.financialAccountProfile.id);
   const activity = await t.query(api.accounting.postedActivity, { workspaceId: workspace.id, month: "2026-09" });
   expect(activity.accounts).toEqual([{
-    financialAccountProfileId: first.financialAccountProfile.id, name: "New account", productKind, emoji,
+    status: "open", financialAccountProfileId: first.financialAccountProfile.id, name: "New account", productKind, emoji,
     nature: "Asset", trackingFrom: "2026-09-24", balance: payload.amount,
   }]);
   expect(activity.rows).toHaveLength(amount === 0 ? 0 : 1);

@@ -1,3 +1,4 @@
+import { submitClose, submitUndo } from "../src/accounting/endingTestInputs";
 import { AccountingError } from "../src/accounting/errors";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -109,7 +110,7 @@ test("ended closing counterparty refuses Undo before freezing and names it", asy
     description: "B",
     idempotencyKey: "b",
   });
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     financialAccountProfileId: s.other.id,
     idempotencyKey: "close-b",
@@ -133,10 +134,10 @@ test("ended closing counterparty refuses Undo before freezing and names it", asy
     ]),
   });
   await expect(
-    s.t.action(api.accounting.startUndoPlace, s.start),
+    submitUndo(s.t, s.start),
   ).rejects.toThrow("place_undo_ended_counterparty");
   expect(await s.status()).toBeNull();
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     financialAccountProfileId: s.third.id,
     idempotencyKey: "close-c",
@@ -145,15 +146,15 @@ test("ended closing counterparty refuses Undo before freezing and names it", asy
 });
 test("only the target freezes; concurrent endings preserve the last open Place", async () => {
   const s = await setup();
-  await s.t.action(api.accounting.startUndoPlace, s.start);
-  const r = await s.t.action(api.accounting.startUndoPlace, {
+  await submitUndo(s.t, s.start);
+  const r = await submitUndo(s.t, {
     ...s.start,
     financialAccountProfileId: s.other.id,
     idempotencyKey: "u-b",
   });
   expect(r.operation.state.kind).toBe("pending");
   await expect(
-    s.t.action(api.accounting.closePlace, {
+    submitClose(s.t, {
       ...s.start,
       financialAccountProfileId: s.third.id,
       idempotencyKey: "c",
@@ -182,7 +183,7 @@ test("legacy category without nature is refused at preview and Start", async () 
     ]),
   });
   await expect(
-    s.t.action(api.accounting.startUndoPlace, s.start),
+    submitUndo(s.t, s.start),
   ).rejects.toThrow("place_undo_invalid_entry");
 });
 test("future entries refuse preview, Start and Close with latest date", async () => {
@@ -204,10 +205,10 @@ test("future entries refuse preview, Start and Close with latest date", async ()
       ]),
     });
   await expect(
-    s.t.action(api.accounting.startUndoPlace, s.start),
+    submitUndo(s.t, s.start),
   ).rejects.toThrow("place_future_entries");
   await expect(
-    s.t.action(api.accounting.closePlace, {
+    submitClose(s.t, {
       ...s.start,
       lines: [{ kind: "adjustment", amount: money(900) }],
     }),
@@ -241,7 +242,7 @@ async function recovery(
 test("Recovery remains fundable after closing its expense's Place", async () => {
   const s = await setup();
   const r = await recovery(s);
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     lines: [{ kind: "adjustment", amount: money(900) }],
   });
@@ -289,7 +290,7 @@ test.each([false, true])(
       ]),
     });
     await expect(
-      s.t.action(api.accounting.startUndoPlace, {
+      submitUndo(s.t, {
         ...target,
         idempotencyKey: "undo-c",
       }),
@@ -299,7 +300,7 @@ test.each([false, true])(
 test("Recovery flags follow an undoing source and an ended destination", async () => {
   const s = await setup();
   await recovery(s);
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   expect(
     (
       await s.t.query(api.savingsRecovery.evaluate, {
@@ -310,7 +311,7 @@ test("Recovery flags follow an undoing source and an ended destination", async (
 });
 test("locking current month cannot interrupt an Undo", async () => {
   const s = await setup();
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   await expect(
     lock(s.t, s.workspace.id, { year: 2026, month: 9 }),
   ).rejects.toThrow("period_lock_undo_in_progress");
@@ -329,7 +330,7 @@ test("nonpositional line numbers cannot skip originals at completion", async () 
     for (const line of await ctx.db.query("journalLines").collect())
       await ctx.db.patch(line._id, { lineNumber: line.lineNumber + 10 });
   });
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   await s.finish();
   expect(await s.status()).toMatchObject({
     state: { kind: "done" },
@@ -365,14 +366,14 @@ test("caller descriptions survive Close, Undo and History, and changed text conf
       },
     ],
   };
-  const receipt = await s.t.action(api.accounting.closePlace, close);
+  const receipt = await submitClose(s.t, close);
   expect(receipt.ending.entries.map((e) => e.description)).toEqual([
     "Pasar saldo",
     "Gasto de cierre",
     "Ajuste final",
   ]);
   await expect(
-    s.t.action(api.accounting.closePlace, {
+    submitClose(s.t, {
       ...close,
       lines: close.lines.map((l) => ({ ...l, description: "Cambiado" })),
     }),
@@ -385,7 +386,7 @@ test("caller descriptions survive Close, Undo and History, and changed text conf
   expect(JSON.stringify(history)).toContain("Ajuste final");
   const second = await setup();
   const args = { ...second.start, reversalDescriptionPrefix: "Reversión:" };
-  await second.t.action(api.accounting.startUndoPlace, args);
+  await submitUndo(second.t, args);
   await second.finish();
   expect(
     (
@@ -406,7 +407,7 @@ test("caller descriptions survive Close, Undo and History, and changed text conf
     ),
   ).toContain("Reversión: Opening");
   await expect(
-    second.t.action(api.accounting.startUndoPlace, {
+    submitUndo(second.t, {
       ...args,
       reversalDescriptionPrefix: "Otro:",
     }),
@@ -415,7 +416,7 @@ test("caller descriptions survive Close, Undo and History, and changed text conf
 
 test("a batch dying before its error handler is resumed by the independent watchdog", async () => {
   const s = await setup();
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   await s.t.run(async (ctx) => {
     for (const job of await ctx.db.system
       .query("_scheduled_functions")
@@ -458,7 +459,7 @@ test("a 50-Place batch has bounded store reads and actually commits ten reversal
     await createProfile(s.t, s.workspace.id, `P${n}`, "bankAccount");
   for (let n = 0; n < 25; n++)
     await s.transfer(`move-${n}`, s.place.id, s.other.id, 1);
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const { processUndoBatch } = await import("./accountingUndo");
   let calls = 0,
     documents = 0,
@@ -539,7 +540,7 @@ test("a 50-Place batch has bounded store reads and actually commits ten reversal
 
 test("unexpected failure can abort only before any reversal and only by the authorizing owner", async () => {
   const s = await setup();
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const operationId = receipt.operation.id as Id<"placeUndoOperations">;
   const module = await import("../src/accounting/commands/reversePostedEntry");
   const fault = vi
@@ -577,7 +578,7 @@ test("unexpected failure can abort only before any reversal and only by the auth
     status: "open",
     canClose: true,
   });
-  const fresh = await s.t.action(api.accounting.startUndoPlace, {
+  const fresh = await submitUndo(s.t, {
     ...s.start,
     idempotencyKey: "try-again",
   });
@@ -592,7 +593,7 @@ test("unexpected failure can abort only before any reversal and only by the auth
 test("a partial Undo cannot abort and exhausted transient failures stay visible", async () => {
   const s = await setup();
   for (let n = 0; n < 15; n++) await s.expense(`e-${n}`, 1);
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const operationId = receipt.operation.id as Id<"placeUndoOperations">;
   await s.t.mutation(internal.accountingUndo.drive, {
     operationId,
@@ -633,7 +634,7 @@ test("a partial Undo cannot abort and exhausted transient failures stay visible"
     "Independent",
     "cash",
   );
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     financialAccountProfileId: independent.id,
     idempotencyKey: "unrelated-close",
@@ -650,9 +651,9 @@ test("a partial Undo cannot abort and exhausted transient failures stay visible"
 test("an in-flight Undo protects only counterparties with unreversed shared entries", async () => {
   const s = await setup();
   await s.transfer("shared", s.place.id, s.other.id, 100);
-  await s.t.action(api.accounting.startUndoPlace, s.start);
+  await submitUndo(s.t, s.start);
   await expect(
-    s.t.action(api.accounting.closePlace, {
+    submitClose(s.t, {
       ...s.start,
       financialAccountProfileId: s.other.id,
       idempotencyKey: "c",
@@ -660,13 +661,13 @@ test("an in-flight Undo protects only counterparties with unreversed shared entr
     }),
   ).rejects.toThrow("place_undo_dependency");
   await expect(
-    s.t.action(api.accounting.startUndoPlace, {
+    submitUndo(s.t, {
       ...s.start,
       financialAccountProfileId: s.other.id,
       idempotencyKey: "u",
     }),
   ).rejects.toThrow("place_undo_dependency");
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     financialAccountProfileId: s.third.id,
     idempotencyKey: "independent",
@@ -683,7 +684,7 @@ test("Recovery contribution into an ended destination blocks the funding Place's
   const s = await setup();
   const r = await recovery(s);
   await r.contribute(100, "complete");
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     financialAccountProfileId: s.third.id,
     idempotencyKey: "end-destination",
@@ -705,7 +706,7 @@ test("Recovery contribution into an ended destination blocks the funding Place's
     ]),
   });
   await expect(
-    s.t.action(api.accounting.startUndoPlace, {
+    submitUndo(s.t, {
       ...target,
       idempotencyKey: "undo-funder",
     }),
@@ -734,7 +735,7 @@ test("completion refuses unreversed originals even when their balances net to ze
     idempotencyKey: "income",
   });
   const module = await import("../src/accounting/commands/reversePostedEntry");
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const fault = vi
     .spyOn(module, "reversePostedEntry")
     .mockResolvedValue(income);
@@ -760,13 +761,13 @@ test.each(["", "\u200b", "x".repeat(1001)])(
   async (description) => {
     const s = await setup();
     await expect(
-      s.t.action(api.accounting.closePlace, {
+      submitClose(s.t, {
         ...s.start,
         lines: [{ kind: "adjustment", amount: money(1000), description }],
       }),
     ).rejects.toThrow("description_invalid");
     await expect(
-      s.t.action(api.accounting.startUndoPlace, {
+      submitUndo(s.t, {
         ...s.start,
         reversalDescriptionPrefix: description,
       }),
@@ -810,7 +811,7 @@ test("ordinary reversal accepts a localized prefix and retains its default for e
 test("Recovery can activate after source Close; corrections still preserve money", async () => {
   const s = await setup();
   const expense = await s.expense("recover-later", 100);
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     lines: [{ kind: "adjustment", amount: money(900) }],
   });
@@ -896,7 +897,7 @@ test("Recovery flags match commands for a legacy ended destination and an undone
   ).toMatchObject({ acceptsContributions: false, canCancel: false });
   const second = await setup();
   await recovery(second);
-  await second.t.action(api.accounting.startUndoPlace, second.start);
+  await submitUndo(second.t, second.start);
   await second.finish();
   expect(
     (
@@ -913,15 +914,15 @@ test("Recovery flags match commands for a legacy ended destination and an undone
 
 test("racing Close and Undo cannot end the last two open Places", async () => {
   const s = await setup(undefined, 0);
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     financialAccountProfileId: s.third.id,
     idempotencyKey: "third",
     lines: [],
   });
   const results = await Promise.allSettled([
-    s.t.action(api.accounting.startUndoPlace, s.start),
-    s.t.action(api.accounting.closePlace, {
+    submitUndo(s.t, s.start),
+    submitClose(s.t, {
       ...s.start,
       financialAccountProfileId: s.other.id,
       idempotencyKey: "other",
@@ -985,7 +986,7 @@ test("an oversized integrity review refuses safely instead of approving an incom
     blockers: expect.arrayContaining([{ code: "place_ending_scan_limit" }]),
   });
   await expect(
-    s.t.action(api.accounting.startUndoPlace, s.start),
+    submitUndo(s.t, s.start),
   ).rejects.toThrow("place_ending_scan_limit");
   expect(await s.status()).toBeNull();
 });
@@ -993,7 +994,7 @@ test("an oversized integrity review refuses safely instead of approving an incom
 test("watchdog re-drives a stale running batch and an obsolete version cannot double-reverse", async () => {
   const s = await setup();
   for (let n = 0; n < 15; n++) await s.expense(`entry-${n}`, 1);
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const operationId = receipt.operation.id as Id<"placeUndoOperations">;
   await s.t.mutation(internal.accountingUndo.drive, {
     operationId,
@@ -1025,7 +1026,7 @@ test("watchdog re-drives a stale running batch and an obsolete version cannot do
 
 test("persistent watchdog stalls stop visibly and can be aborted before progress", async () => {
   const s = await setup();
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const operationId = receipt.operation.id as Id<"placeUndoOperations">;
   for (let n = 0; n < 6; n++) {
     await s.t.run((ctx) =>
@@ -1051,7 +1052,7 @@ test("persistent watchdog stalls stop visibly and can be aborted before progress
 
 test("internal abort requires actual admitted owner context, rather than an owner string alone", async () => {
   const s = await setup();
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   const operationId = receipt.operation.id as Id<"placeUndoOperations">;
   await s.t.run((ctx) =>
     ctx.db.patch(operationId, {
@@ -1079,7 +1080,7 @@ test("a counterparty is free to Close as soon as its last shared original was re
   const s = await setup();
   await s.transfer("shared", s.place.id, s.other.id, 100);
   for (let n = 0; n < 15; n++) await s.expense(`after-${n}`, 1);
-  const receipt = await s.t.action(api.accounting.startUndoPlace, s.start);
+  const receipt = await submitUndo(s.t, s.start);
   expect(receipt.operation.counterparties).toEqual([
     { financialAccountProfileId: s.other.id, remainingEntries: 1 },
   ]);
@@ -1093,7 +1094,7 @@ test("a counterparty is free to Close as soon as its last shared original was re
       { financialAccountProfileId: s.other.id, remainingEntries: 0 },
     ],
   });
-  await s.t.action(api.accounting.closePlace, {
+  await submitClose(s.t, {
     ...s.start,
     financialAccountProfileId: s.other.id,
     idempotencyKey: "close-counterparty",

@@ -91,6 +91,7 @@ export type PlaceEnding = {
   endedBy: string;
 };
 export type StoredPlaceEnding = PlaceEnding & {
+  accountingDate?: string;
   id: string;
   workspaceId: string;
   financialAccountProfileId: string;
@@ -102,6 +103,7 @@ export type StoredPlaceEnding = PlaceEnding & {
 };
 
 export type FinancialAccountProfile = {
+  endedAt?: number;
   status: PlaceStatus;
   id: string;
   workspaceId: string;
@@ -170,6 +172,8 @@ export type PostedJournalEntry = {
 };
 
 export type AccountBalance = {
+  status: PlaceStatus;
+  endedAt?: number;
   financialAccountProfileId: string;
   name: string;
   nature: AccountNature;

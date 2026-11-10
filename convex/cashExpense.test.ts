@@ -63,7 +63,7 @@ test("repeating an idempotency key posts the cash expense once", async () => {
   expect(activity).toEqual([first]);
   expect(balances).toEqual([
     {
-      financialAccountProfileId: daily.id,
+      status: "open", financialAccountProfileId: daily.id,
       name: "Daily",
       nature: "Asset",
       debitMinorUnits: 0,
@@ -165,7 +165,7 @@ test("balances move only after a cash expense is posted", async () => {
 
   expect(empty).toEqual([
     {
-      financialAccountProfileId: daily.id,
+      status: "open", financialAccountProfileId: daily.id,
       name: "Daily",
       nature: "Asset",
       debitMinorUnits: 0,
@@ -175,7 +175,7 @@ test("balances move only after a cash expense is posted", async () => {
   ]);
   expect(after).toEqual([
     {
-      financialAccountProfileId: daily.id,
+      status: "open", financialAccountProfileId: daily.id,
       name: "Daily",
       nature: "Asset",
       debitMinorUnits: 0,

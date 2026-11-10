@@ -91,7 +91,7 @@ function Places({ defaults, subject }: {
       <View style={styles.hero}>
         <Text style={styles.muted}>{t("places.now")}</Text>
         <Text style={styles.amount} adjustsFontSizeToFit numberOfLines={1}>
-          {formatMoney(placesTotal(open, workspace.functionalCurrency), { hideZeroDecimals: true })}
+          {formatMoney(placesTotal([...open, ...undoing], workspace.functionalCurrency), { hideZeroDecimals: true })}
         </Text>
         <Text style={styles.muted}>{many ? tn("places.across", count) : t("places.onePool")}</Text>
       </View>

@@ -31,6 +31,7 @@ export function toWorkspace(
 export function toProfile(profile: StoredProfile): FinancialAccountProfile {
   return {
     status: placeStatus(profile),
+    ...(profile.ending ? { endedAt: profile.ending.occurredAt } : {}),
     id: profile.id,
     workspaceId: profile.workspaceId,
     name: profile.name,

@@ -152,7 +152,7 @@ test.each([
   expect(ui.texts()).toContain("Wallet closes for good and can't be reopened. Its history stays as it is, under Closed places.");
   await ui.press("Close Wallet");
   expect(remote.close.mock.calls).toEqual([[{
-    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1",
+    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(balance), reviewedAccountingDate: "2026-11-10",
     ...(line.kind === "adjustment" ? { closingAdjustmentExpenseName: "Closing adjustment (expense)",
       closingAdjustmentIncomeName: "Closing adjustment (income)" } : {}),
     lines: [line],
@@ -219,7 +219,7 @@ test("a split must explain exactly the whole balance, and amounts follow the sha
   expect(ui.texts()).toEqual(expect.arrayContaining(["Transfer to Savings", "COP 30.000", "Expense in Groceries", "COP 20.000"]));
   await ui.press("Close Wallet");
   expect(remote.close.mock.calls).toEqual([[{
-    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1",
+    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(5_000_000), reviewedAccountingDate: "2026-11-10",
     lines: [
       { kind: "transfer", otherFinancialAccountProfileId: "savings", amount: closing(3_000_000), description: "Closing Wallet" },
       { kind: "expense", userCategoryId: "groceries", amount: closing(2_000_000), description: "Closing Wallet" },
@@ -248,7 +248,7 @@ test("a zero balance closes after one confirmation, then shows a receipt and ret
   expect(ui.texts()).toEqual(["CLOSE OR UNDO", "Review before closing Wallet", "Wallet is at COP 0, so nothing is recorded.",
     "Wallet closes for good and can't be reopened. Its history stays as it is, under Closed places.", "Close Wallet"]);
   await ui.press("Close Wallet");
-  expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", lines: [] }]]);
+  expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(0), reviewedAccountingDate: "2026-11-10", lines: [] }]]);
   expect(ui.texts()).toEqual(["CLOSE OR UNDO", "Wallet is closed", "Nothing was recorded.", "You'll find it under Closed places.", "Done"]);
   await ui.press("Done");
   expect(mounted!.routes()).toEqual(["index", "places"]);
@@ -279,7 +279,7 @@ test("closing the Default Place asks for its replacement and sends it", async ()
   await ui.press("Continue");
   expect(ui.texts()).toContain("Savings becomes your default place.");
   await ui.press("Close Wallet");
-  expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1",
+  expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(0), reviewedAccountingDate: "2026-11-10",
     replacementDefaultFinancialAccountProfileId: "savings", lines: [] }]]);
 });
 
@@ -446,7 +446,7 @@ test("in Spanish the stored descriptions and adjustment names are written in Spa
     "Wallet queda cerrado para siempre y no se puede volver a abrir. Su historial no cambia y lo encuentras en Lugares cerrados."]));
   await ui.press("Cerrar Wallet");
   expect(remote.close.mock.calls).toEqual([[{
-    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1",
+    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(5_000_000), reviewedAccountingDate: "2026-11-10",
     closingAdjustmentExpenseName: "Ajuste de cierre (gasto)", closingAdjustmentIncomeName: "Ajuste de cierre (ingreso)",
     lines: [{ kind: "adjustment", amount: closing(5_000_000), description: "Ajuste de cierre de Wallet" }],
   }]]);

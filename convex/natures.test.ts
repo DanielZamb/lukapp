@@ -63,7 +63,7 @@ test("a card purchase grows a Liability, shown as money owed", async () => {
   expect(card.productKind).toBe("creditCard");
   expect(balances).toEqual([
     {
-      financialAccountProfileId: card.id,
+      status: "open", financialAccountProfileId: card.id,
       name: "Visa",
       nature: "Liability",
       debitMinorUnits: 0,
@@ -71,7 +71,7 @@ test("a card purchase grows a Liability, shown as money owed", async () => {
       balance: { currency: "COP", minorUnits: 150000 },
     },
     {
-      financialAccountProfileId: loan.id,
+      status: "open", financialAccountProfileId: loan.id,
       name: "Car loan",
       nature: "Liability",
       debitMinorUnits: 0,

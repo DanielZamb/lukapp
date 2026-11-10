@@ -137,6 +137,7 @@ export function closeRequest(input: {
   workspaceId: string;
   place: { id: string; name: string };
   balance: Money;
+  accountingDate: string;
   lines: readonly LineDraft[];
   replacement: string | null;
   idempotencyKey: string;
@@ -154,6 +155,7 @@ export function closeRequest(input: {
   return {
     workspaceId: input.workspaceId,
     financialAccountProfileId: input.place.id,
+    reviewedBalance: input.balance, reviewedAccountingDate: input.accountingDate,
     idempotencyKey: input.idempotencyKey,
     ...(input.replacement ? { replacementDefaultFinancialAccountProfileId: input.replacement } : {}),
     ...(lines.some((line) => line.kind === "adjustment") ? {
@@ -165,12 +167,13 @@ export function closeRequest(input: {
 }
 
 export function undoRequest(input: {
-  workspaceId: string; placeId: string; replacement: string | null; idempotencyKey: string;
+  workspaceId: string; placeId: string; replacement: string | null; idempotencyKey: string; previewFingerprint: string;
 }, t: Translator["t"]): UndoRequest {
   return {
     workspaceId: input.workspaceId,
     financialAccountProfileId: input.placeId,
     idempotencyKey: input.idempotencyKey,
+    previewFingerprint: input.previewFingerprint,
     reversalDescriptionPrefix: t("placeEnding.reversalPrefix"),
     ...(input.replacement ? { replacementDefaultFinancialAccountProfileId: input.replacement } : {}),
   };
