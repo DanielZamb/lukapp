@@ -1,12 +1,13 @@
 import { Text, View } from "react-native";
+import { useT, type MessageKey } from "../../i18n";
 import { Choice, useUi } from "../../ui/core";
 import type { NatureAnswer } from "./model";
 
-const answers: Array<{ value: NatureAnswer; label: string }> = [
-  { value: "spend", label: "I spend it" },
-  { value: "receive", label: "I receive it" },
-  { value: "stillMine", label: "It is still mine" },
-  { value: "payDebt", label: "I pay a debt" },
+const answers: Array<{ value: NatureAnswer; label: MessageKey }> = [
+  { value: "spend", label: "categories.answerSpend" },
+  { value: "receive", label: "categories.answerReceive" },
+  { value: "stillMine", label: "categories.answerStillMine" },
+  { value: "payDebt", label: "categories.answerPayDebt" },
 ];
 export function NatureQuestion({ answer, suggested, allowed, disabled, onAnswer }: {
   answer: NatureAnswer | null;
@@ -16,11 +17,12 @@ export function NatureQuestion({ answer, suggested, allowed, disabled, onAnswer 
   onAnswer: (answer: NatureAnswer) => void;
 }) {
   const ui = useUi();
+  const { t } = useT();
   return <View style={ui.section}>
-    <Text style={ui.title}>What happens to the money?</Text>
-    {suggested && <Text style={ui.muted}>Suggested from the name. You can change it.</Text>}
+    <Text style={ui.title}>{t("categories.natureQuestion")}</Text>
+    {suggested && <Text style={ui.muted}>{t("categories.natureSuggested")}</Text>}
     {answers.filter(({ value }) => allowed.includes(value)).map(({ value, label }) =>
-      <Choice key={value} label={label} selected={answer === value}
+      <Choice key={value} label={t(label)} selected={answer === value}
         disabled={disabled} onPress={() => onAnswer(value)} />)}
   </View>;
 }

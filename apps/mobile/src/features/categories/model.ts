@@ -1,4 +1,5 @@
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
+import type { MessageKey } from "../../../../../src/i18n";
 import { api } from "../api";
 
 export type CategorySelection = FunctionArgs<
@@ -37,6 +38,9 @@ export type CategoryEditor =
 export type EditableCategory = Extract<CategoryEditor, { kind: "custom" }> | {
   kind: "edit"; category: Category; name: string; style: CategoryStyle;
 };
+export function natureLabel(nature: Category["nature"]): MessageKey {
+  return nature === "Income" ? "categories.natureIncome" : nature === "Expense" ? "categories.natureExpense" : "categories.natureUnset";
+}
 export const defaultCategoryStyle: CategoryStyle = {
   emoji: "✨",
   tone: "primary",

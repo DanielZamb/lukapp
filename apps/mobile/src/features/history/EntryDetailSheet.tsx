@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Theme } from "../../ui/tokens";
 import type { ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useT } from "../../i18n";
 import { useTheme, useUi } from "../../ui/core";
 import { Sheet } from "../../ui/Sheet";
 import { font, spacing, touchTarget } from "../../ui/tokens";
@@ -20,7 +21,8 @@ type Props = {
 };
 
 export function EntryDetailSheet(props: Props) {
-  return <Sheet label="Entry details" onClose={props.onClose}>
+  const { t } = useT();
+  return <Sheet label={t("review.entryDetails")} onClose={props.onClose}>
     <EntryDetail key={props.entryId} {...props} />
   </Sheet>;
 }
@@ -29,37 +31,40 @@ function EntryDetail({ workspaceId, entryId, profileId, categories, currentDate,
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t, language } = useT();
   const { detail, reversal } = useEntryDetail(workspaceId, entryId, profileId);
-  if (!detail) return <ActivityIndicator accessibilityLabel="Loading entry" />;
+  if (!detail) return <ActivityIndicator accessibilityLabel={t("review.loadingEntry")} />;
   const { entry, row } = detail;
   const moneyIn = row.amount.minorUnits > 0;
   return <>
-    <Text style={ui.label}>{moneyIn ? "MONEY IN" : "MONEY OUT"}</Text>
+    <Text style={ui.label}>{moneyIn ? t("review.moneyIn") : t("review.moneyOut")}</Text>
     <View style={styles.hero}>
       <Text accessibilityRole="header" style={styles.title}>{row.title}</Text>
       <Text adjustsFontSizeToFit numberOfLines={1} style={[styles.amount, moneyIn && { color: theme.primary }]}>
         {historyAmount(row.amount, true)}
       </Text>
       {(row.reversed || entry.reversesEntryId || reversal.state.kind === "posted") &&
-        <Text style={ui.muted}>{entry.reversesEntryId ? "Reversal" : "Reversed"}</Text>}
+        <Text style={ui.muted}>{entry.reversesEntryId ? t("review.statusReversal") : t("review.statusReversed")}</Text>}
     </View>
     <View>
-      <DetailRow label="When"><Text style={styles.value}>{historyDate(row.date, currentDate)}</Text></DetailRow>
+      <DetailRow label={t("review.when")}><Text style={styles.value}>{historyDate(row.date, currentDate, language)}</Text></DetailRow>
       {row.transfer && <>
-        <DetailRow label="From"><Text style={styles.value}>{row.transfer.from.name}</Text></DetailRow>
-        <DetailRow label="To"><Text style={styles.value}>{row.transfer.to.name}</Text></DetailRow>
+        <DetailRow label={t("review.transferFrom")}><Text style={styles.value}>{row.transfer.from.name}</Text></DetailRow>
+        <DetailRow label={t("review.transferTo")}><Text style={styles.value}>{row.transfer.to.name}</Text></DetailRow>
       </>}
-      {(!row.transfer || row.userCategories.length > 0) && <DetailRow label="Category">
+      {(!row.transfer || row.userCategories.length > 0) && <DetailRow label={t("review.category")}>
         {row.userCategories.length ? row.userCategories.map((category) => {
           const emoji = categories.find((stored) => stored.id === category.id)?.style.emoji;
           return <Text key={category.id} style={styles.value}>
-            {[emoji, category.name].filter(Boolean).join(" ")}{category.id === row.primaryUserCategoryId ? " · Primary" : ""}
+            {category.id === row.primaryUserCategoryId
+              ? t("review.primaryCategoryName", { name: [emoji, category.name].filter(Boolean).join(" ") })
+              : [emoji, category.name].filter(Boolean).join(" ")}
           </Text>;
-        }) : <Text style={styles.value}>No category</Text>}
+        }) : <Text style={styles.value}>{t("review.noCategory")}</Text>}
       </DetailRow>}
-      {!row.transfer && <DetailRow label="Place"><Text style={styles.value}>{entry.financialAccountProfileName ?? "No place"}</Text></DetailRow>}
+      {!row.transfer && <DetailRow label={t("review.place")}><Text style={styles.value}>{entry.financialAccountProfileName ?? t("review.noPlace")}</Text></DetailRow>}
     </View>
-    <Text style={[styles.footnote, styles.note]}>Posted entry · amounts in {row.amount.currency}</Text>
+    <Text style={[styles.footnote, styles.note]}>{t("review.entryFootnote", { currency: row.amount.currency })}</Text>
     <EntryReversal detail={detail} reversal={reversal.state} onEntry={onEntry}
       onReverse={reversal.request} onCancel={reversal.cancel} onConfirm={() => void reversal.confirm()} />
   </>;

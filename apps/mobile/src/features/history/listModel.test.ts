@@ -1,4 +1,7 @@
 import { expect, test } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
+
+const en = createTranslator("en");
 import { capitalFlow, compactHistoryAmount, historyAmount, historyDate, historyListRow } from "./listModel";
 import type { HistoryRow } from "./types";
 
@@ -12,12 +15,12 @@ const categories = [{ id: "family", name: "Family", style: { emoji: "🦋", tone
 const places = [{ id: "cash", name: "Daily cash" }];
 
 test("list uses the primary stored emoji, plain place, workspace year, and reversal suffix", () => {
-  expect(historyListRow(row, categories, places, "2026-01-01")).toMatchObject({
+  expect(historyListRow(row, categories, places, "2026-01-01", en)).toMatchObject({
     subtitle: "August 23, 2025 · 🦋 Family · Daily cash · Reversed", amountLabel: "−$1.264,25",
   });
-  expect(historyDate("2025-08-23", "2025-12-31")).toBe("August 23");
+  expect(historyDate("2025-08-23", "2025-12-31", "en")).toBe("August 23");
   expect(historyListRow({ ...row, userCategories: [], primaryUserCategoryId: undefined, detail: "Income", reversed: false,
-    amount: { currency: "USD", minorUnits: 150000 } }, [], places, "2025-12-31")).toMatchObject({
+    amount: { currency: "USD", minorUnits: 150000 } }, [], places, "2025-12-31", en)).toMatchObject({
     subtitle: "August 23 · 💸 Income · Daily cash", amountLabel: "+$1.500",
   });
 });
@@ -26,7 +29,7 @@ test.each([
   [0, "$0"], [100, "$1"], [99900, "$999"], [150000, "$1.5K"],
   [1000000, "$10K"], [110000000, "$1.1M"], [-1250000000, "−$13M"],
 ])("compact amount %i displays %s", (minorUnits, expected) => {
-  expect(compactHistoryAmount(minorUnits, "COP")).toBe(expected);
+  expect(compactHistoryAmount(minorUnits, "COP", "en")).toBe(expected);
 });
 
 test("full amounts hide whole cents and retain two decimals for COP and USD", () => {
@@ -40,5 +43,5 @@ test("full amounts hide whole cents and retain two decimals for COP and USD", ()
 test("history labels and compact totals use the row currency precision", () => {
   expect(historyAmount({ currency: "JPY", minorUnits: 100 })).toBe("JPY 100");
   expect(historyAmount({ currency: "BHD", minorUnits: 1234 })).toBe("BHD 1,234");
-  expect(compactHistoryAmount(100, "JPY")).toBe("JPY 100");
+  expect(compactHistoryAmount(100, "JPY", "en")).toBe("JPY 100");
 });

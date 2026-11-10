@@ -158,7 +158,7 @@ test("transfer details match history for source, destination and stored scope, i
   });
   const selected = filterHistory(globalHistory.page, {
     search: "", profileIds: [destination.id, unrelated.id], categoryIds: [], range: "all", customFrom: null, customTo: null,
-  }, { today: "2026-09-24", profileNames: {} });
+  }, { today: "2026-09-24", language: "en", profileNames: {} });
   expect(selected.map((row) => row.id).sort()).toEqual([original.id, correction.id].sort());
   for (const row of globalHistory.page) {
     expect(row).toMatchObject({ financialAccountProfileIds: expect.arrayContaining([daily.id, destination.id]) });

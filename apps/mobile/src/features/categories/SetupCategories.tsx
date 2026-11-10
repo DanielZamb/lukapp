@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
+import { useT } from "../../i18n";
 import { useTheme, useThemeMode, useUi } from "../../ui/core";
 import { useSetupStyles } from "../setup/styles";
 import type { SetupCategory } from "../setup/model";
@@ -24,6 +25,7 @@ export function SetupCategories({
   const theme = useTheme();
   const mode = useThemeMode();
   const ui = useUi();
+  const { t, tn } = useT();
   const styles = useSetupStyles();
   const recordInteraction = useLocalEntryInteraction();
   const [target, setTarget] = useState<RestyleTarget | null>(null);
@@ -48,8 +50,8 @@ export function SetupCategories({
   return (
     <View style={styles.board}>
       <View style={styles.row}>
-        <Text style={styles.label}>Your categories</Text>
-        <Text style={ui.muted}>{selections.length} selected</Text>
+        <Text style={styles.label}>{t("categories.setupTitle")}</Text>
+        <Text style={ui.muted}>{tn("categories.setupSelected", selections.length)}</Text>
       </View>
       <View style={styles.wrap}>
         {names.map((original) => {
@@ -66,7 +68,7 @@ export function SetupCategories({
               key={category.name}
               accessibilityRole="checkbox"
               accessibilityLabel={category.name}
-              accessibilityHint="Long press to edit"
+              accessibilityHint={t("categories.setupEditHint")}
               accessibilityState={{ checked: selected, disabled }}
               disabled={disabled}
               onPress={() => {
@@ -97,7 +99,7 @@ export function SetupCategories({
         })}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Add your own category"
+          accessibilityLabel={t("categories.setupAddOwnA11y")}
           disabled={disabled}
           onPress={() => {
             recordInteraction();
@@ -106,10 +108,10 @@ export function SetupCategories({
           style={[styles.chip, styles.own]}
         >
           <Ionicons name="add" size={18} color={theme.foreground} />
-          <Text style={styles.chipText}>Your own</Text>
+          <Text style={styles.chipText}>{t("categories.yourOwn")}</Text>
         </Pressable>
       </View>
-      <Text style={ui.muted}>Tap to pick. Hold one to edit it.</Text>
+      <Text style={ui.muted}>{t("categories.setupInstructions")}</Text>
       {target && (
         <RestyleSheet
           target={target}

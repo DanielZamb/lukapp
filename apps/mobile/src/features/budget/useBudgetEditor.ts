@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { z } from "zod";
+import { useT } from "../../i18n";
 import type { api } from "../api";
 import { formatMoney, parseMoney } from "../money";
 import type { BudgetJar } from "./model";
@@ -34,6 +35,7 @@ function readAmount(text: string, currency: string, currentMinorUnits: number | 
 }
 
 export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTransport) {
+  const { t } = useT();
   const [categoryId, setCategoryId] = useState<string | null>(seed.jar?.category.id ?? seed.initialCategoryId ?? null);
   const [amount, setAmount] = useState(seed.jar ? formatMoney({ currency: seed.currency, minorUnits: seed.jar.limitMinorUnits })
     .replace(`${seed.currency} `, "") : "");
@@ -80,9 +82,8 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
         setPending(false);
         const stale = parsed.data.code === "limit_changed" || parsed.data.code === "month_changed";
         setBlocked(stale);
-        setError(stale ? "This limit or month changed. Close and reopen the Budget to use its latest limit."
-          : "Budget was not saved. Check the category and positive limit, then try again.");
-      } else setError("Could not confirm saving. Retry to safely check the same Budget.");
+        setError(stale ? t("budget.errorStale") : t("budget.errorRejected"));
+      } else setError(t("budget.errorUnknown"));
     } finally {
       submitting.current = false;
       if (mounted.active) setBusy(false);

@@ -1,0 +1,63 @@
+import type { Messages } from "../../types";
+import type { budget as en } from "../en/budget";
+
+export const budget: Messages<typeof en> = {
+  nextOpen: "Abrir {name}",
+  nextHot: "{name} ya va en el 80%",
+  nextChange: "Cambiar el tope de {month}",
+  nextSet: "Ponerle un tope a {month}",
+
+  boardTitle: "Presupuestos",
+  saved: "Presupuesto guardado",
+  setAnother: "Poner otro tope",
+  jarLeft: "Quedan {amount}",
+  jarOver: "{amount} de más",
+  jarA11yLeft: "{name}: quedan {amount} de un tope de {limit}. Llevas {spent} gastados. Editar presupuesto.",
+  jarA11yOver: "{name}: te pasaste {amount} de un tope de {limit}. Llevas {spent} gastados. Editar presupuesto.",
+  loading: "Cargando presupuesto",
+
+  eyebrow: "PRESUPUESTO",
+  addTitle: "Agregar presupuesto",
+  policy: "Se repite cada mes. Los cambios aplican para este mes y los siguientes. Los meses pasados conservan su tope. La plata que no gastes no pasa al mes siguiente.",
+  chooseCategory: "Elige una categoría",
+  categoryLabel: "Categoría",
+  categoryEyebrow: "CATEGORÍA",
+  searchA11y: "Buscar categorías del presupuesto",
+  searchPlaceholder: "Buscar categorías",
+  noCategories: "No hay categorías disponibles. Primero agrega una categoría de gasto desde Registrar plata.",
+  noMatches: "Ninguna categoría coincide.",
+  loadingSpending: "Cargando lo gastado en la categoría",
+  limitFor: "Tope para {name}",
+  limitIn: "TOPE EN {currency}",
+  limitInA11y: "Tope del presupuesto en {currency}",
+  saving: "Guardando…",
+  retrySave: "Intentar guardar de nuevo",
+  saveBudget: "Guardar presupuesto",
+
+  composerSpent: "Salieron {amount} este mes",
+  stayUnder: "No pasar de",
+  monthlyLimitA11y: "Tope mensual",
+  composerJarA11y: "Lo que queda en el frasco",
+  composerJarValue: "Quedan {amount}",
+  composerEmpty: "Este frasco ya está vacío.",
+  composerHint: "Lo que todavía queda en el frasco. Cada gasto se lo va comiendo.",
+  saveLimit: "Guardar este tope",
+
+  sheetJarA11y: "Lo que queda en {name}",
+  stayUnderThisMonth: "No pasar de esto este mes",
+  shortcutA11y: "Tope de {amount}",
+  noteLoading: "Cargando lo gastado en {previousMonth}. El cambio aplica para {month} y los meses siguientes.",
+  notePrevious: "En {previousMonth} gastaste {amount} en {name}. El cambio aplica para {month} y los meses siguientes.",
+  saveMonth: "Guardar para {month}",
+
+  errorStale: "Este tope o el mes cambió. Cierra y vuelve a abrir el presupuesto para usar el tope más reciente.",
+  errorRejected: "El presupuesto no se guardó. Revisa la categoría y que el tope sea mayor que cero, y vuelve a intentar.",
+  errorUnknown: "No pudimos confirmar si se guardó. Vuelve a intentar para revisar el mismo presupuesto sin duplicarlo.",
+
+  impactEyebrow: "TE PASARÍAS DEL TOPE",
+  impactEntry: "Movimiento",
+  impactOver: "{name}: {amount} de más",
+  impactBody: "Si continúas, el movimiento se registra igual. El presupuesto no lo bloquea.",
+  impactContinue: "Continuar igual",
+  impactReconsider: "Pensarlo mejor",
+};

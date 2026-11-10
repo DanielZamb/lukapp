@@ -4,6 +4,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useT } from "../../i18n";
 import { useTheme, useUi } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import { CapitalFlow } from "./CapitalFlow";
@@ -32,6 +33,8 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
   const ui = useUi();
   const layout = useReadableLayout();
   const theme = useTheme();
+  const translator = useT();
+  const { t, language } = translator;
   const styles = useMemo(() => historyScreenStyles(theme), [theme]);
   const [query, setQuery] = useState<HistoryQuery>(() => ({ ...emptyQuery, profileIds: initialProfileId ? [initialProfileId] : [] }));
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "date", dir: "desc" });
@@ -45,9 +48,9 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
   const filterRows = singleProfileId !== undefined ? (scopedRows ?? []) : (rows ?? []);
   const movements = useMemo(() => historyMovements(filterRows, singleProfileId), [filterRows, singleProfileId]);
   const movementTotal = total === undefined ? undefined : total + movements.length - filterRows.length;
-  const matched = useMemo(() => sortHistory(filterHistory(movements, filterQuery, { today: currentDate, profileNames }),
-    sort.key, sort.dir, profileNames).map((row) => historyListRow(row, categories, places, currentDate)),
-    [movements, filterQuery, sort, profileNames, categories, places, currentDate]);
+  const matched = useMemo(() => sortHistory(filterHistory(movements, filterQuery, { today: currentDate, language, profileNames }),
+    sort.key, sort.dir, profileNames).map((row) => historyListRow(row, categories, places, currentDate, translator)),
+    [movements, filterQuery, sort, profileNames, categories, places, currentDate, translator, language]);
   const { out, inn } = capitalFlow(matched);
   const loading = rows === undefined || total === undefined ||
     (singleProfileId !== undefined && scopedRows === undefined);
@@ -61,44 +64,44 @@ export function HistoryScreen({ rows, scopedRows, total, categories, places, cur
       contentContainerStyle={{ padding: layout.pagePadding, flexGrow: 1 }}
       ListHeaderComponent={<View style={styles.headerContent}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Go back" hitSlop={8} onPress={onBack}
+          <Pressable accessibilityRole="button" accessibilityLabel={t("review.historyBack")} hitSlop={8} onPress={onBack}
             style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
             <Ionicons name="chevron-back" size={24} color={theme.foreground} />
           </Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={ui.label}>ACROSS ALL PLACES</Text>
-            <Text accessibilityRole="header" style={styles.title}>Tx history</Text>
+            <Text style={ui.label}>{t("review.historyEyebrow")}</Text>
+            <Text accessibilityRole="header" style={styles.title}>{t("review.historyTitle")}</Text>
           </View>
         </View>
-        {!loading && hasMore && <Text style={styles.muted}>Filters and totals cover loaded transactions.</Text>}
+        {!loading && hasMore && <Text style={styles.muted}>{t("review.historyLoadedOnly")}</Text>}
         {!loading && <CapitalFlow key={`${out}-${inn}`} out={out} inn={inn} currency={currency} />}
         <View style={styles.search}>
           <Ionicons name="search-outline" size={18} color={theme.mutedForeground} />
-          <TextInput accessibilityLabel="Search transactions" placeholder="Search" value={query.search}
+          <TextInput accessibilityLabel={t("review.historySearchA11y")} placeholder={t("review.historySearchPlaceholder")} value={query.search}
             onChangeText={(search) => setQuery((current) => ({ ...current, search }))}
             placeholderTextColor={theme.mutedForeground} style={[ui.input, { flex: 1 }]} />
         </View>
         <HistoryFilters query={query} onQuery={setQuery} sort={sort} onSort={setSort}
           places={places} categories={categories} today={currentDate} />
         <View style={styles.count}>
-          <Text style={styles.muted}>{loading ? "Loading history…" : `${matched.length} of ${movementTotal}${hasMore ? " loaded" : ""}`}</Text>
-          {filtered && <Pressable accessibilityRole="button" accessibilityLabel="Clear filters"
+          <Text style={styles.muted}>{loading ? t("review.historyLoading")
+            : t(hasMore ? "review.historyCountLoaded" : "review.historyCount", { shown: matched.length, total: movementTotal ?? 0 })}</Text>
+          {filtered && <Pressable accessibilityRole="button" accessibilityLabel={t("review.clearFilters")}
             onPress={() => setQuery(emptyQuery)} style={styles.clear}>
-            <Text style={styles.clearText}>Clear filters</Text>
+            <Text style={styles.clearText}>{t("review.clearFilters")}</Text>
           </Pressable>}
         </View>
       </View>}
       renderItem={({ item, index }) => <HistoryListRow row={item} onEntry={onEntry} isFirst={index === 0} isLast={index === matched.length - 1} />}
       ListFooterComponent={!loading && hasMore ? <Pressable accessibilityRole="button"
-        accessibilityLabel="Load more transactions" disabled={loadingMore} onPress={onLoadMore}
+        accessibilityLabel={t("review.loadMore")} disabled={loadingMore} onPress={onLoadMore}
         style={styles.loadMore}>
-        {loadingMore ? <ActivityIndicator accessibilityLabel="Loading more transactions" /> :
-          <Text style={styles.clearText}>Load more transactions</Text>}
+        {loadingMore ? <ActivityIndicator accessibilityLabel={t("review.loadingMore")} /> :
+          <Text style={styles.clearText}>{t("review.loadMore")}</Text>}
       </Pressable> : null}
-      ListEmptyComponent={loading ? <ActivityIndicator accessibilityLabel="Loading activity" /> :
-        <View style={styles.empty}><Text style={styles.muted}>{total === 0 ? "No posted activity yet." :
-          hasMore ? "No matches in the loaded transactions. Load more or clear filters." :
-          "Nothing matches these filters. Clear them to see everything."}</Text></View>}
+      ListEmptyComponent={loading ? <ActivityIndicator accessibilityLabel={t("review.loadingActivity")} /> :
+        <View style={styles.empty}><Text style={styles.muted}>{total === 0 ? t("review.historyEmpty") :
+          hasMore ? t("review.historyNoLoadedMatch") : t("review.historyNoMatch")}</Text></View>}
     />
   </SafeAreaView>;
 }

@@ -10,6 +10,7 @@ import { categoryColor } from "../categories/appearance";
 import { api } from "../api";
 import { usePostedActivity } from "../activity";
 import { experienceLevel } from "../levelDoor/model";
+import { useT } from "../../i18n";
 import { formatMoney } from "../money";
 import { BudgetBoard } from "./BudgetBoard";
 import { BudgetCreation } from "./BudgetCreation";
@@ -21,6 +22,7 @@ import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { workspaceId: string; timeZone: string; initialCategoryId?: string; onBack: () => void }) {
   const theme = useTheme();
   const mode = useThemeMode();
+  const { t } = useT();
   const calendar = useWorkspaceCalendar(timeZone);
   const [editor, setEditor] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
   const [creation, setCreation] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
@@ -51,7 +53,7 @@ export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { w
   }, [board, initialCategoryId, workspaceId]);
   const activity = usePostedActivity(workspaceId, timeZone);
   const interact = useLocalEntryInteraction();
-  if (!board || !categories || !activity) return <Screen><ActivityIndicator accessibilityLabel="Loading Budget" /></Screen>;
+  if (!board || !categories || !activity) return <Screen><ActivityIndicator accessibilityLabel={t("budget.loading")} /></Screen>;
   const categoryColors = new Map(categories.map((category) => [category.id, categoryColor(category.style, mode)]));
   if (creation) return <BudgetCreation key={creation.key} seed={creation.seed} categories={creation.categories}
     unlocking={activity.accounts.length === 1 && experienceLevel(activity.accounts.length, board.jars.length) === 0}
@@ -89,6 +91,7 @@ function Editor({ seed, categories, color, onClose, onSaved }: {
   const save = useAction(api.budget.setCategoryLimit);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
+  const { t, language } = useT();
   const editor = useBudgetEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved });
   const [year, month] = seed.month.split("-").map(Number);
   const previousMonth = `${month === 1 ? year - 1 : year}-${String(month === 1 ? 12 : month - 1).padStart(2, "0")}`;
@@ -100,10 +103,10 @@ function Editor({ seed, categories, color, onClose, onSaved }: {
     onLimit={(minorUnits) => { interact(); editor.onAmount(formatMoney({ currency: seed.currency, minorUnits }).replace(`${seed.currency} `, "")); }}
     onAmount={(value) => { interact(); editor.onAmount(value); }}
     onSave={() => { interact(); void editor.submit(); }} onDismiss={onClose} />;
-  return <BudgetEditorSheet title="Add Budget"
-    monthLabel={monthLabel(seed.month)} currency={seed.currency} categories={categories}
+  return <BudgetEditorSheet title={t("budget.addTitle")}
+    monthLabel={monthLabel(seed.month, "monthYear", language)} currency={seed.currency} categories={categories}
     categoryFixed={false}
-    policyCopy="Repeats each month. Changes apply to this month and future months. Past months keep their limits. Unspent money does not roll over."
+    policyCopy={t("budget.policy")}
     {...editor}
     onCategory={(id) => { interact(); editor.onCategory(id); }}
     onSearch={(value) => { interact(); editor.onSearch(value); }}

@@ -21,6 +21,7 @@ vi.mock("react-native", () => ({
 }));
 
 const october = evaluateMonthClose({
+    language: "en",
   period: { year: 2026, month: 10 },
   periodStatus: "open",
   draftCount: 0,
@@ -82,6 +83,7 @@ async function show(
 test("a dated draft blocks close and sending the user back to Drafts", async () => {
   const handlers = await show(
     evaluateMonthClose({
+    language: "en",
       period: { year: 2026, month: 10 },
       periodStatus: "open",
       draftCount: 2,
@@ -101,6 +103,7 @@ test("a dated draft blocks close and sending the user back to Drafts", async () 
 
 test("Candidates warn without blocking confirmation and completion opens overview or home", async () => {
   const warned = evaluateMonthClose({
+    language: "en",
     period: { year: 2026, month: 10 },
     periodStatus: "open",
     draftCount: 0,
@@ -159,6 +162,7 @@ test("Candidates warn without blocking confirmation and completion opens overvie
 
 test("the finished title keeps the month that was locked after the calendar rolls", async () => {
   const november = evaluateMonthClose({
+    language: "en",
     period: { year: 2026, month: 11 },
     periodStatus: "open",
     draftCount: 0,

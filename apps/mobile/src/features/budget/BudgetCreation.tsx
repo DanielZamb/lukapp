@@ -6,6 +6,7 @@ import { ActivityIndicator, Text } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Choice, Field, Header, Screen, useTheme, useUi } from "../../ui/core";
+import { useT } from "../../i18n";
 import { api } from "../api";
 import { useLevelNavigation } from "../levelDoor/navigation";
 import { BudgetComposer, limitSuggestions } from "./BudgetComposer";
@@ -22,6 +23,7 @@ export function BudgetCreation({ seed, categories, categoryColors, unlocking, on
 }) {
   const theme = useTheme();
   const ui = useUi();
+  const { t } = useT();
   const save = useAction(api.budget.setCategoryLimit);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
@@ -53,18 +55,18 @@ export function BudgetCreation({ seed, categories, categoryColors, unlocking, on
   const matches = categories.filter((category) => category.name.toLocaleLowerCase().includes(editor.search.trim().toLocaleLowerCase()));
   if (!selected) return (
     <Screen>
-      <Header title="Choose a category" eyebrow="BUDGET" onBack={onClose} />
-      <Field label="Category" accessibilityLabel="Search Budget categories" placeholder="Search categories"
+      <Header title={t("budget.chooseCategory")} eyebrow={t("budget.eyebrow")} onBack={onClose} />
+      <Field label={t("budget.categoryLabel")} accessibilityLabel={t("budget.searchA11y")} placeholder={t("budget.searchPlaceholder")}
         value={editor.search} onChangeText={(value) => { interact(); editor.onSearch(value); }} />
       {matches.map((category) => <Choice key={category.id} label={`${category.emoji} ${category.name}`} selected={false}
           onPress={() => { interact(); editor.onCategory(category.id); }} />)}
-      {!categories.length && <Text style={ui.muted}>No categories available. Add an expense category from Post money first.</Text>}
-      {!!categories.length && !matches.length && <Text style={ui.muted}>No matching categories.</Text>}
+      {!categories.length && <Text style={ui.muted}>{t("budget.noCategories")}</Text>}
+      {!!categories.length && !matches.length && <Text style={ui.muted}>{t("budget.noMatches")}</Text>}
     </Screen>
   );
   if (!totals) return <Screen>
-    <Header title={`Limit for ${selected.name}`} eyebrow="BUDGET" onBack={onClose} />
-    <ActivityIndicator accessibilityLabel="Loading category spending" />
+    <Header title={t("budget.limitFor", { name: selected.name })} eyebrow={t("budget.eyebrow")} onBack={onClose} />
+    <ActivityIndicator accessibilityLabel={t("budget.loadingSpending")} />
   </Screen>;
   return <BudgetComposer category={selected} currency={seed.currency}
     spentMinorUnits={totals.categories.find((category) => category.categoryId === selected.id)?.minorUnits ?? 0}

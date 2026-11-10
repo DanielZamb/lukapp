@@ -14,7 +14,7 @@ import { useT } from "../../i18n";
 import { categoryColor, categoryOutline, categoryPalette, emojiFrom, isCustomColor, parseHexColor, quickEmojis, readableOn } from "./appearance";
 import { colorDraft, CustomColorPicker, type ColorDraft } from "./CustomColorPicker";
 import { NatureQuestion } from "./NatureQuestion";
-import type { NatureAnswer, CategoryEditor, CategoryOption, CategoryStyle, EditableCategory } from "./model";
+import { natureLabel, type NatureAnswer, type CategoryEditor, type CategoryOption, type CategoryStyle, type EditableCategory } from "./model";
 
 export type CategorySheetProps = {
   sheetRef: RefObject<BottomSheetModal | null>;
@@ -63,7 +63,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
   const custom = isCustomColor(editor.style.color) ? editor.style.color : null;
   const customLabel = custom ? t("lifecycle.customColorValue", { hex: custom }) : t("lifecycle.customColor");
   const name = editor.kind === "custom" || editor.kind === "edit"
-    ? editor.name.trim() || "Your own"
+    ? editor.name.trim() || t("categories.yourOwn")
     : editor.kind === "preset" ? editor.preset.name : editor.option.name;
   return (
     <View style={styles.editor}>
@@ -75,14 +75,14 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
       </View>
       {(editor.kind === "custom" || editor.kind === "edit") && (
         <Field
-          label="Category name"
+          label={t("categories.nameLabel")}
           InputComponent={BottomSheetTextInput}
-          accessibilityLabel="Category name"
+          accessibilityLabel={t("categories.nameLabel")}
           value={editor.name}
           onChangeText={props.onName}
           editable={!props.busy}
           maxLength={80}
-          placeholder="Name it your way"
+          placeholder={t("categories.namePlaceholder")}
           placeholderTextColor={theme.mutedForeground}
           style={[ui.input, pickerSheetStyles.input]}
           autoFocus
@@ -91,14 +91,14 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
       {editor.kind === "custom" && <NatureQuestion answer={props.answer} suggested={props.suggested}
         allowed={props.allowed} disabled={props.busy} onAnswer={props.onAnswer} />}
       {editor.kind === "edit" && <Text style={ui.muted}>
-        {editor.category.nature === "Income" ? "Money in" : editor.category.nature === "Expense" ? "Money out" : "Money direction not set"}. Changing the name or look keeps the same money direction.
+        {t("categories.editNatureNote", { nature: t(natureLabel(editor.category.nature)) })}
       </Text>}
       <View style={styles.emojis}>
         {quickEmojis.map((emoji) => (
           <Pressable
             key={emoji}
             accessibilityRole="radio"
-            accessibilityLabel={`Emoji ${emoji}`}
+            accessibilityLabel={t("categories.emojiA11y", { emoji })}
             accessibilityState={{ selected: editor.style.emoji === emoji, disabled: props.busy }}
             disabled={props.busy}
             onPress={() => props.onStyle({ ...editor.style, emoji })}
@@ -111,7 +111,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
         ))}
         {keyboardOpen ? (
           <BottomSheetTextInput
-            accessibilityLabel="Type any emoji"
+            accessibilityLabel={t("categories.typeEmoji")}
             autoFocus
             editable={!props.busy}
             value=""
@@ -128,7 +128,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
         ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Pick any emoji from your keyboard"
+            accessibilityLabel={t("categories.pickEmojiA11y")}
             disabled={props.busy}
             onPress={() => setKeyboardOpen(true)}
             style={[styles.emojiCell, styles.dashed]}
@@ -137,7 +137,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
           </Pressable>
         )}
       </View>
-      {keyboardOpen && <Text style={ui.muted}>Pick an emoji from your phone keyboard.</Text>}
+      {keyboardOpen && <Text style={ui.muted}>{t("categories.pickEmojiHint")}</Text>}
       {customDraft ? <CustomColorPicker draft={customDraft} onDraft={setCustomDraft} onCancel={() => setCustomDraft(null)}
         onUse={(hex) => { props.onStyle({ ...editor.style, color: hex }); setCustomDraft(null); }} /> : <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.swatches}>
@@ -145,7 +145,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
           <Pressable
             key={entry.id}
             accessibilityRole="radio"
-            accessibilityLabel={`Color ${entry.id}`}
+            accessibilityLabel={t("categories.colorA11y", { id: entry.id })}
             accessibilityState={{ selected: editor.style.color === entry.id, disabled: props.busy }}
             disabled={props.busy}
             onPress={() => props.onStyle({ ...editor.style, color: entry.id })}
@@ -166,21 +166,21 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
         <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
       </Pressable>
       {props.replacingSelection && (
-        <Text style={ui.muted}>This category will replace the three selected categories.</Text>
+        <Text style={ui.muted}>{t("categories.replacingSelection")}</Text>
       )}
       <PrimaryButton
-        label={props.busy ? "Saving…" : editor.kind === "edit" ? "Save changes" : editor.kind === "restyle" ? "Done"
-          : props.answer === "stillMine" || props.answer === "payDebt" ? "Choose a place" : "Add category"}
+        label={props.busy ? t("categories.saving") : editor.kind === "edit" ? t("categories.saveChanges") : editor.kind === "restyle" ? t("common.done")
+          : props.answer === "stillMine" || props.answer === "payDebt" ? t("categories.choosePlace") : t("categories.addCategory")}
         disabled={!props.canConfirm || props.busy}
         onPress={props.onConfirm}
       />
       {editor.kind === "edit" && props.onDelete && <View style={ui.section}>
         {props.confirmingDelete && <>
-          <Text style={ui.title}>Delete {editor.category.name}?</Text>
-          <Text style={ui.muted}>It will no longer appear when choosing categories. Existing entries and their amounts stay in your history.</Text>
-          <SecondaryButton label="Keep category" disabled={props.busy} onPress={() => props.onCancelDelete?.()} />
+          <Text style={ui.title}>{t("categories.deleteTitle", { name: editor.category.name })}</Text>
+          <Text style={ui.muted}>{t("categories.deleteBody")}</Text>
+          <SecondaryButton label={t("categories.keepCategory")} disabled={props.busy} onPress={() => props.onCancelDelete?.()} />
         </>}
-        <SecondaryButton label={props.confirmingDelete ? "Confirm delete" : "Delete category"} tone="danger"
+        <SecondaryButton label={props.confirmingDelete ? t("categories.confirmDelete") : t("categories.deleteCategory")} tone="danger"
           disabled={props.busy} onPress={props.onDelete} />
       </View>}
       </>}
@@ -194,6 +194,7 @@ export function CategorySheet(props: CategorySheetProps) {
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t } = useT();
   return (
     <PickerSheet
       sheetRef={props.sheetRef}
@@ -205,10 +206,10 @@ export function CategorySheet(props: CategorySheetProps) {
         <CategoryAppearance {...props} editor={props.editor} />
       ) : (
         <View style={pickerSheetStyles.search}>
-          <Text style={pickerSheetStyles.title}>Category</Text>
+          <Text style={pickerSheetStyles.title}>{t("categories.pickerTitle")}</Text>
           <BottomSheetTextInput
-            accessibilityLabel="Search categories"
-            placeholder="Search"
+            accessibilityLabel={t("categories.searchLabel")}
+            placeholder={t("categories.searchPlaceholder")}
             placeholderTextColor={theme.mutedForeground}
             value={props.search}
             onChangeText={props.onSearch}
@@ -219,7 +220,7 @@ export function CategorySheet(props: CategorySheetProps) {
       {!props.editor && (
         <>
           {props.options === undefined ? (
-            <Text style={ui.muted}>Loading categories…</Text>
+            <Text style={ui.muted}>{t("categories.loadingList")}</Text>
           ) : props.options.length ? props.options.map((option) => {
             const color = categoryColor(option.style, mode);
             return (
@@ -240,22 +241,22 @@ export function CategorySheet(props: CategorySheetProps) {
             );
           }) : (
             <Text style={ui.muted}>
-              {props.search.trim() ? `Nothing matches "${props.search.trim()}".` : "No categories yet."}
+              {props.search.trim() ? t("categories.pickerNoMatch", { query: props.search.trim() }) : t("categories.pickerEmpty")}
             </Text>
           )}
-          <Pressable accessibilityRole="button" accessibilityLabel="Add your own" onPress={props.onCreate} style={pickerSheetStyles.row}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("categories.addOwn")} onPress={props.onCreate} style={pickerSheetStyles.row}>
             <View style={[styles.disc, styles.addDisc, styles.dashed]}>
               <Ionicons name="add" size={20} color={theme.foreground} />
             </View>
-            <Text style={[ui.body, pickerSheetStyles.rowName]}>Add your own</Text>
+            <Text style={[ui.body, pickerSheetStyles.rowName]}>{t("categories.addOwn")}</Text>
           </Pressable>
           {props.selectionCount !== undefined && (
-            <Text style={ui.muted}>{props.selectionCount} of 3 selected. Each counts the full amount.</Text>
+            <Text style={ui.muted}>{t("categories.selectionCount", { count: props.selectionCount })}</Text>
           )}
           {props.primaryOptions && (
             <View style={ui.section}>
-              <Text style={ui.title}>Which category is primary?</Text>
-              <Text style={ui.muted}>Choose which best describes this transaction. Each selected category still counts the full amount.</Text>
+              <Text style={ui.title}>{t("categories.primaryTitle")}</Text>
+              <Text style={ui.muted}>{t("categories.primaryBody")}</Text>
               {props.primaryOptions.map((option) => (
                 <Choice key={option.key} label={option.name}
                   selected={props.primaryId === option.key}
@@ -265,12 +266,12 @@ export function CategorySheet(props: CategorySheetProps) {
           )}
           {props.limitReached && (
             <View style={ui.section}>
-              <Text accessibilityRole="alert" style={ui.error}>Choose up to three categories. Remove one, or create a category that encompasses the concept.</Text>
-              <SecondaryButton label="Create an encompassing category" onPress={() => props.onCreateEncompassing?.()} />
+              <Text accessibilityRole="alert" style={ui.error}>{t("categories.limitReached")}</Text>
+              <SecondaryButton label={t("categories.createEncompassing")} onPress={() => props.onCreateEncompassing?.()} />
             </View>
           )}
           {props.onDone && (
-            <PrimaryButton label="Done" onPress={props.onDone} disabled={!!props.primaryOptions && !props.primaryId} />
+            <PrimaryButton label={t("common.done")} onPress={props.onDone} disabled={!!props.primaryOptions && !props.primaryId} />
           )}
         </>
       )}

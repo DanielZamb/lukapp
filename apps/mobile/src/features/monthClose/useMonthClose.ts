@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { useT } from "../../i18n";
 import {
   lockFailureMessage,
   type ClosePeriod,
@@ -35,6 +36,7 @@ export function useMonthClose(
   readiness: MonthCloseReadiness | null,
   transport: MonthCloseTransport,
 ) {
+  const translator = useT();
   const [phase, setPhase] = useState<MonthClosePhase>(() =>
     openingPhase(readiness),
   );
@@ -88,7 +90,7 @@ export function useMonthClose(
       change(drafts > 0 ? { kind: "review" } : { kind: "closed", period });
     } catch (error) {
       if (!mounted.active || transport.reportFailure(error)) return;
-      change({ kind: "failed", period, message: lockFailureMessage(error) });
+      change({ kind: "failed", period, message: lockFailureMessage(error, translator) });
     }
   }
 

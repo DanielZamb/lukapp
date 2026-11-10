@@ -7,6 +7,7 @@ import {
 import { useEffect, useRef } from "react";
 import { Text } from "react-native";
 import { Header, PrimaryButton, SecondaryButton, useUi, useTheme } from "../../ui/core";
+import { formatCompactNumber, useT } from "../../i18n";
 import { font, spacing } from "../../ui/tokens";
 import type { PostingBudgetImpact } from "./postingImpact";
 
@@ -25,6 +26,7 @@ export function PostingImpactSheet({
 }) {
   const ui = useUi();
   const theme = useTheme();
+  const { t, language } = useT();
   const sheet = useRef<BottomSheetModal>(null);
   const decided = useRef(false);
   useEffect(() => { sheet.current?.present(); }, []);
@@ -43,15 +45,16 @@ export function PostingImpactSheet({
       )}
     >
       <BottomSheetScrollView contentContainerStyle={{ padding: spacing.xxl, gap: spacing.xl }}>
-        <Header title={description || "Entry"} eyebrow="BUDGET WOULD CROSS" />
+        <Header title={description || t("budget.impactEntry")} eyebrow={t("budget.impactEyebrow")} />
         {hits.map((hit, index) => (
           <Text key={`${hit.category.id}-${index}`} style={[index === 0 ? { fontSize: 36, fontFamily: font.extrabold } : ui.body, { color: theme.danger }]}>
-            {hit.category.name} {new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(toMajorUnits(hit.overMinorUnits, currency))} over
+            {t("budget.impactOver", { name: hit.category.name,
+              amount: formatCompactNumber(language, toMajorUnits(hit.overMinorUnits, currency)) })}
           </Text>
         ))}
-        <Text style={ui.muted}>Continue still posts. A budget does not block.</Text>
-        <PrimaryButton label="Continue anyway" onPress={() => decide(onContinue)} />
-        <SecondaryButton label="Reconsider" onPress={() => decide(onReconsider)} />
+        <Text style={ui.muted}>{t("budget.impactBody")}</Text>
+        <PrimaryButton label={t("budget.impactContinue")} onPress={() => decide(onContinue)} />
+        <SecondaryButton label={t("budget.impactReconsider")} onPress={() => decide(onReconsider)} />
       </BottomSheetScrollView>
     </BottomSheetModal>
   );

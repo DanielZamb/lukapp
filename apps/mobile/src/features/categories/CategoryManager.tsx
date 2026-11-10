@@ -6,22 +6,23 @@ import { ActivityIndicator, BackHandler, Text, View } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { Field, Header, ListGroup, ListRow, PrimaryButton, Screen, useUi } from "../../ui/core";
+import { useT, type Translator } from "../../i18n";
 import { api } from "../api";
 import { DeferredAccountSetup } from "../setup/DeferredAccountSetup";
 import { CategorySheet } from "./CategorySheet";
-import { categoryNameKey, defaultCategoryStyle, type AccountSetupRequest, type Category, type EditableCategory } from "./model";
+import { categoryNameKey, defaultCategoryStyle, natureLabel, type AccountSetupRequest, type Category, type EditableCategory } from "./model";
 import { useNatureSuggestion } from "./useNatureSuggestion";
 
-function failureMessage(error: unknown) {
+export function categoryFailureMessage(error: unknown, { t }: Translator) {
   if (error instanceof ConvexError && typeof error.data === "object" && error.data && "code" in error.data) {
     switch (error.data.code) {
-      case "name_required": return "Enter a category name.";
-      case "category_name_too_long": return "Use 80 characters or fewer.";
-      case "category_name_conflict": return "You already have a category with that name.";
-      case "category_not_found": return "This category is no longer available. Close the editor and choose another.";
+      case "name_required": return t("categories.errorNameRequired");
+      case "category_name_too_long": return t("categories.errorNameTooLong");
+      case "category_name_conflict": return t("categories.errorNameConflict");
+      case "category_not_found": return t("categories.errorNotFound");
     }
   }
-  return "Could not save this change. Try again.";
+  return t("categories.errorSaveChange");
 }
 
 export function CategoryManager({ workspaceId, subject, profileId, currency, timeZone, initialCategoryId, onBack }: {
@@ -29,6 +30,8 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
   initialCategoryId?: string; onBack: () => void;
 }) {
   const ui = useUi();
+  const translator = useT();
+  const { t } = translator;
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
   const create = useAction(api.accounting.createUserCategory);
   const update = useAction(api.accounting.updateUserCategory);
@@ -100,23 +103,23 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
       }
       setEditor(null); setConfirmingDelete(false);
     } catch (failure) {
-      if (!reportFailure(failure)) setError(failureMessage(failure));
+      if (!reportFailure(failure)) setError(categoryFailureMessage(failure, translator));
     } finally {
       saving.current = false; setBusy(false);
     }
   }
   return <Screen>
-    <Header title="Categories" eyebrow="MAKE THEM YOURS" onBack={onBack} />
-    <Text style={ui.muted}>Create categories for money in or out. Tap one to change its name and look.</Text>
-    <Field label="Search categories" accessibilityLabel="Search categories" value={search}
-      onChangeText={(value) => { interact(); setSearch(value); }} placeholder="Search" />
-    {filtered === undefined ? <ActivityIndicator accessibilityLabel="Loading categories" /> : filtered.length > 0 ? <ListGroup>
+    <Header title={t("categories.managerTitle")} eyebrow={t("categories.managerEyebrow")} onBack={onBack} />
+    <Text style={ui.muted}>{t("categories.managerIntro")}</Text>
+    <Field label={t("categories.searchLabel")} accessibilityLabel={t("categories.searchLabel")} value={search}
+      onChangeText={(value) => { interact(); setSearch(value); }} placeholder={t("categories.searchPlaceholder")} />
+    {filtered === undefined ? <ActivityIndicator accessibilityLabel={t("categories.loading")} /> : filtered.length > 0 ? <ListGroup>
       {filtered.map((category) =>
         <ListRow key={category.id} title={category.name} value={category.style.emoji}
-          detail={category.nature === "Income" ? "Money in" : category.nature === "Expense" ? "Money out" : "Money direction not set"} onPress={() => edit(category)} />)}
+          detail={t(natureLabel(category.nature))} onPress={() => edit(category)} />)}
     </ListGroup> : <Text style={ui.muted}>{categories?.length === 0
-      ? "No categories yet. Add one to get started." : "No categories match your search."}</Text>}
-    <PrimaryButton label="Add category" trailingIcon="add" disabled={categories === undefined || !!accountRequest} onPress={() => {
+      ? t("categories.managerEmpty") : t("categories.managerNoMatch")}</Text>}
+    <PrimaryButton label={t("categories.addCategory")} trailingIcon="add" disabled={categories === undefined || !!accountRequest} onPress={() => {
       interact(); setError(""); setConfirmingDelete(false);
       setEditor({ kind: "custom", name: "", answer: null, style: defaultCategoryStyle });
     }} />
@@ -125,7 +128,7 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
       workspaceId={workspaceId} profileId={profileId} currency={currency} timeZone={timeZone}
       onDone={() => setAccountRequest(null)} /></View>}
     <CategorySheet sheetRef={sheet} search="" options={[]} editor={editor} busy={busy}
-      error={duplicate ? "You already have a category with that name." : error} canConfirm={canConfirm}
+      error={duplicate ? t("categories.errorNameConflict") : error} canConfirm={canConfirm}
       answer={answer} suggested={nature.suggested} allowed={nature.allowed}
       onAnswer={(value) => { if (!saving.current) { interact(); setEditor((current) => current?.kind === "custom" ? { ...current, answer: value } : current); } }}
       onSearch={() => {}} onSelect={() => {}} onCreate={() => {}}

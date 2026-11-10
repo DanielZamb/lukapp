@@ -1,4 +1,5 @@
 import { ActivityIndicator, Text, View } from "react-native";
+import { useT } from "../../i18n";
 import { PrimaryButton, SecondaryButton, useUi } from "../../ui/core";
 import type { EntryDetail } from "./types";
 import type { ReversalState } from "./useReversal";
@@ -14,28 +15,29 @@ export type EntryReversalProps = {
 
 export function EntryReversal({ detail, reversal, onEntry, onReverse, onCancel, onConfirm }: EntryReversalProps) {
   const ui = useUi();
+  const { t } = useT();
   const { entry } = detail;
   const canReverse = !entry.reversesEntryId && !entry.reversedByEntryId;
   const originalId = entry.reversesEntryId;
   const reversalId = entry.reversedByEntryId;
   return <>
-    {originalId && <SecondaryButton label="View original entry" onPress={() => onEntry(originalId)} />}
-    {reversalId && <SecondaryButton label="View reversal" onPress={() => onEntry(reversalId)} />}
+    {originalId && <SecondaryButton label={t("review.viewOriginal")} onPress={() => onEntry(originalId)} />}
+    {reversalId && <SecondaryButton label={t("review.viewReversal")} onPress={() => onEntry(reversalId)} />}
     {reversal.kind === "posted" ? <View style={ui.section}>
-      <Text accessibilityRole="alert" style={ui.body}>Reversal posted · {reversal.receipt.accountingDate}</Text>
-      <Text style={ui.muted}>The original entry is preserved.</Text>
-      {!entry.reversedByEntryId && <SecondaryButton label="View reversal" onPress={() => onEntry(reversal.receipt.id)} />}
+      <Text accessibilityRole="alert" style={ui.body}>{t("review.reversalPosted", { date: reversal.receipt.accountingDate })}</Text>
+      <Text style={ui.muted}>{t("review.originalPreserved")}</Text>
+      {!entry.reversedByEntryId && <SecondaryButton label={t("review.viewReversal")} onPress={() => onEntry(reversal.receipt.id)} />}
     </View> : reversal.kind === "submitting" ? <View style={ui.section}>
-      <ActivityIndicator accessibilityLabel="Posting reversal" />
-      <Text style={ui.muted}>Posting reversal…</Text>
+      <ActivityIndicator accessibilityLabel={t("review.postingReversal")} />
+      <Text style={ui.muted}>{t("review.postingReversalProgress")}</Text>
     </View> : reversal.kind === "failed" ? <View style={ui.section}>
       <Text accessibilityRole="alert" style={ui.error}>{reversal.message}</Text>
-      {canReverse && <PrimaryButton label="Retry reversal" onPress={onConfirm} />}
+      {canReverse && <PrimaryButton label={t("review.retryReversal")} onPress={onConfirm} />}
     </View> : canReverse && (reversal.kind === "confirming" ? <View style={ui.section}>
-      <Text style={ui.title}>Reverse this entry?</Text>
-      <Text style={ui.body}>This posts an opposite entry and keeps the original. It uses the original date, or the earliest open date if that month is locked.</Text>
-      <PrimaryButton label="Confirm reversal" onPress={onConfirm} />
-      <SecondaryButton label="Keep entry" onPress={onCancel} />
-    </View> : <SecondaryButton label="Reverse entry" onPress={onReverse} />)}
+      <Text style={ui.title}>{t("review.reverseTitle")}</Text>
+      <Text style={ui.body}>{t("review.reverseBody")}</Text>
+      <PrimaryButton label={t("review.confirmReversal")} onPress={onConfirm} />
+      <SecondaryButton label={t("review.keepEntry")} onPress={onCancel} />
+    </View> : <SecondaryButton label={t("review.reverseEntry")} onPress={onReverse} />)}
   </>;
 }
