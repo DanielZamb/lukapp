@@ -26,7 +26,7 @@ export async function evaluateWorkspace(
   ]);
   const cancelled = new Map(cancellations.map(item => [item.planId, item]));
   const reserved = new Set<string>();
-  const assets = profiles.filter((profile) => !profile.ending && isAssetProductKind(profile.productKind));
+  const assets = profiles.filter((profile) => !profile.ending && !profile.undoOperationId && isAssetProductKind(profile.productKind));
   const destinations = assets
     .slice()
     .sort((a, b) => Number(b.productKind === "savingsAccount") - Number(a.productKind === "savingsAccount")

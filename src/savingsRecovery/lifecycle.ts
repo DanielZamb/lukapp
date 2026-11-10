@@ -1,3 +1,4 @@
+import { requireOpenPlace } from "../accounting/placeState";
 import { ALL_MONTHS, planProgress } from "./progress";
 import { RecoveryError, planTargetMinorUnits } from "./policy";
 import type { RecoveryContribution, RecoveryCorrection, RecoveryPlan, RecoveryReadStore } from "./types";
@@ -26,6 +27,9 @@ export async function requireContributablePlan(store: RecoveryReadStore, planId:
     throw new RecoveryError("plan_cancelled");
   if (await store.findReversalOf(plan.sourceJournalEntryId))
     throw new RecoveryError("expense_not_recoverable");
+  const expense = await store.getEntry(plan.sourceJournalEntryId);
+  const profile = (await store.listProfiles()).find(item => item.id === expense?.financialAccountProfileId);
+  if (profile) requireOpenPlace(profile);
   return plan;
 }
 

@@ -17,7 +17,12 @@ import {
   financialAccountProfile,
 } from "./validators";
 
+import { undoOperationFields } from "./accountingUndoValues";
+
 export default defineSchema({
+  placeUndoOperations: defineTable(undoOperationFields)
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_profile", ["financialAccountProfileId"]),
   placeEndings: defineTable({ ...placeEndingFields, workspaceId: v.id("workspaces"), financialAccountProfileId: v.id("financialAccountProfiles") })
     .index("by_profile", ["financialAccountProfileId"])
     .index("by_workspace_request", ["workspaceId", "idempotencyKey"]),
@@ -242,7 +247,8 @@ export default defineSchema({
     creditMinorUnits: v.number(),
   })
     .index("by_workspace", ["workspaceId"])
-    .index("by_entry", ["journalEntryId", "lineNumber"]),
+    .index("by_entry", ["journalEntryId", "lineNumber"])
+    .index("by_workspace_account", ["workspaceId", "ledgerAccountId"]),
   accountingPeriods: defineTable({
     workspaceId: v.id("workspaces"),
     year: v.number(),

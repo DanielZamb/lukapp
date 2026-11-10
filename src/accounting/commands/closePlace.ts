@@ -1,5 +1,6 @@
 import type { Infer } from "convex/values";
 import type { closePlaceInput, placeClosure as closureValue } from "../../../convex/accountingPlaceValues";
+import { hasVisibleText } from "../names";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
 import { placeStatus, requireOpenPlace } from "../placeState";
@@ -32,9 +33,10 @@ export async function placeClosure(store: AccountingStore, clock: AccountingCloc
   ]);
   const balance = allBalances.find(item => item.financialAccountProfileId === profile.id);
   if (!balance) throw new AccountingError("financial_account_profile_not_found");
-  const openPlaceCount = profiles.filter(item => !item.ending).length;
+  const openPlaceCount = profiles.filter(item => placeStatus(item) === "open").length;
   const blockers: Infer<typeof closureValue>["blockers"] = [];
   if (profile.ending) blockers.push({ code: "financial_account_profile_ended" });
+  if (profiles.some(item => item.undoOperationId)) blockers.push({ code: "place_undo_in_progress" });
   if (openPlaceCount <= 1) blockers.push({ code: "place_last_open" });
   if (plans.length) blockers.push({ code: "place_recovery_destination", plans });
   const isDefault = defaultId === profile.id;
@@ -49,7 +51,14 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
   input: CloseInput & { actor: Actor }) {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
   if (!input.idempotencyKey.trim()) throw new AccountingError("idempotency_key_required");
+  const names = { expense: input.closingAdjustmentExpenseName?.trim(), income: input.closingAdjustmentIncomeName?.trim() };
+  for (const name of Object.values(names)) {
+    if (name !== undefined && !hasVisibleText(name)) throw new AccountingError("name_required");
+    if (name !== undefined && name.length > 80) throw new AccountingError("category_name_too_long");
+  }
   const request = JSON.stringify({
+    ...(names.expense !== undefined ? { closingAdjustmentExpenseName: names.expense } : {}),
+    ...(names.income !== undefined ? { closingAdjustmentIncomeName: names.income } : {}),
     act: "close", financialAccountProfileId: input.financialAccountProfileId,
     replacementDefaultFinancialAccountProfileId: input.replacementDefaultFinancialAccountProfileId ?? null,
     lines: input.lines.map(line => line.kind === "transfer"
@@ -102,7 +111,7 @@ export async function closePlace(store: AccountingStore, clock: AccountingClock,
       }));
     } else {
       const categoryId = line.kind === "expense" ? line.userCategoryId
-        : (await closingAdjustmentCategory(store, workspace, credit ? "Expense" : "Income")).id;
+        : (await closingAdjustmentCategory(store, workspace, credit ? "Expense" : "Income", credit ? names.expense : names.income)).id;
       const post = credit ? recordCashExpense : recordCashIncome;
       entries.push(await post(store, clock, { ...common, financialAccountProfileId: input.financialAccountProfileId,
         userCategoryId: categoryId, description: line.kind === "adjustment" ? "Closing Adjustment" : "Closing a Place" }));

@@ -1,3 +1,5 @@
+import { undoPlace, undoReceipt, undoPreview, undoOperation } from "./accountingUndoValues";
+import { previewUndo, readUndoStatus } from "./accountingUndo";
 import { closePlace as closePlaceArgs, closePlaceReceipt, placeClosure as placeClosureValue } from "./accountingPlaceValues";
 import { placeClosure as readPlaceClosure } from "../src/accounting/commands/closePlace";
 import { placeClosureServices } from "./accountingPlaces";
@@ -129,7 +131,7 @@ export const changeAccountLook = action({
 });
 
 export const listFinancialAccountProfiles = query({
-  args: { ...inWorkspace, status: v.optional(v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("all"))) },
+  args: { ...inWorkspace, status: v.optional(v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("undoing"), v.literal("all"))) },
   returns: v.array(financialAccountProfile),
   handler: async (ctx, args) =>
     run(async () =>
@@ -311,7 +313,7 @@ export const ensurePersonalDefaults = action({
 });
 
 export const postedActivity = query({
-  args: { ...inWorkspace, month: v.string(), includeRows: v.optional(v.boolean()), status: v.optional(v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("all"))) },
+  args: { ...inWorkspace, month: v.string(), includeRows: v.optional(v.boolean()), status: v.optional(v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("undoing"), v.literal("all"))) },
   returns: v.object({
     accounts: v.array(
       v.object({
@@ -526,5 +528,27 @@ export const placeClosure = query({
   handler: async (ctx, args) => run(async () => {
     const actor = await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
     return readPlaceClosure(convexReadStore(ctx.db), { now: () => new Date() }, placeClosureServices(ctx, actor, args.workspaceId), { ...args, actor });
+  }),
+});
+
+export const startUndoPlace = action({
+  args: undoPlace, returns: undoReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof undoReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.startUndoPlace, { ...args, session });
+  },
+});
+export const previewUndoPlace = query({
+  args: { workspaceId: v.string(), financialAccountProfileId: v.string(), cursor: v.optional(v.union(v.string(), v.null())) }, returns: undoPreview,
+  handler: async (ctx, args) => run(async () => {
+    const actor = await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
+    return previewUndo(ctx, actor, args);
+  }),
+});
+export const placeUndoStatus = query({
+  args: { workspaceId: v.string(), financialAccountProfileId: v.string() }, returns: v.union(undoOperation, v.null()),
+  handler: async (ctx, args) => run(async () => {
+    await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
+    return readUndoStatus(ctx, args.workspaceId, args.financialAccountProfileId);
   }),
 });

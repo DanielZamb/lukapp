@@ -46,6 +46,7 @@ export type RecoveryLedgerEntry = {
 };
 
 export type RecoveryProfile = {
+  undoOperationId?: string;
   ending?: import("../accounting/types").PlaceEnding;
   id: string;
   workspaceId: string;

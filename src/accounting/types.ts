@@ -83,7 +83,7 @@ export type Workspace = {
   currentAccountingPeriod: AccountingPeriod;
 };
 
-export type PlaceStatus = "open" | "closed" | "undone";
+export type PlaceStatus = "open" | "closed" | "undone" | "undoing";
 export type PlaceEnding = {
   act: "close" | "undo";
   occurredAt: number;
@@ -97,6 +97,7 @@ export type StoredPlaceEnding = PlaceEnding & {
   idempotencyKey: string;
   request: string;
   entries: PostedJournalEntry[];
+  undoOperationId?: string;
   replacementDefaultFinancialAccountProfileId?: string;
 };
 
@@ -198,6 +199,7 @@ export type StoredWorkspace = {
 };
 
 export type StoredProfile = {
+  undoOperationId?: string;
   ending?: PlaceEnding;
   createdAccountingDate?: string;
   createdAt?: number;
