@@ -28,8 +28,10 @@ beforeEach(() => memory.clear());
 const lease = new LocalInputLease("owner", "session");
 const storage = () => createPostingBatchStorage(lease, "owner", "workspace");
 let root: ReactTestRenderer | undefined;
+const otherRoots: ReactTestRenderer[] = [];
 afterEach(async () => {
   await act(async () => root?.unmount());
+  await act(async () => otherRoots.splice(0).forEach((other) => other.unmount()));
   vi.unstubAllGlobals();
 });
 const account = {
@@ -485,4 +487,115 @@ test("Post all waits for one batch budget decision before sending any entry", as
     await posting;
   });
   expect(session.api.post).toHaveBeenCalledTimes(2);
+});
+
+async function openOtherEditor(api: PostingTransport) {
+  let current: ReturnType<typeof usePostingBatch> | undefined;
+  const batchStorage = storage();
+  function OtherEditor() {
+    current = usePostingBatch(api, batchStorage);
+    return null;
+  }
+  await act(async () => {
+    otherRoots.push(create(createElement(OtherEditor)));
+  });
+  return () => {
+    if (!current) throw new Error("Not mounted");
+    return current;
+  };
+}
+function sentFor(apis: ReturnType<typeof transport>[], description: string) {
+  return apis
+    .flatMap((api) => api.post.mock.calls.map(([command]) => command))
+    .filter((command) => "description" in command.payload && command.payload.description.startsWith(description))
+    .map((command) => command.payload);
+}
+
+test("a stale editor cannot replace a row whose dispatch is unconfirmed; that row only ever sends its first command", async () => {
+  const first = transport();
+  first.post.mockRejectedValueOnce(new Error("Response lost"));
+  const session = await open(first);
+  await queueEntry(session, "-10", "Taxi");
+  const taxi = session.get().batch.queue[0];
+  const second = transport();
+  const stale = await openOtherEditor(second);
+  expect(stale().editable).toBe(true);
+  await act(async () => {
+    await session.get().batch.postAll();
+  });
+  expect(stale().editable).toBe(true);
+  if (taxi.command.kind !== "expense") throw new Error("Expected expense");
+  let kept: boolean | undefined;
+  await act(async () => {
+    kept = await stale().keep(
+      {
+        command: {
+          ...taxi.command,
+          payload: { ...taxi.command.payload, description: "Taxi edited", idempotencyKey: "key-edited" },
+        },
+      },
+      taxi.id,
+    );
+  });
+  const refreshed = {
+    kept,
+    keys: stale().queue.map((row) => row.command.payload.idempotencyKey),
+    editable: stale().editable,
+    error: stale().error,
+  };
+  await act(async () => {
+    await stale().postAll();
+  });
+  expect(sentFor([first, second], "Taxi")).toEqual([
+    expect.objectContaining({ description: "Taxi", idempotencyKey: "key-1" }),
+    expect.objectContaining({ description: "Taxi", idempotencyKey: "key-1" }),
+  ]);
+  expect(refreshed).toEqual({
+    kept: false,
+    keys: ["key-1"],
+    editable: false,
+    error: "An entry in this batch was sent and its result is not known yet. Post again to check it before changing the batch.",
+  });
+  expect(await storage().load()).toEqual({ queue: [], receipts: { count: 0, net: 0 } });
+  expect(stale().posted).toEqual({ count: 1, net: -1000 });
+});
+
+test("a stale editor cannot remove a row whose dispatch is unconfirmed, and nothing else posts before it", async () => {
+  const first = transport();
+  first.post.mockRejectedValueOnce(new Error("Response lost"));
+  const session = await open(first);
+  await queueEntry(session, "-10", "Taxi");
+  await queueEntry(session, "+30", "Refund");
+  const taxi = session.get().batch.queue[0];
+  const second = transport();
+  const stale = await openOtherEditor(second);
+  await act(async () => {
+    await session.get().batch.postAll();
+  });
+  let removed: boolean | undefined;
+  await act(async () => {
+    removed = await stale().remove(taxi.id);
+  });
+  const refreshed = {
+    removed,
+    stored: (await storage().load()).queue.map((row) => row.command.payload.idempotencyKey),
+    shown: stale().queue.map((row) => row.command.payload.idempotencyKey),
+    editable: stale().editable,
+  };
+  await act(async () => {
+    await stale().postAll();
+  });
+  expect(sentFor([first, second], "Taxi")).toEqual([
+    expect.objectContaining({ idempotencyKey: "key-1" }),
+    expect.objectContaining({ idempotencyKey: "key-1" }),
+  ]);
+  expect(second.post.mock.calls.map(([command]) => command.payload.idempotencyKey)).toEqual(["key-1", "key-2"]);
+  expect(refreshed).toEqual({
+    removed: false,
+    stored: ["key-1", "key-2"],
+    shown: ["key-1", "key-2"],
+    editable: false,
+  });
+  expect(await storage().load()).toEqual({ queue: [], receipts: { count: 0, net: 0 } });
+  expect(stale().posted).toEqual({ count: 2, net: 2000 });
 });
