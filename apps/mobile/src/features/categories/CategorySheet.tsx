@@ -10,7 +10,9 @@ import { ScrollView } from "react-native-gesture-handler";
 import { PickerSheet, usePickerSheetStyles } from "../../ui/PickerSheet";
 import { Choice, Field, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
-import { categoryColor, categoryPalette, emojiFrom, quickEmojis } from "./appearance";
+import { useT } from "../../i18n";
+import { categoryColor, categoryOutline, categoryPalette, emojiFrom, isCustomColor, parseHexColor, quickEmojis, readableOn } from "./appearance";
+import { colorDraft, CustomColorPicker, type ColorDraft } from "./CustomColorPicker";
 import { NatureQuestion } from "./NatureQuestion";
 import type { NatureAnswer, CategoryEditor, CategoryOption, CategoryStyle, EditableCategory } from "./model";
 
@@ -52,15 +54,21 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t } = useT();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const color = categoryColor(editor.style, mode);
+  const [customDraft, setCustomDraft] = useState<ColorDraft | null>(null);
+  const committed = categoryColor(editor.style, mode);
+  const color = (customDraft && parseHexColor(customDraft.text)) ?? committed;
+  const outline = categoryOutline(color, mode);
+  const custom = isCustomColor(editor.style.color) ? editor.style.color : null;
+  const customLabel = custom ? t("lifecycle.customColorValue", { hex: custom }) : t("lifecycle.customColor");
   const name = editor.kind === "custom" || editor.kind === "edit"
     ? editor.name.trim() || "Your own"
     : editor.kind === "preset" ? editor.preset.name : editor.option.name;
   return (
     <View style={styles.editor}>
       <View style={styles.previewRow}>
-        <View style={[styles.preview, { backgroundColor: `${color}24`, borderColor: color }]}>
+        <View style={[styles.preview, { backgroundColor: `${color}24`, borderColor: outline }]}>
           <Text style={styles.previewEmoji}>{editor.style.emoji}</Text>
           <Text style={styles.previewName}>{name}</Text>
         </View>
@@ -95,7 +103,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
             disabled={props.busy}
             onPress={() => props.onStyle({ ...editor.style, emoji })}
             style={[styles.emojiCell, editor.style.emoji === emoji && {
-              backgroundColor: `${color}24`, borderColor: color, borderWidth: 2,
+              backgroundColor: `${color}24`, borderColor: outline, borderWidth: 2,
             }]}
           >
             <Text style={styles.emoji}>{emoji}</Text>
@@ -115,7 +123,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
               }
             }}
             onBlur={() => setKeyboardOpen(false)}
-            style={[styles.emojiCell, styles.emojiInput, { borderColor: color, borderWidth: 2 }]}
+            style={[styles.emojiCell, styles.emojiInput, { borderColor: outline, borderWidth: 2 }]}
           />
         ) : (
           <Pressable
@@ -130,6 +138,8 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
         )}
       </View>
       {keyboardOpen && <Text style={ui.muted}>Pick an emoji from your phone keyboard.</Text>}
+      {customDraft ? <CustomColorPicker draft={customDraft} onDraft={setCustomDraft} onCancel={() => setCustomDraft(null)}
+        onUse={(hex) => { props.onStyle({ ...editor.style, color: hex }); setCustomDraft(null); }} /> : <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.swatches}>
         {categoryPalette.map((entry) => (
           <Pressable
@@ -145,6 +155,16 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
           </Pressable>
         ))}
       </ScrollView>
+      <Pressable accessibilityRole="button" accessibilityLabel={customLabel}
+        accessibilityState={{ selected: !!custom, disabled: props.busy }} disabled={props.busy}
+        onPress={() => setCustomDraft(colorDraft(committed))}
+        style={[styles.customRow, custom && { borderColor: categoryOutline(custom, mode), borderWidth: 2 }]}>
+        <View style={[styles.customDot, custom ? { backgroundColor: custom, borderColor: categoryOutline(custom, mode) } : styles.dashed]}>
+          <Ionicons name={custom ? "checkmark" : "color-palette-outline"} size={18} color={custom ? readableOn(custom) : theme.foreground} />
+        </View>
+        <Text style={styles.customLabel}>{customLabel}</Text>
+        <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
+      </Pressable>
       {props.replacingSelection && (
         <Text style={ui.muted}>This category will replace the three selected categories.</Text>
       )}
@@ -163,6 +183,7 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
         <SecondaryButton label={props.confirmingDelete ? "Confirm delete" : "Delete category"} tone="danger"
           disabled={props.busy} onPress={props.onDelete} />
       </View>}
+      </>}
     </View>
   );
 }
@@ -210,7 +231,7 @@ export function CategorySheet(props: CategorySheetProps) {
                 style={pickerSheetStyles.row}
                 onPress={() => props.onSelect(option.key)}
               >
-                <View style={[styles.disc, { backgroundColor: `${color}2e`, borderColor: color }]}>
+                <View style={[styles.disc, { backgroundColor: `${color}2e`, borderColor: categoryOutline(color, mode) }]}>
                   <Text style={styles.emoji}>{option.style.emoji}</Text>
                 </View>
                 <Text style={[ui.body, pickerSheetStyles.rowName]}>{option.name}</Text>
@@ -275,5 +296,9 @@ function createStyles(theme: Theme) {
     swatches: { flexDirection: "row", gap: spacing.sm, paddingRight: spacing.lg },
     swatch: { width: touchTarget, height: touchTarget, alignItems: "center", justifyContent: "center", borderRadius: radius.full, borderWidth: 2, borderColor: "transparent" },
     swatchDot: { width: 26, height: 26, borderRadius: radius.full },
+    customRow: { minHeight: touchTarget, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary },
+    customDot: { width: 30, height: 30, borderRadius: radius.full, borderWidth: 1, borderColor: theme.ring, alignItems: "center", justifyContent: "center" },
+    customLabel: { flex: 1, minWidth: 0, color: theme.foreground, fontSize: 16, lineHeight: 22, fontFamily: font.semibold },
   });
 }

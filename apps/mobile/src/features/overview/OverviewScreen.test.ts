@@ -149,3 +149,24 @@ test("loading keeps the header and history available, and an empty workspace has
   expect(texts(screen()).filter((value) => value === "$0")).toHaveLength(3);
   expect(texts(screen())).toContain("No categories yet.");
 });
+
+test("exact and palette colors render in coins, remaining amounts and bars, with readable text and visible outlines", async () => {
+  await render({ currency: "COP", outMinorUnits: 0, inMinorUnits: 0, categories: [
+    { id: "gym", name: "Gym", style: { emoji: "🏋️", tone: "primary", color: "#2E7D32" }, spendMinorUnits: 200000, limitMinorUnits: 1000000 },
+    { id: "pale", name: "Pale", style: { emoji: "🧁", tone: "primary", color: "#FFF3B0" }, spendMinorUnits: 100000, limitMinorUnits: 1000000 },
+    { id: "food", name: "Food", style: { emoji: "🛒", tone: "positive", color: "h150" }, spendMinorUnits: 100000, limitMinorUnits: 1000000 },
+  ] });
+  const left = (label: string) => button(label).findAllByType("text").find((node) => node.children.join("").endsWith("left"))?.props.style[1].color;
+  expect(["Gym", "Pale", "Food"].map(left)).toEqual(["#2E7D32", "#0a0a0a", "#0a0a0a"]);
+  const coin = (label: string) => button(label).findAllByType("view")[0].props.style[1];
+  expect(["Gym", "Pale", "Food"].map((label) => [coin(label).backgroundColor, coin(label).borderColor])).toEqual([
+    ["#2E7D3214", "#2E7D3255"], ["#FFF3B014", "#8a8a8a"], ["#218c5714", "#218c5755"],
+  ]);
+  await press("Bars");
+  const fills = bars().map((bar) => bar.findAllByType("view")[1].props.style.slice(1));
+  expect(fills).toEqual([
+    [{ width: "100%", backgroundColor: "#2E7D32" }, null],
+    [{ width: "50%", backgroundColor: "#FFF3B0" }, { borderWidth: 1, borderColor: "#8a8a8a" }],
+    [{ width: "50%", backgroundColor: "#218c57" }, null],
+  ]);
+});

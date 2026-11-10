@@ -60,9 +60,12 @@ test("a validation rejection preserves input, and a stale revision requires clos
   const api = transport();
   api.save.mockRejectedValueOnce(new ConvexError({ kind: "budget", code: "limit_must_be_positive" }));
   const editor = await open(api, { ...seed, jar: { category: { id: "food", name: "Food", emoji: "🛒" }, revisionId: "revision-1", limitMinorUnits: 100000, consumptionMinorUnits: 0 } });
-  expect(editor().amount).toBe("1.000,00");
+  expect(editor()).toMatchObject({ amount: "1.000,00", amountIssue: "unchanged", canSubmit: false });
+  await act(async () => { await editor().submit(); });
+  expect(api.save).not.toHaveBeenCalled();
+  await act(async () => { editor().onAmount("1.500"); });
   await act(async () => { editor().onCategory("another"); await editor().submit(); });
-  expect(editor()).toMatchObject({ categoryId: "food", amount: "1.000,00", editable: true });
+  expect(editor()).toMatchObject({ categoryId: "food", amount: "1.500", editable: true });
   api.save.mockRejectedValueOnce(new ConvexError({ kind: "budget", code: "limit_changed" }));
   await act(async () => { editor().onAmount("2.000"); });
   await act(async () => { await editor().submit(); });

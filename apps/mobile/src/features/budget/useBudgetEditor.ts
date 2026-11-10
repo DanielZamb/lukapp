@@ -22,6 +22,16 @@ export type BudgetTransport = {
   onSaved: (receipt: Receipt) => void;
 };
 const rejection = z.object({ kind: z.literal("budget"), code: z.string() });
+export type AmountIssue = "empty" | "invalid" | "notPositive" | "unchanged";
+
+function readAmount(text: string, currency: string, currentMinorUnits: number | undefined):
+  { minorUnits: number; issue: AmountIssue | null } {
+  if (!text.trim()) return { minorUnits: 0, issue: "empty" };
+  let minorUnits: number;
+  try { minorUnits = parseMoney(text, "es-CO", currency); } catch { return { minorUnits: 0, issue: "invalid" }; }
+  if (minorUnits <= 0) return { minorUnits, issue: "notPositive" };
+  return { minorUnits, issue: minorUnits === currentMinorUnits ? "unchanged" : null };
+}
 
 export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTransport) {
   const [categoryId, setCategoryId] = useState<string | null>(seed.jar?.category.id ?? seed.initialCategoryId ?? null);
@@ -40,13 +50,12 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  let minorUnits = 0;
-  try { minorUnits = parseMoney(amount, "es-CO", seed.currency); } catch { /* Incomplete input stays editable. */ }
+  const { minorUnits, issue } = readAmount(amount, seed.currency, seed.jar?.limitMinorUnits);
   const editable = !busy && !pending && !blocked;
   async function submit() {
     const mounted = lifetime.current;
     const selectedCategoryId = request.current?.categoryId ?? categoryId;
-    if (!mounted.active || submitting.current || blocked || !selectedCategoryId || (!request.current && minorUnits <= 0)) return;
+    if (!mounted.active || submitting.current || blocked || !selectedCategoryId || (!request.current && issue)) return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -81,8 +90,8 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
   }
   const canEdit = () => lifetime.current.active && !submitting.current && !request.current && !blocked;
   return {
-    categoryId, amount, minorUnits, search, busy, pending, error, editable,
-    canSubmit: !busy && !blocked && (pending || (!!categoryId && minorUnits > 0)),
+    categoryId, amount, minorUnits, amountIssue: issue, search, busy, pending, error, editable,
+    canSubmit: !busy && !blocked && (pending || (!!categoryId && !issue)),
     canDismiss: !busy && !pending,
     onCategory: (id: string) => { if (canEdit() && !seed.jar) setCategoryId(id); },
     onAmount: (value: string) => { if (canEdit()) setAmount(value); },

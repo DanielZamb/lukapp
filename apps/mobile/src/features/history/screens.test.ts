@@ -332,3 +332,17 @@ test("date radios use workspace today, native custom dates override quick ranges
   expect(button("Dates").props.accessibilityState.selected).toBe(false);
   expect(root?.root.findAllByType(DateTimePicker)).toHaveLength(0);
 });
+
+test("a category with an exact color fills its filter chip with it, and a pale one keeps a visible outline", async () => {
+  const props = filterProps();
+  await act(async () => { root = create(createElement(HistoryScreen, { ...props, categories: [
+    { id: "food", name: "Food", style: { emoji: "🥑", tone: "primary" as const, color: "#2E7D32" } },
+    { id: "family", name: "Family", style: { emoji: "🦋", tone: "positive" as const, color: "#FFF3B0" } },
+    { id: "salary", name: "Salary", style: { emoji: "💸", tone: "warning" as const, color: "h150" } },
+  ] })); });
+  await act(async () => button("All categories").props.onPress());
+  for (const label of ["Food", "Family", "Salary"]) await act(async () => choice("checkbox", label).props.onPress());
+  expect(choice("checkbox", "Food").props.style).toContainEqual({ borderColor: "#2E7D32", borderWidth: 2, backgroundColor: "#2E7D323D" });
+  expect(choice("checkbox", "Family").props.style).toContainEqual({ borderColor: "#8a8a8a", borderWidth: 2, backgroundColor: "#FFF3B03D" });
+  expect(choice("checkbox", "Salary").props.style).toContainEqual({ borderColor: "#218c57", borderWidth: 2, backgroundColor: "#218c573D" });
+});

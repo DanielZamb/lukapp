@@ -2,13 +2,15 @@ import type { Theme } from "../../ui/tokens";
 import { useMemo } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { StyleSheet, Text, View } from "react-native";
-import { PrimaryButton, Screen, useTheme } from "../../ui/core";
+import { PrimaryButton, Screen, useTheme, useThemeMode } from "../../ui/core";
+import { categoryOutline } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import type { LevelUnlock } from "./model";
 
 export function LevelUnlocked({ unlock, onHome }: { unlock: LevelUnlock; onHome: () => void }) {
   const theme = useTheme();
+  const mode = useThemeMode();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return <Screen contentStyle={styles.page}>
     <View style={styles.completion}>
@@ -16,7 +18,7 @@ export function LevelUnlocked({ unlock, onHome }: { unlock: LevelUnlock; onHome:
         <Ionicons name="checkmark" size={32} color={theme.primaryForeground} />
       </View>
       <Text accessibilityRole="header" style={styles.title}>{unlock.door === "budget" ? "Limit is on" : "A second place"}</Text>
-      {unlock.door === "budget" && <View style={[styles.chip, { backgroundColor: `${unlock.color}24`, borderColor: unlock.color }]}>
+      {unlock.door === "budget" && <View style={[styles.chip, { backgroundColor: `${unlock.color}24`, borderColor: categoryOutline(unlock.color, mode) }]}>
         <Text style={styles.emoji}>{unlock.emoji}</Text>
         <Text style={styles.chipText}>{unlock.category} · {formatMoney({ currency: unlock.currency, minorUnits: unlock.limitMinorUnits }, { hideZeroDecimals: true })}</Text>
       </View>}

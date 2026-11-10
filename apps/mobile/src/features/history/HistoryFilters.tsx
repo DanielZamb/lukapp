@@ -9,7 +9,8 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useMemo, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme, useUi } from "../../ui/core";
+import { useTheme, useThemeMode, useUi } from "../../ui/core";
+import { categoryColor, categoryOutline } from "../categories/appearance";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import { dateRanges, sortDefaults, sortLabels, type HistoryQuery, type SortDir, type SortKey } from "./filter";
 import type { HistoryCategory, HistoryPlace } from "./listModel";
@@ -86,6 +87,7 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
 }) {
   const ui = useUi();
   const theme = useTheme();
+  const mode = useThemeMode();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   const modal = useRef<BottomSheetModal>(null);
@@ -117,10 +119,10 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
           </Pressable>
           {matchedCategories.map((category) => {
             const selected = query.categoryIds.includes(category.id);
-            const color = theme[category.style.tone];
+            const color = categoryColor(category.style, mode);
             return <Pressable key={category.id} accessibilityRole="checkbox" accessibilityLabel={category.name}
               accessibilityState={{ checked: selected }} onPress={() => onQuery({ ...query, categoryIds: toggle(query.categoryIds, category.id) })}
-              style={[styles.chip, selected && { borderColor: color, borderWidth: 2, backgroundColor: `${color}3D` }]}>
+              style={[styles.chip, selected && { borderColor: categoryOutline(color, mode), borderWidth: 2, backgroundColor: `${color}3D` }]}>
               <Text style={styles.emoji}>{category.style.emoji}</Text><Text style={styles.chipText}>{category.name}</Text>
             </Pressable>;
           })}

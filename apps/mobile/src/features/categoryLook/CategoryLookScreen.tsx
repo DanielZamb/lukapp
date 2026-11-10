@@ -1,7 +1,8 @@
 import type { Theme } from "../../ui/tokens";
 import { useMemo } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, SecondaryButton, Screen, useTheme, useUi } from "../../ui/core";
+import { Header, PrimaryButton, SecondaryButton, Screen, useTheme, useThemeMode, useUi } from "../../ui/core";
+import { categoryColor, categoryOutline, faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import { remaining, remainingFill } from "../overview/model";
@@ -15,7 +16,8 @@ export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const color = data ? theme[data.style.tone] : theme.primary;
+  const mode = useThemeMode();
+  const color = data ? categoryColor(data.style, mode) : theme.primary;
   const left = data ? remaining(data) : null;
   const money = (minorUnits: number) => formatMoney({ currency: data?.currency ?? "COP", minorUnits }, { hideZeroDecimals: true });
   return (
@@ -24,7 +26,7 @@ export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
       {data === undefined ? <ActivityIndicator accessibilityLabel="Loading category" />
         : data === null ? <Text style={ui.muted}>This category is no longer available.</Text> : <>
           <View style={styles.openAmount}>
-            <View style={[styles.lookChip, { backgroundColor: `${color}24`, borderColor: color }]}>
+            <View style={[styles.lookChip, { backgroundColor: `${color}24`, borderColor: categoryOutline(color, mode) }]}>
               <Text style={styles.emoji}>{data.style.emoji}</Text>
               <Text style={styles.chipText}>{data.name}</Text>
             </View>
@@ -33,8 +35,8 @@ export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
             {data.limitMinorUnits !== null && left !== null && <View style={styles.jarBlock}>
               <View accessibilityRole="progressbar" accessibilityLabel="Remaining in the jar"
                 accessibilityValue={{ min: 0, max: 100, now: Math.round(remainingFill(data) * 100) }}
-                style={[styles.jar, { backgroundColor: left < 0 ? `${theme.danger}33` : `${color}22` }]}>
-                <View style={[styles.jarFill, { width: `${remainingFill(data) * 100}%`, backgroundColor: color }]} />
+                style={[styles.jar, { backgroundColor: left < 0 ? `${theme.danger}33` : `${color}22` }, left >= 0 && faintEdge(color, mode)]}>
+                <View style={[styles.jarFill, { width: `${remainingFill(data) * 100}%`, backgroundColor: color }, faintEdge(color, mode)]} />
               </View>
               <Text style={styles.jarHint}>{left < 0
                 ? `Over the ${money(data.limitMinorUnits)} line`

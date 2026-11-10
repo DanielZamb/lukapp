@@ -182,3 +182,19 @@ test("the category content waits for Convex and handles a removed category", asy
   expect(texts()).toContain("This category is no longer available.");
   expect(texts()).not.toContain("Nothing in this category yet");
 });
+
+test.each([
+  { color: "#2E7D32", outline: "#2E7D32", edge: false },
+  { color: "#FFF3B0", outline: "#8a8a8a", edge: true },
+])("a stored exact color $color renders on the look chip and the jar", async ({ color, outline, edge }) => {
+  const base = provider.query.getMockImplementation();
+  provider.query.mockImplementation((reference, ...rest) => getFunctionName(reference) === "accounting:listUserCategories"
+    ? [{ ...categories[0], style: { emoji: "🍋", tone: "positive", color } }] : base?.(reference, ...rest));
+  await render();
+  const chip = screen().findAll((node) => node.type === "view" && Array.isArray(node.props.style) &&
+    node.props.style.some((style: { backgroundColor?: string }) => style?.backgroundColor === `${color}24`));
+  expect(chip.map((node) => node.props.style[1])).toEqual([{ backgroundColor: `${color}24`, borderColor: outline }]);
+  const ring = { borderWidth: 1, borderColor: "#8a8a8a" };
+  expect(jars()[0].props.style.slice(1)).toEqual([{ backgroundColor: `${color}22` }, edge ? ring : null]);
+  expect(jars()[0].findAllByType("view")[1].props.style.slice(1)).toEqual([{ width: "25%", backgroundColor: color }, edge ? ring : null]);
+});

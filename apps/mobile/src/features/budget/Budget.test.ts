@@ -2,6 +2,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { getFunctionName, type FunctionReference, type FunctionReturnType } from "convex/server";
+import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import BudgetRoute from "../../../app/budget";
@@ -20,6 +21,7 @@ const queries = vi.fn();
 const save = vi.fn<BudgetTransport["save"]>();
 const back = vi.fn();
 const reset = vi.fn();
+const backListeners: (() => boolean)[] = [];
 vi.mock("expo-router", () => ({ router: { back: () => back() }, useNavigation: () => ({ dispatch: reset }), Redirect: "Redirect", useLocalSearchParams: () => ({}) }));
 vi.mock("expo-crypto", () => {
   let sequence = 0;
@@ -42,9 +44,13 @@ vi.mock("../activity", () => ({
 vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ month }) }));
 vi.mock("./BudgetEditorSheet", () => ({ BudgetEditorSheet: "EditorSheet" }));
 vi.mock("@gorhom/bottom-sheet", () => ({
-  BottomSheetModal: "Sheet", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
+  BottomSheetModal: "Sheet", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop", BottomSheetTextInput: "SheetInput",
 }));
 vi.mock("react-native", () => ({
+  BackHandler: { addEventListener: (_: string, listener: () => boolean) => {
+    backListeners.push(listener);
+    return { remove: () => { backListeners.splice(backListeners.indexOf(listener), 1); } };
+  } },
   Platform: { OS: "ios" },
   KeyboardAvoidingView: "keyboard-viewport",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput", View: "View", ScrollView: "ScrollView",
@@ -318,4 +324,144 @@ test("loading waits for live data and rollover requests the new workspace month"
   await act(async () => root?.update(createElement(BudgetRoute)));
   expect(queries.mock.calls).toContainEqual(["budget:evaluate", { workspaceId: "workspace", month: "2026-11", refreshKey: expect.any(String) }]);
   expect(screen.findByProps({ accessibilityLabel: "Set a November limit" }).props.disabled).toBeFalsy();
+});
+
+function limitJar(limitMinorUnits = 40_000_000, revisionId = "revision") {
+  board = { month, currentMonth: month, currency: "COP", totalsOverlap: true, availableCategories: [], jars: [{
+    category: { id: "food", name: "Food", emoji: "🛒" }, revisionId, limitMinorUnits, consumptionMinorUnits: 20_000_000,
+  }] };
+}
+const limitInput = (screen: ReactTestInstance) => screen.findByProps({ accessibilityLabel: "New limit in COP" });
+const typeLimit = (screen: ReactTestInstance, text: string) => act(async () => limitInput(screen).props.onChangeText(text));
+const saveButton = (screen: ReactTestInstance) => screen.findByProps({ accessibilityLabel: "Save October" });
+
+test("an existing limit saves typed amounts below and above it that no shortcut offers", async () => {
+  limitJar();
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  expect(limitInput(screen).props).toMatchObject({ value: "400.000,00", keyboardType: "decimal-pad", editable: true });
+  expect(texts(screen)).toContain("This is the current limit. Type another amount or tap a shortcut.");
+  expect(saveButton(screen).props.accessibilityState.disabled).toBe(true);
+  await typeLimit(screen, "315500");
+  expect(limitInput(screen).props.value).toBe("315.500");
+  expect(screen.findAll((node) => String(node.type) === "Pressable" && node.props.accessibilityState?.selected === true)).toHaveLength(0);
+  await act(async () => saveButton(screen).props.onPress());
+  limitJar(31_550_000, "lowered");
+  await act(async () => root?.update(createElement(BudgetRoute)));
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  expect(limitInput(screen).props.value).toBe("315.500,00");
+  await typeLimit(screen, "1.234.567,8");
+  await act(async () => saveButton(screen).props.onPress());
+  expect(save.mock.calls.map(([request]) => request)).toEqual([
+    { workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10", limit: { currency: "COP", minorUnits: 31_550_000 },
+      expectedRevisionId: "revision", idempotencyKey: expect.any(String) },
+    { workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10", limit: { currency: "COP", minorUnits: 123_456_780 },
+      expectedRevisionId: "lowered", idempotencyKey: expect.any(String) },
+  ]);
+  expect(save.mock.calls[0][0].idempotencyKey).not.toBe(save.mock.calls[1][0].idempotencyKey);
+});
+
+test.each([
+  { typed: "", message: "Type the new limit." },
+  { typed: "0", message: "The limit must be more than zero." },
+  { typed: "0,00", message: "The limit must be more than zero." },
+  { typed: "-50.000", message: "The limit must be more than zero." },
+  { typed: ",", message: "Check the amount. Use dots for thousands and a comma for cents." },
+  { typed: "-", message: "Check the amount. Use dots for thousands and a comma for cents." },
+])("typed limit '$typed' cannot be saved and says why", async ({ typed, message }) => {
+  limitJar();
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  await typeLimit(screen, typed);
+  expect(screen.findAll((node) => String(node.type) === "Text" && node.props.accessibilityRole === "alert")
+    .map((node) => node.children.join(""))).toEqual([message]);
+  expect(saveButton(screen).props.accessibilityState.disabled).toBe(true);
+  await act(async () => saveButton(screen).props.onPress());
+  expect(save).not.toHaveBeenCalled();
+  await typeLimit(screen, "250.000");
+  expect(screen.findAll((node) => String(node.type) === "Text" && node.props.accessibilityRole === "alert")).toHaveLength(0);
+  expect(saveButton(screen).props.accessibilityState.disabled).toBe(false);
+});
+
+test("a typed limit whose save reply is lost retries the frozen command, not a re-read of the field", async () => {
+  limitJar();
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  await typeLimit(screen, "275.000");
+  save.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  await act(async () => saveButton(screen).props.onPress());
+  expect(limitInput(screen).props.editable).toBe(false);
+  await typeLimit(screen, "999.000");
+  expect(limitInput(screen).props.value).toBe("275.000");
+  expect(texts(screen)).toContain("Could not confirm saving. Retry to safely check the same Budget.");
+  await act(async () => screen.findByProps({ accessibilityLabel: "Retry save" }).props.onPress());
+  expect(save.mock.calls.map(([request]) => request)).toEqual([
+    { workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10", limit: { currency: "COP", minorUnits: 27_500_000 },
+      expectedRevisionId: "revision", idempotencyKey: save.mock.calls[0][0].idempotencyKey },
+    { workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10", limit: { currency: "COP", minorUnits: 27_500_000 },
+      expectedRevisionId: "revision", idempotencyKey: save.mock.calls[0][0].idempotencyKey },
+  ]);
+  expect(screen.findAllByType(BottomSheetModal)).toHaveLength(0);
+});
+
+test("a concurrent limit change is shown and keeps the amount the person typed", async () => {
+  limitJar();
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  await typeLimit(screen, "275.000");
+  save.mockRejectedValueOnce(new ConvexError({ kind: "budget", code: "limit_changed" }));
+  await act(async () => saveButton(screen).props.onPress());
+  expect(screen.findAll((node) => String(node.type) === "Text" && node.props.accessibilityRole === "alert")
+    .map((node) => node.children.join(""))).toEqual(["This limit or month changed. Close and reopen the Budget to use its latest limit."]);
+  expect(limitInput(screen).props).toMatchObject({ value: "275.000", editable: false });
+  expect(saveButton(screen).props.accessibilityState.disabled).toBe(true);
+  expect(save).toHaveBeenCalledOnce();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Close" }).props.onPress());
+  expect(screen.findAllByType(BottomSheetModal)).toHaveLength(0);
+});
+
+test("closing the limit sheet twice, by Android Back and by Close, returns to the same Budget screen", async () => {
+  limitJar();
+  const screen = await render();
+  for (const close of ["android-back", "close-button"]) {
+    await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+    expect(screen.findAllByType(BottomSheetModal)).toHaveLength(1);
+    await typeLimit(screen, "123.000");
+    if (close === "android-back") await act(async () => { expect(backListeners.at(-1)?.()).toBe(true); });
+    else await act(async () => screen.findByProps({ accessibilityLabel: "Close" }).props.onPress());
+    expect(screen.findAllByType(BottomSheetModal)).toHaveLength(0);
+    expect(backListeners).toHaveLength(0);
+    expect(texts(screen).filter((text) => text === "Budgets")).toHaveLength(1);
+  }
+  expect(back).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Back" }).props.onPress());
+  expect(back).toHaveBeenCalledOnce();
+});
+
+test("Android Back does not dismiss a limit sheet whose save is still unconfirmed", async () => {
+  limitJar();
+  const screen = await render();
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  await typeLimit(screen, "275.000");
+  save.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  await act(async () => saveButton(screen).props.onPress());
+  await act(async () => { expect(backListeners.at(-1)?.()).toBe(true); });
+  expect(screen.findAllByType(BottomSheetModal)).toHaveLength(1);
+  expect(back).not.toHaveBeenCalled();
+});
+
+test.each([
+  { color: "#2E7D32", outline: "#2E7D32", edge: null },
+  { color: "#FFF3B0", outline: "#8a8a8a", edge: { borderWidth: 1, borderColor: "#8a8a8a" } },
+])("a stored exact color $color renders on the jar and in the limit sheet", async ({ color, outline, edge }) => {
+  limitJar();
+  categories = [{ id: "food", style: { emoji: "🛒", tone: "positive", color } }];
+  const screen = await render();
+  const jar = screen.findAll((node) => String(node.type) === "Pressable").find((node) => node.props.accessibilityLabel?.startsWith("Food:"));
+  expect(jar?.props.style({ pressed: false })[1]).toEqual({ borderColor: outline, backgroundColor: "#f4f4f5" });
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  const track = screen.find((node) => String(node.type) === "View" && node.props.accessibilityLabel === "Remaining in Food");
+  expect(track.props.style.slice(1)).toEqual([{ backgroundColor: `${color}22` }, edge]);
+  expect(track.findAllByType("View" as never)[1].props.style.slice(1)).toEqual([{ width: "50%", backgroundColor: color }, edge]);
 });
