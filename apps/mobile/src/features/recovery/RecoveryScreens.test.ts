@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { Text, TextInput } from "react-native";
 import { Choice, Header, ListGroup, ListRow, PrimaryButton, Screen } from "../../ui/core";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
 import type { RecoveryCandidate, RecoveryContribution, RecoveryPlace, RecoveryPlanView } from "./model";
 import { LanguageProvider } from "../../i18n";
 import { RecoveryActivated, RecoveryCandidates, RecoveryDraft, RecoveryMoveScreen, RecoveryMoved, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
@@ -79,7 +80,7 @@ test("the draft shows the even-split limits and keeps the edited monthly amount"
   const onMonths = vi.fn();
   const onAmount = vi.fn();
   const screen = await render(createElement(RecoveryDraft, {
-    candidate, currency: "COP", destinations, installmentCount: 4, amount: "3.300,00",
+    candidate, currency: "COP", destinations, installmentCount: 4, amount: openAmount("COP", "3.300,00"),
     destinationId: "savings",
     suggestion: {
       installmentMinorUnits: 330_000, minInstallmentMinorUnits: 300_000, maxInstallmentMinorUnits: 1_200_000,
@@ -89,9 +90,9 @@ test("the draft shows the even-split limits and keeps the edited monthly amount"
     onMonths, onAmount, onDestination: () => {}, onSave: () => {}, onBack: () => {},
   }));
   expect(screen.findAll((node) =>
-    typeof node.props.helperText === "string"
-    && node.props.helperText.includes("at least COP 3.000")
-    && node.props.helperText.includes("COP 1.200 extra"),
+    typeof node.props.message?.helper === "string"
+    && node.props.message.helper.includes("at least COP 3.000")
+    && node.props.message.helper.includes("COP 1.200 extra"),
   )).toHaveLength(1);
   expect(screen.findAll((node) => node.props.label === "4 months" && node.props.selected)).toHaveLength(1);
   expect(screen.findAll((node) => node.props.label === "4 months")[0].props.detail).toBe("COP 3.300 each · COP 1.200 extra saving");
@@ -104,7 +105,7 @@ test("the draft shows the even-split limits and keeps the edited monthly amount"
     screen.findAll((node) => node.props.accessibilityLabel === "Monthly amount in COP")[0].props.onChangeText("3.500");
   });
   expect(onMonths).toHaveBeenCalledExactlyOnceWith(6);
-  expect(onAmount).toHaveBeenCalledExactlyOnceWith("3.500");
+  expect(onAmount.mock.calls.map(([amount]) => amount.editor.text)).toEqual(["3.500"]);
 });
 
 test("an open plan shows due progress and offers a real transfer", async () => {
@@ -149,7 +150,7 @@ test("the editable hero precedes one static source, destination and plan, then p
   const submit = vi.fn(async () => {});
   const onAmount = vi.fn();
   const screen = await render(createElement(RecoveryMoveScreen, {
-    plan, sources: destinations, sourceId: "daily", amount: "2.300,00",
+    plan, sources: destinations, sourceId: "daily", amount: openAmount("COP", "2.300,00"),
     editable: true, busy: false, pending: false, canSubmit: true, canDismiss: true, error: "",
     onSource: () => {}, onAmount, submit, onBack: () => {},
   }));
@@ -169,7 +170,7 @@ test("the editable hero precedes one static source, destination and plan, then p
   expect(children[4].props.children).toBe("Progress changes only after this real transfer between your places is posted.");
   expect(screen.findByType(PrimaryButton).props.trailingIcon).toBe("checkmark");
   await act(async () => { input.props.onChangeText("3.000,25"); });
-  expect(onAmount).toHaveBeenCalledExactlyOnceWith("3.000,25");
+  expect(onAmount.mock.calls.map(([amount]) => amount.editor.text)).toEqual(["3.000,25"]);
   await act(async () => { screen.findAll((node) => node.props.label === "Post transfer")[0].props.onPress(); });
   expect(submit).toHaveBeenCalledOnce();
 });
@@ -178,7 +179,7 @@ test("several sources are radios inside the transfer group, excluding the plan d
   const onSource = vi.fn();
   const screen = await render(createElement(RecoveryMoveScreen, {
     plan, sources: [...destinations, { id: "cash", name: "Cash", productKind: "cash" }],
-    sourceId: "daily", amount: "2.300", editable: true, busy: false, pending: false,
+    sourceId: "daily", amount: openAmount("COP", "2.300"), editable: true, busy: false, pending: false,
     canSubmit: true, canDismiss: true, error: "", onSource, onAmount: () => {},
     submit: async () => {}, onBack: () => {},
   }));
@@ -190,7 +191,7 @@ test("several sources are radios inside the transfer group, excluding the plan d
 
 test("no eligible source explains why posting is unavailable", async () => {
   const screen = await render(createElement(RecoveryMoveScreen, {
-    plan, sources: destinations.slice(0, 1), sourceId: null, amount: "2.300",
+    plan, sources: destinations.slice(0, 1), sourceId: null, amount: openAmount("COP", "2.300"),
     editable: true, busy: false, pending: false, canSubmit: false, canDismiss: true,
     error: "", onSource: () => {}, onAmount: () => {}, submit: async () => {}, onBack: () => {},
   }));
@@ -317,7 +318,7 @@ test("Spanish plan list and candidates read as one voice with Colombian dates", 
 
 test("Spanish proposal editor explains months, the monthly range and the extra saving with exact amounts", async () => {
   const screen = await spanish(createElement(RecoveryDraft, {
-    candidate, currency: "COP", destinations, installmentCount: 4, amount: "3.300,00", destinationId: "savings",
+    candidate, currency: "COP", destinations, installmentCount: 4, amount: openAmount("COP", "3.300,00"), destinationId: "savings",
     suggestion: {
       installmentMinorUnits: 330_000, minInstallmentMinorUnits: 300_000, maxInstallmentMinorUnits: 1_200_000,
       premiumMinorUnits: 120_000, targetMinorUnits: 1_320_000, valid: true,
@@ -332,8 +333,8 @@ test("Spanish proposal editor explains months, the monthly range and the extra s
     ["8 meses", "COP 1.500 al mes · COP 0 de ahorro extra"],
     ["12 meses", "COP 1.000 al mes · COP 0 de ahorro extra"],
   ]);
-  const field = screen.find((node) => node.props.accessibilityLabel === "Cuánto pasas cada mes, en COP" && "helperText" in node.props);
-  expect(field.props.helperText)
+  const field = screen.find((node) => node.props.inputAccessibilityLabel === "Cuánto pasas cada mes, en COP");
+  expect(field.props.message.helper)
     .toBe("Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan terminas ahorrando COP 1.200 de más.");
   const copy = visibleCopy(screen);
   expect(copy).toEqual(expect.arrayContaining(["Lo que vas a recuperar", "MESES", "DESTINO", "Activar plan"]));
@@ -342,7 +343,7 @@ test("Spanish proposal editor explains months, the monthly range and the extra s
 
 test("Spanish proposal editor shows the range error when the monthly amount is out of bounds", async () => {
   const screen = await spanish(createElement(RecoveryDraft, {
-    candidate, currency: "COP", destinations: destinations.slice(0, 1), replacing: true, installmentCount: 4, amount: "1",
+    candidate, currency: "COP", destinations: destinations.slice(0, 1), replacing: true, installmentCount: 4, amount: openAmount("COP", "1"),
     destinationId: "savings",
     suggestion: {
       installmentMinorUnits: 100, minInstallmentMinorUnits: 300_000, maxInstallmentMinorUnits: 1_200_000,
@@ -372,7 +373,7 @@ test("Spanish plan page and Move money keep stored names and translate everythin
   expectNoEnglish(pageCopy);
   await act(async () => root?.unmount());
   const move = await spanish(createElement(RecoveryMoveScreen, {
-    plan, sources: destinations, sourceId: "daily", amount: "2.300,00",
+    plan, sources: destinations, sourceId: "daily", amount: openAmount("COP", "2.300,00"),
     editable: true, busy: false, pending: false, canSubmit: true, canDismiss: true, error: "",
     onSource: () => {}, onAmount: () => {}, submit: async () => {}, onBack: () => {},
   }));

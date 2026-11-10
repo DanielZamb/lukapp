@@ -2,6 +2,9 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
 import {
   usePostingEditor,
   type IntakeBinding,
@@ -31,7 +34,7 @@ const facts: LocalEntryFacts = {
   workspaceId: "workspace",
   currency: "COP",
   entryType: "normal",
-  amountText: "-1.264,00",
+  amountText: "-1.264,00", amountFormat: "pre-currency",
   accountingDate: "2026-10-17",
   description: "Groceries",
   profileId: "daily",
@@ -102,7 +105,7 @@ test("a Candidate prefills the shared posting form", async () => {
     confirm: vi.fn(),
   });
   expect(editor().description).toBe("Groceries");
-  expect(editor().amount).toBe("-1.264,00");
+  expect(editor().amount.editor.text).toBe("-1.264,00");
   expect(editor().date).toBe("2026-10-17");
   expect(editor().profileId).toBe("daily");
   expect(editor().categories).toEqual({ ids: ["food"], primaryId: null });
@@ -187,7 +190,7 @@ test("a bound Candidate stays a cash in or out and refuses setup", async () => {
     editor().setSetup({
       name: "New place",
       productKind: "bankAccount",
-      amount: "0",
+      amount: money("0"),
       date: "2026-10-17",
     });
   });
@@ -215,7 +218,7 @@ test.each(["intake", "accounting"])("an idempotency conflict from %s retains the
   expect(editor().posted).toBeNull();
   expect(editor().error).toBe("This entry was already sent with different details");
   expect(editor().description).toBe("Groceries");
-  expect(editor().amount).toBe(facts.amountText);
+  expect(editor().amount.editor.text).toBe(facts.amountText);
   expect(editor().categories).toEqual(facts.categories);
   await act(async () => { await editor().submit(); });
   expect(confirm).toHaveBeenCalledTimes(2);
@@ -273,7 +276,7 @@ test("the account door explicitly refuses intake without changing its facts or w
   expect(accepted).toBe(false);
   expect(editor().setup).toBeNull();
   expect(editor().entryType).toBe("normal");
-  expect(editor().amount).toBe(facts.amountText);
+  expect(editor().amount.editor.text).toBe(facts.amountText);
   expect(editor().categories).toEqual(facts.categories);
   expect(api.save).not.toHaveBeenCalled();
   expect(api.post).not.toHaveBeenCalled();
@@ -283,12 +286,12 @@ test("the account door explicitly refuses intake without changing its facts or w
 test("partial original evidence opens the existing editor with no amount and correction uses the reviewed workspace currency", async () => {
   const confirm = vi.fn(async () => ({ description: "Reviewed", amount: { currency: "COP", minorUnits: -1230 } }));
   const persistReview = vi.fn(async () => {});
-  const editor = await open({ id: "partial", facts: { ...facts, amountText: "", description: "", categories: { ids: [], primaryId: null } },
+  const editor = await open({ id: "partial", facts: { ...facts, amountText: "", amountFormat: "pre-currency", description: "", categories: { ids: [], primaryId: null } },
     originalSuggestion: { ...suggestion, direction: null, description: "", amount: { currency: null, minorUnits: null } },
     frozen: false, persistReview, confirm, discard: vi.fn(async () => "discarded" as const) });
-  expect(editor().amount).toBe(""); expect(editor().canSubmit).toBe(false);
+  expect(editor().amount.editor.text).toBe(""); expect(editor().canSubmit).toBe(false);
   await act(async () => { await editor().submit(); }); expect(confirm).not.toHaveBeenCalled();
-  await act(async () => { editor().setAmount("-12,30"); editor().setDescription("Reviewed"); });
+  await act(async () => { editor().setAmount(money("-12,30")); editor().setDescription("Reviewed"); });
   expect(editor().canSubmit).toBe(true);
   await act(async () => { await editor().submit(); });
   expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ direction: "out", description: "Reviewed", amount: { currency: "COP", minorUnits: 1230 } }));

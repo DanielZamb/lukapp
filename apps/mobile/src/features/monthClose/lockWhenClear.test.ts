@@ -20,7 +20,7 @@ const facts = (accountingDate: string): LocalEntryFacts => ({
   workspaceId: "workspace",
   currency: "COP",
   entryType: "normal",
-  amountText: "-1000",
+  amountText: "-1000", amountFormat: "pre-currency",
   accountingDate,
   description: "Taxi",
   profileId: "cash",

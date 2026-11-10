@@ -6,6 +6,8 @@ import { useT } from "../../i18n";
 import { spacing } from "../../ui/tokens";
 import type { BudgetCategory } from "./model";
 import type { AmountIssue } from "./useBudgetEditor";
+import { AmountField } from "../amount/AmountField";
+import type { AmountSession } from "../amount/session";
 
 export type BudgetEditorSheetProps = {
   title: string;
@@ -16,7 +18,7 @@ export type BudgetEditorSheetProps = {
   categoryId: string | null;
   categoryFixed: boolean;
   search: string;
-  amount: string;
+  amount: AmountSession;
   amountIssue: AmountIssue | null;
   busy: boolean;
   pending: boolean;
@@ -26,7 +28,7 @@ export type BudgetEditorSheetProps = {
   error: string;
   onSearch: (value: string) => void;
   onCategory: (id: string) => void;
-  onAmount: (value: string) => void;
+  onAmount: (value: AmountSession) => void;
   onSave: () => void;
   onDismiss: () => void;
 };
@@ -74,9 +76,9 @@ export function BudgetEditorSheet(props: BudgetEditorSheetProps) {
           </>
         )}
         <Text style={ui.label}>{t("budget.limitIn", { currency: props.currency })}</Text>
-        <BottomSheetTextInput accessibilityLabel={t("budget.limitInA11y", { currency: props.currency })} keyboardType="decimal-pad"
-          placeholder="0" placeholderTextColor={theme.mutedForeground} value={props.amount}
-          onChangeText={props.onAmount} editable={props.editable} style={[ui.input, ui.hero]} />
+        <AmountField session={props.amount} onChange={props.onAmount} InputComponent={BottomSheetTextInput}
+          inputAccessibilityLabel={t("budget.limitInA11y", { currency: props.currency })} placeholder="0"
+          editable={props.editable} inputStyle={[ui.input, ui.hero]} />
         <Text style={ui.muted}>{props.policyCopy}</Text>
         {props.editable && (props.amountIssue === "zero" || props.amountIssue === "notPositive")
           && <Text accessibilityRole="alert" style={ui.error}>{t("lifecycle.limitNotPositive")}</Text>}

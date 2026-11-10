@@ -6,7 +6,7 @@ import { z } from "zod";
 import { useT, type MessageKey } from "../../i18n";
 import { admissionFailure } from "../../device-admission/failure";
 import { api } from "../api";
-import { formatMoney, parseMoney } from "../money";
+import { amountMinorUnits, amountOfMinorUnits, openAmount, type AmountSession } from "../amount/session";
 import type { BudgetJar, RemovedLimit } from "./model";
 
 type AmountArgs = FunctionArgs<typeof api.budget.setCategoryLimit>;
@@ -50,11 +50,11 @@ const refusals: Record<string, { message: MessageKey; closes: boolean }> = {
   idempotency_key_invalid: { message: "budget.errorRejected", closes: false },
 };
 
-function readAmount(text: string, currency: string, currentMinorUnits: number | undefined):
+function readAmount(amount: AmountSession, currentMinorUnits: number | undefined):
   { minorUnits: number; issue: AmountIssue | null } {
-  if (!text.trim()) return { minorUnits: 0, issue: "empty" };
-  let minorUnits: number;
-  try { minorUnits = parseMoney(text, "es-CO", currency); } catch { return { minorUnits: 0, issue: "invalid" }; }
+  if (!amount.editor.text.trim()) return { minorUnits: 0, issue: "empty" };
+  const minorUnits = amountMinorUnits(amount);
+  if (minorUnits === null) return { minorUnits: 0, issue: "invalid" };
   if (minorUnits === 0) return { minorUnits, issue: "zero" };
   if (minorUnits < 0) return { minorUnits, issue: "notPositive" };
   return { minorUnits, issue: minorUnits === currentMinorUnits ? "unchanged" : null };
@@ -62,8 +62,8 @@ function readAmount(text: string, currency: string, currentMinorUnits: number | 
 
 function startingAmount(seed: BudgetEditorSeed) {
   return seed.jar && seed.jar.limitMinorUnits > 0
-    ? formatMoney({ currency: seed.currency, minorUnits: seed.jar.limitMinorUnits }).replace(`${seed.currency} `, "")
-    : "";
+    ? amountOfMinorUnits(seed.currency, seed.jar.limitMinorUnits)
+    : openAmount(seed.currency);
 }
 
 export function useSendLimitCommand(): BudgetTransport["send"] {
@@ -93,7 +93,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  const { minorUnits, issue } = readAmount(amount, seed.currency, seed.jar?.limitMinorUnits);
+  const { minorUnits, issue } = readAmount(amount, seed.jar?.limitMinorUnits);
   const ready: Record<LimitAct, boolean> = {
     amount: !!categoryId && !issue,
     spendNothing: !!categoryId && seed.jar?.limitMinorUnits !== 0,
@@ -163,7 +163,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
     canSend,
     canDismiss: !busy && !pending,
     onCategory: (id: string) => { if (canEdit() && !seed.jar) setCategoryId(id); },
-    onAmount: (value: string) => { if (canEdit()) setAmount(value); },
+    onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.currency) setAmount(value); },
     onResetAmount: () => { if (canEdit()) setAmount(startingAmount(seed)); },
     onSearch: (value: string) => { if (canEdit()) setSearch(value); },
     submit: () => send("amount"),

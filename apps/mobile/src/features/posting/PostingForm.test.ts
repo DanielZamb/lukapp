@@ -12,6 +12,7 @@ import { AccountSetupForm } from "./AccountSetupForm";
 import type { PlaceDraft } from "./usePostingEditor";
 import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
 import { LanguageProvider } from "../../i18n";
+import { openAmount } from "../amount/session";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({
@@ -101,19 +102,24 @@ test.each([false, true])("typing a new expense preserves its sign and grouping, 
     });
   }
   await act(async () => { root = create(createElement(Composer)); });
-  const input = () => root!.root.findByProps({ accessibilityLabel: "Signed amount" });
-  expect(input().props.value).toBe("-0");
+  const input = () => root!.root.find((node) => node.type === "input" && node.props.accessibilityLabel === "Signed amount");
+  const submit = () => root!.root.findByProps({
+    accessibilityLabel: saveToBatch ? "Add to batch" : "Post",
+    accessibilityRole: "button",
+  }).props.onPress();
+  expect(input().props.value).toBe("-");
   for (const digit of "12500") {
     await act(async () => input().props.onChangeText(`${input().props.value}${digit}`));
   }
   expect(input().props.value).toBe("-12.500");
   await act(async () => input().props.onChangeText("-12abc500"));
+  expect(input().props.value).toBe("-12abc500");
+  await act(async () => submit());
+  expect(saveToBatch ? queued : post.mock.calls).toEqual(saveToBatch ? [null] : []);
+  await act(async () => input().props.onChangeText("-12.500"));
   expect(input().props.value).toBe("-12.500");
-  await act(async () => root!.root.findByProps({
-    accessibilityLabel: saveToBatch ? "Add to batch" : "Post",
-    accessibilityRole: "button",
-  }).props.onPress());
-  const command = saveToBatch ? queued[0]?.command : post.mock.calls[0]?.[0];
+  await act(async () => submit());
+  const command = saveToBatch ? queued.at(-1)?.command : post.mock.calls[0]?.[0];
   expect(command).toMatchObject({
     kind: "expense",
     payload: { amount: { currency: "COP", minorUnits: 1250000 } },
@@ -149,7 +155,7 @@ test("one entry follows the prototype order with an open description and one Pos
   }
   const inputs = root!.root.findAllByType("input");
   expect(inputs.map((node) => node.props.placeholder)).toEqual([
-    "-0",
+    "0",
     "What was it",
   ]);
   expect(inputs[1].props.multiline).toBe(true);
@@ -261,7 +267,7 @@ test("Add a place offers the four mapped types, emoji look, and balance today", 
     name: "Travel",
     productKind: "bankAccount",
     emoji: "🐷",
-    amount: "0",
+    amount: openAmount("COP", "0"),
     date: "2026-10-18",
   };
   const onChange = vi.fn();
@@ -283,7 +289,7 @@ test("Add a place offers the four mapped types, emoji look, and balance today", 
     );
   });
   expect(text()).toContain(
-    "Add a place\nName you recognize\nType\nChecking account\nSavings account\nDigital wallet\nCash\nLook\n🐷\nChange\nBalance today\nAdd this place",
+    "Add a place\nName you recognize\nType\nChecking account\nSavings account\nDigital wallet\nCash\nLook\n🐷\nChange\nBalance today\n,\nAdd this place",
   );
   const types = root!.root
     .findByProps({ accessibilityLabel: "Place type" })
@@ -316,7 +322,7 @@ test.each([
 ])("each Place kind reads in $language, sends its stored kind and stays the only one selected", async ({ language, group, labels }) => {
   const sent: string[] = [];
   function Host() {
-    const [value, setValue] = useState<PlaceDraft>({ name: "Travel", productKind: "bankAccount", emoji: "🐷", amount: "0", date: "2026-10-18" });
+    const [value, setValue] = useState<PlaceDraft>({ name: "Travel", productKind: "bankAccount", emoji: "🐷", amount: openAmount("COP", "0"), date: "2026-10-18" });
     return createElement(AccountSetupForm, {
       sheetRef: createRef<BottomSheetModal>(), value, currency: "COP", editable: true, busy: false, pending: false, error: "",
       canSubmit: true, onSubmit: vi.fn(), onDismiss: vi.fn(),
@@ -422,7 +428,7 @@ test("the form reads in Colombian Spanish with no English labels left", async ()
     expect(shown).toContain(copy);
   expect(shown).toContain("Pasa plata entre tus lugares.");
   for (const copy of englishFormCopy) expect(shown).not.toContain(copy);
-  expect(root?.root.findByProps({ accessibilityLabel: "Monto con signo" }).props.placeholder).toBe("-0");
+  expect(root?.root.find((node) => node.type === "input" && node.props.accessibilityLabel === "Monto con signo").props.placeholder).toBe("0");
   expect(root?.root.findByProps({ accessibilityLabel: "Descripción" }).props.placeholder).toBe("¿Qué fue?");
 });
 
@@ -431,7 +437,7 @@ test("adding a place reads in Spanish, including the debt balance question", asy
   await act(async () => {
     root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(AccountSetupForm, {
       sheetRef: createRef<BottomSheetModal>(),
-      value: { name: "", productKind: "creditCard", emoji: "💳", amount: "0", date: "2026-11-10" },
+      value: { name: "", productKind: "creditCard", emoji: "💳", amount: openAmount("COP", "0"), date: "2026-11-10" },
       currency: "COP", editable: true, busy: false, pending: true, error: "", canSubmit: true,
       onChange: vi.fn(), onSubmit: vi.fn(), onDismiss: vi.fn(),
     })));

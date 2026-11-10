@@ -2,6 +2,9 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
 import { usePostingBatch, type BatchDraft } from "./usePostingBatch";
 import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
 
@@ -127,7 +130,7 @@ async function queueEntry(
   description: string,
 ) {
   await act(async () => {
-    session.get().editor.setAmount(amount);
+    session.get().editor.setAmount(money(amount));
     session.get().editor.setDescription(description);
   });
   let captured: BatchDraft | null = null;
@@ -144,7 +147,7 @@ test("One to Batch captures a postable draft, resets One, and sends nothing unti
   const session = await open();
   expect(session.get().editor.captureForBatch()).toBeNull();
   await queueEntry(session, "-12.500", "Taxi");
-  expect(session.get().editor.amount).toBe("-");
+  expect(session.get().editor.amount.editor.text).toBe("-");
   expect(session.get().editor.description).toBe("");
   expect(session.get().batch.queue[0].command).toMatchObject({
     kind: "expense",
@@ -163,7 +166,7 @@ test("cancelling edits leaves the queue untouched; saving replaces the selected 
   });
   await act(async () => {
     session.get().editor.setDescription("Cancelled");
-    session.get().editor.setAmount("+20");
+    session.get().editor.setAmount(money("+20"));
   });
   expect(session.get().batch.queue).toEqual([item]);
   await act(async () => {
@@ -430,7 +433,7 @@ test("an Initial balance rejected by accounting can be edited and posted through
   const session = await open(api);
   await act(async () => {
     session.get().editor.setEntryType("initial");
-    session.get().editor.setAmount("10");
+    session.get().editor.setAmount(money("10"));
   });
   await act(async () => {
     const draft = session.get().editor.captureForBatch();
@@ -446,7 +449,7 @@ test("an Initial balance rejected by accounting can be edited and posted through
     session.get().editor.editBatchDraft(rejected);
   });
   await act(async () => {
-    session.get().editor.setAmount("20");
+    session.get().editor.setAmount(money("20"));
   });
   await act(async () => {
     const draft = session.get().editor.captureForBatch();

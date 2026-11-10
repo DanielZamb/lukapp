@@ -133,10 +133,6 @@ export const posting = {
   batchWaiting: "An entry in this batch was sent and its result is not known yet. Post again to check it before changing the batch.",
   batchChanged: "This batch changed on another screen. Check it and try again.",
 
-  amountDecimals: "Enter an amount with up to {precision} decimal places.",
-  amountSeparators: "Check the thousands separators.",
-  amountInvalid: "Enter a valid amount.",
-  amountTooLarge: "Amount is too large.",
 
   rejectAccountNameConflict: "Another place already uses this name",
   rejectAccountNameTooLong: "Use a place name of 80 characters or fewer",

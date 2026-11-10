@@ -1,20 +1,13 @@
 import type { Language } from "../../../../../src/i18n";
-import { compactBody } from "../budget/model";
-import { formatAmount, toMajorUnits } from "../money";
+import { compactMoney } from "../amount/compact";
+import { formatAmount } from "../money";
 
-export function compactAmount(amount: number, language: Language) {
-  const absolute = Math.abs(amount);
-  const sign = amount < 0 ? "−" : "";
-  const scale = absolute >= 1_000_000 ? 1_000_000 : absolute >= 1000 ? 1000 : 1;
-  if (scale === 1) return `${sign}${language === "es" ? String(absolute).replace(".", ",") : absolute}`;
-  const scaled = absolute / scale;
-  const body = scaled.toFixed(scaled >= 10 || Number.isInteger(scaled) ? 0 : 1);
-  return `${sign}${compactBody(body, scale === 1_000_000 ? "millions" : "thousands", language)}`;
+export function compactAmount(minorUnits: number, currency: string, language: Language) {
+  return compactMoney(minorUnits, currency, language, "overview");
 }
 
 export function symbolAmount(minorUnits: number, symbol: string, mode: "compact" | "grouped", currency: string, language: Language) {
-  const absolute = toMajorUnits(Math.abs(minorUnits), currency);
-  const body = mode === "compact" ? compactAmount(absolute, language) : formatAmount(Math.abs(minorUnits), currency, { hideZeroDecimals: true });
+  const body = mode === "compact" ? compactAmount(Math.abs(minorUnits), currency, language) : formatAmount(Math.abs(minorUnits), currency, { hideZeroDecimals: true });
   return `${minorUnits < 0 ? "−" : ""}${symbol}${body}`;
 }
 

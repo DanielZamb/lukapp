@@ -47,8 +47,8 @@ test("many categories sort by amount over, exclude holding limits, and sum only 
 test("currency-code formatting retains cents and groups thousands", () => {
   expect(budgetAttention({ currency: "USD", jars: [{ ...food,
     limitMinorUnits: 1_000_25, consumptionMinorUnits: 1_100_75 }] }, en)).toMatchObject({
-    rows: [{ detail: "USD 1.100,75 of USD 1.000,25" }],
-    home: { detail: "USD 100,50 over" },
+    rows: [{ detail: "USD 1,100.75 of USD 1,000.25" }],
+    home: { detail: "USD 100.50 over" },
   });
 });
 

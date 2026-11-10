@@ -3,8 +3,9 @@ import { intakeConfirmOutcome, intakeErrorMessage } from "../../../../../src/not
 import { requiresLocalWipe } from "../../local-auth/accessFailure";
 import type { LocalEntryFacts } from "../localEntryDrafts";
 import type { IntakeBinding, PostingReceipt } from "../posting/usePostingEditor";
-import { parseMoney } from "../money";
+import { storedAmountMinorUnits, type StoredAmountText } from "../amount/storedText";
 import { formatDateTime, type Translator } from "../../i18n";
+import { formatAmount } from "../money";
 import { evidenceFor, notificationOf, projectCandidate, type ActiveCandidate } from "./durableState";
 import { factsFromCandidate } from "./facts";
 import { discardCandidate } from "./discard";
@@ -33,14 +34,14 @@ export function createCandidateBinding(input: {
     if (current.status.kind !== "review") return;
     if (facts.workspaceId !== current.workspaceId || facts.currency !== current.currency || facts.entryType !== "normal")
       throw new Error("Candidate review belongs to another workspace");
-    let amount: number | null = null;
-    try { amount = parseMoney(facts.amountText, "es-CO", current.currency); } catch {}
+    const typed: StoredAmountText = { text: facts.amountText, format: facts.amountFormat, ...(facts.amountReenter ? { reenter: true } : {}) };
+    const amount = storedAmountMinorUnits(typed, current.currency);
     seen = await service.updateReview(candidateId, current.recordRevision, {
       direction: amount === null || amount === 0 ? current.review.direction : amount < 0 ? "out" : "in",
       description: facts.description, amountMinorUnits: amount === null ? null : Math.abs(amount), accountingDate: facts.accountingDate,
       financialAccountProfileId: facts.profileId, userCategoryIds: facts.categories.ids,
       primaryUserCategoryId: facts.categories.primaryId,
-    }, { amountText: facts.amountText, currencyReviewed });
+    }, { amount: typed, currencyReviewed });
   }
   return {
     id: candidateId,
@@ -84,12 +85,16 @@ export function createCandidateBinding(input: {
   };
 }
 
-/** What the notification said, around its stored package name, amount and currency. */
-function reviewNote(row: ActiveCandidate, { t, language, locale }: Translator): string {
+/**
+ * What the notification said, around its stored package name, amount and currency. The amount is the integer the
+ * bank text was read as, written in the format of its own currency when the notification named one and of the
+ * Candidate's currency otherwise. The bank text itself is never read again here.
+ */
+function reviewNote(row: ActiveCandidate, { t, language }: Translator): string {
   if (row.origin.kind !== "native") return t("inbox.reviewImported");
   const capture = row.origin.capture;
   const amount = capture.amountMinorUnits === null ? t("inbox.reviewAmountUnresolved") : t("inbox.reviewAmount", {
-    amount: new Intl.NumberFormat(locale, { useGrouping: false, maximumFractionDigits: 2 }).format(capture.amountMinorUnits / 100),
+    amount: formatAmount(capture.amountMinorUnits, capture.currency ?? row.currency, { hideZeroDecimals: true }),
     currency: capture.currency ?? t("inbox.reviewCurrencyUnresolved"),
   });
   const direction = t(capture.direction === null ? "inbox.reviewDirectionUnresolved"

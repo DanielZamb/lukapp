@@ -1,11 +1,13 @@
 import { useMemo } from "react";
 import type { Theme } from "../../ui/tokens";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Header, PrimaryButton, Screen, useTheme, useThemeMode, useUi } from "../../ui/core";
 import { categoryOutline, faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { useT } from "../../i18n";
-import { formatAmount, formatMoney, minorUnitFactor, parseMoney } from "../money";
+import { formatMoney, minorUnitFactor } from "../money";
+import { AmountField } from "../amount/AmountField";
+import { amountMinorUnits, amountOfMinorUnits } from "../amount/session";
 import { jarPresentation, type BudgetCategory } from "./model";
 import type { useBudgetEditor } from "./useBudgetEditor";
 
@@ -31,8 +33,7 @@ export function BudgetComposer(props: Props) {
   const ui = useUi();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { t } = useT();
-  let limit = 0;
-  try { limit = parseMoney(props.amount, "es-CO", props.currency); } catch { /* Incomplete input stays editable. */ }
+  const limit = amountMinorUnits(props.amount) ?? 0;
   const { status, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
   const over = status === "over";
   const money = (minorUnits: number) => formatMoney({ currency: props.currency, minorUnits }, { hideZeroDecimals: true });
@@ -45,9 +46,8 @@ export function BudgetComposer(props: Props) {
       </View>
       <View style={styles.board}>
         <Text style={styles.label}>{t("budget.stayUnder")}</Text>
-        <TextInput accessibilityLabel={t("budget.monthlyLimitA11y")} keyboardType="decimal-pad" placeholder="0"
-          placeholderTextColor={theme.mutedForeground} value={props.amount} onChangeText={props.onAmount}
-          editable={props.editable} style={styles.amount} />
+        <AmountField session={props.amount} onChange={props.onAmount} inputAccessibilityLabel={t("budget.monthlyLimitA11y")}
+          placeholder="0" editable={props.editable} inputStyle={styles.amount} />
         <View accessibilityRole="progressbar" accessibilityLabel={t("budget.composerJarA11y")}
           accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100), text: t("budget.composerJarValue", { amount: money(limit - props.spentMinorUnits) }) }}
           style={[styles.jar, { backgroundColor: over ? `${theme.danger}33` : `${props.color}22` }, !over && faintEdge(props.color, mode)]}>
@@ -59,7 +59,7 @@ export function BudgetComposer(props: Props) {
         {limitSuggestions(props.spentMinorUnits, props.currency).map((value) => (
           <Pressable key={value} accessibilityRole="button" accessibilityLabel={money(value)}
             accessibilityState={{ selected: limit === value, disabled: !props.editable }} disabled={!props.editable}
-            onPress={() => props.onAmount(formatAmount(value, props.currency, { hideZeroDecimals: true }))}
+            onPress={() => props.onAmount(amountOfMinorUnits(props.currency, value, { hideZeroDecimals: true }))}
             style={[styles.chip, limit === value && styles.selected]}>
             <Text style={styles.chipText}>{money(value)}</Text>
           </Pressable>

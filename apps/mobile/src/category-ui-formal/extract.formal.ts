@@ -10,6 +10,7 @@ import type { PostingFormProps } from "../../src/features/posting/PostingForm";
 import type { CategorySheetProps } from "../../src/features/categories/CategorySheet";
 import type { usePostingEditor } from "../../src/features/posting/usePostingEditor";
 import type { AccountSetupForm } from "../../src/features/posting/AccountSetupForm";
+import { openAmount } from "../../src/features/amount/session";
 
 type Editor = ReturnType<typeof usePostingEditor>;
 type SetupProps = ComponentProps<typeof AccountSetupForm>;
@@ -165,9 +166,10 @@ function pair() { return `${editor().profileId}->${editor().destinationId}`; }
 function observe() {
   const e = editor();
   return structuredClone({
-    amount: e.amount, description: e.description, date: e.date, entryType: e.entryType,
+    amount: e.amount.editor.text, description: e.description, date: e.date, entryType: e.entryType,
     profileId: e.profileId, destinationId: e.destinationId, categories: e.categories,
-    reviewRequired: e.transferReviewRequired, setup: e.setup, pending: e.pending, busy: e.busy,
+    reviewRequired: e.transferReviewRequired, setup: e.setup && { ...e.setup, amount: e.setup.amount.editor.text },
+    pending: e.pending, busy: e.busy,
     editable: e.editable, canSubmit: e.canSubmit, formCanSubmit: form().canSubmit,
     categoryEditor: category().editor, categoryCanConfirm: category().canConfirm,
     stage: runtime.stage, commands: runtime.commands, dispatched: runtime.dispatched,
@@ -183,7 +185,7 @@ async function mount(seed: Seed) {
   runtime.save = undefined; runtime.post = undefined; runtime.clear = undefined;
   runtime.sheetVisible = false; runtime.sheetClosing = false; runtime.presents = 0; runtime.dismisses = 0;
   await act(async () => { root = create(createElement(PostRoute)); });
-  await act(async () => { form().onAmountChange(`${seed.sign}10,00`); form().onDescriptionChange("Original composer"); editor().setDate("2026-10-20"); editor().setCategories({ ids: ["prior-category"], primaryId: null }); });
+  await act(async () => { form().onAmountChange(openAmount("COP", `${seed.sign}10,00`)); form().onDescriptionChange("Original composer"); editor().setDate("2026-10-20"); editor().setCategories({ ids: ["prior-category"], primaryId: null }); });
   await act(async () => form().onCategory());
   await act(async () => control("Add your own").props.onPress());
   await act(async () => control("Category name").props.onChangeText("Reserve"));
@@ -192,7 +194,7 @@ async function mount(seed: Seed) {
   const e = editor();
   return { doors: 0, canceled: 0, reopened: 0, created: 0, named: 0, answered: 0,
     placeOpen: false, placeTarget: "destination", selected: 0, changed: 0, swaps: 0, confirms: 0, attempts: 0, lost: 0, reviewed: null,
-    original: { amount: e.amount, description: e.description, date: e.date }, source: e.profileId,
+    original: { amount: e.amount.editor.text, description: e.description, date: e.date }, source: e.profileId,
     composer: true, independent: true, frozen: true, review: true, native: true, violations: [] } satisfies Monitor;
 }
 function fail(m: Monitor, key: "composer" | "independent" | "frozen" | "review" | "native", reason: string) {
@@ -252,10 +254,10 @@ async function step(seed: Seed, m: Monitor, event: Event) {
       case "FrozenCallbacks": {
         const value = editor().setup;
         if (!value) throw new Error("No frozen setup");
-        setup().onChange({ ...value, name: "Changed", amount: "999", productKind: "cash" });
+        setup().onChange({ ...value, name: "Changed", amount: openAmount("COP", "999"), productKind: "cash" });
         editor().setSetup(null);
         editor().beginAccountSetup({ name: "Replacement", answer: "stillMine", style: { emoji: "X", tone: "primary", color: "h270" } });
-        form().onAmountChange("+999,00"); form().onDescriptionChange("Changed");
+        form().onAmountChange(openAmount("COP", "+999,00")); form().onDescriptionChange("Changed");
         editor().setDate("2020-01-01"); editor().setProfileId("other"); editor().setDestinationId("other");
         editor().swapTransferPlaces(); editor().confirmTransferReview();
         break;

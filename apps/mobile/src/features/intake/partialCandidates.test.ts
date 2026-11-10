@@ -95,7 +95,7 @@ test("deleted partial captures do not resurrect through document migration or re
   const state = f.state();
   f.setValue(JSON.stringify({ ...state, v: 2 }));
   const reopened = new IntakeService(f.deps); await reopened.refresh();
-  expect(f.state().v).toBe(3); expect(reopened.candidates()).toEqual([]);
+  expect(f.state().v).toBe(4); expect(reopened.candidates()).toEqual([]);
   expect(f.state().records[0]).toMatchObject({ kind: "terminal", reason: "deleted" });
   f.setPages([{ captures: [{ ...partials[0], amountMinorUnits: 99 }], nextCursor: null }]);
   const acks = f.events.filter((event) => event === "ack").length;
@@ -172,9 +172,11 @@ test("the review note is one sentence per language around the stored source, amo
   };
   const complete = { ...capture, amountMinorUnits: 4512345, currency: "COP" as const, direction: "out" as const };
   expect(await noteFor(complete, "en")).toBe(`Source ${mapping.packageName}. Captured ${formatDateTime("en", capture.capturedAt)}. `
-    + "Original amount 45123.45 COP. Original direction out. Review currency COP.");
+    + "Original amount 45.123,45 COP. Original direction out. Review currency COP.");
   expect(await noteFor(complete, "es")).toBe(`Fuente ${mapping.packageName}. Leída el ${formatDateTime("es", capture.capturedAt)}. `
-    + "Monto original 45123,45 COP. Según la notificación, la plata sale. Moneda a revisar: COP.");
+    + "Monto original 45.123,45 COP. Según la notificación, la plata sale. Moneda a revisar: COP.");
+  const dollars = { ...complete, currency: "USD" as const };
+  expect(await noteFor(dollars, "es")).toContain("Monto original 45,123.45 USD.");
   expect(await noteFor(partials[0]!, "es")).toContain("No pudimos leer el monto. Según la notificación, la plata entra.");
   expect(await noteFor(partials[1]!, "es")).toContain("No se sabe si la plata entra o sale. Escribe el monto con signo.");
 });

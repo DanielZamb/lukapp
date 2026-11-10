@@ -140,8 +140,8 @@ test("history matches the prototype row, uses primary for money in, and navigate
   const incomeRow = { ...detail.row, financialAccountProfileId: "cash", userCategories: [], primaryUserCategoryId: undefined, detail: "Income", amount: { currency: "USD", minorUnits: 150025 } };
   await act(async () => root?.update(createElement(HistoryScreen, { ...props, rows: [incomeRow], scopedRows: [incomeRow] })));
   expect(text()).toContain("💸 Income");
-  expect(text()).toContain("+$1.500,25");
-  const amount = root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1.500,25");
+  expect(text()).toContain("+$1,500.25");
+  const amount = root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1,500.25");
   expect(amount?.props.style).toContainEqual({ color: "#6d28d9" });
 });
 
@@ -149,9 +149,9 @@ test("search updates the count and capital flow, and figures toggle full precisi
   const rows = [detail.row, { ...detail.row, id: "income", title: "Salary", amount: { currency: "COP", minorUnits: 253450 } }];
   await act(async () => { root = create(createElement(HistoryScreen, { ...historyProps(), rows, total: 2 })); });
   expect(text()).toContain("2 of 2");
-  expect(text()).toContain("$1.0K");
-  expect(text()).toContain("$1.5K");
-  expect(text()).toContain("$2.5K");
+  expect(text()).toContain("$1,0K");
+  expect(text()).toContain("$1,5K");
+  expect(text()).toContain("$2,5K");
   await act(async () => button("In").props.onPress());
   expect(text()).toContain("$2.534,50");
   expect(text()).not.toContain("Net");
@@ -253,7 +253,7 @@ test("places multi-pick, empty means all, and clear removes the initial place an
     ...filterProps(), initialProfileId: "cash", scopedRows: cashOnly,
   })); });
   expect(text()).toContain("1 of 3");
-  expect(text()).toContain("Out\n$1.5K");
+  expect(text()).toContain("Out\n$1,5K");
   await act(async () => button("Daily").props.onPress());
   expect(root?.root.findByType(BottomSheetModal).props.enableDynamicSizing).toBe(true);
   expect(choice("checkbox", "Daily").props.accessibilityState.checked).toBe(true);

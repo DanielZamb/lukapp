@@ -21,7 +21,7 @@ export function CategoryLookScreen({ data, onBack, onSetLimit, onEdit }: {
   const { t } = useT();
   const color = data ? categoryColor(data.style, mode) : theme.primary;
   const left = data ? remaining(data) : null;
-  const money = (minorUnits: number) => formatMoney({ currency: data?.currency ?? "COP", minorUnits }, { hideZeroDecimals: true });
+  const money = (minorUnits: number) => data ? formatMoney({ currency: data.currency, minorUnits }, { hideZeroDecimals: true }) : "";
   return (
     <Screen contentStyle={styles.page}>
       <Header title={data?.name ?? t("categories.pickerTitle")} eyebrow={t("categories.lookEyebrow")} onBack={onBack} />

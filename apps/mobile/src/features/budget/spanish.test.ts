@@ -9,6 +9,7 @@ import { BudgetBoard } from "./BudgetBoard";
 import { BudgetLimitSheet } from "./BudgetLimitSheet";
 import { compactAmount, monthLabel, nextAction, type BudgetJar } from "./model";
 import { PostingImpactSheet } from "./PostingImpactSheet";
+import { openAmount } from "../amount/session";
 import { postingBudgetImpact } from "./postingImpact";
 
 vi.mock("@gorhom/bottom-sheet", () => ({
@@ -69,11 +70,13 @@ test("the next Budget action names the month inside one sentence in each languag
 });
 
 test.each([
-  [0, "0", "0"], [123, "1.23", "1,23"], [125_000, "1.3K", `1,3${nb}mil`], [35_400_000, "354K", `354${nb}mil`],
-  [100_000_000, "1M", `1${nb}M`], [123_000_000, "1.23M", `1,23${nb}M`], [-35_400_000, "−354K", `−354${nb}mil`],
-])("compact Budget amount %s reads %s in English and %s in Spanish", (minorUnits, english, spanish) => {
+  [0, "0", "0", "0"], [123, "1,23", "1,23", "1.23"], [125_000, "1,3K", `1,3${nb}mil`, `1.3${nb}mil`],
+  [35_400_000, "354K", `354${nb}mil`, `354${nb}mil`], [100_000_000, "1M", `1${nb}M`, `1${nb}M`],
+  [123_000_000, "1,23M", `1,23${nb}M`, `1.23${nb}M`], [-35_400_000, "−354K", `−354${nb}mil`, `−354${nb}mil`],
+])("compact Budget amount %s reads %s in English and %s in Spanish in COP, and %s in Spanish in USD", (minorUnits, english, spanish, usd) => {
   expect(compactAmount(minorUnits, "COP", "en")).toBe(english);
   expect(compactAmount(minorUnits, "COP", "es")).toBe(spanish);
+  expect(compactAmount(minorUnits, "USD", "es")).toBe(usd);
 });
 
 test("the Budget board reads in Colombian Spanish with tope and frasco wording", async () => {
@@ -98,7 +101,7 @@ test("the Budget board reads in Colombian Spanish with tope and frasco wording",
 test("the limit sheet keeps the month phrases whole in Spanish", async () => {
   const screen = await inSpanish(createElement(BudgetLimitSheet, {
     month: "2026-10", currency: "COP", jar: jar("Comida", 20_000_000, 40_000_000), color: "#047857",
-    previousMonth: "2026-09", previousSpendMinorUnits: 7_312_345, minorUnits: 50_000_000, amount: "500.000",
+    previousMonth: "2026-09", previousSpendMinorUnits: 7_312_345, minorUnits: 50_000_000, amount: openAmount("COP", "500.000"),
     amountIssue: null, busy: false, pending: false, pendingAct: null, editable: true, canSubmit: true, canSend: () => true,
     canDismiss: true, error: "", onLimit: () => {}, onAmount: () => {}, onResetAmount: () => {}, onSave: () => {},
     onSpendNothing: () => {}, onRemove: () => {}, onDismiss: () => {},
@@ -129,7 +132,7 @@ test("the posting impact sheet formats the overage with the shared compact helpe
 function sheetProps(overrides: Partial<Parameters<typeof BudgetLimitSheet>[0]> = {}): Parameters<typeof BudgetLimitSheet>[0] {
   return {
     month: "2026-10", currency: "COP", jar: jar("Comida", 20_000_000, 40_000_000), color: "#047857",
-    previousMonth: "2026-09", previousSpendMinorUnits: 7_312_345, minorUnits: 0, amount: "0",
+    previousMonth: "2026-09", previousSpendMinorUnits: 7_312_345, minorUnits: 0, amount: openAmount("COP", "0"),
     amountIssue: "zero", busy: false, pending: false, pendingAct: null, editable: true, canSubmit: false, canSend: () => true,
     canDismiss: true, error: "", onLimit: () => {}, onAmount: () => {}, onResetAmount: () => {}, onSave: () => {},
     onSpendNothing: () => {}, onRemove: () => {}, onDismiss: () => {}, ...overrides,
@@ -158,7 +161,7 @@ test("a typed zero, its two confirmations and their effects read in Colombian Sp
 
 test("a spend-nothing jar reads as a zero limit in Spanish on its sheet, the board and the posting warning", async () => {
   const zero = jar("Domicilios", 0, 0);
-  const sheet = await inSpanish(createElement(BudgetLimitSheet, sheetProps({ jar: zero, amount: "", amountIssue: "empty" })));
+  const sheet = await inSpanish(createElement(BudgetLimitSheet, sheetProps({ jar: zero, amount: openAmount("COP", ""), amountIssue: "empty" })));
   expect(texts(sheet)).toEqual(expect.arrayContaining([
     "Sin gastos", "No has gastado nada", "Domicilios está sin gastos. Escribe un monto para ponerle tope.",
   ]));

@@ -2,6 +2,7 @@ import * as React from "react";
 import { createElement, useEffect, useRef, useState } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import type { PlaceDraft } from "./usePostingEditor";
 import { AccountSetupForm } from "./AccountSetupForm";
@@ -64,9 +65,11 @@ vi.mock("react-native", () => ({
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 
+const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
+const balanceInput = () => screen().find((node) => node.type === "input" && node.props.accessibilityLabel === "Balance today");
 const initial: PlaceDraft = {
   name: "Savings trip", productKind: "bankAccount", emoji: "💰",
-  amount: "123", date: "2026-10-18",
+  amount: openAmount("COP", "123"), date: "2026-10-18",
   target: { kind: "destination", sourceProfileId: "daily" },
 };
 const dismissed = vi.fn();
@@ -145,7 +148,7 @@ test("Look keeps its controls and place answers after sheet animations settle", 
   );
   if (!savings) throw new Error("Missing Savings choice");
   await act(async () => savings.props.onPress());
-  const balance = screen().findByProps({ accessibilityLabel: "Balance today" });
+  const balance = balanceInput();
   await act(async () => balance.props.onChangeText("456"));
   await act(async () => button("Choose emoji").props.onPress());
   await settle();
@@ -158,7 +161,7 @@ test("Look keeps its controls and place answers after sheet animations settle", 
   expect(dismissed).not.toHaveBeenCalled();
   expect(button("Choose emoji")).toBeDefined();
   expect(screen().findByType(AccountSetupForm).props.value).toEqual({
-    ...initial, name: "Trip savings", productKind: "savingsAccount", amount: "456", emoji: "🏦",
+    ...initial, name: "Trip savings", productKind: "savingsAccount", amount: typedAmount("456"), emoji: "🏦",
   });
 });
 
@@ -199,13 +202,13 @@ function hardwareBack() {
 test("Android Back cancels only Look and retains the unsaved place answers", async () => {
   await mount();
   await act(async () => screen().findByProps({ accessibilityLabel: "Place name" }).props.onChangeText("Back trip"));
-  await act(async () => screen().findByProps({ accessibilityLabel: "Balance today" }).props.onChangeText("456"));
+  await act(async () => balanceInput().props.onChangeText("456"));
   const wallet = screen().findAllByType("button").find((node) =>
     node.props.accessibilityRole === "radio" && node.findByType("text").children.join("") === "Cash",
   );
   if (!wallet) throw new Error("Missing Wallet choice");
   await act(async () => wallet.props.onPress());
-  const before = { ...initial, name: "Back trip", amount: "456", productKind: "cash" };
+  const before = { ...initial, name: "Back trip", amount: typedAmount("456"), productKind: "cash" };
   expect(screen().findByType(AccountSetupForm).props.value).toEqual(before);
   await act(async () => button("Choose emoji").props.onPress());
   await settle();
@@ -267,13 +270,13 @@ test.each(["light", "dark"] as const)("Look has circular themed choices and cust
 test("debt setup starts without a chosen kind, offers both products and asks what is owed", async () => {
   await act(async () => {
     root = create(createElement(BottomSheetModalProvider, null,
-      createElement(Setup, { initialValue: { ...initial, name: "Debt", productKind: null, amount: "0" } })));
+      createElement(Setup, { initialValue: { ...initial, name: "Debt", productKind: null, amount: openAmount("COP", "0") } })));
   });
   expect(button("Credit card").props.accessibilityState.checked).toBe(false);
   expect(button("Loan").props.accessibilityState.checked).toBe(false);
   expect(screen().findAll((node) => node.props.accessibilityLabel === "Checking")).toHaveLength(0);
   expect(screen().findAll((node) => node.props.accessibilityLabel === "Balance today")).toHaveLength(0);
-  expect(screen().findByProps({ accessibilityLabel: "How much do you still owe?" }).props.value).toBe("0");
+  expect(screen().find((node) => node.type === "input" && node.props.accessibilityLabel === "How much do you still owe?").props.value).toBe("0");
   await act(async () => button("Loan").props.onPress());
   expect(screen().findByType(AccountSetupForm).props.value.productKind).toBe("loan");
   await act(async () => button("Credit card").props.onPress());

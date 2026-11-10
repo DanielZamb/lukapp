@@ -51,7 +51,7 @@ async function render(value: MonthOverview | undefined = data) {
 function bars() { return screen().findAll((node) => node.type === "view" && node.props.accessibilityRole === "progressbar"); }
 function percentages() { return bars().map((node) => node.props.accessibilityValue.now); }
 
-test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["AED", "AED "]])("shows posted spending and opens history for %s without formatToParts", async (currency, symbol) => {
+test.each([["COP", "$", "10.000"], ["USD", "$", "10,000"], ["EUR", "€", "10.000"], ["AED", "AED ", "10.000"]])("shows posted spending and opens history for %s without formatToParts", async (currency, symbol, grouped) => {
   const formatToParts = Object.getOwnPropertyDescriptor(Intl.NumberFormat.prototype, "formatToParts");
   Reflect.deleteProperty(Intl.NumberFormat.prototype, "formatToParts");
   try {
@@ -60,7 +60,7 @@ test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["AED", "AED "]])("shows 
       categories: [{ id: "food", name: "Food", style: { emoji: "🍔", tone: "warning" }, spendMinorUnits: 1_000_000, limitMinorUnits: null }],
     });
     expect(texts(screen())).toEqual(expect.arrayContaining(["Net", `−${symbol}10K`, "Out", `${symbol}10K`, "In", `${symbol}0`]));
-    expect(texts(button("Food"))).toEqual(["🍔", "Food", `${symbol}10.000`]);
+    expect(texts(button("Food"))).toEqual(["🍔", "Food", `${symbol}${grouped}`]);
     await press("Go to history");
     expect(callbacks.onHistory).toHaveBeenCalledOnce();
   } finally {
@@ -72,7 +72,7 @@ test.each([
   ["Net", "−$1.000.000,00"], ["Out", "$2.500.000,00"], ["In", "$1.500.000,00"],
 ])("%s focuses to its full amount, hides other amounts, then restores the trio", async (label, full) => {
   await render();
-  expect(texts(screen())).toEqual(expect.arrayContaining(["Net", "−$1M", "Out", "$2.5M", "In", "$1.5M"]));
+  expect(texts(screen())).toEqual(expect.arrayContaining(["Net", "−$1M", "Out", "$2,5M", "In", "$1,5M"]));
   await press(label);
   expect(texts(button(label))).toEqual([label, full]);
   expect(button(label).props.accessibilityState.expanded).toBe(true);
@@ -80,7 +80,7 @@ test.each([
     expect(texts(screen())).not.toContain(other);
   }
   await press(label);
-  expect(texts(screen())).toEqual(expect.arrayContaining(["Net", "−$1M", "Out", "$2.5M", "In", "$1.5M"]));
+  expect(texts(screen())).toEqual(expect.arrayContaining(["Net", "−$1M", "Out", "$2,5M", "In", "$1,5M"]));
 });
 
 test("List is default with spend, draining/flat coins, colored remaining amounts and navigation", async () => {

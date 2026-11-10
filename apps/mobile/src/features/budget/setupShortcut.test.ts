@@ -62,7 +62,7 @@ test("setup shortcut opens the existing Add Budget editor with the first categor
   expect(props).toMatchObject({
     title: "Add Budget",
     categoryId: "food",
-    amount: "",
+    amount: expect.objectContaining({ currency: "COP", editor: expect.objectContaining({ text: "" }) }),
     canSubmit: false,
   });
   await act(async () => props.onDismiss());

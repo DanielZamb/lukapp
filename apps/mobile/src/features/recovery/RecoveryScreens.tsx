@@ -1,9 +1,8 @@
 import { useMemo } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import {
   Choice,
-  Field,
   Header,
   ListGroup,
   ListRow,
@@ -32,6 +31,8 @@ import {
 } from "./model";
 import { ContributionHistory } from "./RecoveryLifecycleScreens";
 import { createRecoveryStyles } from "./styles";
+import { AmountField } from "../amount/AmountField";
+import type { AmountSession } from "../amount/session";
 
 type MonthCount = (typeof INSTALLMENT_COUNTS)[number];
 
@@ -131,7 +132,7 @@ export function RecoveryDraft(props: {
   destinations: RecoveryPlace[];
   replacing?: boolean;
   installmentCount: number;
-  amount: string;
+  amount: AmountSession;
   destinationId: string | null;
   suggestion: ReturnType<typeof suggestionFor>;
   editable: boolean;
@@ -141,7 +142,7 @@ export function RecoveryDraft(props: {
   canDismiss: boolean;
   error: string;
   onMonths: (count: MonthCount) => void;
-  onAmount: (value: string) => void;
+  onAmount: (value: AmountSession) => void;
   onDestination: (id: string) => void;
   onSave: () => void;
   onBack: () => void;
@@ -189,16 +190,16 @@ export function RecoveryDraft(props: {
           );
         })}
       </View>
-      <Field
+      <AmountField
         label={t("recovery.draftMonthly", { currency: props.currency })}
-        accessibilityLabel={t("recovery.draftMonthly", { currency: props.currency })}
-        keyboardType="decimal-pad"
-        value={props.amount}
-        onChangeText={props.onAmount}
+        inputAccessibilityLabel={t("recovery.draftMonthly", { currency: props.currency })}
+        session={props.amount}
+        onChange={props.onAmount}
         editable={props.editable}
-        invalid={!props.suggestion.valid}
-        error={props.error || (!props.suggestion.valid ? limits.invalid : undefined)}
-        helperText={!props.error && props.suggestion.valid ? limitsHelp : undefined}
+        message={{
+          error: props.error || (!props.suggestion.valid ? limits.invalid : undefined),
+          helper: !props.error && props.suggestion.valid ? limitsHelp : undefined,
+        }}
       />
       {(props.error || !props.suggestion.valid) ? <Text style={ui.muted}>{limitsHelp}</Text> : null}
       {props.destinations.length === 1 ? (
@@ -336,7 +337,7 @@ export function RecoveryMoveScreen(props: {
   plan: RecoveryPlanView;
   sources: RecoveryPlace[];
   sourceId: string | null;
-  amount: string;
+  amount: AmountSession;
   editable: boolean;
   busy: boolean;
   pending: boolean;
@@ -344,7 +345,7 @@ export function RecoveryMoveScreen(props: {
   canDismiss: boolean;
   error: string;
   onSource: (id: string) => void;
-  onAmount: (value: string) => void;
+  onAmount: (value: AmountSession) => void;
   submit: () => Promise<void>;
   onBack: () => void;
 }) {
@@ -364,16 +365,15 @@ export function RecoveryMoveScreen(props: {
         <Text style={ui.muted}>{t("recovery.moveAmount")}</Text>
         <View style={styles.amountEntry}>
           <Text style={[ui.hero, styles.amount]}>{props.plan.currency}</Text>
-          <TextInput
-            accessibilityLabel={t("recovery.moveAmountA11y", { currency: props.plan.currency })}
-            keyboardType="decimal-pad"
-            value={props.amount}
-            onChangeText={props.onAmount}
-            editable={props.editable}
-            style={[ui.hero, styles.amount, styles.amountInput]}
-            cursorColor={theme.primary}
-            selectionColor={theme.primary}
-          />
+          <View style={styles.amountInput}>
+            <AmountField
+              inputAccessibilityLabel={t("recovery.moveAmountA11y", { currency: props.plan.currency })}
+              session={props.amount}
+              onChange={props.onAmount}
+              editable={props.editable}
+              inputStyle={[ui.hero, styles.amount]}
+            />
+          </View>
         </View>
         {props.error ? <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text> : null}
       </View>

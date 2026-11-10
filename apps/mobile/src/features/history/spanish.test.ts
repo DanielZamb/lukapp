@@ -100,7 +100,7 @@ test("list rows join stored names with the translated reversal status", () => {
 });
 
 test.each([
-  [150000, "$1.5K", "$1,5 mil"], [110000000, "$1.1M", "$1,1 M"], [99900, "$999", "$999"],
+  [150000, "$1,5K", "$1,5 mil"], [110000000, "$1,1M", "$1,1 M"], [99900, "$999", "$999"],
 ])("compact history amount %i reads %s and %s", (minorUnits, english, spanish) => {
   expect(compactHistoryAmount(minorUnits, "COP", "en")).toBe(english);
   expect(compactHistoryAmount(minorUnits, "COP", "es")).toBe(spanish);

@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import { legacyAmountConvention } from "../accounting/currencies";
-import { formatMoneyInput, parseMoney } from "../../apps/mobile/src/features/money";
+import { readPreCurrencyAmount } from "../../apps/mobile/src/features/amount/preCurrency";
+import { legacyFormatMoneyInput } from "./legacyInput.testSupport";
 import { createAmountEditor, parseAmount } from "./amount";
 import type { AmountIssue, AmountPrecision } from "./amount";
 
@@ -44,13 +45,14 @@ const cases: readonly Case[] = [
 
 const receipts: object[] = [];
 function legacyParse(text: string, currency: string): number | "refused" {
-  try { return parseMoney(text, "es-CO", currency); } catch { return "refused"; }
+  const reading = readPreCurrencyAmount(text, currency);
+  return reading.kind === "parsed" ? reading.minorUnits : "refused";
 }
 
 test.each(cases)("Colombian policy difference p=%s input=%s", (precision, text, oldEditing, oldParsed, expected, why) => {
   const currency = precision === 0 ? "JPY" : precision === 3 ? "BHD" : "COP";
   const format = { convention: legacyAmountConvention, precision };
-  expect(formatMoneyInput(text, currency)).toBe(oldEditing);
+  expect(legacyFormatMoneyInput(text, currency)).toBe(oldEditing);
   expect(legacyParse(text, currency)).toBe(oldParsed);
   const result = parseAmount(text, format);
   if (typeof expected === "number") expect(result).toEqual({ kind: "parsed", minorUnits: expected });

@@ -4,12 +4,11 @@ import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
-import { parseMoney } from "../money";
+import { amountMinorUnits, amountOfMinorUnits, type AmountSession } from "../amount/session";
 import {
   DEFAULT_INSTALLMENT_COUNT,
   INSTALLMENT_COUNTS,
   minInstallment,
-  recoveryMoney,
   suggestionFor,
   type RecoveryCandidate,
   type RecoveryPlace,
@@ -46,7 +45,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   const defaultDestination = seed.destinations.find((place) => place.productKind === "savingsAccount")
     ?? seed.destinations[0] ?? null;
   const [installmentCount, setInstallmentCount] = useState<MonthCount>(DEFAULT_INSTALLMENT_COUNT);
-  const [amount, setAmount] = useState(formatMinor(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)));
+  const [amount, setAmount] = useState(() => installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)));
   const [destinationId, setDestinationId] = useState(defaultDestination?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
@@ -59,9 +58,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  let minorUnits = 0;
-  try { minorUnits = parseMoney(amount, "es-CO", seed.currency); } catch { /* Incomplete amount stays editable. */ }
-  const suggestion = suggestionFor(seed.candidate.amountMinorUnits, installmentCount, minorUnits);
+  const suggestion = suggestionFor(seed.candidate.amountMinorUnits, installmentCount, amountMinorUnits(amount) ?? 0);
   const editable = !busy && !pending;
   async function submit() {
     const mounted = lifetime.current;
@@ -110,14 +107,14 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     onMonths: (count: MonthCount) => {
       if (!canEdit()) return;
       setInstallmentCount(count);
-      setAmount(formatMinor(seed.currency, minInstallment(seed.candidate.amountMinorUnits, count)));
+      setAmount(installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, count)));
     },
-    onAmount: (value: string) => { if (canEdit()) setAmount(value); },
+    onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.currency) setAmount(value); },
     onDestination: (id: string) => { if (canEdit()) setDestinationId(id); },
     submit,
   };
 }
 
-function formatMinor(currency: string, minorUnits: number) {
-  return recoveryMoney({ currency, minorUnits }).replace(`${currency} `, "");
+function installmentAmount(currency: string, minorUnits: number) {
+  return amountOfMinorUnits(currency, minorUnits, { hideZeroDecimals: true });
 }

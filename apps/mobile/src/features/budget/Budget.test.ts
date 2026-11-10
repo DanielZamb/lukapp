@@ -114,7 +114,7 @@ test("creation chooses a category before the composer, then saves shared-parser 
   expect(screen.findAll((node) => String(node.type) === "EditorSheet")).toHaveLength(0);
   expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props).toMatchObject({ keyboardType: "decimal-pad", placeholder: "0" });
   expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(false);
-  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("800000");
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("800.000");
   expect(screen.findByProps({ accessibilityLabel: "COP 800.000" }).props.accessibilityState.selected).toBe(true);
   expect(texts(screen).some((text) => text.startsWith("Repeats each month"))).toBe(false);
   expect(screen.findByProps({ accessibilityLabel: "Remaining jar" }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 0, text: "−COP 60.000 remaining" });
@@ -209,7 +209,7 @@ test("composer waits for spending and preserves a failed save for a safe retry",
   expect(texts(screen)).toContain("COP 0 out this month");
   expect(texts(screen)).toContain("COP 200.000");
   expect(screen.findAllByProps({ accessibilityLabel: "COP 0" })).toHaveLength(0);
-  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("400000");
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("400.000");
   expect(screen.findByProps({ accessibilityLabel: "COP 400.000" }).props.accessibilityState.selected).toBe(true);
   save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
@@ -370,8 +370,8 @@ test("an existing limit saves typed amounts below and above it that no shortcut 
 test.each([
   { typed: "", message: "Type the new limit." },
   { typed: "-50.000", message: "The limit must be more than zero." },
-  { typed: ",", message: "Check the amount. Use dots for thousands and a comma for cents." },
-  { typed: "-", message: "Check the amount. Use dots for thousands and a comma for cents." },
+  { typed: ",", message: "Write the amount like this: 1.234,50" },
+  { typed: "-", message: "Write the amount like this: 1.234,50" },
 ])("typed limit '$typed' cannot be saved and says why", async ({ typed, message }) => {
   limitJar();
   const screen = await render();

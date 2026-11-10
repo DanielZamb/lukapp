@@ -1,6 +1,6 @@
 import type { Language, Translator } from "../../../../../src/i18n";
-import { compactBody } from "../budget/model";
-import { formatAmount, toMajorUnits } from "../money";
+import { compactMoney } from "../amount/compact";
+import { formatAmount } from "../money";
 import { historyDateLabel } from "./filter";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../api";
@@ -38,14 +38,8 @@ export function historyAmount(amount: HistoryRow["amount"], signed = false) {
 }
 
 export function compactHistoryAmount(minorUnits: number, currency: string, language: Language) {
-  const amount = toMajorUnits(Math.abs(minorUnits), currency);
-  const sign = minorUnits < 0 ? "−" : "";
-  const scale = amount >= 1_000_000 ? 1_000_000 : amount >= 1000 ? 1000 : 1;
-  const value = amount / scale;
   const symbol = currency === "COP" || currency === "USD" ? "$" : `${currency} `;
-  if (scale === 1) return `${sign}${symbol}${language === "es" ? String(value).replace(".", ",") : value}`;
-  const body = value.toFixed(value >= 10 || value % 1 === 0 ? 0 : 1);
-  return `${sign}${symbol}${compactBody(body, scale === 1_000_000 ? "millions" : "thousands", language)}`;
+  return `${minorUnits < 0 ? "−" : ""}${symbol}${compactMoney(Math.abs(minorUnits), currency, language, "overview")}`;
 }
 
 export function historyListRow(row: HistoryRow, categories: HistoryCategory[], places: HistoryPlace[], currentDate: string,

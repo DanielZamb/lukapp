@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme, useThemeMode } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
-import { formatAmount, parseMoney } from "../money";
+import { amountMinorUnits, amountOfMinorUnits, amountSign, type AmountSession } from "../amount/session";
 import { appInitial } from "./appCatalog";
 import { IconTile } from "./IntakeParts";
 import { pieces, suggest, type Mention } from "./suggest";
@@ -31,8 +31,8 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
   notification: KeptNotification;
   appLabel?: string;
   currency: string;
-  /** The form's current signed amount text. */
-  amount: string;
+  /** The form's current signed amount. */
+  amount: AmountSession;
   editable: boolean;
   onUseAmount(minorUnits: number): void;
   onUseDescription(text: string): void;
@@ -45,7 +45,8 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
   const [revealed, setRevealed] = useState(false);
   const [anchor, setAnchor] = useState<number | null>(null);
   const accent = dark ? DARK_PRIMARY_TEXT : theme.primary;
-  const current = (() => { try { return Math.abs(parseMoney(amount, "es-CO", currency)); } catch { return null; } })();
+  const typed = amountMinorUnits(amount);
+  const current = typed === null ? null : Math.abs(typed);
   const chosen = suggestion.amounts.find((mention) => mention.minor === current) ?? null;
   const hidden = suggestion.sensitive !== null && !revealed;
   const label = appLabel ?? notification.packageName;
@@ -111,10 +112,11 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
   </View>;
 }
 
-/** The form's amount text for a tapped amount, keeping the sign the form already has. */
-export function signedAmountText(minorUnits: number, currency: string, current: string, fallback: "in" | "out" | null) {
-  const text = current.trim();
-  // "-" alone is the form's empty expense; an empty form falls back to the suggested direction.
-  const negative = /^[-−]/.test(text) || (text === "" && fallback === "out");
-  return `${negative ? "-" : ""}${formatAmount(minorUnits, currency, { hideZeroDecimals: true })}`;
+/**
+ * The form's amount for a tapped notification amount: the already extracted minor units, written in the workspace
+ * currency's format, keeping the sign the form already has. An empty form falls back to the suggested direction.
+ */
+export function signedAmount(minorUnits: number, currency: string, current: AmountSession, fallback: "in" | "out" | null) {
+  const negative = amountSign(current) === "-" || (current.editor.text.trim() === "" && fallback === "out");
+  return amountOfMinorUnits(currency, negative ? -minorUnits : minorUnits, { hideZeroDecimals: true });
 }

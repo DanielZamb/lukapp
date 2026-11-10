@@ -51,7 +51,7 @@ import { beginPostIn, keepIn, parseLocalEntryDocument, readRaw, storageKey, writ
 let root: ReactTestRenderer | undefined;
 let f: ReturnType<typeof fixture>;
 const facts: LocalEntryFacts = {
-  workspaceId: "workspace-1", currency: "COP", entryType: "normal", amountText: "-12.000", accountingDate: "2026-10-23",
+  workspaceId: "workspace-1", currency: "COP", entryType: "normal", amountText: "-12.000", amountFormat: "pre-currency", accountingDate: "2026-10-23",
   description: "Taxi", profileId: "account-1", destinationId: null, categories: { ids: [], primaryId: null },
 };
 
@@ -66,7 +66,7 @@ beforeEach(async () => {
   f = fixture();
   f.setPages([{ captures: [capture, { ...capture, captureId: "capture-2", description: "Bakery" }], nextCursor: null }]);
   await f.service.refresh();
-  const taxi = keepIn({ v: 1, drafts: [] }, { facts }, now, () => "taxi");
+  const taxi = keepIn({ v: 2, drafts: [] }, { facts }, now, () => "taxi");
   const lunch = keepIn(taxi.document, { facts: { ...facts, description: "Lunch" } }, now, () => "lunch");
   const posting = beginPostIn(lunch.document, { command: { kind: "expense", payload: {
     workspaceId: "workspace-1", financialAccountProfileId: "account-1", amount: { currency: "COP", minorUnits: 900000 },

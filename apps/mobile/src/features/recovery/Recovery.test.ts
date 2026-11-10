@@ -4,6 +4,10 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from "rea
 import { Text, TextInput } from "react-native";
 import { getFunctionName, type FunctionReturnType } from "convex/server";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
+const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
 import {
   BaseNavigationContainer, createNavigationContainerRef, createNavigatorFactory,
   StackActions, StackRouter, useNavigationBuilder,
@@ -143,13 +147,13 @@ test("zero plans opens candidates, and the selected expense drafts and activates
   expect(screen.findByType(Header).props.eyebrow).toBe("DENTAL CARE · DRAFT");
   expect(screen.findByType(RecoveryDraft).props).toMatchObject({
     candidate: { title: "Dental care", amountMinorUnits: 48_000_000 },
-    installmentCount: 4, amount: "120.000", destinationId: "savings",
+    installmentCount: 4, amount: typedAmount("120.000"), destinationId: "savings",
   });
   expect(screen.findByType(ListRow).props).toMatchObject({ title: "Destination", value: "Savings" });
-  await act(async () => { screen.findByType(RecoveryDraft).props.onAmount("119.999"); });
+  await act(async () => { screen.findByType(RecoveryDraft).props.onAmount(money("119.999")); });
   expect(screen.findByType(PrimaryButton).props.disabled).toBe(true);
   expect(screen.findByType(RecoveryDraft).props.suggestion.valid).toBe(false);
-  await act(async () => { screen.findByType(RecoveryDraft).props.onAmount("132.000"); });
+  await act(async () => { screen.findByType(RecoveryDraft).props.onAmount(money("132.000")); });
   expect(screen.findByType(RecoveryDraft).props.suggestion).toMatchObject({
     installmentMinorUnits: 13_200_000, premiumMinorUnits: 4_800_000, valid: true,
   });
@@ -180,9 +184,9 @@ test("activation keeps the draft locked and hides back until completion replaces
   expect(screen.findByType(RecoveryDraft).props.busy).toBe(true);
   await act(async () => {
     screen.findByType(RecoveryDraft).props.onMonths(12);
-    screen.findByType(RecoveryDraft).props.onAmount("140.000");
+    screen.findByType(RecoveryDraft).props.onAmount(money("140.000"));
   });
-  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ installmentCount: 4, amount: "120.000" });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ installmentCount: 4, amount: typedAmount("120.000") });
   const request = remote.activate.mock.calls[0][0];
   await act(async () => {
     finish?.({
@@ -328,7 +332,7 @@ test.each(["header", "android", "ios"])("move is pushed from the plan and %s bac
   const { screen, onBack } = await open([plan], true);
   await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
   expect(screen.findByType(Header).props).toMatchObject({ title: "Move money", eyebrow: "RECOVERY CONTRIBUTION" });
-  expect(screen.findByType(RecoveryMoveScreen).props.amount).toBe("300.000");
+  expect(screen.findByType(RecoveryMoveScreen).props.amount.editor.text).toBe("300.000");
   await act(async () => {
     if (method === "header") screen.findByType(Header).props.onBack();
     else if (method === "android") stack.goBack();
@@ -344,7 +348,7 @@ test.each([false, true])("posting replaces the form and View recovery plan shows
   remote.move.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
   const { screen } = await open([plan], true);
   await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
-  if (capped) await act(async () => { screen.findByType(RecoveryMoveScreen).props.onAmount("1.500.000"); });
+  if (capped) await act(async () => { screen.findByType(RecoveryMoveScreen).props.onAmount(money("1.500.000")); });
   await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
   expect(screen.findByType(Header).props.onBack).toBeUndefined();
   expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ busy: true, editable: false, canDismiss: false });
@@ -480,7 +484,7 @@ test("Cancel plan explains what stays, sends one trimmed command, and the cancel
   await act(async () => { button(screen, "Start a replacement").props.onPress(); });
   expect(screen.findByType(Header).props.eyebrow).toBe("EMERGENCY REPAIR · REPLACEMENT");
   expect(texts()).toContain("This plan replaces the cancelled one. Money counted toward the cancelled plan stays there.");
-  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ candidate: repairCandidate, amount: "300.000", replacing: true });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ candidate: repairCandidate, amount: typedAmount("300.000"), replacing: true });
   await act(async () => { button(screen, "Activate plan").props.onPress(); });
   expect(remote.activate.mock.calls).toEqual([[{
     workspaceId: "workspace", sourceJournalEntryId: "expense-repair", destinationFinancialAccountProfileId: "savings",

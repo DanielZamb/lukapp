@@ -1,0 +1,17 @@
+export const amount = {
+  decimalCommaA11y: "Type a decimal comma for {currency}",
+  decimalPointA11y: "Type a decimal point for {currency}",
+  noDecimalsA11y: "{currency} amounts have no decimals",
+  signA11y: "Switch the amount between minus and plus",
+  markComma: "comma",
+  markPoint: "point",
+  hintDecimal: "Use the {mark} for decimals, for example {example}",
+  hintGrouping: "Separate thousands with the {mark} every three digits, for example {example}",
+  hintFormat: "Write the amount like this: {example}",
+  hintTooManyDecimals: "Use up to {precision} decimal places, for example {example}",
+  hintNoDecimals: "{currency} amounts have no decimals, for example {example}",
+  hintNotNumber: "Type only digits and separators, for example {example}",
+  hintTooLarge: "This amount is too large.",
+  noticeConverted: "Saved earlier as {previous}. Check that {current} is right.",
+  noticeReenter: "We couldn't read the amount saved earlier ({previous}). Type it again.",
+} as const;

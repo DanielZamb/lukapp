@@ -4,6 +4,7 @@ import type { CandidateConfirmResult } from "../../../../../src/notificationInta
 import { finishIntakeWipe, type WipeStore } from "./control";
 import type { LocalInputLease } from "../../local-auth/localInput";
 import { parseIntakeDocument, type IntakeCandidate, type StoredSuggestion } from "./candidates";
+import type { StoredAmountText } from "../amount/storedText";
 import { commandFor, commandSchema, emptyState, ingest, mappingSchema, outcomeSchema, parseState, projectCandidate, prune,
   reviewSchema, serializeState, terminal, type ActiveCandidate, type CandidateState, type SourceMapping } from "./durableState";
 
@@ -137,7 +138,7 @@ export class IntakeService {
       const row: ActiveCandidate = { kind: "active", id: candidate.id,
         digest: await this.wait(this.deps.hash(JSON.stringify(candidate)), generation), recordRevision: 0,
         createdAt: candidate.createdAt, expiresAt: candidate.expiresAt, workspaceId: candidate.workspaceId, currency: candidate.currency,
-        origin: { kind: "legacy" }, originalSuggestion: { ...candidate.suggestion, currency: candidate.currency }, review: candidate.suggestion, reviewAmountText: null,
+        origin: { kind: "legacy" }, originalSuggestion: { ...candidate.suggestion, currency: candidate.currency }, review: candidate.suggestion, reviewAmountText: null, reviewAmountFormat: null,
         parserVersion: candidate.parserVersion, consentVersion: candidate.consentVersion,
         status: { kind: "review", currencyReviewed: true, ...(candidate.error ? { error: candidate.error } : {}) } };
       state.records.push(row);
@@ -210,13 +211,17 @@ export class IntakeService {
   }
   read(id: string) { return this.snapshot.state.records.find((r): r is ActiveCandidate => r.id === id && r.kind === "active" && r.expiresAt > this.deps.now()) ?? null; }
   candidates(): IntakeCandidate[] { return this.snapshot.state.records.flatMap((r) => r.kind === "active" && r.expiresAt > this.deps.now() ? [projectCandidate(r)] : []); }
-  updateReview(id: string, revision: number, review: StoredSuggestion, options: { currencyReviewed?: boolean; amountText?: string } = {}) {
+  updateReview(id: string, revision: number, review: StoredSuggestion, options: { currencyReviewed?: boolean; amount?: StoredAmountText } = {}) {
     const parsed = reviewSchema.parse(review);
     const known = this.snapshot.state.records.find((row) => row.id === id);
     const edited = (row: ActiveCandidate): ActiveCandidate => {
       if (row.status.kind !== "review") throw new Error("Confirmation frozen");
       const currencyReviewed = row.status.currencyReviewed || options.currencyReviewed === true;
-      return { ...row, review: parsed, reviewAmountText: options.amountText ?? row.reviewAmountText, recordRevision: row.recordRevision + 1,
+      const { reviewAmountReenter: _previous, ...kept } = row;
+      const amount = options.amount
+        ? { reviewAmountText: options.amount.text, reviewAmountFormat: options.amount.format, ...(options.amount.reenter ? { reviewAmountReenter: true as const } : {}) }
+        : { reviewAmountText: row.reviewAmountText, reviewAmountFormat: row.reviewAmountFormat, ...(row.reviewAmountReenter ? { reviewAmountReenter: true as const } : {}) };
+      return { ...kept, review: parsed, ...amount, recordRevision: row.recordRevision + 1,
         status: { kind: "review", currencyReviewed, ...(!currencyReviewed ? { error: "Review unresolved currency" } : {}) } };
     };
     return this.enqueue((generation) => this.change(generation, (state) => {

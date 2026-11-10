@@ -221,9 +221,9 @@ test.each(["now", "wait"] as const)("priority segments are radios with %s select
 
 test.each([
   { direction: "out", amountMinorUnits: 126400, currency: "COP", expected: "COP 1.264,00" },
-  { direction: "in", amountMinorUnits: 126400, currency: "USD", expected: "USD 1.264,00" },
+  { direction: "in", amountMinorUnits: 126400, currency: "USD", expected: "USD 1,264.00" },
   { direction: "out", amountMinorUnits: -126400, currency: "COP", expected: "COP 1.264,00" },
-  { direction: "in", amountMinorUnits: -126400, currency: "USD", expected: "USD 1.264,00" },
+  { direction: "in", amountMinorUnits: -126400, currency: "USD", expected: "USD 1,264.00" },
 ] as const)("a $direction Candidate with $amountMinorUnits $currency has an unsigned amount and review label", async ({ direction, amountMinorUnits, currency, expected }) => {
   const onOpenCandidate = vi.fn();
   await act(async () => {

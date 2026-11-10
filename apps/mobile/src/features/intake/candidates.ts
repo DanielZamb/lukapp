@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import type { IntakeSuggestion } from "../../../../../src/notificationIntake/types";
 import { isReadyCandidate } from "./ready";
 import { suggest } from "./suggest";
+import type { StoredAmountText } from "../amount/storedText";
 
 export { isReadyCandidate };
 
@@ -28,7 +29,8 @@ export type IntakeCandidate = {
   workspaceId: string;
   currency: "COP" | "USD";
   suggestion: StoredSuggestion;
-  reviewAmountText?: string | null;
+  /** The amount text the person typed while reviewing, with its grammar. */
+  reviewAmount?: StoredAmountText | null;
   parserVersion: string;
   consentVersion: string;
   error?: string;
@@ -130,7 +132,7 @@ const MONEY_ACTIVITY = /\b(?:dinero|plata|transfer\p{L}*|transacci\p{L}*|consign
 
 export function isOtherNotification(row: IntakeCandidate) {
   if (!row.notification?.text.trim() || row.error || row.suggestion.amountMinorUnits !== null || row.suggestion.direction !== null ||
-    row.reviewAmountText?.replace(/[-−+\s]/g, "") || MONEY_ACTIVITY.test(row.notification.text)) return false;
+    row.reviewAmount?.text.replace(/[-−+\s]/g, "") || MONEY_ACTIVITY.test(row.notification.text)) return false;
   const suggestion = suggest({ text: row.notification.text });
   return !suggestion.amount && !suggestion.direction && APP_NOTICE.test(row.notification.text);
 }

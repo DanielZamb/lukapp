@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
-import { formatMoney, parseMoney } from "../money";
 import { defaultAccountingDate } from "../timeZones";
 import type { AccountSetupRequest, CategoryNature } from "../categories/model";
 import type { TransactionCategories } from "../categories/transactionSelection";
@@ -24,6 +23,17 @@ import type {
 import { intakeConfirmOutcome } from "../../../../../src/notificationIntake/outcome";
 import { useT } from "../../i18n";
 import { rejectionMessage } from "./rejection";
+import type { AmountNotice, StoredAmountText } from "../amount/storedText";
+import {
+  amountMinorUnits,
+  amountOfMinorUnits,
+  amountSign,
+  openAmount,
+  openSavedAmount,
+  storedAmountOf,
+  withAmountSign,
+  type AmountSession,
+} from "../amount/session";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -60,7 +70,7 @@ export type PlaceDraft = {
   name: string;
   emoji?: string;
   productKind: PlaceKind | null;
-  amount: string;
+  amount: AmountSession;
   date: string;
   target?: Extract<PendingPosting, { kind: "setup" }>["target"];
 };
@@ -86,12 +96,34 @@ export type PostingDraftsSession = {
 
 /** Equal keys mean the person has nothing new to keep. */
 function factsKey(facts: LocalEntryFacts) {
-  return JSON.stringify([facts.workspaceId, facts.currency, facts.entryType, facts.amountText, facts.accountingDate,
-    facts.description, facts.profileId, facts.destinationId, facts.categories.ids, facts.categories.primaryId]);
+  return JSON.stringify([facts.workspaceId, facts.currency, facts.entryType, facts.amountText, facts.amountFormat,
+    facts.amountReenter === true, facts.accountingDate, facts.description, facts.profileId, facts.destinationId,
+    facts.categories.ids, facts.categories.primaryId]);
 }
 
-function categoryAmount(value: string, nature: CategoryNature) {
-  return `${nature === "Income" ? "+" : "-"}${value.replace(/^[+\-−]/, "")}`;
+function factsAmount(facts: LocalEntryFacts): StoredAmountText {
+  return { text: facts.amountText, format: facts.amountFormat, ...(facts.amountReenter ? { reenter: true } : {}) };
+}
+
+function amountFacts(stored: StoredAmountText): Pick<LocalEntryFacts, "amountText" | "amountFormat" | "amountReenter"> {
+  return { amountText: stored.text, amountFormat: stored.format, ...(stored.reenter ? { amountReenter: true } : {}) };
+}
+
+function categoryAmount(value: AmountSession, nature: CategoryNature) {
+  return withAmountSign(value, nature === "Income" ? "+" : "-");
+}
+
+/** The opened saved amount, while the person has not changed its text. */
+type OpenedAmount = { session: AmountSession; stored: StoredAmountText; notice: AmountNotice | null };
+function untouched(opened: OpenedAmount | null, amount: AmountSession) {
+  return opened !== null && opened.session.currency === amount.currency && opened.session.editor.text === amount.editor.text;
+}
+
+/** The amount of a complete session. Submission paths call it after checking validity, and it refuses again. */
+function requiredMinorUnits(session: AmountSession): number {
+  const minorUnits = amountMinorUnits(session);
+  if (minorUnits === null) throw new Error("Amount is not complete");
+  return minorUnits;
 }
 
 export function usePostingEditor(
@@ -104,7 +136,9 @@ export function usePostingEditor(
   const requestedId = session.draftId;
   const intake = session.intake ?? null;
   const isolate = session.intakeRoute === true || intake !== null;
-  const [amount, setAmount] = useState("-");
+  const [amount, setAmount] = useState(() => openAmount(account.currency, "-"));
+  const [openedAmount, setOpenedAmount] = useState<OpenedAmount | null>(null);
+  const [boundCurrency, setBoundCurrency] = useState(account.currency);
   const [description, setDescription] = useState("");
   const [classification, setClassification] = useState<{
     value: TransactionCategories;
@@ -155,16 +189,10 @@ export function usePostingEditor(
     !intake?.frozen;
   function hydrateFromCommand(value: PendingPosting) {
     const payload = value.payload;
+    setOpenedAmount(null);
     setDate(payload.accountingDate);
-    setAmount(
-      formatMoney({
-        ...payload.amount,
-        minorUnits:
-          value.kind === "expense"
-            ? -payload.amount.minorUnits
-            : payload.amount.minorUnits,
-      }).replace(`${payload.amount.currency} `, ""),
-    );
+    setAmount(amountOfMinorUnits(payload.amount.currency,
+      value.kind === "expense" ? -payload.amount.minorUnits : payload.amount.minorUnits));
     setDescription("description" in payload ? payload.description : "");
     setEntryType(
       value.kind === "transfer"
@@ -178,10 +206,7 @@ export function usePostingEditor(
         name: value.payload.name,
         ...(value.payload.emoji ? { emoji: value.payload.emoji } : {}),
         productKind: value.payload.productKind,
-        amount: formatMoney(value.payload.amount).replace(
-          `${payload.amount.currency} `,
-          "",
-        ),
+        amount: amountOfMinorUnits(value.payload.amount.currency, value.payload.amount.minorUnits),
         date: payload.accountingDate,
         target: value.target,
       });
@@ -202,7 +227,10 @@ export function usePostingEditor(
       }, value.kind === "income" ? "Income" : value.kind === "expense" ? "Expense" : null);
   }
   function hydrateFromFacts(facts: LocalEntryFacts) {
-    setAmount(facts.amountText);
+    const stored = factsAmount(facts);
+    const opened = openSavedAmount(facts.currency, stored);
+    setAmount(opened.session);
+    setOpenedAmount({ ...opened, stored });
     setDescription(facts.description);
     setDate(facts.accountingDate);
     setEntryType(facts.entryType);
@@ -212,7 +240,7 @@ export function usePostingEditor(
     setCategories({
       ids: [...facts.categories.ids],
       primaryId: facts.categories.primaryId,
-    }, facts.entryType === "normal" ? (/^[\-−]/.test(facts.amountText.trim()) ? "Expense" : "Income") : null);
+    }, facts.entryType === "normal" ? (amountSign(opened.session) === "-" ? "Expense" : "Income") : null);
     setSetup(null);
   }
   function assertSameWorkspace(draft: LocalEntryDraft) {
@@ -247,7 +275,8 @@ export function usePostingEditor(
   }
   function resetComposer() {
     const today = defaultAccountingDate(account.timeZone);
-    setAmount("-");
+    setAmount(openAmount(account.currency, "-"));
+    setOpenedAmount(null);
     setDescription("");
     setCategories({ ids: [], primaryId: null });
     setDate(today);
@@ -269,7 +298,7 @@ export function usePostingEditor(
       description: description.trim(),
       amount: {
         currency,
-        minorUnits: Math.abs(parseMoney(amount, "es-CO", account.currency)),
+        minorUnits: Math.abs(requiredMinorUnits(amount)),
       },
       accountingDate: date,
       financialAccountProfileId: profileId,
@@ -282,7 +311,7 @@ export function usePostingEditor(
       workspaceId: account.workspaceId,
       currency: account.currency,
       entryType: "normal",
-      amountText: "-",
+      ...amountFacts(storedAmountOf(openAmount(account.currency, "-"))),
       accountingDate,
       description: "",
       profileId: account.financialAccountProfileId,
@@ -295,7 +324,7 @@ export function usePostingEditor(
       workspaceId: account.workspaceId,
       currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
       entryType: entryType === "transfer" ? "transfer" : "normal",
-      amountText: amount,
+      ...amountFacts(openedAmount && untouched(openedAmount, amount) ? openedAmount.stored : storedAmountOf(amount)),
       accountingDate: date,
       description,
       profileId,
@@ -373,12 +402,13 @@ export function usePostingEditor(
     hydrateFromFacts(intake.facts);
   }, [loading, intake, pending, blocked]);
 
-  let minorUnits: number | null = null;
-  try {
-    minorUnits = parseMoney(amount, "es-CO", account.currency);
-  } catch {
-    /* Incomplete edits stay editable. */
+  if (boundCurrency !== account.currency) {
+    setBoundCurrency(account.currency);
+    setAmount(openAmount(account.currency, "-"));
+    setOpenedAmount(null);
+    if (setup) setSetup({ ...setup, amount: openAmount(account.currency, "0") });
   }
+  const minorUnits = amountMinorUnits(amount);
   const amountValid =
     minorUnits !== null &&
     (entryType === "initial" ? minorUnits >= 0 : minorUnits !== 0);
@@ -400,7 +430,7 @@ export function usePostingEditor(
           productKind: setup.productKind,
           amount: {
             currency: account.currency,
-            minorUnits: parseMoney(setup.amount, "es-CO", account.currency),
+            minorUnits: requiredMinorUnits(setup.amount),
           },
           accountingDate: setup.date,
           idempotencyKey: transport.newKey(),
@@ -411,7 +441,7 @@ export function usePostingEditor(
       workspaceId: account.workspaceId,
       amount: {
         currency: account.currency,
-        minorUnits: Math.abs(parseMoney(amount, "es-CO", account.currency)),
+        minorUnits: Math.abs(requiredMinorUnits(amount)),
       },
       accountingDate: date,
       description: description.trim(),
@@ -451,12 +481,8 @@ export function usePostingEditor(
       },
     };
   }
-  let setupValid = false;
-  try {
-    setupValid = !!setup?.name.trim() && setup.productKind !== null && parseMoney(setup.amount, "es-CO", account.currency) >= 0;
-  } catch {
-    /* Keep incomplete setup editable. */
-  }
+  const setupMinorUnits = setup && setup.amount.currency === account.currency ? amountMinorUnits(setup.amount) : null;
+  const setupValid = !!setup?.name.trim() && setup.productKind !== null && setupMinorUnits !== null && setupMinorUnits >= 0;
   const canSubmit =
     !busy &&
     !loading &&
@@ -574,7 +600,8 @@ export function usePostingEditor(
         await saveCandidateReview();
         const receipt = await intake.confirm(snapshotConfirmed(intake));
         if (!mounted.active) return;
-        setAmount("-");
+        setAmount(openAmount(account.currency, "-"));
+        setOpenedAmount(null);
         setDescription("");
         setCategories({ ids: [], primaryId: null });
         setPosted(receipt);
@@ -617,10 +644,12 @@ export function usePostingEditor(
         setSetupPosted(receipt);
         return;
       }
-      setAmount(entryType === "initial" ? "0" : "-");
+      setAmount(openAmount(account.currency, entryType === "initial" ? "0" : "-"));
       setDescription("");
       setCategories({ ids: [], primaryId: null });
-      setSavedFacts(factsKey({ ...snapshotFacts(), amountText: "-", description: "", categories: { ids: [], primaryId: null } }));
+      setOpenedAmount(null);
+      setSavedFacts(factsKey({ ...snapshotFacts(), amountReenter: undefined, ...amountFacts(storedAmountOf(openAmount(account.currency, "-"))),
+        description: "", categories: { ids: [], primaryId: null } }));
       setPosted(receipt);
     } catch (error) {
       if (transport.reportFailure?.(error)) return;
@@ -676,18 +705,16 @@ export function usePostingEditor(
     factsKey(snapshotFacts()) !== savedFacts;
   return {
     amount,
-    setAmount: (value: string) => {
-      if (canEdit()) {
+    amountNotice: openedAmount && untouched(openedAmount, amount) ? openedAmount.notice : null,
+    signLocked: entryType === "normal" && classification.nature !== null,
+    setAmount: (value: AmountSession) => {
+      if (canEdit() && value.currency === amount.currency) {
         if (entryType === "normal" && classification.nature) {
           setAmount(categoryAmount(value, classification.nature));
           return;
         }
-        let nextDirection = direction;
-        try {
-          nextDirection = parseMoney(value, "es-CO", account.currency) > 0 ? "in" : "out";
-        } catch {
-          /* Preserve the selection during incomplete edits. */
-        }
+        const next = amountMinorUnits(value);
+        const nextDirection = next === null ? direction : next > 0 ? "in" : "out";
         if (nextDirection !== direction)
           setCategories({ ids: [], primaryId: null });
         setAmount(value);
@@ -756,7 +783,7 @@ export function usePostingEditor(
         name: request.name,
         emoji: request.style.emoji,
         productKind: request.answer === "payDebt" ? null : "bankAccount",
-        amount: "0",
+        amount: openAmount(account.currency, "0"),
         date: defaultAccountingDate(account.timeZone),
         target: { kind: "destination", sourceProfileId: profileId },
       });

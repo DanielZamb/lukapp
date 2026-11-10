@@ -12,7 +12,7 @@ import { api } from "../api";
 import { usePostedActivity } from "../activity";
 import { experienceLevel } from "../levelDoor/model";
 import { useT } from "../../i18n";
-import { formatMoney } from "../money";
+import { amountOfMinorUnits } from "../amount/session";
 import { BudgetBoard, type BoardNotice } from "./BudgetBoard";
 import { BudgetCreation } from "./BudgetCreation";
 import { BudgetEditorSheet } from "./BudgetEditorSheet";
@@ -116,7 +116,7 @@ function Editor({ seed, categories, color, onClose, onSaved }: {
     previousMonth={previousMonth}
     previousSpendMinorUnits={previous ? previous.categories.find((category) => category.categoryId === editor.categoryId)?.minorUnits ?? 0 : undefined}
     {...editor}
-    onLimit={(minorUnits) => { interact(); editor.onAmount(formatMoney({ currency: seed.currency, minorUnits }).replace(`${seed.currency} `, "")); }}
+    onLimit={(minorUnits) => { interact(); editor.onAmount(amountOfMinorUnits(seed.currency, minorUnits)); }}
     onAmount={(value) => { interact(); editor.onAmount(value); }}
     onResetAmount={() => { interact(); editor.onResetAmount(); }}
     onSave={() => { interact(); void editor.submit(); }}

@@ -1,6 +1,6 @@
 import type { Language, MessageKey, Translator } from "../../../../../src/i18n";
 import { formatDayMonth, formatLongDate, formatMonthName } from "../../../../../src/i18n/format";
-import { toMajorUnits } from "../money";
+import { formatAmount, toMajorUnits } from "../money";
 import type { HistoryRow } from "./types";
 
 export type DateRangeId = "all" | "7d" | `${number}-${string}`;
@@ -107,8 +107,11 @@ function primaryCategoryName(row: HistoryRow) {
   return row.userCategories[0]?.name ?? "";
 }
 
-function majorUnitDigits(amount: HistoryRow["amount"]) {
-  return String(toMajorUnits(Math.abs(amount.minorUnits), amount.currency));
+/** The amount as plain digits and as it is shown, so a search typed either way finds the row. It is never parsed. */
+function amountSearchText(amount: HistoryRow["amount"]) {
+  const minorUnits = Math.abs(amount.minorUnits);
+  return [String(toMajorUnits(minorUnits, amount.currency)), formatAmount(minorUnits, amount.currency),
+    formatAmount(minorUnits, amount.currency, { hideZeroDecimals: true })].join(" ");
 }
 
 function searchHaystack(
@@ -121,7 +124,7 @@ function searchHaystack(
     row.detail,
     ...row.userCategories.map((category) => category.name),
     profileName(row, context.profileNames),
-    majorUnitDigits(row.amount),
+    amountSearchText(row.amount),
     historyDateLabel(row.date, workspaceYear, context.language),
   ]
     .join(" ")

@@ -9,6 +9,9 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
 import { usePostingEditor, type LoadResult } from "./usePostingEditor";
 import type { PendingPosting } from "./pendingPostingSchema";
 type Receipt = { description: string; amount: { currency: string; minorUnits: number } };
@@ -104,7 +107,7 @@ test("acknowledgement clears the entry and shows Posted on the same editor; Done
   const api = transport();
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1.500,00");
+    editor().setAmount(money("-1.500,00"));
     editor().setDescription("Groceries");
     editor().setDate("2026-10-17");
   });
@@ -115,7 +118,7 @@ test("acknowledgement clears the entry and shows Posted on the same editor; Done
     description: "Groceries",
     amount: { currency: "COP", minorUnits: 150000 },
   });
-  expect(editor().amount).toBe("-");
+  expect(editor().amount.editor.text).toBe("-");
   expect(editor().description).toBe("");
   expect(editor().date).toBe("2026-10-17");
   expect(editor().pending).toBe(false);
@@ -124,10 +127,10 @@ test("acknowledgement clears the entry and shows Posted on the same editor; Done
   expect(api.clear).toHaveBeenCalledOnce();
   await act(async () => editor().dismissPosted());
   expect(editor().posted).toBeNull();
-  expect(editor().amount).toBe("-");
+  expect(editor().amount.editor.text).toBe("-");
   expect(api.post).toHaveBeenCalledOnce();
   await act(async () => {
-    editor().setAmount("-2,50");
+    editor().setAmount(money("-2,50"));
     editor().setDescription("Coffee");
   });
   await act(async () => {
@@ -146,14 +149,14 @@ test("an uncertain response keeps the entry locked and retries its exact saved p
   api.post.mockRejectedValueOnce(new Error("Network interrupted"));
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1.234,50");
+    editor().setAmount(money("-1.234,50"));
     editor().setDescription("Food");
   });
   await act(async () => {
     await editor().submit();
   });
   expect(editor().posted).toBeNull();
-  expect(editor().amount).toBe("-1.234,50");
+  expect(editor().amount.editor.text).toBe("-1.234,50");
   expect(editor().pending).toBe(true);
   expect(editor().editable).toBe(false);
   expect(api.clear).not.toHaveBeenCalled();
@@ -197,7 +200,7 @@ test("an uncertain category expense locks selection and retries the exact catego
   api.post.mockRejectedValueOnce(new Error("Network interrupted"));
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1.500,00");
+    editor().setAmount(money("-1.500,00"));
     editor().setDescription("Food");
     editor().setCategories({ ids: ["food-category"], primaryId: null });
   });
@@ -252,7 +255,7 @@ test("three categories and explicit primary remain fixed across timeout, restore
   api.post.mockRejectedValueOnce(new Error("Response lost"));
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-15,00");
+    editor().setAmount(money("-15,00"));
     editor().setCategories({ ids: ["food", "family", "dining"], primaryId: "dining" });
   });
   await act(async () => { await editor().submit(); });
@@ -311,7 +314,7 @@ for (const code of [
     api.post.mockRejectedValueOnce(new ConvexError({ code }));
     const editor = await open(api);
     await act(async () => {
-      editor().setAmount("-1.500,00");
+      editor().setAmount(money("-1.500,00"));
       editor().setDescription("Food");
       editor().setCategories({ ids: ["food-category", "family", "dining"], primaryId: "dining" });
     });
@@ -349,7 +352,7 @@ test("only an explicitly classified accounting rejection unlocks an expense for 
   );
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
     editor().setCategories({ ids: ["food-category"], primaryId: null });
   });
   await act(async () => {
@@ -367,7 +370,7 @@ test("a framework validation error without an accounting marker keeps uncertaint
   api.post.mockRejectedValueOnce(new ConvexError("Argument validation failed"));
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
   });
   await act(async () => {
     await editor().submit();
@@ -389,7 +392,7 @@ for (const code of [
     api.post.mockRejectedValueOnce(denied);
     const editor = await open(api);
     await act(async () => {
-      editor().setAmount("-1,00");
+      editor().setAmount(money("-1,00"));
       editor().setCategories({ ids: ["food-category"], primaryId: null });
     });
     await act(async () => {
@@ -408,7 +411,7 @@ test("a failed acknowledgement delete keeps the same payload and key for safe re
   api.clear.mockRejectedValueOnce(new Error("Storage delete failed"));
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
     editor().setCategories({ ids: ["food-category"], primaryId: null });
   });
   await act(async () => {
@@ -459,7 +462,7 @@ test("a late post response cannot clear the pending entry of a new admission", a
   api.post.mockImplementationOnce(() => response);
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
   });
   let submission: Promise<void> | undefined;
   await act(async () => {
@@ -501,7 +504,7 @@ test("an old mounted transport cannot save or start another post after its lease
   };
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
   });
   lease.deny();
   await act(async () => {
@@ -543,7 +546,7 @@ for (const interruption of ["inactivity", "navigation"]) {
       acknowledge = () => resolve({ description: payload.description, amount: payload.amount });
     }));
     const old = await open(api);
-    await act(async () => { old().setAmount("-1,00"); old().setDescription("Expense A"); });
+    await act(async () => { old().setAmount(money("-1,00")); old().setDescription("Expense A"); });
     let original: Promise<void> | undefined;
     await act(async () => { original = old().submit(); });
     expect(api.post.mock.calls[0][0].idempotencyKey).toBe("expense-1");
@@ -560,7 +563,7 @@ for (const interruption of ["inactivity", "navigation"]) {
     await act(async () => { await next().submit(); });
     expect(api.post.mock.calls[1][0]).toEqual(api.post.mock.calls[0][0]);
     await act(async () => {
-      next().setAmount("-2,50"); next().setDescription("Expense B");
+      next().setAmount(money("-2,50")); next().setDescription("Expense B");
       next().setDate("2026-10-16"); next().setCategories({ ids: ["coffee", "family", "weekend"], primaryId: "coffee" });
     });
     api.post.mockRejectedValueOnce(new Error("B response lost"));
