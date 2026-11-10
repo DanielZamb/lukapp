@@ -11,7 +11,12 @@ import { kindDetails, placeBalanceInput, placeKinds, type PlaceKind } from "./pl
 import { usePlaceStyles } from "./places/styles";
 import { usePostingEditor } from "./posting/usePostingEditor";
 import { usePostingTransport } from "./posting/usePostingTransport";
+import { useT, type MessageKey } from "../i18n";
 import { defaultAccountingDate } from "./timeZones";
+
+const kindLabels: Record<PlaceKind, MessageKey> = {
+  Checking: "home.placeKindChecking", Savings: "home.placeKindSavings", Wallet: "home.placeKindWallet",
+};
 
 export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   defaults: NonNullable<ReturnType<typeof usePersonalDefaults>>;
@@ -22,6 +27,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   const styles = usePlaceStyles();
   const theme = useTheme();
   const ui = useUi();
+  const { t } = useT();
   const { workspace, financialAccountProfile } = defaults;
   const transport = usePostingTransport(subject);
   const setupTransport = useMemo(() => ({ ...transport, load: () => transport.load(undefined, false) }), [transport]);
@@ -48,18 +54,18 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
     }
     if (editor.setupPosted) {
       finished.current = true; sheet.current?.dismiss(); onClose();
-      if (unlockingSave.current) showUnlocked({ door: "account", accountName: editor.setupPosted.description || "The new place" });
+      if (unlockingSave.current) showUnlocked({ door: "account", accountName: editor.setupPosted.description });
       return;
     }
     if (editor.editable && !started.current) {
       started.current = true;
-      editor.setSetup({ name: "New account", productKind: "savingsAccount", emoji: "🏦", amount: "0",
+      editor.setSetup({ name: t("home.addPlaceDefaultName"), productKind: "savingsAccount", emoji: "🏦", amount: "0",
         date: defaultAccountingDate(workspace.timeZone), target: { kind: "source" } });
     }
     if (editor.setup && !presented.current) {
       presented.current = true; sheet.current?.present();
     }
-  }, [editor, onClose, showUnlocked, workspace.timeZone]);
+  }, [editor, onClose, showUnlocked, t, workspace.timeZone]);
   const setup = editor.setup;
   function pickKind(next: PlaceKind) {
     if (!setup || !editor.editable) return;
@@ -68,10 +74,10 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
       emoji: emojiChanged ? setup.emoji : kindDetails[next].emoji });
   }
   return <>
-    {editor.loading && <ActivityIndicator accessibilityLabel="Loading place setup" />}
+    {editor.loading && <ActivityIndicator accessibilityLabel={t("home.addPlaceLoading")} />}
     {!setup && !!editor.error && <>
       <Text accessibilityRole="alert" style={ui.error}>{editor.error}</Text>
-      <SecondaryButton label="Close place setup" onPress={onClose} />
+      <SecondaryButton label={t("home.addPlaceClose")} onPress={onClose} />
     </>}
     <BottomSheetModal ref={sheet} snapPoints={["80%"]} enableDynamicSizing={false}
       enablePanDownToClose={!editor.busy} onDismiss={onClose}
@@ -80,42 +86,42 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
       keyboardBehavior="interactive" keyboardBlurBehavior="restore">
       {setup && <BottomSheetScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetBody}>
         <View style={styles.field}>
-          <Text style={ui.label}>{unlocking ? "THIS OPENS LEVEL 1" : "ANOTHER PLACE"}</Text>
-          <Text accessibilityRole="header" style={styles.sheetTitle}>Add a place</Text>
+          <Text style={ui.label}>{unlocking ? t("home.addPlaceUnlockEyebrow") : t("home.addPlaceEyebrow")}</Text>
+          <Text accessibilityRole="header" style={styles.sheetTitle}>{t("home.addPlaceTitle")}</Text>
         </View>
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Name you recognize</Text>
-          <BottomSheetTextInput accessibilityLabel="Account name" placeholder="Savings" placeholderTextColor={theme.mutedForeground}
+          <Text style={styles.fieldLabel}>{t("home.addPlaceName")}</Text>
+          <BottomSheetTextInput accessibilityLabel={t("home.addPlaceNameA11y")} placeholder={t("home.addPlaceNamePlaceholder")} placeholderTextColor={theme.mutedForeground}
             value={name} editable={editor.editable} style={styles.input} onChangeText={(value) => {
-              interact(); setName(value); editor.setSetup({ ...setup, name: value.trim() || "New account" });
+              interact(); setName(value); editor.setSetup({ ...setup, name: value.trim() || t("home.addPlaceDefaultName") });
             }} />
         </View>
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Type</Text>
+          <Text style={styles.fieldLabel}>{t("home.addPlaceType")}</Text>
           <View style={styles.chips}>{placeKinds.map((entry) => <Pressable key={entry} accessibilityRole="radio"
-            accessibilityLabel={entry} accessibilityState={{ selected: kind === entry, disabled: !editor.editable }}
+            accessibilityLabel={t(kindLabels[entry])} accessibilityState={{ selected: kind === entry, disabled: !editor.editable }}
             disabled={!editor.editable} onPress={() => pickKind(entry)} style={[styles.chip, kind === entry && styles.selected]}>
-            <Text style={styles.chipText}>{entry}</Text>
+            <Text style={styles.chipText}>{t(kindLabels[entry])}</Text>
           </Pressable>)}</View>
         </View>
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Look</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Choose emoji" disabled={!editor.editable}
+          <Text style={styles.fieldLabel}>{t("home.addPlaceLook")}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("home.addPlaceChooseEmoji")} disabled={!editor.editable}
             onPress={() => { interact(); setEmojiOpen(true); }} style={styles.look}>
-            <Text style={styles.lookGlyph}>{setup.emoji}</Text><Text style={ui.muted}>Change</Text>
+            <Text style={styles.lookGlyph}>{setup.emoji}</Text><Text style={ui.muted}>{t("home.addPlaceChange")}</Text>
           </Pressable>
         </View>
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Balance today</Text>
-          <BottomSheetTextInput accessibilityLabel="Balance today" keyboardType="decimal-pad" placeholder="0"
+          <Text style={styles.fieldLabel}>{t("home.addPlaceBalance")}</Text>
+          <BottomSheetTextInput accessibilityLabel={t("home.addPlaceBalance")} keyboardType="decimal-pad" placeholder="0"
             placeholderTextColor={theme.mutedForeground} value={balance} editable={editor.editable} style={styles.input}
             onChangeText={(value) => { interact(); setBalance(value);
               editor.setSetup({ ...setup, amount: placeBalanceInput(value, workspace.functionalCurrency) });
             }} />
         </View>
         {!!editor.error && <Text accessibilityRole="alert" style={ui.error}>{editor.error}</Text>}
-        {editor.pending && <Text style={ui.muted}>This place is saved for retry. Its answers stay fixed until confirmed.</Text>}
-        <PrimaryButton label={editor.pending ? "Retry setup" : "Add this place"} trailingIcon="checkmark"
+        {editor.pending && <Text style={ui.muted}>{t("home.addPlacePending")}</Text>}
+        <PrimaryButton label={editor.pending ? t("home.addPlaceRetry") : t("home.addPlaceSubmit")} trailingIcon="checkmark"
           pending={editor.busy} disabled={!editor.canSubmit} onPress={() => {
             if (!editor.canSubmit) return;
             interact();

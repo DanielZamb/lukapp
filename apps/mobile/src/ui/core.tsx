@@ -498,7 +498,7 @@ export function ConfirmationScreen({
   title,
   detail,
   onContinue,
-  buttonLabel = "Continue",
+  buttonLabel,
 }: {
   title: string;
   detail: string;
@@ -506,6 +506,7 @@ export function ConfirmationScreen({
   buttonLabel?: string;
 }) {
   const { theme, styles } = useCore();
+  const { t } = useT();
   return (
     <Screen contentStyle={styles.confirmationContent}>
       <View style={styles.confirmation}>
@@ -514,7 +515,7 @@ export function ConfirmationScreen({
         </View>
         <Text style={styles.confirmTitle}>{title}</Text>
         <Text style={styles.confirmDetail}>{detail}</Text>
-        <PrimaryButton label={buttonLabel} onPress={onContinue} />
+        <PrimaryButton label={buttonLabel ?? t("home.confirmationContinue")} onPress={onContinue} />
       </View>
     </Screen>
   );

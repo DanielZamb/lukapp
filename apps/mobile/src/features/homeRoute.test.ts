@@ -4,6 +4,8 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 vi.mock("../ui/Brand", () => ({ BrandLogo: "brand-logo", BrandMark: "brand-mark", BrandSplash: "brand-splash" }));
 import Index from "../../app/index";
+import { LanguageProvider } from "../i18n";
+import { catalogs } from "../../../../src/i18n";
 import type { BudgetJar } from "./budget/model";
 
 type MockPlace = { minorUnits: number; nature?: "Asset" | "Liability" };
@@ -228,4 +230,33 @@ test.each([
   await act(async () => root.update(createElement(Index)));
   expect(texts()).not.toContain(title);
   expect(button("Alerts, nothing needs attention").findAllByType("text")).toHaveLength(0);
+});
+
+test("Home reads in Colombian Spanish with the workspace month, counted places and alert summary", async () => {
+  state.accounts = [{ minorUnits: 500_00 }, { minorUnits: 250_00 }];
+  state.inboxCount = 3;
+  alertJars = [{ category: { id: "food", name: "Food", emoji: "🍋" }, limitMinorUnits: 100_00, consumptionMinorUnits: 150_00 }];
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(Index))); });
+  expect(texts()).toEqual([
+    "ESTE MES", "1", "Lo que tienes ahora", "COP 750", "En 2 lugares",
+    "Food se pasó del tope", "COP 50 de más", "3",
+    "Borradores", "3 por revisar", "Resumen", "Este mes, por categoría",
+    "Planes", "Presupuesto de octubre y recuperar ahorros",
+    "¿Qué quieres hacer?", "Crear un lugar", "Otro bolsillo para tu plata", "Crear un movimiento", "Registra un gasto o un ingreso",
+  ]);
+  const labels = root.root.findAllByType("button").map((node) => node.props.accessibilityLabel);
+  expect(labels).toEqual(expect.arrayContaining([
+    "Alertas, 1 se pasó del tope", "Abrir usuario y espacio de trabajo", "Ver lugares", "¿Qué quieres hacer?",
+    "Food se pasó del tope, COP 50 de más", "Borradores, 3 por revisar", "Resumen, Este mes, por categoría",
+    "Planes, Presupuesto de octubre y recuperar ahorros",
+  ]));
+  const english = new Set(Object.values(catalogs.en.home));
+  expect([...texts(), ...labels].filter((text) => english.has(text))).toEqual([]);
+});
+
+test("one place and nothing waiting read in Spanish", async () => {
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(Index))); });
+  expect(texts()).toContain("Un solo bolsillo · Ver este lugar");
+  expect(texts()).toContain("Nada pendiente");
+  expect(button("Borradores, Nada pendiente")).toBeDefined();
 });

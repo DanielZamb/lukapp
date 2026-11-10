@@ -4,6 +4,7 @@ import * as Crypto from "expo-crypto";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import * as ScreenCapture from "expo-screen-capture";
+import { activeTranslator } from "../i18n";
 import { parseInstallMarker, type InstallMarker } from "./installMarker";
 
 // Cache is not backed up. OS eviction conservatively requires sign-in again.
@@ -25,13 +26,14 @@ export async function readInstallMarker(): Promise<InstallMarker> {
   await writeInstallMarker(marker);
   return marker;
 }
-const sentinelOptions: SecureStore.SecureStoreOptions = {
+// The prompt is read when the OS shows it, so it follows the language chosen at that moment.
+const sentinelOptions = (): SecureStore.SecureStoreOptions => ({
   keychainService: "lukapp.local-entry.v1",
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   requireAuthentication: true,
-  authenticationPrompt: "Unlock Lukapp",
+  authenticationPrompt: activeTranslator().t("access.unlock"),
   cancellableAuthentication: true,
-};
+});
 const sentinelKey = (marker: InstallMarker) => `enrollment.${marker.installId}`;
 const sentinelValue = (marker: InstallMarker, subject: string) =>
   `${marker.installId}:${subject}`;
@@ -56,12 +58,12 @@ export async function enrollBiometry(marker: InstallMarker, subject: string) {
   const generation = biometricGeneration;
   await checkStrongBiometry();
   if (generation !== biometricGeneration) throw new Error("Biometrics cancelled");
-  await SecureStore.deleteItemAsync(sentinelKey(marker), sentinelOptions);
+  await SecureStore.deleteItemAsync(sentinelKey(marker), sentinelOptions());
   if (generation !== biometricGeneration) throw new Error("Biometrics cancelled");
   await SecureStore.setItemAsync(
     sentinelKey(marker),
     sentinelValue(marker, subject),
-    sentinelOptions,
+    sentinelOptions(),
   );
 }
 export async function unlockBiometry(marker: InstallMarker, subject: string) {
@@ -72,13 +74,13 @@ export async function unlockBiometry(marker: InstallMarker, subject: string) {
   if (generation !== biometricGeneration) throw new Error("Biometrics cancelled");
   const sentinel = await SecureStore.getItemAsync(
     sentinelKey(marker),
-    sentinelOptions,
+    sentinelOptions(),
   );
   if (sentinel !== sentinelValue(marker, subject))
     throw new Error("Biometric enrollment changed");
 }
 export async function clearBiometricEnrollment(marker: InstallMarker) {
-  await SecureStore.deleteItemAsync(sentinelKey(marker), sentinelOptions);
+  await SecureStore.deleteItemAsync(sentinelKey(marker), sentinelOptions());
 }
 export async function cancelBiometricPrompt() {
   biometricGeneration++;

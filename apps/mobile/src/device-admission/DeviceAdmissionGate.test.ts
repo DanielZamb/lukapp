@@ -1,3 +1,4 @@
+import * as React from "react";
 import { createElement, useEffect } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { getFunctionName, type FunctionReturnType } from "convex/server";
@@ -5,6 +6,7 @@ import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api } from "../features/api";
 import { DeviceAdmissionGate } from "./DeviceAdmissionGate";
+import { LanguageProvider } from "../i18n";
 
 type Status = Pick<FunctionReturnType<typeof api.deviceAccess.status>, "status" | "wipeLocalInput"> & {
   existingLabel?: string;
@@ -335,4 +337,56 @@ test("a same-install candidate attempts verified reclaim and offers replacement 
   expect(root?.root.findAllByProps({ label: "Use this phone instead" })).toHaveLength(1);
   expect(sdk.replace).not.toHaveBeenCalled();
   expect(mounts).toBe(0);
+});
+
+async function openInSpanish(status: typeof sdk.status) {
+  sdk.status = status;
+  vi.stubGlobal("React", React);
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, tree()));
+  });
+}
+function spoken() {
+  return JSON.stringify(root?.toJSON());
+}
+
+test("naming this device reads in Spanish and registers the typed name unchanged", async () => {
+  sdk.ready = false;
+  await openInSpanish({ status: "success", data: { status: "unregistered", wipeLocalInput: false } });
+  const header = root?.root.findByType("header");
+  expect(header?.props).toMatchObject({ title: "Ponle nombre a este celular", eyebrow: "TUS DISPOSITIVOS" });
+  expect(spoken()).toContain("Elige un nombre para reconocer este celular.");
+  expect(spoken()).toContain("NOMBRE DEL DISPOSITIVO");
+  expect(root?.root.findByType("input").props).toMatchObject({ accessibilityLabel: "Nombre del dispositivo", placeholder: "Mi celular" });
+  expect(button("Registrar dispositivo")).toBeDefined();
+  expect(button("Cerrar sesión")).toBeDefined();
+  await act(async () => root?.root.findByType("input").props.onChangeText("Celular de Ana"));
+  await act(async () => button("Registrar dispositivo").props.onPress());
+  expect(sdk.register.mock.calls[0]?.[0]).toMatchObject({ label: "Celular de Ana" });
+});
+
+test("the occupied screen reads in Spanish, offers a Spanish default name and a Spanish date", async () => {
+  sdk.ready = false;
+  await openInSpanish({ status: "success", data: occupied });
+  expect(root?.root.findByType("header").props.title).toBe("Ya usas Lukapp en otro celular Android");
+  expect(spoken()).toContain("Tu cuenta puede usar un celular Android y un iPhone a la vez.");
+  expect(spoken()).toMatch(/Última actividad: 17 de oct de 2026, \d{1,2}:00/);
+  expect(root?.root.findByType("input").props.value).toBe("Mi celular Android");
+  expect(button("Usar este celular")).toBeDefined();
+  expect(button("Seguir usando Old Android")).toBeDefined();
+});
+
+test("closed access and revocation read in Spanish and stay distinguishable", async () => {
+  await openInSpanish({ status: "success", data: { status: "revoked", wipeLocalInput: true } });
+  expect(root?.root.findByType("header").props.title).toBe("Acceso no disponible en este celular");
+  expect(spoken()).toContain("Se revocó el acceso de este celular.");
+  expect(button("Cerrar sesión")).toBeDefined();
+  expect(root?.root.findAllByProps({ label: "Intentar de nuevo" })).toHaveLength(0);
+  await act(async () => root?.unmount());
+  await openInSpanish({ status: "success", data: { status: "revoked", wipeLocalInput: true, movedTo: "iPhone de Ana" } });
+  expect(spoken()).toContain("El acceso pasó a iPhone de Ana");
+  await act(async () => root?.unmount());
+  await openInSpanish({ status: "pending" });
+  expect(spoken()).toContain("Confirmando el acceso de este celular…");
+  expect(button("Revisar de nuevo")).toBeDefined();
 });

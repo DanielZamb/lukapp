@@ -20,6 +20,9 @@ import {
 import { categoryPalette } from "./categories/appearance";
 import { currencyOptions } from "./setup/currencies";
 import { functionalCurrencyCodes } from "../../../../src/accounting/currencies";
+import { catalogs, createTranslator } from "../../../../src/i18n";
+import { LanguageProvider } from "../i18n";
+import { ThemeProvider } from "../ui/themeContext";
 import type { SetupSummary } from "./setup/model";
 
 const backend = vi.hoisted(() => ({ ensure: vi.fn(), place: vi.fn(), save: vi.fn(), clear: vi.fn(), key: 0, suggestions: {} as Record<string, NatureAnswer | null> }));
@@ -237,7 +240,7 @@ test("More searches all supported currencies by code and name, marks selection, 
   await open();
   await press("Food");
   await press("More currencies");
-  expect(new Set(currencyOptions.map(({ code }) => code))).toEqual(
+  expect(new Set(currencyOptions(createTranslator("en")).map(({ code }) => code))).toEqual(
     functionalCurrencyCodes,
   );
   await type("Search currencies", "Canadian");
@@ -563,4 +566,106 @@ test("uncertain defaults keep account queue, categories and currency read-only t
   expect(backend.place.mock.calls[0][0].payload.name).toBe("Reserve A");
   expect(backend.ensure).toHaveBeenCalledTimes(2);
   expect(complete).toHaveBeenCalledWith(expect.objectContaining({ currency: "COP", startingMinorUnits: 1200, categories: [{ ...starterCategories[0], source: "starter" }] }));
+});
+
+async function openInSpanish() {
+  const complete = vi.fn();
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(Setup, { subject: "owner", onComplete: complete, onCancel: vi.fn() })));
+  });
+  await act(async () => root?.root.findByType(SetupCategories).props.onChange([{ ...starterCategories[0], source: "starter" }]));
+  return complete;
+}
+
+test("the setup sheet reads in Spanish through every stage and its errors", async () => {
+  await openInSpanish();
+  expect(text()).toContain("¿En qué se te va la plata?");
+  expect(text()).toContain("CONFIGURACIÓN · UNA HOJA");
+  expect(text()).toContain("Moneda");
+  expect(text()).toContain("Zona horaria");
+  expect(node("Cancelar la configuración")).toBeDefined();
+  await press("COP");
+  expect(text()).toContain("Peso colombiano");
+  expect(text()).toContain("Alertas de compras");
+  await press("Ahora no, Tú agregas los borradores");
+  expect(text()).toContain("Lo que tienes ahora");
+  expect(text()).toContain("Lo del banco más la plata que tienes en el bolsillo.");
+  expect(text()).toContain("Ya conozco mis gastos. Quiero presupuestos.");
+  await type("Monto inicial", "1.500,25");
+  expect(text()).toContain("COP 1.500,25. Lo del banco más la plata que tienes en el bolsillo.");
+  await type("Monto inicial", "-5");
+  await press("Empezar");
+  expect(backend.ensure).not.toHaveBeenCalled();
+  expect(text()).toContain("Escribe cero o la plata que tienes.");
+  await type("Monto inicial", "25");
+  backend.ensure.mockRejectedValueOnce(new ConvexError({ code: "setup_conflict" }));
+  await press("Empezar");
+  expect(text()).toContain("La configuración ya se guardó con otras respuestas. Puedes editar tus respuestas o cancelar.");
+  backend.ensure.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  await press("Empezar");
+  expect(text()).toContain("No pudimos confirmar la configuración. Reintenta con las mismas respuestas.");
+  const english = Object.entries(catalogs.en.setup)
+    .filter(([key, value]) => !/^(zone|currency)\./.test(key) && !value.includes("{"))
+    .map(([, value]) => value);
+  expect(english.filter((value) => text().includes(value))).toEqual([]);
+});
+
+test("a Spanish setup sends the same starter selection as English, so the stored names do not change", async () => {
+  const complete = await openInSpanish();
+  await press("COP");
+  await press("Ahora no, Tú agregas los borradores");
+  await press("Empezar");
+  expect(backend.ensure.mock.calls[0]?.[0].categories).toEqual([
+    { kind: "preset", presetId: "groceries", style: { emoji: "🛒", tone: "primary", color: "h150" } },
+  ]);
+  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ categories: [{ ...starterCategories[0], source: "starter" }] }));
+});
+
+test("currency search reads in Spanish and finds names in the chosen language", async () => {
+  await openInSpanish();
+  await press("Más monedas");
+  await type("Buscar monedas", "dólar canadiense");
+  expect(node("CAD, Dólar canadiense")).toBeDefined();
+  await type("Buscar monedas", "zzz");
+  expect(text()).toContain("Nada coincide con \"zzz\".");
+});
+
+test("the setup completion recap reads in Spanish as whole sentences around stored names", async () => {
+  const summary: SetupSummary = {
+    categories: starterCategories.slice(0, 7).map((category) => ({ ...category, source: "starter" })),
+    currency: "COP", startingMinorUnits: 150025, purchaseAlertsConsent: false, wantsBudgets: true,
+  };
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(SetupCompletion, { summary, onHome: vi.fn(), onNotificationSetup: vi.fn() })));
+  });
+  expect(text()).toContain("¡Listo!");
+  expect(text()).toContain(
+    "Peso colombiano, empezando con COP 1.500,25. Vas a seguir Food, Transport, Dining y 4 más. Tú vas a agregar los borradores. Los presupuestos quedan a un paso.",
+  );
+  expect(node("Ir al inicio")).toBeDefined();
+  expect(nodes("Configurar la lectura de notificaciones")).toHaveLength(0);
+});
+
+test("at the largest text the purchase-alert choices stack and size to their Spanish copy", async () => {
+  const render = async (reflow: boolean) => {
+    await act(async () => root?.unmount());
+    await act(async () => {
+      root = create(createElement(LanguageProvider, { initialPreference: "es" },
+        createElement(ThemeProvider, { layout: { reflow, pagePadding: 16 } },
+          createElement(Setup, { subject: "owner", onComplete: vi.fn(), onCancel: vi.fn() }))));
+    });
+    await act(async () => root?.root.findByType(SetupCategories).props.onChange([{ ...starterCategories[0], source: "starter" }]));
+    await press("COP");
+    const card = node("Usarlas, Las alertas pueden quedar como movimientos por revisar después de configurar el celular");
+    return { card: card.props.style[0], row: card.parent?.props.style };
+  };
+  const wide = await render(false);
+  expect(wide.row).toMatchObject({ flexDirection: "row" });
+  expect(wide.card).toMatchObject({ flex: 1, minHeight: 120 });
+  const large = await render(true);
+  expect(large.row).toMatchObject({ flexDirection: "column" });
+  expect(large.card.flex).toBeUndefined();
+  expect(large.card.minHeight).toBe(120);
 });
