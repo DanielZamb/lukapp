@@ -20,6 +20,7 @@ import type * as budgetValues from "../budgetValues.js";
 import type * as budgetWrites from "../budgetWrites.js";
 import type * as categoryValidators from "../categoryValidators.js";
 import type * as clerkWebhooks from "../clerkWebhooks.js";
+import type * as crons from "../crons.js";
 import type * as deviceAccess from "../deviceAccess.js";
 import type * as deviceAccessInternal from "../deviceAccessInternal.js";
 import type * as feedback from "../feedback.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   budgetWrites: typeof budgetWrites;
   categoryValidators: typeof categoryValidators;
   clerkWebhooks: typeof clerkWebhooks;
+  crons: typeof crons;
   deviceAccess: typeof deviceAccess;
   deviceAccessInternal: typeof deviceAccessInternal;
   feedback: typeof feedback;
