@@ -270,8 +270,8 @@ test("Spanish history uses Colombian dates and money", async () => {
     onBack: () => {}, onMove: () => {}, onFind: () => {},
   })));
   expect(historyRows(screen).slice(0, 3)).toEqual([
-    ["COP 2.300", "Cuenta", "18 de septiembre de 2026", true],
+    ["COP 2.300", "Sumado", "18 de septiembre de 2026", true],
     ["COP 2.500", "Anulado", "18 de agosto de 2026\nNo cuenta porque la transferencia se reversó.", false],
-    ["COP 2.000", "Corregido", "5 de julio de 2026\nPasó a Fridge\nRazón: Wrong plan\nRegistrado el 2 de oct de 2026, 3:30 p. m.", true],
+    ["COP 2.000", "Corregido", "5 de julio de 2026\nPasó a Fridge\nMotivo: Wrong plan\nRegistrado el 2 de oct de 2026, 3:30 p. m.", true],
   ]);
 });

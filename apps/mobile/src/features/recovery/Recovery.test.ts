@@ -860,3 +860,27 @@ test("a contribution with no other eligible plan can still have its attribution 
   expect(choices(screen)).toEqual([["Don’t count it toward a plan", false]]);
   expect(texts()).toContain("No other plan can take this contribution. A plan needs the same destination, room for the whole amount, and to have started by September 18, 2026.");
 });
+
+test("a renamed destination place shows its new name on the plan and the draft while keeping its identity", async () => {
+  const { screen } = await open([repair], true);
+  const destination = () => screen.find((node) => node.type === ListRow && node.props.title === "Destination").props.value;
+  expect(destination()).toBe("Savings");
+  remote.query.mockReturnValue({
+    ...evaluation, candidates: [candidate],
+    plans: [{ ...repair, destinationName: "Emergency fund" }],
+    destinations: [{ id: "savings", name: "Emergency fund", productKind: "savingsAccount" }],
+  });
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
+  await act(async () => { screen.findByType(Header).props.onBack(); });
+  expect(destination()).toBe("Emergency fund");
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  expect(destination()).toBe("Emergency fund");
+  expect(screen.findByType(RecoveryDraft).props.destinationId).toBe("savings");
+  uuid.next = () => "dental-key";
+  await act(async () => { button(screen, "Activate plan").props.onPress(); });
+  expect(remote.activate.mock.calls).toEqual([[{
+    workspaceId: "workspace", sourceJournalEntryId: "dental", destinationFinancialAccountProfileId: "savings",
+    installmentCount: 4, installmentMinorUnits: 12_000_000, idempotencyKey: "dental-key",
+  }]]);
+});
