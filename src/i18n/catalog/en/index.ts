@@ -1,4 +1,5 @@
 import { access } from "./access";
+import { amount } from "./amount";
 import { budget } from "./budget";
 import { categories } from "./categories";
 import { common } from "./common";
@@ -16,4 +17,4 @@ import { settings } from "./settings";
 import { setup } from "./setup";
 import { workspace } from "./workspace";
 
-export const en = { access, budget, categories, common, drafts, feedback, home, inbox, lifecycle, places, planning, posting, recovery, review, settings, setup, workspace } as const;
+export const en = { access, amount, budget, categories, common, drafts, feedback, home, inbox, lifecycle, places, planning, posting, recovery, review, settings, setup, workspace } as const;
