@@ -101,7 +101,7 @@ vi.mock("../../src/features/posting/usePostingTransport", () => {
   return { usePostingTransport: () => transport };
 });
 vi.mock("../../src/features/posting/postingBatchStorage", () => {
-  const storage = { load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }), update() { throw new Error("Batch outside scope"); } };
+  const storage = { load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }), apply() { throw new Error("Batch outside scope"); } };
   return { usePostingBatchStorage: () => storage };
 });
 vi.mock("../../src/features/posting/PostingForm", () => ({ PostingForm: (props: PostingFormProps) => {

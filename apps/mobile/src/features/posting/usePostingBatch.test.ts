@@ -367,15 +367,24 @@ test("posting completion removes only confirmed rows from the latest stored batc
   };
   let posting: Promise<void> | undefined;
   await act(async () => { posting = session.get().batch.postAll(); });
-  await storage().update((batch) => ({
-    ...batch,
-    queue: [...batch.queue, newerRow],
-  }));
+  expect(await storage().apply({ kind: "keep", item: newerRow })).toMatchObject({ applied: false });
+  await mutateLocalEntryDocument(lease, "owner", (document) => {
+    const stored = document.postingBatches?.workspace;
+    if (!stored) throw new Error("Expected a stored batch");
+    return {
+      document: {
+        ...document,
+        postingBatches: { workspace: { ...stored, queue: [...stored.queue, newerRow] } },
+      },
+      write: true,
+      result: undefined,
+    };
+  });
   await act(async () => { respond?.(); await posting; });
+  expect(api.post.mock.calls.map(([command]) => command.payload.idempotencyKey)).toEqual(["key-1"]);
   expect((await storage().load()).queue).toEqual([newerRow]);
   expect(session.get().batch.queue).toEqual([newerRow]);
   expect(session.get().batch.posted).toEqual({ count: 1, net: -1000 });
-  expect(api.post).toHaveBeenCalledTimes(1);
 });
 
 test.each(["confirmed", "rejected"])(
@@ -524,18 +533,14 @@ test("a stale editor cannot replace a row whose dispatch is unconfirmed; that ro
     await session.get().batch.postAll();
   });
   expect(stale().editable).toBe(true);
-  if (taxi.command.kind !== "expense") throw new Error("Expected expense");
+  const sent = taxi.command;
+  if (sent.kind !== "expense") throw new Error("Expected expense");
+  const edited: BatchDraft = {
+    command: { ...sent, payload: { ...sent.payload, description: "Taxi edited", idempotencyKey: "key-edited" } },
+  };
   let kept: boolean | undefined;
   await act(async () => {
-    kept = await stale().keep(
-      {
-        command: {
-          ...taxi.command,
-          payload: { ...taxi.command.payload, description: "Taxi edited", idempotencyKey: "key-edited" },
-        },
-      },
-      taxi.id,
-    );
+    kept = await stale().keep(edited, taxi.id);
   });
   const refreshed = {
     kept,

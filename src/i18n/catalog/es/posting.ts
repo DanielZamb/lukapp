@@ -131,6 +131,8 @@ export const posting: Messages<typeof en> = {
   batchRejected: "No se aceptó un movimiento. Edita el borrador y vuelve a intentarlo.",
   batchClearFailed: "No se pudo limpiar el movimiento guardado. Registra otra vez para revisar cómo quedó.",
   batchConfirmUncertain: "No se pudo confirmar el lote. Registra otra vez para reintentar sin riesgo los borradores que faltan.",
+  batchWaiting: "Un movimiento de este lote ya se envió y todavía no se sabe cómo quedó. Registra otra vez para confirmarlo antes de cambiar el lote.",
+  batchChanged: "Este lote cambió en otra pantalla. Revísalo y vuelve a intentarlo.",
 
   amountDecimals: "Escribe un monto con máximo {precision} decimales.",
   amountSeparators: "Revisa los separadores de miles.",

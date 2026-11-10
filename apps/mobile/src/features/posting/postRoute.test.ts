@@ -111,7 +111,7 @@ vi.mock("./usePostingTransport", () => {
 vi.mock("./postingBatchStorage", () => {
   const storage = {
     load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }),
-    update: writes.batchUpdate,
+    apply: writes.batchUpdate,
   };
   return { usePostingBatchStorage: () => storage };
 });

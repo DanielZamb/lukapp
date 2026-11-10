@@ -82,7 +82,7 @@ vi.mock("../activity", () => ({ usePersonalDefaults: () => ({
 }) }));
 vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () => () => {} }));
 vi.mock("./postingBatchStorage", () => {
-  const storage = { load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }), update: async () => {} };
+  const storage = { load: async () => ({ queue: [], receipts: { count: 0, net: 0 } }), apply: async () => { throw new Error("Batch outside scope"); } };
   return { usePostingBatchStorage: () => storage };
 });
 vi.mock("./PostingForm", async () => {
