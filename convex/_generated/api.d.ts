@@ -26,6 +26,7 @@ import type * as deviceAccessInternal from "../deviceAccessInternal.js";
 import type * as feedback from "../feedback.js";
 import type * as feedbackErrors from "../feedbackErrors.js";
 import type * as feedbackGithub from "../feedbackGithub.js";
+import type * as feedbackImage from "../feedbackImage.js";
 import type * as feedbackStore from "../feedbackStore.js";
 import type * as feedbackValues from "../feedbackValues.js";
 import type * as historyBackfill from "../historyBackfill.js";
@@ -81,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   feedback: typeof feedback;
   feedbackErrors: typeof feedbackErrors;
   feedbackGithub: typeof feedbackGithub;
+  feedbackImage: typeof feedbackImage;
   feedbackStore: typeof feedbackStore;
   feedbackValues: typeof feedbackValues;
   historyBackfill: typeof historyBackfill;
