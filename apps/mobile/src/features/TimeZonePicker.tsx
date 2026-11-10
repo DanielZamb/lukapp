@@ -41,19 +41,29 @@ export function TimeZonePicker({
           color={theme.mutedForeground}
         />
       </Pressable>
-      {open && (
-        <SearchSheet
-          label={t("setup.searchTimeZones")}
-          placeholder={t("setup.searchTimeZones")}
-          selected={value}
-          options={orderedTimeZones(deviceTimeZone()).map((code) => ({
-            code,
-            name: timeZoneLabel(code, translator),
-          }))}
-          onSelect={onChange}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {open && <TimeZoneSheet value={value} onSelect={onChange} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+export function TimeZoneSheet({ value, onSelect, onClose }: {
+  value: string;
+  onSelect: (timeZone: string) => void;
+  onClose: () => void;
+}) {
+  const translator = useT();
+  const { t } = translator;
+  return (
+    <SearchSheet
+      label={t("setup.searchTimeZones")}
+      placeholder={t("setup.searchTimeZones")}
+      selected={value}
+      options={orderedTimeZones(deviceTimeZone()).map((code) => ({
+        code,
+        name: timeZoneLabel(code, translator),
+      }))}
+      onSelect={onSelect}
+      onClose={onClose}
+    />
   );
 }
