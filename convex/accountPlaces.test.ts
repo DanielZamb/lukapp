@@ -139,7 +139,7 @@ test("rename trims names, rejects blanks and accent-insensitive duplicates, and 
   expect(await t.action(api.accounting.renameAccount, { ...args, name: "Daily" })).toEqual(daily);
 });
 
-test("Place creation and rename cap trimmed names at 80 characters without changing duplicate creation", async () => {
+test("Place creation and rename cap trimmed names at 80 characters and creation rejects a name another Place uses", async () => {
   const t = await convexAccounting(modules);
   const workspace = await createOwnedWorkspace(t);
   const args = { workspaceId: workspace.id, name: "a".repeat(81), productKind: "cash" as const };
@@ -147,9 +147,10 @@ test("Place creation and rename cap trimmed names at 80 characters without chang
     .rejects.toMatchObject({ data: { code: "account_name_too_long" } });
   const place = await t.action(api.accounting.createFinancialAccountProfile, { ...args, name: ` ${"a".repeat(80)} ` });
   expect(place.name).toBe("a".repeat(80));
-  const duplicate = await t.action(api.accounting.createFinancialAccountProfile, { ...args, name: "a".repeat(80) });
-  expect(duplicate.name).toBe("a".repeat(80));
-  expect(duplicate.id).not.toBe(place.id);
+  for (const same of ["a".repeat(80), "A".repeat(80), `  ${"á".repeat(80)}`])
+    await expect(t.action(api.accounting.createFinancialAccountProfile, { ...args, name: same }))
+      .rejects.toMatchObject({ data: { code: "account_name_conflict" } });
+  expect(await t.query(api.accounting.listFinancialAccountProfiles, { workspaceId: workspace.id })).toHaveLength(1);
   const rename = { workspaceId: workspace.id, financialAccountProfileId: place.id, expectedName: place.name, name: "b".repeat(81) };
   await expect(t.action(api.accounting.renameAccount, rename)).rejects.toMatchObject({ data: { code: "account_name_too_long" } });
   expect(await t.action(api.accounting.renameAccount, { ...rename, name: "b".repeat(80) })).toMatchObject({ id: place.id, name: "b".repeat(80) });

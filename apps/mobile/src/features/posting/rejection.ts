@@ -2,8 +2,8 @@ import { accountingErrorMessages, type AccountingErrorCode } from "../../../../.
 import type { MessageKey, Translator } from "../../i18n";
 
 const rejectionKeys: Record<string, MessageKey> = {
-  account_name_conflict: "posting.rejectAccountNameConflict",
   account_name_too_long: "posting.rejectAccountNameTooLong",
+  account_name_conflict: "posting.rejectAccountNameConflict",
   account_emoji_required: "posting.rejectAccountEmojiRequired",
   transfer_profiles_must_differ: "posting.rejectTransferProfilesMustDiffer",
   opening_already_exists: "posting.rejectOpeningAlreadyExists",

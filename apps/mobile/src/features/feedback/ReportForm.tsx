@@ -317,7 +317,7 @@ function ReportForm({
 
 function AudienceNotice({ destination, onRetry }: { destination: DestinationState; onRetry: () => void }) {
   const ui = useUi();
-  const { t } = useT();
+  const { t, tn } = useT();
   if (destination === "loading") return <Text style={ui.muted}>{t("feedback.audienceLoading")}</Text>;
   if (destination === "unavailable")
     return (
@@ -331,6 +331,7 @@ function AudienceNotice({ destination, onRetry }: { destination: DestinationStat
     <Banner tone="info">
       {t(destination.audience === "public" ? "feedback.audiencePublic" : "feedback.audiencePrivate", {
         repository: destination.repository,
+        period: tn("feedback.retentionPeriod", destination.screenshotRetentionDays),
       })}
     </Banner>
   );

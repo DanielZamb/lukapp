@@ -1,5 +1,5 @@
 import { AccountingError } from "../errors";
-import { hasVisibleText } from "../names";
+import { comparableName, hasVisibleText } from "../names";
 import { requireWorkspace } from "../membership";
 import { toProfile } from "../views";
 import type { AccountingStore, Actor } from "../types";
@@ -20,10 +20,8 @@ export async function renameAccount(store: AccountingStore, input: {
   if (name.length > 80) throw new AccountingError("account_name_too_long");
   if (name === profile.name) return toProfile(profile);
   if (input.expectedName !== profile.name) throw new AccountingError("account_name_stale");
-  const normalized = (value: string) => value.normalize("NFKC").trim().replace(/\s+/gu, " ")
-    .normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   if ((await store.listProfiles(input.workspaceId)).some((other) =>
-    other.id !== profile.id && normalized(other.name) === normalized(name)))
+    other.id !== profile.id && comparableName(other.name) === comparableName(name)))
     throw new AccountingError("account_name_conflict");
   return toProfile(await store.renameProfile(profile.id, name));
 }

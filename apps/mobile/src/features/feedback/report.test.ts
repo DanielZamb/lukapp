@@ -142,7 +142,7 @@ function harness({
     });
   let current = boot();
   const configure = (machine: ReportMachine) =>
-    machine.setDestination({ configured: true, repository: "owner/lukapp", audience });
+    machine.setDestination({ configured: true, repository: "owner/lukapp", audience, screenshotRetentionDays: 30 });
   configure(current);
   const phase = () => current.getSnapshot().phase;
   const report = () => {
@@ -755,7 +755,7 @@ test("a frozen retry keeps its screenshot decision even if the destination's aud
   await h.machine.open("shake", "/history");
   h.write();
   await h.machine.send();
-  h.machine.setDestination({ configured: true, repository: "owner/lukapp", audience: "public" });
+  h.machine.setDestination({ configured: true, repository: "owner/lukapp", audience: "public", screenshotRetentionDays: 30 });
   await h.machine.send();
   expect(h.transport.submit.mock.calls[1][0].screenshotSha256).toBe(sha256(original));
   expect(h.published).toEqual([original]);
@@ -801,12 +801,12 @@ test("rate limiting keeps the report editable and says when to try again", async
 
 test("an unconfigured destination and a known offline state send nothing", async () => {
   const h = harness();
-  h.machine.setDestination({ configured: false, repository: "", audience: "public" });
+  h.machine.setDestination({ configured: false, repository: "", audience: "public", screenshotRetentionDays: 30 });
   await h.machine.open("menu", "/settings");
   h.write();
   await h.machine.send();
   expect(h.phase()).toMatchObject({ kind: "editing", notice: { code: "not_configured" } });
-  h.machine.setDestination({ configured: true, repository: "owner/lukapp", audience: "public" });
+  h.machine.setDestination({ configured: true, repository: "owner/lukapp", audience: "public", screenshotRetentionDays: 30 });
   h.goOffline(true);
   await h.machine.send();
   expect(h.phase()).toMatchObject({ kind: "editing", notice: { code: "offline" } });

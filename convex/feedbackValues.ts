@@ -24,7 +24,7 @@ export const reportPayload = v.object(submitArgs);
 export type ReportPayload = Infer<typeof reportPayload>;
 export const reportResult = v.object({ reference: v.string(), issueNumber: v.number(), url: v.string() });
 export type ReportResult = Infer<typeof reportResult>;
-export const destinationResult = v.object({ configured: v.boolean(), repository: v.string(), audience });
+export const destinationResult = v.object({ configured: v.boolean(), repository: v.string(), audience, screenshotRetentionDays: v.number() });
 
 const keyFields = {
   userId: v.string(), reportKey: v.string(), reservedAt: v.number(),
@@ -93,11 +93,23 @@ export async function hash(value: string | ArrayBuffer) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export const defaultScreenshotRetentionDays = 30;
+
+function configuredRetentionDays() {
+  const raw = process.env.GITHUB_FEEDBACK_SCREENSHOT_RETENTION_DAYS?.trim();
+  const days = raw ? Number(raw) : defaultScreenshotRetentionDays;
+  const valid = Number.isSafeInteger(days) && days >= 1 && Number.isSafeInteger(days * 86_400_000) &&
+    Number.isFinite(new Date(Date.now() + days * 86_400_000).getTime());
+  return valid ? days : undefined;
+}
+
 export function configuredDestination() {
   const repository = process.env.GITHUB_FEEDBACK_REPOSITORY?.trim() ?? "";
   const visibility = process.env.GITHUB_FEEDBACK_AUDIENCE?.trim() ?? "public";
+  const retentionDays = configuredRetentionDays();
   return {
-    configured: Boolean(process.env.GITHUB_FEEDBACK_TOKEN?.trim()) &&
+    screenshotRetentionDays: retentionDays ?? defaultScreenshotRetentionDays,
+    configured: retentionDays !== undefined && Boolean(process.env.GITHUB_FEEDBACK_TOKEN?.trim()) &&
       /^[a-zA-Z0-9][a-zA-Z0-9-]*\/[a-zA-Z0-9_.-]+$/.test(repository) &&
       (visibility === "public" || visibility === "private"),
     repository,
@@ -112,9 +124,7 @@ export function requireConfiguration() {
 }
 
 export function screenshotRetentionMs() {
-  const raw = process.env.GITHUB_FEEDBACK_SCREENSHOT_RETENTION_DAYS?.trim();
-  const days = raw ? Number(raw) : 90;
-  if (!Number.isSafeInteger(days) || days < 1 || !Number.isSafeInteger(days * 86_400_000) || !Number.isFinite(new Date(Date.now() + days * 86_400_000).getTime()))
-    feedbackError({ code: "not_configured" });
+  const days = configuredRetentionDays();
+  if (days === undefined) feedbackError({ code: "not_configured" });
   return days * 86_400_000;
 }

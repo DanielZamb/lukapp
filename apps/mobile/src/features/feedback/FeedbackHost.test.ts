@@ -113,7 +113,7 @@ vi.mock("convex/react", () => {
   const client = {
     query: async (ref: never, args: unknown) => {
       backend.calls.push([getFunctionName(ref), args]);
-      return { configured: true, repository: "owner/lukapp", audience: backend.audience };
+      return { configured: true, repository: "owner/lukapp", audience: backend.audience, screenshotRetentionDays: 30 };
     },
     mutation: async (ref: never, args: unknown) => {
       backend.calls.push([getFunctionName(ref), args]);
@@ -266,7 +266,7 @@ test("Settings opens a text report without a screenshot, sends it, and Done retu
   expect(view.captureRef).not.toHaveBeenCalled();
   expect(layerText()).toContain("This report is text only.");
   expect(layerText()).toContain(
-    "This report becomes a public issue in owner/lukapp on GitHub. Anyone on the internet can read it. If you include the screenshot, Lukapp keeps it on its server for a limited time, links it from the issue and then deletes it.",
+    "This report becomes a public issue in owner/lukapp on GitHub. Anyone on the internet can read it. If you include the screenshot, Lukapp keeps it on its server for 30 days, links it from the issue and then deletes it.",
   );
   expect(layerText()).toContain(
     "The report also includes the app version, platform, system version, language and screen name. Nothing else from your account goes with it.",

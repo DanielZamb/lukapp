@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
-import { convexAccounting, createDaily, groceries, provisionWorkspace, reverse } from "../src/accounting/convexHarness";
+import { convexAccounting, createDaily, createProfile, groceries, provisionWorkspace, reverse } from "../src/accounting/convexHarness";
 import type { CategoryStyle } from "../src/accounting/categories/types";
 
 const modules = import.meta.glob(["./**/*.{js,ts}", "!./**/*.test.ts", "!./**/*.d.ts"]);
@@ -97,7 +97,7 @@ test("deleted identities cannot be edited or reused for a new transfer and recre
   await expect(s.t.action(api.accounting.restyleUserCategory, {
     workspaceId: s.workspaceId, categoryId: category.id, style,
   })).rejects.toMatchObject({ data: { code: "category_not_found" } });
-  const destination = await createDaily(s.t, s.workspaceId);
+  const destination = await createProfile(s.t, s.workspaceId, "Savings", "savingsAccount");
   await expect(s.t.action(api.accounting.recordAccountTransfer, {
     workspaceId: s.workspaceId, sourceFinancialAccountProfileId: s.daily.id,
     destinationFinancialAccountProfileId: destination.id, userCategoryIds: [category.id],

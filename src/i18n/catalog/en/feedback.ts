@@ -45,8 +45,10 @@ export const feedback = {
   screenshotMissing: "The screenshot saved with this report is missing or changed on this phone, so it was removed.",
 
   audienceLoading: "Checking where reports go…",
-  audiencePublic: "This report becomes a public issue in {repository} on GitHub. Anyone on the internet can read it. If you include the screenshot, Lukapp keeps it on its server for a limited time, links it from the issue and then deletes it. Until then, anyone can see it.",
-  audiencePrivate: "This report goes to {repository} on GitHub, a private repository. Only the Lukapp team can read it. If you include the screenshot, Lukapp keeps it on its server for a limited time, links it from the issue and then deletes it.",
+  retentionPeriod_one: "1 day",
+  retentionPeriod_other: "{count} days",
+  audiencePublic: "This report becomes a public issue in {repository} on GitHub. Anyone on the internet can read it. If you include the screenshot, Lukapp keeps it on its server for {period}, links it from the issue and then deletes it. Until then, anyone can see it.",
+  audiencePrivate: "This report goes to {repository} on GitHub, a private repository. Only the Lukapp team can read it. If you include the screenshot, Lukapp keeps it on its server for {period}, links it from the issue and then deletes it.",
   audienceUnavailable: "Lukapp can't check where reports go right now.",
   checkAgain: "Check again",
   automaticContext: "The report also includes the app version, platform, system version, language and screen name. Nothing else from your account goes with it.",

@@ -117,7 +117,12 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(
 
 test("reports trusted destination and defaults to a public audience", async () => {
   const { t } = await fixture();
-  expect(await t.query(api.feedback.destination, {})).toEqual({ configured: true, repository: "DanielZamb/lukapp", audience: "public" });
+  expect(await t.query(api.feedback.destination, {})).toEqual({ configured: true, repository: "DanielZamb/lukapp", audience: "public", screenshotRetentionDays: 1 });
+  vi.stubEnv("GITHUB_FEEDBACK_SCREENSHOT_RETENTION_DAYS", "7");
+  expect(await t.query(api.feedback.destination, {})).toMatchObject({ configured: true, screenshotRetentionDays: 7 });
+  vi.stubEnv("GITHUB_FEEDBACK_SCREENSHOT_RETENTION_DAYS", "0");
+  expect(await t.query(api.feedback.destination, {})).toMatchObject({ configured: false });
+  vi.stubEnv("GITHUB_FEEDBACK_SCREENSHOT_RETENTION_DAYS", "");
   vi.stubEnv("GITHUB_FEEDBACK_AUDIENCE", "");
   expect(await t.query(api.feedback.destination, {})).toMatchObject({ audience: "public" });
   vi.stubEnv("GITHUB_FEEDBACK_AUDIENCE", "private");
@@ -769,9 +774,9 @@ test.each(["anonymous", "unregistered", "revoked", "clerk-revoked", "wrong-clien
   expect(await f.t.run((ctx) => ctx.db.system.query("_storage").collect())).toHaveLength(0);
 });
 
-test("retention defaults to 90 days and rejects invalid or sub-day server configuration", () => {
+test("retention defaults to 30 days and rejects invalid or sub-day server configuration", () => {
   vi.stubEnv("GITHUB_FEEDBACK_SCREENSHOT_RETENTION_DAYS", "");
-  expect(screenshotRetentionMs()).toBe(90 * retentionMs);
+  expect(screenshotRetentionMs()).toBe(30 * retentionMs);
   for (const value of ["0", "-1", "NaN", "Infinity", "1.5", "9999999999999999"]) {
     vi.stubEnv("GITHUB_FEEDBACK_SCREENSHOT_RETENTION_DAYS", value);
     expect(() => screenshotRetentionMs()).toThrowError();

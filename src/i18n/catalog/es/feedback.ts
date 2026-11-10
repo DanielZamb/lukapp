@@ -48,8 +48,10 @@ export const feedback: Messages<typeof en> = {
   screenshotMissing: "La captura de pantalla guardada con este reporte ya no está en este celular o cambió, así que la quitamos.",
 
   audienceLoading: "Revisando a dónde llegan los reportes…",
-  audiencePublic: "Este reporte se publica en {repository}, en GitHub, y es público: cualquier persona en internet puede leerlo. Si incluyes la captura de pantalla, Lukapp la guarda en su servidor por un tiempo limitado, la enlaza desde el reporte y luego la borra. Mientras tanto, cualquiera puede verla.",
-  audiencePrivate: "Este reporte llega a {repository} en GitHub, un repositorio privado. Solo el equipo de Lukapp puede leerlo. Si incluyes la captura de pantalla, Lukapp la guarda en su servidor por un tiempo limitado, la enlaza desde el reporte y luego la borra.",
+  retentionPeriod_one: "1 día",
+  retentionPeriod_other: "{count} días",
+  audiencePublic: "Este reporte se publica en {repository}, en GitHub, y es público: cualquier persona en internet puede leerlo. Si incluyes la captura de pantalla, Lukapp la guarda en su servidor durante {period}, la enlaza desde el reporte y luego la borra. Mientras tanto, cualquiera puede verla.",
+  audiencePrivate: "Este reporte llega a {repository} en GitHub, un repositorio privado. Solo el equipo de Lukapp puede leerlo. Si incluyes la captura de pantalla, Lukapp la guarda en su servidor durante {period}, la enlaza desde el reporte y luego la borra.",
   audienceUnavailable: "Lukapp no puede revisar ahora a dónde llegan los reportes.",
   checkAgain: "Revisar de nuevo",
   automaticContext: "El reporte también incluye la versión de la app, la plataforma, la versión del sistema, el idioma y el nombre de la pantalla. No lleva nada más de tu cuenta.",

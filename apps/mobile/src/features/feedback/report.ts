@@ -2,7 +2,7 @@ import { emptyFields, hasTypedText, validateReport, type ReportField, type Repor
 
 export type ReportKind = "bug" | "feedback";
 export type Audience = "public" | "private";
-export type Destination = { configured: boolean; repository: string; audience: Audience };
+export type Destination = { configured: boolean; repository: string; audience: Audience; screenshotRetentionDays: number };
 export type DestinationState = Destination | "loading" | "unavailable";
 export type Screenshot = { uri: string; width: number; height: number; redacted: boolean };
 /** The exact bytes of a screenshot file and their lower-case hex SHA-256. */

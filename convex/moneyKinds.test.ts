@@ -402,6 +402,7 @@ test("atomic account setup converges on one profile/opening, including zero, and
     await expect(
       t.action(api.accounting.setupFinancialAccountProfile, {
         ...args,
+        name: "Another place",
         idempotencyKey: "invalid-setup",
         ...patch,
       }),
