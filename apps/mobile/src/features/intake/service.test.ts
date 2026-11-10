@@ -56,7 +56,7 @@ test("all bounded pages advance past missing mappings and include another worksp
 });
 
 test("mapping validation rejection leaves capture pending", async () => {
-  const f = fixture(); f.deps.validateMapping = async () => false;
+  const f = fixture(); f.deps.validateMapping = async () => null;
   expect(await f.service.refresh()).toEqual({ saved: 0, unresolved: 1, conflicts: 0 });
   expect(f.events).not.toContain("ack");
 });
@@ -191,11 +191,11 @@ test("expiry deletes active and terminal rows at original expiry", async () => {
 });
 
 test("record count and UTF-8 bounds reject without eviction", async () => {
-  const state = ingest(emptyState(), capture, mapping, await hash(JSON.stringify(capture)));
+  const state = ingest(emptyState(), capture, mapping, await hash(JSON.stringify(capture)), mapping.timeZone);
   const row = state.records[0]; if (!row || row.kind !== "active") throw new Error("missing row");
   const full = { ...state, records: Array.from({ length: 512 }, (_, i) => ({ ...terminal(row, "deleted"), id: `terminal-${i}` })) };
   expect(parseState(serializeState(full)).records).toHaveLength(512);
-  expect(() => ingest(full, capture, mapping, "0".repeat(64))).toThrow(); expect(full.records).toHaveLength(512);
+  expect(() => ingest(full, capture, mapping, "0".repeat(64), mapping.timeZone)).toThrow(); expect(full.records).toHaveLength(512);
   expect(utf8Bytes("é😀")).toBe(6);
   expect(() => serializeState({ ...state, records: Array.from({ length: 512 }, (_, i) => ({ ...row, id: `row-${i}`, review: { ...row.review, description: "😀".repeat(512) } })) })).toThrow("CAPACITY_EXCEEDED");
 });
@@ -306,7 +306,7 @@ test("a corrupt-storage recovery epoch permits explicit wipe without reading the
 
 
 test("current review account validation happens before freezing a new command", async () => {
-  const f = fixture(); await f.service.refresh(); f.deps.validateMapping = async () => false;
+  const f = fixture(); await f.service.refresh(); f.deps.validateMapping = async () => null;
   await expect(f.service.beginConfirmation("capture-1", 0)).rejects.toThrow("Candidate account mapping is unavailable");
   expect(f.service.read("capture-1")?.status.kind).toBe("review");
 });

@@ -97,7 +97,7 @@ export function fixture() {
   const lease = new LocalInputLease("owner", "session");
   const deps = { native, lease, isCurrent: () => true, subject: "owner", hash, ownerScope: async () => "o".repeat(43),
     newMutationId: () => `00000000-0000-4000-8000-${String(++mutationNumber).padStart(12, "0")}`, now: () => clock,
-    validateMapping: async () => true, readLegacy: async () => legacy,
+    validateMapping: async (): Promise<{ timeZone: string } | null> => ({ timeZone: mapping.timeZone }), readLegacy: async () => legacy,
     deleteLegacy: async () => { legacy = null; events.push("delete-legacy"); },
     deleteNotices: async () => {},
     wipeStore: { read: async () => wipeIntent, write: async (intent: WipeIntent) => { wipeIntent = intent; }, clear: async () => { wipeIntent = null; } },

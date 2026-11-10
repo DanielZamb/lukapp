@@ -221,7 +221,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
       const profile = ready.profiles.find((row) => row.id === current.profileId && row.workspaceId === workspaceId);
       const currency = ready.workspace.functionalCurrency;
       if (!profile || (currency !== "COP" && currency !== "USD")) { setError(t("inbox.placeUnavailable")); return; }
-      const same = existing && existing.workspaceId === workspaceId && existing.financialAccountProfileId === profile.id && existing.currency === currency && existing.timeZone === ready.workspace.timeZone;
+      const same = existing && existing.workspaceId === workspaceId && existing.financialAccountProfileId === profile.id && existing.currency === currency;
       const mapping: SourceMapping = same ? existing : { sourceSelectionId: Crypto.randomUUID(), packageName: current.packageName,
         workspaceId, financialAccountProfileId: profile.id, currency, timeZone: ready.workspace.timeZone };
       void perform("inbox.pendingSaving", () => configure([...active.filter((old) => old.packageName !== mapping.packageName), mapping]))

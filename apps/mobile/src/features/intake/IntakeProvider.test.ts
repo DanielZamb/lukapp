@@ -32,8 +32,9 @@ vi.mock("expo-secure-store", () => ({
   deleteItemAsync: async (key: string) => { boundary.memory.delete(key); },
 }));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: boundary.subject }) }));
+const workspaceRead = { id: "workspace-1", functionalCurrency: "COP", timeZone: "America/Bogota" };
 const query = vi.fn(async (reference: Parameters<typeof getFunctionName>[0]) => {
-  if (getFunctionName(reference).endsWith(":openWorkspace")) return { id: "workspace-1", functionalCurrency: "COP", timeZone: "America/Bogota" };
+  if (getFunctionName(reference).endsWith(":openWorkspace")) return { ...workspaceRead };
   return [{ id: "account-1", workspaceId: "workspace-1" }];
 });
 const client = { query };
@@ -46,7 +47,7 @@ import { useIntakeCandidates } from "../useIntakeCandidates";
 import { clearLocalInput } from "../clearLocalInput";
 import { intakeStorageKey } from "./candidates";
 import { wipeIntentKey } from "./control";
-import { fixture, now } from "./service.testSupport";
+import { capture, fixture, mapping, now } from "./service.testSupport";
 import type { IntakeService } from "./service";
 import { intakeOwnerScope } from "./owner";
 
@@ -73,6 +74,7 @@ beforeEach(() => {
   vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   boundary.subject = "owner"; boundary.admitted = true; boundary.deviceAdmitted = true; boundary.events.clear(); boundary.hints.clear(); boundary.memory.clear();
   counts = []; lease = new LocalInputLease("owner", "session"); f = fixture();
+  Object.assign(workspaceRead, { functionalCurrency: "COP", timeZone: "America/Bogota" });
   boundary.bridge = { apiVersion: 3, ...f.native, addListener: (_event: string, listener: (hint: unknown) => void) => {
     boundary.hints.add(listener); return { remove: () => boundary.hints.delete(listener) };
   } };
@@ -210,4 +212,66 @@ test("SEN90-R1-01 app cleanup remains blocked and durably retryable while the An
   await clearLocalInput("owner");
   expect(f.raw()).toBeNull(); expect(boundary.memory.has(wipeIntentKey("owner"))).toBe(false);
   expect(boundary.memory.has(intakeStorageKey("owner"))).toBe(false);
+});
+
+const bogotaOctober31At2350 = Date.parse("2026-11-01T04:50:00Z");
+async function restart() {
+  await act(async () => root?.unmount()); root = undefined;
+  await mount();
+  if (!service) throw new Error("No service");
+  return service;
+}
+async function settle<T>(work: () => Promise<T>) {
+  let result: T | undefined;
+  await act(async () => { result = await work(); });
+  return result as T;
+}
+
+test("a Candidate waiting when the time zone changes confirms after a restart with the day it was captured", async () => {
+  f.setPages([{ captures: [{ ...capture, notificationAt: bogotaOctober31At2350 }], nextCursor: null }]);
+  await mount();
+  expect(service?.read("capture-1")?.review.accountingDate).toBe("2026-10-31");
+  workspaceRead.timeZone = "Pacific/Auckland";
+  const restarted = await restart();
+  const command = await settle(() => restarted.beginConfirmation("capture-1", 0));
+  expect([command.confirmed.accountingDate, command.suggestion.accountingDate]).toEqual(["2026-10-31", "2026-10-31"]);
+  expect(restarted.read("capture-1")?.status.kind).toBe("submitting");
+});
+
+test("alerts from a source set up under the old time zone keep arriving, dated in the new zone, without a new source version", async () => {
+  await mount();
+  expect(service?.read("capture-1")?.review.accountingDate).toBe("2026-10-23");
+  workspaceRead.timeZone = "Pacific/Auckland";
+  f.setPages([{ captures: [{ ...capture, captureId: "capture-2", notificationAt: bogotaOctober31At2350 }], nextCursor: null }]);
+  const restarted = await restart();
+  expect(restarted.getSnapshot().drain).toEqual({ unresolved: 0, conflicts: 0 });
+  expect(restarted.read("capture-2")?.review.accountingDate).toBe("2026-11-01");
+  expect(restarted.read("capture-1")?.review.accountingDate).toBe("2026-10-23");
+  expect(f.state().mappings).toEqual([mapping]);
+  expect(f.events).not.toContain("configure");
+  expect(await settle(() => restarted.beginConfirmation("capture-2", 0))).toMatchObject({ confirmed: { accountingDate: "2026-11-01" } });
+});
+
+test("a workspace in another currency still refuses waiting Candidates and new alerts", async () => {
+  await mount(); if (!service) throw new Error("No service");
+  const current = service;
+  workspaceRead.timeZone = "Pacific/Auckland"; workspaceRead.functionalCurrency = "USD";
+  await act(async () => { await expect(current.beginConfirmation("capture-1", 0)).rejects.toThrow("Candidate account mapping is unavailable"); });
+  expect(current.read("capture-1")?.status.kind).toBe("review");
+  f.setPages([{ captures: [{ ...capture, captureId: "capture-2" }], nextCursor: null }]);
+  expect(await settle(() => current.refresh())).toEqual({ saved: 0, unresolved: 1, conflicts: 0 });
+  expect(current.read("capture-2")).toBeNull();
+});
+
+test("a confirmation already sent stays frozen exactly through a time-zone change and a restart", async () => {
+  await mount(); if (!service) throw new Error("No service");
+  const current = service;
+  const command = await settle(() => current.beginConfirmation("capture-1", 0));
+  const frozen = f.state().records[0];
+  workspaceRead.timeZone = "Pacific/Auckland";
+  const restarted = await restart();
+  expect(await settle(() => restarted.beginConfirmation("capture-1", 0))).toEqual(command);
+  const row = restarted.read("capture-1"); if (!row) throw new Error("Missing frozen Candidate");
+  await act(async () => { await expect(restarted.updateReview("capture-1", row.recordRevision, { ...row.review, description: "Changed" })).rejects.toThrow("Confirmation frozen"); });
+  expect(f.state().records[0]).toEqual(frozen);
 });

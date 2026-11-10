@@ -67,6 +67,7 @@ export const outcomeSchema = z.discriminatedUnion("ok", [
 export const mappingSchema = z.object({
   sourceSelectionId: z.string().regex(/^[!-~]{1,64}$/), packageName: z.string().max(255).regex(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/),
   workspaceId: text, financialAccountProfileId: text, currency,
+  /** The workspace zone when the source was set up. Captures are dated in the workspace's zone when they are ingested. */
   timeZone: text.refine((zone) => { try { new Intl.DateTimeFormat("en", { timeZone: zone }); return true; } catch { return false; } }),
 }).strict();
 export type SourceMapping = z.infer<typeof mappingSchema>;
@@ -137,13 +138,13 @@ export function parseState(value: string | null): CandidateState {
 export function prune(state: CandidateState, now: number): CandidateState {
   return { ...state, records: state.records.filter((r) => r.expiresAt > now) };
 }
-export function ingest(state: CandidateState, capture: NativeCapture, mapping: SourceMapping, digest: string): CandidateState {
+export function ingest(state: CandidateState, capture: NativeCapture, mapping: SourceMapping, digest: string, timeZone: string): CandidateState {
   const prior = state.records.find((r) => r.id === capture.captureId);
   if (prior) {
     if (prior.digest !== digest) throw new Error("CAPTURE_CONFLICT");
     return state;
   }
-  const accountingDate = calendarDate(new Date(capture.notificationAt), mapping.timeZone);
+  const accountingDate = calendarDate(new Date(capture.notificationAt), timeZone);
   const { currency: suggestedCurrency, parserVersion, ...suggested } = suggestionFor(capture, mapping);
   const suggestion = { ...suggested, description: suggested.description.slice(0, 1024),
     accountingDate, financialAccountProfileId: mapping.financialAccountProfileId, userCategoryIds: [], primaryUserCategoryId: null };

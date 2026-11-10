@@ -217,15 +217,24 @@ test("identical mappings keep their ID, changed accounts get a new version, and 
   expect(active).toContainEqual(other);
 });
 
+test("after a time-zone change, saving the same place keeps the source's identity", async () => {
+  boundary.query.mockImplementation(async (ref) => getFunctionName(ref) === "accounting:openWorkspace" ? { ...workspace, timeZone: "Pacific/Auckland" } : profiles);
+  f.setValue(serializeState({ ...emptyState(), mappings: [mapping], activeSelectionIds: [mapping.sourceSelectionId] }));
+  await mount();
+  await acknowledge(); await choose();
+  expect(f.state().mappings).toEqual([mapping]);
+  expect(f.state().activeSelectionIds).toEqual([mapping.sourceSelectionId]);
+});
+
 test("unavailable saved accounts remain visible and configure rejection never claims activation", async () => {
   f.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, financialAccountProfileId: "removed-account" }], activeSelectionIds: [mapping.sourceSelectionId] }));
   await mount(); expect(text()).toContain("Place unavailable · To an unavailable place");
-  const validate = vi.spyOn(f.deps, "validateMapping").mockResolvedValue(false);
+  const validate = vi.spyOn(f.deps, "validateMapping").mockResolvedValue(null);
   await acknowledge(); await choose("Savings");
   expect(text()).toContain("A place or workspace is unavailable or permissions changed.");
   expect(f.events).not.toContain("configure");
   expect(f.state().activeSelectionIds).toEqual([mapping.sourceSelectionId]);
-  validate.mockResolvedValue(true);
+  validate.mockResolvedValue({ timeZone: mapping.timeZone });
 });
 
 test("a lost configure reply remains pending and retries the exact saved command", async () => {
