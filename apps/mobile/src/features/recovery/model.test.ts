@@ -46,7 +46,7 @@ test("progress is recovered of the plan target, and the implied rate stays a per
     status: "active", id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
     principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 230_000,
-    impliedAnnualRateBps: 150, activationMonth: "2026-09", currency: "COP",
+    impliedAnnualRateBps: 150, activationDate: "2026-09-01", activationMonth: "2026-09", currency: "COP",
     recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, targetMinorUnits: 1_380_000,
     dueMinorUnits: 230_000,
   }, en.t)).toBe("COP 2.300 of COP 13.800 moved back to savings");
@@ -72,7 +72,7 @@ test("a replayed move uses server progress, and a larger transfer shows moved ve
 
 test("only plans the server will accept are offered as targets, and never another plan for the same expense", () => {
   const base = {
-    destinationFinancialAccountProfileId: "savings", remainingMinorUnits: 500_000, activationMonth: "2026-06",
+    destinationFinancialAccountProfileId: "savings", remainingMinorUnits: 500_000, activationDate: "2026-06-01", activationMonth: "2026-06",
     acceptsContributions: true, sourceJournalEntryId: "expense-b",
   };
   const from = { ...base, id: "from", sourceJournalEntryId: "expense-a" };
@@ -83,7 +83,7 @@ test("only plans the server will accept are offered as targets, and never anothe
     { ...base, id: "closed-to-contributions", acceptsContributions: false },
     { ...base, id: "other-destination", destinationFinancialAccountProfileId: "wallet" },
     { ...base, id: "too-small", remainingMinorUnits: 100_000 },
-    { ...base, id: "started-later", activationMonth: "2026-10" },
+    { ...base, id: "started-later", activationDate: "2026-10-01", activationMonth: "2026-10" },
   ] as unknown as Parameters<typeof correctionTargets>[0];
   expect(correctionTargets(plans, plans[0], { amountMinorUnits: 300_000, contributionDate: "2026-09-18" }).map((plan) => plan.id))
     .toEqual(["open"]);
@@ -99,7 +99,7 @@ const laptopPlan = {
   status: "active", id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 230_000,
-  impliedAnnualRateBps: 150, activationMonth: "2026-09", currency: "COP",
+  impliedAnnualRateBps: 150, activationDate: "2026-09-01", activationMonth: "2026-09", currency: "COP",
   recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, targetMinorUnits: 1_380_000,
   dueMinorUnits: 230_000,
 } satisfies RecoveryPlanView;

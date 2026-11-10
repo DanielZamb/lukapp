@@ -43,7 +43,7 @@ export async function evaluateWorkspace(
       const sourceReversed = Boolean(await store.findReversalOf(plan.sourceJournalEntryId));
       const decision = cancelled.get(plan.id);
       const cancellation = decision && { ...decision, origin: decision.origin ?? { kind: "person" as const } };
-      const cancelledInMonth = cancellation !== undefined && month >= currentRecoveryMonth(cancellation.eventTime, timeZone);
+      const cancelledInMonth = cancellation !== undefined && month >= cancellation.cancellationDate.slice(0, 7);
       if (!cancelledInMonth && allTimeProgress.remainingMinorUnits > 0) reserved.add(plan.sourceJournalEntryId);
       const canCancel = cancellation === undefined && allTimeProgress.remainingMinorUnits > 0;
       const status: "active" | "suspended" | "cancelled" | "completed" = cancelledInMonth ? "cancelled" :
@@ -70,6 +70,7 @@ export async function evaluateWorkspace(
         installmentMinorUnits: plan.installmentMinorUnits,
         impliedAnnualRateBps: plan.impliedAnnualRateBps,
         activationMonth: plan.activationMonth,
+        activationDate: plan.activationDate,
         currency: plan.currency,
         ...progress,
         status,

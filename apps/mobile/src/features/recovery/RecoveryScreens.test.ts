@@ -29,7 +29,7 @@ const plan: RecoveryPlanView = {
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 230_000,
-  impliedAnnualRateBps: 1800, activationMonth: "2026-09", currency: "COP",
+  impliedAnnualRateBps: 1800, activationDate: "2026-09-01", activationMonth: "2026-09", currency: "COP",
   recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, targetMinorUnits: 1_380_000,
   dueMinorUnits: 230_000,
 };
@@ -423,7 +423,7 @@ test.each([
     ...plan, status: "cancelled", canCancel: false, acceptsContributions: false, remainingMinorUnits: 0, dueMinorUnits: 0,
     cancellation: {
       id: "cancel", workspaceId: "workspace", planId: plan.id, idempotencyKey: "key", createdBy: "owner",
-      eventTime: Date.UTC(2026, 9, 5, 15), recordedAt: Date.UTC(2026, 9, 5, 15), origin,
+      cancellationDate: "2026-10-05", eventTime: Date.UTC(2026, 9, 5, 15), recordedAt: Date.UTC(2026, 9, 5, 15), origin,
     },
   });
   const shown = async (view: RecoveryPlanView) => (await render(createElement(RecoveryPlanScreen, {

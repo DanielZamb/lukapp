@@ -88,7 +88,7 @@ test.each(["active", "suspended"] as const)("Plans shows only an active recovery
       canCancel: true, acceptsContributions: status === "active", cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
       status, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
       destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
-      installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+      installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationDate: "2026-10-01", activationMonth: "2026-10",
       currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
     }],
   };
@@ -104,7 +104,7 @@ test("Plans summarizes several recovery plans", async () => {
     canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
     status: "active" as const, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
-    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationDate: "2026-10-01", activationMonth: "2026-10",
     currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
   };
   state.recovery = { ...state.recovery!, plans: [plan, { ...plan, id: "plan-2", title: "Laptop repair" }] };
@@ -123,7 +123,7 @@ test.each([
     canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
     status: "active" as const, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
-    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationDate: "2026-10-01", activationMonth: "2026-10",
     currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
   };
   state.recovery = {
@@ -160,7 +160,7 @@ test("Plans reads in Spanish with the workspace month inside each sentence", asy
     contributionHistory: [], status: "active" as const, id: "plan-1", title: "Nevera", sourceJournalEntryId: "exp-1",
     sourceTitle: "Nevera", destinationFinancialAccountProfileId: "savings", destinationName: "Ahorros",
     principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 200_000, impliedAnnualRateBps: 0,
-    activationMonth: "2026-09", currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 1_200_000,
+    activationDate: "2026-09-01", activationMonth: "2026-09", currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 1_200_000,
     targetMinorUnits: 1_200_000, dueMinorUnits: 200_000,
   };
   state.recovery = { ...state.recovery!, plans: [active, { ...active, id: "plan-2", title: "Llantas" }] };

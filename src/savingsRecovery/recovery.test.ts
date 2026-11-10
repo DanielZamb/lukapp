@@ -46,7 +46,12 @@ function memory() {
     },
     listExpenseEntries: async () => [...entries.values()].filter((entry) =>
       entry.policy === "cash-expense@1" && !entry.reversesEntryId && !reversals.has(entry.id)),
-    findPlanRequest: async (key) => plans.find((plan) => plan.idempotencyKey === key) ?? null,
+    findPlanRequest: async (key) => {
+      const plan = plans.find(item => item.idempotencyKey === key);
+      if (!plan) return null;
+      const { activationDate: _activationDate, ...receipt } = plan;
+      return receipt;
+    },
     findContributionRequest: async (key) =>
       contributions.find((contribution) => contribution.idempotencyKey === key && !contribution.correctsContributionId) ?? null,
     insertPlan: async (plan) => {

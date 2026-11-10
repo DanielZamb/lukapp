@@ -245,6 +245,7 @@ test("Recovery's stored activation month and existing contribution dates stay in
   const s = await recoveryAtMonthEnd();
   const contribution = await s.t.action(api.savingsRecovery.recordContribution, s.contribution);
   expect(s.activation.plan.activationMonth).toBe("2026-10");
+  expect((await s.t.run(ctx => ctx.db.query("savingsRecoveryPlans").unique()))?.activationDate).toBe("2026-10-31");
   expect(contribution.contribution.contributionDate).toBe("2026-10-31");
   await zone(s);
   expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: s.workspaceId, month: "2026-10" })).toMatchObject({ currentMonth: "2026-11", plans: [{ activationMonth: "2026-10", recoveredMinorUnits: 25, contributionHistory: [{ contributionDate: "2026-10-31" }] }] });
@@ -269,6 +270,7 @@ test.each([
   const s = await recoveryAtMonthEnd(new Date("2026-09-01T12:00:00-05:00"), "2026-09-01");
   vi.setSystemTime(new Date(cancelledAt));
   await s.t.action(api.savingsRecovery.cancelPlan, { workspaceId: s.workspaceId, planId: s.activation.plan.id, idempotencyKey: "cancel" });
+  expect((await s.t.run(ctx => ctx.db.query("savingsRecoveryCancellations").unique()))?.cancellationDate).toBe(cancelledAt.slice(0, 10));
   vi.setSystemTime(new Date("2026-11-02T12:00:00Z"));
   await zone(s, targetZone);
   expect(await s.t.query(api.savingsRecovery.evaluate, { workspaceId: s.workspaceId, month: "2026-09" })).toMatchObject({ plans: [{ status: "active" }] });
@@ -286,6 +288,7 @@ test.each(["Pacific/Auckland", "America/Los_Angeles"])("Recovery activation afte
   const previousDate = targetZone === "Pacific/Auckland" ? "2026-10-31" : "2026-10-30";
   const contribution = { workspaceId: s.workspaceId, planId: plan.id, sourceFinancialAccountProfileId: s.profileId, amount: { currency: "COP", minorUnits: 25 }, accountingDate: date, description: "Recovery", idempotencyKey: "gift" };
   expect(plan.activationMonth).toBe(date.slice(0, 7));
+  expect((await s.t.run(ctx => ctx.db.query("savingsRecoveryPlans").unique()))?.activationDate).toBe(date);
   await expect(s.t.action(api.savingsRecovery.recordContribution, { ...contribution, accountingDate: previousDate, idempotencyKey: "early" }))
     .rejects.toMatchObject({ data: { code: "transfer_predates_activation" } });
   expect(await s.t.action(api.savingsRecovery.recordContribution, contribution)).toMatchObject({ contribution: { contributionDate: date } });

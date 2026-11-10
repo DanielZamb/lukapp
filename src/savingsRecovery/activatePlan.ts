@@ -1,10 +1,10 @@
 import {
-  currentRecoveryMonth,
   isAssetProductKind,
   RecoveryError,
   requireIdempotencyKey,
   suggestContribution,
 } from "./policy";
+import { calendarDate } from "../accounting/timeZone";
 import { remainingPrincipal } from "./lifecycle";
 import { ALL_MONTHS, planProgress } from "./progress";
 import type { ActivatePlan, RecoveryWriteStore } from "./types";
@@ -70,6 +70,7 @@ export async function activatePlan(
     installmentCount: input.installmentCount,
     installmentMinorUnits: input.installmentMinorUnits,
   });
+  const activationDate = calendarDate(new Date(input.now), await store.timeZone());
   const plan = await store.insertPlan({
     workspaceId: input.workspaceId,
     ...(replacesPlanId === undefined ? {} : { replacesPlanId }),
@@ -82,10 +83,12 @@ export async function activatePlan(
     installmentMinorUnits: suggestion.installmentMinorUnits,
     impliedAnnualRateBps: suggestion.impliedAnnualRateBps,
     currency,
-    activationMonth: currentRecoveryMonth(input.now, await store.timeZone()),
+    activationDate,
+    activationMonth: activationDate.slice(0, 7),
     idempotencyKey: input.idempotencyKey,
     createdBy: input.actorId,
     createdAt: input.now,
   });
-  return { plan, replay: false };
+  const { activationDate: _activationDate, ...receipt } = plan;
+  return { plan: receipt, replay: false };
 }

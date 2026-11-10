@@ -89,6 +89,7 @@ export default defineSchema({
     impliedAnnualRateBps: v.number(),
     currency: v.string(),
     activationMonth: v.string(),
+    activationDate: v.optional(v.string()),
     replacesPlanId: v.optional(v.id("savingsRecoveryPlans")),
     replacementLinkInferred: v.optional(v.boolean()),
     idempotencyKey: v.string(),
@@ -102,6 +103,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"), planId: v.id("savingsRecoveryPlans"),
     reason: v.optional(v.string()), idempotencyKey: v.string(), createdBy: v.string(),
     eventTime: v.number(), recordedAt: v.number(),
+    cancellationDate: v.optional(v.string()),
     origin: v.optional(cancellationOrigin),
   }).index("by_workspace", ["workspaceId"])
     .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
