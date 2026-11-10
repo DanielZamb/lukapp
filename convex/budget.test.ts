@@ -197,9 +197,8 @@ test("zero and removed overlapping jars feed Alerts and posting impact without c
   expect((await s.read("2026-09")).jars).toMatchObject([{ limitMinorUnits: 0, consumptionMinorUnits: 150000 }]);
   expect((await s.read()).jars).toMatchObject([{ limitMinorUnits: 0, consumptionMinorUnits: -150000 }]);
   expect(attention(await s.read())).toEqual({ rows: [], home: null, bellLabel: "Alerts, nothing needs attention" });
-  expect(postingBudgetImpact({ jars: (await s.read()).jars, categoryIds: [family], expenseMinorUnits: 150000 })).toEqual([]);
-  expect(postingBudgetImpact({ jars: (await s.read()).jars, categoryIds: [family], expenseMinorUnits: 150001 }))
-    .toEqual([{ category: { id: family, name: "Family", emoji: "🛒" }, overMinorUnits: 1 }]);
+  expect(postingBudgetImpact({ jars: (await s.read()).jars, categoryIds: [family], expenseMinorUnits: 150000 }))
+    .toEqual([{ category: { id: family, name: "Family", emoji: "🛒" }, overMinorUnits: 150000 }]);
   expect((await s.read("2026-11")).jars).toMatchObject([{ limitMinorUnits: 0, consumptionMinorUnits: 0 }]);
 });
 
