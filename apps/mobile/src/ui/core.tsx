@@ -369,7 +369,7 @@ export function AppearanceToggle() {
 
 /** Device language, or an explicit English or Spanish choice that persists on this phone. */
 export function LanguageToggle() {
-  const { styles } = useCore();
+  const { styles, layout } = useCore();
   const { t, preference, setPreference } = useLanguage();
   const options = [
     { value: "system" as const, label: t("settings.languageSystem"), a11y: t("settings.languageSystemA11y") },
@@ -384,7 +384,7 @@ export function LanguageToggle() {
           accessibilityLabel={option.a11y}
           accessibilityState={{ selected: preference === option.value }}
           onPress={() => setPreference(option.value)}
-          style={[styles.segment, { flexBasis: "30%" }, preference === option.value && styles.segmentSelected]}
+          style={[styles.segment, { flexBasis: layout.reflow ? "100%" : "30%" }, preference === option.value && styles.segmentSelected]}
         >
           <Text style={styles.segmentText}>{option.label}</Text>
         </Pressable>
@@ -498,7 +498,7 @@ export function ConfirmationScreen({
   title,
   detail,
   onContinue,
-  buttonLabel = "Continue",
+  buttonLabel,
 }: {
   title: string;
   detail: string;
@@ -506,6 +506,7 @@ export function ConfirmationScreen({
   buttonLabel?: string;
 }) {
   const { theme, styles } = useCore();
+  const { t } = useT();
   return (
     <Screen contentStyle={styles.confirmationContent}>
       <View style={styles.confirmation}>
@@ -514,7 +515,7 @@ export function ConfirmationScreen({
         </View>
         <Text style={styles.confirmTitle}>{title}</Text>
         <Text style={styles.confirmDetail}>{detail}</Text>
-        <PrimaryButton label={buttonLabel} onPress={onContinue} />
+        <PrimaryButton label={buttonLabel ?? t("home.confirmationContinue")} onPress={onContinue} />
       </View>
     </Screen>
   );

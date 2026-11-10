@@ -1,5 +1,6 @@
 import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useT } from "../i18n";
 import { useThemeMode } from "./core";
 import { font, spacing } from "./tokens";
 
@@ -28,16 +29,17 @@ export function BrandMark({ size = 56 }: { size?: number }) {
 
 export function BrandSplash() {
   const mode = useThemeMode();
+  const { t } = useT();
   return <SafeAreaView style={[styles.splash, { backgroundColor: mode === "dark" ? "#21132f" : "#6d28d9" }]}>
     <View style={styles.signature}>
       <Image source={require("../../assets/brand/symbol-inverse.png")} accessible={false}
         style={styles.symbol} resizeMode="contain" />
       <Image source={require("../../assets/brand/wordmark-inverse.png")} accessibilityLabel="Lukapp"
         style={styles.wordmark} resizeMode="contain" />
-      <Text style={styles.promise}>Las lucas tienen{"\n"}un para qué.</Text>
-      <ActivityIndicator color="#f5f3ff" accessibilityLabel="Checking local protection" />
+      <Text style={styles.promise}>{t("access.splashPromise")}</Text>
+      <ActivityIndicator color="#f5f3ff" accessibilityLabel={t("access.checkingProtection")} />
     </View>
-    <Text style={styles.footer}>Tus lucas. Tu manera de vivir.</Text>
+    <Text style={styles.footer}>{t("access.splashFooter")}</Text>
   </SafeAreaView>;
 }
 

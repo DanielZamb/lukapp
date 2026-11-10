@@ -1,3 +1,7 @@
+import { setup } from "../../../../src/i18n/catalog/en/setup";
+import type { MessageKey, Translator } from "../../../../src/i18n";
+import { formatMonthName } from "../../../../src/i18n/format";
+
 export const LATIN_AMERICA_TIME_ZONES = [
   "America/Bogota",
   "America/Mexico_City",
@@ -67,42 +71,14 @@ const FALLBACK_TIME_ZONES = [
   "Pacific/Honolulu",
 ] as const;
 
-const TIME_ZONE_LABELS: Record<string, string> = {
-  "America/Bogota": "Bogotá",
-  "America/Mexico_City": "Mexico City",
-  "America/Lima": "Lima",
-  "America/Guayaquil": "Guayaquil",
-  "America/Santiago": "Santiago",
-  "America/Argentina/Buenos_Aires": "Buenos Aires",
-  "America/Sao_Paulo": "São Paulo",
-  "America/Caracas": "Caracas",
-  "America/La_Paz": "La Paz",
-  "America/Asuncion": "Asunción",
-  "America/Montevideo": "Montevideo",
-  "America/Panama": "Panama",
-  "America/Costa_Rica": "Costa Rica",
-  "America/Guatemala": "Guatemala",
-  "America/Havana": "Havana",
-  "America/Santo_Domingo": "Santo Domingo",
-  "America/Puerto_Rico": "Puerto Rico",
-  "America/New_York": "New York",
-  "America/Chicago": "Chicago",
-  "America/Denver": "Denver",
-  "America/Los_Angeles": "Los Angeles",
-  "America/Toronto": "Toronto",
-  "Europe/Madrid": "Madrid",
-  "Europe/Lisbon": "Lisbon",
-  "Europe/London": "London",
-  UTC: "UTC",
-  "Pacific/Auckland": "Auckland",
-};
-
 export function deviceTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-export function timeZoneLabel(timeZone: string): string {
-  return TIME_ZONE_LABELS[timeZone] ?? timeZone.replaceAll("_", " ");
+/** A city name from the catalog where one exists, otherwise the IANA id made readable. */
+export function timeZoneLabel(timeZone: string, { t }: Translator): string {
+  const key = `zone.${timeZone}`;
+  return key in setup ? t(`setup.${key}` as MessageKey) : timeZone.replaceAll("_", " ");
 }
 
 function supportedTimeZones(): string[] {
@@ -121,11 +97,11 @@ export function orderedTimeZones(deviceZone: string): string[] {
   ];
 }
 
-export function filterTimeZones(zones: string[], query: string): string[] {
+export function filterTimeZones(zones: string[], query: string, translator: Translator): string[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return zones;
   return zones.filter((zone) => {
-    const label = timeZoneLabel(zone).toLowerCase();
+    const label = timeZoneLabel(zone, translator).toLowerCase();
     return zone.toLowerCase().includes(needle) || label.includes(needle);
   });
 }
@@ -144,8 +120,8 @@ export function calendarDate(now: Date, timeZone: string): string {
   return `${year}-${month}-${day}`;
 }
 
-export function spentMonthEyebrow(timeZone: string, now = new Date()): string {
-  return `SPENT IN ${new Intl.DateTimeFormat("en", { month: "long", timeZone }).format(now).toUpperCase()}`;
+export function spentMonthEyebrow({ t, language, locale }: Translator, timeZone: string, now = new Date()): string {
+  return t("home.spentIn", { month: formatMonthName(language, now, { timeZone }) }).toLocaleUpperCase(locale);
 }
 
 export function defaultAccountingDate(timeZone: string, now = new Date()): string {

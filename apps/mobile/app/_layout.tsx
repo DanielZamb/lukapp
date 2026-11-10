@@ -19,7 +19,7 @@ import { ActivityIndicator, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "../src/features/api";
-import { LanguageProvider } from "../src/i18n";
+import { LanguageProvider, useT } from "../src/i18n";
 import { LocalEntryGate } from "../src/local-auth/LocalEntryGate";
 import { PrebuiltSignIn } from "../src/local-auth/PrebuiltSignIn";
 import { IntakeProvider } from "../src/features/intake/IntakeProvider";
@@ -43,13 +43,14 @@ void SplashScreen.preventAutoHideAsync();
 
 function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
   const ui = useUi();
+  const { t } = useT();
   const report = useDeviceAccessFailure();
   useLayoutEffect(() => { report(error); }, [error, report]);
   return (
     <Screen>
-      <Header title="Could not load your money" />
-      <Text style={ui.body}>Check your connection and try again.</Text>
-      <PrimaryButton label="Try again" onPress={retry} />
+      <Header title={t("access.loadFailedTitle")} />
+      <Text style={ui.body}>{t("access.loadFailedBody")}</Text>
+      <PrimaryButton label={t("common.retry")} onPress={retry} />
     </Screen>
   );
 }
@@ -67,12 +68,12 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
 }
 function ConfigNeeded() {
   const ui = useUi();
+  const { t } = useT();
   return (
     <Screen>
-      <Header title="Development configuration needed" />
+      <Header title={t("access.configTitle")} />
       <Text style={ui.body}>
-        Set EXPO_PUBLIC_CONVEX_URL and EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, then
-        restart Metro.
+        {t("access.configBody", { convexUrl: "EXPO_PUBLIC_CONVEX_URL", clerkKey: "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY" })}
       </Text>
     </Screen>
   );
@@ -80,6 +81,7 @@ function ConfigNeeded() {
 
 function Admission() {
   const ui = useUi();
+  const { t } = useT();
   const { isLoaded, isSignedIn } = useAuth();
   const { signOut } = useClerk();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -91,7 +93,7 @@ function Admission() {
     return (
       <Screen>
         <ActivityIndicator />
-        <Text style={ui.body}>Connecting…</Text>
+        <Text style={ui.body}>{t("access.connecting")}</Text>
       </Screen>
     );
   if (!isSignedIn)
@@ -107,11 +109,9 @@ function Admission() {
   )
     return (
       <Screen>
-        <Header title="Access unavailable" />
-        <Text style={ui.body}>
-          This account cannot open Lukapp. Use the admitted owner account.
-        </Text>
-        <SecondaryButton label="Sign out" onPress={() => void signOut()} />
+        <Header title={t("access.unavailableTitle")} />
+        <Text style={ui.body}>{t("access.unavailableBody")}</Text>
+        <SecondaryButton label={t("access.signOut")} onPress={() => void signOut()} />
       </Screen>
     );
   if (!connection)

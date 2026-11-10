@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useT } from "../../i18n";
 import { useTheme, useUi } from "../../ui/core";
 import { useSetupStyles } from "./styles";
 
@@ -42,6 +43,7 @@ export function SearchSheet({
   const insets = useSafeAreaInsets();
   const ui = useUi();
   const styles = useSetupStyles();
+  const { t } = useT();
   const sheet = useRef<BottomSheetModal>(null);
   const [query, setQuery] = useState("");
   useEffect(() => {
@@ -101,7 +103,7 @@ export function SearchSheet({
           </Pressable>
         ))}
         {matches.length === 0 && (
-          <Text style={ui.muted}>{`Nothing matches "${query.trim()}".`}</Text>
+          <Text style={ui.muted}>{t("setup.noMatches", { query: query.trim() })}</Text>
         )}
       </BottomSheetScrollView>
     </BottomSheetModal>

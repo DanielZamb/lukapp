@@ -5,7 +5,7 @@ export function experienceLevel(accountCount: number, limitCount: number) {
 }
 
 export const levelUnlockSchema = z.discriminatedUnion("door", [
-  z.object({ door: z.literal("account"), accountName: z.string().default("The new place") }),
+  z.object({ door: z.literal("account"), accountName: z.string().optional() }),
   z.object({
     door: z.literal("budget"), category: z.string(), emoji: z.string(),
     color: z.string().regex(/^#[\da-f]{6}$/i), currency: z.string(),

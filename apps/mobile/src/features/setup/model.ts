@@ -4,6 +4,7 @@ import type {
   CategorySelection,
   CategoryStyle,
 } from "../categories/model";
+import type { Translator } from "../../../../../src/i18n";
 import { parseMoney } from "../money";
 
 export type SetupCategory = {
@@ -37,8 +38,8 @@ export function setupSelections(
         };
   });
 }
-export function startingAmount(text: string, currency: string) {
+export function startingAmount(text: string, currency: string, { t }: Translator) {
   const minorUnits = text.trim() ? parseMoney(text, "es-CO", currency) : 0;
-  if (minorUnits < 0) throw new Error("Enter zero or the amount you hold.");
+  if (minorUnits < 0) throw new Error(t("setup.startingNegative"));
   return minorUnits;
 }

@@ -20,6 +20,7 @@ import {
 import { categoryPalette } from "./categories/appearance";
 import { currencyOptions } from "./setup/currencies";
 import { functionalCurrencyCodes } from "../../../../src/accounting/currencies";
+import { createTranslator } from "../../../../src/i18n";
 import type { SetupSummary } from "./setup/model";
 
 const backend = vi.hoisted(() => ({ ensure: vi.fn(), place: vi.fn(), save: vi.fn(), clear: vi.fn(), key: 0, suggestions: {} as Record<string, NatureAnswer | null> }));
@@ -237,7 +238,7 @@ test("More searches all supported currencies by code and name, marks selection, 
   await open();
   await press("Food");
   await press("More currencies");
-  expect(new Set(currencyOptions.map(({ code }) => code))).toEqual(
+  expect(new Set(currencyOptions(createTranslator("en")).map(({ code }) => code))).toEqual(
     functionalCurrencyCodes,
   );
   await type("Search currencies", "Canadian");

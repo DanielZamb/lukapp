@@ -12,9 +12,11 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
+import { useT } from "../i18n";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { Header, PrimaryButton, useTheme, useUi } from "../ui/core";
+import { useReadableLayout } from "../ui/themeContext";
 import { font, radius, spacing } from "../ui/tokens";
 import { api } from "./api";
 import { DeferredAccountSetup } from "./setup/DeferredAccountSetup";
@@ -67,6 +69,9 @@ export function Setup({
   const insets = useSafeAreaInsets();
   const ui = useUi();
   const styles = useSetupStyles();
+  const layout = useReadableLayout();
+  const translator = useT();
+  const { t } = translator;
   const interact = useLocalEntryInteraction();
   const reportFailure = useDeviceAccessFailure();
   const sheet = useRef<BottomSheetModal>(null);
@@ -115,7 +120,7 @@ export function Setup({
   let formatted = "";
   try {
     formatted = formatMoney(
-      { currency, minorUnits: startingAmount(starting, currency) },
+      { currency, minorUnits: startingAmount(starting, currency, translator) },
       { hideZeroDecimals: true },
     );
   } catch {
@@ -130,7 +135,7 @@ export function Setup({
       if (!submission) {
         if (!presets || !categories.length || !currencyChosen || consent === null)
           return;
-        const startingMinorUnits = startingAmount(starting, currency);
+        const startingMinorUnits = startingAmount(starting, currency, translator);
         submission = {
           payload: {
             functionalCurrency: currency,
@@ -165,18 +170,16 @@ export function Setup({
       ) {
         setPhase({ kind: "editing" });
         if (reportFailure(error)) return;
-        setError(
-          "Setup was already saved with different answers. You can edit your answers or cancel.",
-        );
+        setError(t("setup.conflict"));
       } else {
         setPhase(submission ? { kind: "retryDefaults", submission } : { kind: "editing" });
         if (reportFailure(error)) return;
         setError(
           submission
-            ? "Setup could not be confirmed. Retry with the same answers. Your submitted answers are read-only until setup is confirmed."
+            ? t("setup.unconfirmed")
             : error instanceof Error
               ? error.message
-              : "Setup could not finish.",
+              : t("setup.failed"),
         );
       }
     } finally {
@@ -219,13 +222,13 @@ export function Setup({
           <View style={[styles.row, { alignItems: "flex-start" }]}>
             <View style={{ flex: 1 }}>
               <Header
-                title="Where does your money go?"
-                eyebrow="SETUP · ONE SHEET"
+                title={t("setup.title")}
+                eyebrow={t("setup.eyebrow")}
               />
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Cancel setup"
+              accessibilityLabel={t("setup.cancel")}
               disabled={disabled}
               accessibilityState={{ disabled }}
               style={styles.icon}
@@ -239,8 +242,8 @@ export function Setup({
             </Pressable>
           </View>
           {phase.kind === "accounts" ? <View style={styles.board}>
-            <Text style={ui.title}>Basic setup has been saved</Text>
-            <Text style={ui.muted}>Add the places you chose, or explicitly add them later.</Text>
+            <Text style={ui.title}>{t("setup.savedTitle")}</Text>
+            <Text style={ui.muted}>{t("setup.savedDetail")}</Text>
             {phase.requests.slice(phase.index, phase.index + 1).map((accountRequest) => <DeferredAccountSetup
               key={phase.index} request={accountRequest} subject={subject}
               workspaceId={phase.result.workspace.id} profileId={phase.result.financialAccountProfile.id}
@@ -258,14 +261,14 @@ export function Setup({
               if (next.length) advance(2);
             }}
           />
-          {!!accountRequests.length && <Text style={ui.muted}>{accountRequests.map(({ name }) => name).join(", ")} will be added after basic setup. Do not include those balances in My money. These unsaved requests stay only in this setup session.</Text>}
+          {!!accountRequests.length && <Text style={ui.muted}>{t("setup.pendingPlaces", { names: accountRequests.map(({ name }) => name).join(", ") })}</Text>}
           {stage >= 2 && (
             <View style={styles.board}>
               <View style={styles.row}>
-                <Text style={styles.label}>Currency</Text>
+                <Text style={styles.label}>{t("setup.currency")}</Text>
                 {currencyChosen && (
                   <Text style={[ui.muted, { flex: 1, textAlign: "right" }]}>
-                    {currencyName(currency)}
+                    {currencyName(currency, translator)}
                   </Text>
                 )}
               </View>
@@ -291,7 +294,7 @@ export function Setup({
                 ))}
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="More currencies"
+                  accessibilityLabel={t("setup.moreCurrencies")}
                   disabled={disabled}
                   onPress={() => {
                     if (disabled || saving.current) return;
@@ -309,7 +312,7 @@ export function Setup({
                   <Text style={styles.chipText}>
                     {currencyChosen && !commonCurrencies.includes(currency)
                       ? currency
-                      : "More"}
+                      : t("setup.more")}
                   </Text>
                 </Pressable>
               </View>
@@ -326,20 +329,20 @@ export function Setup({
           )}
           {stage >= 3 && (
             <View style={styles.board}>
-              <Text style={styles.label}>Purchase alerts</Text>
-              <View style={{ flexDirection: "row", gap: spacing.md }}>
+              <Text style={styles.label}>{t("setup.purchaseAlerts")}</Text>
+              <View style={{ flexDirection: layout.reflow ? "column" : "row", gap: spacing.md }}>
                 {[
                   {
                     value: true,
                     emoji: "🔔",
-                    label: "Use them",
-                    detail: "Alerts can become Candidates after device setup",
+                    label: t("setup.alertsUse"),
+                    detail: t("setup.alertsUseDetail"),
                   },
                   {
                     value: false,
                     emoji: "✍️",
-                    label: "Not now",
-                    detail: "You add drafts yourself",
+                    label: t("setup.alertsSkip"),
+                    detail: t("setup.alertsSkipDetail"),
                   },
                 ].map((option) => (
                   <Pressable
@@ -382,9 +385,9 @@ export function Setup({
           {stage >= 4 && (
             <>
               <View style={styles.board}>
-                <Text style={styles.label}>What you have now</Text>
+                <Text style={styles.label}>{t("setup.whatYouHave")}</Text>
                 <BottomSheetTextInput
-                  accessibilityLabel="Starting amount"
+                  accessibilityLabel={t("setup.startingA11y")}
                   value={starting}
                   placeholder="0"
                   keyboardType="decimal-pad"
@@ -406,8 +409,7 @@ export function Setup({
                   }}
                 />
                 <Text style={ui.muted}>
-                  {formatted ? `${formatted}. ` : ""}Bank plus the cash in your
-                  pocket.
+                  {formatted ? t("setup.startingHintAmount", { amount: formatted }) : t("setup.startingHint")}
                 </Text>
               </View>
               {error ? (
@@ -416,7 +418,7 @@ export function Setup({
                 </Text>
               ) : null}
               <PrimaryButton
-                label="Start tracking"
+                label={t("setup.start")}
                 trailingIcon="checkmark"
                 pending={busy}
                 disabled={phase.kind === "editing" && (!categories.length || !presets)}
@@ -424,16 +426,12 @@ export function Setup({
               />
               {!categories.length && (
                 <Text style={[ui.muted, { textAlign: "center" }]}>
-                  Pick at least one category to start
+                  {t("setup.pickOne")}
                 </Text>
               )}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={
-                  wantsBudgets
-                    ? "You want budgets. That door opens after this."
-                    : "I already know my spending. I want budgets."
-                }
+                accessibilityLabel={wantsBudgets ? t("setup.budgetsOn") : t("setup.budgetsOff")}
                 accessibilityState={{ selected: wantsBudgets, disabled }}
                 disabled={disabled}
                 onPress={() => {
@@ -457,9 +455,7 @@ export function Setup({
                     },
                   ]}
                 >
-                  {wantsBudgets
-                    ? "You want budgets. That door opens after this."
-                    : "I already know my spending. I want budgets."}
+                  {wantsBudgets ? t("setup.budgetsOn") : t("setup.budgetsOff")}
                 </Text>
               </Pressable>
             </>
@@ -469,9 +465,9 @@ export function Setup({
       </BottomSheetModal>
       {currencyOpen && !disabled && (
         <SearchSheet
-          label="Search currencies"
-          placeholder="Search by code or name"
-          options={currencyOptions}
+          label={t("setup.searchCurrencies")}
+          placeholder={t("setup.searchCurrenciesPlaceholder")}
+          options={currencyOptions(translator)}
           selected={currencyChosen ? currency : null}
           onSelect={chooseCurrency}
           onClose={() => setCurrencyOpen(false)}

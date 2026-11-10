@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "vitest";
+import { createTranslator } from "../../../../src/i18n";
 import {
   LATIN_AMERICA_TIME_ZONES,
   calendarDate,
@@ -9,6 +10,9 @@ import {
   spentMonthEyebrow,
   timeZoneLabel,
 } from "./timeZones";
+
+const en = createTranslator("en");
+const es = createTranslator("es");
 
 const bogotaMonthEnd = new Date("2026-10-31T23:30:00-05:00");
 const supportedValuesOf = Intl.supportedValuesOf;
@@ -27,9 +31,22 @@ test("a new place's starting date follows the Workspace calendar, not the phone"
 
 test("Home's month label uses the Workspace timezone, not UTC", () => {
   expect(bogotaMonthEnd.toISOString().slice(0, 10)).toBe("2026-11-01");
-  expect(spentMonthEyebrow("America/Bogota", bogotaMonthEnd)).toBe("SPENT IN OCTOBER");
-  expect(spentMonthEyebrow("Pacific/Auckland", bogotaMonthEnd)).toBe("SPENT IN NOVEMBER");
+  expect(spentMonthEyebrow(en, "America/Bogota", bogotaMonthEnd)).toBe("SPENT IN OCTOBER");
+  expect(spentMonthEyebrow(en, "Pacific/Auckland", bogotaMonthEnd)).toBe("SPENT IN NOVEMBER");
   expect(calendarDate(bogotaMonthEnd, "America/Bogota").slice(0, 7)).toBe("2026-10");
+  expect(spentMonthEyebrow(es, "America/Bogota", bogotaMonthEnd)).toBe("GASTADO EN OCTUBRE");
+  expect(spentMonthEyebrow(es, "Pacific/Auckland", bogotaMonthEnd)).toBe("GASTADO EN NOVIEMBRE");
+});
+
+test("time zone names read in the chosen language, and search matches either the name or the id", () => {
+  const ordered = orderedTimeZones("America/New_York");
+  expect(timeZoneLabel("America/Mexico_City", en)).toBe("Mexico City");
+  expect(timeZoneLabel("America/Mexico_City", es)).toBe("Ciudad de México");
+  expect(timeZoneLabel("Europe/London", es)).toBe("Londres");
+  expect(timeZoneLabel("Asia/Ho_Chi_Minh", es)).toBe("Asia/Ho Chi Minh");
+  expect(filterTimeZones(ordered, "nueva york", es)).toEqual(["America/New_York"]);
+  expect(filterTimeZones(ordered, "nueva york", en)).toEqual([]);
+  expect(filterTimeZones(ordered, "new_york", es)).toEqual(["America/New_York"]);
 });
 
 test("Latin American zones appear first and search matches city names", () => {
@@ -39,9 +56,9 @@ test("Latin American zones appear first and search matches city names", () => {
   ]);
   expect(ordered).toContain("America/New_York");
   expect(orderedTimeZones("Africa/Nairobi")).toContain("Africa/Nairobi");
-  expect(filterTimeZones(ordered, "bogotá")[0]).toBe("America/Bogota");
-  expect(filterTimeZones(ordered, "lima")).toEqual(["America/Lima"]);
-  expect(timeZoneLabel("America/Sao_Paulo")).toBe("São Paulo");
+  expect(filterTimeZones(ordered, "bogotá", en)[0]).toBe("America/Bogota");
+  expect(filterTimeZones(ordered, "lima", en)).toEqual(["America/Lima"]);
+  expect(timeZoneLabel("America/Sao_Paulo", en)).toBe("São Paulo");
 });
 
 test("the picker lists every IANA zone when the runtime can, with a Hermes fallback", () => {
@@ -49,7 +66,7 @@ test("the picker lists every IANA zone when the runtime can, with a Hermes fallb
   const ordered = orderedTimeZones("UTC");
   expect(ordered).toContain("Asia/Tokyo");
   expect(ordered).toContain("Europe/Berlin");
-  expect(filterTimeZones(ordered, "tokyo")).toContain("Asia/Tokyo");
+  expect(filterTimeZones(ordered, "tokyo", en)).toContain("Asia/Tokyo");
   expect(new Set(ordered).size).toBe(ordered.length);
   for (const zone of runtime) expect(ordered).toContain(zone);
 
@@ -62,7 +79,7 @@ test("the picker lists every IANA zone when the runtime can, with a Hermes fallb
   ]);
   expect(fallback).toContain("Asia/Tokyo");
   expect(fallback).toContain("Europe/Berlin");
-  expect(filterTimeZones(fallback, "berlin")).toContain("Europe/Berlin");
+  expect(filterTimeZones(fallback, "berlin", en)).toContain("Europe/Berlin");
 });
 
 test("the next Workspace midnight is the zone's civil midnight, not 24 hours later", () => {

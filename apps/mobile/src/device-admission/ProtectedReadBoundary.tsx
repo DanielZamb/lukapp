@@ -1,6 +1,7 @@
 import React, { Component, useLayoutEffect, type ReactNode } from "react";
 import { Text } from "react-native";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
+import { useT } from "../i18n";
 import { Header, PrimaryButton, Screen, useUi } from "../ui/core";
 
 type ReadState = { kind: "clear" } | { kind: "error"; error: unknown };
@@ -17,13 +18,14 @@ export class ProtectedReadBoundary extends Component<{ children: ReactNode }, Re
 }
 function ReadFailure({ error, retry }: { error: unknown; retry: () => void }) {
   const ui = useUi();
+  const { t } = useT();
   const report = useDeviceAccessFailure();
   useLayoutEffect(() => { report(error); }, [error, report]);
   return (
     <Screen>
-      <Header title="Could not load your money" />
-      <Text style={ui.body}>Access could not be confirmed. Check your connection and try again.</Text>
-      <PrimaryButton label="Try again" onPress={retry} />
+      <Header title={t("access.loadFailedTitle")} />
+      <Text style={ui.body}>{t("access.readFailedBody")}</Text>
+      <PrimaryButton label={t("common.retry")} onPress={retry} />
     </Screen>
   );
 }

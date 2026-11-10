@@ -1,6 +1,7 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { useT } from "../../i18n";
 import { PrimaryButton, SecondaryButton, useUi } from "../../ui/core";
 import type { AccountSetupRequest } from "../categories/model";
 import { AccountSetupForm } from "../posting/AccountSetupForm";
@@ -18,6 +19,7 @@ export function DeferredAccountSetup({ request, subject, workspaceId, profileId,
   onDone: () => void;
 }) {
   const ui = useUi();
+  const { t } = useT();
   const transport = usePostingTransport(subject);
   const isolated = useMemo(() => ({ ...transport, load: () => transport.load(undefined, false) }), [transport]);
   const editor = usePostingEditor({ workspaceId, financialAccountProfileId: profileId,
@@ -53,11 +55,11 @@ export function DeferredAccountSetup({ request, subject, workspaceId, profileId,
     onDone();
   }
   return <View style={ui.section}>
-    <Text style={ui.body}>Add {request.name}. Its balance is separate from My money.</Text>
-    {editor.blockedByPendingPostings && <Text accessibilityRole="alert" style={ui.error}>Finish the saved entry in Drafts before adding this place.</Text>}
-    {closed && <PrimaryButton label="Continue place setup" onPress={() => { setClosed(false); sheet.current?.present(); }} />}
+    <Text style={ui.body}>{t("setup.deferredAdd", { name: request.name })}</Text>
+    {editor.blockedByPendingPostings && <Text accessibilityRole="alert" style={ui.error}>{t("setup.deferredBlocked")}</Text>}
+    {closed && <PrimaryButton label={t("setup.deferredContinue")} onPress={() => { setClosed(false); sheet.current?.present(); }} />}
     {!submitted.current && !editor.pending && !editor.busy && !editor.loading &&
-      <SecondaryButton label="Add later" onPress={finish} />}
+      <SecondaryButton label={t("setup.deferredLater")} onPress={finish} />}
     <AccountSetupForm sheetRef={sheet} value={editor.setup} currency={currency}
       editable={editor.editable} busy={editor.busy} pending={editor.pending} error={editor.error}
       canSubmit={editor.canSubmit} onChange={editor.setSetup} onSubmit={() => {
