@@ -4,9 +4,9 @@ import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT } from "../../i18n";
 import type { api } from "../api";
-import { parseMoney } from "../money";
+import { amountMinorUnits, amountOfMinorUnits, type AmountSession } from "../amount/session";
 import { defaultAccountingDate } from "../timeZones";
-import { recoveryMoney, type RecoveryPlace, type RecoveryPlanView } from "./model";
+import type { RecoveryPlace, RecoveryPlanView } from "./model";
 
 type Request = FunctionArgs<typeof api.savingsRecovery.recordContribution>;
 type Receipt = FunctionReturnType<typeof api.savingsRecovery.recordContribution>;
@@ -26,7 +26,7 @@ export function useRecoveryMove(
   const defaultSource = seed.sources.find((place) => place.id !== seed.plan.destinationFinancialAccountProfileId)
     ?? null;
   const [sourceId, setSourceId] = useState(defaultSource?.id ?? null);
-  const [amount, setAmount] = useState(formatMinor(seed.plan.currency, seed.plan.dueMinorUnits));
+  const [amount, setAmount] = useState(() => amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }));
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -38,8 +38,7 @@ export function useRecoveryMove(
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  let minorUnits = 0;
-  try { minorUnits = parseMoney(amount, seed.plan.currency); } catch { /* Incomplete amount stays editable. */ }
+  const minorUnits = amountMinorUnits(amount) ?? 0;
   const editable = !busy && !pending;
   async function submit() {
     const mounted = lifetime.current;
@@ -89,11 +88,8 @@ export function useRecoveryMove(
     canSubmit: !busy && (pending || (seed.plan.status === "active" && !!sourceId && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
     canDismiss: !busy && !pending,
     onSource: (id: string) => { if (canEdit()) setSourceId(id); },
-    onAmount: (value: string) => { if (canEdit()) setAmount(value); },
+    onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.plan.currency) setAmount(value); },
     submit,
   };
 }
 
-function formatMinor(currency: string, minorUnits: number) {
-  return recoveryMoney({ currency, minorUnits }).replace(`${currency} `, "");
-}

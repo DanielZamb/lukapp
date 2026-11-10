@@ -12,7 +12,10 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-nativ
 import { Choice, Field, Header, PrimaryButton, Screen, SecondaryButton, useTheme, useThemeMode, useUi } from "../../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../../../ui/tokens";
 import { api } from "../../api";
-import { formatAmount, parseMoney } from "../../money";
+import { formatAmount } from "../../money";
+import { AmountField } from "../../amount/AmountField";
+import { amountMinorUnits, amountOfMinorUnits, openAmount } from "../../amount/session";
+import { currentAmountTextFormat } from "../../amount/currencyFormat";
 import { calendarDate } from "../../timeZones";
 import { useLocalEntryDrafts } from "../../useLocalEntryDrafts";
 import { IntakeContext } from "../IntakeProvider";
@@ -125,7 +128,8 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
   const [variant, setVariant] = useState<"A" | "B">("A");
   const [revealed, setRevealed] = useState(false);
   const [chosen, setChosen] = useState<Mention | null>(suggestion.amount);
-  const [amountText, setAmountText] = useState(suggestion.amount ? formatAmount(suggestion.amount.minor, currency, { hideZeroDecimals: true }) : "");
+  const [amount, setAmount] = useState(() => suggestion.amount
+    ? amountOfMinorUnits(currency, suggestion.amount.minor, { hideZeroDecimals: true }) : openAmount(currency));
   const [direction, setDirection] = useState<Direction>(suggestion.direction?.value ?? "out");
   const [description, setDescription] = useState(suggestion.counterparty?.value ?? "");
   const [anchor, setAnchor] = useState<number | null>(null);
@@ -133,14 +137,13 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const hidden = suggestion.sensitive !== null && !revealed;
-  // parseMoney returns minor units and throws while the text is incomplete.
-  const minor = (() => { try { return parseMoney(amountText || "0", currency); } catch { return 0; } })();
+  const minor = amountMinorUnits(amount) ?? 0;
   const foreign = chosen?.currency && chosen.currency !== currency;
   const accent = dark ? "#c4b5fd" : theme.primary;
 
   function choose(mention: Mention) {
     setChosen(mention);
-    setAmountText(formatAmount(mention.minor, currency, { hideZeroDecimals: true }));
+    setAmount(amountOfMinorUnits(currency, mention.minor, { hideZeroDecimals: true }));
   }
   function tapWord(start: number, end: number) {
     if (anchor === null) { setAnchor(start); setDescription(suggestion.text.slice(start, end)); return; }
@@ -154,7 +157,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
     setBusy(true); setError("");
     try {
       const draftId = await drafts.port.keep({ facts: {
-        workspaceId, currency, entryType: "normal", amountText: `${direction === "out" ? "-" : ""}${formatAmount(minor, currency, { hideZeroDecimals: true })}`, amountFormat: "pre-currency",
+        workspaceId, currency, entryType: "normal", amountText: `${direction === "out" ? "-" : ""}${formatAmount(minor, currency, { hideZeroDecimals: true })}`, amountFormat: currentAmountTextFormat(currency),
         accountingDate: calendarDate(new Date(arrival.at), timeZone), description: description.slice(0, 120), profileId, destinationId: null,
         categories: { ids: [], primaryId: null },
       } });
@@ -236,7 +239,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
     {foreign ? <AlertLine>{`This amount is in ${chosen?.currency}; this workspace records ${currency}. Check the amount before posting.`}</AlertLine> : null}
     {hidden ? null : variant === "A" ? <>
       {amountHero}
-      <Field label="Amount" accessibilityLabel="Amount" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} />
+      <AmountField label="Amount" inputAccessibilityLabel="Amount" session={amount} onChange={setAmount} editable />
       {suggestion.amounts.length > 1 ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
         {suggestion.amounts.map((mention) => <Pressable key={mention.start} accessibilityRole="radio" accessibilityState={{ checked: mention === chosen }}
           accessibilityLabel={`Use ${mention.raw}${mention.role === "balance" ? ", a balance" : ""}`} onPress={() => choose(mention)}

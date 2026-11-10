@@ -155,7 +155,7 @@ test("history shows the first page immediately, loads more on request, and opens
   expect(text()).toContain("1 of 101");
   await act(async () => root?.root.findByType("input").props.onChangeText("older receipt"));
   expect(text()).toContain("1 of 101");
-  expect(text()).toContain("Net\n−$1.5K");
+  expect(text()).toContain("Net\n−$1,5K");
   await act(async () => button("Older receipt, −$1.500").props.onPress());
   expect(provider.push).not.toHaveBeenCalled();
   expect(provider.present).toHaveBeenCalledOnce();
@@ -289,7 +289,7 @@ test("sheet keeps fractional amounts and the uncategorized money-in fallback", a
   });
   await openDetail();
   expect(text()).toContain("MONEY IN");
-  expect(text()).toContain("+$1.500,25");
+  expect(text()).toContain("+$1,500.25");
   expect(text()).toContain("When\nOctober 17, 2025");
   expect(text()).toContain("Category\nNo category");
   expect(text()).toContain("Place\nNo place");

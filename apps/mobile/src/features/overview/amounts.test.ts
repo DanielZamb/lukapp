@@ -13,7 +13,7 @@ test.each([
 test("symbol amounts convert minor units once and use es-CO grouping", () => {
   expect(currencyDisplayPrefix("COP")).toBe("$");
   expect(currencyDisplayPrefix("USD")).toBe("$");
-  expect(symbolAmount(123456789, "$", "compact", "COP", "en")).toBe("$1.2M");
+  expect(symbolAmount(123456789, "$", "compact", "COP", "en")).toBe("$1,2M");
   expect(symbolAmount(-10800000000, "$", "compact", "COP", "en")).toBe("−$108M");
   expect(symbolAmount(123456789, "$", "grouped", "COP", "en")).toBe("$1.234.567,89");
   expect(fullAmount(-123456789, "$", "COP")).toBe("−$1.234.567,89");

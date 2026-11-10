@@ -5,7 +5,8 @@ import type {
   CategoryStyle,
 } from "../categories/model";
 import type { Translator } from "../../../../../src/i18n";
-import { parseMoney } from "../money";
+import { amountMinorUnits, type AmountSession } from "../amount/session";
+import { amountRefusal } from "../amount/hints";
 
 export type SetupCategory = {
   name: string;
@@ -45,8 +46,11 @@ export function setupSelections(
         };
   });
 }
-export function startingAmount(text: string, currency: string, { t }: Translator) {
-  const minorUnits = text.trim() ? parseMoney(text, currency) : 0;
+/** The starting amount to send. Blank means zero; text that is not a complete amount is refused, never guessed. */
+export function startingAmount(amount: AmountSession, { t }: Translator) {
+  if (!amount.editor.text.trim()) return 0;
+  const minorUnits = amountMinorUnits(amount);
+  if (minorUnits === null) throw new Error(amountRefusal(amount, t));
   if (minorUnits < 0) throw new Error(t("setup.startingNegative"));
   return minorUnits;
 }

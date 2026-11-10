@@ -1,7 +1,7 @@
 import { useMemo, useRef, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { useT } from "../../i18n";
-import { useTheme, useUi } from "../../ui/themeContext";
+import { useThemeContext } from "../../ui/themeContext";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
 import { amountHint } from "./hints";
 import { applyNativeText, nativeCaretAfter } from "./nativeEdit";
@@ -11,7 +11,10 @@ export type AmountFieldProps = {
   session: AmountSession;
   onChange: (next: AmountSession) => void;
   editable: boolean;
-  accessibilityLabel: string;
+  /** The input's accessible name. */
+  inputAccessibilityLabel: string;
+  /** A visible label in the shared field style, which also gives the input the field's box. */
+  label?: string;
   placeholder?: string;
   /** A control that sets the sign, for fields that accept a negative amount. */
   sign?: { disabled?: boolean };
@@ -31,8 +34,7 @@ export type AmountFieldProps = {
  */
 export function AmountField(props: AmountFieldProps) {
   const { t } = useT();
-  const theme = useTheme();
-  const ui = useUi();
+  const { theme, ui, styles: shared } = useThemeContext();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const latest = useRef(props.session);
   latest.current = props.session;
@@ -47,12 +49,14 @@ export function AmountField(props: AmountFieldProps) {
     props.onChange(next);
   }
   const keyEnabled = props.editable && decimals;
+  const refused = !!hint || !!props.message?.error;
   return (
     <View style={styles.field}>
+      {props.label ? <Text style={shared.fieldLabel}>{props.label}</Text> : null}
       <View style={[styles.row, props.rowStyle]}>
         {props.leading}
         <Input
-          accessibilityLabel={props.accessibilityLabel}
+          accessibilityLabel={props.inputAccessibilityLabel}
           value={editor.text}
           selection={editor.selection}
           editable={props.editable}
@@ -79,7 +83,7 @@ export function AmountField(props: AmountFieldProps) {
             if (selection.start === current.editor.selection.start && selection.end === current.editor.selection.end) return;
             emit(editAmountSession(current, { kind: "select", selection }));
           }}
-          style={[styles.input, props.inputStyle]}
+          style={[props.label ? [shared.fieldInput, styles.boxed, refused && shared.fieldInputInvalid] : null, styles.input, props.inputStyle]}
         />
         {props.sign && (
           <Pressable
@@ -123,6 +127,7 @@ function createStyles(theme: Theme) {
     field: { gap: spacing.xs },
     row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
     input: { flex: 1, minWidth: 0 },
+    boxed: { width: "auto" },
     key: {
       minWidth: touchTarget,
       minHeight: touchTarget,

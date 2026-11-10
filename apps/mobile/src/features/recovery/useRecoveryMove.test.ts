@@ -3,6 +3,10 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
+const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
 import type { RecoveryPlace, RecoveryPlanView } from "./model";
 import { LanguageProvider } from "../../i18n";
 import { useRecoveryMove, type RecoveryMoveTransport } from "./useRecoveryMove";
@@ -57,7 +61,7 @@ test("the due amount posts one guarded movement under one key", async () => {
   vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
   const api = transport();
   const move = await open(api);
-  expect(move()).toMatchObject({ sourceId: "daily", amount: "2.300", canSubmit: true });
+  expect(move()).toMatchObject({ sourceId: "daily", amount: typedAmount("2.300"), canSubmit: true });
   await act(async () => { await Promise.all([move().submit(), move().submit()]); });
   expect(api.move.mock.calls.map(([request]) => request)).toEqual([{
     workspaceId: "workspace", planId: "plan-1", sourceFinancialAccountProfileId: "daily",
@@ -81,8 +85,8 @@ test("an uncertain movement freezes edits and retry reuses the same key", async 
   const api = transport();
   api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const move = await open(api);
-  await act(async () => { await move().submit(); move().onSource("savings"); move().onAmount("3.000"); });
-  expect(move()).toMatchObject({ sourceId: "daily", amount: "2.300", pending: true, editable: false, canDismiss: false });
+  await act(async () => { await move().submit(); move().onSource("savings"); move().onAmount(money("3.000")); });
+  expect(move()).toMatchObject({ sourceId: "daily", amount: typedAmount("2.300"), pending: true, editable: false, canDismiss: false });
   await act(async () => { await move().submit(); });
   expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
 });
@@ -137,7 +141,7 @@ test("unmounted acknowledgements cannot finish a newer movement", async () => {
 test.each(["", "0", "-1", "1.23", "2.300,123", "abc"])("invalid hero amount %s blocks posting", async (amount) => {
   const api = transport();
   const move = await open(api);
-  await act(async () => { move().onAmount(amount); });
+  await act(async () => { move().onAmount(money(amount)); });
   expect(move().canSubmit).toBe(false);
   await act(async () => { await move().submit(); });
   expect(api.move).not.toHaveBeenCalled();
@@ -146,7 +150,7 @@ test.each(["", "0", "-1", "1.23", "2.300,123", "abc"])("invalid hero amount %s b
 test("the edited hero uses the shared parser and the chosen source", async () => {
   const api = transport();
   const move = await open(api, { workspaceId: "workspace", timeZone: "America/Bogota", plan, sources: [...sources, { id: "cash", name: "Cash", productKind: "cash" }] });
-  await act(async () => { move().onAmount("3.000,25"); move().onSource("cash"); });
+  await act(async () => { move().onAmount(money("3.000,25")); move().onSource("cash"); });
   expect(move().canSubmit).toBe(true);
   await act(async () => { await move().submit(); });
   expect(api.move.mock.calls[0][0]).toMatchObject({
@@ -165,8 +169,8 @@ test("a destination without another source cannot be selected or posted", async 
 test("zero due blocks posting until a positive amount is entered", async () => {
   const api = transport();
   const move = await open(api, { workspaceId: "workspace", timeZone: "America/Bogota", plan: { ...plan, dueMinorUnits: 0 }, sources });
-  expect(move()).toMatchObject({ amount: "0", canSubmit: false });
-  await act(async () => { move().onAmount("100"); });
+  expect(move()).toMatchObject({ amount: typedAmount("0"), canSubmit: false });
+  await act(async () => { move().onAmount(money("100")); });
   expect(move().canSubmit).toBe(true);
 });
 
@@ -189,7 +193,7 @@ test.each([["JPY", 100, "100"], ["BHD", 1234, "1,234"]] satisfies [string, numbe
     const api = transport();
     const move = await open(api, { workspaceId: "workspace", timeZone: "America/Bogota", sources,
       plan: { ...plan, currency, dueMinorUnits: minorUnits } });
-    expect(move().amount).toBe(amount);
+    expect(move().amount.editor.text).toBe(amount);
     await act(async () => { await move().submit(); });
     expect(api.move.mock.calls[0][0].amount).toEqual({ currency, minorUnits });
   },

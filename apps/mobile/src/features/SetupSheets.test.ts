@@ -116,7 +116,7 @@ async function mount() {
   await act(async () => control("Starting amount").props.onChangeText("123"));
 }
 function expectAnswers(currency = "USD") {
-  expect(control("Starting amount").props.value).toBe("123");
+  expect(control("Starting amount").props.value).toBe(currency === "USD" ? "123" : "");
   expect(control("Food").props.accessibilityState.checked).toBe(true);
   if (currency === "CAD")
     expect(control("More currencies").findByType("text").children).toEqual(["CAD"]);

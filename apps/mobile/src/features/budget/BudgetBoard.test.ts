@@ -44,7 +44,7 @@ test("jars match variant A with compact remaining amounts, category borders and 
   expect(text(screen)).toContain("OCTOBER\nBudgets\nOpen Over");
   expect(screen.findAll((node) => String(node.type) === "Text").map((node) => node.children.join(""))).toEqual([
     "OCTOBER", "Budgets", "Open Over", "🛒", "Unused", "1M left", "🛒", "Partial", "354K left",
-    "🛒", "Spent", "0 left", "🛒", "Over", "500K over", "🛒", "Reversed", "2.5M left", "Set another limit",
+    "🛒", "Spent", "0 left", "🛒", "Over", "500K over", "🛒", "Reversed", "2,5M left", "Set another limit",
   ]);
   const buttons = screen.findAll((node) => String(node.type) === "Pressable").filter((node) => node.props.accessibilityLabel?.includes("spent."));
   expect(buttons[1].props.accessibilityLabel).toBe("Partial: COP 354.000,00 left of COP 1.000.000,00. COP 646.000,00 spent. Edit Budget.");

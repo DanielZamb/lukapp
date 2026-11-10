@@ -2,6 +2,9 @@ import { createElement, useMemo, useSyncExternalStore } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
 import { createTranslator } from "../../../../../src/i18n";
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
@@ -43,13 +46,13 @@ test("editor persists review before leaving and reopens edited facts while recei
   const f = fixture(); await f.service.refresh();
   const dispatch = vi.fn(async (command: ConfirmCandidateInput) => result(command));
   const editor = await open(f.service, dispatch);
-  await act(async () => { editor().setDescription("Reviewed market"); editor().setAmount("-500,00"); });
+  await act(async () => { editor().setDescription("Reviewed market"); editor().setAmount(money("-500,00")); });
   await act(async () => { await editor().saveCandidateReview(); });
   expect(f.service.read("capture-1")?.review.description).toBe("Reviewed market");
   await act(async () => root?.unmount()); root = undefined;
   const reopenedService = new IntakeService(f.deps); await reopenedService.refresh();
   const reopened = await open(reopenedService, dispatch);
-  expect(reopened().description).toBe("Reviewed market"); expect(reopened().amount).toBe("-500,00");
+  expect(reopened().description).toBe("Reviewed market"); expect(reopened().amount.editor.text).toBe("-500,00");
   await act(async () => { await reopened().submit(); });
   const command = dispatch.mock.calls[0]?.[0];
   expect(command?.confirmed.description).toBe("Reviewed market"); expect(command?.confirmed.amount.minorUnits).toBe(50000);
@@ -61,11 +64,11 @@ test("editor persists review before leaving and reopens edited facts while recei
 test("incomplete amount text survives navigation and cannot become Ready or submit", async () => {
   const f = fixture(); await f.service.refresh(); const dispatch = vi.fn(async (command: ConfirmCandidateInput) => result(command));
   const editor = await open(f.service, dispatch);
-  await act(async () => { editor().setAmount("-"); });
+  await act(async () => { editor().setAmount(money("-")); });
   await act(async () => { await editor().saveCandidateReview(); });
   expect(f.service.read("capture-1")?.review.amountMinorUnits).toBeNull();
   await act(async () => root?.unmount()); root = undefined;
-  const reopened = await open(f.service, dispatch); expect(reopened().amount).toBe("-"); expect(reopened().canSubmit).toBe(false);
+  const reopened = await open(f.service, dispatch); expect(reopened().amount.editor.text).toBe("-"); expect(reopened().canSubmit).toBe(false);
   await act(async () => { await reopened().submit(); }); expect(dispatch).not.toHaveBeenCalled();
 });
 

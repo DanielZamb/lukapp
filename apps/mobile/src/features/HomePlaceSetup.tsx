@@ -7,7 +7,9 @@ import { PrimaryButton, SecondaryButton, useTheme, useUi } from "../ui/core";
 import type { usePersonalDefaults } from "./activity";
 import { useLevelNavigation } from "./levelDoor/navigation";
 import { EmojiSheet } from "./places/EmojiSheet";
-import { kindDetails, placeBalanceInput, placeKinds, type PlaceKind } from "./places/model";
+import { kindDetails, placeKinds, type PlaceKind } from "./places/model";
+import { AmountField } from "./amount/AmountField";
+import { openAmount, type AmountSession } from "./amount/session";
 import { usePlaceStyles } from "./places/styles";
 import { usePostingEditor } from "./posting/usePostingEditor";
 import { usePostingTransport } from "./posting/usePostingTransport";
@@ -44,7 +46,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   const unlockingSave = useRef<boolean | null>(null);
   const { showUnlocked } = useLevelNavigation();
   const [name, setName] = useState("");
-  const [balance, setBalance] = useState("");
+  const [balance, setBalance] = useState(() => openAmount(workspace.functionalCurrency));
   const [kind, setKind] = useState<PlaceKind>("Savings");
   const [emojiChanged, setEmojiChanged] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -60,13 +62,13 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
     }
     if (editor.editable && !started.current) {
       started.current = true;
-      editor.setSetup({ name: t("home.addPlaceDefaultName"), productKind: "savingsAccount", emoji: "🏦", amount: "0",
-        date: defaultAccountingDate(workspace.timeZone), target: { kind: "source" } });
+      editor.setSetup({ name: t("home.addPlaceDefaultName"), productKind: "savingsAccount", emoji: "🏦",
+        amount: openAmount(workspace.functionalCurrency, "0"), date: defaultAccountingDate(workspace.timeZone), target: { kind: "source" } });
     }
     if (editor.setup && !presented.current) {
       presented.current = true; sheet.current?.present();
     }
-  }, [editor, onClose, showUnlocked, t, workspace.timeZone]);
+  }, [editor, onClose, showUnlocked, t, workspace.timeZone, workspace.functionalCurrency]);
   const setup = editor.setup;
   function pickKind(next: PlaceKind) {
     if (!setup || !editor.editable) return;
@@ -114,10 +116,10 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
         </View>
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>{t("home.addPlaceBalance")}</Text>
-          <BottomSheetTextInput accessibilityLabel={t("home.addPlaceBalance")} keyboardType="decimal-pad" placeholder="0"
-            placeholderTextColor={theme.mutedForeground} value={balance} editable={editor.editable} style={styles.input}
-            onChangeText={(value) => { interact(); setBalance(value);
-              editor.setSetup({ ...setup, amount: placeBalanceInput(value, workspace.functionalCurrency) });
+          <AmountField session={balance} editable={editor.editable} inputAccessibilityLabel={t("home.addPlaceBalance")}
+            placeholder="0" InputComponent={BottomSheetTextInput} inputStyle={styles.input}
+            onChange={(value: AmountSession) => { interact(); setBalance(value);
+              editor.setSetup({ ...setup, amount: value.editor.text.trim() ? value : openAmount(value.currency, "0") });
             }} />
         </View>
         {!!editor.error && <Text accessibilityRole="alert" style={ui.error}>{editor.error}</Text>}

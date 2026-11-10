@@ -1,4 +1,5 @@
 import type { PostingFormProps } from "./PostingForm";
+import { openAmount } from "../amount/session";
 
 type Fixture = Omit<
   PostingFormProps,
@@ -15,7 +16,7 @@ type Fixture = Omit<
 >;
 export const emptyPostingForm = {
   currency: "COP",
-  amount: "-",
+  amount: openAmount("COP", "-"),
   description: "",
   date: "August 23, 2026",
   place: "💰 My money",
@@ -35,7 +36,7 @@ export const acknowledgedPostingForm = {
 
 export const incomePostingForm = {
   ...emptyPostingForm,
-  amount: "+4.200.000,00",
+  amount: openAmount("COP", "+4.200.000,00"),
   description: "Salary",
   category: "Salary",
   canSubmit: true,
@@ -43,7 +44,7 @@ export const incomePostingForm = {
 export const transferPostingForm = {
   ...emptyPostingForm,
   entryType: "transfer",
-  amount: "-500.000,00",
+  amount: openAmount("COP", "-500.000,00"),
   description: "Card payment",
   destination: "Credit card",
   categoryEnabled: true,
@@ -52,7 +53,7 @@ export const transferPostingForm = {
 export const openingPostingForm = {
   ...emptyPostingForm,
   entryType: "initial",
-  amount: "250.000,00",
+  amount: openAmount("COP", "250.000,00"),
   description: "Starting amount",
   categoryEnabled: false,
   canSubmit: true,

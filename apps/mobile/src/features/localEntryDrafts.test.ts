@@ -454,7 +454,7 @@ test("an accounting rejection reopens a money draft with its facts", () => {
         workspaceId: "workspace",
         currency: "COP",
         entryType: "normal",
-        amountText: "−1.500,00", amountFormat: "pre-currency",
+        amountText: "−1.500,00", amountFormat: "cop/1",
         accountingDate: "2026-10-17",
         description: "Food",
         profileId: "cash",

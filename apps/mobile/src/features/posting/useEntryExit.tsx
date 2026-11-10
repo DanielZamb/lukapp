@@ -6,7 +6,8 @@ import { useT } from "../../i18n";
 import { ConfirmSheet } from "../../ui/ConfirmSheet";
 import { SecondaryButton, useUi } from "../../ui/core";
 import type { DiscardOutcome } from "../discardOutcome";
-import { formatMoney, parseMoney } from "../money";
+import { formatMoney } from "../money";
+import { amountMinorUnits, type AmountSession } from "../amount/session";
 
 type ExitEditor = {
   unsaved: boolean;
@@ -15,20 +16,16 @@ type ExitEditor = {
   busy: boolean;
   posted: unknown;
   description: string;
-  amount: string;
+  amount: AmountSession;
   keepDraft(): Promise<string | undefined>;
   discardDraft(): Promise<DiscardOutcome | undefined>;
   discardCandidate(): Promise<DiscardOutcome | undefined>;
 };
 type ExitSheet = { kind: "leave"; resume: () => void } | { kind: "discard-draft" } | { kind: "discard-candidate" };
 
-function amountLabel(amount: string, currency: string) {
-  try {
-    const minorUnits = parseMoney(amount, currency);
-    return minorUnits ? formatMoney({ currency, minorUnits: Math.abs(minorUnits) }) : "";
-  } catch {
-    return "";
-  }
+function amountLabel(amount: AmountSession) {
+  const minorUnits = amountMinorUnits(amount);
+  return minorUnits ? formatMoney({ currency: amount.currency, minorUnits: Math.abs(minorUnits) }) : "";
 }
 
 /**
@@ -36,9 +33,8 @@ function amountLabel(amount: string, currency: string) {
  * Leaving with unsaved input asks first, including the iOS back swipe, which only usePreventRemove can hold.
  * A frozen posting or confirmation offers no discard.
  */
-export function useEntryExit({ editor, currency, enabled, candidateRoute, onCandidateLeave, refresh }: {
+export function useEntryExit({ editor, enabled, candidateRoute, onCandidateLeave, refresh }: {
   editor: ExitEditor;
-  currency: string;
   /** False while another composer, such as the batch editor, owns the screen. */
   enabled: boolean;
   candidateRoute: boolean;
@@ -114,7 +110,7 @@ export function useEntryExit({ editor, currency, enabled, candidateRoute, onCand
     await refresh().catch(() => {});
   });
 
-  const amount = amountLabel(editor.amount, currency);
+  const amount = amountLabel(editor.amount);
   const title = editor.description.trim() || t(candidateRoute ? "drafts.unnamedCandidate" : "drafts.incompleteDraft");
   const detail = amount ? `${title} · ${amount}` : title;
   const disabled = busy || editor.busy;

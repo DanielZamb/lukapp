@@ -2,6 +2,9 @@ import * as React from "react";
 import { createElement, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
 import { getFunctionName } from "convex/server";
 import type { PostingFormProps } from "./PostingForm";
 
@@ -222,7 +225,7 @@ async function seed(document: LocalEntryDocument) {
 }
 async function type(amount: string, description: string) {
   await act(async () => {
-    props().onAmountChange(amount);
+    props().onAmountChange(money(amount));
     props().onDescriptionChange(description);
   });
 }
@@ -242,7 +245,7 @@ test("Keep draft keeps an incomplete entry, returns to the caller and lists it i
   await act(async () => button("Keep draft").props.onPress());
   expect(nav.stack).toEqual(["drafts"]);
   const [kept] = await stored();
-  expect(kept).toMatchObject({ status: "open", facts: { description: "Taxi", amountText: "-12.000", amountFormat: "pre-currency", profileId: "account-1", categories: { ids: [], primaryId: null } } });
+  expect(kept).toMatchObject({ status: "open", facts: { description: "Taxi", amountText: "-12.000", amountFormat: "cop/1", profileId: "account-1", categories: { ids: [], primaryId: null } } });
   await closePost();
   await act(async () => { root = create(providers(createElement(DraftsRoute))); });
   expect(text()).toContain("Taxi");
@@ -252,7 +255,8 @@ test("Keep draft keeps an incomplete entry, returns to the caller and lists it i
 test("reopening a Draft restores every fact, and saving changes updates that same Draft", async () => {
   await seed(keepIn({ v: 2, drafts: [] }, { facts: taxi }, now, () => "taxi").document);
   await openPost({ draftId: "taxi" });
-  expect(props()).toMatchObject({ amount: "-12.000", description: "Taxi", entryType: "normal", place: "👛 Wallet", category: "F Food", date: "October 20, 2026" });
+  expect(props().amount.editor.text).toBe("-12.000");
+  expect(props()).toMatchObject({ description: "Taxi", entryType: "normal", place: "👛 Wallet", category: "F Food", date: "October 20, 2026" });
   await act(async () => props().onDescriptionChange("Taxi home"));
   await act(async () => props().onBack());
   expect(sheet()?.props.accessibilityLabel).toBe("Unsaved entry");
@@ -264,7 +268,8 @@ test("reopening a Draft restores every fact, and saving changes updates that sam
   expect(drafts[0]).toMatchObject({ status: "open", facts: { ...taxi, description: "Taxi home" } });
   await closePost();
   await openPost({ draftId: "taxi" });
-  expect(props()).toMatchObject({ amount: "-12.000", description: "Taxi home", place: "👛 Wallet", category: "F Food" });
+  expect(props().amount.editor.text).toBe("-12.000");
+  expect(props()).toMatchObject({ description: "Taxi home", place: "👛 Wallet", category: "F Food" });
 });
 
 test("Discard changes leaves the earlier Draft as it was", async () => {

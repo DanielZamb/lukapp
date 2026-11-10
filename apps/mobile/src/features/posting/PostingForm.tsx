@@ -1,4 +1,6 @@
-import { formatMoneyInput } from "../money";
+import { AmountField } from "../amount/AmountField";
+import type { AmountSession } from "../amount/session";
+import type { AmountNotice } from "../amount/storedText";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, type ReactNode } from "react";
 import { ComposeModeToggle } from "./ComposeModeToggle";
@@ -28,7 +30,11 @@ export type PostingFormProps = {
   /** Shown under the header in place of the source note, e.g. the notification a Candidate came from. */
   notification?: ReactNode;
   currency: string;
-  amount: string;
+  amount: AmountSession;
+  /** Set when a saved amount reopened in a new form or could not be read. */
+  amountNotice?: AmountNotice | null;
+  /** True while the chosen category decides the sign. */
+  signLocked?: boolean;
   description: string;
   date: string;
   place: string;
@@ -41,7 +47,7 @@ export type PostingFormProps = {
   canSubmit: boolean;
   error: string;
   posted: string | null;
-  onAmountChange: (value: string) => void;
+  onAmountChange: (value: AmountSession) => void;
   onDescriptionChange: (value: string) => void;
   onBack: () => void;
   onPlace: () => void;
@@ -136,8 +142,8 @@ function postingFormStyles(theme: Theme, layout: ReadableLayout) {
       fontSize: 28,
       color: theme.mutedForeground,
     },
+    amountField: { flex: layout.reflow ? 0 : 1 },
     amount: {
-      flex: layout.reflow ? 0 : 1,
       fontFamily: font.extrabold,
       fontSize: fontSize.hero,
       minHeight: 64,
@@ -166,6 +172,10 @@ function postingFormStyles(theme: Theme, layout: ReadableLayout) {
 
 export function PostingForm(props: PostingFormProps) {
   const { t } = useT();
+  const signOnly = /^[+−-]$/.test(props.amount.editor.text.trim());
+  const notice = props.amountNotice?.kind === "converted"
+    ? t("amount.noticeConverted", { previous: props.amountNotice.previous, current: props.amount.editor.text })
+    : props.amountNotice?.kind === "reenter" ? t("amount.noticeReenter", { previous: props.amountNotice.previous }) : null;
   const ui = useUi();
   const theme = useTheme();
   const layout = useReadableLayout();
@@ -223,22 +233,18 @@ export function PostingForm(props: PostingFormProps) {
         <Text style={styles.currency}>
           {props.currency === "COP" ? "$" : props.currency}
         </Text>
-        <TextInput
-          accessibilityLabel={t("posting.formAmountA11y")}
-          value={props.amount === "-" ? "-0" : props.amount}
-          onChangeText={(value) => props.onAmountChange(formatMoneyInput(value, props.currency))}
-          editable={props.editable}
-          keyboardType="numbers-and-punctuation"
-          placeholder="-0"
-          placeholderTextColor={theme.mutedForeground}
-          style={[
-            styles.amount,
-            {
-              color:
-                props.amount === "-" ? theme.mutedForeground : theme.foreground,
-            },
-          ]}
-        />
+        <View style={styles.amountField}>
+          <AmountField
+            session={props.amount}
+            onChange={props.onAmountChange}
+            editable={props.editable}
+            inputAccessibilityLabel={t("posting.formAmountA11y")}
+            placeholder="0"
+            sign={{ disabled: props.signLocked === true }}
+            notice={notice}
+            inputStyle={[styles.amount, { color: signOnly ? theme.mutedForeground : theme.foreground }]}
+          />
+        </View>
       </View>
       <View
         accessibilityRole="radiogroup"

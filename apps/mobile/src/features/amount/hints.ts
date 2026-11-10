@@ -51,3 +51,8 @@ export function amountHint(session: AmountSession, t: Translator["t"]): string |
       return t("amount.hintNotNumber", { example: example.full });
   }
 }
+
+/** The hint for text that cannot be used, or a plain example of the format when it is only incomplete. */
+export function amountRefusal(session: AmountSession, t: Translator["t"]): string {
+  return amountHint(session, t) ?? t("amount.hintFormat", { example: examples(session.editor.format).full });
+}

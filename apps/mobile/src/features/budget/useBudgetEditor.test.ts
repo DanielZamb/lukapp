@@ -2,6 +2,10 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
+const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
 import { useBudgetEditor, type BudgetEditorSeed, type BudgetTransport } from "./useBudgetEditor";
 
 const seed: BudgetEditorSeed = { workspaceId: "workspace", month: "2026-10", currency: "COP", jar: null, removedLimits: [] };
@@ -32,7 +36,7 @@ test("positive category limits submit once with exact minor units and current-mo
   const api = transport();
   const editor = await open(api);
   expect(editor().canSubmit).toBe(false);
-  await act(async () => { editor().onCategory("food"); editor().onAmount("1.500,25"); });
+  await act(async () => { editor().onCategory("food"); editor().onAmount(money("1.500,25")); });
   expect(editor().canSubmit).toBe(true);
   await act(async () => { await Promise.all([editor().submit(), editor().submit()]); });
   expect(api.send.mock.calls.map(([command]) => command)).toEqual([{ kind: "amount", args: {
@@ -47,9 +51,9 @@ test("an uncertain save freezes edits and retry reuses its exact payload and key
   const api = transport();
   api.send.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const editor = await open(api);
-  await act(async () => { editor().onCategory("food"); editor().onAmount("1.500"); });
-  await act(async () => { await editor().submit(); editor().onCategory("family"); editor().onAmount("7.000"); });
-  expect(editor()).toMatchObject({ categoryId: "food", amount: "1.500", pending: true, editable: false, canDismiss: false, canSubmit: true });
+  await act(async () => { editor().onCategory("food"); editor().onAmount(money("1.500")); });
+  await act(async () => { await editor().submit(); editor().onCategory("family"); editor().onAmount(money("7.000")); });
+  expect(editor()).toMatchObject({ categoryId: "food", amount: typedAmount("1.500"), pending: true, editable: false, canDismiss: false, canSubmit: true });
   expect(editor().error).toBe("Could not confirm saving. Retry to safely check the same Budget.");
   await act(async () => { await editor().submit(); });
   expect(api.send.mock.calls.map(([command]) => command)).toEqual([1, 2].map(() => ({ kind: "amount", args: {
@@ -63,16 +67,16 @@ test("a validation rejection preserves input, and a stale revision requires clos
   const api = transport();
   api.send.mockRejectedValueOnce(new ConvexError({ kind: "budget", code: "limit_must_be_positive" }));
   const editor = await open(api, { ...seed, jar: foodJar });
-  expect(editor()).toMatchObject({ amount: "1.000,00", amountIssue: "unchanged", canSubmit: false });
+  expect(editor()).toMatchObject({ amount: typedAmount("1.000,00"), amountIssue: "unchanged", canSubmit: false });
   await act(async () => { await editor().submit(); });
   expect(api.send).not.toHaveBeenCalled();
-  await act(async () => { editor().onAmount("1.500"); });
+  await act(async () => { editor().onAmount(money("1.500")); });
   await act(async () => { editor().onCategory("another"); await editor().submit(); });
-  expect(editor()).toMatchObject({ categoryId: "food", amount: "1.500", editable: true });
+  expect(editor()).toMatchObject({ categoryId: "food", amount: typedAmount("1.500"), editable: true });
   api.send.mockRejectedValueOnce(new ConvexError({ kind: "budget", code: "limit_changed" }));
-  await act(async () => { editor().onAmount("2.000"); });
+  await act(async () => { editor().onAmount(money("2.000")); });
   await act(async () => { await editor().submit(); });
-  expect(editor()).toMatchObject({ amount: "2.000", editable: false, canSubmit: false, canDismiss: true });
+  expect(editor()).toMatchObject({ amount: typedAmount("2.000"), editable: false, canSubmit: false, canDismiss: true });
   expect(editor().error).toBe("This limit or month changed. Close and reopen the Budget to use its latest limit.");
   expect(api.send.mock.calls.map(([{ args }]) => [args.expectedRevisionId, args.idempotencyKey])).toEqual([["revision-1", "budget-1"], ["revision-1", "budget-2"]]);
 });
@@ -87,13 +91,13 @@ test("unmounted editor acknowledgements cannot close a new editor or submit agai
     expectedRevisionId: null, sequence: 1, idempotencyKey: args.idempotencyKey, createdBy: "owner", createdAt: 1,
   } }; });
   const old = await open(api);
-  await act(async () => { old().onCategory("food"); old().onAmount("1.000"); });
+  await act(async () => { old().onCategory("food"); old().onAmount(money("1.000")); });
   let pending: Promise<void> | undefined;
   await act(async () => { pending = old().submit(); });
   await act(async () => { root?.unmount(); });
   const current = await open(api);
-  await act(async () => { current().onCategory("family"); current().onAmount("2.000"); resolve?.(); await pending; });
-  expect(current()).toMatchObject({ amount: "2.000", categoryId: "family", pending: false, canSubmit: true });
+  await act(async () => { current().onCategory("family"); current().onAmount(money("2.000")); resolve?.(); await pending; });
+  expect(current()).toMatchObject({ amount: typedAmount("2.000"), categoryId: "family", pending: false, canSubmit: true });
   expect(api.onSaved).not.toHaveBeenCalled();
   await act(async () => { await old().submit(); await current().submit(); });
   expect(api.send.mock.calls.map(([{ args }]) => [args.categoryId, "limit" in args ? args.limit.minorUnits : null]))
@@ -104,12 +108,12 @@ test("unmounted editor acknowledgements cannot close a new editor or submit agai
 test.each(["", "0", "-1", "1,234", "90.071.992.547.409,92"])("invalid limit %s remains editable without submitting", async (amount) => {
   const api = transport();
   const editor = await open(api);
-  await act(async () => { editor().onCategory("food"); editor().onAmount(amount); });
+  await act(async () => { editor().onCategory("food"); editor().onAmount(money(amount)); });
   expect(editor().canSubmit).toBe(false);
   await act(async () => { await editor().submit(); });
   expect(api.send).not.toHaveBeenCalled();
-  await act(async () => { editor().onAmount("1,23"); await editor().submit(); });
-  expect(editor().amount).toBe("1,23");
+  await act(async () => { editor().onAmount(money("1,23")); await editor().submit(); });
+  expect(editor().amount.editor.text).toBe("1,23");
   expect(editor().canSubmit).toBe(true);
 });
 
@@ -118,7 +122,7 @@ test.each([["JPY", "100", 100], ["BHD", "1,234", 1234]] satisfies [string, strin
   "a %s Budget saves the currency's exact minor units", async (currency, amount, minorUnits) => {
     const api = transport();
     const editor = await open(api, { ...seed, currency });
-    await act(async () => { editor().onCategory("food"); editor().onAmount(amount); });
+    await act(async () => { editor().onCategory("food"); editor().onAmount(money(amount, currency)); });
     await act(async () => { await editor().submit(); });
     expect(api.send.mock.calls[0][0]).toMatchObject({ kind: "amount", args: { limit: { currency, minorUnits } } });
   },
@@ -144,10 +148,10 @@ test("spend nothing sends a zero-limit decision, and a spend-nothing jar starts 
   expect(api.send.mock.calls.map(([command]) => command)).toEqual([{ kind: "spendNothing", args: food("budget-1") }]);
   await act(async () => root?.unmount());
   const zero = await open(api, { ...seed, jar: { ...foodJar, revisionId: "zero-revision", limitMinorUnits: 0 } });
-  expect(zero()).toMatchObject({ amount: "", amountIssue: "empty", canSubmit: false });
+  expect(zero()).toMatchObject({ amount: typedAmount(""), amountIssue: "empty", canSubmit: false });
   expect(zero().canSend("spendNothing")).toBe(false);
   await act(async () => { await zero().spendNothing(); });
-  await act(async () => { zero().onAmount("50.000"); });
+  await act(async () => { zero().onAmount(money("50.000")); });
   await act(async () => { await zero().submit(); });
   expect(api.send.mock.calls.slice(1).map(([command]) => command)).toEqual([{ kind: "amount", args: {
     ...food("budget-2", "zero-revision"), limit: { currency: "COP", minorUnits: 5_000_000 },
@@ -162,9 +166,9 @@ test("an uncertain removal stays frozen until the identical removal is retried",
   expect(editor()).toMatchObject({ pending: true, pendingAct: "remove", canDismiss: false, editable: false,
     error: "Could not confirm saving. Retry to safely check the same Budget." });
   expect([editor().canSend("remove"), editor().canSend("amount"), editor().canSend("spendNothing")]).toEqual([true, false, false]);
-  await act(async () => { editor().onAmount("2.000"); editor().onResetAmount(); });
+  await act(async () => { editor().onAmount(money("2.000")); editor().onResetAmount(); });
   await act(async () => { await editor().submit(); await editor().spendNothing(); });
-  expect(editor().amount).toBe("1.000,00");
+  expect(editor().amount.editor.text).toBe("1.000,00");
   expect(api.send).toHaveBeenCalledOnce();
   await act(async () => { await editor().remove(); });
   expect(api.send.mock.calls.map(([command]) => command)).toEqual([
@@ -177,11 +181,11 @@ test("a category whose limit was removed expects that removal when it gets a lim
   const api = transport();
   const removedLimits = [{ categoryId: "food", revisionId: "removal-7", effectiveMonth: "2026-09" }];
   const editor = await open(api, { ...seed, removedLimits });
-  await act(async () => { editor().onCategory("food"); editor().onAmount("50.000"); });
+  await act(async () => { editor().onCategory("food"); editor().onAmount(money("50.000")); });
   await act(async () => { await editor().submit(); });
   await act(async () => root?.unmount());
   const other = await open(api, { ...seed, removedLimits });
-  await act(async () => { other().onCategory("travel"); other().onAmount("50.000"); });
+  await act(async () => { other().onCategory("travel"); other().onAmount(money("50.000")); });
   await act(async () => { await other().submit(); });
   expect(api.send.mock.calls.map(([{ args }]) => [args.categoryId, args.expectedRevisionId])).toEqual([["food", "removal-7"], ["travel", null]]);
 });
@@ -190,14 +194,14 @@ test("a typed zero is its own issue: nothing saves, and the two explicit acts re
   const api = transport();
   const editor = await open(api, { ...seed, jar: foodJar });
   for (const typed of ["0", "0,00"]) {
-    await act(async () => { editor().onAmount(typed); });
+    await act(async () => { editor().onAmount(money(typed)); });
     expect(editor()).toMatchObject({ amountIssue: "zero", canSubmit: false });
     await act(async () => { await editor().submit(); });
   }
   expect(api.send).not.toHaveBeenCalled();
   expect([editor().canSend("remove"), editor().canSend("spendNothing")]).toEqual([true, true]);
   await act(async () => { editor().onResetAmount(); });
-  expect(editor().amount).toBe("1.000,00");
+  expect(editor().amount.editor.text).toBe("1.000,00");
 });
 
 test.each([

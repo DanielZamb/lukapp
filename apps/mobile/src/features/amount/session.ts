@@ -6,7 +6,7 @@ import {
   type AmountEditorState,
   type AmountFormat,
 } from "../../../../../src/money/amount";
-import { amountFormat } from "./policy";
+import { amountFormat } from "./currencyFormat";
 import { amountTextFormatOf, openStoredAmountText, type AmountNotice, type StoredAmountText } from "./storedText";
 
 /**

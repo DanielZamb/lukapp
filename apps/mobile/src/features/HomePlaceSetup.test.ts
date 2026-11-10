@@ -197,6 +197,9 @@ test.each([
     .map((node) => node.props.accessibilityLabel)).toEqual([label]);
   await act(async () => input("Balance today").props.onChangeText("abc"));
   await act(async () => button("Add this place").props.onPress());
+  expect(state.post).not.toHaveBeenCalled();
+  await act(async () => input("Balance today").props.onChangeText(""));
+  await act(async () => button("Add this place").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ productKind, emoji, amount: { minorUnits: 0 } });
   await act(async () => root.unmount());
   vi.clearAllMocks();

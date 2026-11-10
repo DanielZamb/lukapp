@@ -2,6 +2,9 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
 
 vi.mock("expo-secure-store", () => ({
   getItemAsync: async () => null,
@@ -244,7 +247,7 @@ test("Keep as Draft stores incomplete amount text and never posts", async () => 
   const editor = await open(api, notebook);
   expect(editor().canKeepDraft).toBe(true);
   await act(async () => {
-    editor().setAmount("-");
+    editor().setAmount(money("-"));
     editor().setDescription("Snacks");
   });
   await act(async () => {
@@ -252,7 +255,7 @@ test("Keep as Draft stores incomplete amount text and never posts", async () => 
   });
   expect(notebook.keep).toHaveBeenCalledOnce();
   expect(notebook.keep.mock.calls[0][0].facts).toMatchObject({
-    amountText: "-", amountFormat: "pre-currency",
+    amountText: "-", amountFormat: "cop/1",
     description: "Snacks",
     entryType: "normal",
   });
@@ -266,7 +269,7 @@ test("Keep as Draft stores incomplete amount text and never posts", async () => 
 test("resume hydrates an open draft without locking the form", async () => {
   const api = transport();
   const editor = await open(api, port([openDraft]), "open-1");
-  expect(editor().amount).toBe("");
+  expect(editor().amount.editor.text).toBe("");
   expect(editor().description).toBe("Taxi");
   expect(editor().date).toBe("2026-10-16");
   expect(editor().profileId).toBe("cash");
@@ -322,7 +325,7 @@ test("Keep as Draft is unavailable during setup and initial balance", async () =
     editor().setSetup({
       name: "Card",
       productKind: "creditCard",
-      amount: "0",
+      amount: money("0"),
       date: "2026-10-17",
     });
   });
@@ -338,7 +341,7 @@ test("posting a kept draft saves under that draft id then posts once", async () 
   const notebook = port([openDraft]);
   const editor = await open(api, notebook, "open-1");
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
   });
   await act(async () => {
     await editor().submit();
@@ -361,7 +364,7 @@ test("Post stays disabled while Keep is still saving and cannot create a second 
   );
   const editor = await open(api, notebook);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
     editor().setDescription("Snacks");
   });
   expect(editor().canSubmit).toBe(true);
@@ -401,7 +404,7 @@ test("a successful post clears the row after the editor unmounts", async () => {
   );
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
     editor().setDescription("Taxi");
   });
   let submission!: Promise<void>;
@@ -429,7 +432,7 @@ test("an accounting rejection reopens the draft instead of deleting it", async (
   );
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
     editor().setDescription("Food");
   });
   await act(async () => {
@@ -452,7 +455,7 @@ test("several pending postings block a new submission", async () => {
   expect(editor().canSubmit).toBe(false);
   expect(editor().editable).toBe(false);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
     await editor().submit();
   });
   expect(api.save).not.toHaveBeenCalled();
@@ -479,7 +482,7 @@ test("two editors bind the stored posting and never write it onto another draft"
   );
   const editor1 = await open(first);
   await act(async () => {
-    editor1().setAmount("-800,00");
+    editor1().setAmount(money("-800,00"));
     editor1().setDescription("Rent");
   });
   let posting!: Promise<void>;
@@ -521,7 +524,7 @@ test("an accounting rejection keeps money facts in the store as an open draft", 
   );
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
     editor().setDescription("Food");
   });
   await act(async () => {

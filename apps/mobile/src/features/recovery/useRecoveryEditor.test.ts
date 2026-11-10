@@ -3,6 +3,10 @@ import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
+const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
 import { LanguageProvider } from "../../i18n";
 import { useRecoveryEditor, type RecoveryEditorSeed, type RecoveryEditorTransport } from "./useRecoveryEditor";
 
@@ -53,7 +57,7 @@ test("the default suggestion is the even split, and an edit posts that exact mon
   expect(editor()).toMatchObject({
     installmentCount: 4, destinationId: "savings", suggestion: { installmentMinorUnits: 300_000, valid: true },
   });
-  await act(async () => { editor().onMonths(4); editor().onAmount("3.300"); });
+  await act(async () => { editor().onMonths(4); editor().onAmount(money("3.300")); });
   expect(editor().suggestion).toMatchObject({ installmentMinorUnits: 330_000, premiumMinorUnits: 120_000, valid: true });
   await act(async () => { await Promise.all([editor().submit(), editor().submit()]); });
   expect(api.save.mock.calls.map(([request]) => request)).toEqual([{
@@ -67,9 +71,9 @@ test("an uncertain activation freezes edits and retry reuses the same key", asyn
   const api = transport();
   api.save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const editor = await open(api);
-  await act(async () => { editor().onAmount("3.000"); });
+  await act(async () => { editor().onAmount(money("3.000")); });
   await act(async () => { await editor().submit(); editor().onMonths(8); });
-  expect(editor()).toMatchObject({ installmentCount: 4, amount: "3.000", pending: true, editable: false, canDismiss: false });
+  expect(editor()).toMatchObject({ installmentCount: 4, amount: typedAmount("3.000"), pending: true, editable: false, canDismiss: false });
   await act(async () => { await editor().submit(); });
   expect(api.save.mock.calls.map(([request]) => [request.installmentCount, request.installmentMinorUnits, request.idempotencyKey]))
     .toEqual([[4, 300_000, "activate-1"], [4, 300_000, "activate-1"]]);
@@ -88,7 +92,7 @@ test("a recovery rejection keeps the draft editable", async () => {
 test.each(["", "0", "2.999", "12.001"])("invalid monthly amount %s stays editable without activating", async (amount) => {
   const api = transport();
   const editor = await open(api);
-  await act(async () => { editor().onAmount(amount); });
+  await act(async () => { editor().onAmount(money(amount)); });
   expect(editor().suggestion.valid).toBe(false);
   expect(editor().canSubmit).toBe(false);
   await act(async () => { await editor().submit(); });
@@ -99,7 +103,7 @@ test.each(["", "0", "2.999", "12.001"])("invalid monthly amount %s stays editabl
 test("a three-decimal recovery plan keeps the edited installment in exact minor units", async () => {
   const api = transport();
   const editor = await open(api, { ...seed, currency: "BHD", candidate: { ...seed.candidate, amountMinorUnits: 1234 } });
-  await act(async () => { editor().onMonths(4); editor().onAmount("0,400"); });
+  await act(async () => { editor().onMonths(4); editor().onAmount(money("0,400", "BHD")); });
   await act(async () => { await editor().submit(); });
   expect(api.save.mock.calls[0][0].installmentMinorUnits).toBe(400);
 });

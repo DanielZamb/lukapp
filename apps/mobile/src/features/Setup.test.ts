@@ -340,6 +340,8 @@ test("setup_conflict drops the saved request and allows edited answers to be sub
   expect(text()).toContain("Setup was already saved with different answers.");
   await type("Starting amount", "25");
   await press("USD");
+  expect(node("Starting amount").props.value).toBe("");
+  await type("Starting amount", "25");
   await press("Start tracking");
 
   expect(backend.ensure.mock.calls.map(([payload]) => ({

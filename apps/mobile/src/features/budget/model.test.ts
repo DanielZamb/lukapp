@@ -30,12 +30,13 @@ test("cool jars open the first category and empty months create a limit", () => 
 });
 
 test.each([
-  [0, "0"], [123, "1.23"], [99_999, "999.99"], [100_000, "1K"], [125_000, "1.3K"],
-  [35_400_000, "354K"], [22_800_000, "228K"], [41_300_000, "413K"],
-  [100_000_000, "1M"], [110_000_000, "1.1M"], [123_000_000, "1.23M"],
-  [1_234_000_000, "12M"], [-35_400_000, "−354K"], [-123, "−1.23"],
-])("compact minor-unit amount %s is %s without a currency symbol", (minor, expected) => {
-  expect(compactAmount(minor, "COP", "en")).toBe(expected);
+  [0, "0", "0"], [123, "1,23", "1.23"], [99_999, "999,99", "999.99"], [100_000, "1K", "1K"], [125_000, "1,3K", "1.3K"],
+  [35_400_000, "354K", "354K"], [22_800_000, "228K", "228K"], [41_300_000, "413K", "413K"],
+  [100_000_000, "1M", "1M"], [110_000_000, "1,1M", "1.1M"], [123_000_000, "1,23M", "1.23M"],
+  [1_234_000_000, "12M", "12M"], [-35_400_000, "−354K", "−354K"], [-123, "−1,23", "−1.23"],
+])("compact minor-unit amount %s reads %s in COP and %s in USD, in English, without a currency symbol", (minor, cop, usd) => {
+  expect(compactAmount(minor, "COP", "en")).toBe(cop);
+  expect(compactAmount(minor, "USD", "en")).toBe(usd);
 });
 
 test.each([

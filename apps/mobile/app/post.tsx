@@ -15,7 +15,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, BackHandler, Keyboard, Platform, Text, View } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
-import { formatMoney, localDate, parseMoney } from "../src/features/money";
+import { formatMoney, localDate } from "../src/features/money";
+import { amountMinorUnits, openAmount } from "../src/features/amount/session";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
@@ -41,7 +42,7 @@ import { useEntryExit } from "../src/features/posting/useEntryExit";
 import { useLocalEntryDrafts } from "../src/features/useLocalEntryDrafts";
 import { useIntakeCandidates } from "../src/features/useIntakeCandidates";
 import { createCandidateBinding } from "../src/features/intake/postingBinding";
-import { NotificationCard, signedAmountText } from "../src/features/intake/NotificationCard";
+import { NotificationCard, signedAmount } from "../src/features/intake/NotificationCard";
 import {
   canPostCategories,
   needsPrimary,
@@ -194,7 +195,6 @@ function PostMoney({
   }, [candidateId, navigation, editor.saveCandidateReview, transport]);
   const exit = useEntryExit({
     editor,
-    currency: workspace.functionalCurrency,
     enabled: mode === "one",
     candidateRoute: !!candidateId,
     onCandidateLeave: () => { leavingCandidate.current = true; },
@@ -299,7 +299,7 @@ function PostMoney({
             amount={editor.amount}
             editable={editor.editable}
             onUseAmount={(minor) => interaction(() => editor.setAmount(
-              signedAmountText(minor, workspace.functionalCurrency, editor.amount, binding.originalSuggestion.direction)))}
+              signedAmount(minor, editor.amount.currency, editor.amount, binding.originalSuggestion.direction)))}
             onUseDescription={(text) => interaction(() => editor.setDescription(text))}
           />
         ) : undefined}
@@ -398,11 +398,12 @@ function PostMoney({
             (!editor.pending && (!categoryValid || !placesValid))
           ) return;
           if (needsBudgetCheck) {
-            if (!budget) return;
+            const typed = amountMinorUnits(editor.amount);
+            if (!budget || typed === null) return;
             const hits = postingBudgetImpact({
               jars: budget.jars,
               categoryIds: editor.categories.ids,
-              expenseMinorUnits: -parseMoney(editor.amount, workspace.functionalCurrency),
+              expenseMinorUnits: -typed,
             });
             if (hits.length) {
               Keyboard.dismiss();
@@ -473,7 +474,7 @@ function PostMoney({
               name: request?.name ?? "",
               productKind: request?.answer === "payDebt" ? null : "bankAccount",
               emoji: request?.style.emoji ?? "💰",
-              amount: "0",
+              amount: openAmount(workspace.functionalCurrency, "0"),
               date: defaultAccountingDate(workspace.timeZone),
               target:
                 placeTarget === "destination"

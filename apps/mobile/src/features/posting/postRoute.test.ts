@@ -9,6 +9,10 @@ import { parsePendingPosting } from "./pendingPostingSchema";
 import type { CategorySheetProps } from "../categories/CategorySheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
+const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
 import { capture, mapping, fixture as intakeFixture } from "../intake/service.testSupport";
 import { emptyState, serializeState } from "../intake/durableState";
 import { NotificationCard } from "../intake/NotificationCard";
@@ -236,7 +240,7 @@ test.each(["normal"] satisfies Array<NonNullable<PostingFormProps["entryType"]>>
     }];
     await mount();
     await act(async () => {
-      formProps().onAmountChange("-7");
+      formProps().onAmountChange(money("-7"));
       formProps().onDescriptionChange("PostingPalette-2134");
       formProps().onEntryType?.(entryType);
     });
@@ -279,7 +283,7 @@ test.each([
     }
     await act(async () => {
       formProps().onEntryType?.(entryType);
-      formProps().onAmountChange(entryType === "initial" ? "0" : "-1");
+      formProps().onAmountChange(money(entryType === "initial" ? "0" : "-1"));
     });
     if (entryType === "transfer") {
       await act(async () => formProps().onDestination?.());
@@ -319,7 +323,7 @@ test("a negative draft can choose income without closing the picker and posts th
   };
   queryData.categories = [base, { ...base, id: "salary", name: "Salary", normalizedName: "salary", nature: "Income", resolvedPostingAccountCode: "income" }];
   await mount();
-  await act(async () => { formProps().onAmountChange("-125"); formProps().onDescriptionChange("Category first salary"); });
+  await act(async () => { formProps().onAmountChange(money("-125")); formProps().onDescriptionChange("Category first salary"); });
   await act(async () => formProps().onCategory());
   const sheet = () => {
     if (!root) throw new Error("Post route is not mounted");
@@ -327,7 +331,7 @@ test("a negative draft can choose income without closing the picker and posts th
   };
   expect(sheet().props.options.map((option: { key: string }) => option.key)).toEqual(["food", "salary"]);
   await act(async () => sheet().props.onSelect("salary"));
-  expect(formProps()).toMatchObject({ amount: "+125", category: "F Salary", canSubmit: true });
+  expect(formProps()).toMatchObject({ amount: typedAmount("+125"), category: "F Salary", canSubmit: true });
   expect(sheet().props.options.map((option: { key: string }) => option.key)).toEqual(["food", "salary"]);
   await act(async () => sheet().props.onDone());
   await act(async () => formProps().onPost());
@@ -338,7 +342,7 @@ test("Initial balance can enable Post without a category", async () => {
   await mount();
   await act(async () => {
     formProps().onEntryType?.("initial");
-    formProps().onAmountChange("7");
+    formProps().onAmountChange(money("7"));
     formProps().onDescriptionChange("Opening");
   });
   expect(formProps()).toMatchObject({ categoryEnabled: false, canSubmit: true });
@@ -352,7 +356,7 @@ test("paying an existing loan selects a destination instead of opening new-loan 
   queryData.profiles = [{ id: "daily", name: "My money" }, { id: "loan", name: "My loan" }];
   await mount();
   await act(async () => {
-    formProps().onAmountChange("-10");
+    formProps().onAmountChange(money("-10"));
     formProps().onDescriptionChange("Loan payment");
     formProps().onCategory();
   });
@@ -366,7 +370,7 @@ test("paying an existing loan selects a destination instead of opening new-loan 
   const place = root!.root.find((node) => String(node.type) === "place-sheet");
   await act(async () => place.props.onSelect("loan"));
   expect(formProps()).toMatchObject({ entryType: "transfer", categoryEnabled: false,
-    destination: "💰 My loan", amount: "-10", description: "Loan payment" });
+    destination: "💰 My loan", amount: typedAmount("-10"), description: "Loan payment" });
   expect(writes.save).not.toHaveBeenCalled();
   expect(writes.post).not.toHaveBeenCalled();
   expect(formProps()).toMatchObject({ canSubmit: false, blockedReason: "Confirm From and To before posting." });
@@ -384,7 +388,7 @@ test.each(["source", "destination"])("Android Back from %s preserves unsaved Pos
   platform.os = "android";
   await mount();
   expect(back.handler).toBeUndefined();
-  await act(async () => formProps().onAmountChange("-7"));
+  await act(async () => formProps().onAmountChange(money("-7")));
   await act(async () => formProps().onDescriptionChange("PostingBack-1946"));
   if (target === "destination") await act(async () => formProps().onEntryType?.("transfer"));
   await act(async () => target === "source" ? formProps().onPlace() : formProps().onDestination?.());
@@ -395,7 +399,7 @@ test.each(["source", "destination"])("Android Back from %s preserves unsaved Pos
   expect(handled).toBe(true);
   expect(picker.dismiss).toHaveBeenCalledOnce();
   expect(routeBack).not.toHaveBeenCalled();
-  expect(formProps()).toMatchObject({ amount: "-7", description: "PostingBack-1946" });
+  expect(formProps()).toMatchObject({ amount: typedAmount("-7"), description: "PostingBack-1946" });
   const placeSheet = root?.root.find((node) => String(node.type) === "place-sheet");
   await act(async () => placeSheet?.props.onDismiss());
   expect(back.handler).toBeUndefined();
@@ -406,17 +410,17 @@ test.each(["source", "destination"])("Android Back from %s preserves unsaved Pos
 test("canceling Add a place preserves the unsaved Post without saving", async () => {
   platform.os = "android";
   await mount();
-  await act(async () => formProps().onAmountChange("-7"));
+  await act(async () => formProps().onAmountChange(money("-7")));
   await act(async () => formProps().onDescriptionChange("PostingBack-1946"));
   await act(async () => formProps().onPlace());
   const placeSheet = root?.root.find((node) => String(node.type) === "place-sheet");
   await act(async () => placeSheet?.props.onAdd());
   expect(back.handler).toBeUndefined();
   const setup = () => root?.root.find((node) => String(node.type) === "setup");
-  expect(setup()?.props.value).toMatchObject({ name: "", amount: "0", target: { kind: "source" } });
+  expect(setup()?.props.value).toMatchObject({ name: "", amount: typedAmount("0"), target: { kind: "source" } });
   await act(async () => setup()?.props.onDismiss());
   expect(setup()?.props.value).toBeNull();
-  expect(formProps()).toMatchObject({ amount: "-7", description: "PostingBack-1946" });
+  expect(formProps()).toMatchObject({ amount: typedAmount("-7"), description: "PostingBack-1946" });
   expect(routeBack).not.toHaveBeenCalled();
   expect(writes.save).not.toHaveBeenCalled();
   expect(writes.post).not.toHaveBeenCalled();
@@ -428,7 +432,7 @@ test("native account dismissal allows the category account door to reopen withou
   expect(accountSheet.present).not.toHaveBeenCalled();
   expect(accountSheet.dismiss).not.toHaveBeenCalled();
   await act(async () => {
-    formProps().onAmountChange("-10");
+    formProps().onAmountChange(money("-10"));
     formProps().onDescriptionChange("Posting reserve");
   });
   const originalDate = formProps().date;
@@ -452,16 +456,16 @@ test("native account dismissal allows the category account door to reopen withou
   }
   await openAccountDoor();
   expect(accountSheet.present).toHaveBeenCalledOnce();
-  expect(setup().props.value).toMatchObject({ name: "Posting reserve", amount: "0", target: { kind: "destination", sourceProfileId: "daily" } });
+  expect(setup().props.value).toMatchObject({ name: "Posting reserve", amount: typedAmount("0"), target: { kind: "destination", sourceProfileId: "daily" } });
   await act(async () => setup().props.onDismiss());
   expect(setup().props.value).toBeNull();
   expect(accountSheet.dismiss).not.toHaveBeenCalled();
-  expect(formProps()).toMatchObject({ amount: "-10", description: "Posting reserve", date: originalDate, entryType: "transfer", place: "💰 My money", destination: "Pick", category: "Pick", canSubmit: false });
+  expect(formProps()).toMatchObject({ amount: typedAmount("-10"), description: "Posting reserve", date: originalDate, entryType: "transfer", place: "💰 My money", destination: "Pick", category: "Pick", canSubmit: false });
   await openAccountDoor();
   expect(accountSheet.present).toHaveBeenCalledTimes(2);
   expect(accountSheet.dismiss).not.toHaveBeenCalled();
-  expect(setup().props.value).toMatchObject({ name: "Posting reserve", amount: "0", target: { kind: "destination", sourceProfileId: "daily" } });
-  expect(formProps()).toMatchObject({ amount: "-10", description: "Posting reserve", date: originalDate, entryType: "transfer", place: "💰 My money", destination: "Pick", category: "Pick", canSubmit: false });
+  expect(setup().props.value).toMatchObject({ name: "Posting reserve", amount: typedAmount("0"), target: { kind: "destination", sourceProfileId: "daily" } });
+  expect(formProps()).toMatchObject({ amount: typedAmount("-10"), description: "Posting reserve", date: originalDate, entryType: "transfer", place: "💰 My money", destination: "Pick", category: "Pick", canSubmit: false });
   expect(root?.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityLabel === "Confirm From and To")).toHaveLength(0);
   await act(async () => formProps().onPost());
   expect(writes.save).not.toHaveBeenCalled();
@@ -473,7 +477,7 @@ test("Android Back dismisses the unsaved category editor and preserves the Post 
   platform.os = "android";
   await mount();
   await act(async () => {
-    formProps().onAmountChange("-7");
+    formProps().onAmountChange(money("-7"));
     formProps().onDescriptionChange("PostingCheck-2122");
     formProps().onCategory();
   });
@@ -488,7 +492,7 @@ test("Android Back dismisses the unsaved category editor and preserves the Post 
   await act(async () => { handled = back.handler?.() ?? false; });
   expect(handled).toBe(true);
   expect(root?.root.findAll((node) => String(node.type) === "category-sheet")).toHaveLength(0);
-  expect(formProps()).toMatchObject({ amount: "-7", description: "PostingCheck-2122", category: "Pick", canSubmit: false });
+  expect(formProps()).toMatchObject({ amount: typedAmount("-7"), description: "PostingCheck-2122", category: "Pick", canSubmit: false });
   expect(routeBack).not.toHaveBeenCalled();
   expect(back.handler).toBeUndefined();
   await act(async () => formProps().onCategory());
@@ -534,7 +538,7 @@ test("incoming account creation offers an explicit swap with two-account picker 
   });
   await mount();
   await act(async () => {
-    formProps().onAmountChange("+125,00");
+    formProps().onAmountChange(money("+125,00"));
     formProps().onDescriptionChange("From Savings");
   });
   const originalDate = formProps().date;
@@ -557,7 +561,7 @@ test("incoming account creation offers an explicit swap with two-account picker 
   await act(async () => root?.root.find((node) => String(node.type) === "setup").props.onDismiss());
   expect(accountSheet.dismiss).toHaveBeenCalledOnce();
   expect(writes.post).toHaveBeenCalledOnce();
-  expect(formProps()).toMatchObject({ amount: "+125,00", description: "From Savings", date: originalDate, place: "💰 My money", destination: "💰 Savings", canSubmit: false, category: "Pick" });
+  expect(formProps()).toMatchObject({ amount: typedAmount("+125,00"), description: "From Savings", date: originalDate, place: "💰 My money", destination: "💰 Savings", canSubmit: false, category: "Pick" });
   const place = () => root?.root.find((node) => String(node.type) === "place-sheet");
   await act(async () => formProps().onPlace());
   expect(place()?.props.excludedId).toBe("savings");
@@ -566,7 +570,7 @@ test("incoming account creation offers an explicit swap with two-account picker 
   expect(place()?.props.excludedId).toBe("daily");
   expect(place()?.findAll((node) => typeof node.type === "string" && node.props.accessibilityLabel === "💰 My money")).toHaveLength(0);
   await act(async () => formProps().transferReview?.onSwap());
-  expect(formProps()).toMatchObject({ amount: "+125,00", description: "From Savings", date: originalDate, place: "💰 Savings", destination: "💰 My money", canSubmit: false, category: "Pick" });
+  expect(formProps()).toMatchObject({ amount: typedAmount("+125,00"), description: "From Savings", date: originalDate, place: "💰 Savings", destination: "💰 My money", canSubmit: false, category: "Pick" });
   expect(place()?.props.excludedId).toBe("savings");
   expect(place()?.findAll((node) => typeof node.type === "string" && node.props.accessibilityLabel === "💰 My money")).toHaveLength(1);
   await act(async () => formProps().onPlace());
@@ -593,7 +597,7 @@ test.each([
   await mount();
   await act(async () => {
     formProps().onEntryType?.("initial");
-    formProps().onAmountChange(amount);
+    formProps().onAmountChange(money(amount, currency));
     formProps().onDescriptionChange("Opening money");
   });
   await act(async () => { formProps().onPost(); });
@@ -652,9 +656,9 @@ test("a Candidate's kept notification is shown in Post, and tapping it fills the
   type Card = { props: { notification: { text: string }; onUseAmount(minor: number): void; onUseDescription(text: string): void } };
   const card = () => form.props?.notification as unknown as Card;
   expect(card().props.notification.text).toContain("TIENDA D1");
-  expect(form.props?.amount).toBe("−32.000,00"); expect(form.props?.description).toBe("TIENDA D1");
+  expect(form.props?.amount.editor.text).toBe("-32.000,00"); expect(form.props?.description).toBe("TIENDA D1");
   await act(async () => { card().props.onUseAmount(125_030_000); });
-  expect(form.props?.amount).toBe("-1.250.300");
+  expect(form.props?.amount.editor.text).toBe("-1.250.300");
   await act(async () => { card().props.onUseDescription("Tienda de barrio"); });
   expect(form.props?.description).toBe("Tienda de barrio");
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
@@ -685,9 +689,9 @@ test("an existing unresolved incoming Candidate shows its body and can use its u
   const card = form.props?.notification;
   if (!React.isValidElement<ComponentProps<typeof NotificationCard>>(card)) throw new Error("Missing notification card");
   expect(card.props.notification.text).toBe(text);
-  expect(form.props?.amount).toBe("");
+  expect(form.props?.amount.editor.text).toBe("");
   await act(async () => { card.props.onUseAmount(4_500); });
-  expect(form.props?.amount).toBe("45");
+  expect(form.props?.amount.editor.text).toBe("45");
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
   expect(candidateService.read("capture-1")?.review).toMatchObject({ amountMinorUnits: 4_500, direction: "in" });
   expect(candidateService.read("capture-1")?.originalSuggestion.amountMinorUnits).toBeNull();
@@ -711,7 +715,7 @@ test("a batch save refused because a stored entry awaits its result closes the c
   await mount();
   await act(async () => { formProps().onBatch?.(); });
   await act(async () => { root?.root.findByType(BatchNativeStack).props.onAdd(); });
-  await act(async () => { formProps().onAmountChange("-1"); formProps().onDescriptionChange("Lunch"); });
+  await act(async () => { formProps().onAmountChange(money("-1")); formProps().onDescriptionChange("Lunch"); });
   await act(async () => formProps().onCategory());
   const sheet = root?.root.find((node) => String(node.type) === "category-sheet");
   await act(async () => sheet?.props.onSelect("food"));

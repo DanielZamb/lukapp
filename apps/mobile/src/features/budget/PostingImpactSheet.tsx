@@ -1,4 +1,3 @@
-import { toMajorUnits } from "../money";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -7,7 +6,8 @@ import {
 import { useEffect, useRef } from "react";
 import { Text } from "react-native";
 import { Header, PrimaryButton, SecondaryButton, useUi, useTheme } from "../../ui/core";
-import { formatCompactNumber, useT } from "../../i18n";
+import { useT } from "../../i18n";
+import { compactMoney } from "../amount/compact";
 import { font, spacing } from "../../ui/tokens";
 import type { PostingBudgetImpact } from "./postingImpact";
 
@@ -49,7 +49,7 @@ export function PostingImpactSheet({
         {hits.map((hit, index) => (
           <Text key={`${hit.category.id}-${index}`} style={[index === 0 ? { fontSize: 36, fontFamily: font.extrabold } : ui.body, { color: theme.danger }]}>
             {t("budget.impactOver", { name: hit.category.name,
-              amount: formatCompactNumber(language, toMajorUnits(hit.overMinorUnits, currency)) })}
+              amount: compactMoney(hit.overMinorUnits, currency, language, "budget") })}
           </Text>
         ))}
         <Text style={ui.muted}>{t("budget.impactBody")}</Text>

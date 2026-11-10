@@ -13,6 +13,7 @@ import type { PlaceDraft } from "./usePostingEditor";
 import type { PlaceKind } from "./pendingPostingSchema";
 import { useT, type MessageKey } from "../../i18n";
 import { kindDetails, placeKinds, type PlaceKind as PlaceChoice } from "../places/model";
+import { AmountField } from "../amount/AmountField";
 
 type KindChip = readonly [id: string, productKind: PlaceKind, label: MessageKey];
 const assetLabels: Record<PlaceChoice, MessageKey> = {
@@ -142,16 +143,18 @@ export function AccountSetupForm(props: {
                 <Text style={ui.muted}>{t("posting.setupChange")}</Text>
               </Pressable>
             </View>
-            <Field
-              label={balanceLabel}
-              accessibilityLabel={balanceLabel}
-              value={value.amount}
-              editable={props.editable}
-              keyboardType="numbers-and-punctuation"
-              placeholder="0"
-              onChangeText={(amount) => props.onChange({ ...value, amount })}
-              InputComponent={BottomSheetTextInput}
-            />
+            <View style={styles.field}>
+              <Text style={styles.label}>{balanceLabel}</Text>
+              <AmountField
+                session={value.amount}
+                onChange={(amount) => props.onChange({ ...value, amount })}
+                editable={props.editable}
+                inputAccessibilityLabel={balanceLabel}
+                placeholder="0"
+                InputComponent={BottomSheetTextInput}
+                inputStyle={ui.input}
+              />
+            </View>
             {!!props.error && (
               <Text accessibilityRole="alert" style={ui.error}>
                 {props.error}

@@ -8,6 +8,7 @@ import { AccountSetupForm } from "../posting/AccountSetupForm";
 import { usePostingEditor } from "../posting/usePostingEditor";
 import { usePostingTransport } from "../posting/usePostingTransport";
 import { defaultAccountingDate } from "../timeZones";
+import { openAmount } from "../amount/session";
 
 export function DeferredAccountSetup({ request, subject, workspaceId, profileId, currency, timeZone, onDone }: {
   request: AccountSetupRequest;
@@ -41,13 +42,13 @@ export function DeferredAccountSetup({ request, subject, workspaceId, profileId,
       started.current = true;
       editor.setSetup({ name: request.name, emoji: request.style.emoji,
         productKind: request.answer === "payDebt" ? null : "bankAccount",
-        amount: "0", date: defaultAccountingDate(timeZone), target: { kind: "source" } });
+        amount: openAmount(currency, "0"), date: defaultAccountingDate(timeZone), target: { kind: "source" } });
     }
     if (editor.setup && !presented.current) {
       presented.current = true;
       sheet.current?.present();
     }
-  }, [editor, onDone, request, timeZone]);
+  }, [editor, onDone, request, timeZone, currency]);
   function finish() {
     if (done.current || submitted.current || editor.loading) return;
     done.current = true;

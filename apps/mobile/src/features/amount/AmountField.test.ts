@@ -31,7 +31,7 @@ function Owner({ currency }: { currency: string }) {
   const language = useLanguage();
   if (session.currency !== currency) setSession(open(currency));
   return createElement("view", null,
-    createElement(AmountField, { session, onChange: setSession, editable: true, accessibilityLabel: "Amount", sign: {} }),
+    createElement(AmountField, { session, onChange: setSession, editable: true, inputAccessibilityLabel: "Amount", sign: {} }),
     createElement("button", {
       accessibilityLabel: "Send", accessibilityRole: "button",
       onPress: () => {

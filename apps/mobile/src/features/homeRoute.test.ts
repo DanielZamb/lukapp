@@ -194,7 +194,7 @@ test("Home retains USD cents in the real balance total", async () => {
   state.currency = "USD";
   state.accounts = [{ minorUnits: 100_25 }, { minorUnits: 20_10, nature: "Liability" }];
   await render();
-  expect(texts()).toContain("USD 80,15");
+  expect(texts()).toContain("USD 80.15");
 });
 
 test("a liability balance reduces what you have instead of increasing it", async () => {

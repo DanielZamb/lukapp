@@ -19,6 +19,7 @@ import {
 import { postingBatchSchema, type StoredPostingBatch } from "./posting/postingBatchSchema";
 import type { DiscardOutcome } from "./discardOutcome";
 import { amountTextFormatSchema, type AmountTextFormat } from "./amount/storedText";
+import { currentAmountTextFormat } from "./amount/currencyFormat";
 export { LocalEntryDraftFrozenError, LocalEntryDraftGoneError };
 
 export const LOCAL_ENTRY_DRAFT_TTL_MS = 15 * 24 * 60 * 60 * 1000;
@@ -452,7 +453,7 @@ export function factsFromCommand(command: PostableCommand): LocalEntryFacts {
         `${payload.amount.currency} `,
         "",
       ),
-      amountFormat: "pre-currency",
+      amountFormat: currentAmountTextFormat(payload.amount.currency),
       accountingDate: payload.accountingDate,
       description: payload.description,
       profileId: payload.sourceFinancialAccountProfileId,
@@ -478,7 +479,7 @@ export function factsFromCommand(command: PostableCommand): LocalEntryFacts {
       ...payload.amount,
       minorUnits: signed,
     }).replace(`${payload.amount.currency} `, ""),
-    amountFormat: "pre-currency",
+    amountFormat: currentAmountTextFormat(payload.amount.currency),
     accountingDate: payload.accountingDate,
     description: payload.description,
     profileId: payload.financialAccountProfileId,

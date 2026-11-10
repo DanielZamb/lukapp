@@ -4,16 +4,18 @@ import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomShe
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { useT, type MessageKey } from "../../i18n";
-import { Field, Header, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
+import { Header, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
 import { faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
-import { formatMoney, formatMoneyInput, minorUnitFactor, currencyDisplayPrefix } from "../money";
+import { formatMoney, minorUnitFactor, currencyDisplayPrefix } from "../money";
+import { AmountField } from "../amount/AmountField";
+import { amountRefusal } from "../amount/hints";
+import type { AmountSession } from "../amount/session";
 import { compactAmount, jarPresentation, monthInSentence, monthLabel, type BudgetJar } from "./model";
 import type { AmountIssue, useBudgetEditor } from "./useBudgetEditor";
 
-const issueMessage: Record<Exclude<AmountIssue, "zero">, MessageKey> = {
+const issueMessage: Record<Exclude<AmountIssue, "zero" | "invalid">, MessageKey> = {
   empty: "lifecycle.limitEmpty",
-  invalid: "lifecycle.limitInvalid",
   notPositive: "lifecycle.limitNotPositive",
   unchanged: "lifecycle.limitUnchanged",
 };
@@ -31,7 +33,7 @@ type BudgetLimitSheetProps = Pick<ReturnType<typeof useBudgetEditor>,
   previousMonth: string;
   previousSpendMinorUnits: number | undefined;
   onLimit: (minorUnits: number) => void;
-  onAmount: (text: string) => void;
+  onAmount: (amount: AmountSession) => void;
   onResetAmount: () => void;
   onSave: () => void;
   onSpendNothing: () => void;
@@ -86,6 +88,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
   const fieldMessage = issue === null || issue === "zero" ? null
     : issue === "unchanged" ? { helper: t(issueMessage.unchanged) }
     : issue === "empty" && spendNothingJar ? { helper: t("budget.spendNothingCurrent", { name }) }
+    : issue === "invalid" ? { error: amountRefusal(props.amount, t) }
     : { error: t(issueMessage[issue]) };
   const status = preview.status === "over" ? t("budget.jarOver", { amount: formatMoney({ currency: props.currency, minorUnits: preview.amount }) })
     : preview.status === "clear" ? t("budget.nothingSpent")
@@ -103,7 +106,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
       backgroundStyle={styles.background}
       backdropComponent={(backdrop) => <BottomSheetBackdrop {...backdrop} opacity={0.4}
         appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior={props.canDismiss ? "close" : "none"} />}>
-      <BottomSheetScrollView contentContainerStyle={styles.content}>
+      <BottomSheetScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         {header}
         {layer === "spendNothing" ? <>
           <Text style={ui.body}>{t("budget.spendNothingEffect", { name })}</Text>
@@ -129,12 +132,10 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
             <View style={[styles.fill, { width: `${preview.fill * 100}%`, backgroundColor: props.color }, faintEdge(props.color, mode)]} />
           </View>
           <Text style={styles.meta}>{t("budget.stayUnderThisMonth")}</Text>
-          <Field label={t("lifecycle.limitLabel")} InputComponent={BottomSheetTextInput}
-            accessibilityLabel={t("lifecycle.limitInputA11y", { currency: props.currency })}
-            keyboardType="decimal-pad" placeholder="0" value={props.amount} editable={props.editable}
-            onChangeText={(text) => props.onAmount(formatMoneyInput(text, props.currency))}
-            error={fieldMessage?.error} helperText={fieldMessage?.helper}
-            style={styles.input} />
+          <AmountField label={t("lifecycle.limitLabel")} InputComponent={BottomSheetTextInput}
+            inputAccessibilityLabel={t("lifecycle.limitInputA11y", { currency: props.currency })}
+            placeholder="0" session={props.amount} editable={props.editable} onChange={props.onAmount}
+            message={fieldMessage ?? undefined} inputStyle={styles.input} />
           {zeroChoice ? <View style={styles.panel}>
             <Text style={styles.panelTitle}>{t("budget.zeroTitle")}</Text>
             <Text style={styles.meta}>{spendNothingJar ? t("budget.zeroAlreadySpendNothing", { name }) : t("budget.zeroBody")}</Text>

@@ -23,6 +23,8 @@ import { DeferredAccountSetup } from "./setup/DeferredAccountSetup";
 import type { AccountSetupRequest } from "./categories/model";
 import { SetupCategories } from "./categories/SetupCategories";
 import { formatMoney } from "./money";
+import { AmountField } from "./amount/AmountField";
+import { openAmount } from "./amount/session";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { deviceTimeZone } from "./timeZones";
 import {
@@ -89,7 +91,7 @@ export function Setup({
   const [stage, setStage] = useState(1);
   const [consent, setConsent] = useState<boolean | null>(null);
   const [timeZone, setTimeZone] = useState(deviceTimeZone);
-  const [starting, setStarting] = useState("");
+  const [starting, setStarting] = useState(() => openAmount("COP"));
   const [wantsBudgets, setWantsBudgets] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -114,13 +116,14 @@ export function Setup({
     if (disabled || saving.current) return;
     interact();
     setCurrency(code);
+    if (code !== starting.currency) setStarting(openAmount(code));
     setCurrencyChosen(true);
     advance(3);
   }
   let formatted = "";
   try {
     formatted = formatMoney(
-      { currency, minorUnits: startingAmount(starting, currency, translator) },
+      { currency: starting.currency, minorUnits: startingAmount(starting, translator) },
       { hideZeroDecimals: true },
     );
   } catch {
@@ -135,7 +138,7 @@ export function Setup({
       if (!submission) {
         if (!presets || !categories.length || !currencyChosen || consent === null)
           return;
-        const startingMinorUnits = startingAmount(starting, currency, translator);
+        const startingMinorUnits = startingAmount(starting, translator);
         submission = {
           payload: {
             functionalCurrency: currency,
@@ -386,19 +389,18 @@ export function Setup({
             <>
               <View style={styles.board}>
                 <Text style={styles.label}>{t("setup.whatYouHave")}</Text>
-                <BottomSheetTextInput
-                  accessibilityLabel={t("setup.startingA11y")}
-                  value={starting}
+                <AmountField
+                  session={starting}
+                  inputAccessibilityLabel={t("setup.startingA11y")}
                   placeholder="0"
-                  keyboardType="decimal-pad"
-                  placeholderTextColor={theme.mutedForeground}
                   editable={!disabled}
-                  onChangeText={(value) => {
+                  InputComponent={BottomSheetTextInput}
+                  onChange={(value) => {
                     if (disabled || saving.current) return;
                     interact();
                     setStarting(value);
                   }}
-                  style={{
+                  inputStyle={{
                     minHeight: 88,
                     paddingHorizontal: spacing.sm,
                     color: theme.foreground,
