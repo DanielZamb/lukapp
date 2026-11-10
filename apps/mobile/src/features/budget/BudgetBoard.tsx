@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { Theme } from "../../ui/tokens";
 import { useReadableLayout } from "../../ui/themeContext";
 import type { ReadableLayout } from "../../ui/layout";
-import { Header, PrimaryButton, Screen, SecondaryButton, useUi, useTheme } from "../../ui/core";
+import { Header, PrimaryButton, Screen, SecondaryButton, useUi, useTheme, useThemeMode } from "../../ui/core";
+import { categoryOutline } from "../categories/appearance";
 import { font, fontSize, radius, spacing } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import { compactAmount, jarPresentation, monthLabel, nextAction, type BudgetJar } from "./model";
@@ -60,6 +61,7 @@ export function BudgetBoard(props: BudgetBoardProps) {
 
 function Jar({ jar, currency, color, onPress }: { jar: BudgetJar; currency: string; color: string; onPress: () => void }) {
   const theme = useTheme();
+  const mode = useThemeMode();
   const layout = useReadableLayout();
   const styles = useMemo(() => boardStyles(theme, layout), [theme, layout]);
   const { over, amount, fill } = jarPresentation(jar);
@@ -70,7 +72,7 @@ function Jar({ jar, currency, color, onPress }: { jar: BudgetJar; currency: stri
     <Pressable accessibilityRole="button"
       accessibilityLabel={`${jar.category.name}: ${value} ${over ? "over a limit of" : "left of"} ${limit}. ${spent} spent. Edit Budget.`}
       onPress={onPress} style={({ pressed }) => [styles.jar, {
-        borderColor: over ? theme.danger : color,
+        borderColor: over ? theme.danger : categoryOutline(color, mode),
         backgroundColor: over ? `${theme.danger}18` : theme.secondary,
       }, pressed && styles.pressed]}>
       {!over && <View pointerEvents="none" style={[styles.fill, { height: `${fill * 100}%`, backgroundColor: `${color}66` }]} />}

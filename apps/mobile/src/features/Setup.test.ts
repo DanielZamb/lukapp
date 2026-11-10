@@ -15,9 +15,9 @@ import { SetupCategories } from "./categories/SetupCategories";
 import { SetupCompletion } from "./setup/Completion";
 import {
   starterCategories,
-  categoryPalette,
   emojiFrom,
 } from "./categories/looks";
+import { categoryPalette } from "./categories/appearance";
 import { currencyOptions } from "./setup/currencies";
 import { functionalCurrencyCodes } from "../../../../src/accounting/currencies";
 import type { SetupSummary } from "./setup/model";

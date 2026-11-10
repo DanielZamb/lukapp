@@ -13,13 +13,8 @@ import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import type { SetupCategory } from "../setup/model";
 import { SetupBackdrop } from "../setup/SearchSheet";
 import { useSetupStyles } from "../setup/styles";
-import {
-  categoryColor,
-  categoryPalette,
-  emojiFrom,
-  fallbackLook,
-  quickEmojis,
-} from "./looks";
+import { categoryColor, categoryOutline, categoryPalette } from "./appearance";
+import { emojiFrom, fallbackLook, quickEmojis } from "./looks";
 import { NatureQuestion } from "./NatureQuestion";
 import { useNatureSuggestion } from "./useNatureSuggestion";
 import { categoryNameKey, type NatureAnswer, type AccountSetupRequest } from "./model";
@@ -67,7 +62,7 @@ export function RestyleSheet({
   );
   const named = target.kind === "create" || target.category.source === "custom";
   const blocked = named && (!trimmed || trimmed.length > 80 || duplicate || (target.kind === "create" && !answer));
-  const color = categoryColor(style, mode) ?? theme.primary;
+  const color = categoryColor(style, mode);
   const preview = {
     name: trimmed || "Your own",
     style,
@@ -121,7 +116,7 @@ export function RestyleSheet({
               style={[
                 styles.icon,
                 style.emoji === emoji && {
-                  borderColor: color,
+                  borderColor: categoryOutline(color, mode),
                   borderWidth: 2,
                   backgroundColor: `${color}24`,
                 },

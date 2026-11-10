@@ -4,7 +4,8 @@ import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomShe
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { useT, type MessageKey } from "../../i18n";
-import { Field, Header, PrimaryButton, SecondaryButton, useTheme, useUi } from "../../ui/core";
+import { Field, Header, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
+import { faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { formatMoney, formatMoneyInput, minorUnitFactor, currencyDisplayPrefix } from "../money";
 import { compactAmount, jarPresentation, monthLabel, type BudgetJar } from "./model";
@@ -35,6 +36,7 @@ type BudgetLimitSheetProps = Pick<ReturnType<typeof useBudgetEditor>,
 export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
   const ui = useUi();
   const theme = useTheme();
+  const mode = useThemeMode();
   const { t } = useT();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const sheet = useRef<BottomSheetModal>(null);
@@ -77,8 +79,8 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
         <View accessible accessibilityRole="progressbar" accessibilityLabel={`Remaining in ${props.jar.category.name}`}
           accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100),
             text: `${formatMoney({ currency: props.currency, minorUnits: amount })} ${over ? "over" : "left"}` }}
-          style={[styles.jar, { backgroundColor: over ? `${theme.danger}33` : `${props.color}22` }]}>
-          <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: props.color }]} />
+          style={[styles.jar, { backgroundColor: over ? `${theme.danger}33` : `${props.color}22` }, !over && faintEdge(props.color, mode)]}>
+          <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: props.color }, faintEdge(props.color, mode)]} />
         </View>
         <Text style={styles.meta}>Stay under this month</Text>
         <Field label={t("lifecycle.limitLabel")} InputComponent={BottomSheetTextInput}

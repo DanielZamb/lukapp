@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import type { Theme } from "../../ui/tokens";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Header, PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
+import { Header, PrimaryButton, Screen, useTheme, useThemeMode, useUi } from "../../ui/core";
+import { categoryOutline, faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { formatAmount, formatMoney, minorUnitFactor, parseMoney } from "../money";
 import { jarPresentation, type BudgetCategory } from "./model";
@@ -25,6 +26,7 @@ export function limitSuggestions(spentMinorUnits: number, currency: string) {
 
 export function BudgetComposer(props: Props) {
   const theme = useTheme();
+  const mode = useThemeMode();
   const ui = useUi();
   const styles = useMemo(() => createStyles(theme), [theme]);
   let limit = 0;
@@ -34,7 +36,7 @@ export function BudgetComposer(props: Props) {
   return (
     <Screen contentStyle={styles.page}>
       <Header eyebrow="BUDGET" title={`Limit for ${props.category.name}`} onBack={props.canDismiss ? props.onBack : undefined} />
-      <View style={[styles.spentChip, { backgroundColor: `${props.color}24`, borderColor: props.color }]}>
+      <View style={[styles.spentChip, { backgroundColor: `${props.color}24`, borderColor: categoryOutline(props.color, mode) }]}>
         <Text style={styles.emoji}>{props.category.emoji}</Text>
         <Text style={styles.chipText}>{money(props.spentMinorUnits)} out this month</Text>
       </View>
@@ -45,8 +47,8 @@ export function BudgetComposer(props: Props) {
           editable={props.editable} style={styles.amount} />
         <View accessibilityRole="progressbar" accessibilityLabel="Remaining jar"
           accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100), text: `${money(limit - props.spentMinorUnits)} remaining` }}
-          style={[styles.jar, { backgroundColor: over ? `${theme.danger}33` : `${props.color}22` }]}>
-          <View style={{ height: "100%", width: `${fill * 100}%`, backgroundColor: props.color, borderRadius: radius.full }} />
+          style={[styles.jar, { backgroundColor: over ? `${theme.danger}33` : `${props.color}22` }, !over && faintEdge(props.color, mode)]}>
+          <View style={[{ height: "100%", width: `${fill * 100}%`, backgroundColor: props.color, borderRadius: radius.full }, faintEdge(props.color, mode)]} />
         </View>
         <Text style={styles.hint}>{over ? "This jar is already empty." : "What is still in the jar. Spent eats it."}</Text>
       </View>

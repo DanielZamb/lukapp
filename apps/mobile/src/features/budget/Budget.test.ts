@@ -450,3 +450,18 @@ test("Android Back does not dismiss a limit sheet whose save is still unconfirme
   expect(screen.findAllByType(BottomSheetModal)).toHaveLength(1);
   expect(back).not.toHaveBeenCalled();
 });
+
+test.each([
+  { color: "#2E7D32", outline: "#2E7D32", edge: null },
+  { color: "#FFF3B0", outline: "#8a8a8a", edge: { borderWidth: 1, borderColor: "#8a8a8a" } },
+])("a stored exact color $color renders on the jar and in the limit sheet", async ({ color, outline, edge }) => {
+  limitJar();
+  categories = [{ id: "food", style: { emoji: "🛒", tone: "positive", color } }];
+  const screen = await render();
+  const jar = screen.findAll((node) => String(node.type) === "Pressable").find((node) => node.props.accessibilityLabel?.startsWith("Food:"));
+  expect(jar?.props.style({ pressed: false })[1]).toEqual({ borderColor: outline, backgroundColor: "#f4f4f5" });
+  await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
+  const track = screen.find((node) => String(node.type) === "View" && node.props.accessibilityLabel === "Remaining in Food");
+  expect(track.props.style.slice(1)).toEqual([{ backgroundColor: `${color}22` }, edge]);
+  expect(track.findAllByType("View" as never)[1].props.style.slice(1)).toEqual([{ width: "50%", backgroundColor: color }, edge]);
+});

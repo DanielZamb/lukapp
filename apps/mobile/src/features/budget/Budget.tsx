@@ -5,7 +5,8 @@ import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
-import { Screen, useTheme } from "../../ui/core";
+import { Screen, useTheme, useThemeMode } from "../../ui/core";
+import { categoryColor } from "../categories/appearance";
 import { api } from "../api";
 import { usePostedActivity } from "../activity";
 import { experienceLevel } from "../levelDoor/model";
@@ -19,6 +20,7 @@ import { useBudgetEditor, type BudgetEditorSeed } from "./useBudgetEditor";
 
 export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { workspaceId: string; timeZone: string; initialCategoryId?: string; onBack: () => void }) {
   const theme = useTheme();
+  const mode = useThemeMode();
   const calendar = useWorkspaceCalendar(timeZone);
   const [editor, setEditor] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
   const [creation, setCreation] = useState<{ key: string; seed: BudgetEditorSeed; categories: BudgetCategory[] } | null>(null);
@@ -50,15 +52,16 @@ export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { w
   const activity = usePostedActivity(workspaceId, timeZone);
   const interact = useLocalEntryInteraction();
   if (!board || !categories || !activity) return <Screen><ActivityIndicator accessibilityLabel="Loading Budget" /></Screen>;
+  const categoryColors = new Map(categories.map((category) => [category.id, categoryColor(category.style, mode)]));
   if (creation) return <BudgetCreation key={creation.key} seed={creation.seed} categories={creation.categories}
     unlocking={activity.accounts.length === 1 && experienceLevel(activity.accounts.length, board.jars.length) === 0}
-    categoryColors={new Map(categories.map((category) => [category.id, theme[category.style.tone]]))}
+    categoryColors={categoryColors}
     onClose={() => { setCreation(null); refresh(Crypto.randomUUID()); }}
     onSaved={() => { setCreation(null); refresh(Crypto.randomUUID()); setSaved(true); }} />;
   return (
     <>
       <BudgetBoard month={board.month} currency={board.currency} jars={board.jars} saved={saved}
-        categoryColors={new Map(categories.map((category) => [category.id, theme[category.style.tone]]))}
+        categoryColors={categoryColors}
         canAdd={board.availableCategories.length > 0} onBack={onBack}
         onAdd={() => {
           if (board.month !== board.currentMonth) return;
@@ -73,7 +76,7 @@ export function Budget({ workspaceId, timeZone, onBack, initialCategoryId }: { w
           setEditor({ key: Crypto.randomUUID(), seed: { workspaceId, currency: board.currency, month: board.currentMonth, jar: current }, categories: [current.category] });
         }} />
       {editor && <Editor key={editor.key} seed={editor.seed} categories={editor.categories}
-        color={theme[categories.find((category) => category.id === editor.seed.jar?.category.id)?.style.tone ?? "primary"]}
+        color={categoryColors.get(editor.seed.jar?.category.id ?? "") ?? theme.primary}
         onClose={() => { setEditor(null); refresh(Crypto.randomUUID()); }}
         onSaved={() => { setEditor(null); refresh(Crypto.randomUUID()); setSaved(true); }} />}
     </>

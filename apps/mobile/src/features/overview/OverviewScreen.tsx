@@ -5,7 +5,8 @@ import type { ReadableLayout } from "../../ui/layout";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
+import { Header, PrimaryButton, Screen, useTheme, useThemeMode, useUi } from "../../ui/core";
+import { categoryColor, categoryInk, categoryOutline, faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { currencyDisplayPrefix } from "../money";
 import { compactAmount, symbolAmount } from "./amounts";
@@ -20,6 +21,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
 }) {
   const ui = useUi();
   const theme = useTheme();
+  const mode = useThemeMode();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   const [view, setView] = useState<"list" | "spend" | "remaining">("list");
@@ -47,7 +49,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
         <View style={styles.group}>
           {categories.map((category, index) => {
             const left = remaining(category);
-            const color = theme[category.style.tone];
+            const color = categoryColor(category.style, mode);
             const over = left !== null && left < 0;
             return (
               <Pressable key={category.id} accessibilityRole="button" accessibilityLabel={category.name}
@@ -57,7 +59,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
                   <Text style={styles.name}>{category.name}</Text>
                   <View style={styles.trail}>
                     <Text style={styles.value} numberOfLines={layout.reflow ? undefined : 1}>{symbolAmount(category.spendMinorUnits, symbol, "grouped", data.currency)}</Text>
-                    {left !== null && <Text style={[styles.left, { color: over ? theme.danger : color }]}>
+                    {left !== null && <Text style={[styles.left, { color: over ? theme.danger : categoryInk(color, mode) }]}>
                       {compactAmount(toMajorUnits(Math.abs(left), data.currency))} {over ? "over" : "left"}
                     </Text>}
                   </View>
@@ -73,7 +75,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
           {barRows.map((category) => {
             const left = remaining(category);
             const over = showRemaining && left !== null && left < 0;
-            const color = over ? theme.danger : theme[category.style.tone];
+            const color = over ? theme.danger : categoryColor(category.style, mode);
             const fill = showRemaining ? remainingFill(category) : Math.max(0, Math.min(1, category.spendMinorUnits / maxSpend));
             const value = showRemaining && left !== null
               ? `${compactAmount(toMajorUnits(Math.abs(left), data.currency))}${over ? " over" : ""}`
@@ -87,7 +89,7 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
                 <Text style={styles.emoji}>{category.style.emoji}</Text>
                 <View accessibilityRole="progressbar" accessibilityLabel={`${category.name}, ${showRemaining ? "remaining limit" : "share of largest spend"}`}
                   accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100) }} style={styles.track}>
-                  <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: color }]} />
+                  <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: color }, faintEdge(color, mode)]} />
                 </View>
                 <Text style={[styles.barValue, over && { color: theme.danger }]} numberOfLines={1}>{value}</Text>
               </Pressable>
@@ -118,13 +120,15 @@ function CategoryCoin({ category }: { category: OverviewCategory }) {
   const theme = useTheme();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
+  const mode = useThemeMode();
   const left = remaining(category);
   const over = left !== null && left < 0;
-  const color = theme[category.style.tone];
+  const color = categoryColor(category.style, mode);
+  const outline = categoryOutline(color, mode);
   return (
     <View style={[styles.coin, {
       backgroundColor: over ? `${theme.danger}2e` : `${color}14`,
-      borderColor: over ? theme.danger : `${color}55`, borderWidth: over ? 2 : 1,
+      borderColor: over ? theme.danger : outline === color ? `${color}55` : outline, borderWidth: over ? 2 : 1,
     }]}>
       {left !== null && !over && <View style={[styles.coinFill, { height: `${remainingFill(category) * 100}%`, backgroundColor: `${color}3d` }]} />}
       <Text style={styles.coinEmoji}>{category.style.emoji}</Text>

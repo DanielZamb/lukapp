@@ -6,7 +6,8 @@ import { useTheme, useThemeMode, useUi } from "../../ui/core";
 import { useSetupStyles } from "../setup/styles";
 import type { SetupCategory } from "../setup/model";
 import type { AccountSetupRequest, CategoryStyle } from "./model";
-import { categoryColor, starterCategories } from "./looks";
+import { categoryColor, categoryOutline } from "./appearance";
+import { starterCategories } from "./looks";
 import { RestyleSheet, type RestyleTarget } from "./SetupRestyleSheet";
 
 export function SetupCategories({
@@ -59,7 +60,7 @@ export function SetupCategories({
           const selected = selections.some(
             (item) => item.name === category.name,
           );
-          const color = categoryColor(category.style, mode) ?? theme.primary;
+          const color = categoryColor(category.style, mode);
           return (
             <Pressable
               key={category.name}
@@ -84,7 +85,7 @@ export function SetupCategories({
                 styles.chip,
                 selected && {
                   borderWidth: 2,
-                  borderColor: color,
+                  borderColor: categoryOutline(color, mode),
                   backgroundColor: `${color}24`,
                 },
               ]}
