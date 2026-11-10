@@ -110,7 +110,16 @@ export type RecoveryCancellation = {
   createdBy: string;
   eventTime: number;
   recordedAt: number;
+  origin?: RecoveryCancellationOrigin;
 };
+
+export type RecoveryInvalidation =
+  | { kind: "transfer_reversed"; transferJournalEntryId: string; reversalJournalEntryId: string }
+  | { kind: "contribution_corrected"; contributionId: string; correctionId: string };
+
+export type RecoveryCancellationOrigin =
+  | { kind: "person" }
+  | { kind: "automatic"; cause: RecoveryInvalidation; unfinishedPlanId: string };
 
 export type RecoveryCorrection = {
   id: string;

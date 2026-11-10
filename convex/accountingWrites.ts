@@ -1,4 +1,7 @@
 import { renameAccount as rename } from "../src/accounting/commands/renameAccount";
+import { cancelReopenedPlans } from "../src/savingsRecovery/cancelReopenedPlans";
+import { recoveryWriteStore } from "./savingsRecoveryStore";
+import { runRecovery } from "./savingsRecoveryErrors";
 import { v } from "convex/values";
 import { changeAccountLook as changeLook } from "../src/accounting/commands/changeAccountLook";
 import { internalMutation } from "./_generated/server";
@@ -138,12 +141,17 @@ export const reversePostedEntry = internalMutation({
       workspaceId: args.workspaceId,
       permission: "accounting:correct",
     });
-    return run(() =>
-      createAccountingCore(convexStore(ctx.db)).reversePostedEntry({
+    return run(() => runRecovery(async () => {
+      const reversed = await createAccountingCore(convexStore(ctx.db)).reversePostedEntry({
         ...args,
         actor,
-      }),
-    );
+      });
+      if (!reversed.replay) await cancelReopenedPlans(recoveryWriteStore(ctx, args.workspaceId), {
+        workspaceId: args.workspaceId, actorId: actor.userId, now: Date.now(),
+        cause: { kind: "transfer_reversed", transferJournalEntryId: args.journalEntryId, reversalJournalEntryId: reversed.id },
+      });
+      return reversed;
+    }));
   },
 });
 export const ensurePersonalDefaults = internalMutation({

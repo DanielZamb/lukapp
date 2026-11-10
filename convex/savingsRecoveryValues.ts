@@ -1,8 +1,20 @@
 import { v } from "convex/values";
 
+export const cancellationOrigin = v.union(
+  v.object({ kind: v.literal("person") }),
+  v.object({
+    kind: v.literal("automatic"), unfinishedPlanId: v.string(),
+    cause: v.union(
+      v.object({ kind: v.literal("transfer_reversed"), transferJournalEntryId: v.string(), reversalJournalEntryId: v.string() }),
+      v.object({ kind: v.literal("contribution_corrected"), contributionId: v.string(), correctionId: v.string() }),
+    ),
+  }),
+);
+
 export const cancellation = v.object({
   id: v.string(), workspaceId: v.string(), planId: v.string(), reason: v.optional(v.string()),
   idempotencyKey: v.string(), createdBy: v.string(), eventTime: v.number(), recordedAt: v.number(),
+  origin: cancellationOrigin,
 });
 export const correction = v.object({
   id: v.string(), workspaceId: v.string(), contributionId: v.string(), reason: v.string(),

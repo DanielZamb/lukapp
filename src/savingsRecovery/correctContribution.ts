@@ -1,4 +1,5 @@
 import { ALL_MONTHS, activeAttributions, planProgress } from "./progress";
+import { cancelReopenedPlans } from "./cancelReopenedPlans";
 import { requireContributablePlan, requireContributionDate } from "./lifecycle";
 import { RecoveryError, requireIdempotencyKey } from "./policy";
 import type { CorrectContribution, RecoveryContribution, RecoveryWriteStore } from "./types";
@@ -51,6 +52,10 @@ export async function correctContribution(store: RecoveryWriteStore, input: Corr
     ...(replacementContribution ? { replacementContributionId: replacementContribution.id } : {}),
     contributionDate: original.contributionDate,
     idempotencyKey: input.idempotencyKey, createdBy: input.actorId, recordedAt: input.now,
+  });
+  await cancelReopenedPlans(store, {
+    workspaceId: input.workspaceId, actorId: input.actorId, now: input.now,
+    cause: { kind: "contribution_corrected", contributionId: original.id, correctionId: correction.id },
   });
   return { correction, replacementContribution, replay: false };
 }

@@ -422,6 +422,7 @@ const repairCandidate: RecoveryCandidate = {
 const cancellation = {
   id: "cancel-1", workspaceId: "workspace", planId: "repair", reason: "Income changed", idempotencyKey: "cancel-key",
   createdBy: "owner", eventTime: Date.UTC(2026, 9, 5, 15), recordedAt: Date.UTC(2026, 9, 5, 15),
+  origin: { kind: "person" as const },
 };
 const cancelledRepair: RecoveryPlanView = {
   ...repair, canCancel: false, acceptsContributions: false, status: "cancelled", cancellation, remainingMinorUnits: 0, dueMinorUnits: 0,

@@ -4,6 +4,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { mobilePlatform } from "./lib/securityValues";
 import { revisionFields } from "./budgetValues";
+import { cancellationOrigin } from "./savingsRecoveryValues";
 import { reportFields, reservationFields } from "./feedbackValues";
 import {
   accountNature,
@@ -98,6 +99,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"), planId: v.id("savingsRecoveryPlans"),
     reason: v.optional(v.string()), idempotencyKey: v.string(), createdBy: v.string(),
     eventTime: v.number(), recordedAt: v.number(),
+    origin: v.optional(cancellationOrigin),
   }).index("by_workspace", ["workspaceId"])
     .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
     .index("by_plan", ["planId"]),
