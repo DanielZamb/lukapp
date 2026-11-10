@@ -24,6 +24,8 @@ import { LocalEntryGate } from "../src/local-auth/LocalEntryGate";
 import { PrebuiltSignIn } from "../src/local-auth/PrebuiltSignIn";
 import { IntakeProvider } from "../src/features/intake/IntakeProvider";
 import { DeviceAdmissionGate } from "../src/device-admission/DeviceAdmissionGate";
+import { FeedbackHost } from "../src/features/feedback/FeedbackHost";
+import { FeedbackAdmission } from "../src/features/feedback/controls";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import {
   Header,
@@ -120,6 +122,7 @@ function Admission() {
     );
   return (
     <DeviceAdmissionGate>
+    <FeedbackAdmission />
     <IntakeProvider>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
@@ -177,9 +180,11 @@ export default function Layout() {
             )}
           >
             <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-              <BottomSheetModalProvider>
-                <Admission />
-              </BottomSheetModalProvider>
+              <FeedbackHost>
+                <BottomSheetModalProvider>
+                  <Admission />
+                </BottomSheetModalProvider>
+              </FeedbackHost>
             </ConvexProviderWithClerk>
           </LocalEntryGate>
         </ClerkProvider>
