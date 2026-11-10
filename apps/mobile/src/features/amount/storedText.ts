@@ -30,8 +30,17 @@ export function amountTextFormatOf(convention: AmountConvention): ConventionForm
   return format;
 }
 
-/** A saved amount text and the grammar it was written in. `reenter` marks text whose meaning could not be confirmed. */
-export type StoredAmountText = Readonly<{ text: string; format: AmountTextFormat; reenter?: true }>;
+export const amountReviewReasons = ["converted", "pasted"] as const;
+export type AmountReviewReason = (typeof amountReviewReasons)[number];
+/** A saved amount that still awaits the person's confirmation, and the text it was saved as before the app rewrote it. */
+export type StoredAmountReview = Readonly<{ reason: AmountReviewReason; previous: string | null }>;
+export const storedAmountReviewSchema = z.object({ reason: z.enum(amountReviewReasons), previous: z.string().max(256).nullable() }).strict();
+
+/**
+ * A saved amount text and the grammar it was written in. `reenter` marks text whose meaning could not be confirmed;
+ * `review` marks text the person has not yet confirmed.
+ */
+export type StoredAmountText = Readonly<{ text: string; format: AmountTextFormat; reenter?: true; review?: StoredAmountReview }>;
 
 export type AmountNotice =
   | Readonly<{ kind: "converted"; previous: string }>

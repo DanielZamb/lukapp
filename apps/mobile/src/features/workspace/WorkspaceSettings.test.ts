@@ -450,7 +450,7 @@ const expense = (idempotencyKey: string, currency = "COP"): PostableCommand => (
 } });
 async function storeDeviceInput() {
   const now = Date.now();
-  let document: LocalEntryDocument = { v: 2, drafts: [] };
+  let document: LocalEntryDocument = { v: 3, drafts: [] };
   document = keepIn(document, { facts: facts({}) }, now, () => "taxi").document;
   document = keepIn(document, { facts: facts({ workspaceId: "other", description: "Elsewhere" }) }, now, () => "elsewhere").document;
   document = beginPostIn(document, { command: expense("sent") }, now, () => "sent").document;
@@ -585,7 +585,7 @@ test("a refused currency change keeps every draft on the phone", async () => {
 
 test("unsent input counts once when a rejected batch row reopened its draft, and other currencies stay", () => {
   const now = Date.now();
-  const sent = beginPostIn({ v: 2, drafts: [] }, { command: expense("row") }, now, () => "row-draft");
+  const sent = beginPostIn({ v: 3, drafts: [] }, { command: expense("row") }, now, () => "row-draft");
   const reopened = rejectPostIn(sent.document, "row-draft");
   const document: LocalEntryDocument = {
     ...keepIn(reopened, { facts: facts({ currency: "EUR" }) }, now, () => "euro").document,

@@ -52,7 +52,11 @@ export function amountHint(session: AmountSession, t: Translator["t"]): string |
   }
 }
 
-/** The hint for text that cannot be used, or a plain example of the format when it is only incomplete. */
+/**
+ * The hint for text that cannot be used, a request to confirm an amount that awaits confirmation, or a plain example
+ * of the format when it is only incomplete.
+ */
 export function amountRefusal(session: AmountSession, t: Translator["t"]): string {
+  if (session.review && session.editor.kind === "complete") return t("amount.reviewRequired");
   return amountHint(session, t) ?? t("amount.hintFormat", { example: examples(session.editor.format).full });
 }

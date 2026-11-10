@@ -116,7 +116,7 @@ const versionOne = {
 test("version 1 Drafts read as pre-currency text, verbatim, with sent commands and batch rows untouched", () => {
   const { document, dirty } = parseLocalEntryDocument(JSON.parse(JSON.stringify(versionOne)), now);
   expect(dirty).toBe(false);
-  expect(document.v).toBe(2);
+  expect(document.v).toBe(3);
   expect(document.drafts.map((draft) => draft.status === "open" ? [draft.id, draft.facts.amountText, draft.facts.amountFormat] : [draft.id]))
     .toEqual([["cop", "-1.234,50", "pre-currency"], ["usd", "-1.234,50", "pre-currency"], ["usd-bad", "-12.34", "pre-currency"], ["sent"]]);
   expect(document.drafts[3]).toEqual(versionOne.drafts[3]);
@@ -132,8 +132,25 @@ test("a version 2 Draft keeps its format through a write and a read", () => {
   expect(parseLocalEntryDocument(JSON.parse(JSON.stringify(document)), now).document).toEqual(document);
 });
 
+test("a version 3 Draft keeps an amount awaiting confirmation through a write and a read; a version 2 Draft reads with none", () => {
+  const awaiting = { ...facts("USD", "-1,234.00"), amountFormat: "usd/1", amountReview: { reason: "converted", previous: "-1.234" } };
+  const written = JSON.parse(JSON.stringify({ v: 3, drafts: [{ id: "usd", createdAt: now, expiresAt: now + 1000, status: "open", facts: awaiting }] }));
+  const { document } = parseLocalEntryDocument(written, now);
+  expect(document.drafts[0]).toMatchObject({ facts: { amountText: "-1,234.00", amountFormat: "usd/1", amountReview: { reason: "converted", previous: "-1.234" } } });
+  expect(parseLocalEntryDocument(JSON.parse(JSON.stringify(document)), now).document).toEqual(document);
+  const older = parseLocalEntryDocument({ v: 2, drafts: [{ id: "usd", createdAt: now, expiresAt: now + 1000, status: "open",
+    facts: { ...facts("USD", "-1,234.5"), amountFormat: "usd/1" } }] }, now).document;
+  expect(older.v).toBe(3);
+  expect(older.drafts[0]).toEqual({ id: "usd", createdAt: now, expiresAt: now + 1000, status: "open",
+    facts: { ...facts("USD", "-1,234.5"), amountFormat: "usd/1" } });
+});
+
 test("an unknown Draft document version or text format blocks instead of clearing", () => {
-  expect(() => parseLocalEntryDocument({ ...versionOne, v: 3 }, now)).toThrow();
+  expect(() => parseLocalEntryDocument({ ...versionOne, v: 4 }, now)).toThrow();
+  expect(() => parseLocalEntryDocument({
+    v: 3, drafts: [{ id: "x", createdAt: now, expiresAt: now + 1000, status: "open",
+      facts: { ...facts("USD", "1,234"), amountFormat: "usd/1", amountReview: { reason: "guessed", previous: null } } }],
+  }, now)).toThrow();
   expect(() => parseLocalEntryDocument({
     v: 2, drafts: [{ id: "x", createdAt: now, expiresAt: now + 1000, status: "open", facts: { ...facts("USD", "1"), amountFormat: "usd/2" } }],
   }, now)).toThrow();

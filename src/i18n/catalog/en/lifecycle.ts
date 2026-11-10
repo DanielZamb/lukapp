@@ -3,7 +3,6 @@ export const lifecycle = {
   limitInputA11y: "New limit in {currency}",
   limitShortcuts: "Shortcuts",
   limitEmpty: "Type the new limit.",
-  limitInvalid: "Check the amount. Use dots for thousands and a comma for cents.",
   limitNotPositive: "The limit must be more than zero.",
   limitUnchanged: "This is the current limit. Type another amount or tap a shortcut.",
 

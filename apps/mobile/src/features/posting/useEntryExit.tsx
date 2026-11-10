@@ -7,7 +7,7 @@ import { ConfirmSheet } from "../../ui/ConfirmSheet";
 import { SecondaryButton, useUi } from "../../ui/core";
 import type { DiscardOutcome } from "../discardOutcome";
 import { formatMoney } from "../money";
-import { amountMinorUnits, type AmountSession } from "../amount/session";
+import { displayedMinorUnits, type AmountSession } from "../amount/session";
 
 type ExitEditor = {
   unsaved: boolean;
@@ -24,7 +24,7 @@ type ExitEditor = {
 type ExitSheet = { kind: "leave"; resume: () => void } | { kind: "discard-draft" } | { kind: "discard-candidate" };
 
 function amountLabel(amount: AmountSession) {
-  const minorUnits = amountMinorUnits(amount);
+  const minorUnits = displayedMinorUnits(amount);
   return minorUnits ? formatMoney({ currency: amount.currency, minorUnits: Math.abs(minorUnits) }) : "";
 }
 

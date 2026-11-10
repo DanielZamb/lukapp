@@ -1,8 +1,8 @@
 import { expect, test, vi } from "vitest";
 import { currencyDisplayPrefix, formatAmount, formatMoney } from "./money";
 import { readPreCurrencyAmount } from "./amount/preCurrency";
-import { applyNativeText } from "./amount/nativeEdit";
-import { amountMinorUnits, openAmount } from "./amount/session";
+import { nativeTextChange, nativeTrackOf } from "./amount/nativeEdit";
+import { amountMinorUnits, confirmAmount, displayedMinorUnits, openAmount } from "./amount/session";
 
 vi.mock("expo-secure-store", () => ({}));
 import { suggest } from "./intake/suggest";
@@ -75,10 +75,15 @@ const entered: ReadonlyArray<readonly [raw: string, oldTwo: string, oldThree: st
 
 test.each(entered)("text %s entered into an empty field (old sanitizer gave %s, %s)", (raw, _oldTwo, _oldThree, cop, usd, bhd) => {
   for (const [currency, [text, result]] of [["COP", cop], ["USD", usd], ["BHD", bhd]] as const) {
-    const session = applyNativeText(openAmount(currency), raw);
+    const opened = openAmount(currency);
+    const session = nativeTextChange(opened, nativeTrackOf(opened), raw).session;
     expect(session.editor.text, currency).toBe(text);
-    if (typeof result === "number") expect(amountMinorUnits(session), currency).toBe(result);
-    else {
+    if (typeof result === "number") {
+      expect(displayedMinorUnits(session), currency).toBe(result);
+      const pastedSeparator = /[.,]/.test(raw);
+      expect(amountMinorUnits(session), currency).toBe(pastedSeparator ? null : result);
+      expect(amountMinorUnits(confirmAmount(session)), currency).toBe(result);
+    } else {
       expect(session.editor.kind, currency).toBe(result);
       expect(amountMinorUnits(session), currency).toBeNull();
     }

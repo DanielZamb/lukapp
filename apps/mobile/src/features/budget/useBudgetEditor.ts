@@ -6,7 +6,7 @@ import { z } from "zod";
 import { useT, type MessageKey } from "../../i18n";
 import { admissionFailure } from "../../device-admission/failure";
 import { api } from "../api";
-import { amountMinorUnits, amountOfMinorUnits, openAmount, type AmountSession } from "../amount/session";
+import { amountMinorUnits, amountOfMinorUnits, displayedMinorUnits, openAmount, type AmountSession } from "../amount/session";
 import type { BudgetJar, RemovedLimit } from "./model";
 
 type AmountArgs = FunctionArgs<typeof api.budget.setCategoryLimit>;
@@ -53,7 +53,7 @@ const refusals: Record<string, { message: MessageKey; closes: boolean }> = {
 function readAmount(amount: AmountSession, currentMinorUnits: number | undefined):
   { minorUnits: number; issue: AmountIssue | null } {
   if (!amount.editor.text.trim()) return { minorUnits: 0, issue: "empty" };
-  const minorUnits = amountMinorUnits(amount);
+  const minorUnits = displayedMinorUnits(amount);
   if (minorUnits === null) return { minorUnits: 0, issue: "invalid" };
   if (minorUnits === 0) return { minorUnits, issue: "zero" };
   if (minorUnits < 0) return { minorUnits, issue: "notPositive" };
@@ -79,6 +79,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
   const { t } = translator;
   const [categoryId, setCategoryId] = useState<string | null>(seed.jar?.category.id ?? seed.initialCategoryId ?? null);
   const [amount, setAmount] = useState(() => startingAmount(seed));
+  if (amount.currency !== seed.currency) setAmount(startingAmount(seed));
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingAct, setPendingAct] = useState<LimitAct | null>(null);
@@ -95,7 +96,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
   }, []);
   const { minorUnits, issue } = readAmount(amount, seed.jar?.limitMinorUnits);
   const ready: Record<LimitAct, boolean> = {
-    amount: !!categoryId && !issue,
+    amount: !!categoryId && !issue && amountMinorUnits(amount) !== null,
     spendNothing: !!categoryId && seed.jar?.limitMinorUnits !== 0,
     remove: !!seed.jar,
   };

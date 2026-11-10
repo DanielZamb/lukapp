@@ -119,6 +119,9 @@ test.each([false, true])("typing a new expense preserves its sign and grouping, 
   await act(async () => input().props.onChangeText("-12.500"));
   expect(input().props.value).toBe("-12.500");
   await act(async () => submit());
+  expect(saveToBatch ? queued.at(-1) : post.mock.calls[0]).toBeFalsy();
+  await act(async () => root!.root.findByProps({ accessibilityLabel: "Confirm COP 12.500,00", accessibilityRole: "button" }).props.onPress());
+  await act(async () => submit());
   const command = saveToBatch ? queued.at(-1)?.command : post.mock.calls[0]?.[0];
   expect(command).toMatchObject({
     kind: "expense",

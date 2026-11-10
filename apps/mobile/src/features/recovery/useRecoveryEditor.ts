@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
-import { amountMinorUnits, amountOfMinorUnits, type AmountSession } from "../amount/session";
+import { amountMinorUnits, amountOfMinorUnits, displayedMinorUnits, type AmountSession } from "../amount/session";
 import {
   DEFAULT_INSTALLMENT_COUNT,
   INSTALLMENT_COUNTS,
@@ -58,12 +58,13 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  const suggestion = suggestionFor(seed.candidate.amountMinorUnits, installmentCount, amountMinorUnits(amount) ?? 0);
+  const suggestion = suggestionFor(seed.candidate.amountMinorUnits, installmentCount, displayedMinorUnits(amount) ?? 0);
+  const ready = suggestion.valid && amountMinorUnits(amount) !== null;
   const editable = !busy && !pending;
   async function submit() {
     const mounted = lifetime.current;
     const selected = request.current?.destinationFinancialAccountProfileId ?? destinationId;
-    if (!mounted.active || submitting.current || !selected || (!request.current && !suggestion.valid)) return;
+    if (!mounted.active || submitting.current || !selected || (!request.current && !ready)) return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -102,7 +103,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   const canEdit = () => lifetime.current.active && !submitting.current && !request.current;
   return {
     installmentCount, amount, destinationId, busy, pending, error, editable, suggestion,
-    canSubmit: !busy && (pending || (!!destinationId && suggestion.valid)),
+    canSubmit: !busy && (pending || (!!destinationId && ready)),
     canDismiss: !busy && !pending,
     onMonths: (count: MonthCount) => {
       if (!canEdit()) return;

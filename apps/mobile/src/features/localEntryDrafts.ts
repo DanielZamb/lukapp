@@ -18,7 +18,7 @@ import {
 } from "./localEntryDraftErrors";
 import { postingBatchSchema, type StoredPostingBatch } from "./posting/postingBatchSchema";
 import type { DiscardOutcome } from "./discardOutcome";
-import { amountTextFormatSchema, type AmountTextFormat } from "./amount/storedText";
+import { amountTextFormatSchema, storedAmountReviewSchema, type AmountTextFormat, type StoredAmountReview } from "./amount/storedText";
 import { currentAmountTextFormat } from "./amount/currencyFormat";
 export { LocalEntryDraftFrozenError, LocalEntryDraftGoneError };
 
@@ -33,6 +33,8 @@ export type LocalEntryFacts = {
   amountText: string;
   amountFormat: AmountTextFormat;
   amountReenter?: true;
+  /** The amount still awaits the person's confirmation. */
+  amountReview?: StoredAmountReview;
   accountingDate: string;
   description: string;
   profileId: string;
@@ -54,7 +56,7 @@ export type PostingDraft = DraftMeta & {
 };
 export type LocalEntryDraft = OpenDraft | PostingDraft;
 export type LocalEntryDocument = {
-  v: 2;
+  v: 3;
   drafts: LocalEntryDraft[];
   postingBatches?: Record<string, StoredPostingBatch>;
 };
@@ -119,11 +121,12 @@ const factsFields = {
   destinationId: z.string().min(1).nullable(),
   categories: categoriesSchema,
 };
-const factsSchema = z.object({
+const taggedFactsFields = {
   ...factsFields,
   amountFormat: amountTextFormatSchema,
   amountReenter: z.literal(true).optional(),
-});
+};
+const factsSchema = z.object({ ...taggedFactsFields, amountReview: storedAmountReviewSchema.optional() });
 const metaSchema = {
   id: z.string().min(1),
   createdAt: z.number().int().nonnegative(),
@@ -135,11 +138,21 @@ const postingDraftSchema = z.object({
   command: pendingPostingSchema,
 });
 const localEntryDocumentSchema = z.object({
-  v: z.literal(2),
+  v: z.literal(3),
   postingBatches: z.record(z.string(), postingBatchSchema).optional(),
   drafts: z.array(
     z.discriminatedUnion("status", [
       z.object({ ...metaSchema, status: z.literal("open"), facts: factsSchema }),
+      postingDraftSchema,
+    ]),
+  ),
+});
+const taggedDocumentSchema = z.object({
+  v: z.literal(2),
+  postingBatches: z.record(z.string(), postingBatchSchema).optional(),
+  drafts: z.array(
+    z.discriminatedUnion("status", [
+      z.object({ ...metaSchema, status: z.literal("open"), facts: z.object(taggedFactsFields) }),
       postingDraftSchema,
     ]),
   ),
@@ -183,9 +196,11 @@ export function parseLocalEntryDocument(
   now: number,
 ): ParsedDocument {
   if (raw === null || raw === undefined)
-    return { document: { v: 2, drafts: [] }, dirty: false };
+    return { document: { v: 3, drafts: [] }, dirty: false };
   if (typeof raw === "object" && raw !== null && "v" in raw) {
-    const document = raw.v === 1 ? fromPreCurrencyDocument(preCurrencyDocumentSchema.parse(raw)) : localEntryDocumentSchema.parse(raw);
+    const document = raw.v === 1 ? fromPreCurrencyDocument(preCurrencyDocumentSchema.parse(raw))
+      : raw.v === 2 ? { ...taggedDocumentSchema.parse(raw), v: 3 as const }
+      : localEntryDocumentSchema.parse(raw);
     const drafts = document.drafts.filter((draft) => draft.expiresAt > now);
     return {
       document: { ...document, drafts },
@@ -195,7 +210,7 @@ export function parseLocalEntryDocument(
   const command = parsePendingPosting(raw);
   return {
     document: {
-      v: 2,
+      v: 3,
       drafts: [
         {
           id: command.payload.idempotencyKey,
@@ -210,11 +225,15 @@ export function parseLocalEntryDocument(
   };
 }
 
-/** Version 1 Drafts kept their amount text in the pre-currency grammar. It stays verbatim, tagged as such. */
+/**
+ * Version 1 Drafts kept their amount text in the pre-currency grammar. It stays verbatim, tagged as such. Version 2
+ * Drafts could not yet record an amount awaiting confirmation; the ones whose text needs rewriting still ask for it
+ * when reopened, because their tag says so.
+ */
 function fromPreCurrencyDocument(document: z.infer<typeof preCurrencyDocumentSchema>): LocalEntryDocument {
   return {
     ...document,
-    v: 2,
+    v: 3,
     drafts: document.drafts.map((draft) =>
       draft.status === "open" ? { ...draft, facts: { ...draft.facts, amountFormat: "pre-currency" } } : draft),
   };

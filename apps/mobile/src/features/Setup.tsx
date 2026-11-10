@@ -24,7 +24,7 @@ import type { AccountSetupRequest } from "./categories/model";
 import { SetupCategories } from "./categories/SetupCategories";
 import { formatMoney } from "./money";
 import { AmountField } from "./amount/AmountField";
-import { openAmount } from "./amount/session";
+import { displayedMinorUnits, openAmount } from "./amount/session";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { deviceTimeZone } from "./timeZones";
 import {
@@ -120,15 +120,8 @@ export function Setup({
     setCurrencyChosen(true);
     advance(3);
   }
-  let formatted = "";
-  try {
-    formatted = formatMoney(
-      { currency: starting.currency, minorUnits: startingAmount(starting, translator) },
-      { hideZeroDecimals: true },
-    );
-  } catch {
-    /* Keep incomplete input editable. */
-  }
+  const shown = starting.editor.text.trim() ? displayedMinorUnits(starting) : 0;
+  const formatted = shown === null || shown < 0 ? "" : formatMoney({ currency: starting.currency, minorUnits: shown }, { hideZeroDecimals: true });
   async function finish() {
     if (saving.current || phase.kind === "accounts") return;
     interact();
