@@ -7,8 +7,8 @@ import { useT } from "../src/i18n";
 import { Header, Screen } from "../src/ui/core";
 
 function Entry({ workspaceId, entryId }: { workspaceId: string; entryId: string }) {
-  const { detail, reversal } = useEntryDetail(workspaceId, entryId);
-  return <EntryDetailScreen detail={detail} reversal={reversal.state}
+  const { detail, reversal, places } = useEntryDetail(workspaceId, entryId);
+  return <EntryDetailScreen detail={detail} reversal={reversal.state} places={places}
     onBack={() => router.back()}
     onEntry={(next) => router.push({ pathname: "/entry", params: { entryId: next } })}
     onReverse={reversal.request} onCancel={reversal.cancel} onConfirm={() => void reversal.confirm()} />;

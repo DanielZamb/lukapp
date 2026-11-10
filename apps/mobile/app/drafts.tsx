@@ -66,7 +66,11 @@ function Drafts({
     return () => { active = false; clearTimeout(timer); };
   }, [subject, discardRevision]);
   const confirmCandidates = useAction(api.notificationIntake.confirmCandidates);
-  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
+  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, status: "all" });
+  // A Candidate naming a Place that ended or is being undone waits for the person to pick another; it is never confirmed in bulk.
+  const unavailable = new Set(places?.filter((place) => place.status !== undefined && place.status !== "open").map((place) => place.id));
+  const ready = places ? intake.ready.filter((candidate) => candidate.status?.kind === "pending"
+    || !unavailable.has(candidate.suggestion.financialAccountProfileId)) : [];
   const reportFailure = useDeviceAccessFailure();
   const listsLoaded =
     drafts.count !== null && (intake.count !== null || !!intake.error);
@@ -101,9 +105,9 @@ function Drafts({
       }}
       now={intake.now}
       wait={intake.wait}
-      ready={intake.ready}
+      ready={ready}
       otherNotifications={intake.otherNotifications}
-      readyTotal={readyTotalMinorUnits(intake.ready)}
+      readyTotal={readyTotalMinorUnits(ready)}
       currency={currency}
       segment={segment}
       readyToShow={drafts.count !== null && (intake.count !== null || !!intake.error)}
@@ -132,11 +136,11 @@ function Drafts({
       onDiscardDraft={(id) => drafts.port.discard(id)}
       onConfirmReady={() => {
         void (async () => {
-          if (!intake.ready.length || confirming) return;
+          if (!ready.length || confirming) return;
           setConfirming(true);
           let addedCount = 0;
           try {
-            addedCount = await confirmReadyCandidates(intake.service, intake.ready,
+            addedCount = await confirmReadyCandidates(intake.service, ready,
               (items) => confirmCandidates({ workspaceId, items }));
           } catch (error) {
             if (handleReadyBatchError(error, reportFailure, intake.refresh) === "wiped")

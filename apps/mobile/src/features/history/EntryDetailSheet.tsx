@@ -9,6 +9,7 @@ import { font, spacing, touchTarget } from "../../ui/tokens";
 import { EntryReversal } from "./EntryReversal";
 import { historyAmount, historyDate, type HistoryCategory } from "./listModel";
 import { useEntryDetail } from "./useEntryDetail";
+import { entryPlaceName } from "../placeEnding/model";
 
 type Props = {
   workspaceId: string;
@@ -32,7 +33,7 @@ function EntryDetail({ workspaceId, entryId, profileId, categories, currentDate,
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { t, language } = useT();
-  const { detail, reversal } = useEntryDetail(workspaceId, entryId, profileId);
+  const { detail, reversal, places } = useEntryDetail(workspaceId, entryId, profileId);
   if (!detail) return <ActivityIndicator accessibilityLabel={t("review.loadingEntry")} />;
   const { entry, row } = detail;
   const moneyIn = row.amount.minorUnits > 0;
@@ -49,8 +50,8 @@ function EntryDetail({ workspaceId, entryId, profileId, categories, currentDate,
     <View>
       <DetailRow label={t("review.when")}><Text style={styles.value}>{historyDate(row.date, currentDate, language)}</Text></DetailRow>
       {row.transfer && <>
-        <DetailRow label={t("review.transferFrom")}><Text style={styles.value}>{row.transfer.from.name}</Text></DetailRow>
-        <DetailRow label={t("review.transferTo")}><Text style={styles.value}>{row.transfer.to.name}</Text></DetailRow>
+        <DetailRow label={t("review.transferFrom")}><Text style={styles.value}>{entryPlaceName(row.transfer.from.id, row.transfer.from.name, places, t)}</Text></DetailRow>
+        <DetailRow label={t("review.transferTo")}><Text style={styles.value}>{entryPlaceName(row.transfer.to.id, row.transfer.to.name, places, t)}</Text></DetailRow>
       </>}
       {(!row.transfer || row.userCategories.length > 0) && <DetailRow label={t("review.category")}>
         {row.userCategories.length ? row.userCategories.map((category) => {
@@ -62,10 +63,11 @@ function EntryDetail({ workspaceId, entryId, profileId, categories, currentDate,
           </Text>;
         }) : <Text style={styles.value}>{t("review.noCategory")}</Text>}
       </DetailRow>}
-      {!row.transfer && <DetailRow label={t("review.place")}><Text style={styles.value}>{entry.financialAccountProfileName ?? t("review.noPlace")}</Text></DetailRow>}
+      {!row.transfer && <DetailRow label={t("review.place")}><Text style={styles.value}>{entry.financialAccountProfileName
+        ? entryPlaceName(entry.financialAccountProfileId, entry.financialAccountProfileName, places, t) : t("review.noPlace")}</Text></DetailRow>}
     </View>
     <Text style={[styles.footnote, styles.note]}>{t("review.entryFootnote", { currency: row.amount.currency })}</Text>
-    <EntryReversal detail={detail} reversal={reversal.state} onEntry={onEntry}
+    <EntryReversal detail={detail} reversal={reversal.state} places={places} onEntry={onEntry}
       onReverse={reversal.request} onCancel={reversal.cancel} onConfirm={() => void reversal.confirm()} />
   </>;
 }

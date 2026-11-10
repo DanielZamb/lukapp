@@ -16,6 +16,9 @@ import type { IntakeCandidate, IntakeCandidateId } from "./intake/candidates";
 import { currencyMismatchReason, isReadyCandidate } from "./intake/ready";
 import { MonthCloseWarning, ReconciliationWarning, WarningIconButton } from "./intake/InboxDetails";
 import type { DiscardNotice } from "./localDiscardNotices";
+import { unavailablePlaceReason, type PlaceStatus } from "./placeEnding/model";
+
+type InboxPlace = { id: string; name: string; status?: PlaceStatus };
 
 export type InboxSegment = "now" | "wait";
 type InboxScreen = "inbox" | "warning" | "month-close" | "discard";
@@ -36,10 +39,13 @@ function candidateDetail(
   t: Translator["t"],
   candidate: IntakeCandidate,
   workspaceCurrency: string,
-  places: { id: string; name: string }[],
+  places: InboxPlace[],
 ) {
   const mismatch = currencyMismatchReason(t, candidate.currency, workspaceCurrency);
   if (mismatch) return mismatch;
+  const place = places.find((item) => item.id === candidate.suggestion.financialAccountProfileId);
+  const unavailable = place?.status ? unavailablePlaceReason({ name: place.name, status: place.status }, t) : null;
+  if (unavailable) return unavailable;
   if (candidate.error) return candidateErrorText(t, candidate.error);
   if (!isReadyCandidate(candidate, workspaceCurrency)) return t("inbox.needsReview");
   return places.find((place) => place.id === candidate.suggestion.financialAccountProfileId)?.name ?? t("inbox.savedPlace");
@@ -119,7 +125,7 @@ export function DraftsScreen({
   error: string;
   confirming: boolean;
   month: string;
-  places: { id: string; name: string }[];
+  places: InboxPlace[];
   confirmedCount: number | null;
   onContinueAfterConfirmation: () => void;
   onSegment: (segment: InboxSegment) => void;

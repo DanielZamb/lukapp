@@ -14,5 +14,6 @@ export function useEntryDetail(workspaceId: string, entryId: string, profileId?:
   const reportFailure = useDeviceAccessFailure();
   const transport = useMemo(() => ({ post, reportFailure }), [post, reportFailure]);
   const reversal = useReversal(workspaceId, entryId, transport, useT());
-  return { detail, reversal };
+  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, status: "all" });
+  return { detail, reversal, places };
 }

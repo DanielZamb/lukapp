@@ -26,6 +26,8 @@ export function reversalFailureMessage(error: unknown, { t }: Translator) {
   if (data && typeof data === "object" && "kind" in data && data.kind === "accounting" && "code" in data) {
     if (data.code === "journal_entry_already_reversed") return t("review.reversalAlready");
     if (data.code === "reversal_cannot_be_reversed") return t("review.reversalOfReversal");
+    if (data.code === "financial_account_profile_ended") return t("placeEnding.rejectEnded");
+    if (data.code === "place_undo_in_progress") return t("placeEnding.rejectUndoing");
     return t("review.reversalRejected");
   }
   return t("review.reversalUnknown");

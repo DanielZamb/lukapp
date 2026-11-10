@@ -1,13 +1,15 @@
 import { useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { HistoryScreen } from "../src/features/history/HistoryScreen";
 import { EntryDetailSheet } from "../src/features/history/EntryDetailSheet";
 import { usePostedHistory } from "../src/features/history/usePostedHistory";
+import { placeLabel } from "../src/features/placeEnding/model";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
+import { useT } from "../src/i18n";
 import { Screen } from "../src/ui/core";
 
 function History({ workspaceId, profileId, timeZone, currency }: {
@@ -22,7 +24,9 @@ function History({ workspaceId, profileId, timeZone, currency }: {
   const scopedRows = scoped.rows;
   const activePage = scopedProfileId !== undefined ? scoped : all;
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
-  const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId });
+  const { t } = useT();
+  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, status: "all" });
+  const places = useMemo(() => profiles?.map((place) => ({ ...place, name: placeLabel(place, t) })), [profiles, t]);
   const { date } = useWorkspaceCalendar(timeZone);
   const scopedReady = scopedProfileId === undefined || scopedRows !== undefined;
   const ready = categories !== undefined && places !== undefined && allRows !== undefined && scopedReady;
