@@ -79,6 +79,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
   const command = act === "undo" ? undo : close;
   const locked = close.frozen || undo.frozen;
   const step = steps[steps.length - 1]!;
+  const place = places?.find((item) => item.id === profileId);
 
   function leave(go: () => void) {
     leaving.current = true;
@@ -88,6 +89,9 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
     if (locked) return;
     interact();
     if (receipt) return leave(onEnded);
+    // A Place that ended or started undoing elsewhere has no step left to return to.
+    if (place && place.status !== "open") return leave(onBack);
+    if (command.state.name === "open" && command.state.refusal) command.release();
     if (adding) return setAdding(false);
     if (steps.length > 1) return setSteps((current) => current.slice(0, -1));
     leave(onBack);
@@ -98,7 +102,6 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
     else if (!locked) navigation.dispatch(data.action);
   });
 
-  const place = places?.find((item) => item.id === profileId);
   const others = (places ?? []).filter((item) => item.status === "open" && item.id !== profileId);
   if (!places || !closure) return <LoadingScreen onBack={back} />;
   if (!place) return <EndedScreen title={t("placeEnding.missingTitle")} detail={t("placeEnding.missingDetail")} onBack={back} />;

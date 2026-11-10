@@ -452,3 +452,26 @@ test("in Spanish the stored descriptions and adjustment names are written in Spa
   }]]);
   expect(ui.texts()).toEqual(expect.arrayContaining(["Cerraste Wallet", "No se registró ningún movimiento.", "Listo"]));
 });
+
+test("a refusal clears once the person goes back to change their answer", async () => {
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_balance_mismatch", message: "x" }));
+  await open();
+  await ui.press("Close Wallet");
+  await ui.press("I don't know / adjustment");
+  await ui.press("Close Wallet");
+  expect(ui.alerts()).toEqual(["The balance changed meanwhile. Check that the amounts add up to the whole balance."]);
+  await systemBack();
+  await ui.press("Review");
+  expect(ui.alerts()).toEqual([]);
+});
+
+test("a Place that ends elsewhere mid-flow leaves with one Back", async () => {
+  await open();
+  await ui.press("Close Wallet");
+  await ui.press("I spent it");
+  remote.places = [{ ...wallet, status: "closed" }, daily, savings];
+  await ui.press("🛒 Groceries");
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "This place has already ended", "Its history stays under Closed places."]);
+  await ui.press("Back");
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
