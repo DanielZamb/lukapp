@@ -89,3 +89,25 @@ test.each([
     expect(factsFromCandidate({ ...candidate, suggestion: { ...candidate.suggestion, amountMinorUnits: null } }).amountText).toBe("");
   }
 });
+
+test("bank extraction and its fact projection keep source-format values in English and Spanish", async () => {
+  const { activeTranslator, setActiveTranslator } = await import("../i18n/active");
+  const { createTranslator } = await import("../../../../src/i18n");
+  const original = activeTranslator();
+  try {
+    for (const language of ["en", "es"] as const) {
+      setActiveTranslator(createTranslator(language));
+      const extracted = suggest({ text: "Pagaste USD 1,234.56 en Shop. Saldo COP 9.876,54" });
+      expect(extracted.amounts.map(mention => [mention.minor, mention.currency])).toEqual([[123456, "USD"], [987654, "COP"]]);
+      for (const currency of ["COP", "USD"] as const) {
+        const candidate: IntakeCandidate = {
+          id: "language-baseline", createdAt: 0, expiresAt: 1, workspaceId: "baseline", currency,
+          parserVersion: "baseline", consentVersion: "baseline",
+          suggestion: { direction: "out", amountMinorUnits: 123456, description: "", accountingDate: "2026-11-10",
+            financialAccountProfileId: "", userCategoryIds: [], primaryUserCategoryId: null },
+        };
+        expect(factsFromCandidate(candidate).amountText).toBe("−1.234,56");
+      }
+    }
+  } finally { setActiveTranslator(original); }
+});
