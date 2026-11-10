@@ -73,7 +73,7 @@ function props(unlocking = true): ComponentProps<typeof HomePlaceSetup> {
         purchaseAlertsConsent: false, wantsBudgets: false,
         workspace: { id: "workspace", functionalCurrency: "COP", timeZone: "America/Bogota",
           currentAccountingPeriod: { year: 2026, month: 10, status: "open" }, kind: "Personal", chartOfAccountsTemplate: "puc@1" },
-        financialAccountProfile: { id: "daily", name: "Daily", productKind: "cash", ledgerAccountId: "ledger", workspaceId: "workspace" },
+        financialAccountProfile: { status: "open", id: "daily", name: "Daily", productKind: "cash", ledgerAccountId: "ledger", workspaceId: "workspace" },
       },
       subject: "owner", unlocking, onClose: state.close,
   };

@@ -1,3 +1,4 @@
+import { requireOpenPlace } from "../accounting/placeState";
 import {
   isAssetProductKind,
   RecoveryError,
@@ -59,6 +60,7 @@ export async function activatePlan(
   );
   if (!destination || destination.workspaceId !== input.workspaceId)
     throw new RecoveryError("destination_not_found");
+  requireOpenPlace(destination);
   if (!isAssetProductKind(destination.productKind))
     throw new RecoveryError("destination_must_be_asset");
   const principalMinorUnits = await remainingPrincipal(store, source.id, source.amountMinorUnits, {

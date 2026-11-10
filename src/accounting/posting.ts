@@ -1,3 +1,4 @@
+import { requireOpenPlace } from "./placeState";
 /* The one entry point that writes to the General Ledger. Commands build drafts; this recognizes them. */
 import { requireOpeningDate } from "./openingControl";
 import { AccountingError } from "./errors";
@@ -101,6 +102,11 @@ async function assertLinkedRecords(
   workspaceId: string,
   draft: JournalEntryDraft,
 ): Promise<void> {
+  const touchedAccounts = new Set(draft.lines.map(line => line.ledgerAccountId));
+  for (const profile of await store.listProfiles(workspaceId)) {
+    if (touchedAccounts.has(profile.postingAccountId) || profile.id === draft.financialAccountProfileId)
+      requireOpenPlace(profile);
+  }
   const reversed = draft.reversesEntryId === undefined ? undefined : await store.getJournalEntry(draft.reversesEntryId);
   if (draft.reversesEntryId !== undefined && (!reversed || reversed.workspaceId !== workspaceId))
     throw new AccountingError("journal_entry_not_found");

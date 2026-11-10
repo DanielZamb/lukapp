@@ -65,7 +65,10 @@ export const workspace = v.object({
   currentAccountingPeriod: accountingPeriod,
 });
 
+export const placeStatus = v.union(v.literal("open"), v.literal("closed"), v.literal("undone"));
+
 export const financialAccountProfile = v.object({
+  status: placeStatus,
   id: v.string(),
   workspaceId: v.string(),
   name: v.string(),

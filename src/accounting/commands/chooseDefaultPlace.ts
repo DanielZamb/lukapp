@@ -1,3 +1,4 @@
+import { requireOpenPlace } from "../placeState";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
 import type { AccountingStore, Actor } from "../types";
@@ -10,5 +11,6 @@ export async function requireSelectableDefaultPlace(
   const profile = await store.getProfile(input.financialAccountProfileId);
   if (!profile || profile.workspaceId !== input.workspaceId)
     throw new AccountingError("financial_account_profile_not_found");
+  requireOpenPlace(profile);
   return profile;
 }

@@ -1,3 +1,6 @@
+import { closePlace as closePlaceArgs, closePlaceReceipt } from "./accountingPlaceValues";
+import { closePlace as runClosePlace } from "../src/accounting/commands/closePlace";
+import { placeClosingServices } from "./accountingPlaces";
 import { renameAccount as rename } from "../src/accounting/commands/renameAccount";
 import { cancelReopenedPlans } from "../src/savingsRecovery/cancelReopenedPlans";
 import { recoveryWriteStore } from "./savingsRecoveryStore";
@@ -287,5 +290,14 @@ export const changeFunctionalCurrency = internalMutation({
       workspaceId: args.workspaceId, idempotencyKey: args.idempotencyKey, setting: "functionalCurrency",
       value: args.functionalCurrency, expectedValue: args.expectedFunctionalCurrency,
     }));
+  },
+});
+
+export const closePlace = internalMutation({
+  args: { ...closePlaceArgs, session: liveSession }, returns: closePlaceReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "accounting:post" });
+    return run(() => runClosePlace(convexStore(ctx.db), { now: () => new Date() }, placeClosingServices(ctx, actor, args.workspaceId), { ...args, actor }));
   },
 });

@@ -1,4 +1,12 @@
 export const accountingErrorMessages = {
+  financial_account_profile_ended: "This Place has ended. Choose an open Place",
+  place_last_open: "Keep at least one open Place",
+  place_recovery_destination: "Finish or cancel the Recovery plans using this Place",
+  place_default_replacement_required: "Choose another open Place as the Default Place",
+  place_default_replacement_invalid: "Choose a different open Place for the default",
+  place_close_line_invalid: "This closing line cannot settle this Place's balance",
+  place_close_balance_mismatch: "Closing lines must explain the entire balance exactly",
+
   default_place_stale: "The Default Place changed. Refresh before choosing it",
   time_zone_month_behind: "That time zone is still in the previous month. Try again once the month has started there",
   time_zone_stale: "The workspace time zone changed. Refresh before changing it",
