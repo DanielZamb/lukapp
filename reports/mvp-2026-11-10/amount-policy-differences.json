@@ -1,0 +1,666 @@
+[
+  {
+    "precision": 2,
+    "input": "letters",
+    "oldEditing": "",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": "refused",
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "l",
+        "index": 0
+      }
+    },
+    "newEditing": {
+      "text": "letters",
+      "kind": "invalid"
+    },
+    "why": "Characters are retained instead of stripped"
+  },
+  {
+    "precision": 2,
+    "input": "1abc234",
+    "oldEditing": "1.234",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123400,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "a",
+        "index": 1
+      }
+    },
+    "newEditing": {
+      "text": "1abc234",
+      "kind": "invalid"
+    },
+    "why": "Characters are retained instead of stripped"
+  },
+  {
+    "precision": 2,
+    "input": "$12",
+    "oldEditing": "12",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 1200,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "$",
+        "index": 0
+      }
+    },
+    "newEditing": {
+      "text": "$12",
+      "kind": "invalid"
+    },
+    "why": "Currency symbols are not numeric input"
+  },
+  {
+    "precision": 2,
+    "input": "1 234,50",
+    "oldEditing": "1.234,50",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123450,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": " ",
+        "index": 1
+      }
+    },
+    "newEditing": {
+      "text": "1 234,50",
+      "kind": "invalid"
+    },
+    "why": "Internal whitespace is not removed"
+  },
+  {
+    "precision": 2,
+    "input": "1e3",
+    "oldEditing": "13",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 1300,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "e",
+        "index": 1
+      }
+    },
+    "newEditing": {
+      "text": "1e3",
+      "kind": "invalid"
+    },
+    "why": "Exponent text is not stripped to digits"
+  },
+  {
+    "precision": 2,
+    "input": "1-2",
+    "oldEditing": "-12",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": -1200,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "-",
+        "index": 1
+      }
+    },
+    "newEditing": {
+      "text": "1-2",
+      "kind": "invalid"
+    },
+    "why": "An internal sign is not relocated"
+  },
+  {
+    "precision": 2,
+    "input": "--1",
+    "oldEditing": "-1",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": -100,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "-",
+        "index": 1
+      }
+    },
+    "newEditing": {
+      "text": "--1",
+      "kind": "invalid"
+    },
+    "why": "Duplicate signs are not collapsed"
+  },
+  {
+    "precision": 2,
+    "input": "+-1",
+    "oldEditing": "+1",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 100,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "-",
+        "index": 1
+      }
+    },
+    "newEditing": {
+      "text": "+-1",
+      "kind": "invalid"
+    },
+    "why": "Competing signs are not resolved"
+  },
+  {
+    "precision": 2,
+    "input": "12.",
+    "oldEditing": "12,",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 1200,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "12.",
+      "kind": "invalid"
+    },
+    "why": "A group mark cannot become a decimal"
+  },
+  {
+    "precision": 2,
+    "input": "12.5",
+    "oldEditing": "12,5",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 1250,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "12.5",
+      "kind": "invalid"
+    },
+    "why": "A group mark cannot become a decimal"
+  },
+  {
+    "precision": 2,
+    "input": "12.50",
+    "oldEditing": "12,50",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 1250,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "12.50",
+      "kind": "invalid"
+    },
+    "why": "A group mark cannot become a decimal"
+  },
+  {
+    "precision": 2,
+    "input": ".5",
+    "oldEditing": ",5",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": "refused",
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": ".5",
+      "kind": "invalid"
+    },
+    "why": "A leading foreign group mark is not decimal intent"
+  },
+  {
+    "precision": 2,
+    "input": "1.234.",
+    "oldEditing": "1.234,",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123400,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "1.234.",
+      "kind": "invalid"
+    },
+    "why": "A second group mark cannot become a decimal"
+  },
+  {
+    "precision": 2,
+    "input": "1.0005",
+    "oldEditing": "10.005",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 1000500,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "1.0005",
+      "kind": "invalid"
+    },
+    "why": "Unknown pasted malformed grouping is not regrouped"
+  },
+  {
+    "precision": 2,
+    "input": "1..2",
+    "oldEditing": "12",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 1200,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "1..2",
+      "kind": "invalid"
+    },
+    "why": "Repeated groups are not removed"
+  },
+  {
+    "precision": 2,
+    "input": "1,,2",
+    "oldEditing": "1,2",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 120,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "wrong_separator",
+        "separator": ",",
+        "group": ".",
+        "decimal": ","
+      }
+    },
+    "newEditing": {
+      "text": "1,,2",
+      "kind": "invalid"
+    },
+    "why": "Repeated decimals are not removed"
+  },
+  {
+    "precision": 2,
+    "input": "1,2.3",
+    "oldEditing": "1,23",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "wrong_separator",
+        "separator": ".",
+        "group": ".",
+        "decimal": ","
+      }
+    },
+    "newEditing": {
+      "text": "1,2.3",
+      "kind": "invalid"
+    },
+    "why": "Group marks in fractions are not removed"
+  },
+  {
+    "precision": 2,
+    "input": "1,2345",
+    "oldEditing": "1,23",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "too_many_decimals",
+        "precision": 2,
+        "actual": 4
+      }
+    },
+    "newEditing": {
+      "text": "1,2345",
+      "kind": "invalid"
+    },
+    "why": "Excess fraction digits are not truncated"
+  },
+  {
+    "precision": 2,
+    "input": "1.234,567",
+    "oldEditing": "1.234,56",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123456,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "too_many_decimals",
+        "precision": 2,
+        "actual": 3
+      }
+    },
+    "newEditing": {
+      "text": "1.234,567",
+      "kind": "invalid"
+    },
+    "why": "Excess fraction digits are not truncated"
+  },
+  {
+    "precision": 2,
+    "input": "1,23foo",
+    "oldEditing": "1,23",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "f",
+        "index": 4
+      }
+    },
+    "newEditing": {
+      "text": "1,23foo",
+      "kind": "invalid"
+    },
+    "why": "Fraction text is not stripped"
+  },
+  {
+    "precision": 2,
+    "input": "USD 1,234.56",
+    "oldEditing": "1,23",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "U",
+        "index": 0
+      }
+    },
+    "newEditing": {
+      "text": "USD 1,234.56",
+      "kind": "invalid"
+    },
+    "why": "Labels and foreign formats are not repaired"
+  },
+  {
+    "precision": 2,
+    "input": "1,234,567",
+    "oldEditing": "1,23",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 123,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "wrong_separator",
+        "separator": ",",
+        "group": ".",
+        "decimal": ","
+      }
+    },
+    "newEditing": {
+      "text": "1,234,567",
+      "kind": "invalid"
+    },
+    "why": "Repeated decimal text is not truncated"
+  },
+  {
+    "precision": 2,
+    "input": "12,",
+    "oldEditing": "12,",
+    "oldDirectParse": 1200,
+    "oldParseAfterEditing": 1200,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "incomplete",
+        "expected": "fraction"
+      }
+    },
+    "newEditing": {
+      "text": "12,",
+      "kind": "incomplete"
+    },
+    "why": "A trailing decimal cannot submit"
+  },
+  {
+    "precision": 2,
+    "input": "0,",
+    "oldEditing": "0,",
+    "oldDirectParse": 0,
+    "oldParseAfterEditing": 0,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "incomplete",
+        "expected": "fraction"
+      }
+    },
+    "newEditing": {
+      "text": "0,",
+      "kind": "incomplete"
+    },
+    "why": "A trailing decimal cannot submit"
+  },
+  {
+    "precision": 2,
+    "input": "-0",
+    "oldEditing": "-0",
+    "oldDirectParse": "-0",
+    "oldParseAfterEditing": 0,
+    "newParse": {
+      "kind": "parsed",
+      "minorUnits": 0
+    },
+    "newEditing": {
+      "text": "-0",
+      "kind": "complete"
+    },
+    "why": "Signed financial zero is normalized"
+  },
+  {
+    "precision": 2,
+    "input": "9007199254740992",
+    "oldEditing": "9.007.199.254.740.992",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": "refused",
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "too_large",
+        "maxMinorUnits": "9007199254740991"
+      }
+    },
+    "newEditing": {
+      "text": "9007199254740992",
+      "kind": "invalid"
+    },
+    "why": "Overflow remains visible and nonpostable"
+  },
+  {
+    "precision": 0,
+    "input": "12,",
+    "oldEditing": "12,",
+    "oldDirectParse": 12,
+    "oldParseAfterEditing": 12,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "decimals_not_allowed",
+        "decimal": ","
+      }
+    },
+    "newEditing": {
+      "text": "12,",
+      "kind": "invalid"
+    },
+    "why": "Zero-digit currencies reject even bare decimal marks"
+  },
+  {
+    "precision": 0,
+    "input": "12,abc",
+    "oldEditing": "12,",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 12,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "not_a_number",
+        "character": "a",
+        "index": 3
+      }
+    },
+    "newEditing": {
+      "text": "12,abc",
+      "kind": "invalid"
+    },
+    "why": "Invalid text cannot become an accepted zero-digit amount"
+  },
+  {
+    "precision": 0,
+    "input": "1.0005",
+    "oldEditing": "10.005",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 10005,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "1.0005",
+      "kind": "invalid"
+    },
+    "why": "Only editor-generated grouping permits digit continuation"
+  },
+  {
+    "precision": 3,
+    "input": "12.5",
+    "oldEditing": "12,5",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 12500,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "12.5",
+      "kind": "invalid"
+    },
+    "why": "Foreign decimal guessing is removed for three digits too"
+  },
+  {
+    "precision": 3,
+    "input": "12.50",
+    "oldEditing": "12,50",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 12500,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "bad_grouping",
+        "group": ".",
+        "primaryGroupSize": 3,
+        "secondaryGroupSize": 3
+      }
+    },
+    "newEditing": {
+      "text": "12.50",
+      "kind": "invalid"
+    },
+    "why": "Foreign decimal guessing is removed for three digits too"
+  },
+  {
+    "precision": 3,
+    "input": "1,2345",
+    "oldEditing": "1,234",
+    "oldDirectParse": "refused",
+    "oldParseAfterEditing": 1234,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "too_many_decimals",
+        "precision": 3,
+        "actual": 4
+      }
+    },
+    "newEditing": {
+      "text": "1,2345",
+      "kind": "invalid"
+    },
+    "why": "A fourth fractional digit is not truncated"
+  },
+  {
+    "precision": 3,
+    "input": "12,",
+    "oldEditing": "12,",
+    "oldDirectParse": 12000,
+    "oldParseAfterEditing": 12000,
+    "newParse": {
+      "kind": "refused",
+      "issue": {
+        "code": "incomplete",
+        "expected": "fraction"
+      }
+    },
+    "newEditing": {
+      "text": "12,",
+      "kind": "incomplete"
+    },
+    "why": "Trailing decimals are incomplete at every nonzero precision"
+  }
+]
