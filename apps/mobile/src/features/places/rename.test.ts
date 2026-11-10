@@ -58,7 +58,7 @@ import { LanguageProvider } from "../../i18n";
 import { historyListRow } from "../history/listModel";
 import { createTranslator } from "../../../../../src/i18n";
 
-const daily: Place = { financialAccountProfileId: "daily", name: "Daily", nature: "Asset", productKind: "bankAccount",
+const daily: Place = { status: "open", financialAccountProfileId: "daily", name: "Daily", nature: "Asset", productKind: "bankAccount",
   trackingFrom: "2026-09-24", balance: { currency: "COP", minorUnits: 10000 } };
 const savings: Place = { ...daily, financialAccountProfileId: "savings", name: "Savings", productKind: "savingsAccount" };
 const receipt = { id: "daily", workspaceId: "ws", name: "Everyday", productKind: "bankAccount" as const, ledgerAccountId: "ledger" };

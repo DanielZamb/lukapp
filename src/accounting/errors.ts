@@ -1,4 +1,7 @@
 export const accountingErrorMessages = {
+  place_close_balance_stale: "The balance changed. Review the closing again",
+  place_close_date_stale: "The accounting date changed. Review the closing again",
+  place_undo_preview_stale: "The entries or their effects changed. Review Undo again",
   place_undo_invalid_entry: "A stored entry needs repair before Undo",
   place_future_entries: "This Place has future entries. Wait until their accounting date",
   place_ending_scan_limit: "This Place needs a paged integrity review before it can end",

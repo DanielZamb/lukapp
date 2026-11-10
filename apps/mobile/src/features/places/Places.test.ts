@@ -36,7 +36,7 @@ vi.mock("react-native", () => ({
 import PlacesRoute from "../../../app/places";
 import { LanguageProvider } from "../../i18n";
 let root: ReactTestRenderer;
-const daily: Place = { financialAccountProfileId: "daily", name: "Daily", nature: "Asset", productKind: "bankAccount",
+const daily: Place = { status: "open", financialAccountProfileId: "daily", name: "Daily", nature: "Asset", productKind: "bankAccount",
   trackingFrom: "2026-09-24", balance: { currency: "COP", minorUnits: 10000 } };
 beforeEach(() => {
   vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -145,4 +145,11 @@ test("a sole place carries no default label", async () => {
   await render();
   expect(button("Daily").findAllByType("text").map((node) => node.children.join(""))).toEqual(["💰", "Daily", "COP 100"]);
   expect(texts()).not.toContain("Default");
+});
+
+test("money still in an undoing Place counts in the total while the open-place count excludes it", async () => {
+  state.accounts = [daily, { ...daily, financialAccountProfileId: "undoing", name: "Being undone", status: "undoing", balance: { currency: "COP", minorUnits: 2500 } }];
+  state.statuses = { undoing: "undoing" };
+  await render();
+  expect(texts().slice(0, 4)).toEqual(["ONE POOL", "Daily", "What you have now", "COP 125"]);
 });

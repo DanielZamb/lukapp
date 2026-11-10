@@ -216,7 +216,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
       onConfirm={() => {
         interact();
         void undo.submit(() => typedNameMatches(typed, name) && preview.settled
-          ? undoRequest({ workspaceId, placeId: profileId, replacement, idempotencyKey: Crypto.randomUUID() }, t) : null);
+          ? undoRequest({ previewFingerprint: preview.first!.fingerprint, workspaceId, placeId: profileId, replacement, idempotencyKey: Crypto.randomUUID() }, t) : null);
       }} />;
 
   return <ReviewScreen name={name} balance={balance} lines={lines} targetName={targetName} accountingDate={closure.accountingDate}
@@ -224,7 +224,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, onBack, onEnded, onSta
     onBack={locked ? undefined : back}
     onConfirm={() => {
       interact();
-      void close.submit(() => closeRequest({ workspaceId, place: { id: profileId, name }, balance, lines, replacement,
+      void close.submit(() => closeRequest({ accountingDate: closure.accountingDate, workspaceId, place: { id: profileId, name }, balance, lines, replacement,
         idempotencyKey: Crypto.randomUUID() }, t));
     }} />;
 }

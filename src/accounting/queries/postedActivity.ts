@@ -40,7 +40,9 @@ export async function postedActivity(
       );
     }));
   return {
-    accounts: await Promise.all(accounts.filter(account => input.status === "all" || placeStatus(context.profiles.get(account.financialAccountProfileId) ?? {}) === (input.status ?? "open")).map(async (account) => {
+    accounts: await Promise.all(accounts.filter(account => input.status === "all" || (input.status === undefined
+      ? ["open", "undoing"].includes(placeStatus(context.profiles.get(account.financialAccountProfileId) ?? {}))
+      : placeStatus(context.profiles.get(account.financialAccountProfileId) ?? {}) === input.status)).map(async (account) => {
       const profile = context.profiles.get(account.financialAccountProfileId);
       if (!profile) throw new AccountingError("financial_account_profile_not_found");
       const opening = await findActiveOpening(store, workspace.id, profile.id);
@@ -48,6 +50,8 @@ export async function postedActivity(
         ?? profile.createdAccountingDate
         ?? (profile.createdAt === undefined ? null : calendarDate(new Date(profile.createdAt), workspace.timeZone));
       return {
+        status: placeStatus(profile),
+        ...(profile.ending ? { endedAt: profile.ending.occurredAt } : {}),
         productKind: profile.productKind,
         ...(profile.emoji ? { emoji: profile.emoji } : {}),
         trackingFrom,

@@ -90,10 +90,10 @@ export async function endingBlockers(
   const undoing = profiles.filter(
     (p) => p.id !== profileId && p.undoOperationId,
   );
-  const operations = await ctx.db
-    .query("placeUndoOperations")
-    .withIndex("by_workspace_request", (q) => q.eq("workspaceId", workspace))
-    .collect();
+  const operations = (await Promise.all(undoing.map(p => {
+    const id = ctx.db.normalizeId("placeUndoOperations", p.undoOperationId ?? "");
+    return id ? ctx.db.get(id) : null;
+  }))).filter(o => o !== null);
   const active = operations.filter(
     (o) =>
       o.financialAccountProfileId !== profileId &&

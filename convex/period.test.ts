@@ -128,7 +128,7 @@ test("a cash expense cannot become Posted in a Locked Period", async () => {
   expect(activity).toEqual([]);
   expect(balances).toEqual([
     {
-      financialAccountProfileId: daily.id,
+      status: "open", financialAccountProfileId: daily.id,
       name: "Daily",
       nature: "Asset",
       debitMinorUnits: 0,

@@ -17,7 +17,7 @@ export function placeClosureServices(ctx: QueryCtx, actor: Actor, workspaceId: s
   return {
     defaultPlace,
     endingBlockers: (profileId: string, today: string) => endingBlockers(ctx, workspaceId, profileId, today),
-    unfinishedDestinationPlans: (profileId: string) => unfinishedDestinationPlans(recoveryReadStore(ctx, workspaceId), profileId),
+    unfinishedDestinationPlans: (profileId: string) => unfinishedDestinationPlans(recoveryReadStore(ctx, workspaceId, true), profileId),
   };
 }
 

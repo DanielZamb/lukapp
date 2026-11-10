@@ -1,5 +1,5 @@
-import { undoPlace, undoReceipt } from "./accountingUndoValues";
-import { startUndo } from "./accountingUndo";
+import { abortUndoOperation, startUndo } from "./accountingUndo";
+import { abortUndo, undoPlace, undoReceipt } from "./accountingUndoValues";
 import { closePlace as closePlaceArgs, closePlaceReceipt } from "./accountingPlaceValues";
 import { closePlace as runClosePlace } from "../src/accounting/commands/closePlace";
 import { placeClosingServices } from "./accountingPlaces";
@@ -310,5 +310,14 @@ export const startUndoPlace = internalMutation({
     const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
     await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "accounting:correct" });
     return run(() => startUndo(ctx, actor, args));
+  },
+});
+
+export const abortUndoPlace = internalMutation({
+  args: { ...abortUndo, session: liveSession }, returns: undoReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "accounting:correct" });
+    return run(() => abortUndoOperation(ctx, actor, args.operationId, args.workspaceId));
   },
 });

@@ -45,7 +45,7 @@ vi.mock("convex/react", async () => {
   const preview = (cursor: string | null) => {
     const page = remote.page(cursor);
     if (page instanceof Error) throw page;
-    return { closure: remote.closure, canUndo: remote.blockers.length === 0, blockers: remote.blockers, operation: null, page };
+    return { fingerprint: "reviewed-snapshot", closure: remote.closure, canUndo: remote.blockers.length === 0, blockers: remote.blockers, operation: null, page };
   };
   const client = { query: async (_ref: unknown, args: { cursor: string | null }) => preview(args.cursor) };
   return {
@@ -179,7 +179,7 @@ test("Undo starts only after the Place's name is typed, sends the localized pref
   expect(ui.disabled("Undo Wallet")).toBe(false);
   await ui.press("Undo Wallet");
   expect(remote.undo.mock.calls).toEqual([[{
-    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reversalDescriptionPrefix: "Reversal:",
+    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", previewFingerprint: "reviewed-snapshot", reversalDescriptionPrefix: "Reversal:",
   }]]);
   expect(mounted!.routes()).toEqual(["index", "places", "account"]);
 });
@@ -196,7 +196,7 @@ test("undoing the Default Place asks for its replacement and sends it with the s
   expect(ui.texts()).toContain("Daily becomes your default place.");
   await ui.type("Place name to confirm", "Wallet");
   await ui.press("Undo Wallet");
-  expect(remote.undo.mock.calls[0]![0]).toEqual({ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1",
+  expect(remote.undo.mock.calls[0]![0]).toEqual({ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", previewFingerprint: "reviewed-snapshot",
     reversalDescriptionPrefix: "Reversal:", replacementDefaultFinancialAccountProfileId: "daily" });
 });
 

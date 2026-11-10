@@ -1,3 +1,4 @@
+import { placeStatus } from "../placeState";
 import { normalBalance } from "../chartOfAccounts";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
@@ -24,6 +25,8 @@ export async function balances(
       creditMinorUnits: 0,
     };
     return {
+      status: placeStatus(profile),
+      ...(profile.ending ? { endedAt: profile.ending.occurredAt } : {}),
       financialAccountProfileId: profile.id,
       name: profile.name,
       nature: ledgerAccount.nature,

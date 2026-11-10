@@ -1,3 +1,4 @@
+import { completeEndingRead, ENDING_COLLECTION_LIMIT } from "./accountingEndingBounds";
 import type { UserCategory } from "../src/accounting/categories/types";
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import { AccountingError } from "../src/accounting/errors";
@@ -287,7 +288,8 @@ function readStore(db: ReadDb): ReadMethods {
       const id = idFor(db, "financialAccountProfiles", profileId);
       const doc = id && (await db.get(id));
       const ending = doc && await db.query("placeEndings").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
-      const operations = doc ? await db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).collect() : [];
+      const operations = doc ? await db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).take(ENDING_COLLECTION_LIMIT + 1) : [];
+      completeEndingRead(operations);
       const operation = operations.find(o => o.state.kind !== "done" && o.state.kind !== "aborted");
       return doc ? toProfile(doc, ending ?? undefined, operation?._id) : undefined;
     },
@@ -299,9 +301,9 @@ function readStore(db: ReadDb): ReadMethods {
           q.eq("workspaceId", storedId<"workspaces">(workspaceId)),
         )
         .collect();
-      const endings = await db.query("placeEndings").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).collect();
+      const endings = completeEndingRead(await db.query("placeEndings").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).take(ENDING_COLLECTION_LIMIT + 1));
       const byProfile = new Map(endings.map(ending => [ending.financialAccountProfileId, ending]));
-      const operations = await db.query("placeUndoOperations").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).collect();
+      const operations = completeEndingRead(await db.query("placeUndoOperations").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).take(ENDING_COLLECTION_LIMIT + 1));
       const active = new Map(operations.filter(o => o.state.kind !== "done" && o.state.kind !== "aborted").map(o => [o.financialAccountProfileId, o._id]));
       return docs.map(doc => toProfile(doc, byProfile.get(doc._id), active.get(doc._id)));
     },

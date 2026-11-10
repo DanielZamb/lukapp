@@ -53,7 +53,7 @@ import { LanguageProvider } from "../../i18n";
 import { ListRow } from "../../ui/core";
 
 const place = (id: string, name: string, minorUnits = 0, extra: Partial<Place> = {}): Place => ({
-  financialAccountProfileId: id, name, nature: "Asset", productKind: "bankAccount", trackingFrom: "2026-09-24",
+  status: "open", financialAccountProfileId: id, name, nature: "Asset", productKind: "bankAccount", trackingFrom: "2026-09-24",
   balance: { currency: "COP", minorUnits }, ...extra });
 const operation = (status: unknown, reversedCount = 0) =>
   ({ id: "op", state: status, reversedCount, hasReversedEntries: reversedCount > 0, alreadyReversedCount: 0 });
@@ -143,7 +143,7 @@ test("the Places list counts open Places, follows an Undo and lists ended Places
   state.statuses = { card: "undoing", wallet: "closed", old: "undone" };
   state.undo = { card: operation({ kind: "running" }, 2), old: operation({ kind: "done", endingId: "e", completedAt: nov9 }, 5) };
   await render(PlacesRoute);
-  expect(texts()).toEqual(["ONE POOL", "Daily", "What you have now", "COP 100",
+  expect(texts()).toEqual(["ONE POOL", "Daily", "What you have now", "COP 150",
     "Bank and pocket are still one pool. Add a place when money lives apart.",
     "💰", "Daily", "COP 100",
     "💰", "Card", "Undoing this place · 2 movements reversed", "COP 50",
