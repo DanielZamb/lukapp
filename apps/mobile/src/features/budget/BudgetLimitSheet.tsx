@@ -1,16 +1,24 @@
 import { useMemo } from "react";
 import type { Theme } from "../../ui/tokens";
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, SecondaryButton, useTheme, useUi } from "../../ui/core";
-import { font, radius, spacing, touchTarget } from "../../ui/tokens";
-import { formatMoney, minorUnitFactor, currencyDisplayPrefix } from "../money";
+import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { useT, type MessageKey } from "../../i18n";
+import { Field, Header, PrimaryButton, SecondaryButton, useTheme, useUi } from "../../ui/core";
+import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
+import { formatMoney, formatMoneyInput, minorUnitFactor, currencyDisplayPrefix } from "../money";
 import { compactAmount, jarPresentation, monthLabel, type BudgetJar } from "./model";
-import type { useBudgetEditor } from "./useBudgetEditor";
+import type { AmountIssue, useBudgetEditor } from "./useBudgetEditor";
+
+const issueMessage: Record<AmountIssue, MessageKey> = {
+  empty: "lifecycle.limitEmpty",
+  invalid: "lifecycle.limitInvalid",
+  notPositive: "lifecycle.limitNotPositive",
+  unchanged: "lifecycle.limitUnchanged",
+};
 
 type BudgetLimitSheetProps = Pick<ReturnType<typeof useBudgetEditor>,
-  "minorUnits" | "busy" | "pending" | "editable" | "canSubmit" | "canDismiss" | "error"
+  "amount" | "amountIssue" | "minorUnits" | "busy" | "pending" | "editable" | "canSubmit" | "canDismiss" | "error"
 > & {
   month: string;
   currency: string;
@@ -19,6 +27,7 @@ type BudgetLimitSheetProps = Pick<ReturnType<typeof useBudgetEditor>,
   previousMonth: string;
   previousSpendMinorUnits: number | undefined;
   onLimit: (minorUnits: number) => void;
+  onAmount: (text: string) => void;
   onSave: () => void;
   onDismiss: () => void;
 };
@@ -26,14 +35,25 @@ type BudgetLimitSheetProps = Pick<ReturnType<typeof useBudgetEditor>,
 export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
   const ui = useUi();
   const theme = useTheme();
+  const { t } = useT();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const sheet = useRef<BottomSheetModal>(null);
   const active = useRef(false);
+  const dismissable = useRef(props.canDismiss);
+  dismissable.current = props.canDismiss;
   useLayoutEffect(() => {
     active.current = true;
     return () => { active.current = false; };
   }, []);
   useEffect(() => { sheet.current?.present(); }, []);
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (dismissable.current) sheet.current?.dismiss();
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
+  const issue = props.editable ? props.amountIssue : null;
   const { over, amount, fill } = jarPresentation({ ...props.jar, limitMinorUnits: props.minorUnits });
   const stepMinorUnits = 100_000 * minorUnitFactor(props.currency);
   const choices = [
@@ -61,6 +81,14 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
           <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: props.color }]} />
         </View>
         <Text style={styles.meta}>Stay under this month</Text>
+        <Field label={t("lifecycle.limitLabel")} InputComponent={BottomSheetTextInput}
+          accessibilityLabel={t("lifecycle.limitInputA11y", { currency: props.currency })}
+          keyboardType="decimal-pad" placeholder="0" value={props.amount} editable={props.editable}
+          onChangeText={(text) => props.onAmount(formatMoneyInput(text, props.currency))}
+          error={issue && issue !== "unchanged" ? t(issueMessage[issue]) : undefined}
+          helperText={issue === "unchanged" ? t(issueMessage.unchanged) : undefined}
+          style={styles.input} />
+        <Text style={styles.meta}>{t("lifecycle.limitShortcuts")}</Text>
         <View style={styles.chips}>
           {choices.map((value) => (
             <Pressable key={value} accessibilityRole="button" accessibilityLabel={`Limit ${symbol}${compactAmount(value, props.currency)}`}
@@ -71,7 +99,7 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
             </Pressable>
           ))}
         </View>
-        {props.minorUnits !== props.jar.limitMinorUnits && <Text style={styles.note}>
+        {!issue && props.minorUnits !== props.jar.limitMinorUnits && <Text style={styles.note}>
           {props.previousSpendMinorUnits === undefined ? `Loading ${previousMonth} spending.`
             : `${previousMonth} ${props.jar.category.name} spent ${symbol}${compactAmount(props.previousSpendMinorUnits, props.currency)}.`}
           {` Saving applies to ${month} and future months.`}
@@ -94,6 +122,7 @@ function createStyles(theme: Theme) {
     jar: { height: 22, borderRadius: radius.full, overflow: "hidden" },
     fill: { height: "100%", borderRadius: radius.full },
     meta: { color: theme.mutedForeground, fontSize: 14, lineHeight: 20, fontFamily: font.regular },
+    input: { fontSize: fontSize.title, fontFamily: font.bold },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     chip: { maxWidth: "100%", paddingVertical: spacing.sm, minHeight: touchTarget, justifyContent: "center", paddingHorizontal: spacing.lg,
       borderRadius: radius.full, borderWidth: 1, borderColor: theme.border },

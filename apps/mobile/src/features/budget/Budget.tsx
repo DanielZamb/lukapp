@@ -95,6 +95,7 @@ function Editor({ seed, categories, color, onClose, onSaved }: {
     previousSpendMinorUnits={previous ? previous.categories.find((category) => category.categoryId === editor.categoryId)?.minorUnits ?? 0 : undefined}
     {...editor}
     onLimit={(minorUnits) => { interact(); editor.onAmount(formatMoney({ currency: seed.currency, minorUnits }).replace(`${seed.currency} `, "")); }}
+    onAmount={(value) => { interact(); editor.onAmount(value); }}
     onSave={() => { interact(); void editor.submit(); }} onDismiss={onClose} />;
   return <BudgetEditorSheet title="Add Budget"
     monthLabel={monthLabel(seed.month)} currency={seed.currency} categories={categories}

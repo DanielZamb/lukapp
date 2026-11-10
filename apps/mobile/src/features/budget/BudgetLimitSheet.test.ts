@@ -6,9 +6,10 @@ import { BudgetLimitSheet } from "./BudgetLimitSheet";
 import type { BudgetJar } from "./model";
 
 vi.mock("@gorhom/bottom-sheet", () => ({
-  BottomSheetModal: "Sheet", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
+  BottomSheetModal: "Sheet", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop", BottomSheetTextInput: "SheetInput",
 }));
 vi.mock("react-native", () => ({
+  BackHandler: { addEventListener: () => ({ remove() {} }) },
   Pressable: "Pressable", Text: "Text", View: "View", ScrollView: "ScrollView", TextInput: "TextInput",
   ActivityIndicator: "ActivityIndicator",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -43,6 +44,8 @@ async function renderSheet(currency: string, previousSpendMinorUnits = 7_312_345
       previousMonth: "2026-09",
       previousSpendMinorUnits,
       minorUnits,
+      amount: "",
+      amountIssue: null,
       busy: false,
       pending: false,
       editable: true,
@@ -50,6 +53,7 @@ async function renderSheet(currency: string, previousSpendMinorUnits = 7_312_345
       canDismiss: true,
       error: "",
       onLimit: () => {},
+      onAmount: () => {},
       onSave: () => {},
       onDismiss: () => {},
     }), {
