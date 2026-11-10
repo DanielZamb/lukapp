@@ -190,10 +190,16 @@ export async function currencyChangeBlockedReason(
   const changes = await ctx.db.query("workspaceSettingChanges")
     .withIndex("by_workspace_setting", q => q.eq("workspaceId", workspaceId).eq("setting", "functionalCurrency")).collect();
   if (changes.some(change => change.changed)) return "functional_currency_already_changed";
-  for (const table of ["budgetLimitRevisions", "savingsRecoveryPlans", "savingsRecoveryContributions", "savingsRecoveryCorrections"] as const) {
+  for (const table of ["journalLines", "budgetLimitRevisions", "savingsRecoveryPlans", "savingsRecoveryContributions", "savingsRecoveryCorrections"] as const) {
     if (await ctx.db.query(table).withIndex("by_workspace", q => q.eq("workspaceId", workspaceId)).first())
       return "functional_currency_has_records";
   }
+  if (await ctx.db.query("ledgerAccountTotals")
+    .withIndex("by_workspace_period_account", q => q.eq("workspaceId", workspaceId)).first())
+    return "functional_currency_has_records";
+  if (await ctx.db.query("notificationIntakeReceipts")
+    .withIndex("by_workspace_request", q => q.eq("workspaceId", workspaceId)).first())
+    return "functional_currency_has_records";
   for (const table of ["financialAccountOpenings", "financialAccountSetups"] as const) {
     const rows = await ctx.db.query(table).withIndex("by_workspace_idempotency", q => q.eq("workspaceId", workspaceId)).collect();
     if (rows.some(row => row.amount.minorUnits !== 0)) return "functional_currency_has_records";

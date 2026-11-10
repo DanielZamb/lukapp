@@ -284,9 +284,21 @@ test("currency no-op leaves its single actual change available", async () => {
 test("a retained Recovery plan blocks currency even in a legacy workspace without journal rows", async () => {
   const s = await recoveryAtMonthEnd();
   await s.t.run(async ctx => {
+    for (const row of await ctx.db.query("ledgerAccountTotals").collect()) await ctx.db.delete(row._id);
     for (const row of await ctx.db.query("journalLines").collect()) await ctx.db.delete(row._id);
     for (const row of await ctx.db.query("journalEntries").collect()) await ctx.db.delete(row._id);
   });
   await expect(currency(s)).rejects.toMatchObject({ data: { code: "functional_currency_has_records" } });
   expect((await s.t.query(api.accounting.workspaceSettings, { workspaceId: s.workspaceId })).currencyChangeBlockedReason).toBe("functional_currency_has_records");
+});
+
+test("a retained currency-denominated ledger summary blocks a currency change without journal rows", async () => {
+  const s = await setup();
+  await s.t.run(async ctx => {
+    const workspaceId = ctx.db.normalizeId("workspaces", s.workspaceId);
+    const ledgerAccountId = ctx.db.normalizeId("ledgerAccounts", s.original.financialAccountProfile.ledgerAccountId);
+    if (!workspaceId || !ledgerAccountId) throw new Error("Missing fixture IDs");
+    await ctx.db.insert("ledgerAccountTotals", { workspaceId, ledgerAccountId, period: "2026-10", debitMinorUnits: 100, creditMinorUnits: 0 });
+  });
+  await expect(currency(s)).rejects.toMatchObject({ data: { code: "functional_currency_has_records" } });
 });
