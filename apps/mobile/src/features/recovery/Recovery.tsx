@@ -31,25 +31,32 @@ import { useRecoveryEditor, type RecoveryEditorSeed } from "./useRecoveryEditor"
 import { useRecoveryCancel, useRecoveryCorrection } from "./useRecoveryLifecycle";
 import { useRecoveryMove } from "./useRecoveryMove";
 
-type CandidatesView = { name: "candidates"; parentPlanId: string | null };
-type PlanView = { name: "plan"; id: string; notice?: RecoveryPlanNotice };
+type PlanView = { name: "plan"; id: string; notice?: RecoveryPlanNotice; caller?: PlanView };
+type CandidatesView = { name: "candidates"; parent: PlanView | null };
 type View =
   | { name: "entry" }
   | CandidatesView
   | { name: "draft"; key: string; candidate: RecoveryCandidate; replacesPlanId: string | null; from: CandidatesView | PlanView }
   | { name: "activated"; title: string; installmentMinorUnits: number; currency: string; activationMonth: string }
   | PlanView
-  | { name: "move"; key: string; id: string }
-  | { name: "cancel"; key: string; id: string }
-  | { name: "correct"; key: string; id: string; contributionId: string }
+  | { name: "move"; key: string; plan: PlanView }
+  | { name: "cancel"; key: string; plan: PlanView }
+  | { name: "correct"; key: string; plan: PlanView; contributionId: string }
   | {
     name: "moved";
-    planId: string;
+    plan: PlanView;
     title: string;
     movedMinorUnits: number;
     countedMinorUnits: number;
     currency: string;
   };
+
+/** A plan already open in this chain is returned to as it was; any other plan opens one step further. */
+function linkedPlan(from: PlanView, id: string): PlanView {
+  for (let open: PlanView | undefined = from; open; open = open.caller)
+    if (open.id === id) return open;
+  return { name: "plan", id, caller: from };
+}
 
 export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }: {
   workspaceId: string;
@@ -64,8 +71,10 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   const interact = useLocalEntryInteraction();
   const { t } = useT();
   const back = () => {
-    if (view.name === "candidates" && view.parentPlanId) {
-      setView({ name: "plan", id: view.parentPlanId });
+    if (view.name === "plan" && view.caller) {
+      setView(view.caller);
+    } else if (view.name === "candidates" && view.parent) {
+      setView(view.parent);
     } else if (view.name === "plan" && board && board.plans.length > 1) {
       setView({ name: "entry" });
     } else if (view.name !== "activated" && view.name !== "moved") {
@@ -74,8 +83,8 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   };
   useRecoveryBack(
     view.name === "activated" || view.name === "moved"
-      || (view.name === "candidates" && view.parentPlanId !== null)
-      || (view.name === "plan" && !!board && board.plans.length > 1)
+      || (view.name === "candidates" && view.parent !== null)
+      || (view.name === "plan" && (!!view.caller || (!!board && board.plans.length > 1)))
       ? back : null,
   );
   if (!board) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
@@ -110,7 +119,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
     );
   }
   if (view.name === "moved") {
-    const live = board.plans.find((item) => item.id === view.planId);
+    const live = board.plans.find((item) => item.id === view.plan.id);
     if (!live) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <RecoveryMoved
@@ -123,13 +132,13 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
           recoveredMinorUnits: live.recoveredMinorUnits,
           targetMinorUnits: live.targetMinorUnits,
         }, t)}
-        onViewPlan={() => setView({ name: "plan", id: view.planId })}
+        onViewPlan={() => setView(view.plan)}
         onHome={onHome}
       />
     );
   }
   if (view.name === "move") {
-    const plan = board.plans.find((item) => item.id === view.id);
+    const plan = board.plans.find((item) => item.id === view.plan.id);
     if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <Move
@@ -138,12 +147,12 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
         timeZone={timeZone}
         plan={plan}
         sources={board.sources}
-        onClose={() => setView({ name: "plan", id: plan.id })}
+        onClose={() => setView(view.plan)}
         onMoved={(receipt) => {
           refresh(Crypto.randomUUID());
           setView({
             name: "moved",
-            planId: plan.id,
+            plan: view.plan,
             title: plan.title,
             movedMinorUnits: receipt.transfer.amount.minorUnits,
             countedMinorUnits: receipt.contribution.amountMinorUnits,
@@ -154,23 +163,23 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
     );
   }
   if (view.name === "cancel") {
-    const plan = board.plans.find((item) => item.id === view.id);
+    const plan = board.plans.find((item) => item.id === view.plan.id);
     if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <Cancel
         key={view.key}
         workspaceId={workspaceId}
         plan={plan}
-        onClose={() => setView({ name: "plan", id: plan.id })}
+        onClose={() => setView(view.plan)}
         onCancelled={() => {
           refresh(Crypto.randomUUID());
-          setView({ name: "plan", id: plan.id, notice: "cancelled" });
+          setView({ ...view.plan, notice: "cancelled" });
         }}
       />
     );
   }
   if (view.name === "correct") {
-    const plan = board.plans.find((item) => item.id === view.id);
+    const plan = board.plans.find((item) => item.id === view.plan.id);
     const contribution = plan?.contributionHistory.find((item) => item.id === view.contributionId);
     if (!plan || !contribution) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
@@ -180,10 +189,10 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
         plan={plan}
         plans={board.plans}
         contribution={contribution}
-        onClose={() => setView({ name: "plan", id: plan.id })}
+        onClose={() => setView(view.plan)}
         onCorrected={() => {
           refresh(Crypto.randomUUID());
-          setView({ name: "plan", id: plan.id, notice: "corrected" });
+          setView({ ...view.plan, notice: "corrected" });
         }}
       />
     );
@@ -191,6 +200,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   if (view.name === "plan" || (view.name === "entry" && board.plans.length === 1)) {
     const plan = view.name === "plan" ? board.plans.find((item) => item.id === view.id) : board.plans[0];
     if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
+    const shown: PlanView = view.name === "plan" ? view : { name: "plan", id: plan.id };
     const replacement = board.candidates.find((item) => item.journalEntryId === plan.sourceJournalEntryId) ?? null;
     return (
       <RecoveryPlanScreen
@@ -199,23 +209,23 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
         month={board.currentMonth}
         timeZone={timeZone}
         replacement={replacement}
-        notice={view.name === "plan" ? view.notice : undefined}
+        notice={shown.notice}
         onBack={back}
-        onMove={() => { interact(); setView({ name: "move", key: Crypto.randomUUID(), id: plan.id }); }}
-        onFind={() => setView({ name: "candidates", parentPlanId: plan.id })}
-        onCancel={() => { interact(); setView({ name: "cancel", key: Crypto.randomUUID(), id: plan.id }); }}
+        onMove={() => { interact(); setView({ name: "move", key: Crypto.randomUUID(), plan: shown }); }}
+        onFind={() => setView({ name: "candidates", parent: shown })}
+        onCancel={() => { interact(); setView({ name: "cancel", key: Crypto.randomUUID(), plan: shown }); }}
         onReplace={() => {
           if (!replacement) return;
           interact();
           setView({
             name: "draft", key: Crypto.randomUUID(), candidate: replacement,
-            replacesPlanId: plan.id, from: { name: "plan", id: plan.id },
+            replacesPlanId: plan.id, from: shown,
           });
         }}
-        onPlan={(id) => { interact(); setView({ name: "plan", id }); }}
+        onPlan={(id) => { interact(); setView(linkedPlan(shown, id)); }}
         onFix={(contributionId) => {
           interact();
-          setView({ name: "correct", key: Crypto.randomUUID(), id: plan.id, contributionId });
+          setView({ name: "correct", key: Crypto.randomUUID(), plan: shown, contributionId });
         }}
       />
     );
@@ -226,7 +236,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
       setView({ name: "plan", id });
     }} />;
   }
-  const parentPlanId = view.name === "candidates" ? view.parentPlanId : null;
+  const parent = view.name === "candidates" ? view.parent : null;
   return (
     <RecoveryCandidates
       currency={board.currency}
@@ -238,7 +248,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
         setView({
           name: "draft", key: Crypto.randomUUID(), candidate,
           replacesPlanId: openCancelledPlan(board.plans, candidate.journalEntryId)?.id ?? null,
-          from: { name: "candidates", parentPlanId },
+          from: { name: "candidates", parent },
         });
       }}
     />

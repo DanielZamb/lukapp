@@ -840,6 +840,9 @@ test("Fix attribution lists only plans that can take the contribution and sends 
   const moved = screen.find((node) => node.type === ListRow && node.props.title === "COP 300.000");
   expect([moved.props.value, moved.props.detail]).toEqual(["Counted", "September 18, 2026\nMoved from Emergency repair"]);
   await act(async () => { stack.goBack(); });
+  expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+  expect(alerts()).toEqual(["Attribution corrected. No money moved."]);
+  await act(async () => { stack.goBack(); });
   expect(screen.findByType(RecoveryPlanList).props.plans).toHaveLength(7);
 });
 
