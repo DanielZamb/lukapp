@@ -23,7 +23,7 @@ function line(nature: Input["entries"][number]["lines"][number]["nature"], debit
   };
 }
 const budget: Input["budget"] = {
-  month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true,
+  month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true, removedLimits: [],
   jars: [{ category: { id: "food", name: "food", emoji: "🍋" }, revisionId: "revision", limitMinorUnits: 400000, consumptionMinorUnits: 500000 }],
   availableCategories: [],
 };

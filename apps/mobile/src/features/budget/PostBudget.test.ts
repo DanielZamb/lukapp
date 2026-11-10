@@ -98,7 +98,7 @@ beforeEach(() => {
   profiles = [{ id: "bank", name: "Bank" }, { id: "card", name: "Card" }];
   vi.mocked(router.replace).mockClear();
   budget = {
-    month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true, availableCategories: [],
+    month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true, removedLimits: [], availableCategories: [],
     jars: ["food", "home"].map((id) => ({
       category: { id, name: id === "food" ? "Food" : "Home", emoji: "" },
       revisionId: id, limitMinorUnits: 10000000, consumptionMinorUnits: 9000000,

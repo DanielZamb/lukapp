@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import { ownerQuery } from "./lib/functions";
 import { requireWorkspacePermission } from "./lib/deviceAuthorization";
 import { verifyCurrentSession } from "./lib/session";
-import { evaluation, setLimitArgs, setLimitResult } from "./budgetValues";
+import { evaluation, limitTargetArgs, setLimitArgs, setLimitResult } from "./budgetValues";
 import { budgetReadStore } from "./budgetStore";
 import { runBudget } from "./budgetErrors";
 import { evaluateMonth } from "../src/budget/evaluateMonth";
@@ -27,5 +27,21 @@ export const setCategoryLimit = action({
   handler: async (ctx, args): Promise<Infer<typeof setLimitResult>> => {
     const session = await verifyCurrentSession(ctx.auth);
     return ctx.runMutation(internal.budgetWrites.setCategoryLimit, { ...args, session });
+  },
+});
+
+export const setCategorySpendNothing = action({
+  args: limitTargetArgs, returns: setLimitResult,
+  handler: async (ctx, args): Promise<Infer<typeof setLimitResult>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.budgetWrites.setCategorySpendNothing, { ...args, session });
+  },
+});
+
+export const removeCategoryLimit = action({
+  args: limitTargetArgs, returns: setLimitResult,
+  handler: async (ctx, args): Promise<Infer<typeof setLimitResult>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.budgetWrites.removeCategoryLimit, { ...args, session });
   },
 });
