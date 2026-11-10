@@ -119,6 +119,7 @@ export const posting = {
   reviewSaveFailed: "Could not save Candidate review. Retry before leaving.",
   clearFailed: "Could not clear the saved entry. Retry to check its status.",
   alreadyPosting: "A posting is already in progress. Finish it from Drafts.",
+  alreadySent: "This entry was already sent and its result is not known yet. Post again to check it.",
   candidateConfirmFailed: "Could not confirm this Candidate.",
   confirmUncertain: "Could not confirm posting. Retry to safely check the same entry.",
   draftGonePosted: "This draft was already posted or removed. Nothing was posted again.",

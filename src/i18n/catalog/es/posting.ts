@@ -122,6 +122,7 @@ export const posting: Messages<typeof en> = {
   reviewSaveFailed: "No se pudo guardar la revisión. Reintenta antes de salir.",
   clearFailed: "No se pudo limpiar el movimiento guardado. Reintenta para revisar cómo quedó.",
   alreadyPosting: "Ya hay un registro en curso. Termínalo desde Borradores.",
+  alreadySent: "Este movimiento ya se envió y todavía no se sabe cómo quedó. Registra otra vez para confirmarlo.",
   candidateConfirmFailed: "No se pudo confirmar este movimiento por revisar.",
   confirmUncertain: "No se pudo confirmar el registro. Reintenta para revisar ese mismo movimiento sin duplicarlo.",
   draftGonePosted: "Este borrador ya se registró o se borró. No se registró nada otra vez.",
