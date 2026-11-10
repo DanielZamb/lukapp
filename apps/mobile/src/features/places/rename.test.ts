@@ -14,8 +14,13 @@ vi.mock("expo-router", () => ({
 }));
 vi.mock("convex/react", async () => {
   const { getFunctionName } = await import("convex/server");
-  return { useAction: (ref: Parameters<typeof getFunctionName>[0]) =>
-    getFunctionName(ref) === "accounting:renameAccount" ? state.rename : state.changeLook };
+  return {
+    useAction: (ref: Parameters<typeof getFunctionName>[0]) =>
+      getFunctionName(ref) === "accounting:renameAccount" ? state.rename : state.changeLook,
+    useQuery: (ref: Parameters<typeof getFunctionName>[0]) => getFunctionName(ref) === "accounting:listFinancialAccountProfiles"
+      ? state.accounts.map((account) => ({ id: account.financialAccountProfileId, workspaceId: "ws", name: account.name,
+        productKind: account.productKind, ledgerAccountId: "ledger", status: "open" })) : null,
+  };
 });
 vi.mock("./EmojiSheet", () => ({ EmojiSheet: "emoji-sheet" }));
 vi.mock("@gorhom/bottom-sheet", async () => {

@@ -1,4 +1,4 @@
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { router, Redirect, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
@@ -10,8 +10,9 @@ import { EmojiSheet } from "../src/features/places/EmojiSheet";
 import { accountEmoji, accountKinds, placeTitle, trackingDate } from "../src/features/places/model";
 import { RenameSheet } from "../src/features/places/RenameSheet";
 import { usePlaceStyles } from "../src/features/places/styles";
+import { UndoStatusCard, useUndoStatus } from "../src/features/placeEnding/UndoStatus";
 import { useT } from "../src/i18n";
-import { Header, ListGroup, ListRow, PrimaryButton, Screen, useTheme, useUi } from "../src/ui/core";
+import { Header, ListGroup, ListRow, PrimaryButton, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
 
 function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   workspaceId: string;
@@ -22,7 +23,8 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   const styles = usePlaceStyles();
   const ui = useUi();
   const theme = useTheme();
-  const activity = usePostedActivity(workspaceId, timeZone);
+  const activity = usePostedActivity(workspaceId, timeZone, "all");
+  const profiles = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, status: "all" });
   const recent = useRecentActivity(workspaceId, 3, profileId);
   const translator = useT();
   const { t } = translator;
@@ -32,26 +34,36 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   const [renaming, setRenaming] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const account = activity?.accounts.find((a) => a.financialAccountProfileId === profileId);
-  const title = account ? placeTitle(account.name, activity?.accounts.length ?? 0, t) : "";
+  const status = profiles?.find((profile) => profile.id === profileId)?.status;
+  const open = status === "open";
+  const openCount = profiles?.filter((profile) => profile.status === "open").length ?? 0;
+  const undo = useUndoStatus(workspaceId, profileId, status === "undoing" || status === "undone");
+  const title = account ? placeTitle(account.name, open ? openCount : 0, t) : "";
+  const ready = activity !== undefined && profiles !== undefined;
   return <Screen contentStyle={styles.page}>
     <Header titleStyle={styles.pageTitle} title={title} eyebrow={t("places.accountEyebrow")} onBack={() => router.back()} />
     {posted && <Text accessibilityRole="alert" style={ui.body}>{t("places.accountPosted")}</Text>}
-    {account ? <>
+    {account && ready ? <>
       <View style={styles.hero}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("places.accountChangeLook")} onPress={() => setEmoji(accountEmoji(account))}>
+        {open ? <Pressable accessibilityRole="button" accessibilityLabel={t("places.accountChangeLook")} onPress={() => setEmoji(accountEmoji(account))}>
           <Text style={styles.heroEmoji}>{accountEmoji(account)}</Text>
-        </Pressable>
+        </Pressable> : <Text style={styles.heroEmoji}>{accountEmoji(account)}</Text>}
         <Text style={styles.muted}>{t("places.accountBalance")}</Text>
         <Text adjustsFontSizeToFit numberOfLines={1} style={styles.detailAmount}>
           {formatMoney(account.balance, { hideZeroDecimals: true })}
         </Text>
-        {profileId === defaultProfileId && (activity?.accounts.length ?? 0) > 1 &&
+        {open && profileId === defaultProfileId && openCount > 1 &&
           <Text style={[styles.badge, { alignSelf: "flex-start" }]}>{t("workspace.defaultBadge")}</Text>}
       </View>
+      {status === "closed" && <Text style={ui.body}>{t("placeEnding.accountClosed")}</Text>}
+      {(status === "undoing" || status === "undone") && (undo ? <UndoStatusCard operation={undo} timeZone={timeZone} />
+        : undo === undefined ? <ActivityIndicator accessibilityLabel={t("placeEnding.loading")} /> : null)}
+      {status === "undone" && <Text style={ui.body}>{t("placeEnding.accountUndone")}</Text>}
+      {status === "undoing" && <Text style={ui.body}>{t("placeEnding.accountUndoing")}</Text>}
       <PrimaryButton label={t("places.accountSeeHistory")} trailingIcon="receipt-outline"
         onPress={() => router.push({ pathname: "/history", params: { profileId } })} />
       <ListGroup>
-        <ListRow title={t("planning.nameRow")} value={title} onPress={() => setRenaming(true)} />
+        <ListRow title={t("planning.nameRow")} value={title} onPress={open ? () => setRenaming(true) : undefined} />
         <ListRow title={t("places.accountType")} value={t(accountKinds[account.productKind])} />
         <ListRow title={t("places.accountCurrency")} value={account.balance.currency} />
         <ListRow title={t("places.accountTracking")} value={trackingDate(account.trackingFrom, translator)} />
@@ -63,11 +75,13 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
             value={row.reversed ? t("places.accountReversed") : formatActivityAmount(row.amount)}
             valueStyle={{ color: row.reversed ? theme.mutedForeground : row.amount.minorUnits > 0 ? theme.primary : theme.foreground }} />)}
       </ListGroup> : <ActivityIndicator accessibilityLabel={t("places.accountLoadingRecent")} />}
-      {emoji !== null && <EmojiSheet emoji={emoji} onPick={setEmoji} onDismiss={() => setEmoji(null)}
+      {open && <SecondaryButton label={t("placeEnding.endAction")}
+        onPress={() => router.push({ pathname: "/place-ending", params: { profileId } })} />}
+      {open && emoji !== null && <EmojiSheet emoji={emoji} onPick={setEmoji} onDismiss={() => setEmoji(null)}
         onUse={async () => { await changeLook({ workspaceId, financialAccountProfileId: profileId, emoji }); }} />}
-      {renaming && <RenameSheet rename={rename} onDismiss={() => setRenaming(false)}
+      {open && renaming && <RenameSheet rename={rename} onDismiss={() => setRenaming(false)}
         seed={{ workspaceId, profileId, storedName: account.name, initialName: title }} />}
-    </> : activity ? <Text style={ui.muted}>{t("places.accountNotFound")}</Text> : <ActivityIndicator accessibilityLabel={t("places.accountLoading")} />}
+    </> : ready ? <Text style={ui.muted}>{t("places.accountNotFound")}</Text> : <ActivityIndicator accessibilityLabel={t("places.accountLoading")} />}
   </Screen>;
 }
 export default function AccountRoute() {
