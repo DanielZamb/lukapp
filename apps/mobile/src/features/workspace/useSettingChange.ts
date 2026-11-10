@@ -35,6 +35,7 @@ const refusals: Record<string, MessageKey> = {
   default_place_stale: "workspace.defaultPlaceStale",
   financial_account_profile_not_found: "workspace.placeMissing",
   time_zone_stale: "workspace.timeZoneStale",
+  time_zone_month_behind: "workspace.timeZoneMonthBehind",
   time_zone_invalid: "workspace.timeZoneInvalid",
   functional_currency_stale: "workspace.currencyStale",
   functional_currency_invalid: "workspace.currencyInvalid",

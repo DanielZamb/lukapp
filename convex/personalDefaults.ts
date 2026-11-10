@@ -274,6 +274,11 @@ export async function changeWorkspaceSetting(
     const code = { defaultPlace: "default_place_stale", timeZone: "time_zone_stale", functionalCurrency: "functional_currency_stale" } as const;
     throw new AccountingError(code[input.setting]);
   }
+  if (input.setting === "timeZone" && value !== current) {
+    const now = new Date();
+    if (calendarDate(now, value).slice(0, 7) < calendarDate(now, current).slice(0, 7))
+      throw new AccountingError("time_zone_month_behind");
+  }
   if (!defaults.setupResult) {
     const original = await readPersonalDefaults(ctx, actor);
     if (!original) throw new ConvexError({ code: "defaults_unavailable" });

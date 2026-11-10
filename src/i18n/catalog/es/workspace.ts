@@ -41,6 +41,7 @@ export const workspace: Messages<typeof en> = {
 
   defaultPlaceStale: "Tu lugar por defecto se cambió desde otro lado. Ahora es {current}.",
   placeMissing: "Ese lugar ya no está disponible. Elige otro.",
+  timeZoneMonthBehind: "En esa zona horaria todavía es el mes pasado, y tu espacio ya está en el mes nuevo. Intenta de nuevo cuando el mes haya empezado allá.",
   timeZoneStale: "La zona horaria se cambió desde otro lado. Ahora es {current}.",
   timeZoneInvalid: "Lukapp no reconoce esa zona horaria. Elige otra.",
   currencyStale: "La moneda se cambió desde otro lado. Ahora es {current}.",

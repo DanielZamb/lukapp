@@ -99,7 +99,6 @@ test("time zone changes today immediately, keeps October facts and Budget consum
 
 for (const [oldZone, newZone, lockedMonth, openMonth, openDate, setupTime] of [
   ["America/Bogota", "Pacific/Auckland", 10, 11, "2026-11-01", "2026-10-01T12:00:00Z"],
-  ["Pacific/Auckland", "America/Bogota", 11, 10, "2026-10-31", "2026-10-01T12:00:00Z"],
 ] as const) test(`zone boundary ${oldZone} to ${newZone} preserves locks and permits the other month`, async () => {
   const s = await setup(0, oldZone, new Date(setupTime));
   vi.setSystemTime(monthEnd);
@@ -331,4 +330,17 @@ test("a retained currency-denominated ledger summary blocks a currency change wi
     await ctx.db.insert("ledgerAccountTotals", { workspaceId, ledgerAccountId, period: "2026-10", debitMinorUnits: 100, creditMinorUnits: 0 });
   });
   await expect(currency(s)).rejects.toMatchObject({ data: { code: "functional_currency_has_records" } });
+});
+
+test("a zone change that would put the workspace back in the previous month is refused, and allowed once that month has started there", async () => {
+  const s = await setup(0, "Pacific/Auckland", new Date("2026-10-31T21:00:00Z"));
+  expect((await s.t.query(api.accounting.workspaceSettings, { workspaceId: s.workspaceId })).today).toBe("2026-11-01");
+  await expect(zone(s, "America/Los_Angeles", "Pacific/Auckland", "west"))
+    .rejects.toMatchObject({ data: { code: "time_zone_month_behind" } });
+  expect((await s.t.query(api.accounting.workspaceSettings, { workspaceId: s.workspaceId })).timeZone).toBe("Pacific/Auckland");
+  expect(await s.t.run(ctx => ctx.db.query("workspaceSettingChanges").collect())).toEqual([]);
+  expect(await zone(s, "Asia/Tokyo", "Pacific/Auckland", "same-month")).toMatchObject({ changed: true, value: "Asia/Tokyo" });
+  vi.setSystemTime(new Date("2026-11-01T07:30:00Z"));
+  expect(await zone(s, "America/Los_Angeles", "Asia/Tokyo", "west-later")).toMatchObject({ changed: true, value: "America/Los_Angeles" });
+  expect((await s.t.query(api.accounting.workspaceSettings, { workspaceId: s.workspaceId })).today).toBe("2026-11-01");
 });

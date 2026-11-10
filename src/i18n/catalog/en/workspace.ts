@@ -38,6 +38,7 @@ export const workspace = {
 
   defaultPlaceStale: "Your default place was changed somewhere else. It’s now {current}.",
   placeMissing: "That place is no longer available. Choose another one.",
+  timeZoneMonthBehind: "It’s still last month in that time zone, and your workspace is already in the new month. Try again once the month has started there.",
   timeZoneStale: "The time zone was changed somewhere else. It’s now {current}.",
   timeZoneInvalid: "Lukapp doesn’t recognize that time zone. Choose another one.",
   currencyStale: "The currency was changed somewhere else. It’s now {current}.",

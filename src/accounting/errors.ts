@@ -1,5 +1,6 @@
 export const accountingErrorMessages = {
   default_place_stale: "The Default Place changed. Refresh before choosing it",
+  time_zone_month_behind: "That time zone is still in the previous month. Try again once the month has started there",
   time_zone_stale: "The workspace time zone changed. Refresh before changing it",
   functional_currency_stale: "The Functional Currency changed. Refresh before changing it",
   functional_currency_has_entries: "Functional Currency cannot change after any posted entry",
