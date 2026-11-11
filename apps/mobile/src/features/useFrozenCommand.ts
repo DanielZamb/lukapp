@@ -1,12 +1,13 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { ConvexError } from "convex/values";
-import { z } from "zod";
 
-const refusal = z.object({ kind: z.union([z.literal("recovery"), z.literal("accounting")]), code: z.string() });
-
-function planningRefusal(error: unknown) {
-  const parsed = refusal.safeParse(error instanceof ConvexError ? error.data : null);
-  return parsed.success ? parsed.data.code : null;
+/**
+ * A structured server error with a code is a definite refusal, whatever its kind: the function threw before its
+ * mutation committed. Only a transport failure or an unrecognised shape leaves the outcome unknown.
+ */
+export function refusalCodeOf(error: unknown): string | null {
+  const data: unknown = error instanceof ConvexError ? error.data : null;
+  return data !== null && typeof data === "object" && "code" in data && typeof data.code === "string" ? data.code : null;
 }
 
 export type CommandTransport<Request, Receipt> = {
@@ -52,7 +53,7 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
     } catch (caught) {
       const handled = transport.reportFailure(caught);
       if (!mounted.active) return;
-      const code = handled ? null : (transport.refusalCode ?? planningRefusal)(caught);
+      const code = handled ? null : (transport.refusalCode ?? refusalCodeOf)(caught);
       if (code !== null) {
         frozen.current = null;
         setState({ name: "open", refusal: { code, request } });

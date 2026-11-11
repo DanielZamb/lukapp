@@ -30,21 +30,20 @@ function UndoingRow({ workspaceId, account, timeZone }: { workspaceId: string; a
       <Text style={styles.placeGlyph}>{accountEmoji(account)}</Text>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.name}>{account.name}</Text>
-        <Text style={styles.muted}>{undoStatusLine(operation, translator, timeZone)}</Text>
+        <Text style={styles.muted}>{undoStatusLine(operation, account.name, translator, timeZone)}</Text>
       </View>
       <Text style={styles.value}>{formatMoney(account.balance, { hideZeroDecimals: true })}</Text>
     </Pressable>
   </View>;
 }
 
-/** An ended Place: which act ended it and, for an Undo, when it finished. A Close's date is not in any read. */
-function EndedRow({ workspaceId, account, status, timeZone }: { workspaceId: string; account: Place; status: Status; timeZone: string }) {
+/** An ended Place: which act ended it and on what day. */
+function EndedRow({ account, status, endedAt, timeZone }: { account: Place; status: Status; endedAt: number | undefined; timeZone: string }) {
   const styles = usePlaceStyles();
   const { t, language } = useT();
-  const operation = useUndoStatus(workspaceId, account.financialAccountProfileId, status === "undone");
-  const ended = status === "closed" ? t("placeEnding.closedAct")
-    : operation?.state.kind === "done" ? t("placeEnding.undoneOn", { date: formatLongDate(language, operation.state.completedAt, timeZone) })
-    : t("placeEnding.undoneAct");
+  const date = endedAt === undefined ? null : formatLongDate(language, endedAt, timeZone);
+  const ended = status === "closed" ? date ? t("placeEnding.closedOn", { date }) : t("placeEnding.closedAct")
+    : date ? t("placeEnding.undoneOn", { date }) : t("placeEnding.undoneAct");
   return <View style={styles.row}>
     <Pressable accessibilityRole="button" accessibilityLabel={t("placeEnding.closedRowA11y", { name: account.name, ended })}
       style={styles.placeButton}
@@ -72,7 +71,8 @@ function Places({ defaults, subject }: {
   const { month } = useWorkspaceCalendar(workspace.timeZone);
   const budget = useQuery(api.budget.evaluate, { workspaceId: workspace.id, month });
   const [placeOpen, setPlaceOpen] = useState(false);
-  const statusOf = (id: string): Status | undefined => profiles?.find((profile) => profile.id === id)?.status;
+  const profileOf = (id: string) => profiles?.find((profile) => profile.id === id);
+  const statusOf = (id: string): Status | undefined => profileOf(id)?.status;
   const accounts = activity && profiles ? activity.accounts : undefined;
   const open = accounts?.filter((account) => statusOf(account.financialAccountProfileId) === "open") ?? [];
   const undoing = accounts?.filter((account) => statusOf(account.financialAccountProfileId) === "undoing") ?? [];
@@ -121,8 +121,9 @@ function Places({ defaults, subject }: {
     {ended.length > 0 && <View style={ui.section}>
       <Text accessibilityRole="header" style={ui.sectionHeading}>{t("placeEnding.closedSection")}</Text>
       <View style={styles.group}>
-        {ended.map((account) => <EndedRow key={account.financialAccountProfileId} workspaceId={workspace.id} account={account}
-          status={statusOf(account.financialAccountProfileId)!} timeZone={workspace.timeZone} />)}
+        {ended.map((account) => <EndedRow key={account.financialAccountProfileId} account={account}
+          status={statusOf(account.financialAccountProfileId)!} endedAt={profileOf(account.financialAccountProfileId)?.endedAt}
+          timeZone={workspace.timeZone} />)}
       </View>
     </View>}
     {placeOpen && <HomePlaceSetup defaults={defaults} subject={subject} unlocking={unlocking} onClose={() => setPlaceOpen(false)} />}

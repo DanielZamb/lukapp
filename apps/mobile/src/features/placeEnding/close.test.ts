@@ -5,8 +5,19 @@ import { act, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { emptyState } from "../intake/durableState";
-import { mountStack, screenHelpers } from "./flow.testSupport";
+import { mountStack, screenHelpers, settle } from "./flow.testSupport";
 
+const phone = vi.hoisted(() => new Map<string, string>());
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: async (key: string) => phone.get(key) ?? null,
+  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
+  deleteItemAsync: async (key: string) => { phone.delete(key); },
+}));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("react-native", () => ({
   Platform: { OS: "android" }, KeyboardAvoidingView: "KeyboardAvoidingView",
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", TextInput: "TextInput",
@@ -24,11 +35,17 @@ vi.mock("expo-crypto", () => ({ randomUUID: () => `key-${++keys.next}` }));
 const access = vi.hoisted(() => ({ report: (_error: unknown): boolean => false }));
 vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => access.report }));
 vi.mock("../../local-auth/interaction", () => ({ useLocalEntryInteraction: () => () => {} }));
-const intake = vi.hoisted(() => ({
-  snapshot: { state: null as unknown, status: null, error: "", loaded: true, wipePending: false, drain: null },
-  listeners: new Set<() => void>(),
-  service: { listSources: async () => [{ packageName: "com.todo1.mobile", label: "Bancolombia" }, { packageName: "com.nequi.MobileApp", label: "Nequi" }] },
-}));
+const intake = vi.hoisted(() => {
+  const value = {
+    snapshot: { state: null as unknown, status: null, error: "", loaded: true, wipePending: false, drain: null },
+    listeners: new Set<() => void>(),
+    service: {
+      listSources: async () => [{ packageName: "com.todo1.mobile", label: "Bancolombia" }, { packageName: "com.nequi.MobileApp", label: "Nequi" }],
+      getSnapshot: () => value.snapshot,
+    },
+  };
+  return value;
+});
 vi.mock("../intake/IntakeProvider", async () => {
   const { useSyncExternalStore } = await import("react");
   const subscribe = (listener: () => void) => { intake.listeners.add(listener); return () => { intake.listeners.delete(listener); }; };
@@ -37,12 +54,29 @@ vi.mock("../intake/IntakeProvider", async () => {
 type Profile = { id: string; workspaceId: string; name: string; productKind: string; ledgerAccountId: string; status: string };
 const remote = vi.hoisted(() => ({
   places: [] as unknown[], closure: null as unknown, categories: [] as unknown[],
-  close: vi.fn(), undo: vi.fn(),
+  close: vi.fn(), undo: vi.fn(), phoneDay: "2026-11-10", version: 0, listeners: new Set<() => void>(),
 }));
+/** The server and the phone's calendar move under the open screen; every live read sees the change on its next render. */
+function serverChange(change: () => void) {
+  change();
+  remote.version++;
+  for (const listener of remote.listeners) listener();
+}
+vi.mock("../useWorkspaceCalendar", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => { remote.listeners.add(listener); return () => { remote.listeners.delete(listener); }; };
+  return { useWorkspaceCalendar: () => {
+    useSyncExternalStore(subscribe, () => remote.version);
+    return { date: remote.phoneDay, month: remote.phoneDay.slice(0, 7), now: new Date() };
+  } };
+});
 vi.mock("convex/react", async () => {
   const { getFunctionName } = await import("convex/server");
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => { remote.listeners.add(listener); return () => { remote.listeners.delete(listener); }; };
   return {
     useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
+      useSyncExternalStore(subscribe, () => remote.version);
       if (args === "skip") return undefined;
       const name = getFunctionName(ref);
       if (name === "accounting:listFinancialAccountProfiles") return remote.places;
@@ -82,6 +116,7 @@ const receipt = (entries: unknown[] = []) => ({ ending: { id: "ending", act: "cl
 let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
 beforeEach(() => {
+  phone.clear();
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   keys.next = 0;
@@ -92,6 +127,7 @@ beforeEach(() => {
   remote.categories = categories;
   remote.close.mockReset();
   remote.undo.mockReset();
+  remote.phoneDay = "2026-11-10";
 });
 afterEach(async () => {
   await act(async () => mounted?.root.unmount());
@@ -103,7 +139,7 @@ async function open(language?: "es") {
 }
 async function systemBack() { await act(async () => { mounted!.stack.goBack(); }); }
 
-test("the choice explains both acts and an Undo's effect on reports before either starts", async () => {
+test("the choice explains both acts and what an Undo changes in reports before either starts", async () => {
   await open();
   expect(ui.texts()).toEqual([
     "CLOSE OR UNDO", "What happened to Wallet?",
@@ -112,8 +148,8 @@ test("the choice explains both acts and an Undo's effect on reports before eithe
     "The account existed and has ended, like a bank account you cancelled or a loan you finished paying. Every movement stays in your History and your reports. If it still has money, you'll say where it went, and each answer is recorded as a movement dated today.",
     "Close Wallet",
     "Undo place",
-    "It was a mistake and should never have been here. Every movement in it is reversed, and its balance goes to zero.",
-    "This erases its movements from your reports by reversing each one. The originals stay in History, marked as reversed. Movements from months you already closed are reversed in this month, and transfers with other places are reversed too, so their balances change.",
+    "It was a mistake and should never have been here. Each of its movements is reversed with an opposite movement, so its balance goes to zero.",
+    "Nothing is erased: the originals stay in History, marked as reversed, and earlier months keep the results they had. Each reversal is a new movement in this month, so this month's spending and income can change and its Budget spending can go negative. Transfers with other places are reversed too, which changes their balances.",
     "Undo Wallet",
   ]);
   expect(remote.close).not.toHaveBeenCalled();
@@ -380,7 +416,7 @@ test("a refusal names the blocker from its context and a later attempt is a new 
   expect(ui.alerts()).toEqual(["It has a movement dated in the future The latest is dated November 30, 2026. Wait until that day, or reverse that movement first."]);
   expect(ui.has("Back")).toBe(true);
   await ui.press("Close Wallet");
-  expect(ui.alerts()).toEqual(["The balance changed meanwhile. Check that the amounts add up to the whole balance."]);
+  expect(ui.alerts()).toEqual(["The amounts don't add up to the whole balance. Check them and try again."]);
   expect(remote.close.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-1", "key-2"]);
 });
 
@@ -437,6 +473,10 @@ test("in Spanish the stored descriptions and adjustment names are written in Spa
   await open("es");
   expect(ui.texts().slice(0, 3)).toEqual(["CERRAR O DESHACER", "¿Qué pasó con Wallet?",
     "Elige lo que de verdad pasó. Las dos opciones son definitivas: un lugar que termina no se puede volver a abrir."]);
+  expect(ui.texts().slice(7, 9)).toEqual([
+    "Fue un error y nunca debió estar aquí. Cada uno de sus movimientos se reversa con un movimiento contrario, así que su saldo queda en cero.",
+    "No se borra nada: los originales se quedan en el Historial, marcados como reversados, y los meses anteriores conservan los resultados que tenían. Cada reversión es un movimiento nuevo de este mes, así que los gastos y los ingresos de este mes pueden cambiar y el gasto de tu Presupuesto de este mes puede quedar en negativo. Las transferencias con otros lugares también se reversan, y eso cambia sus saldos.",
+  ]);
   await ui.press("Cerrar Wallet");
   expect(ui.texts().slice(0, 3)).toEqual(["CERRAR O DESHACER", "¿A dónde se fue la plata?",
     "Wallet tiene COP 50.000. Explica todo el saldo para poder cerrarlo."]);
@@ -459,7 +499,7 @@ test("a refusal clears once the person goes back to change their answer", async 
   await ui.press("Close Wallet");
   await ui.press("I don't know / adjustment");
   await ui.press("Close Wallet");
-  expect(ui.alerts()).toEqual(["The balance changed meanwhile. Check that the amounts add up to the whole balance."]);
+  expect(ui.alerts()).toEqual(["The amounts don't add up to the whole balance. Check them and try again."]);
   await systemBack();
   await ui.press("Review");
   expect(ui.alerts()).toEqual([]);
@@ -474,4 +514,425 @@ test("a Place that ends elsewhere mid-flow leaves with one Back", async () => {
   expect(ui.texts()).toEqual(["CLOSE OR UNDO", "This place has already ended", "Its history stays under Closed places."]);
   await ui.press("Back");
   expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+const everyAnswer = ["I moved it to another place", "I spent it", "I don't know / adjustment", "I covered it from another place",
+  "It was waived or no longer exists", "I paid it from another place", "It was forgiven or no longer exists", "It was returned to another place"];
+async function reviewTransferToSavings() {
+  await open();
+  await ui.press("Close Wallet");
+  await ui.press("I moved it to another place");
+  await ui.press("Savings");
+  expect(ui.texts()).toContain("Transfer to Savings");
+}
+
+test("a balance that changes under the summary withdraws it and returns to the answers, stating both amounts", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  await act(async () => serverChange(() => { remote.closure = closure("Asset", 3_000_000); }));
+  expect(ui.texts().slice(0, 4)).toEqual(["CLOSE OR UNDO", "Where did the money go?",
+    "The balance of Wallet changed from COP 50.000 to COP 30.000. Check your answers against the new balance, then review again.",
+    "Wallet has COP 30.000. Account for all of it to close it."]);
+  expect(ui.texts()).toEqual(expect.arrayContaining(["I moved it to another place", "Savings", "You explained COP 20.000 too much"]));
+  expect(ui.disabled("Review")).toBe(true);
+  await ui.type("Amount for I moved it to another place", "30.000");
+  await ui.press("Review");
+  expect(ui.texts().join(" ")).not.toContain("changed from");
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls).toEqual([[{
+    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(3_000_000), reviewedAccountingDate: "2026-11-10",
+    lines: [{ kind: "transfer", otherFinancialAccountProfileId: "savings", amount: closing(3_000_000), description: "Closing Wallet" }],
+  }]]);
+});
+
+test("a balance whose sign flips drops the answers the new balance doesn't allow and offers its own", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  await act(async () => serverChange(() => { remote.closure = closure("Asset", -1_250_000); }));
+  expect(ui.texts().slice(0, 4)).toEqual(["CLOSE OR UNDO", "How was the overdraft settled?",
+    "The balance of Wallet changed from COP 50.000 to −COP 12.500. Check your answers against the new balance, then review again.",
+    "Wallet is overdrawn by COP 12.500. Account for all of it to close it."]);
+  expect(everyAnswer.filter((label) => ui.has(label))).toEqual(["I covered it from another place", "It was waived or no longer exists"]);
+  expect(ui.has("Remove I moved it to another place")).toBe(false);
+  await ui.press("It was waived or no longer exists");
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls).toEqual([[{
+    workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(-1_250_000), reviewedAccountingDate: "2026-11-10",
+    closingAdjustmentExpenseName: "Closing adjustment (expense)", closingAdjustmentIncomeName: "Closing adjustment (income)",
+    lines: [{ kind: "adjustment", amount: closing(1_250_000), description: "Closing adjustment for Wallet" }],
+  }]]);
+});
+
+test("a balance that reaches zero under the summary leaves nothing to record and asks for a new review", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  await act(async () => serverChange(() => { remote.closure = closure("Asset", 0); }));
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "Review before closing Wallet",
+    "The balance of Wallet changed from COP 50.000 to COP 0, so nothing needs to be recorded now. Review again before closing.",
+    "Wallet is at COP 0, so nothing is recorded.",
+    "Wallet closes for good and can't be reopened. Its history stays as it is, under Closed places.", "Close Wallet"]);
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1",
+    reviewedBalance: closing(0), reviewedAccountingDate: "2026-11-10", lines: [] }]]);
+});
+
+test.each([
+  { source: "the phone's calendar", change: () => { remote.phoneDay = "2026-11-11"; } },
+  { source: "the server's reading", change: () => { remote.closure = closure("Asset", 5_000_000, { accountingDate: "2026-11-11" }); } },
+])("a new day seen through $source re-dates the summary, says so and binds the new day", async ({ change }) => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  await act(async () => serverChange(change));
+  expect(ui.texts().slice(1, 4)).toEqual(["Review before closing Wallet",
+    "It's a new day: this closing is now recorded on November 11, 2026. Review it again before closing.",
+    "Recorded today, November 11, 2026:"]);
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls[0]![0]).toMatchObject({ reviewedBalance: closing(5_000_000), reviewedAccountingDate: "2026-11-11" });
+});
+
+test("a balance refused as stale after the new balance arrived returns to the answers with both amounts and a new key", async () => {
+  remote.close.mockImplementationOnce(async () => {
+    serverChange(() => { remote.closure = closure("Asset", 4_000_000); });
+    throw new ConvexError({ kind: "accounting", code: "place_close_balance_stale", message: "x" });
+  }).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  expect(ui.texts().slice(1, 3)).toEqual(["Where did the money go?",
+    "The balance of Wallet changed from COP 50.000 to COP 40.000. Check your answers against the new balance, then review again."]);
+  expect(ui.alerts()).not.toContain("The balance changed before the place closed, so nothing was recorded. Getting the new balance…");
+  await ui.type("Amount for I moved it to another place", "40.000");
+  await ui.press("Review");
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls.map(([request]) => [request.idempotencyKey, request.reviewedBalance, request.lines[0].amount]))
+    .toEqual([["key-1", closing(5_000_000), closing(5_000_000)], ["key-2", closing(4_000_000), closing(4_000_000)]]);
+});
+
+test("a balance refused as stale before the new balance arrives blocks closing until it does", async () => {
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_balance_stale", message: "x" }));
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  expect(ui.alerts()).toEqual(["The balance changed before the place closed, so nothing was recorded. Getting the new balance…"]);
+  expect(ui.disabled("Close Wallet")).toBe(true);
+  await act(async () => serverChange(() => { remote.closure = closure("Asset", 4_000_000); }));
+  expect(ui.texts()[2]).toBe("The balance of Wallet changed from COP 50.000 to COP 40.000. Check your answers against the new balance, then review again.");
+  expect(remote.close).toHaveBeenCalledTimes(1);
+});
+
+test("a day refused as stale re-dates the summary from the phone's calendar and the next attempt binds it under a new key", async () => {
+  remote.close.mockImplementationOnce(async () => {
+    serverChange(() => { remote.phoneDay = "2026-11-11"; });
+    throw new ConvexError({ kind: "accounting", code: "place_close_date_stale", message: "x" });
+  }).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  expect(ui.texts().slice(1, 4)).toEqual(["Review before closing Wallet",
+    "It's a new day: this closing is now recorded on November 11, 2026. Review it again before closing.",
+    "Recorded today, November 11, 2026:"]);
+  expect(ui.alerts()).toEqual(["It's a new day: this closing is now recorded on November 11, 2026. Review it again before closing."]);
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls.map(([request]) => [request.idempotencyKey, request.reviewedAccountingDate]))
+    .toEqual([["key-1", "2026-11-10"], ["key-2", "2026-11-11"]]);
+});
+
+test("a day refused as stale while this phone still shows the reviewed day says to check the phone's clock", async () => {
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_date_stale", message: "x" }));
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  expect(ui.alerts()).toEqual(["The day changed before the place closed, so nothing was recorded. This phone still shows November 10, 2026: check its date and time, then try again."]);
+  expect(ui.disabled("Close Wallet")).toBe(false);
+});
+
+test("a category deleted while the closing is open shows as deleted, blocks closing and is chosen again from the summary", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await open();
+  await ui.press("Close Wallet");
+  await ui.press("I spent it");
+  await ui.press("🛒 Groceries");
+  await act(async () => serverChange(() => {
+    remote.categories = [categories[1], { id: "rent", name: "Rent", nature: "Expense", style: { emoji: "🏠" } }];
+  }));
+  expect(ui.texts()).toEqual(expect.arrayContaining(["Expense in Groceries (deleted)", "No longer available. Tap to choose another."]));
+  expect(ui.alerts()).toEqual(["Something you chose is no longer available. Tap it to choose again."]);
+  expect(ui.disabled("Close Wallet")).toBe(true);
+  await ui.row("Expense in Groceries (deleted)");
+  expect(ui.texts()[1]).toBe("What did you spend it on?");
+  await ui.press("🏠 Rent");
+  expect(ui.texts()[1]).toBe("Review before closing Wallet");
+  expect(ui.texts()).toContain("Expense in Rent");
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls[0]![0].lines).toEqual([{ kind: "expense", userCategoryId: "rent", amount: closing(5_000_000), description: "Closing Wallet" }]);
+});
+
+test.each([
+  { status: "closed", label: "Transfer to Savings (closed)" },
+  { status: "undoing", label: "Transfer to Savings (being undone)" },
+])("a destination place that becomes $status shows so on the summary, blocks closing and is chosen again", async ({ status, label }) => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  await act(async () => serverChange(() => { remote.places = [wallet, daily, { ...savings, status }]; }));
+  expect(ui.texts()).toContain(label);
+  expect(ui.disabled("Close Wallet")).toBe(true);
+  await ui.press("Close Wallet").catch(() => {});
+  expect(remote.close).not.toHaveBeenCalled();
+  await ui.row(label);
+  expect(ui.has("Savings")).toBe(false);
+  await ui.press("Daily");
+  expect(ui.texts()).toContain("Transfer to Daily");
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls[0]![0].lines[0].otherFinancialAccountProfileId).toBe("daily");
+});
+
+test("a new default place that closes meanwhile is marked, blocks closing and is chosen again, returning to the summary twice", async () => {
+  remote.closure = closure("Asset", 0, { isDefault: true, requiresReplacementDefault: true });
+  remote.close.mockResolvedValue(receipt());
+  await open();
+  await ui.press("Close Wallet");
+  await ui.press("Savings");
+  await ui.press("Continue");
+  expect(ui.texts()).toContain("Savings becomes your default place.");
+  await act(async () => serverChange(() => { remote.places = [wallet, daily, { ...savings, status: "closed" }]; }));
+  expect(ui.texts()).toEqual(expect.arrayContaining(["Savings (closed) can't become your default place anymore", "Tap to choose another default place."]));
+  expect(ui.disabled("Close Wallet")).toBe(true);
+  for (const round of [1, 2]) {
+    await ui.row("Savings (closed) can't become your default place anymore");
+    expect(ui.texts()[1]).toBe("Choose your new default place");
+    if (round === 1) { await systemBack(); expect(ui.texts()[1]).toBe("Review before closing Wallet"); }
+  }
+  await ui.press("Daily");
+  await ui.press("Continue");
+  expect(ui.texts()).toContain("Daily becomes your default place.");
+  await systemBack();
+  expect(ui.texts()[1]).toBe("Choose your new default place");
+  await ui.press("Continue");
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(0),
+    reviewedAccountingDate: "2026-11-10", replacementDefaultFinancialAccountProfileId: "daily", lines: [] }]]);
+});
+
+test("in Spanish a deleted category and a closed place read as such", async () => {
+  remote.places = [wallet, daily, { ...savings, name: "Ahorros" }];
+  remote.categories = [{ id: "groceries", name: "Mercado", nature: "Expense", style: { emoji: "🛒" } }];
+  await open("es");
+  await ui.press("Cerrar Wallet");
+  await ui.press("La gasté");
+  await ui.press("🛒 Mercado");
+  await systemBack();
+  await ui.press("Dividir en otra respuesta");
+  await ui.press("La pasé a otro lugar");
+  await ui.press("Ahorros");
+  await act(async () => serverChange(() => { remote.categories = []; remote.places = [wallet, daily, { ...savings, name: "Ahorros", status: "closed" }]; }));
+  expect(ui.texts()).toEqual(expect.arrayContaining(["Mercado (eliminada)", "Ahorros (cerrado)", "Ya no está disponible. Toca para elegir otra opción."]));
+  expect(ui.disabled("Revisar")).toBe(true);
+  await act(async () => serverChange(() => { remote.closure = closure("Asset", 4_000_000); }));
+  expect(ui.texts()).toContain("El saldo de Wallet cambió de COP 50.000 a COP 40.000. Revisa tus respuestas con el saldo nuevo y vuelve a revisar el cierre.");
+});
+
+const storedKey = "lukapp.placeEnding.unresolved.owner";
+const closeUncertain = "We couldn't confirm whether the place closed. Retry: we send exactly the same closing and nothing is recorded twice.";
+const unresolvedBody = "The closing was sent, but its answer never reached this phone, so it may already be recorded. Send it again exactly as it was: if it was recorded, you'll see what was recorded; if not, it's recorded now.";
+const sentTransfer = {
+  workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(5_000_000), reviewedAccountingDate: "2026-11-10",
+  lines: [{ kind: "transfer", otherFinancialAccountProfileId: "savings", amount: closing(5_000_000), description: "Closing Wallet" }],
+};
+const storeOnPhone = (request: unknown, act = "close") => phone.set(storedKey, JSON.stringify({ v: 1, endings: [{ act, request }] }));
+async function restart() {
+  await act(async () => mounted!.root.unmount());
+  await open();
+  await settle();
+}
+
+test("an unconfirmed closing survives a restart, shows what it contained and resends the identical request under its key", async () => {
+  remote.close.mockRejectedValueOnce(new Error("network lost")).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual([closeUncertain]);
+  expect(remote.close.mock.calls[0]![0]).toEqual(sentTransfer);
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "close", request: sentTransfer }] });
+  await restart();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "We couldn't confirm whether Wallet closed", unresolvedBody,
+    "Recorded on November 10, 2026:", "Transfer to Savings", "COP 50.000", "Send it again"]);
+  expect(ui.has("Close Wallet")).toBe(false);
+  expect(ui.has("Undo Wallet")).toBe(false);
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
+  expect(ui.texts()).toContain("Wallet is closed");
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test("a resend whose outcome is unknown again stays stored and locked, and the next try sends the same request", async () => {
+  storeOnPhone(sentTransfer);
+  remote.close.mockRejectedValueOnce(new Error("still offline")).mockResolvedValueOnce(receipt());
+  await open();
+  await settle();
+  await ui.press("Send it again");
+  await settle();
+  expect(ui.alerts()).toEqual([closeUncertain]);
+  expect(ui.has("Back")).toBe(false);
+  await systemBack();
+  expect(mounted!.routes()).toEqual(["index", "places", "account", "place-ending"]);
+  expect(JSON.parse(phone.get(storedKey)!).endings[0].request).toEqual(sentTransfer);
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test.each([
+  { code: "place_close_balance_stale", notice: "It wasn't closed because its balance changed since. Start a new review." },
+  { code: "place_close_date_stale", notice: "It wasn't closed because the day changed since. Start a new review." },
+  { code: "locked_period", notice: "The earlier request wasn't recorded. This month is closed, so the closing can't be recorded today." },
+])("a resent closing refused with $code is forgotten and the person starts a fresh review under a new key", async ({ code, notice }) => {
+  storeOnPhone({ ...sentTransfer, idempotencyKey: "from-before" });
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code, message: "x" })).mockResolvedValueOnce(receipt());
+  await open();
+  await settle();
+  await ui.press("Send it again");
+  await settle();
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.texts().slice(1, 3)).toEqual(["What happened to Wallet?", notice]);
+  await ui.press("Close Wallet");
+  expect(ui.alerts()).toEqual([]);
+  await ui.press("I don't know / adjustment");
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["from-before", "key-1"]);
+});
+
+test("a request is on the phone while it is sent and forgotten after a receipt or a refusal", async () => {
+  const seen: Array<string | undefined> = [];
+  remote.close.mockImplementationOnce(async () => { seen.push(phone.get(storedKey)); throw new ConvexError({ kind: "accounting", code: "locked_period", message: "x" }); })
+    .mockImplementationOnce(async () => { seen.push(phone.get(storedKey)); return receipt(); });
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  expect(phone.has(storedKey)).toBe(false);
+  await ui.press("Close Wallet");
+  await settle();
+  expect(seen.map((raw) => JSON.parse(raw!).endings[0].request.idempotencyKey)).toEqual(["key-1", "key-2"]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.texts()).toContain("Wallet is closed");
+});
+
+test("a stored request is forgotten once the backend reports the Place as ended, and another Place's request is kept", async () => {
+  const otherPlace = { ...sentTransfer, financialAccountProfileId: "daily", idempotencyKey: "daily-key" };
+  phone.set(storedKey, JSON.stringify({ v: 1, endings: [{ act: "close", request: sentTransfer }, { act: "close", request: otherPlace }] }));
+  remote.places = [{ ...wallet, status: "closed" }, daily, savings];
+  await open();
+  await settle();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "This place has already ended", "Its history stays under Closed places."]);
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "close", request: otherPlace }] });
+  expect(remote.close).not.toHaveBeenCalled();
+});
+
+test("an unreadable saved request blocks a new attempt until it is read", async () => {
+  phone.set(storedKey, "{not json");
+  await open();
+  await settle();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "We couldn't read this phone's saved request",
+    "An earlier closing or undo of this place may be waiting on this phone. Try reading it again before starting anything new.", "Try again"]);
+  storeOnPhone(sentTransfer);
+  await ui.press("Try again");
+  await settle();
+  expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet closed");
+});
+
+test("in Spanish an unconfirmed closing reads as such", async () => {
+  storeOnPhone({ ...sentTransfer, lines: [{ kind: "expense", userCategoryId: "groceries", amount: closing(5_000_000), description: "Cierre de Wallet" }] });
+  remote.categories = [{ id: "groceries", name: "Mercado", nature: "Expense", style: { emoji: "🛒" } }];
+  await open("es");
+  await settle();
+  expect(ui.texts()).toEqual(["CERRAR O DESHACER", "No pudimos confirmar si Wallet quedó cerrado",
+    "El cierre se envió, pero la respuesta nunca llegó a este celular, así que puede que ya esté registrado. Envíalo otra vez tal como estaba: si ya se registró, verás lo que quedó registrado; si no, se registra ahora.",
+    "Se registra el 10 de noviembre de 2026:", "Gasto en Mercado", "COP 50.000", "Enviar otra vez"]);
+});
+
+test("a source mapped to the Place after the summary was drawn stops the closing at the moment of sending, with the same message", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  intake.snapshot = { ...intake.snapshot, state: { ...emptyState(), mappings: [mapping("s1", "com.todo1.mobile")], activeSelectionIds: ["s1"] } };
+  await ui.press("Close Wallet");
+  await settle();
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "You can't close Wallet yet", "Apps send their notifications here",
+    "Notifications from Bancolombia land in this place. Point them at another place or stop reading them.",
+    "Go to notification sources", "Go back"]);
+  await ui.press("Go to notification sources");
+  await act(async () => phoneWith([mapping("s1", "com.todo1.mobile", "daily")], ["s1"]));
+  await systemBack();
+  expect(ui.texts()[1]).toBe("Review before closing Wallet");
+  expect(ui.alerts()).toEqual([]);
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls).toEqual([[sentTransfer]]);
+});
+
+test("a phone whose sources can't be read at the moment of sending stops the closing", async () => {
+  await reviewTransferToSavings();
+  intake.snapshot = { ...intake.snapshot, loaded: false, error: "storage" };
+  await ui.press("Close Wallet");
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(ui.texts().slice(2, 4)).toEqual(["We couldn't check this phone's notification sources",
+    "Open notification sources and check that none of them lands in this place."]);
+});
+
+test("retrying a closing whose outcome is unknown resends it even if a source now points at the Place", async () => {
+  remote.close.mockRejectedValueOnce(new Error("network lost")).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  intake.snapshot = { ...intake.snapshot, state: { ...emptyState(), mappings: [mapping("s1", "com.todo1.mobile")], activeSelectionIds: ["s1"] } };
+  await ui.press("Retry closing");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
+});
+
+test("choosing an unavailable answer again returns to the summary, and backing out of the picker does too, twice", async () => {
+  await reviewTransferToSavings();
+  await act(async () => serverChange(() => { remote.places = [wallet, daily, { ...savings, status: "closed" }]; }));
+  for (const _round of [1, 2]) {
+    await ui.row("Transfer to Savings (closed)");
+    expect(ui.texts()[1]).toBe("Which place did it go to?");
+    await systemBack();
+    expect(ui.texts()[1]).toBe("Review before closing Wallet");
+    expect(mounted!.routes()).toEqual(["index", "places", "account", "place-ending"]);
+  }
+  await systemBack();
+  expect(ui.texts()[1]).toBe("Where did the money go?");
+  await systemBack();
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  await systemBack();
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("an unconfirmed closing's screen goes back to the Place's page with one Back and keeps the request, twice", async () => {
+  storeOnPhone(sentTransfer);
+  for (const _round of [1, 2]) {
+    await open();
+    await settle();
+    expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet closed");
+    await systemBack();
+    expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+    await act(async () => mounted!.root.unmount());
+  }
+  mounted = undefined;
+  expect(JSON.parse(phone.get(storedKey)!).endings[0].request).toEqual(sentTransfer);
+  expect(remote.close).not.toHaveBeenCalled();
+});
+
+test("in Spanish the new day and a stale refusal read as such", async () => {
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_date_stale", message: "x" }))
+    .mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_balance_stale", message: "x" }));
+  remote.places = [wallet, daily, { ...savings, name: "Ahorros" }];
+  await open("es");
+  await ui.press("Cerrar Wallet");
+  await ui.press("La pasé a otro lugar");
+  await ui.press("Ahorros");
+  await ui.press("Cerrar Wallet");
+  expect(ui.alerts()).toEqual(["Cambió el día antes de cerrar el lugar, así que no se registró nada. Este celular todavía muestra 10 de noviembre de 2026: revisa su fecha y hora, y vuelve a intentarlo."]);
+  await act(async () => serverChange(() => { remote.phoneDay = "2026-11-11"; }));
+  expect(ui.texts().slice(2, 4)).toEqual(["Cambió el día: este cierre ahora se registra el 11 de noviembre de 2026. Revísalo otra vez antes de cerrar.",
+    "Se registra hoy, 11 de noviembre de 2026:"]);
+  await ui.press("Cerrar Wallet");
+  expect(ui.alerts()).toEqual(["Cambió el día: este cierre ahora se registra el 11 de noviembre de 2026. Revísalo otra vez antes de cerrar.",
+    "El saldo cambió antes de cerrar el lugar, así que no se registró nada. Estamos trayendo el saldo nuevo…"]);
 });

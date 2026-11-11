@@ -94,6 +94,8 @@ export const planning = {
   fixDestination: "This transfer went to a different place than {plan} uses. Choose another plan or don’t count it.",
   fixPredates: "This transfer happened before {plan} started, so it can’t count toward it. Choose another plan or don’t count it.",
   fixPlanCancelled: "{plan} was cancelled. Choose another plan or don’t count it.",
+  fixPlaceEnded: "{plan} saves into a place that is closed, so it can't take this contribution. Choose another plan or don’t count it.",
+  fixPlaceUndoing: "{plan} saves into a place that is being undone, so it can't take this contribution. Choose another plan or don’t count it.",
   fixPlanSuspended: "The expense behind {plan} was reversed, so it can’t take contributions now. Choose another plan or don’t count it.",
   fixPlanMissing: "That plan is no longer available. Choose another plan or don’t count it.",
   fixCapacity: "Other plans already count part of this transfer, so the whole amount can’t move there. Choose another plan or don’t count it.",

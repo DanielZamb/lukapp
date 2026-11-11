@@ -6,6 +6,11 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), changeLook: vi.fn(), recent: vi.fn(), rows: [] as {
   id: string; title: string; date: string; reversed?: boolean; amount: { currency: string; minorUnits: number };
 }[] }));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("expo-router", () => ({
   router: { push: state.push, back: state.back }, Redirect: "redirect",
   useLocalSearchParams: () => ({ profileId: "card-profile" }),
