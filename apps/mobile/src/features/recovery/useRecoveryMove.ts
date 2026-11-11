@@ -62,6 +62,8 @@ export function useRecoveryMove(
     amount: amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }),
     source: placeChoice(defaultSource?.id ?? null),
   });
+  if (form.amount.currency !== seed.plan.currency)
+    setForm((now) => ({ ...now, amount: amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }) }));
   const unavailable = useChosenPlace(seed.sources, form.source);
   const sourceId = form.source.id;
   const [sameSource, setSameSource] = useState(false);

@@ -454,10 +454,13 @@ export function usePostingEditor(
       setup: now.setup && { ...now.setup, amount: openAmount(account.currency, "0") },
     }));
   }
-  /** Changes the amount; a change to its text or its confirmation means it is no longer the saved amount. */
-  function changeAmount(next: AmountSession) {
+  /**
+   * Changes the amount, with `patch` in the same update so that both are refused together when the amount belongs to
+   * one the form replaced. A change to its text or its confirmation means it is no longer the saved amount.
+   */
+  function changeAmount(next: AmountSession, patch: Partial<Editor> = {}) {
     setForm((now) => ({
-      ...now, amount: next,
+      ...now, ...patch, amount: next,
       openedAmount: next.editor.text !== now.amount.editor.text || next.review !== now.amount.review ? null : now.openedAmount,
     }));
   }
@@ -777,9 +780,8 @@ export function usePostingEditor(
           changeAmount(categoryAmount(value, nature));
           return;
         }
-        if (displayedMinorUnits(value) !== null && directionOf(value) !== directionOf(now.amount))
-          change({ classification: unclassified });
-        changeAmount(value);
+        changeAmount(value, displayedMinorUnits(value) !== null && directionOf(value) !== directionOf(now.amount)
+          ? { classification: unclassified } : {});
       }
     },
     /** The amount as of the latest change, for a check a press makes before it sends. */

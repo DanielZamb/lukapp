@@ -75,6 +75,8 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)),
     destination: placeChoice(defaultDestination?.id ?? null),
   });
+  if (form.amount.currency !== seed.currency)
+    setForm((now) => ({ ...now, amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, now.months)) }));
   const unavailable = useChosenPlace(seed.destinations, form.destination);
   const command = useFrozenCommand<Request, Receipt>({
     send: transport.save, reportFailure: transport.reportFailure, onDone: transport.onSaved,
