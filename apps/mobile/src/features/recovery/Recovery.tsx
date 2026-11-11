@@ -70,7 +70,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   const [refreshKey, refresh] = useState(Crypto.randomUUID);
   const [view, setView] = useState<View>({ name: "entry" });
   const board = useQuery(api.savingsRecovery.evaluate, { workspaceId, refreshKey });
-  const unresolved = useUnresolvedRecovery(workspaceId);
+  const unresolved = useUnresolvedRecovery(workspaceId, board?.plans);
   const interact = useLocalEntryInteraction();
   const { t } = useT();
   const back = () => {

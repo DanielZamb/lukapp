@@ -1,8 +1,9 @@
 import type { FunctionArgs } from "convex/server";
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { z } from "zod";
 import type { api } from "../api";
 import { unresolvedRequests } from "../unresolvedRequests";
+import type { RecoveryPlanView } from "./model";
 
 export type MoveRequest = FunctionArgs<typeof api.savingsRecovery.recordContribution>;
 export type ActivationRequest = FunctionArgs<typeof api.savingsRecovery.activatePlan>;
@@ -54,6 +55,25 @@ const recovery = unresolvedRequests<UnresolvedRecovery>({
   unreadable: "Unreadable unresolved Recovery requests",
 });
 
+/**
+ * Whether the plans the server shows already settle a saved request. A movement is settled once its plan lists a
+ * contribution under its key. An activation is settled once its expense shows a plan with its terms, or any plan not
+ * cancelled: resending it could then only replay that plan or be refused as expense_already_recovered. The board does
+ * not carry a plan's own key, so a plan with the same terms made on another phone settles it too; resending it after
+ * that plan was cancelled would start a plan the person had already ended.
+ */
+export function settledByBoard(entry: UnresolvedRecovery, plans: readonly RecoveryPlanView[]) {
+  if (entry.act === "move") {
+    const { planId, idempotencyKey } = entry.request;
+    return plans.some((plan) => plan.id === planId && plan.contributionHistory.some((item) => item.idempotencyKey === idempotencyKey));
+  }
+  const request = entry.request;
+  return plans.some((plan) => plan.sourceJournalEntryId === request.sourceJournalEntryId && (plan.status !== "cancelled" || (
+    plan.destinationFinancialAccountProfileId === request.destinationFinancialAccountProfileId
+    && plan.installmentCount === request.installmentCount && plan.installmentMinorUnits === request.installmentMinorUnits
+    && (request.replacesPlanId === undefined || plan.replacesPlanId === request.replacesPlanId))));
+}
+
 export const keepUnresolvedRecovery = recovery.keep;
 export const readUnresolvedRecovery = recovery.read;
 
@@ -62,14 +82,22 @@ export const clearUnresolvedRecovery = recovery.clear;
 
 /**
  * The movements and activations of one workspace that this phone sent without learning their outcome, as read when
- * Recovery opened. Until one is settled, the screen for its plan or expense can only resend it.
+ * Recovery opened, less those the server's plans already settle. Until one is settled, the screen for its plan or
+ * expense can only resend it.
  */
-export function useUnresolvedRecovery(workspaceId: string) {
+export function useUnresolvedRecovery(workspaceId: string, plans: readonly RecoveryPlanView[] | undefined) {
   const { stored, keep, settle, retryRead } = recovery.useStored(workspaceId);
-  const entries = stored === undefined || stored === "unreadable" ? [] : stored;
+  const forget = useCallback((entry: UnresolvedRecovery) => settle(slotOf(entry), entry.request.idempotencyKey), [settle]);
+  const [entries, settled] = useMemo(() => {
+    const all = stored === undefined || stored === "unreadable" ? [] : stored;
+    const answered = plans ? all.filter((entry) => settledByBoard(entry, plans)) : [];
+    return [all.filter((entry) => !answered.includes(entry)), answered];
+  }, [stored, plans]);
+  useEffect(() => {
+    for (const entry of settled) void forget(entry).catch(() => {});
+  }, [settled, forget]);
   const moves = entries.flatMap((entry) => entry.act === "move" ? [entry.request] : []);
   const activations = entries.flatMap((entry) => entry.act === "activate" ? [entry.request] : []);
-  const forget = useCallback((entry: UnresolvedRecovery) => settle(slotOf(entry), entry.request.idempotencyKey), [settle]);
   return {
     reading: stored === undefined,
     unreadable: stored === "unreadable",
