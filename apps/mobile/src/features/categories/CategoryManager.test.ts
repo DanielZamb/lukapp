@@ -160,3 +160,10 @@ test("a Save kept from before the name changed renames to the name the sheet sho
     { workspaceId: "workspace", categoryId: "cafe", name: "Weekend", style: category.style },
   ]);
 });
+
+test("fourth review, finding 4: two presses of the first Delete, before the sheet shows the confirmation, delete nothing", async () => {
+  await render(); await openCategory();
+  const first = sheet().onDelete;
+  await act(async () => { first?.(); first?.(); });
+  expect(provider.remove).not.toHaveBeenCalled();
+});
