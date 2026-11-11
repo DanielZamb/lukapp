@@ -297,7 +297,7 @@ test("Add a place offers the four mapped types, emoji look, and balance today", 
     );
   });
   expect(text()).toContain(
-    "Add a place\nName you recognize\nType\nChecking account\nSavings account\nDigital wallet\nCash\nLook\n🐷\nChange\nBalance today\n,\nReads as COP 0,00\nAdd this place",
+    "Add a place\nName you recognize\nType\nChecking account\nSavings account\nDigital wallet\nCash\nLook\n🐷\nChange\nBalance today\nReads as COP 0,00\nAdd this place",
   );
   const types = root!.root
     .findByProps({ accessibilityLabel: "Place type" })

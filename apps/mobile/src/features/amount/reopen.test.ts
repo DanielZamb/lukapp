@@ -15,7 +15,7 @@ import { IntakeService } from "../intake/service";
 import { viewInbox } from "../intake/candidates";
 import { confirmReadyCandidates } from "../intake/confirmReady";
 import { capture, fixture, mapping, now } from "../intake/service.testSupport";
-import { amountSendable, confirmAmount, displayedMinorUnits, openAmount, toggleAmountSign, withNativeText } from "./session";
+import { amountSendable, confirmAmount, displayedMinorUnits, openAmount, withNativeText } from "./session";
 import type { AmountTextFormat, StoredAmountReview } from "./storedText";
 
 let root: ReactTestRenderer | undefined;
@@ -348,7 +348,7 @@ test("fourth review, finding B: a frozen Candidate whose saved text would now op
   expect(batch.mock.calls.map(([items]) => JSON.stringify(items))).toEqual([JSON.stringify([command])]);
 });
 
-test("a rewritten Draft awaits confirmation until confirmed, through keeping, a sign change and reopening", async () => {
+test("a rewritten Draft awaits confirmation until confirmed, through keeping, a sign change from its category and reopening", async () => {
   const { api, posted } = transport();
   const store = port(savedBefore("USD", "-1.234"));
   let opened = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
@@ -358,7 +358,7 @@ test("a rewritten Draft awaits confirmation until confirmed, through keeping, a 
   await act(async () => root?.unmount()); root = undefined;
   opened = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
   expect(opened.editor().amount.review).toEqual({ pasted: false, converted: { previous: "-1.234" } });
-  await act(async () => { opened.editor().setAmount(toggleAmountSign(opened.editor().amount)); });
+  await act(async () => { opened.editor().setCategories({ ids: ["salary"], primaryId: null }, "Income"); });
   expect(opened.editor().amount.editor.text).toBe("+1,234.00");
   await act(async () => { await opened.editor().keepDraft(); });
   expect(store.kept.at(-1)?.facts).toMatchObject({ amountText: "+1,234.00", amountFormat: "usd/1",

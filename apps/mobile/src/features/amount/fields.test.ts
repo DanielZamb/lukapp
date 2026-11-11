@@ -75,7 +75,7 @@ function PostComposer({ currency, sent, batch }: { currency: Currency; sent: num
   replaceOwnerAmount = editor.resetComposer;
   return createElement(PostingForm, {
     ...emptyPostingForm, ...formHandlers, currency, amount: editor.amount, onAmountChange: editor.setAmount,
-    amountNotice: editor.amountNotice, signLocked: editor.signLocked, editable: editor.editable, canSubmit: editor.canSubmit,
+    amountNotice: editor.amountNotice, editable: editor.editable, canSubmit: editor.canSubmit,
     saveToBatch: batch,
     onPost: () => {
       if (!batch) { void editor.submit(); return; }
@@ -215,18 +215,13 @@ async function render(field: Field, initial: Currency, language: Language) {
   const submit = async () => { await act(async () => { await control(field.submit(language)).props.onPress(); }); };
   /** The Save handler as this render hands it out; a bottom sheet's portal hands out the previous render's. */
   const saveHandler = () => { const press = control(field.submit(language)).props.onPress as () => unknown; return async () => { await act(async () => { await press(); }); }; };
+  /** Types each character at the end of the text, as the phone's number pad does: digits and either mark. */
   const type = async (characters: string) => {
     for (const character of characters) {
       const node = input();
       const value = node.props.value as string;
       await act(async () => node.props.onChangeText(value + character));
-      const end = value.length + 1;
-      await act(async () => input().props.onSelectionChange?.({ nativeEvent: { selection: { start: end, end } } }));
     }
-  };
-  const decimal = async () => {
-    const name = createTranslator(language).t(currency === "COP" ? "amount.decimalCommaA11y" : "amount.decimalPointA11y", { currency });
-    await act(async () => control(name).props.onPress());
   };
   const alerts = () => root!.root.findAll((node) => node.type === "text" && node.props.accessibilityRole === "alert")
     .map((node) => node.children.join(""));
@@ -235,12 +230,16 @@ async function render(field: Field, initial: Currency, language: Language) {
   const switchTo = async (next: Currency, during: () => void = () => {}) => {
     await act(async () => { switchCurrency(next); currency = next; during(); });
   };
-  return { sent, input, submit, saveHandler, type, decimal, alerts, switchTo };
+  return { sent, input, submit, saveHandler, type, alerts, switchTo };
 }
 
 const wrongKeyHint = {
   COP: { en: "Use the comma for decimals, for example 12,50", es: "Usa la coma para los decimales, por ejemplo 12,50" },
   USD: { en: "Use the point for decimals, for example 12.50", es: "Usa el punto para los decimales, por ejemplo 12.50" },
+} as const;
+const typedSignHint = {
+  COP: { en: "Type only digits and separators, for example 1.234,50", es: "Escribe solo números y separadores, por ejemplo 1.234,50" },
+  USD: { en: "Type only digits and separators, for example 1,234.50", es: "Escribe solo números y separadores, por ejemplo 1,234.50" },
 } as const;
 const foreignHint = {
   COP: { en: "Write the amount like this: 1.234,50", es: "Escribe el monto así: 1.234,50" },
@@ -259,14 +258,24 @@ for (const field of fields) {
     });
 
     for (const language of ["en", "es"] as const) {
-      test(`${field.name}, ${currency}, ${language}: digits and the decimal key send 1234.50 as 123450 minor units`, async () => {
+      test(`${field.name}, ${currency}, ${language}: digits and the phone's decimal mark send 1234.50 as 123450 minor units`, async () => {
         const screen = await render(field, currency, language);
-        await screen.type("1234");
-        await screen.decimal();
+        const typed = currency === "COP" ? "1234,50" : "1234.50";
+        await screen.type(typed.slice(0, 5));
+        await screen.submit();
+        expect(screen.sent, "an amount ending in its decimal mark is incomplete").toEqual([]);
         await screen.type("50");
-        expect(screen.input().props.value.replace(/^[+-]/, "")).toBe(currency === "COP" ? "1234,50" : "1234.50");
+        expect(screen.input().props.value).toBe(typed);
         await screen.submit();
         expect(screen.sent).toEqual([123450]);
+      });
+
+      test(`${field.name}, ${currency}, ${language}: a sign typed into the text is refused with the format hint and nothing is sent`, async () => {
+        const screen = await render(field, currency, language);
+        await screen.type(currency === "COP" ? "1234,50-" : "1234.50-");
+        expect(screen.alerts()).toContain(typedSignHint[currency][language]);
+        await screen.submit();
+        expect(screen.sent).toEqual([]);
       });
 
       test(`${field.name}, ${currency}, ${language}: the phone's other separator key is refused with a hint`, async () => {
@@ -306,9 +315,7 @@ test.each([
 ] as const)("in %s the preview a person sees before saving is the amount that is sent", async (currency, plan, composer, sheet) => {
   for (const [name, preview] of [["Recovery proposal", plan], ["Budget creation", composer], ["Budget limit sheet", sheet]] as const) {
     const screen = await render(byName(name), currency, "en");
-    await screen.type("1234");
-    await screen.decimal();
-    await screen.type("50");
+    await screen.type(currency === "COP" ? "1234,50" : "1234.50");
     const shown = root!.root.findAll((node) => node.props.detail === preview
       || node.props.accessibilityValue?.text === preview);
     expect(shown.length, name).toBeGreaterThan(0);

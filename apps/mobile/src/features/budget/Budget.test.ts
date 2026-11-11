@@ -378,9 +378,10 @@ test("an existing limit saves typed amounts below and above it that no shortcut 
 
 test.each([
   { typed: "", message: "Type the new limit." },
-  { typed: "-50.000", message: "The limit must be more than zero." },
+  { typed: "-50.000", message: "Type only digits and separators, for example 1.234,50" },
   { typed: ",", message: "Write the amount like this: 1.234,50" },
-  { typed: "-", message: "Write the amount like this: 1.234,50" },
+  { typed: "-", message: "Type only digits and separators, for example 1.234,50" },
+  { typed: "50.000-", message: "Type only digits and separators, for example 1.234,50" },
 ])("typed limit '$typed' cannot be saved and says why", async ({ typed, message }) => {
   limitJar();
   const screen = await render();

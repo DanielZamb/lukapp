@@ -24,7 +24,8 @@ import { functionalCurrencyCodes } from "../../../../src/accounting/currencies";
 import { catalogs, createTranslator } from "../../../../src/i18n";
 import { LanguageProvider } from "../i18n";
 import { ThemeProvider } from "../ui/themeContext";
-import type { SetupSummary } from "./setup/model";
+import { startingAmount, type SetupSummary } from "./setup/model";
+import { openAmount, withAmountSign, withNativeText, type AmountAtPress } from "./amount/session";
 
 const backend = vi.hoisted(() => ({ ensure: vi.fn(), place: vi.fn(), save: vi.fn(), clear: vi.fn(), key: 0, suggestions: {} as Record<string, NatureAnswer | null> }));
 vi.mock("./posting/usePostingTransport", () => {
@@ -609,9 +610,9 @@ test("the setup sheet reads in Spanish through every stage and its errors", asyn
   await type("Monto inicial", "1.500,25");
   expect(text()).toContain("COP 1.500,25. Lo del banco más la plata que tienes en el bolsillo.");
   await type("Monto inicial", "-5");
+  expect(text()).toContain("Escribe solo números y separadores, por ejemplo 1.234,50");
   await press("Empezar");
   expect(backend.ensure).not.toHaveBeenCalled();
-  expect(text()).toContain("Escribe cero o la plata que tienes.");
   await type("Monto inicial", "25");
   backend.ensure.mockRejectedValueOnce(new ConvexError({ code: "setup_conflict" }));
   await press("Empezar");
@@ -689,16 +690,16 @@ async function typeKeys(label: string, keys: string) {
 }
 
 test.each([
-  ["COP", "en", "Starting amount", "Type a decimal comma for COP", "Start tracking", "Not now, You record your own entries",
+  ["COP", "en", "Starting amount", "Start tracking", "Not now, You record your own entries",
     "COP 1.234,50. Bank plus the cash in your pocket.", "Use the comma for decimals, for example 12,50"],
-  ["USD", "en", "Starting amount", "Type a decimal point for USD", "Start tracking", "Not now, You record your own entries",
+  ["USD", "en", "Starting amount", "Start tracking", "Not now, You record your own entries",
     "USD 1,234.50. Bank plus the cash in your pocket.", "Use the point for decimals, for example 12.50"],
-  ["COP", "es", "Monto inicial", "Escribir coma decimal en COP", "Empezar", "Ahora no, Tú registras tus movimientos",
+  ["COP", "es", "Monto inicial", "Empezar", "Ahora no, Tú registras tus movimientos",
     "COP 1.234,50. Lo del banco más la plata que tienes en el bolsillo.", "Usa la coma para los decimales, por ejemplo 12,50"],
-  ["USD", "es", "Monto inicial", "Escribir punto decimal en USD", "Empezar", "Ahora no, Tú registras tus movimientos",
+  ["USD", "es", "Monto inicial", "Empezar", "Ahora no, Tú registras tus movimientos",
     "USD 1,234.50. Lo del banco más la plata que tienes en el bolsillo.", "Usa el punto para los decimales, por ejemplo 12.50"],
-])("the %s starting amount in %s is typed with the decimal key, previewed as sent, and a wrong separator is refused",
-  async (currency, language, field, decimal, start, consent, preview, hint) => {
+])("the %s starting amount in %s is typed with the phone's decimal mark, previewed as sent, and a wrong separator is refused",
+  async (currency, language, field, start, consent, preview, hint) => {
     if (language === "es") await openInSpanish();
     else { await open(); await press("Food"); }
     await press(currency);
@@ -708,13 +709,21 @@ test.each([
     await press(start);
     expect(backend.ensure).not.toHaveBeenCalled();
     await type(field, "");
-    await typeKeys(field, "1234");
-    await press(decimal);
+    await typeKeys(field, currency === "COP" ? "1234," : "1234.");
+    await press(start);
+    expect(backend.ensure, "a starting amount ending in its decimal mark is incomplete").not.toHaveBeenCalled();
     await typeKeys(field, "50");
     expect(text()).toContain(preview);
     await press(start);
     expect(backend.ensure.mock.calls.map(([payload]) => [payload.functionalCurrency, payload.startingMinorUnits])).toEqual([[currency, 123450]]);
   });
+
+test("a negative starting amount is refused with its own message even if one reaches the press, though the field's text cannot carry a sign", () => {
+  const negative = withNativeText(withAmountSign(openAmount("COP"), "-"), "5") as AmountAtPress;
+  expect(() => startingAmount(negative, "COP", createTranslator("es"))).toThrow("Escribe cero o la plata que tienes.");
+  expect(() => startingAmount(negative, "COP", createTranslator("en"))).toThrow("Enter zero or the amount you hold.");
+  expect(startingAmount(withNativeText(openAmount("COP"), "5") as AmountAtPress, "COP", createTranslator("en"))).toBe(500);
+});
 
 test("third review, finding 2: a Start tracking handler from the render before the last keystroke saves the starting amount as typed", async () => {
   await open();

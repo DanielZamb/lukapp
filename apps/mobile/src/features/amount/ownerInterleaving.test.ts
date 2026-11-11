@@ -12,15 +12,15 @@ import { LanguageProvider } from "../../i18n";
 import { confirmShown, showing, type Shown } from "../confirmation";
 import { AmountField } from "./AmountField";
 import { reactNativeInput, readsAs } from "./phone.testSupport";
-import { nativeText, openAmount, sendableMinorUnits, type AmountAtPress, type AmountSession } from "./session";
+import { nativeText, openAmount, sendableMinorUnits, withAmountSign, type AmountAtPress, type AmountSession } from "./session";
 import { useFormState, withFields } from "./useAmountState";
 
 type Currency = "COP" | "USD" | "JPY";
-/** How the independent reader reads each currency: its separators, and how many decimals it has. */
-const grammar: Record<Currency, { cop: boolean; precision: number; decimalKey: string }> = {
-  COP: { cop: true, precision: 2, decimalKey: "Type a decimal comma for COP" },
-  USD: { cop: false, precision: 2, decimalKey: "Type a decimal point for USD" },
-  JPY: { cop: true, precision: 0, decimalKey: "JPY amounts have no decimals" },
+/** How the independent reader reads each currency: its separators, how many decimals it has, and its decimal mark. */
+const grammar: Record<Currency, { cop: boolean; precision: number; mark: string }> = {
+  COP: { cop: true, precision: 2, mark: "," },
+  USD: { cop: false, precision: 2, mark: "." },
+  JPY: { cop: true, precision: 0, mark: "," },
 };
 type Sent = { currency: Currency; minorUnits: number };
 /** An owner of one amount whose currency, amount and an open confirmation all change while the phone types. */
@@ -34,14 +34,13 @@ function Owner({ start }: { start: Currency }) {
   const [form, setForm, readForm] = useFormState<Form>(() => ({ currency: start, amount: openAmount(start), shown: null }));
   owner = { read: readForm as unknown as () => Form, set: setForm, rendered: form };
   return createElement(AmountField, {
-    session: form.amount, editable: true, inputAccessibilityLabel: "Amount", sign: {},
+    session: form.amount, editable: true, inputAccessibilityLabel: "Amount",
     onChange: (amount: AmountSession) => { setForm((now) => withFields(now, { amount })); },
   });
 }
 
 function rng(seed: number) { let x = seed; return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 4294967296; }; }
 const input = () => root!.root.findByType("input" as never);
-const control = (label: string) => root!.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0];
 const shownSign = () => {
   const label = root!.root.findAll((node) => node.type === "text" && ["minus", "plus"].includes(node.props.accessibilityLabel))[0]?.props.accessibilityLabel;
   return label === "minus" ? "-" : label === "plus" ? "+" : "";
@@ -58,7 +57,7 @@ const steps = Number(process.env.AMOUNT_OWNER_INTERLEAVING_STEPS ?? 120);
 
 /**
  * The fourth review's finding 1, generalized. Between the phone's native events the owner changes its currency,
- * replaces its amount, or opens a confirmation of the amount it would send; each change lands in the same task as a
+ * replaces its amount, sets the sign beside it, or opens a confirmation of the amount it would send; each change lands in the same task as a
  * delivered event, before React renders. Whatever Save sends, and whatever a confirmation confirms, is in the owner's
  * currency now and reads, under that currency's grammar, as a text the phone showed in the current input: the text it
  * shows now once the phone is quiet. A confirmation whose amount changed is withdrawn, never confirmed.
@@ -81,12 +80,12 @@ test.each((["android", "ios"] as const).flatMap((platform) =>
       const look = () => { seen.texts.add(phone.text); seen.signs.add(shownSign()); };
       /** Whether the input showed `minorUnits` in `currency`: a text it showed, with a sign the field showed beside the input. */
       const showed = (minorUnits: number, { cop, precision }: { cop: boolean; precision: number }) =>
-        [...seen.texts].some((text) => [...seen.signs].some((sign) => readsAs(sign + text, cop, precision) === minorUnits));
+        [...seen.texts].some((text) => [...seen.signs].some((sign) => readsAs(sign, text, cop, precision) === minorUnits));
       const readable = (sent: Sent, when: string) => {
         const { cop, precision } = grammar[sent.currency];
         expect(sent.currency, when).toBe(owner.read().currency);
         if (!phone.reporting) expect(sent.minorUnits, `${when}: the phone shows ${JSON.stringify(shownSign() + phone.text)}`)
-          .toBe(readsAs(shownSign() + phone.text, cop, precision));
+          .toBe(readsAs(shownSign(), phone.text, cop, precision));
         else expect(showed(sent.minorUnits, { cop, precision }),
           `${when}: ${sent.minorUnits} ${sent.currency} is no text the current input showed: ${JSON.stringify([...seen.texts])}`).toBe(true);
       };
@@ -110,8 +109,12 @@ test.each((["android", "ios"] as const).flatMap((platform) =>
         else if (k < 0.32) phone.done();
         else if (k < 0.55) await phone.deliver();
         else if (k < 0.62) phone.apply();
-        else if (k < 0.68) await phone.press(control(grammar[owner.read().currency].decimalKey));
-        else if (k < 0.7) await phone.press(control("Switch the amount between minus and plus"));
+        else if (k < 0.64) phone.key(grammar[owner.read().currency].mark);
+        else if (k < 0.645) phone.key(["-", "+", "−"][Math.floor(random() * 3)]);
+        else if (k < 0.7) {
+          const sign = random() < 0.5 ? "-" : "+";
+          await ownerChange((now) => ({ ...now, amount: withAmountSign(now.amount, sign) }));
+        }
         else if (k < 0.74) {
           const other = owner.read().currency === first ? second : first;
           await ownerChange((now) => ({ ...now, currency: other, amount: openAmount(other), shown: null }));
@@ -140,7 +143,7 @@ test.each((["android", "ios"] as const).flatMap((platform) =>
       look();
       const quiet = sendable();
       const { cop, precision } = grammar[owner.read().currency];
-      const reads = readsAs(shownSign() + phone.text, cop, precision);
+      const reads = readsAs(shownSign(), phone.text, cop, precision);
       if (quiet) expect(quiet.minorUnits, `run ${run}, quiet`).toBe(reads);
       tally.refused += phone.dropped;
       await act(async () => { root?.unmount(); });
