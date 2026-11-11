@@ -212,6 +212,20 @@ test("third review, finding 3: a converted saved amount awaits confirmation afte
   expect(sent).toEqual([{ currency: "USD", minorUnits: 1200 }]);
 });
 
+test("third review, finding 4: the sign key never writes the native text, so a keystroke racing it cannot drop the sign", async () => {
+  const phone = await render("USD");
+  await phone.type("12");
+  await phone.press(button("Switch the amount between minus and plus"), { hold: true });
+  expect(input().props.value).toBe("12");
+  expect(texts()).toContain("−");
+  await send();
+  await phone.type("3", { racing: true });
+  expect(phone.text).toBe("123");
+  expect(texts()).toContain("Reads as −USD 123.00");
+  await send();
+  expect(sent).toEqual([{ currency: "USD", minorUnits: -1200 }, { currency: "USD", minorUnits: -12300 }]);
+});
+
 test("finding 4: a typed amount replaced in one change by another with the same separators awaits confirmation", async () => {
   const phone = await render("USD");
   await phone.type("1,234");
