@@ -1,9 +1,11 @@
 import * as Crypto from "expo-crypto";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { useT } from "../i18n";
 import { useLocalInputLease } from "../local-auth/localInput";
 import {
   countDraftsInMonth,
+  discardLocalEntryDraft,
   findLiveDraft,
   keepIn,
   mutateLocalEntryDocument,
@@ -27,6 +29,7 @@ export function useLocalEntryDrafts(input: {
   countMonth: (period: { year: number; month: number }) => Promise<number>;
   port: LocalEntryDraftsPort;
 } {
+  const { t } = useT();
   const lease = useLocalInputLease();
   const [count, setCount] = useState<number | null>(null);
   const [monthCount, setMonthCount] = useState<number | null>(null);
@@ -54,7 +57,7 @@ export function useLocalEntryDrafts(input: {
       );
       setError("");
     } catch {
-      setError("Could not load Drafts on this device.");
+      setError(t("inbox.draftsLoadFailed"));
     }
   }, [input.subject, input.workspaceId, input.month?.year, input.month?.month, lease]);
   useFocusEffect(
@@ -104,6 +107,11 @@ export function useLocalEntryDrafts(input: {
           now,
         );
         return findLiveDraft(parsed.document, id, input.workspaceId, now);
+      },
+      discard: async (id) => {
+        const outcome = await discardLocalEntryDraft(lease, input.subject, input.workspaceId, id);
+        await refresh();
+        return outcome;
       },
     }),
     [input.subject, input.workspaceId, lease, refresh],

@@ -5,6 +5,7 @@ import { getFunctionName, type FunctionReference, type FunctionReturnType } from
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import PlansRoute from "../../../app/plans";
 import { api } from "../api";
+import { LanguageProvider } from "../../i18n";
 
 type RecoveryEvaluation = FunctionReturnType<typeof api.savingsRecovery.evaluate>;
 
@@ -32,6 +33,7 @@ vi.mock("react-native", () => ({
 }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
+vi.mock("expo-secure-store", () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => {
@@ -63,7 +65,7 @@ test("Plans matches the settled landing using the workspace month with separate 
   const screen = root.root;
   expect(textCopy(screen)).toEqual([
     "LOOKING AHEAD", "Plans", "October budget", "This month's limits", "Savings recovery", "Start from an expense",
-    "Budget is the October plan. Recovery is a sibling destination. It is not a budget row.",
+    "Budget is your plan for October. Savings recovery is separate.",
   ]);
   expect(screen.findAll((node) => String(node.type) === "Icon").map((node) => node.props.name)).toEqual([
     "chevron-back", "flag-outline", "chevron-forward", "trending-up-outline", "chevron-forward",
@@ -83,9 +85,10 @@ test.each(["active", "suspended"] as const)("Plans shows only an active recovery
   state.recovery = {
     ...state.recovery!,
     plans: [{
+      canCancel: true, acceptsContributions: status === "active", cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
       status, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
       destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
-      installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+      installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationDate: "2026-10-01", activationMonth: "2026-10",
       currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
     }],
   };
@@ -98,9 +101,10 @@ test.each(["active", "suspended"] as const)("Plans shows only an active recovery
 
 test("Plans summarizes several recovery plans", async () => {
   const plan = {
+    canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
     status: "active" as const, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
-    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationDate: "2026-10-01", activationMonth: "2026-10",
     currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
   };
   state.recovery = { ...state.recovery!, plans: [plan, { ...plan, id: "plan-2", title: "Laptop repair" }] };
@@ -116,15 +120,16 @@ test.each([
   { activeCount: 2, detail: "2 plans" },
 ])("Plans excludes completed plans when $activeCount active plans remain", async ({ activeCount, detail }) => {
   const plan = {
+    canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
     status: "active" as const, id: "plan-1", title: "Emergency repair", sourceJournalEntryId: "exp-1", sourceTitle: "Emergency repair",
     destinationFinancialAccountProfileId: "savings", destinationName: "Savings", principalMinorUnits: 100_00,
-    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationMonth: "2026-10",
+    installmentCount: 6, installmentMinorUnits: 20_00, impliedAnnualRateBps: 0, activationDate: "2026-10-01", activationMonth: "2026-10",
     currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 120_00, targetMinorUnits: 120_00, dueMinorUnits: 20_00,
   };
   state.recovery = {
     ...state.recovery!,
     plans: [
-      { ...plan, id: "completed", title: "Completed repair", recoveredMinorUnits: 120_00, remainingMinorUnits: 0, dueMinorUnits: 0 },
+      { ...plan, canCancel: false, acceptsContributions: false, id: "completed", title: "Completed repair", recoveredMinorUnits: 120_00, remainingMinorUnits: 0, dueMinorUnits: 0 },
       ...Array.from({ length: activeCount }, (_, index) => ({ ...plan, id: `active-${index}` })),
     ],
   };
@@ -142,9 +147,32 @@ test("Plans keeps the recovery row visible while evaluate is loading", async () 
   const copy = textCopy(root.root);
   expect(copy).toEqual([
     "LOOKING AHEAD", "Plans", "October budget", "This month's limits", "Savings recovery", "",
-    "Budget is the October plan. Recovery is a sibling destination. It is not a budget row.",
+    "Budget is your plan for October. Savings recovery is separate.",
   ]);
   expect(copy).not.toContain("Emergency repair");
   root.root.findByProps({ accessibilityLabel: "Savings recovery, " });
   expect(root.root.findAll((node) => String(node.type) === "Icon").map((node) => node.props.name)).toContain("trending-up-outline");
+});
+
+test("Plans reads in Spanish with the workspace month inside each sentence", async () => {
+  const active = {
+    canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined,
+    contributionHistory: [], status: "active" as const, id: "plan-1", title: "Nevera", sourceJournalEntryId: "exp-1",
+    sourceTitle: "Nevera", destinationFinancialAccountProfileId: "savings", destinationName: "Ahorros",
+    principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 200_000, impliedAnnualRateBps: 0,
+    activationDate: "2026-09-01", activationMonth: "2026-09", currency: "COP", recoveredMinorUnits: 0, remainingMinorUnits: 1_200_000,
+    targetMinorUnits: 1_200_000, dueMinorUnits: 200_000,
+  };
+  state.recovery = { ...state.recovery!, plans: [active, { ...active, id: "plan-2", title: "Llantas" }] };
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(PlansRoute)));
+  });
+  if (!root) throw new Error("Plans not mounted");
+  expect(textCopy(root.root)).toEqual([
+    "LO QUE VIENE", "Planes", "Presupuesto de octubre", "Los topes de este mes", "Recuperar ahorros", "2 planes",
+    "El presupuesto es tu plan para octubre. Recuperar ahorros va aparte.",
+  ]);
+  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Presupuesto de octubre, Los topes de este mes"
+    && typeof node.props.onPress === "function")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.props.accessibilityLabel === "Atrás")).not.toHaveLength(0);
 });

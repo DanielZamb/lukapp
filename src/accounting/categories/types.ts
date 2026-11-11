@@ -8,7 +8,7 @@ export type CategoryStyle = {
   color?: string;
 };
 export type CategorySelection =
-  | { kind: "preset"; presetId: string; style: CategoryStyle }
+  | { kind: "preset"; presetId: string; style: CategoryStyle; name?: string }
   | {
       kind: "custom";
       name: string;

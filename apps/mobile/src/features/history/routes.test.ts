@@ -17,6 +17,11 @@ const provider = vi.hoisted(() => ({
   details: new Map<string, EntryDetail>(), post: vi.fn<ReversalTransport["post"]>(),
   detailQuery: vi.fn(), present: vi.fn(), dismiss: vi.fn(), hardwareBack: undefined as (() => boolean) | undefined,
 }));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("expo-router", () => ({
   router: { push: provider.push, back: provider.back }, Redirect: "redirect", useLocalSearchParams: () => provider.params,
 }));
@@ -48,7 +53,8 @@ vi.mock("react-native", () => ({
     props.data.length ? props.data.map((item, index) => createElement("row", { key: item.id }, props.renderItem({ item, index }))) : props.ListEmptyComponent, props.ListFooterComponent),
 }));
 vi.mock("../activity", () => ({
-  usePersonalDefaults: () => ({ workspace: { id: "ws", timeZone: "America/Bogota", functionalCurrency: "COP" } }),
+  usePersonalDefaults: () => ({ workspace: { id: "ws", timeZone: "America/Bogota", functionalCurrency: "COP" },
+    financialAccountProfile: { id: "daily" } }),
   usePostedActivity: () => ({ accounts: [{
     financialAccountProfileId: "daily", name: "Daily", productKind: "cash", nature: "Asset",
     balance: { currency: "COP", minorUnits: 0 }, trackingFrom: "2026-10-01",
@@ -154,7 +160,7 @@ test("history shows the first page immediately, loads more on request, and opens
   expect(text()).toContain("1 of 101");
   await act(async () => root?.root.findByType("input").props.onChangeText("older receipt"));
   expect(text()).toContain("1 of 101");
-  expect(text()).toContain("Net\n−$1.5K");
+  expect(text()).toContain("Net\n−$1,5K");
   await act(async () => button("Older receipt, −$1.500").props.onPress());
   expect(provider.push).not.toHaveBeenCalled();
   expect(provider.present).toHaveBeenCalledOnce();
@@ -234,7 +240,7 @@ test("sheet keeps confirmation, cancel, submitting, retry, posted receipt, and l
   expect(text()).toContain("Posting reversal…");
   expect(text()).not.toContain("Confirm reversal");
   await act(async () => finish?.(receipt));
-  expect(text()).toContain("Reversal posted · 2026-10-17");
+  expect(text()).toContain("Reversal posted · October 17, 2026");
   expect(text()).toContain("Reversed");
   expect(text()).not.toContain("Reverse entry");
   provider.details.set("100", reversed);
@@ -257,7 +263,7 @@ test("sheet retries an uncertain reversal with the same correction identity", as
   await act(async () => button("Confirm reversal").props.onPress());
   expect(text()).toContain("Could not confirm the reversal. Retry to check the same correction safely.");
   await act(async () => button("Retry reversal").props.onPress());
-  expect(text()).toContain("Reversal posted · 2026-10-17");
+  expect(text()).toContain("Reversal posted · October 17, 2026");
   expect(provider.post.mock.calls.map(([payload]) => payload)).toEqual([
     { workspaceId: "ws", journalEntryId: "100", idempotencyKey: "mobile-reversal@1:ws:100" },
     { workspaceId: "ws", journalEntryId: "100", idempotencyKey: "mobile-reversal@1:ws:100" },
@@ -288,7 +294,7 @@ test("sheet keeps fractional amounts and the uncategorized money-in fallback", a
   });
   await openDetail();
   expect(text()).toContain("MONEY IN");
-  expect(text()).toContain("+$1.500,25");
+  expect(text()).toContain("+$1,500.25");
   expect(text()).toContain("When\nOctober 17, 2025");
   expect(text()).toContain("Category\nNo category");
   expect(text()).toContain("Place\nNo place");
@@ -304,7 +310,7 @@ test("standalone entry callers keep the detail screen, reversal confirmation, li
   expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
   await act(async () => button("Reverse entry").props.onPress());
   await act(async () => button("Confirm reversal").props.onPress());
-  expect(text()).toContain("Reversal posted · 2026-10-17");
+  expect(text()).toContain("Reversal posted · October 17, 2026");
   await act(async () => button("View reversal").props.onPress());
   expect(provider.push).toHaveBeenCalledWith({ pathname: "/entry", params: { entryId: "reversal" } });
   await act(async () => button("Back").props.onPress());
@@ -318,7 +324,7 @@ test("place history counts the loaded scope, and clear removes both place and se
   provider.place = { results: [corpus[100]], status: "Exhausted" };
   await act(async () => { root = create(createElement(HistoryRoute)); });
   await act(async () => root?.update(createElement(HistoryRoute)));
-  expect(text()).toContain("ACROSS ALL PLACES\nTx history");
+  expect(text()).toContain("ACROSS ALL PLACES\nHistory");
   expect(text()).toContain("1 of 1");
   expect(text()).not.toContain("Newer posting");
   await act(async () => root?.root.findByType("input").props.onChangeText("missing"));
@@ -334,14 +340,14 @@ test("place history counts the loaded scope, and clear removes both place and se
 
 test("overview and account use primary receipt buttons and pass the account selection", async () => {
   await act(async () => { root = create(createElement(OverviewRoute)); });
-  const overview = button("Go to tx history");
+  const overview = button("Go to history");
   expect(overview.findByType(Ionicons).props.name).toBe("receipt-outline");
   expect(overview.props.style({ pressed: false })[0].backgroundColor).toBe("#6d28d9");
   await act(async () => overview.props.onPress());
   expect(provider.push).toHaveBeenLastCalledWith("/history");
   provider.params = { profileId: "daily" };
   await act(async () => root?.update(createElement(AccountRoute)));
-  const account = button("See in tx history");
+  const account = button("See in history");
   expect(account.findByType(Ionicons).props.name).toBe("receipt-outline");
   expect(account.props.style({ pressed: false })[0].backgroundColor).toBe("#6d28d9");
   await act(async () => account.props.onPress());

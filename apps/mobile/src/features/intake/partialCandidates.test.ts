@@ -1,4 +1,6 @@
+import { ConvexError } from "convex/values";
 import { expect, test, vi } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
 import type { NativeCapture } from "../../../modules/notification-intake";
@@ -46,7 +48,7 @@ test.each(partials)("partial facts %j persist once before ack and remain Needs r
   const view = viewInbox({ v: 1, candidates: f.service.candidates() }, mapping.workspaceId, now, "COP");
   expect(view.ready).toEqual([]); expect(view.now.map((row) => row.id)).toEqual([capture.captureId]);
   const dispatch = vi.fn();
-  await expect(confirmReadyCandidates(f.service, f.service.candidates(), dispatch)).rejects.toThrow();
+  await expect(confirmReadyCandidates(f.service, f.service.candidates(), dispatch)).resolves.toBe(0);
   expect(dispatch).not.toHaveBeenCalled();
   expect(f.state().records[0]).toMatchObject({ status: { kind: "review" } });
 });
@@ -55,7 +57,7 @@ test("the Candidate binding starts with an empty amount, persists edits and free
   const f = fixture(); const partial = partials[0];
   f.setPages([{ captures: [partial], nextCursor: null }]); await f.service.refresh();
   const dispatch = vi.fn(async (command: ConfirmCandidateInput) => resultFor(command));
-  const binding = createCandidateBinding({ service: f.service, candidateId: capture.captureId, workspaceId: mapping.workspaceId, dispatch });
+  const binding = createCandidateBinding({ service: f.service, candidateId: capture.captureId, workspaceId: mapping.workspaceId, dispatch, translator: createTranslator("en") });
   expect(binding.facts.amountText).toBe("");
   expect(binding.originalSuggestion).toMatchObject({ direction: "in", amount: { currency: null, minorUnits: null } });
   await binding.persistReview({ ...binding.facts, amountText: "-12,30", description: "Reviewed market" });
@@ -94,7 +96,7 @@ test("deleted partial captures do not resurrect through document migration or re
   const state = f.state();
   f.setValue(JSON.stringify({ ...state, v: 2 }));
   const reopened = new IntakeService(f.deps); await reopened.refresh();
-  expect(f.state().v).toBe(3); expect(reopened.candidates()).toEqual([]);
+  expect(f.state().v).toBe(5); expect(reopened.candidates()).toEqual([]);
   expect(f.state().records[0]).toMatchObject({ kind: "terminal", reason: "deleted" });
   f.setPages([{ captures: [{ ...partials[0], amountMinorUnits: 99 }], nextCursor: null }]);
   const acks = f.events.filter((event) => event === "ack").length;
@@ -160,4 +162,42 @@ test("a late raw-diagnostic read cannot return after lock or owner admission end
   await expect(f.service.listDiagnostics()).rejects.toThrow("Intake admission ended");
   const read = vi.spyOn(f.native, "readDiagnostic");
   await expect(f.service.readDiagnostic("arrival")).rejects.toThrow("Intake admission ended"); expect(read).not.toHaveBeenCalled();
+});
+
+test("the review note is one sentence per language around the stored source, amount and currency", async () => {
+  const { formatDateTime } = await import("../../../../../src/i18n/format");
+  const noteFor = async (partial: NativeCapture, language: "en" | "es") => {
+    const f = fixture(); f.setPages([{ captures: [partial], nextCursor: null }]); await f.service.refresh();
+    return createCandidateBinding({ service: f.service, candidateId: capture.captureId, workspaceId: mapping.workspaceId,
+      dispatch: vi.fn(), translator: createTranslator(language) }).reviewNote;
+  };
+  const complete = { ...capture, amountMinorUnits: 4512345, currency: "COP" as const, direction: "out" as const };
+  expect(await noteFor(complete, "en")).toBe(`Source ${mapping.packageName}. Captured ${formatDateTime("en", capture.capturedAt)}. `
+    + "Original amount 45.123,45 COP. Original direction out. Review currency COP.");
+  expect(await noteFor(complete, "es")).toBe(`Fuente ${mapping.packageName}. Leída el ${formatDateTime("es", capture.capturedAt)}. `
+    + "Monto original 45.123,45 COP. Según la notificación, la plata sale. Moneda a revisar: COP.");
+  const dollars = { ...complete, currency: "USD" as const };
+  expect(await noteFor(dollars, "es")).toContain("Monto original 45,123.45 USD.");
+  expect(await noteFor(partials[0]!, "es")).toContain("No pudimos leer el monto. Según la notificación, la plata entra.");
+  expect(await noteFor(partials[1]!, "es")).toContain("No se sabe si la plata entra o sale. La categoría que elijas lo define. Moneda a revisar");
+});
+
+test.each([
+  new ConvexError({ code: "provider_unavailable" }),
+  new ConvexError({ code: "session_verification_required" }),
+  new ConvexError({ code: "permission_denied" }),
+])("one Candidate whose reply was lost stays frozen when the retry is refused with $data.code, and goes again unchanged", async (refusal) => {
+  const f = fixture();
+  await f.service.refresh();
+  const dispatch = vi.fn(async (command: ConfirmCandidateInput) => resultFor(command));
+  dispatch.mockRejectedValueOnce(new Error("offline")).mockRejectedValueOnce(refusal);
+  const binding = createCandidateBinding({ service: f.service, candidateId: capture.captureId, workspaceId: mapping.workspaceId, dispatch, translator: createTranslator("en") });
+  const confirmed = { ...binding.originalSuggestion, direction: "out" as const, amount: { currency: "COP" as const, minorUnits: 45000 } };
+  await expect(binding.confirm(confirmed)).rejects.toThrow("offline");
+  await expect(binding.confirm(confirmed)).rejects.toBe(refusal);
+  expect(rowOf(f.service).status.kind).toBe("submitting");
+  await binding.confirm({ ...confirmed, description: "Edited after the refusal" });
+  const first = dispatch.mock.calls[0]![0];
+  expect(first).toMatchObject({ candidateId: "capture-1", confirmed: { description: "Market", amount: { currency: "COP", minorUnits: 45000 } } });
+  expect(dispatch.mock.calls.map(([command]) => command)).toEqual([first, first, first]);
 });

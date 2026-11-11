@@ -475,3 +475,21 @@ test("custom category colors survive creation, restyling and category reads", as
   expect((await t.query(api.accounting.listUserCategories, { workspaceId: workspace.id }))[0].style)
     .toEqual({ emoji: "👩🏽‍💻", tone: "primary", color: "olive" });
 });
+
+test("a preset created under the person's own-language name keeps the preset's accounting and stores that name", async () => {
+  const t = await convexAccounting(modules);
+  const workspace = await provisionWorkspace(t, { functionalCurrency: "COP", chartOfAccountsTemplate: "co-puc-personal@1" });
+  const create = (selection: CategorySelection) =>
+    t.action(api.accounting.createUserCategory, { workspaceId: workspace.id, selection });
+  const spanish = await create({ ...food, name: "  Comida " });
+  if (spanish.kind !== "category") throw new Error("Expected category");
+  expect(spanish.category).toMatchObject({
+    name: "Comida", nature: "Expense", natureSource: "preset",
+    defaultPostingAccountCode: "51959501", classification: { kind: "preset", concept: "groceries" },
+  });
+  const blank = await create({ kind: "preset", presetId: "transport", style, name: "   " });
+  if (blank.kind !== "category") throw new Error("Expected category");
+  expect(blank.category.name).toBe("Transport");
+  await expect(create({ kind: "preset", presetId: "health", style, name: "x".repeat(81) }))
+    .rejects.toThrow(/category_name_too_long/);
+});

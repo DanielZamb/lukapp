@@ -54,7 +54,7 @@ vi.mock("../useWorkspaceCalendar", () => ({
   }),
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
-vi.mock("convex/react", () => ({ useQuery: () => ({ currency: "COP", jars: [] }) }));
+vi.mock("convex/react", () => ({ useQuery: () => ({ currency: "COP", jars: [], removedLimits: [] }) }));
 vi.mock("../useInboxCount", () => ({ useInboxCount: () => 0 }));
 vi.mock("../HomePlaceSetup", () => ({ HomePlaceSetup: "place-setup" }));
 vi.mock("../Setup", () => ({ Setup: "setup" }));
@@ -111,7 +111,7 @@ test("a live defaults update keeps setup mounted until its receipt and Go to hom
       chartOfAccountsTemplate: "co-puc-personal@1",
       currentAccountingPeriod: { year: 2026, month: 10, status: "open" },
     },
-    financialAccountProfile: {
+    financialAccountProfile: { status: "open",
       id: "money",
       workspaceId: "workspace",
       name: "My money",

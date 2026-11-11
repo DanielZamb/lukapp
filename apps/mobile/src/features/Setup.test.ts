@@ -1,4 +1,5 @@
 import * as React from "react";
+import { typeAmount } from "./amount/typing.testSupport";
 import { createElement, type PropsWithChildren } from "react";
 import {
   act,
@@ -15,12 +16,16 @@ import { SetupCategories } from "./categories/SetupCategories";
 import { SetupCompletion } from "./setup/Completion";
 import {
   starterCategories,
-  categoryPalette,
   emojiFrom,
 } from "./categories/looks";
+import { categoryPalette } from "./categories/appearance";
 import { currencyOptions } from "./setup/currencies";
 import { functionalCurrencyCodes } from "../../../../src/accounting/currencies";
-import type { SetupSummary } from "./setup/model";
+import { catalogs, createTranslator } from "../../../../src/i18n";
+import { LanguageProvider } from "../i18n";
+import { ThemeProvider } from "../ui/themeContext";
+import { startingAmount, type SetupSummary } from "./setup/model";
+import { openAmount, withAmountSign, withNativeText, type AmountAtPress } from "./amount/session";
 
 const backend = vi.hoisted(() => ({ ensure: vi.fn(), place: vi.fn(), save: vi.fn(), clear: vi.fn(), key: 0, suggestions: {} as Record<string, NatureAnswer | null> }));
 vi.mock("./posting/usePostingTransport", () => {
@@ -44,6 +49,7 @@ vi.mock("convex/react", () => ({
   },
 }));
 vi.mock("react-native", () => ({
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   KeyboardAvoidingView: "keyboard-viewport",
   BackHandler: { addEventListener: () => ({ remove() {} }) },
   Platform: { OS: "ios" },
@@ -151,8 +157,11 @@ async function open() {
 async function reveal() {
   await press("Food");
   await press("COP");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
 }
+
+const starterSelection = ({ name, style }: { name: string; style: (typeof starterCategories)[number]["style"] }) =>
+  ({ name, starterName: name, style, source: "starter" as const });
 
 test("only categories open; choices reveal currency, alerts, then empty amount and never retract", async () => {
   await open();
@@ -167,7 +176,7 @@ test("only categories open; choices reveal currency, alerts, then empty amount a
   ).toHaveLength(1);
   await press("COP");
   expect(nodes("Starting amount")).toHaveLength(0);
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   expect(node("Starting amount").props).toMatchObject({
     value: "",
     placeholder: "0",
@@ -237,7 +246,7 @@ test("More searches all supported currencies by code and name, marks selection, 
   await open();
   await press("Food");
   await press("More currencies");
-  expect(new Set(currencyOptions.map(({ code }) => code))).toEqual(
+  expect(new Set(currencyOptions(createTranslator("en")).map(({ code }) => code))).toEqual(
     functionalCurrencyCodes,
   );
   await type("Search currencies", "Canadian");
@@ -290,7 +299,7 @@ test("Start tracking saves real setup answers once, with empty meaning zero and 
     purchaseAlertsConsent: false,
     wantsBudgets: true,
     firstCategoryId: "saved-food",
-    categories: [{ ...starterCategories[0], source: "starter" }],
+    categories: [starterSelection(starterCategories[0])],
   });
 });
 
@@ -302,6 +311,10 @@ test("comma cents parse exactly, malformed amounts stay editable, and an uncerta
   expect(backend.ensure).not.toHaveBeenCalled();
   expect(node("Starting amount").props.editable).toBe(true);
   await type("Starting amount", "1.500,25");
+  await press("Start tracking");
+  expect(backend.ensure).not.toHaveBeenCalled();
+  expect(text()).toContain("Confirm the amount before you continue.");
+  await press("Confirm COP 1.500,25");
   backend.ensure.mockRejectedValueOnce(new Error("lost acknowledgement"));
   await press("Start tracking");
   expect(node("Starting amount").props.editable).toBe(false);
@@ -318,7 +331,7 @@ test("comma cents parse exactly, malformed amounts stay editable, and an uncerta
   expect(complete).toHaveBeenCalledOnce();
   expect(complete).toHaveBeenCalledWith(expect.objectContaining({
     startingMinorUnits: 150025,
-    categories: [{ ...starterCategories[0], source: "starter" }],
+    categories: [starterSelection(starterCategories[0])],
   }));
 });
 
@@ -334,6 +347,8 @@ test("setup_conflict drops the saved request and allows edited answers to be sub
   expect(text()).toContain("Setup was already saved with different answers.");
   await type("Starting amount", "25");
   await press("USD");
+  expect(node("Starting amount").props.value).toBe("");
+  await type("Starting amount", "25");
   await press("Start tracking");
 
   expect(backend.ensure.mock.calls.map(([payload]) => ({
@@ -391,7 +406,7 @@ test("completion shows six look chips and exact summary, then goes home", async 
   });
   expect(text()).toContain("You're set");
   expect(text()).toContain("Purchase alerts can become Candidates after device setup. Device access and review are still required.");
-  expect(text()).toContain("Budgets stay one door away.");
+  expect(text()).toContain("Budgets are one step away.");
   expect(text()).not.toContain("Shopping");
   expect(
     root?.root
@@ -428,7 +443,7 @@ test("the actual custom setup editor blocks unknown names, resets answers and pr
   await press("I receive it");
   await press("Add category");
   await press("COP");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   await press("Start tracking");
   expect(backend.ensure.mock.calls[0][0].categories).toEqual([
     { kind: "custom", name: "Another income", answer: "receive", style: expect.any(Object) },
@@ -466,7 +481,7 @@ test("deferred accounts never enter categories; defaults succeed first and accou
   backend.place.mockRejectedValueOnce(new Error("lost place reply"));
   await press("Add this place");
   expect(nodes("Add later")).toHaveLength(0);
-  expect(node("Account name").props.editable).toBe(false);
+  expect(node("Place name").props.editable).toBe(false);
   await press("Retry setup");
   expect(backend.ensure).toHaveBeenCalledTimes(2);
   expect(backend.place).toHaveBeenCalledTimes(2);
@@ -502,7 +517,7 @@ test("setup shows an overridable name suggestion and keeps the confirmed flow an
   await press("I receive it");
   await press("Add category");
   await press("COP");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   await press("Start tracking");
   expect(backend.ensure.mock.calls[0][0].categories[0]).toMatchObject({ kind: "custom", name: "Savings", answer: "receive" });
   expect(backend.place).not.toHaveBeenCalled();
@@ -515,9 +530,12 @@ test("a deferred place uses the selected non-COP workspace currency without subs
   await press("More currencies");
   await type("Search currencies", "CAD");
   await press("CAD, Canadian Dollar");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   await press("Start tracking");
   await type("Balance today", "12,34");
+  await press("Add this place");
+  expect(backend.place).not.toHaveBeenCalled();
+  await press("Confirm CAD 12,34");
   await press("Add this place");
   expect(backend.ensure.mock.calls[0][0].functionalCurrency).toBe("CAD");
   expect(backend.place.mock.calls[0][0].payload.amount).toEqual({ currency: "CAD", minorUnits: 1234 });
@@ -557,10 +575,202 @@ test("uncertain defaults keep account queue, categories and currency read-only t
   await press("Start tracking");
   expect(backend.ensure.mock.calls[1][0]).toEqual(backend.ensure.mock.calls[0][0]);
   expect(backend.ensure.mock.calls[1][0]).toMatchObject({ functionalCurrency: "COP", startingMinorUnits: 1200 });
-  expect(node("Account name").props.value).toBe("Reserve A");
+  expect(node("Place name").props.value).toBe("Reserve A");
   await press("Add this place");
   expect(backend.place).toHaveBeenCalledOnce();
   expect(backend.place.mock.calls[0][0].payload.name).toBe("Reserve A");
   expect(backend.ensure).toHaveBeenCalledTimes(2);
-  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ currency: "COP", startingMinorUnits: 1200, categories: [{ ...starterCategories[0], source: "starter" }] }));
+  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ currency: "COP", startingMinorUnits: 1200, categories: [starterSelection(starterCategories[0])] }));
+});
+
+async function openInSpanish() {
+  const complete = vi.fn();
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(Setup, { subject: "owner", onComplete: complete, onCancel: vi.fn() })));
+  });
+  await act(async () => root?.root.findByType(SetupCategories).props.onChange([starterSelection(starterCategories[0])]));
+  return complete;
+}
+
+test("the setup sheet reads in Spanish through every stage and its errors", async () => {
+  await openInSpanish();
+  expect(text()).toContain("¿En qué se te va la plata?");
+  expect(text()).toContain("CONFIGURACIÓN");
+  expect(text()).toContain("Moneda");
+  expect(text()).toContain("Zona horaria");
+  expect(node("Cancelar la configuración")).toBeDefined();
+  await press("COP");
+  expect(text()).toContain("Peso colombiano");
+  expect(text()).toContain("Alertas de compras");
+  await press("Ahora no, Tú registras tus movimientos");
+  expect(text()).toContain("Lo que tienes ahora");
+  expect(text()).toContain("Lo del banco más la plata que tienes en el bolsillo.");
+  expect(text()).toContain("Ya conozco mis gastos. Quiero presupuestos.");
+  await type("Monto inicial", "1.500,25");
+  expect(text()).toContain("COP 1.500,25. Lo del banco más la plata que tienes en el bolsillo.");
+  await type("Monto inicial", "-5");
+  expect(text()).toContain("Escribe solo números y separadores, por ejemplo 1.234,50");
+  await press("Empezar");
+  expect(backend.ensure).not.toHaveBeenCalled();
+  await type("Monto inicial", "25");
+  backend.ensure.mockRejectedValueOnce(new ConvexError({ code: "setup_conflict" }));
+  await press("Empezar");
+  expect(text()).toContain("La configuración ya se guardó con otras respuestas. Puedes editar tus respuestas o cancelar.");
+  backend.ensure.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  await press("Empezar");
+  expect(text()).toContain("No pudimos confirmar la configuración. Reintenta con las mismas respuestas.");
+  const english = Object.entries(catalogs.en.setup)
+    .filter(([key, value]) => !/^(zone|currency)\./.test(key) && !value.includes("{"))
+    .map(([, value]) => value);
+  expect(english.filter((value) => text().includes(value))).toEqual([]);
+});
+
+test("a Spanish setup sends the same starter selection as English, so the stored names do not change", async () => {
+  const complete = await openInSpanish();
+  await press("COP");
+  await press("Ahora no, Tú registras tus movimientos");
+  await press("Empezar");
+  expect(backend.ensure.mock.calls[0]?.[0].categories).toEqual([
+    { kind: "preset", presetId: "groceries", style: { emoji: "🛒", tone: "primary", color: "h150" } },
+  ]);
+  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ categories: [starterSelection(starterCategories[0])] }));
+});
+
+test("currency search reads in Spanish and finds names in the chosen language", async () => {
+  await openInSpanish();
+  await press("Más monedas");
+  await type("Buscar monedas", "dólar canadiense");
+  expect(node("CAD, Dólar canadiense")).toBeDefined();
+  await type("Buscar monedas", "zzz");
+  expect(text()).toContain("Nada coincide con “zzz”.");
+});
+
+test("the setup completion recap reads in Spanish as whole sentences around stored names", async () => {
+  const summary: SetupSummary = {
+    categories: starterCategories.slice(0, 7).map((category) => ({ ...category, source: "starter" })),
+    currency: "COP", startingMinorUnits: 150025, purchaseAlertsConsent: false, wantsBudgets: true,
+  };
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(SetupCompletion, { summary, onHome: vi.fn(), onNotificationSetup: vi.fn() })));
+  });
+  expect(text()).toContain("¡Listo!");
+  expect(text()).toContain(
+    "Peso colombiano, empezando con COP 1.500,25. Tus categorías: Food, Transport, Dining y 4 más. Tú vas a registrar tus movimientos. Los presupuestos quedan a un paso.",
+  );
+  expect(node("Ir al inicio")).toBeDefined();
+  expect(nodes("Configurar la lectura de notificaciones")).toHaveLength(0);
+});
+
+test("at the largest text the purchase-alert choices stack and size to their Spanish copy", async () => {
+  const render = async (reflow: boolean) => {
+    await act(async () => root?.unmount());
+    await act(async () => {
+      root = create(createElement(LanguageProvider, { initialPreference: "es" },
+        createElement(ThemeProvider, { layout: { reflow, pagePadding: 16 } },
+          createElement(Setup, { subject: "owner", onComplete: vi.fn(), onCancel: vi.fn() }))));
+    });
+    await act(async () => root?.root.findByType(SetupCategories).props.onChange([starterSelection(starterCategories[0])]));
+    await press("COP");
+    const card = node("Usarlas, Las alertas pueden quedar como movimientos por revisar después de configurar el celular");
+    return { card: card.props.style[0], row: card.parent?.props.style };
+  };
+  const wide = await render(false);
+  expect(wide.row).toMatchObject({ flexDirection: "row" });
+  expect(wide.card).toMatchObject({ flex: 1, minHeight: 120 });
+  const large = await render(true);
+  expect(large.row).toMatchObject({ flexDirection: "column" });
+  expect(large.card.flex).toBeUndefined();
+  expect(large.card.minHeight).toBe(120);
+});
+
+async function typeKeys(label: string, keys: string) {
+  await typeAmount(() => node(label), keys);
+}
+
+test.each([
+  ["COP", "en", "Starting amount", "Start tracking", "Not now, You record your own entries",
+    "COP 1.234,50. Bank plus the cash in your pocket.", "Use the comma for decimals, for example 12,50"],
+  ["USD", "en", "Starting amount", "Start tracking", "Not now, You record your own entries",
+    "USD 1,234.50. Bank plus the cash in your pocket.", "Use the point for decimals, for example 12.50"],
+  ["COP", "es", "Monto inicial", "Empezar", "Ahora no, Tú registras tus movimientos",
+    "COP 1.234,50. Lo del banco más la plata que tienes en el bolsillo.", "Usa la coma para los decimales, por ejemplo 12,50"],
+  ["USD", "es", "Monto inicial", "Empezar", "Ahora no, Tú registras tus movimientos",
+    "USD 1,234.50. Lo del banco más la plata que tienes en el bolsillo.", "Usa el punto para los decimales, por ejemplo 12.50"],
+])("the %s starting amount in %s is typed with the phone's decimal mark, previewed as sent, and a wrong separator is refused",
+  async (currency, language, field, start, consent, preview, hint) => {
+    if (language === "es") await openInSpanish();
+    else { await open(); await press("Food"); }
+    await press(currency);
+    await press(consent);
+    await typeKeys(field, currency === "COP" ? "12.50" : "12,50");
+    expect(text()).toContain(hint);
+    await press(start);
+    expect(backend.ensure).not.toHaveBeenCalled();
+    await type(field, "");
+    await typeKeys(field, currency === "COP" ? "1234," : "1234.");
+    await press(start);
+    expect(backend.ensure, "a starting amount ending in its decimal mark is incomplete").not.toHaveBeenCalled();
+    await typeKeys(field, "50");
+    expect(text()).toContain(preview);
+    await press(start);
+    expect(backend.ensure.mock.calls.map(([payload]) => [payload.functionalCurrency, payload.startingMinorUnits])).toEqual([[currency, 123450]]);
+  });
+
+test("a negative starting amount is refused with its own message even if one reaches the press, though the field's text cannot carry a sign", () => {
+  const negative = withNativeText(withAmountSign(openAmount("COP"), "-"), "5") as AmountAtPress;
+  expect(() => startingAmount(negative, "COP", createTranslator("es"))).toThrow("Escribe cero o la plata que tienes.");
+  expect(() => startingAmount(negative, "COP", createTranslator("en"))).toThrow("Enter zero or the amount you hold.");
+  expect(startingAmount(withNativeText(openAmount("COP"), "5") as AmountAtPress, "COP", createTranslator("en"))).toBe(500);
+});
+
+test("third review, finding 2: a Start tracking handler from the render before the last keystroke saves the starting amount as typed", async () => {
+  await open();
+  await reveal();
+  await press("I already know my spending. I want budgets.");
+  await typeKeys("Starting amount", "150");
+  const stale = node("Start tracking").props.onPress as () => void;
+  await typeKeys("Starting amount", "0");
+  await act(async () => { stale(); });
+  expect(backend.ensure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ startingMinorUnits: 150000 }));
+});
+
+test("a Start tracking handler kept from before the currency changed saves the currency the amount is in", async () => {
+  await open();
+  await reveal();
+  const kept = node("Start tracking").props.onPress as () => void;
+  await press("USD");
+  await type("Starting amount", "25");
+  await act(async () => kept());
+  expect(backend.ensure.mock.calls.map(([payload]) => [payload.functionalCurrency, payload.startingMinorUnits])).toEqual([["USD", 2500]]);
+});
+
+test("handlers kept from before a lost reply neither change the answers nor rebuild the held setup", async () => {
+  await open();
+  await reveal();
+  const kept = { finish: node("Start tracking").props.onPress as () => void, usd: node("USD").props.onPress as () => void };
+  backend.ensure.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  await act(async () => kept.finish());
+  await act(async () => kept.usd());
+  expect(node("COP").props.accessibilityState.checked).toBe(true);
+  await act(async () => kept.finish());
+  expect(backend.ensure.mock.calls.map(([payload]) => payload.functionalCurrency)).toEqual(["COP", "COP"]);
+  expect(backend.ensure.mock.calls[1][0]).toEqual(backend.ensure.mock.calls[0][0]);
+});
+
+test("fourth review, finding 1: the COP field's last keystroke, arriving after USD is chosen, is not saved as a USD amount", async () => {
+  await open();
+  await reveal();
+  await press("I already know my spending. I want budgets.");
+  await typeKeys("Starting amount", "1.00");
+  const late = node("Starting amount").props.onChangeText as (text: string) => void;
+  await act(async () => {
+    node("USD").props.onPress();
+    late("1.000");
+  });
+  const shown = node("Starting amount").props.value as string;
+  await press("Start tracking");
+  expect(backend.ensure.mock.calls.map(([payload]) => [payload.functionalCurrency, payload.startingMinorUnits])).toEqual([["USD", 0]]);
+  expect(shown).toBe("");
 });

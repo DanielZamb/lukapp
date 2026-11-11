@@ -9,11 +9,16 @@ export type RecoveryPlan = {
   installmentMinorUnits: number;
   impliedAnnualRateBps: number;
   currency: string;
+  activationDate: string;
   activationMonth: string;
+  replacesPlanId?: string;
+  replacementLinkInferred?: boolean;
   idempotencyKey: string;
   createdBy: string;
   createdAt: number;
 };
+
+export type RecoveryPlanReceipt = Omit<RecoveryPlan, "activationDate">;
 
 export type RecoveryContribution = {
   id: string;
@@ -25,6 +30,7 @@ export type RecoveryContribution = {
   idempotencyKey: string;
   createdBy: string;
   recordedAt: number;
+  correctsContributionId?: string;
 };
 
 export type RecoveryLedgerEntry = {
@@ -40,6 +46,8 @@ export type RecoveryLedgerEntry = {
 };
 
 export type RecoveryProfile = {
+  undoOperationId?: string;
+  ending?: import("../accounting/types").PlaceEnding;
   id: string;
   workspaceId: string;
   name: string;
@@ -58,6 +66,7 @@ export type RecoverySuggestion = {
 };
 
 export type ActivatePlan = {
+  replacesPlanId?: string;
   workspaceId: string;
   sourceJournalEntryId: string;
   destinationFinancialAccountProfileId: string;
@@ -76,6 +85,8 @@ export type RecordContribution = {
 export type RecoveryReadStore = {
   functionalCurrency: () => Promise<string>;
   timeZone: () => Promise<string>;
+  listCancellations: () => Promise<RecoveryCancellation[]>;
+  listCorrections: () => Promise<RecoveryCorrection[]>;
   listPlans: () => Promise<RecoveryPlan[]>;
   listContributions: () => Promise<RecoveryContribution[]>;
   listProfiles: () => Promise<RecoveryProfile[]>;
@@ -85,10 +96,61 @@ export type RecoveryReadStore = {
 };
 
 export type RecoveryWriteStore = RecoveryReadStore & {
-  findPlanRequest: (key: string) => Promise<RecoveryPlan | null>;
+  insertCancellation: (decision: Omit<RecoveryCancellation, "id">) => Promise<RecoveryCancellation>;
+  insertCorrection: (decision: Omit<RecoveryCorrection, "id">) => Promise<RecoveryCorrection>;
+  findPlanRequest: (key: string) => Promise<RecoveryPlanReceipt | null>;
   findContributionRequest: (key: string) => Promise<RecoveryContribution | null>;
   insertPlan: (plan: Omit<RecoveryPlan, "id">) => Promise<RecoveryPlan>;
   insertContribution: (
     contribution: Omit<RecoveryContribution, "id">,
   ) => Promise<RecoveryContribution>;
+};
+
+export type RecoveryCancellation = {
+  id: string;
+  workspaceId: string;
+  planId: string;
+  reason?: string;
+  idempotencyKey: string;
+  createdBy: string;
+  eventTime: number;
+  cancellationDate: string;
+  recordedAt: number;
+  origin?: RecoveryCancellationOrigin;
+};
+
+export type RecoveryInvalidation =
+  | { kind: "transfer_reversed"; transferJournalEntryId: string; reversalJournalEntryId: string }
+  | { kind: "contribution_corrected"; contributionId: string; correctionId: string };
+
+export type RecoveryCancellationOrigin =
+  | { kind: "person" }
+  | { kind: "automatic"; cause: RecoveryInvalidation; unfinishedPlanId: string };
+
+export type RecoveryCorrection = {
+  id: string;
+  workspaceId: string;
+  contributionId: string;
+  reason: string;
+  targetPlanId?: string;
+  replacementContributionId?: string;
+  contributionDate: string;
+  idempotencyKey: string;
+  createdBy: string;
+  recordedAt: number;
+};
+
+export type CancelPlan = {
+  workspaceId: string;
+  planId: string;
+  reason?: string;
+  idempotencyKey: string;
+};
+
+export type CorrectContribution = {
+  workspaceId: string;
+  contributionId: string;
+  reason: string;
+  targetPlanId?: string;
+  idempotencyKey: string;
 };

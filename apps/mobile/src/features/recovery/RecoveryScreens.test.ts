@@ -4,8 +4,10 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { Text, TextInput } from "react-native";
 import { Choice, Header, ListGroup, ListRow, PrimaryButton, Screen } from "../../ui/core";
 import { afterEach, expect, test, vi } from "vitest";
-import type { RecoveryCandidate, RecoveryPlace, RecoveryPlanView } from "./model";
-import { RecoveryCandidates, RecoveryDraft, RecoveryMoveScreen, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
+import { openAmount } from "../amount/session";
+import type { RecoveryCandidate, RecoveryContribution, RecoveryPlace, RecoveryPlanView } from "./model";
+import { LanguageProvider } from "../../i18n";
+import { RecoveryActivated, RecoveryCandidates, RecoveryDraft, RecoveryMoveScreen, RecoveryMoved, RecoveryPlanList, RecoveryPlanScreen } from "./RecoveryScreens";
 
 vi.mock("react-native", () => ({
   Platform: { OS: "ios" },
@@ -16,17 +18,19 @@ vi.mock("react-native", () => ({
 }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
+vi.mock("expo-secure-store", () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
 
 const candidate: RecoveryCandidate = {
   journalEntryId: "exp-1", title: "Laptop repair", accountingDate: "2026-09-09",
   amountMinorUnits: 1_200_000, financialAccountProfileId: "daily", placeName: "Daily",
 };
 const plan: RecoveryPlanView = {
+  canCancel: true, acceptsContributions: true, cancellation: undefined, replacesPlanId: undefined, replacedByPlanId: undefined, contributionHistory: [],
   status: "active",
   id: "plan-1", title: "Laptop repair", sourceJournalEntryId: "exp-1", sourceTitle: "Laptop repair",
   destinationFinancialAccountProfileId: "savings", destinationName: "Savings",
   principalMinorUnits: 1_200_000, installmentCount: 6, installmentMinorUnits: 230_000,
-  impliedAnnualRateBps: 1800, activationMonth: "2026-09", currency: "COP",
+  impliedAnnualRateBps: 1800, activationDate: "2026-09-01", activationMonth: "2026-09", currency: "COP",
   recoveredMinorUnits: 230_000, remainingMinorUnits: 1_150_000, targetMinorUnits: 1_380_000,
   dueMinorUnits: 230_000,
 };
@@ -34,6 +38,10 @@ const destinations: RecoveryPlace[] = [
   { id: "savings", name: "Savings", productKind: "savingsAccount" },
   { id: "daily", name: "Daily", productKind: "bankAccount" },
 ];
+const planDefaults = {
+  plans: [plan], timeZone: "America/Bogota", replacement: null,
+  onCancel: () => {}, onReplace: () => {}, onPlan: () => {}, onFix: () => {},
+};
 let root: ReactTestRenderer | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
 async function render(node: React.ReactElement) {
@@ -72,7 +80,7 @@ test("the draft shows the even-split limits and keeps the edited monthly amount"
   const onMonths = vi.fn();
   const onAmount = vi.fn();
   const screen = await render(createElement(RecoveryDraft, {
-    candidate, currency: "COP", destinations, installmentCount: 4, amount: "3.300,00",
+    candidate, currency: "COP", destinations, installmentCount: 4, amount: openAmount("COP", "3.300,00"),
     destinationId: "savings",
     suggestion: {
       installmentMinorUnits: 330_000, minInstallmentMinorUnits: 300_000, maxInstallmentMinorUnits: 1_200_000,
@@ -82,9 +90,9 @@ test("the draft shows the even-split limits and keeps the edited monthly amount"
     onMonths, onAmount, onDestination: () => {}, onSave: () => {}, onBack: () => {},
   }));
   expect(screen.findAll((node) =>
-    typeof node.props.helperText === "string"
-    && node.props.helperText.includes("at least COP 3.000")
-    && node.props.helperText.includes("COP 1.200 extra"),
+    typeof node.props.message?.helper === "string"
+    && node.props.message.helper.includes("at least COP 3.000")
+    && node.props.message.helper.includes("COP 1.200 extra"),
   )).toHaveLength(1);
   expect(screen.findAll((node) => node.props.label === "4 months" && node.props.selected)).toHaveLength(1);
   expect(screen.findAll((node) => node.props.label === "4 months")[0].props.detail).toBe("COP 3.300 each · COP 1.200 extra saving");
@@ -97,12 +105,13 @@ test("the draft shows the even-split limits and keeps the edited monthly amount"
     screen.findAll((node) => node.props.accessibilityLabel === "Monthly amount in COP")[0].props.onChangeText("3.500");
   });
   expect(onMonths).toHaveBeenCalledExactlyOnceWith(6);
-  expect(onAmount).toHaveBeenCalledExactlyOnceWith("3.500");
+  expect(onAmount.mock.calls.map(([amount]) => amount.editor.text)).toEqual(["3.500"]);
 });
 
 test("an open plan shows due progress and offers a real transfer", async () => {
   const onMove = vi.fn();
   const screen = await render(createElement(RecoveryPlanScreen, {
+    ...planDefaults,
     plan, month: "2026-10", onBack: () => {}, onMove, onFind: () => {},
   }));
   expect(screen.findAll((node) => node.props.title === "Due this month" && node.props.value === "COP 2.300")[0].props.valueStyle).toEqual({ color: "#9c5f06" });
@@ -115,6 +124,7 @@ test("an open plan shows due progress and offers a real transfer", async () => {
 
 test("a completed plan has a neutral zero due and no movement button", async () => {
   const screen = await render(createElement(RecoveryPlanScreen, {
+    ...planDefaults,
     plan: { ...plan, recoveredMinorUnits: 1_380_000, remainingMinorUnits: 0, dueMinorUnits: 0 },
     month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
   }));
@@ -127,7 +137,8 @@ test("a completed plan has a neutral zero due and no movement button", async () 
 
 test("a suspended plan explains its reversed expense and offers no movement", async () => {
   const screen = await render(createElement(RecoveryPlanScreen, {
-    plan: { ...plan, status: "suspended", dueMinorUnits: 0 },
+    ...planDefaults,
+    plan: { ...plan, acceptsContributions: false, status: "suspended", dueMinorUnits: 0 },
     month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
   }));
   expect(screen.findAll((node) => node.type === Text && node.children.join("") ===
@@ -139,13 +150,13 @@ test("the editable hero precedes one static source, destination and plan, then p
   const submit = vi.fn(async () => {});
   const onAmount = vi.fn();
   const screen = await render(createElement(RecoveryMoveScreen, {
-    plan, sources: destinations, sourceId: "daily", amount: "2.300,00",
+    plan, sources: destinations, sourceId: "daily", amount: openAmount("COP", "2.300,00"),
     editable: true, busy: false, pending: false, canSubmit: true, canDismiss: true, error: "",
     onSource: () => {}, onAmount, submit, onBack: () => {},
   }));
   expect(screen.findByType(Header).props).toMatchObject({ title: "Move money", eyebrow: "RECOVERY CONTRIBUTION" });
   const input = screen.findByType(TextInput);
-  expect(input.props).toMatchObject({ accessibilityLabel: "Amount in COP", value: "2.300,00", keyboardType: "decimal-pad", editable: true });
+  expect(input.props).toMatchObject({ accessibilityLabel: "Amount in COP", value: "2300,00", keyboardType: "decimal-pad", editable: true });
   expect(screen.findAllByType(Choice)).toHaveLength(0);
   expect(screen.findByType(ListGroup).findAllByType(ListRow).map((row) => ({ title: row.props.title, value: row.props.value, icon: row.props.icon }))).toEqual([
     { title: "From", value: "Daily", icon: "arrow-up-circle-outline" },
@@ -156,10 +167,10 @@ test("the editable hero precedes one static source, destination and plan, then p
   expect(children[1].props.children[0].props.children).toBe("Amount");
   expect(children[2].type).toBe(ListGroup);
   expect(children[3].type).toBe(PrimaryButton);
-  expect(children[4].props.children).toBe("Progress changes only after this real account-to-account transfer posts.");
+  expect(children[4].props.children).toBe("Progress changes only after this real transfer between your places is posted.");
   expect(screen.findByType(PrimaryButton).props.trailingIcon).toBe("checkmark");
   await act(async () => { input.props.onChangeText("3.000,25"); });
-  expect(onAmount).toHaveBeenCalledExactlyOnceWith("3.000,25");
+  expect(onAmount.mock.calls.map(([amount]) => amount.editor.text)).toEqual(["3.000,25"]);
   await act(async () => { screen.findAll((node) => node.props.label === "Post transfer")[0].props.onPress(); });
   expect(submit).toHaveBeenCalledOnce();
 });
@@ -168,7 +179,7 @@ test("several sources are radios inside the transfer group, excluding the plan d
   const onSource = vi.fn();
   const screen = await render(createElement(RecoveryMoveScreen, {
     plan, sources: [...destinations, { id: "cash", name: "Cash", productKind: "cash" }],
-    sourceId: "daily", amount: "2.300", editable: true, busy: false, pending: false,
+    sourceId: "daily", amount: openAmount("COP", "2.300"), editable: true, busy: false, pending: false,
     canSubmit: true, canDismiss: true, error: "", onSource, onAmount: () => {},
     submit: async () => {}, onBack: () => {},
   }));
@@ -180,11 +191,245 @@ test("several sources are radios inside the transfer group, excluding the plan d
 
 test("no eligible source explains why posting is unavailable", async () => {
   const screen = await render(createElement(RecoveryMoveScreen, {
-    plan, sources: destinations.slice(0, 1), sourceId: null, amount: "2.300",
+    plan, sources: destinations.slice(0, 1), sourceId: null, amount: openAmount("COP", "2.300"),
     editable: true, busy: false, pending: false, canSubmit: false, canDismiss: true,
     error: "", onSource: () => {}, onAmount: () => {}, submit: async () => {}, onBack: () => {},
   }));
   expect(screen.findAllByType(Choice)).toHaveLength(0);
   expect(screen.findByType(PrimaryButton).props.disabled).toBe(true);
   expect(JSON.stringify(root?.toJSON())).toContain("Add another place before you can move money into this destination.");
+});
+
+function contribution(id: string, over: Partial<RecoveryContribution> = {}): RecoveryContribution {
+  return {
+    id, workspaceId: "ws", planId: "plan-1", transferJournalEntryId: `transfer-${id}`, amountMinorUnits: 230_000,
+    contributionDate: "2026-09-18", idempotencyKey: id, createdBy: "owner", recordedAt: Date.UTC(2026, 8, 18, 17),
+    status: "active", transferReversed: false, correction: undefined, correctsContributionId: undefined, ...over,
+  };
+}
+const recordedAt = Date.UTC(2026, 9, 2, 20, 30);
+const correction = (contributionId: string, reason: string, targetPlanId?: string) => ({
+  id: `fix-${contributionId}`, workspaceId: "ws", contributionId, reason, targetPlanId, contributionDate: "2026-07-05",
+  idempotencyKey: `fix-${contributionId}`, createdBy: "owner", recordedAt,
+});
+const history = [
+  contribution("jun", { contributionDate: "2026-06-20", amountMinorUnits: 100_000, status: "corrected", transferReversed: true,
+    correction: correction("jun", "Not a recovery transfer") }),
+  contribution("sep"),
+  contribution("jul", { contributionDate: "2026-07-05", amountMinorUnits: 200_000, status: "corrected",
+    correction: correction("jul", "Wrong plan", "plan-2") }),
+  contribution("aug", { contributionDate: "2026-08-18", amountMinorUnits: 250_000, status: "voided", transferReversed: true }),
+];
+const withHistory: RecoveryPlanView = { ...plan, contributionHistory: history };
+const other: RecoveryPlanView = { ...plan, id: "plan-2", title: "Fridge", contributionHistory: [
+  contribution("jul-moved", { planId: "plan-2", contributionDate: "2026-07-05", amountMinorUnits: 200_000, correctsContributionId: "jul" }),
+] };
+function historyRows(screen: ReturnType<typeof render> extends Promise<infer T> ? T : never) {
+  const label = screen.findAll((node) => node.type === Text && ["CONTRIBUTIONS", "APORTES"].includes(node.children.join("")))[0];
+  return label.parent!.findAllByType(ListRow).map((row) => [row.props.title, row.props.value, row.props.detail, !!row.props.onPress]);
+}
+
+test("contribution history lists newest first with each status, its correction link, reason and recording time", async () => {
+  const onFix = vi.fn();
+  const onPlan = vi.fn();
+  const screen = await render(createElement(RecoveryPlanScreen, {
+    ...planDefaults, plan: withHistory, plans: [withHistory, other], month: "2026-10", onFix, onPlan,
+    onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }));
+  expect(historyRows(screen)).toEqual([
+    ["COP 2.300", "Counted", "September 18, 2026", true],
+    ["COP 2.500", "Voided", "August 18, 2026\nNot counted because the transfer was reversed.", false],
+    ["COP 2.000", "Corrected", "July 5, 2026\nMoved to Fridge\nReason: Wrong plan\nRecorded Oct 2, 2026, 3:30 PM", true],
+    ["COP 1.000", "Corrected", "June 20, 2026\nNo longer counts toward a plan. It stays as ordinary saving.\nReason: Not a recovery transfer\nRecorded Oct 2, 2026, 3:30 PM\nThe transfer was later reversed.", false],
+  ]);
+  expect(JSON.stringify(root?.toJSON())).toContain("Tap a counted contribution to fix which plan it counts toward.");
+  const rows = screen.findAll((node) => node.type === ListRow && typeof node.props.onPress === "function" && node.props.title !== "Destination");
+  await act(async () => { rows.find((row) => row.props.value === "Counted")?.props.onPress(); });
+  await act(async () => { rows.find((row) => row.props.value === "Corrected")?.props.onPress(); });
+  expect(onFix.mock.calls).toEqual([["sep"]]);
+  expect(onPlan.mock.calls).toEqual([["plan-2"]]);
+});
+
+test("a replacement contribution names the plan it moved from, and an empty history explains itself", async () => {
+  const screen = await render(createElement(RecoveryPlanScreen, {
+    ...planDefaults, plan: other, plans: [withHistory, other], month: "2026-10",
+    onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }));
+  expect(historyRows(screen)).toEqual([["COP 2.000", "Counted", "July 5, 2026\nMoved from Laptop repair", true]]);
+  await act(async () => root?.unmount());
+  const empty = await render(createElement(RecoveryPlanScreen, {
+    ...planDefaults, plan, month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }));
+  expect(empty.findAll((node) => node.type === Text && node.children.join("") ===
+    "No contributions yet. Each transfer you make toward this plan shows up here.")).toHaveLength(1);
+  expect(JSON.stringify(root?.toJSON())).not.toContain("Tap a counted contribution");
+});
+
+test("Spanish history uses Colombian dates and money", async () => {
+  const screen = await render(createElement(LanguageProvider, { initialPreference: "es" }, createElement(RecoveryPlanScreen, {
+    ...planDefaults, plan: withHistory, plans: [withHistory, other], month: "2026-10",
+    onBack: () => {}, onMove: () => {}, onFind: () => {},
+  })));
+  expect(historyRows(screen).slice(0, 3)).toEqual([
+    ["COP 2.300", "Sumado", "18 de septiembre de 2026", true],
+    ["COP 2.500", "Anulado", "18 de agosto de 2026\nNo cuenta porque la transferencia se reversó.", false],
+    ["COP 2.000", "Corregido", "5 de julio de 2026\nPasó a Fridge\nMotivo: Wrong plan\nRegistrado el 2 de oct de 2026, 3:30 p. m.", true],
+  ]);
+});
+
+const copyProps = ["title", "eyebrow", "label", "detail", "value", "helperText", "error", "accessibilityLabel"] as const;
+function visibleCopy(screen: ReactTestRenderer["root"]) {
+  const copy = new Set<string>();
+  for (const node of screen.findAll(() => true)) {
+    if (node.type === Text) copy.add(node.children.join(""));
+    for (const prop of copyProps) if (typeof node.props[prop] === "string") copy.add(node.props[prop]);
+  }
+  return [...copy];
+}
+const spanish = (node: React.ReactElement) => render(createElement(LanguageProvider, { initialPreference: "es" }, node));
+const englishCopy = [
+  "Savings recovery", "PLANS", "moved back to savings", "Expenses to recover", "CLOSE", "Choose an expense",
+  "Plan the recovery", "DRAFT", "Amount to replenish", "MONTHS", "months", "each", "Monthly amount", "Each month must",
+  "Activate plan", "Activation fixes", "Recovered so far", "complete", "left", "Due this month", "Destination",
+  "Original plan", "Move money", "Find another expense", "Recovery is a saving plan", "RECOVERY CONTRIBUTION",
+  "Amount", "From", "Counts toward", "Post transfer", "Progress changes", "View recovery plan", "Back home",
+  "Recovery plan active", "will begin", "View Plans",
+];
+function expectNoEnglish(copy: string[]) {
+  for (const english of englishCopy) expect(copy.filter((text) => text.includes(english))).toEqual([]);
+}
+
+test("Spanish plan list and candidates read as one voice with Colombian dates", async () => {
+  const list = await spanish(createElement(RecoveryPlanList, { plans: [plan], onBack: () => {}, onPlan: () => {} }));
+  expect(visibleCopy(list)).toEqual(expect.arrayContaining(["Recuperar ahorros", "PLANES", "COP 2.300 de COP 13.800 recuperados"]));
+  expectNoEnglish(visibleCopy(list));
+  await act(async () => root?.unmount());
+  const candidates = await spanish(createElement(RecoveryCandidates, {
+    currency: "COP", month: "2026-10", candidates: [candidate], onBack: () => {}, onStart: () => {},
+  }));
+  const copy = visibleCopy(candidates);
+  expect(copy).toEqual(expect.arrayContaining([
+    "Gastos por recuperar", "CIERRE DE OCTUBRE", "9 de septiembre · Daily",
+    "Elige un gasto que quieras reponer ahorrando de a poquito. El gasto queda registrado tal como pasó.",
+  ]));
+  expect(copy).toContain("Laptop repair");
+  expectNoEnglish(copy);
+});
+
+test("Spanish proposal editor explains months, the monthly range and the extra saving with exact amounts", async () => {
+  const screen = await spanish(createElement(RecoveryDraft, {
+    candidate, currency: "COP", destinations, installmentCount: 4, amount: openAmount("COP", "3.300,00"), destinationId: "savings",
+    suggestion: {
+      installmentMinorUnits: 330_000, minInstallmentMinorUnits: 300_000, maxInstallmentMinorUnits: 1_200_000,
+      premiumMinorUnits: 120_000, targetMinorUnits: 1_320_000, valid: true,
+    },
+    editable: true, busy: false, pending: false, canSubmit: true, canDismiss: true, error: "",
+    onMonths: () => {}, onAmount: () => {}, onDestination: () => {}, onSave: () => {}, onBack: () => {},
+  }));
+  expect(screen.findByType(Header).props).toMatchObject({ title: "Arma tu plan", eyebrow: "LAPTOP REPAIR · BORRADOR" });
+  expect(screen.findAllByType(Choice).slice(0, 4).map((choice) => [choice.props.label, choice.props.detail])).toEqual([
+    ["4 meses", "COP 3.300 al mes · COP 1.200 de ahorro extra"],
+    ["6 meses", "COP 2.000 al mes · COP 0 de ahorro extra"],
+    ["8 meses", "COP 1.500 al mes · COP 0 de ahorro extra"],
+    ["12 meses", "COP 1.000 al mes · COP 0 de ahorro extra"],
+  ]);
+  const field = screen.find((node) => node.props.inputAccessibilityLabel === "Cuánto pasas cada mes, en COP");
+  expect(field.props.message.helper)
+    .toBe("Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan terminas ahorrando COP 1.200 de más.");
+  const copy = visibleCopy(screen);
+  expect(copy).toEqual(expect.arrayContaining(["Lo que vas a recuperar", "MESES", "DESTINO", "Activar plan"]));
+  expectNoEnglish(copy);
+});
+
+test("Spanish proposal editor shows the range error when the monthly amount is out of bounds", async () => {
+  const screen = await spanish(createElement(RecoveryDraft, {
+    candidate, currency: "COP", destinations: destinations.slice(0, 1), replacing: true, installmentCount: 4, amount: openAmount("COP", "1"),
+    destinationId: "savings",
+    suggestion: {
+      installmentMinorUnits: 100, minInstallmentMinorUnits: 300_000, maxInstallmentMinorUnits: 1_200_000,
+      premiumMinorUnits: 0, targetMinorUnits: 1_200_000, valid: false,
+    },
+    editable: true, busy: false, pending: false, canSubmit: false, canDismiss: true, error: "",
+    onMonths: () => {}, onAmount: () => {}, onDestination: () => {}, onSave: () => {}, onBack: () => {},
+  }));
+  expect(screen.findByType(Header).props.eyebrow).toBe("LAPTOP REPAIR · REEMPLAZO");
+  expect(visibleCopy(screen)).toEqual(expect.arrayContaining([
+    "Escribe un monto por mes entre COP 3.000 y COP 12.000.",
+    "Cada mes puedes pasar mínimo COP 3.000 y máximo COP 12.000. Con este plan recuperas justo lo del gasto, sin nada de más.",
+    "Destino",
+  ]));
+});
+
+test("Spanish plan page and Move money keep stored names and translate everything around them", async () => {
+  const page = await spanish(createElement(RecoveryPlanScreen, {
+    ...planDefaults, plan, month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }));
+  const pageCopy = visibleCopy(page);
+  expect(pageCopy).toEqual(expect.arrayContaining([
+    "Recuperar ahorros", "LAPTOP REPAIR", "Recuperado hasta ahora", "17% completado", "Faltan COP 11.500",
+    "Avance para recuperar Laptop repair", "Para pasar este mes", "Destino", "Savings", "Plan original", "6 meses",
+    "Pasar la plata de octubre", "Buscar otro gasto", "Cancelar plan",
+  ]));
+  expectNoEnglish(pageCopy);
+  await act(async () => root?.unmount());
+  const move = await spanish(createElement(RecoveryMoveScreen, {
+    plan, sources: destinations, sourceId: "daily", amount: openAmount("COP", "2.300,00"),
+    editable: true, busy: false, pending: false, canSubmit: true, canDismiss: true, error: "",
+    onSource: () => {}, onAmount: () => {}, submit: async () => {}, onBack: () => {},
+  }));
+  expect(move.findByType(Header).props).toMatchObject({ title: "Pasar plata", eyebrow: "APORTE AL PLAN" });
+  expect(move.findByType(ListGroup).findAllByType(ListRow).map((row) => [row.props.title, row.props.value])).toEqual([
+    ["De", "Daily"], ["Para", "Savings"], ["Cuenta para", "Laptop repair"],
+  ]);
+  const moveCopy = visibleCopy(move);
+  expect(moveCopy).toEqual(expect.arrayContaining(["Monto", "Monto en COP", "Registrar transferencia"]));
+  expectNoEnglish(moveCopy);
+});
+
+test("Spanish completion screens name the month and amounts inside one sentence", async () => {
+  const activated = await spanish(createElement(RecoveryActivated, {
+    title: "Laptop repair", currency: "COP", installmentMinorUnits: 230_000, activationMonth: "2026-11",
+    onViewPlans: () => {}, onHome: () => {},
+  }));
+  const activatedCopy = visibleCopy(activated);
+  expect(activatedCopy).toEqual(expect.arrayContaining([
+    "Tu plan quedó activo", "Laptop repair empieza con un aporte de COP 2.300 en noviembre.", "Ver planes", "Volver al inicio",
+  ]));
+  expectNoEnglish(activatedCopy);
+  await act(async () => root?.unmount());
+  const moved = await spanish(createElement(RecoveryMoved, {
+    title: "Pasaste COP 2.300", detail: "detalle", onViewPlan: () => {}, onHome: () => {},
+  }));
+  expect(visibleCopy(moved)).toEqual(expect.arrayContaining(["Ver el plan", "Volver al inicio"]));
+  expectNoEnglish(visibleCopy(moved));
+});
+
+test("English completion copy is unchanged", async () => {
+  const activated = await render(createElement(RecoveryActivated, {
+    title: "Laptop repair", currency: "COP", installmentMinorUnits: 230_000, activationMonth: "2026-11",
+    onViewPlans: () => {}, onHome: () => {},
+  }));
+  expect(visibleCopy(activated)).toEqual(expect.arrayContaining([
+    "Recovery plan active", "Laptop repair will begin with a COP 2.300 contribution in November.", "View Plans", "Back home",
+  ]));
+});
+
+test.each([
+  [{ kind: "transfer_reversed" as const, transferJournalEntryId: "t1", reversalJournalEntryId: "r1" },
+    "Lukapp cancelled this plan because a transfer that counted toward it was reversed and a newer plan already covers this expense."],
+  [{ kind: "contribution_corrected" as const, contributionId: "c1", correctionId: "k1" },
+    "Lukapp cancelled this plan because a transfer was removed from it and a newer plan already covers this expense."],
+])("a plan Lukapp cancelled says so and why, and a plan the person cancelled does not", async (cause, sentence) => {
+  const cancelled = (origin: NonNullable<RecoveryPlanView["cancellation"]>["origin"]): RecoveryPlanView => ({
+    ...plan, status: "cancelled", canCancel: false, acceptsContributions: false, remainingMinorUnits: 0, dueMinorUnits: 0,
+    cancellation: {
+      id: "cancel", workspaceId: "workspace", planId: plan.id, idempotencyKey: "key", createdBy: "owner",
+      cancellationDate: "2026-10-05", eventTime: Date.UTC(2026, 9, 5, 15), recordedAt: Date.UTC(2026, 9, 5, 15), origin,
+    },
+  });
+  const shown = async (view: RecoveryPlanView) => (await render(createElement(RecoveryPlanScreen, {
+    ...planDefaults, plan: view, month: "2026-10", onBack: () => {}, onMove: () => {}, onFind: () => {},
+  }))).findAll((node) => node.type === Text).map((node) => node.children.join(""));
+  expect(await shown(cancelled({ kind: "automatic", unfinishedPlanId: "newer", cause }))).toContain(sentence);
+  expect((await shown(cancelled({ kind: "person" }))).filter((text) => text.startsWith("Lukapp cancelled"))).toEqual([]);
 });

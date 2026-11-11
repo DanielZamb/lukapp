@@ -67,6 +67,14 @@ test("a ready Candidate is listed and consumed after confirm", () => {
   expect(consumeIn(accepted, "c1").candidates).toEqual([]);
 });
 
+test("a Candidate whose confirmation is pending stays in Needs you now and joins the Confirm all retry set", () => {
+  const pending = candidate("pending", { status: { kind: "pending" }, error: "Confirmation pending. Open to retry." });
+  const failed = candidate("failed", { status: { kind: "review", revision: 3 }, error: "Locked Period" });
+  const inbox = viewInbox({ v: 1, candidates: [pending, failed, candidate("ready")] }, "workspace", now, "COP");
+  expect(inbox.now.map((row) => row.id)).toEqual(["pending", "failed"]);
+  expect(inbox.ready.map((row) => row.id)).toEqual(["pending", "ready"]);
+});
+
 test("a Candidate in a foreign currency is never Ready", () => {
   const usd = candidate("usd", { currency: "USD" });
   const inbox = viewInbox({ v: 1, candidates: [usd] }, "workspace", now, "COP");
@@ -108,7 +116,7 @@ test("revocation wipe deletes Candidates without touching a missing Drafts key",
 });
 
 test("platform-unsupported local-input wipe clears legacy Drafts and Candidates for the subject", async () => {
-  await writeDocument("owner", { v: 1, drafts: [] });
+  await writeDocument("owner", { v: 3, drafts: [] });
   await writeIntakeDocument("owner", {
     v: 1,
     candidates: [candidate("c1")],
@@ -151,7 +159,7 @@ test("the source adapter writes captures locally and never invents Convex ids", 
 test("kept notifications with no amount fold under Other notifications and leave the badge count", () => {
   const notification = { text: "Nu\nAprovecha 30% de descuento", packageName: "com.nu.production", at: now };
   const promo = candidate("promo", { notification, suggestion: { ...candidate("x").suggestion, amountMinorUnits: null, direction: null } });
-  const typed = candidate("typed", { notification, reviewAmountText: "-12.000", suggestion: { ...candidate("x").suggestion, amountMinorUnits: null } });
+  const typed = candidate("typed", { notification, reviewAmount: { text: "-12.000", format: "pre-currency" }, suggestion: { ...candidate("x").suggestion, amountMinorUnits: null } });
   const old = candidate("old", { suggestion: { ...candidate("x").suggestion, amountMinorUnits: null } });
   const inbox = viewInbox({ v: 1, candidates: [promo, typed, old, candidate("money")] }, "workspace", now, "COP");
   expect(inbox.otherNotifications.map((row) => row.id)).toEqual(["promo"]);

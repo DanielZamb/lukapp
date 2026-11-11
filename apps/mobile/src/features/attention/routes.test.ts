@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import AlertsRoute from "../../../app/alerts";
 import type { api } from "../api";
 import { theme } from "../../ui/core";
+import { LanguageProvider } from "../../i18n";
 
 const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), query: vi.fn(),
   calendar: vi.fn(), month: "2026-10" }));
@@ -38,7 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   defaults = "ready";
   state.month = "2026-10";
-  evaluation = { currency: "COP", month: "2026-10", currentMonth: "2026-10", totalsOverlap: true,
+  evaluation = { currency: "COP", month: "2026-10", currentMonth: "2026-10", totalsOverlap: true, removedLimits: [],
     jars: [], availableCategories: [{ id: "unlimited", name: "Unlimited", emoji: "🏷️" }] };
   state.query.mockImplementation((reference) => {
     if (getFunctionName(reference) !== "budget:evaluate") throw new Error(`Unexpected query ${getFunctionName(reference)}`);
@@ -119,4 +120,16 @@ test("unknown defaults wait and absent defaults redirect home", async () => {
   defaults = "missing";
   await update();
   expect(root.root.findByType(Redirect).props.href).toBe("/");
+});
+
+test("Alerts reads in Spanish, empty and with an over-limit category", async () => {
+  const spanish = () => createElement(LanguageProvider, { initialPreference: "es" }, createElement(AlertsRoute));
+  await act(async () => { root = create(spanish()); });
+  expect(texts()).toEqual(["LO QUE NECESITA ATENCIÓN", "Alertas", "Nada se pasó del tope", "Vas dentro de tus topes"]);
+  expect(root.root.findAllByType("button").map((node) => node.props.accessibilityLabel)).toEqual(["Atrás"]);
+  if (!evaluation) throw new Error("Expected evaluation");
+  evaluation = { ...evaluation, jars: [{ category: { id: "food", name: "Mercado", emoji: "🍋" }, revisionId: "r",
+    limitMinorUnits: 100_00, consumptionMinorUnits: 150_00 }] };
+  await act(async () => root.update(spanish()));
+  expect(texts()).toEqual(["LO QUE NECESITA ATENCIÓN", "Alertas", "🍋  Mercado se pasó del tope", "COP 150 de COP 100", "Ahora"]);
 });

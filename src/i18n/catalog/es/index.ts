@@ -1,0 +1,22 @@
+import type { Catalog } from "../../types";
+import { access } from "./access";
+import { amount } from "./amount";
+import { budget } from "./budget";
+import { categories } from "./categories";
+import { common } from "./common";
+import { drafts } from "./drafts";
+import { feedback } from "./feedback";
+import { home } from "./home";
+import { inbox } from "./inbox";
+import { lifecycle } from "./lifecycle";
+import { placeEnding } from "./placeEnding";
+import { places } from "./places";
+import { planning } from "./planning";
+import { posting } from "./posting";
+import { recovery } from "./recovery";
+import { review } from "./review";
+import { settings } from "./settings";
+import { setup } from "./setup";
+import { workspace } from "./workspace";
+
+export const es: Catalog = { access, amount, budget, categories, common, drafts, feedback, home, inbox, lifecycle, placeEnding, places, planning, posting, recovery, review, settings, setup, workspace };

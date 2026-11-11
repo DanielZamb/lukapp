@@ -1,12 +1,14 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { useT } from "../../i18n";
 import { PrimaryButton, SecondaryButton, useUi } from "../../ui/core";
 import type { AccountSetupRequest } from "../categories/model";
 import { AccountSetupForm } from "../posting/AccountSetupForm";
 import { usePostingEditor } from "../posting/usePostingEditor";
 import { usePostingTransport } from "../posting/usePostingTransport";
 import { defaultAccountingDate } from "../timeZones";
+import { openAmount } from "../amount/session";
 
 export function DeferredAccountSetup({ request, subject, workspaceId, profileId, currency, timeZone, onDone }: {
   request: AccountSetupRequest;
@@ -18,6 +20,7 @@ export function DeferredAccountSetup({ request, subject, workspaceId, profileId,
   onDone: () => void;
 }) {
   const ui = useUi();
+  const { t } = useT();
   const transport = usePostingTransport(subject);
   const isolated = useMemo(() => ({ ...transport, load: () => transport.load(undefined, false) }), [transport]);
   const editor = usePostingEditor({ workspaceId, financialAccountProfileId: profileId,
@@ -39,29 +42,29 @@ export function DeferredAccountSetup({ request, subject, workspaceId, profileId,
       started.current = true;
       editor.setSetup({ name: request.name, emoji: request.style.emoji,
         productKind: request.answer === "payDebt" ? null : "bankAccount",
-        amount: "0", date: defaultAccountingDate(timeZone), target: { kind: "source" } });
+        amount: openAmount(currency, "0"), date: defaultAccountingDate(timeZone), target: { kind: "source" } });
     }
     if (editor.setup && !presented.current) {
       presented.current = true;
       sheet.current?.present();
     }
-  }, [editor, onDone, request, timeZone]);
+  }, [editor, onDone, request, timeZone, currency]);
   function finish() {
-    if (done.current || submitted.current || editor.loading) return;
+    if (done.current || submitted.current || editor.read().loading) return;
     done.current = true;
     sheet.current?.dismiss();
     onDone();
   }
   return <View style={ui.section}>
-    <Text style={ui.body}>Add {request.name}. Its balance is separate from My money.</Text>
-    {editor.blockedByPendingPostings && <Text accessibilityRole="alert" style={ui.error}>Finish the saved entry in Drafts before adding this place.</Text>}
-    {closed && <PrimaryButton label="Continue place setup" onPress={() => { setClosed(false); sheet.current?.present(); }} />}
+    <Text style={ui.body}>{t("setup.deferredAdd", { name: request.name })}</Text>
+    {editor.blockedByPendingPostings && <Text accessibilityRole="alert" style={ui.error}>{t("setup.deferredBlocked")}</Text>}
+    {closed && <PrimaryButton label={t("setup.deferredContinue")} onPress={() => { setClosed(false); sheet.current?.present(); }} />}
     {!submitted.current && !editor.pending && !editor.busy && !editor.loading &&
-      <SecondaryButton label="Add later" onPress={finish} />}
+      <SecondaryButton label={t("setup.deferredLater")} onPress={finish} />}
     <AccountSetupForm sheetRef={sheet} value={editor.setup} currency={currency}
       editable={editor.editable} busy={editor.busy} pending={editor.pending} error={editor.error}
-      canSubmit={editor.canSubmit} onChange={editor.setSetup} onSubmit={() => {
-        if (!editor.canSubmit) return;
+      canSubmit={editor.canSubmit} onChange={editor.changeSetup} onSubmit={() => {
+        if (!editor.read().canSubmit) return;
         submitted.current = true;
         void editor.submit();
       }}

@@ -19,6 +19,13 @@ const modules = import.meta.glob([
 const style = { emoji: "🛒", tone: "primary" } as const;
 function writeArgs(workspaceId = "foreign", profileId = "foreign") {
   return {
+    abortUndoPlace: { workspaceId, operationId: "operation" },
+    startUndoPlace: { previewFingerprint: "preview", workspaceId, financialAccountProfileId: profileId, idempotencyKey: "undo" },
+    closePlace: { reviewedBalance: { currency: "COP", minorUnits: 0 }, reviewedAccountingDate: "2026-09-24", workspaceId, financialAccountProfileId: profileId, idempotencyKey: "close", lines: [] },
+    changeDefaultPlace: { workspaceId, financialAccountProfileId: profileId, expectedFinancialAccountProfileId: profileId, idempotencyKey: "default" },
+    changeWorkspaceTimeZone: { workspaceId, timeZone: "Pacific/Auckland", expectedTimeZone: "America/Bogota", idempotencyKey: "zone" },
+    changeFunctionalCurrency: { workspaceId, functionalCurrency: "USD", expectedFunctionalCurrency: "COP", idempotencyKey: "currency" },
+    renameAccount: { workspaceId, financialAccountProfileId: profileId, name: "New", expectedName: "Old" },
     changeAccountLook: { workspaceId, financialAccountProfileId: profileId, emoji: "🐷" },
     createFinancialAccountProfile: {
       workspaceId,
@@ -58,6 +65,9 @@ function writeArgs(workspaceId = "foreign", profileId = "foreign") {
 }
 function readArgs(workspaceId: string) {
   return {
+    previewUndoPlace: { workspaceId, financialAccountProfileId: "foreign" },
+    placeUndoStatus: { workspaceId, financialAccountProfileId: "foreign" },
+    placeClosure: { workspaceId, financialAccountProfileId: "foreign" },
     openWorkspace: { workspaceId },
     listFinancialAccountProfiles: { workspaceId },
     listLedgerAccounts: { workspaceId },
@@ -71,6 +81,8 @@ function readArgs(workspaceId: string) {
     listUserCategories: { workspaceId },
     categoryTotals: { workspaceId, month: "2026-09" },
     personalDefaults: {},
+    workspaceSettings: { workspaceId },
+    workspaceSettingHistory: { workspaceId },
   };
 }
 async function expectWritesDenied(
@@ -119,7 +131,7 @@ function observation(
   };
 }
 
-test("the complete accounting write inventory is public actions with only internal mutation handlers", async () => {
+test("accounting writes use public actions and screenshot preparation is the only public mutation", async () => {
   const actions = Object.entries(accounting)
     .filter(([, value]) => "isAction" in value)
     .map(([name]) => name)
@@ -139,11 +151,14 @@ test("the complete accounting write inventory is public actions with only intern
     expect(handler.isInternal).toBe(true);
   // Inspect every deployed module so a new legacy public mutation cannot escape the inventory.
   const publicMutations: string[] = [];
+  const feedbackFunctions: string[] = [];
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", fixtureIdentity.issuer);
   for (const [path, load] of Object.entries(modules)) {
     const loaded: unknown = await load();
     if (!loaded || typeof loaded !== "object") continue;
     for (const [name, value] of Object.entries(loaded)) {
+      if (path === "./feedback.ts" && value && (typeof value === "object" || typeof value === "function") && "isPublic" in value)
+        feedbackFunctions.push(name);
       if (
         value &&
         (typeof value === "object" || typeof value === "function") &&
@@ -153,7 +168,8 @@ test("the complete accounting write inventory is public actions with only intern
         publicMutations.push(`${path}:${name}`);
     }
   }
-  expect(publicMutations).toEqual([]);
+  expect(publicMutations).toEqual(["./feedback.ts:removeScreenshot"]);
+  expect(feedbackFunctions.sort()).toEqual(["attachScreenshot", "destination", "removeScreenshot", "submit"]);
 });
 
 test("raw workspace creation is denied even for the registered live Owner", async () => {

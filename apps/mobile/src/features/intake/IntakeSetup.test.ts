@@ -4,6 +4,8 @@ import { FlatList } from "react-native";
 import { getFunctionName } from "convex/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
+import { formatDateTime } from "../../../../../src/i18n/format";
 import type { NativeStatus, UnsupportedStatus } from "../../../modules/notification-intake";
 import { IntakeContext } from "./IntakeProvider";
 import { INTAKE_ACKNOWLEDGEMENT, INTAKE_DISCLOSURE_VERSION, IntakeSetup } from "./IntakeSetup";
@@ -117,7 +119,7 @@ test("the disclosure comes first, gates OS settings and never configures or enab
   expect(text()).toContain("The notification text is never uploaded; only the values you confirm are posted.");
   expect(text()).toContain("deleted 15 days after their first capture");
   expect(text()).toContain("Notifications that look like security codes are not kept.");
-  expect(text()).toContain("Every Candidate requires review before financial posting.");
+  expect(text()).toContain("Every Candidate needs your review before it's posted.");
   expect(button("Continue").props.accessibilityState.disabled).toBe(true);
   await press("Continue");
   expect(text()).toContain("Before you turn it on");
@@ -132,7 +134,7 @@ test("the disclosure comes first, gates OS settings and never configures or enab
   statusFields.access = "granted"; statusFields.connection = "disconnected"; statusFields.checkedAt = now + 1234;
   await act(async () => { await f.service.refresh(); });
   expect(text()).toContain("Granted"); expect(text()).toContain("Disconnected");
-  expect(text()).toContain(new Date(now + 1234).toLocaleString()); expect(text()).not.toContain("just now");
+  expect(text()).toContain(formatDateTime("en", now + 1234)); expect(text()).not.toContain("just now");
   expect(text()).toContain("Listener isn't connected");
   expect(button("Add an app").props.accessibilityState.disabled).toBe(false);
   const retry = vi.spyOn(f.native, "retryConnection");
@@ -177,7 +179,7 @@ test("public permission failure is visible and refresh reloads current accounts"
 test.each(["platform", "native_module_missing"] satisfies UnsupportedStatus["reason"][])("unsupported %s is distinct and never offers capture setup", async (reason) => {
   unsupported = { supported: false, reason }; await mount();
   expect(text()).toContain("Not available here");
-  expect(text()).toContain(reason === "platform" ? "supported only in the custom Android app" : "Custom Android binary missing");
+  expect(text()).toContain(reason === "platform" ? "works only in the full Lukapp app for Android" : "This version of the app can't read notifications.");
   expect(boundary.query).not.toHaveBeenCalled();
   expect(has(acknowledgement)).toBe(false);
   expect(has("Add an app")).toBe(false); expect(has("Turn off and wipe")).toBe(false);
@@ -194,8 +196,8 @@ test.each(["corrupt", "key_unavailable"] satisfies NativeStatus["storageState"][
   expect(f.events).not.toContain("wipe");
   await press("Turn off and wipe");
   expect(text()).toContain("Turn off and wipe?");
-  expect(text()).toContain("including saved review edits and pending submission commands");
-  expect(text()).toContain("Posted ledger entries and manual Drafts are kept.");
+  expect(text()).toContain("with your saved review edits and pending sends");
+  expect(text()).toContain("Posted entries and the Drafts you made yourself are kept.");
   expect(f.events).not.toContain("wipe");
   await press("Keep it on"); expect(f.events).not.toContain("wipe");
 });
@@ -215,15 +217,24 @@ test("identical mappings keep their ID, changed accounts get a new version, and 
   expect(active).toContainEqual(other);
 });
 
+test("after a time-zone change, saving the same place keeps the source's identity", async () => {
+  boundary.query.mockImplementation(async (ref) => getFunctionName(ref) === "accounting:openWorkspace" ? { ...workspace, timeZone: "Pacific/Auckland" } : profiles);
+  f.setValue(serializeState({ ...emptyState(), mappings: [mapping], activeSelectionIds: [mapping.sourceSelectionId] }));
+  await mount();
+  await acknowledge(); await choose();
+  expect(f.state().mappings).toEqual([mapping]);
+  expect(f.state().activeSelectionIds).toEqual([mapping.sourceSelectionId]);
+});
+
 test("unavailable saved accounts remain visible and configure rejection never claims activation", async () => {
   f.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, financialAccountProfileId: "removed-account" }], activeSelectionIds: [mapping.sourceSelectionId] }));
   await mount(); expect(text()).toContain("Place unavailable · To an unavailable place");
-  const validate = vi.spyOn(f.deps, "validateMapping").mockResolvedValue(false);
+  const validate = vi.spyOn(f.deps, "validateMapping").mockResolvedValue(null);
   await acknowledge(); await choose("Savings");
-  expect(text()).toContain("An account or workspace is unavailable or permission changed.");
+  expect(text()).toContain("A place or workspace is unavailable or permissions changed.");
   expect(f.events).not.toContain("configure");
   expect(f.state().activeSelectionIds).toEqual([mapping.sourceSelectionId]);
-  validate.mockResolvedValue(true);
+  validate.mockResolvedValue({ timeZone: mapping.timeZone });
 });
 
 test("a lost configure reply remains pending and retries the exact saved command", async () => {
@@ -243,7 +254,7 @@ test("active and retained mapping capacity errors preserve existing data", async
   const mappings = Array.from({ length: 64 }, (_, index) => ({ ...mapping, sourceSelectionId: `retired-${index}`, packageName: `app.source${index}` }));
   f.setValue(serializeState({ ...emptyState(), mappings }));
   await mount(); await enable();
-  expect(text()).toContain("Intake capacity reached."); expect(f.state().mappings).toEqual(mappings);
+  expect(text()).toContain("Intake limit reached."); expect(f.state().mappings).toEqual(mappings);
   expect(f.events).not.toContain("configure");
 });
 
@@ -254,11 +265,11 @@ test("observed content-free notices dismiss through the service while recovery g
     statusFields.notices = statusFields.notices?.filter((row) => !noticeIds.includes(row.id));
   });
   await mount(); await acknowledge();
-  expect(text()).toContain(`Intake was recovering since ${new Date(now - 5000).toLocaleString()}. 2 captures rejected.`);
+  expect(text()).toContain(`Intake was recovering since ${formatDateTime("en", now - 5000)}. 2 captures rejected.`);
   expect(text()).toContain("Too many alerts at once");
-  expect(text()).toContain(`3 alerts · ${new Date(now - 4000).toLocaleString()} to ${new Date(now - 2000).toLocaleString()}`);
-  expect(intakeWarning(f.service.getSnapshot())).toContain("recovery gap since");
-  await press("Dismiss overflow notice");
+  expect(text()).toContain(`3 alerts · ${formatDateTime("en", now - 4000)} to ${formatDateTime("en", now - 2000)}`);
+  expect(intakeWarning(f.service.getSnapshot(), createTranslator("en"))).toContain("while it was recovering");
+  await press("Dismiss notice: Too many alerts at once");
   expect(dismiss).toHaveBeenCalledWith({ expectedEpoch: "a".repeat(22), noticeIds: ["notice-1"] });
   expect(text()).not.toContain("Too many alerts at once"); expect(text()).toContain("Activity may be missing");
 });
@@ -292,7 +303,7 @@ test("failed wipe remains visibly blocked, including missing-native recovery, th
   expect(text()).toContain("Wipe is pending"); expect(f.wipeIntent()).not.toBeNull();
   expect(has("Turn off and wipe")).toBe(false);
   unsupported = { supported: false, reason: "native_module_missing" };
-  await press("Retry pending wipe"); expect(text()).toContain("NATIVE_WIPE_REQUIRED");
+  await press("Retry pending wipe"); expect(text()).toContain("Install the full Lukapp app for Android to finish wiping");
   expect(f.wipeIntent()).not.toBeNull();
   unsupported = null;
   await press("Retry pending wipe"); expect(f.wipeIntent()).toBeNull();
@@ -404,4 +415,42 @@ test("sources saved under an older disclosure are offered the update, re-saved w
   expect(f.state().mappings).toEqual([mapping]);
   expect((await f.native.getStatus() as NativeStatus).consentVersion).toBe(INTAKE_DISCLOSURE_VERSION);
   expect(text()).not.toContain("See each notification with its suggestion");
+});
+
+async function mountSpanish() {
+  const { LanguageProvider } = await import("../../i18n");
+  await f.service.refresh().catch(() => {});
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, tree())); });
+}
+
+test("setup reads in Spanish and names Android's own Acceso a notificaciones setting", async () => {
+  statusFields.access = "not_granted";
+  await mountSpanish();
+  expect(text()).toContain("Antes de activarla");
+  expect(text()).toContain("Solo las apps que elijas");
+  expect(text()).toContain("El siguiente paso es permitir el Acceso a notificaciones");
+  await press("Leí el aviso de la lectura de notificaciones");
+  await press("Continuar");
+  const shown = text();
+  for (const copy of ["Lectura de notificaciones", "ALERTAS DE COMPRAS", "Permite el Acceso a notificaciones", "Apps que Lukapp lee",
+    "Este celular", "Acceso a notificaciones", "No permitido", "Personal · COP · Bogota"])
+    expect(shown).toContain(copy);
+  expect(has("Acceso a notificaciones, No permitido")).toBe(false);
+  expect(root?.root.findAllByProps({ label: "Permitir el Acceso a notificaciones" }).length).toBeGreaterThan(0);
+  expect(root?.root.findAllByProps({ label: "Abrir Acceso a notificaciones" }).length).toBeGreaterThan(0);
+  for (const english of ["Notification intake", "Allow notification access", "This phone", "Not granted", "Apps you read from"])
+    expect(shown).not.toContain(english);
+});
+
+test("choosing where an app's alerts go reads in Spanish around the stored app label", async () => {
+  await mountSpanish();
+  await press("Leí el aviso de la lectura de notificaciones");
+  await press("Continuar");
+  await act(async () => { root!.root.findAllByProps({ label: "Agregar una app" })[0]!.props.onPress(); });
+  expect(root?.root.findByProps({ accessibilityLabel: "Buscar apps" }).props.placeholder).toBe("Buscar por nombre");
+  await press("Bank");
+  expect(text()).toContain("¿A dónde van las alertas de Bank?");
+  expect(text()).toContain("Cuenta de ahorro");
+  expect(text()).toContain("Efectivo");
+  expect(text()).toContain("Puedes cambiarlo después. Los otros espacios conservan su propio lugar para Bank.");
 });

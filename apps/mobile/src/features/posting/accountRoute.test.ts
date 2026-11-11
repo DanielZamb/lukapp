@@ -6,12 +6,25 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 const state = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn(), changeLook: vi.fn(), recent: vi.fn(), rows: [] as {
   id: string; title: string; date: string; reversed?: boolean; amount: { currency: string; minorUnits: number };
 }[] }));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("expo-router", () => ({
   router: { push: state.push, back: state.back }, Redirect: "redirect",
   useLocalSearchParams: () => ({ profileId: "card-profile" }),
 }));
-vi.mock("convex/react", () => ({ useAction: () => state.changeLook }));
+vi.mock("convex/react", async () => {
+  const { getFunctionName } = await import("convex/server");
+  return {
+    useAction: () => state.changeLook,
+    useQuery: (ref: Parameters<typeof getFunctionName>[0]) => getFunctionName(ref) === "accounting:listFinancialAccountProfiles"
+      ? [{ id: "card-profile", workspaceId: "ws", name: "Card", productKind: "creditCard", ledgerAccountId: "ledger", status: "open" }] : null,
+  };
+});
 vi.mock("../places/EmojiSheet", () => ({ EmojiSheet: "emoji-sheet" }));
+vi.mock("../places/RenameSheet", () => ({ RenameSheet: "rename-sheet" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native", () => ({
@@ -47,11 +60,11 @@ function button(label: string) {
 }
 test("account shows the real place metadata, empty activity and filtered history", async () => {
   await render();
-  expect(texts()).toEqual(["PLACE", "Card", "💳", "Current balance", "COP 100", "See in tx history",
-    "Type", "Credit card", "Currency", "COP", "Tracking from", "September 24, 2026",
-    "Recent activity", "No activity yet", "New entries will appear here"]);
+  expect(texts()).toEqual(["PLACE", "Card", "💳", "Current balance", "COP 100", "See in history",
+    "Name", "Card", "Type", "Credit card", "Currency", "COP", "Tracking from", "September 24, 2026",
+    "Recent activity", "No activity yet", "New entries will appear here", "Close or undo this place"]);
   expect(state.recent).toHaveBeenCalledWith("ws", 3, "card-profile");
-  await act(async () => button("See in tx history").props.onPress());
+  await act(async () => button("See in history").props.onPress());
   expect(state.push).toHaveBeenCalledWith({ pathname: "/history", params: { profileId: "card-profile" } });
   await act(async () => button("Back").props.onPress());
   expect(state.back).toHaveBeenCalledOnce();

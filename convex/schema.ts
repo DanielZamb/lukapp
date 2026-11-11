@@ -1,18 +1,39 @@
+import { placeEndingFields } from "./accountingPlaceValues";
+import { defaults, workspaceSettingFields } from "./accountingValues";
 import { intakeEvidence } from "./notificationIntakeValues";
 import { categoryFields } from "./categoryValidators";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { mobilePlatform } from "./lib/securityValues";
 import { revisionFields } from "./budgetValues";
+import { cancellationOrigin } from "./savingsRecoveryValues";
+import { reportFields, reservationFields } from "./feedbackValues";
 import {
   accountNature,
   normalSide,
   periodStatus,
   postingPolicy,
   productKind,
+  financialAccountProfile,
 } from "./validators";
 
+import { undoOperationFields } from "./accountingUndoValues";
+
 export default defineSchema({
+  placeUndoOperations: defineTable(undoOperationFields)
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_profile", ["financialAccountProfileId"]),
+  placeEndings: defineTable({ ...placeEndingFields, workspaceId: v.id("workspaces"), financialAccountProfileId: v.id("financialAccountProfiles") })
+    .index("by_profile", ["financialAccountProfileId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"]),
+  feedbackReports: defineTable(reportFields)
+    .index("by_user_key", ["userId", "reportKey"])
+    .index("by_screenshot", ["screenshotStorageId"]),
+  feedbackReservations: defineTable(reservationFields)
+    .index("by_user_key", ["userId", "reportKey"])
+    .index("by_user_time", ["userId", "reservedAt"])
+    .index("by_user_sent", ["userId", "sentAt"])
+    .index("by_screenshot", ["screenshot.storageId"]),
   ledgerAccountTotals: defineTable({
     workspaceId: v.id("workspaces"),
     ledgerAccountId: v.id("ledgerAccounts"),
@@ -25,6 +46,7 @@ export default defineSchema({
     journalEntryId: v.id("journalEntries"),
   }).index("by_entry", ["journalEntryId"]),
   financialAccountSetups: defineTable({
+    originalCurrency: v.optional(v.string()),
     workspaceId: v.id("workspaces"),
     idempotencyKey: v.string(),
     name: v.string(),
@@ -36,6 +58,7 @@ export default defineSchema({
     openingJournalEntryId: v.optional(v.id("journalEntries")),
   }).index("by_workspace_idempotency", ["workspaceId", "idempotencyKey"]),
   financialAccountOpenings: defineTable({
+    originalCurrency: v.optional(v.string()),
     workspaceId: v.id("workspaces"),
     financialAccountProfileId: v.id("financialAccountProfiles"),
     accountingDate: v.string(),
@@ -76,6 +99,9 @@ export default defineSchema({
     impliedAnnualRateBps: v.number(),
     currency: v.string(),
     activationMonth: v.string(),
+    activationDate: v.optional(v.string()),
+    replacesPlanId: v.optional(v.id("savingsRecoveryPlans")),
+    replacementLinkInferred: v.optional(v.boolean()),
     idempotencyKey: v.string(),
     createdBy: v.string(),
     createdAt: v.number(),
@@ -83,7 +109,25 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
     .index("by_workspace_source", ["workspaceId", "sourceJournalEntryId"]),
+  savingsRecoveryCancellations: defineTable({
+    workspaceId: v.id("workspaces"), planId: v.id("savingsRecoveryPlans"),
+    reason: v.optional(v.string()), idempotencyKey: v.string(), createdBy: v.string(),
+    eventTime: v.number(), recordedAt: v.number(),
+    cancellationDate: v.optional(v.string()),
+    origin: v.optional(cancellationOrigin),
+  }).index("by_workspace", ["workspaceId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_plan", ["planId"]),
+  savingsRecoveryCorrections: defineTable({
+    workspaceId: v.id("workspaces"), contributionId: v.id("savingsRecoveryContributions"),
+    reason: v.string(), targetPlanId: v.optional(v.id("savingsRecoveryPlans")),
+    replacementContributionId: v.optional(v.id("savingsRecoveryContributions")),
+    contributionDate: v.string(), idempotencyKey: v.string(), createdBy: v.string(), recordedAt: v.number(),
+  }).index("by_workspace", ["workspaceId"])
+    .index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_contribution", ["contributionId"]),
   savingsRecoveryContributions: defineTable({
+    correctsContributionId: v.optional(v.id("savingsRecoveryContributions")),
     workspaceId: v.id("workspaces"),
     planId: v.id("savingsRecoveryPlans"),
     transferJournalEntryId: v.id("journalEntries"),
@@ -124,7 +168,13 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     reason: v.optional(v.union(v.literal("superseded"), v.literal("replaced"))),
   }).index("by_session", ["clerkSessionId"]),
+  workspaceSettingChanges: defineTable({
+    ...workspaceSettingFields,
+    workspaceId: v.id("workspaces"),
+  }).index("by_workspace_request", ["workspaceId", "idempotencyKey"])
+    .index("by_workspace_setting", ["workspaceId", "setting"]),
   personalDefaults: defineTable({
+    setupResult: v.optional(v.object({ ...defaults.fields, financialAccountProfile: v.object({ ...financialAccountProfile.fields, status: v.optional(financialAccountProfile.fields.status) }) })),
     ownerSubject: v.string(),
     workspaceId: v.id("workspaces"),
     financialAccountProfileId: v.id("financialAccountProfiles"),
@@ -139,6 +189,7 @@ export default defineSchema({
     functionalCurrency: v.string(),
     chartOfAccountsTemplate: v.string(),
     timeZone: v.optional(v.string()),
+    defaultFinancialAccountProfileId: v.optional(v.id("financialAccountProfiles")),
     ledgerSummaryVersion: v.optional(v.literal(1)),
     ledgerSummaryCursor: v.optional(v.union(v.string(), v.null())),
   }),
@@ -158,6 +209,7 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_code", ["workspaceId", "code"]),
   financialAccountProfiles: defineTable({
+    createdAccountingDate: v.optional(v.string()),
     workspaceId: v.id("workspaces"),
     name: v.string(),
     emoji: v.optional(v.string()),
@@ -195,7 +247,9 @@ export default defineSchema({
     creditMinorUnits: v.number(),
   })
     .index("by_workspace", ["workspaceId"])
-    .index("by_entry", ["journalEntryId", "lineNumber"]),
+    .index("by_entry", ["journalEntryId", "lineNumber"])
+    .index("by_entry_account", ["journalEntryId", "ledgerAccountId"])
+    .index("by_workspace_account", ["workspaceId", "ledgerAccountId"]),
   accountingPeriods: defineTable({
     workspaceId: v.id("workspaces"),
     year: v.number(),

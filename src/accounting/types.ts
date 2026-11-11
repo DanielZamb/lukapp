@@ -83,7 +83,28 @@ export type Workspace = {
   currentAccountingPeriod: AccountingPeriod;
 };
 
+export type PlaceStatus = "open" | "closed" | "undone" | "undoing";
+export type PlaceEnding = {
+  act: "close" | "undo";
+  occurredAt: number;
+  recordedAt: number;
+  endedBy: string;
+};
+export type StoredPlaceEnding = PlaceEnding & {
+  accountingDate?: string;
+  id: string;
+  workspaceId: string;
+  financialAccountProfileId: string;
+  idempotencyKey: string;
+  request: string;
+  entries: PostedJournalEntry[];
+  undoOperationId?: string;
+  replacementDefaultFinancialAccountProfileId?: string;
+};
+
 export type FinancialAccountProfile = {
+  endedAt?: number;
+  status: PlaceStatus;
   id: string;
   workspaceId: string;
   name: string;
@@ -151,6 +172,8 @@ export type PostedJournalEntry = {
 };
 
 export type AccountBalance = {
+  status: PlaceStatus;
+  endedAt?: number;
   financialAccountProfileId: string;
   name: string;
   nature: AccountNature;
@@ -180,6 +203,9 @@ export type StoredWorkspace = {
 };
 
 export type StoredProfile = {
+  undoOperationId?: string;
+  ending?: PlaceEnding;
+  createdAccountingDate?: string;
   createdAt?: number;
   id: string;
   workspaceId: string;
@@ -239,6 +265,8 @@ export type AccountingClock = {
 };
 
 export type AccountingStore = {
+  findPlaceEnding(workspaceId: string, idempotencyKey: string): Promise<StoredPlaceEnding | undefined>;
+  insertPlaceEnding(ending: Omit<StoredPlaceEnding, "id">): Promise<StoredPlaceEnding>;
   findAccountSetup(workspaceId: string, idempotencyKey: string): Promise<StoredAccountSetup | undefined>;
   insertAccountSetup(setup: StoredAccountSetup): Promise<void>;
   findOpeningMarkerByIdempotencyKey(
@@ -273,6 +301,7 @@ export type AccountingStore = {
   ): Promise<LedgerAccount | undefined>;
   listLedgerAccounts(workspaceId: string): Promise<LedgerAccount[]>;
   insertProfile(profile: Omit<StoredProfile, "id" | "createdAt">): Promise<StoredProfile>;
+  renameProfile(profileId: string, name: string): Promise<StoredProfile>;
   restyleProfile(profileId: string, emoji: string): Promise<StoredProfile>;
   getProfile(profileId: string): Promise<StoredProfile | undefined>;
   listProfiles(workspaceId: string): Promise<StoredProfile[]>;
@@ -329,6 +358,7 @@ export type AccountingCore = {
     productKind: FinancialAccountProductKind;
   }): Promise<FinancialAccountProfile>;
   listFinancialAccountProfiles(input: {
+    status?: PlaceStatus | "all";
     actor: Actor;
     workspaceId: string;
   }): Promise<FinancialAccountProfile[]>;
@@ -406,10 +436,12 @@ export type AccountSetupInput = Omit<OpeningPositionInput, "financialAccountProf
   productKind: FinancialAccountProductKind;
 };
 export type StoredAccountSetup = Omit<AccountSetupInput, "actor"> & {
+  originalCurrency?: string;
   financialAccountProfileId: string;
   openingJournalEntryId?: string;
 };
 export type StoredOpeningMarker = {
+  originalCurrency?: string;
   workspaceId: string;
   financialAccountProfileId: string;
   accountingDate: string;

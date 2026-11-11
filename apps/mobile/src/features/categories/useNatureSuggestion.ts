@@ -8,5 +8,5 @@ export function useNatureSuggestion(name: string) {
   const suggestion = useQuery(api.accounting.suggestCategoryNature,
     key ? { name: key } : "skip");
   const suggested = suggestion?.suggested;
-  return { allowed, suggested: suggested && allowed.includes(suggested) ? suggested : null };
+  return { allowed, suggested: suggested && allowed.includes(suggested) ? suggested : null, key };
 }

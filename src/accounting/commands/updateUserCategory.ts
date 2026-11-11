@@ -1,4 +1,5 @@
 import { normalizeCategoryName } from "../categories/policy";
+import { hasVisibleText } from "../names";
 import type { CategoryStyle } from "../categories/types";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
@@ -12,7 +13,7 @@ export async function updateUserCategory(store: AccountingStore, input: {
   if (!category || category.workspaceId !== input.workspaceId || category.deletedAt !== undefined)
     throw new AccountingError("category_not_found");
   const name = input.name.trim();
-  if (!name) throw new AccountingError("name_required");
+  if (!hasVisibleText(name)) throw new AccountingError("name_required");
   if (name.length > 80) throw new AccountingError("category_name_too_long");
   const normalizedName = normalizeCategoryName(name);
   if ((await store.listCategories(input.workspaceId)).some((other) =>

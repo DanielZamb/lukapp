@@ -1,3 +1,4 @@
+import { useFormState, withFields } from "../features/amount/useAmountState";
 import { useClerk } from "@clerk/expo";
 import { useAction, useQuery_experimental } from "convex/react";
 import Constants from "expo-constants";
@@ -5,6 +6,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, type 
 import { ConvexError } from "convex/values";
 import { ActivityIndicator, Platform, Text } from "react-native";
 import { api } from "../features/api";
+import { useT } from "../i18n";
 import { useLocalInstallId } from "../local-auth/installation";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { useDeviceAccessFailure } from "../local-auth/accessFailure";
@@ -28,6 +30,8 @@ export function DeviceAdmissionGate({ children }: { children: ReactNode }) {
 
 function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () => void }) {
   const ui = useUi();
+  const translator = useT();
+  const { t } = translator;
   const installId = useLocalInstallId();
   const interaction = useLocalEntryInteraction();
   const report = useDeviceAccessFailure();
@@ -51,10 +55,15 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     else if (status.status === "success" && status.data.status === "revoked")
       report(new ConvexError({ code: "device_revoked", wipeLocalInput: true, ...(status.data.movedTo ? { movedTo: status.data.movedTo } : {}) }));
   }, [status, report]);
-  const [name, setName] = useState("");
-  const [replacementName, setReplacementName] = useState(platform === "ios" ? "My iPhone" : "My Android phone");
+  /** The names typed for this phone and whether one was sent; registering reads them at the press. */
+  const [form, setForm, readForm] = useFormState(() => ({
+    name: "", replacementName: t(platform === "ios" ? "access.defaultNameIos" : "access.defaultNameAndroid"), submitted: false,
+  }));
+  const { name, replacementName, submitted } = form;
+  const setName = (value: string) => setForm((now) => withFields(now, { name: value }));
+  const setReplacementName = (value: string) => setForm((now) => withFields(now, { replacementName: value }));
+  const setSubmitted = (value: boolean) => setForm((now) => withFields(now, { submitted: value }));
   const [busy, setBusy] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [failure, setFailure] = useState<AdmissionFailure | null>(null);
   const submitting = useRef(false);
   const mounted = useRef(true);
@@ -62,7 +71,8 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  const validName = name.trim().length > 0 && name.trim().length <= 80;
+  const named = (value: string) => value.trim().length > 0 && value.trim().length <= 80;
+  const validName = named(name);
   const existingLabel = status.status === "success" && status.data.status === "unregistered"
     ? status.data.existingLabel : undefined;
 
@@ -70,7 +80,7 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     ? status.data.occupier : undefined;
 
   async function registerNamed(label: string) {
-    if (submitting.current || submitted || !nativePlatform || !appVersion || !validBuild ||
+    if (submitting.current || readForm().submitted || !nativePlatform || !appVersion || !validBuild ||
       status.status !== "success" || status.data.status !== "unregistered") return;
     submitting.current = true;
     setBusy(true);
@@ -81,7 +91,7 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
       if (mounted.current) setSubmitted(true);
     } catch (error) {
       if (report(error)) return;
-      if (mounted.current) setFailure(admissionFailure(error));
+      if (mounted.current) setFailure(admissionFailure(error, translator));
     } finally {
       submitting.current = false;
       if (mounted.current) setBusy(false);
@@ -92,19 +102,19 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     void registerNamed(existingLabel);
   }, [existingLabel]);
   async function move() {
-    if (!occupier || submitting.current || submitted || !nativePlatform || !appVersion || !validBuild ||
-        !replacementName.trim() || replacementName.trim().length > 80) return;
+    const now = readForm();
+    if (!occupier || submitting.current || now.submitted || !nativePlatform || !appVersion || !validBuild || !named(now.replacementName)) return;
     submitting.current = true;
     setBusy(true);
     setFailure(null);
     try {
       if (!await enrollment.ensure() || !mounted.current) return;
-      await replace({ installId, label: replacementName.trim(), platform: nativePlatform, appVersion,
+      await replace({ installId, label: now.replacementName.trim(), platform: nativePlatform, appVersion,
         expectedOccupierId: occupier.deviceId, expectedSessionId: occupier.sessionId });
       if (mounted.current) setSubmitted(true);
     } catch (error) {
       if (report(error)) return;
-      if (mounted.current) setFailure(admissionFailure(error));
+      if (mounted.current) setFailure(admissionFailure(error, translator));
     } finally {
       submitting.current = false;
       if (mounted.current) setBusy(false);
@@ -121,26 +131,26 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     try {
       await signOut();
     } catch {
-      if (mounted.current) setFailure({ kind: "denied", message: "Sign-out could not finish. Try signing out again." });
+      if (mounted.current) setFailure({ kind: "denied", message: t("access.signOutFailed") });
     } finally {
       submitting.current = false;
       if (mounted.current) setBusy(false);
     }
   }
 
-  const denied = status.status === "error" ? admissionFailure(status.error)
+  const denied = status.status === "error" ? admissionFailure(status.error, translator)
     : status.status === "success" && status.data.status === "revoked"
-      ? { kind: "denied", message: status.data.movedTo ? `Access moved to ${status.data.movedTo}` : "This device’s access was revoked." } satisfies AdmissionFailure
+      ? { kind: "denied", message: status.data.movedTo ? t("access.movedTo", { device: status.data.movedTo }) : t("access.revoked") } satisfies AdmissionFailure
       : failure?.kind === "denied" ? failure : null;
   const closed = denied ?? (existingLabel && failure && !(occupier && failure.kind === "occupied") ? failure : null);
   if (closed || !validBuild) return (
     <Screen>
-      <Header title="Device access unavailable" />
+      <Header title={t("access.deviceUnavailableTitle")} />
       <Text accessibilityRole="alert" style={ui.error}>
-        {closed?.message ?? "This build does not support native device registration."}
+        {closed?.message ?? t("access.buildUnsupported")}
       </Text>
-      {closed && closed.kind !== "denied" && <PrimaryButton label="Try again" onPress={retry} />}
-      <SecondaryButton label={busy ? "Signing out…" : "Sign out"} disabled={busy} onPress={() => void leave()} />
+      {closed && closed.kind !== "denied" && <PrimaryButton label={t("common.retry")} onPress={retry} />}
+      <SecondaryButton label={busy ? t("access.signingOut") : t("access.signOut")} disabled={busy} onPress={() => void leave()} />
     </Screen>
   );
   if (status.status === "success" && status.data.status === "registered" && enrollment.ready)
@@ -155,9 +165,9 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
       (status.status === "success" && status.data.status === "registered")) return (
     <Screen>
       <ActivityIndicator />
-      <Text style={ui.body}>Confirming device access…</Text>
-      <SecondaryButton label="Check again" onPress={retry} />
-      <SecondaryButton label={busy ? "Signing out…" : "Sign out"} disabled={busy} onPress={() => void leave()} />
+      <Text style={ui.body}>{t("access.confirmingDevice")}</Text>
+      <SecondaryButton label={t("access.checkAgain")} onPress={retry} />
+      <SecondaryButton label={busy ? t("access.signingOut") : t("access.signOut")} disabled={busy} onPress={() => void leave()} />
     </Screen>
   );
   return (
@@ -167,7 +177,7 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
       canSubmit={validName}
       error={failure?.message ?? ""}
       onNameChange={(value) => { interaction(); setName(value); }}
-      onSubmit={() => { if (validName) void registerNamed(name.trim()); }}
+      onSubmit={() => { const typed = readForm().name; if (named(typed)) void registerNamed(typed.trim()); }}
       onSignOut={() => void leave()}
     />
   );

@@ -112,16 +112,16 @@ async function mount() {
   });
   await press("Food");
   await press("USD");
-  await press("Not now, You add drafts yourself");
+  await press("Not now, You record your own entries");
   await act(async () => control("Starting amount").props.onChangeText("123"));
 }
 function expectAnswers(currency = "USD") {
-  expect(control("Starting amount").props.value).toBe("123");
+  expect(control("Starting amount").props.value).toBe(currency === "USD" ? "123" : "");
   expect(control("Food").props.accessibilityState.checked).toBe(true);
   if (currency === "CAD")
     expect(control("More currencies").findByType("text").children).toEqual(["CAD"]);
   else expect(control(currency).props.accessibilityState.checked).toBe(true);
-  expect(control("Not now, You add drafts yourself").props.accessibilityState.checked).toBe(true);
+  expect(control("Not now, You record your own entries").props.accessibilityState.checked).toBe(true);
 }
 
 test.each([

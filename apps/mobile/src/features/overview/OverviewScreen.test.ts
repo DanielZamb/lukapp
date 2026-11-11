@@ -51,7 +51,7 @@ async function render(value: MonthOverview | undefined = data) {
 function bars() { return screen().findAll((node) => node.type === "view" && node.props.accessibilityRole === "progressbar"); }
 function percentages() { return bars().map((node) => node.props.accessibilityValue.now); }
 
-test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["AED", "AED "]])("shows posted spending and opens history for %s without formatToParts", async (currency, symbol) => {
+test.each([["COP", "$", "10.000"], ["USD", "$", "10,000"], ["EUR", "€", "10.000"], ["AED", "AED ", "10.000"]])("shows posted spending and opens history for %s without formatToParts", async (currency, symbol, grouped) => {
   const formatToParts = Object.getOwnPropertyDescriptor(Intl.NumberFormat.prototype, "formatToParts");
   Reflect.deleteProperty(Intl.NumberFormat.prototype, "formatToParts");
   try {
@@ -60,8 +60,8 @@ test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["AED", "AED "]])("shows 
       categories: [{ id: "food", name: "Food", style: { emoji: "🍔", tone: "warning" }, spendMinorUnits: 1_000_000, limitMinorUnits: null }],
     });
     expect(texts(screen())).toEqual(expect.arrayContaining(["Net", `−${symbol}10K`, "Out", `${symbol}10K`, "In", `${symbol}0`]));
-    expect(texts(button("Food"))).toEqual(["🍔", "Food", `${symbol}10.000`]);
-    await press("Go to tx history");
+    expect(texts(button("Food"))).toEqual(["🍔", "Food", `${symbol}${grouped}`]);
+    await press("Go to history");
     expect(callbacks.onHistory).toHaveBeenCalledOnce();
   } finally {
     if (formatToParts) Object.defineProperty(Intl.NumberFormat.prototype, "formatToParts", formatToParts);
@@ -72,7 +72,7 @@ test.each([
   ["Net", "−$1.000.000,00"], ["Out", "$2.500.000,00"], ["In", "$1.500.000,00"],
 ])("%s focuses to its full amount, hides other amounts, then restores the trio", async (label, full) => {
   await render();
-  expect(texts(screen())).toEqual(expect.arrayContaining(["Net", "−$1M", "Out", "$2.5M", "In", "$1.5M"]));
+  expect(texts(screen())).toEqual(expect.arrayContaining(["Net", "−$1M", "Out", "$2,5M", "In", "$1,5M"]));
   await press(label);
   expect(texts(button(label))).toEqual([label, full]);
   expect(button(label).props.accessibilityState.expanded).toBe(true);
@@ -80,7 +80,7 @@ test.each([
     expect(texts(screen())).not.toContain(other);
   }
   await press(label);
-  expect(texts(screen())).toEqual(expect.arrayContaining(["Net", "−$1M", "Out", "$2.5M", "In", "$1.5M"]));
+  expect(texts(screen())).toEqual(expect.arrayContaining(["Net", "−$1M", "Out", "$2,5M", "In", "$1,5M"]));
 });
 
 test("List is default with spend, draining/flat coins, colored remaining amounts and navigation", async () => {
@@ -99,7 +99,7 @@ test("List is default with spend, draining/flat coins, colored remaining amounts
   expect(leftText?.props.style[1].color).toBe(theme.positive);
   const coinFills = screen().findAllByType("view").filter((node) => Array.isArray(node.props.style) && node.props.style[1]?.height);
   expect(coinFills.map((node) => node.props.style[1].height)).toEqual(["80%", "100%"]);
-  await press("Back"); await press("Go to tx history"); await press("Partial");
+  await press("Back"); await press("Go to history"); await press("Partial");
   expect(callbacks.onBack).toHaveBeenCalledOnce();
   expect(callbacks.onHistory).toHaveBeenCalledOnce();
   expect(callbacks.onCategory).toHaveBeenCalledExactlyOnceWith("partial");
@@ -143,9 +143,30 @@ test("exactly spent limits have zero remaining without an over warning", async (
 test("loading keeps the header and history available, and an empty workspace has zero flow", async () => {
   await act(async () => { root = create(createElement(OverviewScreen, { data: undefined, onBack: vi.fn(), onHistory: vi.fn(), onCategory: vi.fn() })); });
   expect(screen().findAllByType(ActivityIndicator)).toHaveLength(1);
-  expect(texts(screen())).toContain("Go to tx history");
+  expect(texts(screen())).toContain("Go to history");
   await act(async () => root?.update(createElement(OverviewScreen, { data: { currency: "COP", outMinorUnits: 0, inMinorUnits: 0, categories: [] }, onBack: vi.fn(), onHistory: vi.fn(), onCategory: vi.fn() })));
   expect(screen().findAllByType(ActivityIndicator)).toHaveLength(0);
   expect(texts(screen()).filter((value) => value === "$0")).toHaveLength(3);
   expect(texts(screen())).toContain("No categories yet.");
+});
+
+test("exact and palette colors render in coins, remaining amounts and bars, with readable text and visible outlines", async () => {
+  await render({ currency: "COP", outMinorUnits: 0, inMinorUnits: 0, categories: [
+    { id: "gym", name: "Gym", style: { emoji: "🏋️", tone: "primary", color: "#2E7D32" }, spendMinorUnits: 200000, limitMinorUnits: 1000000 },
+    { id: "pale", name: "Pale", style: { emoji: "🧁", tone: "primary", color: "#FFF3B0" }, spendMinorUnits: 100000, limitMinorUnits: 1000000 },
+    { id: "food", name: "Food", style: { emoji: "🛒", tone: "positive", color: "h150" }, spendMinorUnits: 100000, limitMinorUnits: 1000000 },
+  ] });
+  const left = (label: string) => button(label).findAllByType("text").find((node) => node.children.join("").endsWith("left"))?.props.style[1].color;
+  expect(["Gym", "Pale", "Food"].map(left)).toEqual(["#2E7D32", "#0a0a0a", "#0a0a0a"]);
+  const coin = (label: string) => button(label).findAllByType("view")[0].props.style[1];
+  expect(["Gym", "Pale", "Food"].map((label) => [coin(label).backgroundColor, coin(label).borderColor])).toEqual([
+    ["#2E7D3214", "#2E7D3255"], ["#FFF3B014", "#8a8a8a"], ["#218c5714", "#218c5755"],
+  ]);
+  await press("Bars");
+  const fills = bars().map((bar) => bar.findAllByType("view")[1].props.style.slice(1));
+  expect(fills).toEqual([
+    [{ width: "100%", backgroundColor: "#2E7D32" }, null],
+    [{ width: "50%", backgroundColor: "#FFF3B0" }, { borderWidth: 1, borderColor: "#8a8a8a" }],
+    [{ width: "50%", backgroundColor: "#218c57" }, null],
+  ]);
 });

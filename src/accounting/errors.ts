@@ -1,6 +1,43 @@
 export const accountingErrorMessages = {
+  place_close_balance_stale: "The balance changed. Review the closing again",
+  place_close_date_stale: "The accounting date changed. Review the closing again",
+  place_undo_preview_stale: "The entries or their effects changed. Review Undo again",
+  place_undo_invalid_entry: "A stored entry needs repair before Undo",
+  place_future_entries: "This Place has future entries. Wait until their accounting date",
+  place_ending_scan_limit: "This Place needs a paged integrity review before it can end",
+  place_undo_dependency: "This Place shares entries with a Place being undone",
+  place_undo_ended_counterparty: "An entry touches an ended Place. Use Close instead",
+  place_recovery_contributed_destination: "A Recovery plan with contributions uses this Place as destination",
+  place_undo_originals_remain: "Unreversed entries still touch this Place",
+  place_undo_abort_forbidden: "Only the authorizing owner can abort an unstarted Undo needing attention",
+  period_lock_undo_in_progress: "The current month cannot lock while an Undo is in progress",
+  description_invalid: "Use a visible description of at most 1000 characters",
+  place_undo_in_progress: "A Place is being undone. Wait for it to finish",
+  place_recovery_covered_expenses: "A Recovery plan has contributions for an expense in this Place",
+  place_undo_current_period_locked: "Undo needs the current month to be open",
+  place_undo_operation_not_found: "Undo operation not found",
+  place_undo_balance_not_zero: "Undo could not bring the Place balance to zero",
+  financial_account_profile_ended: "This Place has ended. Choose an open Place",
+  place_last_open: "Keep at least one open Place",
+  place_recovery_destination: "Finish or cancel the Recovery plans using this Place",
+  place_default_replacement_required: "Choose another open Place as the Default Place",
+  place_default_replacement_invalid: "Choose a different open Place for the default",
+  place_close_line_invalid: "This closing line cannot settle this Place's balance",
+  place_close_balance_mismatch: "Closing lines must explain the entire balance exactly",
+
+  default_place_stale: "The Default Place changed. Refresh before choosing it",
+  time_zone_month_behind: "That time zone is still in the previous month. Try again once the month has started there",
+  time_zone_stale: "The workspace time zone changed. Refresh before changing it",
+  functional_currency_stale: "The Functional Currency changed. Refresh before changing it",
+  functional_currency_has_entries: "Functional Currency cannot change after any posted entry",
+  functional_currency_has_records: "Functional Currency cannot change after currency amounts have been recorded",
+  functional_currency_already_changed: "Functional Currency can change only once",
+
   ledger_summary_not_ready: "Ledger totals are being prepared. Try again after the migration completes",
   ledger_totals_out_of_range: "Ledger totals exceed the supported amount range",
+  account_name_conflict: "Another place already uses this name",
+  account_name_too_long: "Use a place name of 80 characters or fewer",
+  account_name_stale: "This place was renamed. Refresh before changing it",
   account_emoji_required: "Choose a look for this place",
   transfer_profiles_must_differ: "Choose two different places for an Account Transfer",
   opening_already_exists: "Reverse the active starting amount before replacing it",
@@ -53,7 +90,7 @@ export type AccountingErrorCode = keyof typeof accountingErrorMessages;
 export class AccountingError extends Error {
   readonly code: AccountingErrorCode;
 
-  constructor(code: AccountingErrorCode) {
+  constructor(code: AccountingErrorCode, readonly context?: Record<string, string | number | Array<{ id: string; name: string } | { id: string; title: string }>>) {
     super(accountingErrorMessages[code]);
     this.name = "AccountingError";
     this.code = code;

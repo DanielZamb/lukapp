@@ -13,18 +13,19 @@ import {
   useUi,
 } from "../../ui/core";
 import { font, fontSize, radius, spacing } from "../../ui/tokens";
+import { useT } from "../../i18n";
 import { formatMoney } from "../money";
 import {
   candidatesDetail,
-  closedDetail,
   closedTitle,
   confirmDetail,
   draftsDetail,
+  footerLabel,
   lockActionLabel,
-  mismatchDetail,
   monthLabel,
   reviewEyebrow,
   type MonthCloseReadiness,
+  type ClosePeriod,
 } from "./model";
 import type { MonthClosePhase } from "./useMonthClose";
 
@@ -60,10 +61,13 @@ export function MonthCloseScreen({
   onHome: () => void;
   onRequest: () => void;
   onCancel: () => void;
-  onConfirm: () => void;
+  /** Receives the month the confirmation showed. */
+  onConfirm: (period: ClosePeriod) => void;
 }) {
   const theme = useTheme();
   const ui = useUi();
+  const translator = useT();
+  const { t, tn, language } = translator;
   const styles = useMemo(() => createStyles(theme), [theme]);
   if (phase.kind === "closed")
     return (
@@ -77,15 +81,15 @@ export function MonthCloseScreen({
             />
           </View>
           <Text accessibilityRole="header" style={styles.completionTitle}>
-            {closedTitle(phase.period)}
+            {closedTitle(phase.period, translator)}
           </Text>
-          <Text style={styles.completionCopy}>{closedDetail()}</Text>
+          <Text style={styles.completionCopy}>{t("review.closedDetail")}</Text>
           <PrimaryButton
-            label={`View ${monthLabel(phase.period)} overview`}
+            label={t("review.closeViewOverview", { month: monthLabel(phase.period, language) })}
             trailingIcon="pie-chart-outline"
             onPress={onOverview}
           />
-          <SecondaryButton label="Back home" onPress={onHome} />
+          <SecondaryButton label={t("review.closeBackHome")} onPress={onHome} />
         </View>
       </Screen>
     );
@@ -96,13 +100,13 @@ export function MonthCloseScreen({
     const display = {
       ...readiness,
       period: phase.period,
-      monthLabel: monthLabel(phase.period),
+      monthLabel: monthLabel(phase.period, language),
     };
     return (
       <Screen>
         <Header
-          title={`Complete ${display.monthLabel}`}
-          eyebrow={reviewEyebrow(readiness)}
+          title={footerLabel(display.period, translator)}
+          eyebrow={reviewEyebrow(readiness, translator)}
           onBack={locking ? undefined : onBack}
         />
         {phase.kind === "failed" ? (
@@ -110,23 +114,23 @@ export function MonthCloseScreen({
             {phase.message}
           </Text>
         ) : null}
-        {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{intakeWarning} This does not block Month Close.</Text> : null}
-        <Text style={ui.body}>{confirmDetail(display)}</Text>
+        {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{t("review.closeIntakeWarning", { warning: intakeWarning })}</Text> : null}
+        <Text style={ui.body}>{confirmDetail(display, translator)}</Text>
         <PrimaryButton
           label={
             locking
-              ? "Completing…"
+              ? t("review.closeCompleting")
               : phase.kind === "failed"
-                ? "Retry close"
-                : lockActionLabel(display.period)
+                ? t("review.closeRetry")
+                : lockActionLabel(display.period, translator)
           }
           trailingIcon="lock-closed-outline"
           pending={locking}
           disabled={locking}
-          onPress={onConfirm}
+          onPress={() => onConfirm(display.period)}
         />
         {phase.kind === "confirm" ? (
-          <SecondaryButton label="Keep reviewing" onPress={onCancel} />
+          <SecondaryButton label={t("review.closeKeepReviewing")} onPress={onCancel} />
         ) : null}
       </Screen>
     );
@@ -134,87 +138,81 @@ export function MonthCloseScreen({
   if (readiness.periodStatus === "mismatch")
     return (
       <Screen>
-        <Header title={`Complete ${readiness.monthLabel}`} onBack={onBack} />
+        <Header title={footerLabel(readiness.period, translator)} onBack={onBack} />
         <Text accessibilityRole="alert" style={ui.error}>
-          {mismatchDetail()}
+          {t("review.closeMismatch")}
         </Text>
       </Screen>
     );
   return (
     <Screen>
       <Header
-        title={`Complete ${readiness.monthLabel}`}
-        eyebrow={reviewEyebrow(readiness)}
+        title={footerLabel(readiness.period, translator)}
+        eyebrow={reviewEyebrow(readiness, translator)}
         onBack={onBack}
       />
-      {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{intakeWarning} This does not block Month Close.</Text> : null}
+      {intakeWarning ? <Text accessibilityRole="alert" style={ui.error}>{t("review.closeIntakeWarning", { warning: intakeWarning })}</Text> : null}
       <View style={styles.amountCard}>
-        <Text style={ui.muted}>{readiness.monthLabel} spending</Text>
+        <Text style={ui.muted}>{t("review.closeSpending", { month: readiness.monthLabel })}</Text>
         <Text style={styles.detailAmount}>
           {formatMoney({
             currency: summary.currency,
             minorUnits: summary.spendMinorUnits,
           })}
         </Text>
-        <Text style={ui.muted}>
-          This review locks the month; it does not move money or change balances.
-        </Text>
+        <Text style={ui.muted}>{t("review.closeLocksNote")}</Text>
       </View>
       <ListGroup>
         {readiness.blocked ? (
           <ListRow
-            title="Draft review"
-            detail={draftsDetail(readiness.draftCount)}
-            value="Required"
+            title={t("review.closeDraftReview")}
+            detail={draftsDetail(readiness.draftCount, translator)}
+            value={t("review.closeRequired")}
             onPress={onReviewDrafts}
           />
         ) : null}
         <ListRow
-          title="Notification Candidates"
-          detail={candidatesDetail(readiness.candidateCount)}
-          value={readiness.candidateCount ? "Warns" : "Done"}
+          title={t("review.closeCandidates")}
+          detail={candidatesDetail(readiness.candidateCount, translator)}
+          value={readiness.candidateCount ? t("review.closeWarns") : t("review.closeDone")}
           valueStyle={{
             color: readiness.candidateCount ? theme.warning : theme.positive,
           }}
           onPress={readiness.candidateCount ? onReviewDrafts : undefined}
         />
         <ListRow
-          title="Account balances"
-          detail={`${summary.accountCount} Financial Accounts checked`}
-          value="Reviewed"
+          title={t("review.closeBalances")}
+          detail={tn("review.closeAccountsChecked", summary.accountCount)}
+          value={t("review.closeReviewed")}
           valueStyle={{ color: theme.positive }}
           onPress={onAccountBalances}
         />
         <ListRow
-          title="Savings recovery"
+          title={t("review.closeRecovery")}
           detail={
             summary.recoveryDueMinorUnits > 0
-              ? `${formatMoney({
+              ? t("review.closeRecoveryDue", { amount: formatMoney({
                   currency: summary.currency,
                   minorUnits: summary.recoveryDueMinorUnits,
-                })} due this month`
-              : "Nothing due this month"
+                }) })
+              : t("review.closeRecoveryNone")
           }
-          value="Review"
+          value={t("review.closeReview")}
           onPress={onRecovery}
         />
       </ListGroup>
       <PrimaryButton
         label={
           readiness.blocked
-            ? "Review Drafts first"
-            : lockActionLabel(readiness.period)
+            ? t("review.closeReviewDraftsFirst")
+            : lockActionLabel(readiness.period, translator)
         }
         trailingIcon={
           readiness.blocked ? "document-text-outline" : "lock-closed-outline"
         }
         onPress={readiness.blocked ? onReviewDrafts : onRequest}
       />
-      <Text style={styles.footnote}>
-        Remaining Candidates warn. They do not block Month Close. If recovery is
-        not funded, the close records a planning shortfall; it never fabricates a
-        transfer.
-      </Text>
+      <Text style={styles.footnote}>{t("review.closeFootnote")}</Text>
     </Screen>
   );
 }

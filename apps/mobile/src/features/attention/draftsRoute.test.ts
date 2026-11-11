@@ -4,7 +4,11 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import DraftsRoute from "../../../app/drafts";
 import { fixture, now } from "../intake/service.testSupport";
-import type { IntakeCandidate } from "../intake/candidates";
+const now0 = now;
+import { viewInbox, type IntakeCandidate } from "../intake/candidates";
+import { confirmReadyCandidates } from "../intake/confirmReady";
+import { createCandidateBinding } from "../intake/postingBinding";
+import { createTranslator } from "../../../../../src/i18n";
 import type { ConfirmCandidateInput } from "../../../../../src/notificationIntake/types";
 
 const route = vi.hoisted((): {
@@ -16,6 +20,7 @@ const intakeState = vi.hoisted(() => ({
   now: [] as IntakeCandidate[],
   wait: [] as IntakeCandidate[],
   confirm: vi.fn(), refresh: vi.fn(), report: vi.fn(),
+  places: [] as Array<{ id: string; name: string; status: string }>,
 }));
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
@@ -23,7 +28,7 @@ vi.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ segment: route.segment }),
   router: { push: route.push, replace: route.replace, back: vi.fn() }, Redirect: "redirect",
 }));
-vi.mock("convex/react", () => ({ useAction: () => intakeState.confirm, useQuery: () => [] }));
+vi.mock("convex/react", () => ({ useAction: () => intakeState.confirm, useQuery: () => intakeState.places }));
 vi.mock("expo-secure-store", () => ({}));
 vi.mock("../activity", () => ({ usePersonalDefaults: () => ({
   workspace: { id: "workspace", functionalCurrency: "COP", currentAccountingPeriod: { year: 2026, month: 10 } },
@@ -38,15 +43,18 @@ vi.mock("../useIntakeCandidates", () => ({ useIntakeCandidates: () => {
     return saved?.kind === "terminal" ? [] : [projected.find((candidate) => candidate.id === row.id) ?? row];
   });
   const now = project(intakeState.now), wait = project(intakeState.wait);
-  return { now, wait, ready: [...now, ...wait].filter((row) => !row.error),
+  return { now, wait, ready: viewInbox({ v: 1, candidates: [...now, ...wait] }, "workspace", now0, "COP").ready,
     count: now.length + wait.length, error: "", notices: [], dismissNotices: vi.fn(), service: f.service,
     refresh: async () => { intakeState.refresh(); await f.service.refresh(); },
   };
 } }));
 vi.mock("../../local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => intakeState.report }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+const back = await vi.hoisted(async () => (await import("../../ui/bottomSheet.testSupport")).backHandlers());
+vi.mock("@gorhom/bottom-sheet", () => import("../../ui/bottomSheet.testSupport"));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 vi.mock("react-native", () => ({
+  BackHandler: back.BackHandler,
   KeyboardAvoidingView: "keyboard-viewport",
   Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
@@ -68,6 +76,7 @@ beforeEach(() => {
   route.replace.mockClear();
   intakeState.now = [];
   intakeState.wait = [];
+  intakeState.places = [];
   f = fixture();
   f.setValue(null, 0);
   f.setPages([{ captures: [], nextCursor: null }]);
@@ -243,7 +252,7 @@ test("a partial batch reports only acknowledged records and keeps the failed Can
   await act(async () => button("Back to Candidates").props.onPress());
   expect(text()).toContain("Candidates");
   await act(async () => button("Needs you now, 1").props.onPress());
-  expect(text()).toContain("Locked Period");
+  expect(text()).toContain("That month is already closed");
 });
 
 test("confirmation counts successful records across Convex batches", async () => {
@@ -265,10 +274,72 @@ test("a failed server request refreshes the inbox without showing confirmation",
   expect(button("Confirm all Ready").props.disabled).toBe(false);
 });
 
+test("Confirm all Ready retries a dropped batch with the same frozen command and settles it once", async () => {
+  route.segment = "now";
+  intakeState.now = [candidate("c1")];
+  const succeed = intakeState.confirm.getMockImplementation();
+  intakeState.confirm.mockRejectedValueOnce(new Error("offline"));
+  await mount();
+  await act(async () => button("Confirm all Ready").props.onPress());
+  expect(f.service.read("c1")?.status.kind).toBe("submitting");
+  expect(text()).toContain("Confirmation pending. Open to retry.");
+  intakeState.confirm.mockImplementation(succeed ?? (async () => ({ results: [] })));
+  await act(async () => button("Confirm all Ready").props.onPress());
+  const [first, second] = intakeState.confirm.mock.calls.map(([input]) => input);
+  expect(second).toEqual(first);
+  expect(second.items.map((item: ConfirmCandidateInput) => [item.candidateId, item.confirmed.amount.minorUnits])).toEqual([["c1", 126400]]);
+  expect(f.service.getSnapshot().state.records[0]).toMatchObject({ id: "c1", kind: "terminal", reason: "confirmed" });
+  expect(text()).toContain("Record added");
+});
+
 
 test("Sources navigates to the canonical intake route and Candidate review keeps the existing posting route", async () => {
   route.segment = "now"; intakeState.now = [candidate("c1")]; await mount();
   await act(async () => button("Sources").props.onPress());
   await act(async () => button("Review Groceries").props.onPress());
   expect(route.push.mock.calls).toEqual([["/intake"], [{ pathname: "/post", params: { candidateId: "c1" } }]]);
+});
+
+
+test("a Candidate naming a closed Place says so and is left out of Confirm all Ready, without being changed or deleted", async () => {
+  route.segment = "now";
+  intakeState.places = [{ id: "daily", name: "Daily", status: "open" }, { id: "wallet", name: "Wallet", status: "closed" }];
+  const onWallet = candidate("c2");
+  onWallet.suggestion = { ...onWallet.suggestion, description: "Taxi", financialAccountProfileId: "wallet" };
+  intakeState.now = [candidate("c1"), onWallet];
+  await mount();
+  expect(text()).toContain("Wallet is closed. Choose another place.");
+  await act(async () => button("Confirm all Ready").props.onPress());
+  expect(intakeState.confirm.mock.calls.map(([input]) => input.items.map((item: ConfirmCandidateInput) => item.candidateId))).toEqual([["c1"]]);
+  expect(f.service.read("c2")?.review.financialAccountProfileId).toBe("wallet");
+});
+
+test("third review, finding 1: a Candidate whose amount awaits confirmation says so and is left out of Confirm all Ready until confirmed", async () => {
+  route.segment = "now";
+  intakeState.now = [candidate("c1"), candidate("c2")];
+  await mount();
+  const binding = createCandidateBinding({ service: f.service, candidateId: "c2", workspaceId: "workspace",
+    dispatch: vi.fn(), translator: createTranslator("en") });
+  await act(async () => binding.persistReview({ ...binding.facts, description: "Taxi", amountText: "-1.234", amountFormat: "cop/1",
+    amountReview: { reason: "pasted", previous: null } }));
+  expect(text()).toContain("Confirm the amount before you continue.");
+  await act(async () => button("Confirm all Ready").props.onPress());
+  expect(intakeState.confirm.mock.calls.map(([input]) => input.items.map((item: ConfirmCandidateInput) => item.candidateId))).toEqual([["c1"]]);
+  await act(async () => button("Back to Candidates").props.onPress());
+  expect(text()).toContain("Confirm the amount before you continue.");
+  expect(f.service.read("c2")).toMatchObject({ status: { kind: "review" }, reviewAmountReview: { reason: "pasted", previous: null } });
+
+  const stale = f.service.candidates().filter((row) => row.id === "c2");
+  await act(async () => { await confirmReadyCandidates(f.service, stale, intakeState.confirm); });
+  expect(intakeState.confirm).toHaveBeenCalledTimes(1);
+  await expect(f.service.beginConfirmation("c2", f.service.read("c2")!.recordRevision)).rejects.toThrow();
+  expect(f.service.read("c2")).toMatchObject({ status: { kind: "review" } });
+
+  const confirming = createCandidateBinding({ service: f.service, candidateId: "c2", workspaceId: "workspace",
+    dispatch: vi.fn(), translator: createTranslator("en") });
+  await act(async () => confirming.persistReview({ ...confirming.facts, amountReview: undefined }));
+  expect(text()).not.toContain("Confirm the amount before you continue.");
+  await act(async () => button("Confirm all Ready").props.onPress());
+  expect(intakeState.confirm.mock.calls.at(-1)?.[0].items.map((item: ConfirmCandidateInput) => [item.candidateId, item.confirmed.amount]))
+    .toEqual([["c2", { currency: "COP", minorUnits: 123400 }]]);
 });

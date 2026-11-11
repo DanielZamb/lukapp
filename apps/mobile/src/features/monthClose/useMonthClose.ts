@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { useT } from "../../i18n";
 import {
   lockFailureMessage,
   type ClosePeriod,
@@ -35,6 +36,7 @@ export function useMonthClose(
   readiness: MonthCloseReadiness | null,
   transport: MonthCloseTransport,
 ) {
+  const translator = useT();
   const [phase, setPhase] = useState<MonthClosePhase>(() =>
     openingPhase(readiness),
   );
@@ -72,12 +74,14 @@ export function useMonthClose(
       );
   }, [readiness?.alreadyLocked, readiness?.canLock, readiness?.period]);
 
-  async function confirm() {
+  /** Locks `shown`, the month the confirmation showed, only while the open confirmation is for that month. */
+  async function confirm(shown: ClosePeriod) {
     const mounted = lifetime.current;
     const now = current.current;
     if (
       !mounted.active ||
-      (now.kind !== "confirm" && now.kind !== "failed")
+      (now.kind !== "confirm" && now.kind !== "failed") ||
+      !samePeriod(now.period, shown)
     )
       return;
     const period = now.period;
@@ -88,7 +92,7 @@ export function useMonthClose(
       change(drafts > 0 ? { kind: "review" } : { kind: "closed", period });
     } catch (error) {
       if (!mounted.active || transport.reportFailure(error)) return;
-      change({ kind: "failed", period, message: lockFailureMessage(error) });
+      change({ kind: "failed", period, message: lockFailureMessage(error, translator) });
     }
   }
 

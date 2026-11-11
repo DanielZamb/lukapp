@@ -4,9 +4,13 @@ import { router, Redirect } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
+import { FeedbackSettings } from "../src/features/feedback/FeedbackSettings";
+import { placeTitle } from "../src/features/places/model";
+import { useT } from "../src/i18n";
 import { BrandLogo } from "../src/ui/Brand";
 import {
   AppearanceToggle,
+  LanguageToggle,
   Header,
   ListGroup,
   ListRow,
@@ -25,51 +29,70 @@ function SettingsContent({
   currency: string;
 }) {
   const ui = useUi();
+  const { t, tn } = useT();
   const { signOut } = useClerk();
   const { user } = useUser();
   const profiles = useQuery(api.accounting.listFinancialAccountProfiles, {
     workspaceId,
   });
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
-  const title = user?.firstName?.trim() || "You";
+  const title = user?.firstName?.trim() || t("settings.fallbackName");
   const placeCount = profiles?.length ?? 0;
+  const kind = workspaceKind === "Personal" ? t("settings.workspacePersonal") : workspaceKind;
   const financesDetail =
-    placeCount === 1
-      ? `${workspaceKind} · ${currency} · My money`
-      : `${workspaceKind} · ${currency} · ${placeCount} places`;
+    profiles?.length === 1
+      ? `${kind} · ${currency} · ${placeTitle(profiles[0].name, 1, t)}`
+      : `${kind} · ${currency} · ${tn("settings.places", placeCount)}`;
   const draftCategories =
     categories?.slice(0, 3).map((category) => category.name).join(" · ") ||
-    "No categories yet";
+    t("settings.noCategories");
   return (
     <Screen>
-      <Header title={title} eyebrow="USER & WORKSPACE" onBack={() => router.back()} />
+      <Header title={title} eyebrow={t("settings.eyebrow")} onBack={() => router.back()} />
       <View style={ui.section}>
-        <Text style={ui.sectionHeading}>Appearance</Text>
+        <Text style={ui.sectionHeading}>{t("settings.appearance")}</Text>
         <AppearanceToggle />
+      </View>
+      <View style={ui.section}>
+        <Text style={ui.sectionHeading}>{t("settings.language")}</Text>
+        <LanguageToggle />
       </View>
       <ListGroup>
         <ListRow
-          title="My finances"
+          title={t("settings.myFinances")}
           detail={profiles ? financesDetail : undefined}
           icon="home-outline"
           onPress={() => router.push("/overview")}
         />
         <ListRow
-          title="Categories"
+          title={t("workspace.settingsRow")}
+          detail={t("workspace.settingsRowDetail")}
+          icon="options-outline"
+          onPress={() => router.push("/workspace")}
+        />
+        <ListRow
+          title={t("settings.categories")}
           detail={categories ? draftCategories : undefined}
           icon="pricetag-outline"
           onPress={() => router.push("./categories")}
         />
         <ListRow
-          title="Notification intake"
-          detail="Device access, source apps, accounts and Candidates"
+          title={t("settings.intake")}
+          detail={t("settings.intakeDetail")}
           icon="notifications-outline"
           onPress={() => router.push("/intake")}
+        />
+        <ListRow
+          title={t("lifecycle.devicesRow")}
+          detail={t("lifecycle.devicesRowDetail")}
+          icon="phone-portrait-outline"
+          onPress={() => router.push("/devices")}
           isLast
         />
       </ListGroup>
       {!profiles || !categories ? <ActivityIndicator /> : null}
-      <SecondaryButton label="Sign out" onPress={() => void signOut()} />
+      <FeedbackSettings />
+      <SecondaryButton label={t("settings.signOut")} onPress={() => void signOut()} />
       <View style={{ alignItems: "center", paddingTop: 24 }}>
         <BrandLogo width={112} />
       </View>

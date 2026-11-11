@@ -129,7 +129,7 @@ test("history matches the prototype row, uses primary for money in, and navigate
   const cashRow = { ...detail.row, financialAccountProfileId: "cash", reversed: true };
   const props = { ...historyProps(), rows: [cashRow], scopedRows: [cashRow], total: 3, initialProfileId: "cash" };
   await act(async () => { root = create(createElement(HistoryScreen, props)); });
-  expect(text()).toContain("ACROSS ALL PLACES\nTx history");
+  expect(text()).toContain("ACROSS ALL PLACES\nHistory");
   expect(text()).toContain("1 of 3");
   expect(text()).toContain("October 17 · 🥑 Food · Daily · Reversed");
   expect(text()).toContain("−$1.500");
@@ -140,8 +140,8 @@ test("history matches the prototype row, uses primary for money in, and navigate
   const incomeRow = { ...detail.row, financialAccountProfileId: "cash", userCategories: [], primaryUserCategoryId: undefined, detail: "Income", amount: { currency: "USD", minorUnits: 150025 } };
   await act(async () => root?.update(createElement(HistoryScreen, { ...props, rows: [incomeRow], scopedRows: [incomeRow] })));
   expect(text()).toContain("💸 Income");
-  expect(text()).toContain("+$1.500,25");
-  const amount = root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1.500,25");
+  expect(text()).toContain("+$1,500.25");
+  const amount = root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1,500.25");
   expect(amount?.props.style).toContainEqual({ color: "#6d28d9" });
 });
 
@@ -149,9 +149,9 @@ test("search updates the count and capital flow, and figures toggle full precisi
   const rows = [detail.row, { ...detail.row, id: "income", title: "Salary", amount: { currency: "COP", minorUnits: 253450 } }];
   await act(async () => { root = create(createElement(HistoryScreen, { ...historyProps(), rows, total: 2 })); });
   expect(text()).toContain("2 of 2");
-  expect(text()).toContain("$1.0K");
-  expect(text()).toContain("$1.5K");
-  expect(text()).toContain("$2.5K");
+  expect(text()).toContain("$1,0K");
+  expect(text()).toContain("$1,5K");
+  expect(text()).toContain("$2,5K");
   await act(async () => button("In").props.onPress());
   expect(text()).toContain("$2.534,50");
   expect(text()).not.toContain("Net");
@@ -253,7 +253,7 @@ test("places multi-pick, empty means all, and clear removes the initial place an
     ...filterProps(), initialProfileId: "cash", scopedRows: cashOnly,
   })); });
   expect(text()).toContain("1 of 3");
-  expect(text()).toContain("Out\n$1.5K");
+  expect(text()).toContain("Out\n$1,5K");
   await act(async () => button("Daily").props.onPress());
   expect(root?.root.findByType(BottomSheetModal).props.enableDynamicSizing).toBe(true);
   expect(choice("checkbox", "Daily").props.accessibilityState.checked).toBe(true);
@@ -331,4 +331,18 @@ test("date radios use workspace today, native custom dates override quick ranges
   expect(text()).toContain("3 of 3");
   expect(button("Dates").props.accessibilityState.selected).toBe(false);
   expect(root?.root.findAllByType(DateTimePicker)).toHaveLength(0);
+});
+
+test("a category with an exact color fills its filter chip with it, and a pale one keeps a visible outline", async () => {
+  const props = filterProps();
+  await act(async () => { root = create(createElement(HistoryScreen, { ...props, categories: [
+    { id: "food", name: "Food", style: { emoji: "🥑", tone: "primary" as const, color: "#2E7D32" } },
+    { id: "family", name: "Family", style: { emoji: "🦋", tone: "positive" as const, color: "#FFF3B0" } },
+    { id: "salary", name: "Salary", style: { emoji: "💸", tone: "warning" as const, color: "h150" } },
+  ] })); });
+  await act(async () => button("All categories").props.onPress());
+  for (const label of ["Food", "Family", "Salary"]) await act(async () => choice("checkbox", label).props.onPress());
+  expect(choice("checkbox", "Food").props.style).toContainEqual({ borderColor: "#2E7D32", borderWidth: 2, backgroundColor: "#2E7D323D" });
+  expect(choice("checkbox", "Family").props.style).toContainEqual({ borderColor: "#8a8a8a", borderWidth: 2, backgroundColor: "#FFF3B03D" });
+  expect(choice("checkbox", "Salary").props.style).toContainEqual({ borderColor: "#218c57", borderWidth: 2, backgroundColor: "#218c573D" });
 });

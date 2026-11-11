@@ -2,6 +2,10 @@ import { createElement, useMemo, useSyncExternalStore } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
+import { createTranslator } from "../../../../../src/i18n";
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("react-native", () => ({ Platform: { OS: "android" } }));
 import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
@@ -24,13 +28,14 @@ const transport: PostingTransport = {
   load: async () => ({ kind: "none" }), save: async () => { throw new Error("Manual storage must not run"); },
   post: async () => { throw new Error("Manual posting must not run"); }, clear: async () => {}, abort: async () => {}, newKey: () => "unused",
 };
-async function open(service: IntakeService, dispatch: (command: ConfirmCandidateInput) => Promise<ConfirmCandidateResult>, reportFailure?: (error: unknown) => boolean) {
+async function open(service: IntakeService, dispatch: (command: ConfirmCandidateInput) => Promise<ConfirmCandidateResult>, reportFailure?: (error: unknown) => boolean,
+  currency = "COP") {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let value: ReturnType<typeof usePostingEditor> | undefined;
   function Harness() {
     useSyncExternalStore(service.subscribe, service.getSnapshot);
-    const intake = useMemo(() => createCandidateBinding({ service, candidateId: "capture-1", workspaceId: "workspace-1", dispatch }), [service]);
-    value = usePostingEditor({ workspaceId: "workspace-1", financialAccountProfileId: "account-1", currency: "COP", timeZone: "America/Bogota" },
+    const intake = useMemo(() => createCandidateBinding({ service, candidateId: "capture-1", workspaceId: "workspace-1", dispatch, translator: createTranslator("en") }), [service]);
+    value = usePostingEditor({ workspaceId: "workspace-1", financialAccountProfileId: "account-1", currency, timeZone: "America/Bogota" },
       { ...transport, reportFailure }, { intake, intakeRoute: true });
     return null;
   }
@@ -42,13 +47,13 @@ test("editor persists review before leaving and reopens edited facts while recei
   const f = fixture(); await f.service.refresh();
   const dispatch = vi.fn(async (command: ConfirmCandidateInput) => result(command));
   const editor = await open(f.service, dispatch);
-  await act(async () => { editor().setDescription("Reviewed market"); editor().setAmount("-500,00"); });
+  await act(async () => { editor().setDescription("Reviewed market"); editor().setAmount(money("-500,00")); });
   await act(async () => { await editor().saveCandidateReview(); });
   expect(f.service.read("capture-1")?.review.description).toBe("Reviewed market");
   await act(async () => root?.unmount()); root = undefined;
   const reopenedService = new IntakeService(f.deps); await reopenedService.refresh();
   const reopened = await open(reopenedService, dispatch);
-  expect(reopened().description).toBe("Reviewed market"); expect(reopened().amount).toBe("-500,00");
+  expect(reopened().description).toBe("Reviewed market"); expect(reopened().amount.editor.text).toBe("-500,00");
   await act(async () => { await reopened().submit(); });
   const command = dispatch.mock.calls[0]?.[0];
   expect(command?.confirmed.description).toBe("Reviewed market"); expect(command?.confirmed.amount.minorUnits).toBe(50000);
@@ -60,11 +65,11 @@ test("editor persists review before leaving and reopens edited facts while recei
 test("incomplete amount text survives navigation and cannot become Ready or submit", async () => {
   const f = fixture(); await f.service.refresh(); const dispatch = vi.fn(async (command: ConfirmCandidateInput) => result(command));
   const editor = await open(f.service, dispatch);
-  await act(async () => { editor().setAmount("-"); });
+  await act(async () => { editor().setAmount(money("-")); });
   await act(async () => { await editor().saveCandidateReview(); });
   expect(f.service.read("capture-1")?.review.amountMinorUnits).toBeNull();
   await act(async () => root?.unmount()); root = undefined;
-  const reopened = await open(f.service, dispatch); expect(reopened().amount).toBe("-"); expect(reopened().canSubmit).toBe(false);
+  const reopened = await open(f.service, dispatch); expect(reopened().amount.editor.text).toBe("-"); expect(reopened().canSubmit).toBe(false);
   await act(async () => { await reopened().submit(); }); expect(dispatch).not.toHaveBeenCalled();
 });
 
@@ -154,4 +159,41 @@ test("SEN90-R1-02 saving and reopening review converges after a committed write 
   expect(reopened().description).toBe("Saved despite lost response");
   await act(async () => { await reopened().saveCandidateReview(); });
   expect(reopenedService.read("capture-1")?.recordRevision).toBe(1);
+});
+
+/** A USD Candidate frozen with a command for 123,450 minor units, whose review text was saved before amounts followed the currency. */
+async function frozenLegacyUsdCandidate() {
+  const f = fixture(); await f.service.refresh();
+  await f.service.beginConfirmation("capture-1", 0);
+  const state = JSON.parse(f.raw()!) as { mappings: Array<Record<string, unknown>>; records: Array<Record<string, any>> };
+  state.mappings = state.mappings.map((each) => ({ ...each, currency: "USD" }));
+  state.records = state.records.map((row) => {
+    const amount = { currency: "USD", minorUnits: 123450 };
+    const command = row.status.command;
+    return { ...row, currency: "USD", reviewAmountText: "-1.234,50", reviewAmountFormat: "pre-currency",
+      review: { ...row.review, amountMinorUnits: 123450 }, originalSuggestion: { ...row.originalSuggestion, amountMinorUnits: 123450, currency: "USD" },
+      status: { ...row.status, command: { ...command, confirmed: { ...command.confirmed, amount }, suggestion: { ...command.suggestion, amount } } } };
+  });
+  f.setValue(JSON.stringify(state), 2);
+  const service = new IntakeService(f.deps); await service.refresh();
+  return { f, service };
+}
+
+test("fourth review, finding 5: a frozen legacy Candidate shows its held command and resends it exactly as Confirm all Ready does", async () => {
+  const single = await frozenLegacyUsdCandidate();
+  const dispatch = vi.fn(async (command: ConfirmCandidateInput) => result(command));
+  const editor = await open(single.service, dispatch, undefined, "USD");
+  const shown = { editable: editor().editable, review: editor().amount.review, text: editor().amount.editor.text, canSubmit: editor().canSubmit };
+  await act(async () => { await editor().submit(); });
+  expect(dispatch).toHaveBeenCalledTimes(1);
+  expect(shown).toEqual({ editable: false, review: null, text: "-1234.50", canSubmit: true });
+  await act(async () => root?.unmount()); root = undefined;
+
+  const batch = await frozenLegacyUsdCandidate();
+  const confirm = vi.fn(async (items: ConfirmCandidateInput[]) => ({
+    results: items.map((command) => ({ candidateId: command.candidateId, ok: true as const, result: result(command) })) }));
+  await confirmReadyCandidates(batch.service, batch.service.candidates(), confirm);
+  expect(confirm.mock.calls[0]?.[0]).toEqual([dispatch.mock.calls[0]?.[0]]);
+  expect(JSON.stringify(dispatch.mock.calls[0]?.[0])).toBe(JSON.stringify(confirm.mock.calls[0]?.[0]?.[0]));
+  expect(dispatch.mock.calls[0]?.[0].confirmed.amount).toEqual({ currency: "USD", minorUnits: 123450 });
 });

@@ -86,6 +86,7 @@ import { getFunctionName } from "convex/server";
 import { ConvexError } from "convex/values";
 import { api } from "../features/api";
 import { LocalEntryGate } from "./LocalEntryGate";
+import { LanguageProvider } from "../i18n";
 import { PrebuiltSignIn } from "./PrebuiltSignIn";
 import { ThemeProvider, useThemeContext } from "../ui/themeContext";
 
@@ -481,4 +482,32 @@ test("Sign in instead on the same install enrolls once and uses verified reclaim
   expect(root?.root.findAllByType(FinancialScreen)).toHaveLength(1);
   expect(sdk.enroll).toHaveBeenCalledOnce();
   expect(sdk.unlock).not.toHaveBeenCalled();
+});
+
+test("the locked screen reads in Spanish with distinct unlock and sign-in actions", async () => {
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(LocalEntryGate, {
+      children: createElement(FinancialScreen),
+      renderSignIn: () => createElement("sign-in"),
+    })));
+  });
+  if (!root) throw new Error("Gate not mounted");
+  expect(root.root.findByType("header").props.title).toBe("Lukapp está bloqueada");
+  expect(JSON.stringify(root.toJSON())).toContain("Usa la biometría segura del celular para abrir tu información financiera.");
+  expect(root.root.findAllByType("button").map((node) => node.props.label)).toEqual(["Desbloquear Lukapp", "Iniciar sesión"]);
+  expect(root.root.findAllByType(FinancialScreen)).toHaveLength(0);
+});
+
+test("a failed sign-in handoff reads in Spanish and retries", async () => {
+  sdk.session = { id: "session", status: "active", currentTask: null };
+  sdk.nativeFlow = { isLoaded: true, isAuthFlowComplete: true };
+  const handoff = vi.fn(async () => { throw new Error("network"); });
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(PrebuiltSignIn, { onSessionCreated: handoff })));
+  });
+  if (!root) throw new Error("Sign-in not mounted");
+  expect(JSON.stringify(root.toJSON())).toContain("No pudimos terminar el inicio de sesión. Intenta de nuevo.");
+  await act(async () => root?.root.findByProps({ label: "Reintentar" }).props.onPress());
+  expect(handoff).toHaveBeenCalledTimes(2);
 });

@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { ScrollView } from "react-native";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
 import { BatchNativeStack, batchRowFor } from "./BatchNativeStack";
 import { PostingForm } from "./PostingForm";
 import { emptyPostingForm } from "./PostingForm.fixtures";
@@ -65,6 +66,7 @@ function batch(): ReturnType<typeof usePostingBatch> {
     queue: [],
     busy: false,
     editable: true,
+    waiting: false,
     error: "",
     posted: null,
     keep: vi.fn(),
@@ -192,7 +194,7 @@ test("batch chips use the primary category palette colour and update after a res
     { id: "food", name: "Food", style: { emoji: "🍜", tone: "primary", color: "h0" } },
     { id: "travel", name: "Travel", style: { emoji: "🚌", tone: "primary", color: "h120" } },
   ] satisfies NonNullable<Parameters<typeof batchRowFor>[0]["categories"]>;
-  const rowFor = () => batchRowFor({ item, categories, profiles: [{ id: "wallet", name: "Wallet" }] });
+  const rowFor = () => batchRowFor({ item, categories, profiles: [{ id: "wallet", name: "Wallet" }], t: createTranslator("en").t });
   await render({ ...batch(), queue: [item] }, { rowFor });
   const chip = () => root!.root.findAllByType("text").find((node) => node.children.join("") === "🚌")!.parent!;
   expect(chip().props.style).toContainEqual({ backgroundColor: "#218c2122" });
@@ -304,4 +306,37 @@ test("One shows the waiting count and the modal saves to batch without a posted 
   expect(
     root!.root.findAllByProps({ accessibilityRole: "tablist" }),
   ).toHaveLength(0);
+});
+
+async function renderSpanish(value: ReturnType<typeof usePostingBatch>) {
+  const { LanguageProvider } = await import("../../i18n");
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(BatchNativeStack, { ...props, batch: value })));
+  });
+}
+
+test("the batch reads in Spanish with counted drafts and a counted receipt", async () => {
+  await renderSpanish({ ...batch(), queue: [out, incoming] });
+  const shown = copy();
+  expect(shown).toContain("Uno\nVarios");
+  expect(shown).toContain("2 borradores guardados en este celular. Todavía no se ha registrado nada.");
+  expect(shown).toContain("Sin título");
+  expect(shown).toContain("Sale\n−$10\nEntra\n+$30\nNETO");
+  expect(root!.root.findByProps({ accessibilityLabel: "Editar borrador sin título" })).toBeTruthy();
+  expect(root!.root.findAllByProps({ label: "Registrar 2" }).length).toBeGreaterThan(0);
+  for (const english of ["Batch", "drafts held", "Untitled", "Out", "NET", "Add one"]) expect(shown).not.toMatch(new RegExp(`\\b${english}\\b`));
+
+  await act(async () => root?.unmount());
+  await renderSpanish({ ...batch(), queue: [out] });
+  expect(copy()).toContain("1 borrador guardado en este celular.");
+  await act(async () => root?.unmount());
+  await renderSpanish({ ...batch(), posted: { count: 1, net: -1000 } });
+  expect(copy()).toContain("Se registró 1\nNeto −$10 · este mes\nListo");
+});
+
+test("batch rows name a missing category and account in the reader's language", () => {
+  const rowFor = (language: "en" | "es") => batchRowFor({ item: out, categories: [], profiles: [], t: createTranslator(language).t });
+  expect(rowFor("en")).toMatchObject({ category: "No category", place: "No place" });
+  expect(rowFor("es")).toMatchObject({ category: "Sin categoría", place: "Sin lugar" });
 });

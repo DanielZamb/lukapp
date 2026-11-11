@@ -6,6 +6,7 @@ import type { RefObject } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Pressable, Text, View } from "react-native";
 import { useTheme, useUi } from "../../ui/core";
+import { useT } from "../../i18n";
 import { PickerSheet, usePickerSheetStyles } from "../../ui/PickerSheet";
 
 export function PlaceSheet(props: {
@@ -21,6 +22,7 @@ export function PlaceSheet(props: {
   onSelect: (id: string) => void;
   onAdd: () => void;
 }) {
+  const { t } = useT();
   const pickerSheetStyles = usePickerSheetStyles();
   const ui = useUi();
   const theme = useTheme();
@@ -36,8 +38,8 @@ export function PlaceSheet(props: {
       <View style={pickerSheetStyles.search}>
         <Text style={pickerSheetStyles.title}>{props.title}</Text>
         <BottomSheetTextInput
-          accessibilityLabel="Search places"
-          placeholder="Search"
+          accessibilityLabel={t("posting.placeSearchA11y")}
+          placeholder={t("posting.placeSearch")}
           placeholderTextColor={theme.mutedForeground}
           value={props.search}
           onChangeText={props.onSearch}
@@ -69,12 +71,12 @@ export function PlaceSheet(props: {
       ))}
       {visible?.length === 0 && (
         <Text style={ui.muted}>
-          {props.search.trim() ? `Nothing matches "${props.search.trim()}".` : "No places yet."}
+          {props.search.trim() ? t("posting.placeNoMatch", { search: props.search.trim() }) : t("posting.placeNone")}
         </Text>
       )}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Add a place"
+        accessibilityLabel={t("posting.placeAdd")}
         disabled={props.disabled}
         onPress={props.onAdd}
         style={pickerSheetStyles.row}
@@ -82,7 +84,7 @@ export function PlaceSheet(props: {
         <View style={pickerSheetStyles.addDisc}>
           <Ionicons name="add" size={20} color={theme.foreground} />
         </View>
-        <Text style={[ui.body, pickerSheetStyles.rowName]}>Add a place</Text>
+        <Text style={[ui.body, pickerSheetStyles.rowName]}>{t("posting.placeAdd")}</Text>
       </Pressable>
     </PickerSheet>
   );

@@ -1,13 +1,16 @@
 import { ActivityIndicator, Text, View } from "react-native";
+import { useT } from "../../i18n";
 import { Header, ListGroup, ListRow, Screen, useUi } from "../../ui/core";
+import { entryPlaceName, type PlaceProfile } from "../placeEnding/model";
 import { EntryReversal } from "./EntryReversal";
 import { formatActivityAmount } from "./format";
 import type { EntryDetail } from "./types";
 import type { ReversalState } from "./useReversal";
 
-export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse, onCancel, onConfirm }: {
+export function EntryDetailScreen({ detail, reversal, places, onBack, onEntry, onReverse, onCancel, onConfirm }: {
   detail: EntryDetail | undefined;
   reversal: ReversalState;
+  places?: PlaceProfile[];
   onBack: () => void;
   onEntry: (id: string) => void;
   onReverse: () => void;
@@ -15,27 +18,29 @@ export function EntryDetailScreen({ detail, reversal, onBack, onEntry, onReverse
   onConfirm: () => void;
 }) {
   const ui = useUi();
+  const { t } = useT();
   const entry = detail?.entry;
   const primary = detail?.row.userCategories.find((category) => category.id === detail.row.primaryUserCategoryId);
   return <Screen>
-    <Header title="Posted entry" onBack={onBack} />
-    {!detail ? <ActivityIndicator accessibilityLabel="Loading entry" /> : <>
+    <Header title={t("review.postedEntry")} onBack={onBack} />
+    {!detail ? <ActivityIndicator accessibilityLabel={t("review.loadingEntry")} /> : <>
       <View style={ui.section}>
         <Text style={ui.title}>{detail.row.title}</Text>
         <Text adjustsFontSizeToFit numberOfLines={1} style={ui.hero}>{formatActivityAmount(detail.row.amount)}</Text>
-        <Text style={ui.muted}>{detail.row.reversed ? "Reversed" : entry?.reversesEntryId ? "Reversal" : "Posted"}</Text>
+        <Text style={ui.muted}>{detail.row.reversed ? t("review.statusReversed") : entry?.reversesEntryId ? t("review.statusReversal") : t("review.statusPosted")}</Text>
       </View>
       <ListGroup>
-        <ListRow title="Date" value={detail.row.date} />
+        <ListRow title={t("review.date")} value={detail.row.date} />
         {detail.row.transfer ? <>
-          <ListRow title="From" value={detail.row.transfer.from.name} />
-          <ListRow title="To" value={detail.row.transfer.to.name} />
-        </> : entry?.financialAccountProfileName && <ListRow title="Account" value={entry.financialAccountProfileName} />}
+          <ListRow title={t("review.transferFrom")} value={entryPlaceName(detail.row.transfer.from.id, detail.row.transfer.from.name, places, t)} />
+          <ListRow title={t("review.transferTo")} value={entryPlaceName(detail.row.transfer.to.id, detail.row.transfer.to.name, places, t)} />
+        </> : entry?.financialAccountProfileName && <ListRow title={t("review.account")}
+          value={entryPlaceName(entry.financialAccountProfileId, entry.financialAccountProfileName, places, t)} />}
         {(!detail.row.transfer || detail.row.userCategories.length > 0) &&
-          <ListRow title="Category" detail={detail.row.userCategories.map((category) => category.name).join(" · ") || "No category"} />}
-        {primary && <ListRow title="Primary category" value={primary.name} />}
+          <ListRow title={t("review.category")} detail={detail.row.userCategories.map((category) => category.name).join(" · ") || t("review.noCategory")} />}
+        {primary && <ListRow title={t("review.primaryCategory")} value={primary.name} />}
       </ListGroup>
-      <EntryReversal detail={detail} reversal={reversal} onEntry={onEntry}
+      <EntryReversal detail={detail} reversal={reversal} places={places} onEntry={onEntry}
         onReverse={onReverse} onCancel={onCancel} onConfirm={onConfirm} />
     </>}
   </Screen>;

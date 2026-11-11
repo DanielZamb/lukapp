@@ -19,10 +19,13 @@ import { ActivityIndicator, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "../src/features/api";
+import { LanguageProvider, useT } from "../src/i18n";
 import { LocalEntryGate } from "../src/local-auth/LocalEntryGate";
 import { PrebuiltSignIn } from "../src/local-auth/PrebuiltSignIn";
 import { IntakeProvider } from "../src/features/intake/IntakeProvider";
 import { DeviceAdmissionGate } from "../src/device-admission/DeviceAdmissionGate";
+import { FeedbackHost } from "../src/features/feedback/FeedbackHost";
+import { FeedbackAdmission } from "../src/features/feedback/controls";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import {
   Header,
@@ -40,13 +43,14 @@ void SplashScreen.preventAutoHideAsync();
 
 function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
   const ui = useUi();
+  const { t } = useT();
   const report = useDeviceAccessFailure();
   useLayoutEffect(() => { report(error); }, [error, report]);
   return (
     <Screen>
-      <Header title="Could not load your money" />
-      <Text style={ui.body}>Check your connection and try again.</Text>
-      <PrimaryButton label="Try again" onPress={retry} />
+      <Header title={t("access.loadFailedTitle")} />
+      <Text style={ui.body}>{t("access.loadFailedBody")}</Text>
+      <PrimaryButton label={t("common.retry")} onPress={retry} />
     </Screen>
   );
 }
@@ -54,20 +58,22 @@ function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
 export function ErrorBoundary(props: ErrorBoundaryProps) {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
+      <LanguageProvider>
+        <ThemeProvider>
         <ErrorFallback {...props} />
       </ThemeProvider>
+        </LanguageProvider>
     </SafeAreaProvider>
   );
 }
 function ConfigNeeded() {
   const ui = useUi();
+  const { t } = useT();
   return (
     <Screen>
-      <Header title="Development configuration needed" />
+      <Header title={t("access.configTitle")} />
       <Text style={ui.body}>
-        Set EXPO_PUBLIC_CONVEX_URL and EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY, then
-        restart Metro.
+        {t("access.configBody", { convexUrl: "EXPO_PUBLIC_CONVEX_URL", clerkKey: "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY" })}
       </Text>
     </Screen>
   );
@@ -75,6 +81,7 @@ function ConfigNeeded() {
 
 function Admission() {
   const ui = useUi();
+  const { t } = useT();
   const { isLoaded, isSignedIn } = useAuth();
   const { signOut } = useClerk();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -86,7 +93,7 @@ function Admission() {
     return (
       <Screen>
         <ActivityIndicator />
-        <Text style={ui.body}>Connecting…</Text>
+        <Text style={ui.body}>{t("access.connecting")}</Text>
       </Screen>
     );
   if (!isSignedIn)
@@ -102,11 +109,9 @@ function Admission() {
   )
     return (
       <Screen>
-        <Header title="Access unavailable" />
-        <Text style={ui.body}>
-          This account cannot open Lukapp. Use the admitted owner account.
-        </Text>
-        <SecondaryButton label="Sign out" onPress={() => void signOut()} />
+        <Header title={t("access.unavailableTitle")} />
+        <Text style={ui.body}>{t("access.unavailableBody")}</Text>
+        <SecondaryButton label={t("access.signOut")} onPress={() => void signOut()} />
       </Screen>
     );
   if (!connection)
@@ -117,6 +122,7 @@ function Admission() {
     );
   return (
     <DeviceAdmissionGate>
+    <FeedbackAdmission />
     <IntakeProvider>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
@@ -128,11 +134,14 @@ function Admission() {
       <Stack.Screen name="alerts" />
       <Stack.Screen name="month-close" />
       <Stack.Screen name="account" />
+      <Stack.Screen name="place-ending" />
       <Stack.Screen name="overview" />
       <Stack.Screen name="plans" />
       <Stack.Screen name="budget" />
       <Stack.Screen name="recovery" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="workspace" />
+      <Stack.Screen name="devices" />
       <Stack.Screen name="categories" />
       <Stack.Screen name="oauth-callback" />
     </Stack>
@@ -154,15 +163,18 @@ export default function Layout() {
   if (!convex || !publishableKey)
     return (
       <SafeAreaProvider>
+        <LanguageProvider>
         <ThemeProvider>
           <ConfigNeeded />
         </ThemeProvider>
+        </LanguageProvider>
       </SafeAreaProvider>
     );
   if (!loaded && !error) return null;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <LanguageProvider>
         <ThemeProvider>
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
           <LocalEntryGate
@@ -171,13 +183,16 @@ export default function Layout() {
             )}
           >
             <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-              <BottomSheetModalProvider>
-                <Admission />
-              </BottomSheetModalProvider>
+              <FeedbackHost>
+                <BottomSheetModalProvider>
+                  <Admission />
+                </BottomSheetModalProvider>
+              </FeedbackHost>
             </ConvexProviderWithClerk>
           </LocalEntryGate>
         </ClerkProvider>
         </ThemeProvider>
+        </LanguageProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

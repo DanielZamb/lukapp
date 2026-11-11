@@ -3,12 +3,14 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BudgetLimitSheet } from "./BudgetLimitSheet";
+import { openAmount } from "../amount/session";
 import type { BudgetJar } from "./model";
 
 vi.mock("@gorhom/bottom-sheet", () => ({
-  BottomSheetModal: "Sheet", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop",
+  BottomSheetModal: "Sheet", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop", BottomSheetTextInput: "SheetInput",
 }));
 vi.mock("react-native", () => ({
+  BackHandler: { addEventListener: () => ({ remove() {} }) },
   Pressable: "Pressable", Text: "Text", View: "View", ScrollView: "ScrollView", TextInput: "TextInput",
   ActivityIndicator: "ActivityIndicator",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -43,14 +45,22 @@ async function renderSheet(currency: string, previousSpendMinorUnits = 7_312_345
       previousMonth: "2026-09",
       previousSpendMinorUnits,
       minorUnits,
+      amount: openAmount(currency, ""),
+      amountIssue: null,
       busy: false,
       pending: false,
+      pendingAct: null,
       editable: true,
       canSubmit: true,
+      canSend: () => true,
       canDismiss: true,
       error: "",
       onLimit: () => {},
+      onAmount: () => {},
+      onResetAmount: () => {},
       onSave: () => {},
+      onSpendNothing: () => {},
+      onRemove: () => {},
       onDismiss: () => {},
     }), {
       createNodeMock: (element) => {
@@ -87,7 +97,7 @@ test.each(["COP", "USD"])("shows the narrow $ symbol for %s when formatToParts i
 });
 
 test.each([
-  { previousSpendMinorUnits: 282_000_000, money: "$2.82M" },
+  { previousSpendMinorUnits: 282_000_000, money: "$2,82M" },
   { previousSpendMinorUnits: 0, money: "$0" },
 ])("prior spend $previousSpendMinorUnits uses compact chip money", async ({ previousSpendMinorUnits, money }) => {
   const screen = await renderSheet("COP", previousSpendMinorUnits, 48_000_000);

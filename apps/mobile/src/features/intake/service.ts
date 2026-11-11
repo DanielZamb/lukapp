@@ -4,6 +4,8 @@ import type { CandidateConfirmResult } from "../../../../../src/notificationInta
 import { finishIntakeWipe, type WipeStore } from "./control";
 import type { LocalInputLease } from "../../local-auth/localInput";
 import { parseIntakeDocument, type IntakeCandidate, type StoredSuggestion } from "./candidates";
+import type { StoredAmountText } from "../amount/storedText";
+import { candidateSendsAsSaved } from "./amountText";
 import { commandFor, commandSchema, emptyState, ingest, mappingSchema, outcomeSchema, parseState, projectCandidate, prune,
   reviewSchema, serializeState, terminal, type ActiveCandidate, type CandidateState, type SourceMapping } from "./durableState";
 
@@ -17,7 +19,12 @@ export type IntakeDependencies = {
   ownerScope(): Promise<string>;
   newMutationId(): string;
   now(): number;
-  validateMapping(mapping: Pick<SourceMapping, "workspaceId" | "financialAccountProfileId" | "currency"> & Partial<Pick<SourceMapping, "timeZone">>): Promise<boolean>;
+  /**
+   * The workspace's current time zone while the mapping's workspace, Place and currency still hold, or null.
+   * A mapping's own zone is the one it was set up under and is not compared: a capture is dated in the zone current
+   * when it becomes a Candidate, and a Candidate keeps that date (ADR 0093).
+   */
+  validateMapping(mapping: Pick<SourceMapping, "workspaceId" | "financialAccountProfileId" | "currency">): Promise<{ timeZone: string } | null>;
   readLegacy(): Promise<unknown>;
   deleteLegacy(): Promise<void>;
   deleteNotices(): Promise<void>;
@@ -137,7 +144,7 @@ export class IntakeService {
       const row: ActiveCandidate = { kind: "active", id: candidate.id,
         digest: await this.wait(this.deps.hash(JSON.stringify(candidate)), generation), recordRevision: 0,
         createdAt: candidate.createdAt, expiresAt: candidate.expiresAt, workspaceId: candidate.workspaceId, currency: candidate.currency,
-        origin: { kind: "legacy" }, originalSuggestion: { ...candidate.suggestion, currency: candidate.currency }, review: candidate.suggestion, reviewAmountText: null,
+        origin: { kind: "legacy" }, originalSuggestion: { ...candidate.suggestion, currency: candidate.currency }, review: candidate.suggestion, reviewAmountText: null, reviewAmountFormat: null,
         parserVersion: candidate.parserVersion, consentVersion: candidate.consentVersion,
         status: { kind: "review", currencyReviewed: true, ...(candidate.error ? { error: candidate.error } : {}) } };
       state.records.push(row);
@@ -163,12 +170,13 @@ export class IntakeService {
       do {
         const loaded = await this.load(generation);
         const page = await this.wait(this.deps.native.listPending({ expectedEpoch: loaded.status.epoch, cursor, limit: 50 }), generation);
-        const ready: Array<{ capture: NativeCapture; mapping: SourceMapping; digest: string }> = [];
+        const ready: Array<{ capture: NativeCapture; mapping: SourceMapping; timeZone: string; digest: string }> = [];
         for (const capture of page.captures) {
           const mapping = loaded.state.mappings.find((m) => m.sourceSelectionId === capture.sourceSelectionId);
-          if (!mapping || !await this.wait(this.deps.validateMapping(mapping), generation)) { report.unresolved += 1; continue; }
+          const workspace = mapping ? await this.wait(this.deps.validateMapping(mapping), generation) : null;
+          if (!mapping || !workspace) { report.unresolved += 1; continue; }
           if (capture.expiresAt <= this.deps.now()) continue;
-          ready.push({ capture, mapping, digest: await this.wait(this.deps.hash(JSON.stringify(capture)), generation) });
+          ready.push({ capture, mapping, timeZone: workspace.timeZone, digest: await this.wait(this.deps.hash(JSON.stringify(capture)), generation) });
         }
         if (ready.length) {
           const ids = await this.change(generation, (state) => {
@@ -177,7 +185,7 @@ export class IntakeService {
             for (const item of ready) {
               const prior = next.records.find((r) => r.id === item.capture.captureId);
               if (prior && prior.digest !== item.digest) continue;
-              next = ingest(next, item.capture, item.mapping, item.digest);
+              next = ingest(next, item.capture, item.mapping, item.digest, item.timeZone);
               ids.push(item.capture.captureId);
             }
             return { state: next, result: ids };
@@ -210,13 +218,19 @@ export class IntakeService {
   }
   read(id: string) { return this.snapshot.state.records.find((r): r is ActiveCandidate => r.id === id && r.kind === "active" && r.expiresAt > this.deps.now()) ?? null; }
   candidates(): IntakeCandidate[] { return this.snapshot.state.records.flatMap((r) => r.kind === "active" && r.expiresAt > this.deps.now() ? [projectCandidate(r)] : []); }
-  updateReview(id: string, revision: number, review: StoredSuggestion, options: { currencyReviewed?: boolean; amountText?: string } = {}) {
+  updateReview(id: string, revision: number, review: StoredSuggestion, options: { currencyReviewed?: boolean; amount?: StoredAmountText } = {}) {
     const parsed = reviewSchema.parse(review);
     const known = this.snapshot.state.records.find((row) => row.id === id);
     const edited = (row: ActiveCandidate): ActiveCandidate => {
       if (row.status.kind !== "review") throw new Error("Confirmation frozen");
       const currencyReviewed = row.status.currencyReviewed || options.currencyReviewed === true;
-      return { ...row, review: parsed, reviewAmountText: options.amountText ?? row.reviewAmountText, recordRevision: row.recordRevision + 1,
+      const { reviewAmountReenter: _previous, reviewAmountReview: _review, ...kept } = row;
+      const amount = options.amount
+        ? { reviewAmountText: options.amount.text, reviewAmountFormat: options.amount.format, ...(options.amount.reenter ? { reviewAmountReenter: true as const } : {}),
+          ...(options.amount.review ? { reviewAmountReview: options.amount.review } : {}) }
+        : { reviewAmountText: row.reviewAmountText, reviewAmountFormat: row.reviewAmountFormat, ...(row.reviewAmountReenter ? { reviewAmountReenter: true as const } : {}),
+          ...(row.reviewAmountReview ? { reviewAmountReview: row.reviewAmountReview } : {}) };
+      return { ...kept, review: parsed, ...amount, recordRevision: row.recordRevision + 1,
         status: { kind: "review", currencyReviewed, ...(!currencyReviewed ? { error: "Review unresolved currency" } : {}) } };
     };
     return this.enqueue((generation) => this.change(generation, (state) => {
@@ -244,13 +258,13 @@ export class IntakeService {
       const current = this.activeRow(loaded.state, id);
       if (current.status.kind === "review" && !await this.wait(this.deps.validateMapping({
         workspaceId: current.workspaceId, financialAccountProfileId: current.review.financialAccountProfileId, currency: current.currency,
-        ...(current.origin.kind === "native" ? { timeZone: current.origin.mapping.timeZone } : {}),
       }), generation)) throw new Error("Candidate account mapping is unavailable");
       return this.change(generation, (state) => {
       const row = this.activeRow(state, id);
       if (row.status.kind !== "review") return { state, result: row.status.command };
       if (row.recordRevision !== revision) throw new Error("RECORD_REVISION_MISMATCH");
       if (!row.status.currencyReviewed) throw new Error("Review unresolved currency");
+      if (!candidateSendsAsSaved(projectCandidate(row))) throw new Error("Review amount awaits confirmation");
       if (row.origin.kind === "native" && row.currency !== row.origin.mapping.currency) throw new Error("Unsupported workspace currency");
       const command = commandSchema.parse(commandFor(row));
       const next: ActiveCandidate = { ...row, recordRevision: revision + 1, status: { kind: "submitting", command, startedAt: this.deps.now() } };

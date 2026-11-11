@@ -1,0 +1,249 @@
+{
+ "device": "Samsung Galaxy S21 FE (SM-G990E), Android 16, Samsung Keyboard 5.9.20.89, locale en-US, font scale 1.5",
+ "recorded": "2026-11-10",
+ "source": "reports/mvp-2026-11-10/amount-field/device/logs/r3-A6-sheet-fast-fixed-1.jsonl",
+ "currency": "USD",
+ "initialText": "",
+ "finalText": "5432109812345",
+ "sends": [],
+ "events": [
+  {
+   "kind": "keyPress",
+   "key": "5"
+  },
+  {
+   "kind": "text",
+   "text": "5",
+   "eventCount": 4
+  },
+  {
+   "kind": "selection",
+   "start": 1,
+   "end": 1
+  },
+  {
+   "kind": "keyPress",
+   "key": "4"
+  },
+  {
+   "kind": "text",
+   "text": "54",
+   "eventCount": 8
+  },
+  {
+   "kind": "selection",
+   "start": 2,
+   "end": 2
+  },
+  {
+   "kind": "keyPress",
+   "key": "3"
+  },
+  {
+   "kind": "text",
+   "text": "543",
+   "eventCount": 12
+  },
+  {
+   "kind": "selection",
+   "start": 3,
+   "end": 3
+  },
+  {
+   "kind": "keyPress",
+   "key": "2"
+  },
+  {
+   "kind": "text",
+   "text": "5432",
+   "eventCount": 16
+  },
+  {
+   "kind": "selection",
+   "start": 4,
+   "end": 4
+  },
+  {
+   "kind": "keyPress",
+   "key": "1"
+  },
+  {
+   "kind": "text",
+   "text": "54321",
+   "eventCount": 20
+  },
+  {
+   "kind": "selection",
+   "start": 5,
+   "end": 5
+  },
+  {
+   "kind": "keyPress",
+   "key": "0"
+  },
+  {
+   "kind": "text",
+   "text": "543210",
+   "eventCount": 24
+  },
+  {
+   "kind": "selection",
+   "start": 6,
+   "end": 6
+  },
+  {
+   "kind": "keyPress",
+   "key": "9"
+  },
+  {
+   "kind": "text",
+   "text": "5432109",
+   "eventCount": 28
+  },
+  {
+   "kind": "selection",
+   "start": 7,
+   "end": 7
+  },
+  {
+   "kind": "keyPress",
+   "key": "8"
+  },
+  {
+   "kind": "text",
+   "text": "54321098",
+   "eventCount": 32
+  },
+  {
+   "kind": "selection",
+   "start": 8,
+   "end": 8
+  },
+  {
+   "kind": "keyPress",
+   "key": "7"
+  },
+  {
+   "kind": "text",
+   "text": "543210987",
+   "eventCount": 36
+  },
+  {
+   "kind": "selection",
+   "start": 9,
+   "end": 9
+  },
+  {
+   "kind": "keyPress",
+   "key": "6"
+  },
+  {
+   "kind": "text",
+   "text": "5432109876",
+   "eventCount": 40
+  },
+  {
+   "kind": "selection",
+   "start": 10,
+   "end": 10
+  },
+  {
+   "kind": "keyPress",
+   "key": "Backspace"
+  },
+  {
+   "kind": "text",
+   "text": "543210987",
+   "eventCount": 44
+  },
+  {
+   "kind": "selection",
+   "start": 9,
+   "end": 9
+  },
+  {
+   "kind": "keyPress",
+   "key": "Backspace"
+  },
+  {
+   "kind": "text",
+   "text": "54321098",
+   "eventCount": 48
+  },
+  {
+   "kind": "selection",
+   "start": 8,
+   "end": 8
+  },
+  {
+   "kind": "keyPress",
+   "key": "1"
+  },
+  {
+   "kind": "text",
+   "text": "543210981",
+   "eventCount": 52
+  },
+  {
+   "kind": "selection",
+   "start": 9,
+   "end": 9
+  },
+  {
+   "kind": "keyPress",
+   "key": "2"
+  },
+  {
+   "kind": "text",
+   "text": "5432109812",
+   "eventCount": 56
+  },
+  {
+   "kind": "selection",
+   "start": 10,
+   "end": 10
+  },
+  {
+   "kind": "keyPress",
+   "key": "3"
+  },
+  {
+   "kind": "text",
+   "text": "54321098123",
+   "eventCount": 60
+  },
+  {
+   "kind": "selection",
+   "start": 11,
+   "end": 11
+  },
+  {
+   "kind": "keyPress",
+   "key": "4"
+  },
+  {
+   "kind": "text",
+   "text": "543210981234",
+   "eventCount": 64
+  },
+  {
+   "kind": "selection",
+   "start": 12,
+   "end": 12
+  },
+  {
+   "kind": "keyPress",
+   "key": "5"
+  },
+  {
+   "kind": "text",
+   "text": "5432109812345",
+   "eventCount": 68
+  },
+  {
+   "kind": "selection",
+   "start": 13,
+   "end": 13
+  }
+ ]
+}

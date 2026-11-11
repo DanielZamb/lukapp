@@ -1,66 +1,30 @@
 import type { CategoryStyle } from "./model";
-import type { ThemeMode } from "../../ui/tokens";
 
-function hslToHex(hue: number, saturation: number, lightness: number) {
-  const sat = saturation / 100;
-  const light = lightness / 100;
-  const channel = (n: number) => {
-    const k = (n + hue / 30) % 12;
-    const value =
-      light -
-      sat *
-        Math.min(light, 1 - light) *
-        Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    return Math.round(value * 255)
-      .toString(16)
-      .padStart(2, "0");
-  };
-  return `#${channel(0)}${channel(8)}${channel(4)}`;
-}
-
-export const categoryPalette = [
-  ...Array.from({ length: 24 }, (_, index) => ({
-    id: `h${index * 15}`,
-    light: hslToHex(index * 15, 62, 34),
-    dark: hslToHex(index * 15, 72, 68),
-  })),
-  {
-    id: "cool-gray",
-    light: hslToHex(215, 12, 38),
-    dark: hslToHex(215, 12, 68),
-  },
-  { id: "warm-gray", light: hslToHex(35, 12, 38), dark: hslToHex(35, 14, 68) },
-  { id: "brown", light: hslToHex(25, 45, 32), dark: hslToHex(25, 45, 62) },
-  { id: "olive", light: hslToHex(80, 35, 30), dark: hslToHex(80, 35, 60) },
-];
-export function categoryColor(style: CategoryStyle, mode: ThemeMode = "light") {
-  return categoryPalette.find((entry) => entry.id === style.color)?.[mode];
-}
 export const fallbackLook: CategoryStyle = {
   emoji: "✨",
   tone: "primary",
   color: "h270",
 };
 export const starterCategories = [
-  { name: "Food", style: { emoji: "🛒", tone: "primary", color: "h150" } },
-  { name: "Transport", style: { emoji: "🚌", tone: "primary", color: "h210" } },
-  { name: "Dining", style: { emoji: "🍔", tone: "primary", color: "h30" } },
-  { name: "Home", style: { emoji: "🏠", tone: "primary", color: "h270" } },
-  { name: "Health", style: { emoji: "💊", tone: "primary", color: "h345" } },
-  { name: "Fun", style: { emoji: "🎮", tone: "primary", color: "h45" } },
-  { name: "Shopping", style: { emoji: "🛍️", tone: "primary", color: "h180" } },
+  { key: "groceries", name: "Food", style: { emoji: "🛒", tone: "primary", color: "h150" } },
+  { key: "transport", name: "Transport", style: { emoji: "🚌", tone: "primary", color: "h210" } },
+  { key: "dining", name: "Dining", style: { emoji: "🍔", tone: "primary", color: "h30" } },
+  { key: "home", name: "Home", style: { emoji: "🏠", tone: "primary", color: "h270" } },
+  { key: "health", name: "Health", style: { emoji: "💊", tone: "primary", color: "h345" } },
+  { key: "fun", name: "Fun", style: { emoji: "🎮", tone: "primary", color: "h45" } },
+  { key: "shopping", name: "Shopping", style: { emoji: "🛍️", tone: "primary", color: "h180" } },
   {
-    name: "Bills",
+    key: "bills", name: "Bills",
     style: { emoji: "🧾", tone: "primary", color: "cool-gray" },
   },
-  { name: "Family", style: { emoji: "👪", tone: "primary", color: "h195" } },
-  { name: "Education", style: { emoji: "📚", tone: "primary", color: "h240" } },
-  { name: "Pets", style: { emoji: "🐾", tone: "primary", color: "h15" } },
+  { key: "family", name: "Family", style: { emoji: "👪", tone: "primary", color: "h195" } },
+  { key: "education", name: "Education", style: { emoji: "📚", tone: "primary", color: "h240" } },
+  { key: "pets", name: "Pets", style: { emoji: "🐾", tone: "primary", color: "h15" } },
   {
-    name: "Other",
+    key: "other", name: "Other",
     style: { emoji: "✨", tone: "primary", color: "warm-gray" },
   },
-] satisfies { name: string; style: CategoryStyle }[];
+] satisfies { key: string; name: string; style: CategoryStyle }[];
 export const quickEmojis = ["🛒", "🍔", "🚌", "🏠", "💊", "🎮", "🛍️", "✨"];
 
 export function emojiFrom(text: string) {

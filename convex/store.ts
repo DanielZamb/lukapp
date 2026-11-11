@@ -1,7 +1,8 @@
+import { completeEndingRead, ENDING_COLLECTION_LIMIT } from "./accountingEndingBounds";
 import type { UserCategory } from "../src/accounting/categories/types";
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import { AccountingError } from "../src/accounting/errors";
-import { workspaceTimeZone } from "../src/accounting/timeZone";
+import { calendarDate, workspaceTimeZone } from "../src/accounting/timeZone";
 import { applyJournalSummary, readAccountTotals, readFirstActivityDate } from "./ledgerSummary";
 import type {
   AccountingPeriod,
@@ -19,6 +20,7 @@ export type ReadDb = GenericQueryCtx<DataModel>["db"];
 type WriteDb = GenericMutationCtx<DataModel>["db"];
 type ReadMethods = Omit<AccountingStore, WriteMethod>;
 type WriteMethod =
+  | "insertPlaceEnding"
   | "insertAccountSetup"
   | "insertOpeningMarker"
   | "insertCategory"
@@ -28,6 +30,7 @@ type WriteMethod =
   | "insertWorkspace"
   | "insertLedgerAccount"
   | "insertProfile"
+  | "renameProfile"
   | "restyleProfile"
   | "insertJournalEntry"
   | "insertAccountingPeriod"
@@ -84,9 +87,12 @@ function toLedgerAccount(doc: Doc<"ledgerAccounts">): LedgerAccount {
   };
 }
 
-function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
+function toProfile(doc: Doc<"financialAccountProfiles">, ending?: StoredProfile["ending"], undoOperationId?: string): StoredProfile {
   return {
+    ...(ending ? { ending: { act: ending.act, endedBy: ending.endedBy, occurredAt: ending.occurredAt, recordedAt: ending.recordedAt } } : {}),
+    ...(undoOperationId ? { undoOperationId } : {}),
     createdAt: doc._creationTime,
+    ...(doc.createdAccountingDate ? { createdAccountingDate: doc.createdAccountingDate } : {}),
     id: doc._id,
     workspaceId: doc.workspaceId,
     name: doc.name,
@@ -99,6 +105,7 @@ function toProfile(doc: Doc<"financialAccountProfiles">): StoredProfile {
 
 function toOpening(doc: Doc<"financialAccountOpenings">): StoredOpeningMarker {
   return {
+    ...(doc.originalCurrency ? { originalCurrency: doc.originalCurrency } : {}),
     workspaceId: doc.workspaceId,
     financialAccountProfileId: doc.financialAccountProfileId,
     accountingDate: doc.accountingDate,
@@ -163,6 +170,12 @@ function readStore(db: ReadDb): ReadMethods {
   }
 
   return {
+    async findPlaceEnding(workspaceId, idempotencyKey) {
+      const doc = await db.query("placeEndings").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId)).eq("idempotencyKey", idempotencyKey)).unique();
+      if (!doc) return undefined;
+      const { _id, _creationTime, ...ending } = doc;
+      return { id: _id, ...ending };
+    },
     async findAccountSetup(workspaceId, idempotencyKey) {
       const doc = await db
         .query("financialAccountSetups")
@@ -274,7 +287,11 @@ function readStore(db: ReadDb): ReadMethods {
     async getProfile(profileId) {
       const id = idFor(db, "financialAccountProfiles", profileId);
       const doc = id && (await db.get(id));
-      return doc ? toProfile(doc) : undefined;
+      const ending = doc && await db.query("placeEndings").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).unique();
+      const operations = doc ? await db.query("placeUndoOperations").withIndex("by_profile", q => q.eq("financialAccountProfileId", doc._id)).take(ENDING_COLLECTION_LIMIT + 1) : [];
+      completeEndingRead(operations);
+      const operation = operations.find(o => o.state.kind !== "done" && o.state.kind !== "aborted");
+      return doc ? toProfile(doc, ending ?? undefined, operation?._id) : undefined;
     },
 
     async listProfiles(workspaceId) {
@@ -284,7 +301,11 @@ function readStore(db: ReadDb): ReadMethods {
           q.eq("workspaceId", storedId<"workspaces">(workspaceId)),
         )
         .collect();
-      return docs.map(toProfile);
+      const endings = completeEndingRead(await db.query("placeEndings").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).take(ENDING_COLLECTION_LIMIT + 1));
+      const byProfile = new Map(endings.map(ending => [ending.financialAccountProfileId, ending]));
+      const operations = completeEndingRead(await db.query("placeUndoOperations").withIndex("by_workspace_request", q => q.eq("workspaceId", storedId<"workspaces">(workspaceId))).take(ENDING_COLLECTION_LIMIT + 1));
+      const active = new Map(operations.filter(o => o.state.kind !== "done" && o.state.kind !== "aborted").map(o => [o.financialAccountProfileId, o._id]));
+      return docs.map(doc => toProfile(doc, byProfile.get(doc._id), active.get(doc._id)));
     },
 
     async getJournalEntry(entryId) {
@@ -356,8 +377,12 @@ function readStore(db: ReadDb): ReadMethods {
   };
 }
 
-function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
+function writeStore(db: WriteDb, preparedProfiles?: StoredProfile[]): Pick<AccountingStore, WriteMethod> {
   return {
+    async insertPlaceEnding(ending) {
+      const id = await db.insert("placeEndings", { ...ending, workspaceId: storedId<"workspaces">(ending.workspaceId), financialAccountProfileId: storedId<"financialAccountProfiles">(ending.financialAccountProfileId) });
+      return { id, ...ending };
+    },
     async insertAccountSetup({ openingJournalEntryId, ...setup }) {
       await db.insert("financialAccountSetups", {
         ...setup,
@@ -426,6 +451,15 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
       return { id, ...account };
     },
 
+    async renameProfile(profileId, name) {
+      const id = storedId<"financialAccountProfiles">(profileId);
+      const profile = await db.get(id);
+      if (!profile) throw new AccountingError("financial_account_profile_not_found");
+      await db.patch(id, { name });
+      await db.patch(profile.postingAccountId, { name });
+      return toProfile({ ...profile, name });
+    },
+
     async restyleProfile(profileId, emoji) {
       const id = storedId<"financialAccountProfiles">(profileId);
       await db.patch(id, { emoji });
@@ -435,7 +469,10 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
     },
 
     async insertProfile(profile) {
+      const workspace = await db.get(storedId<"workspaces">(profile.workspaceId));
+      if (!workspace) throw new AccountingError("workspace_membership_required");
       const id = await db.insert("financialAccountProfiles", {
+        createdAccountingDate: calendarDate(new Date(), workspaceTimeZone(workspace)),
         ...profile,
         workspaceId: storedId<"workspaces">(profile.workspaceId),
         postingAccountId: storedId<"ledgerAccounts">(profile.postingAccountId),
@@ -487,7 +524,7 @@ function writeStore(db: WriteDb): Pick<AccountingStore, WriteMethod> {
           creditMinorUnits: line.creditMinorUnits,
         });
       }
-      const profiles = await db
+      const profiles = preparedProfiles?.map(p => ({ _id: storedId<"financialAccountProfiles">(p.id), postingAccountId: p.postingAccountId })) ?? await db
         .query("financialAccountProfiles")
         .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
         .collect();
@@ -561,6 +598,7 @@ function unavailable(method: string): never {
 
 function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
   return {
+    insertPlaceEnding: async () => unavailable("insertPlaceEnding"),
     insertAccountSetup: async () => unavailable("insertAccountSetup"),
     insertOpeningMarker: async () => unavailable("insertOpeningMarker"),
     insertCategory: async () => unavailable("insertCategory"),
@@ -570,6 +608,7 @@ function readOnlyWrites(): Pick<AccountingStore, WriteMethod> {
     insertWorkspace: async () => unavailable("insertWorkspace"),
     insertLedgerAccount: async () => unavailable("insertLedgerAccount"),
     insertProfile: async () => unavailable("insertProfile"),
+    renameProfile: async () => unavailable("renameProfile"),
     restyleProfile: async () => unavailable("restyleProfile"),
     insertJournalEntry: async () => unavailable("insertJournalEntry"),
     insertAccountingPeriod: async () => unavailable("insertAccountingPeriod"),
@@ -584,6 +623,6 @@ export function convexReadStore(db: ReadDb): AccountingStore {
   return { ...readStore(db), ...readOnlyWrites() };
 }
 
-export function convexStore(db: WriteDb): AccountingStore {
-  return { ...readStore(db), ...writeStore(db) };
+export function convexStore(db: WriteDb, preparedProfiles?: StoredProfile[]): AccountingStore {
+  return { ...readStore(db), ...writeStore(db, preparedProfiles) };
 }

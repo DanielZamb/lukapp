@@ -12,9 +12,15 @@ import {
   pendingPostingSchema,
   type PendingPosting,
 } from "./posting/pendingPostingSchema";
-import { LocalEntryDraftGoneError } from "./localEntryDraftErrors";
+import {
+  LocalEntryDraftFrozenError,
+  LocalEntryDraftGoneError,
+} from "./localEntryDraftErrors";
 import { postingBatchSchema, type StoredPostingBatch } from "./posting/postingBatchSchema";
-export { LocalEntryDraftGoneError };
+import type { DiscardOutcome } from "./discardOutcome";
+import { amountTextFormatSchema, storedAmountReviewSchema, type AmountTextFormat, type StoredAmountReview } from "./amount/storedText";
+import { currentAmountTextFormat } from "./amount/currencyFormat";
+export { LocalEntryDraftFrozenError, LocalEntryDraftGoneError };
 
 export const LOCAL_ENTRY_DRAFT_TTL_MS = 15 * 24 * 60 * 60 * 1000;
 export type LocalEntryDraftId = string;
@@ -25,6 +31,10 @@ export type LocalEntryFacts = {
   currency: string;
   entryType: "normal" | "transfer";
   amountText: string;
+  amountFormat: AmountTextFormat;
+  amountReenter?: true;
+  /** The amount still awaits the person's confirmation. */
+  amountReview?: StoredAmountReview;
   accountingDate: string;
   description: string;
   profileId: string;
@@ -46,7 +56,7 @@ export type PostingDraft = DraftMeta & {
 };
 export type LocalEntryDraft = OpenDraft | PostingDraft;
 export type LocalEntryDocument = {
-  v: 1;
+  v: 3;
   drafts: LocalEntryDraft[];
   postingBatches?: Record<string, StoredPostingBatch>;
 };
@@ -84,6 +94,8 @@ export type LocalEntryDraftsPort = {
     facts: LocalEntryFacts;
   }): Promise<LocalEntryDraftId>;
   read(id: LocalEntryDraftId): Promise<LocalEntryDraft | null>;
+  /** Removes one open Draft of this workspace. A Draft whose posting command was dispatched stays `frozen`. */
+  discard(id: LocalEntryDraftId): Promise<DiscardOutcome>;
 };
 
 const categoriesSchema = z
@@ -98,7 +110,7 @@ const categoriesSchema = z
     )
       ctx.addIssue({ code: "custom", message: "Invalid category selection" });
   });
-const factsSchema = z.object({
+const factsFields = {
   workspaceId: z.string().min(1),
   currency: currencySchema,
   entryType: z.enum(["normal", "transfer"]),
@@ -108,27 +120,50 @@ const factsSchema = z.object({
   profileId: z.string(),
   destinationId: z.string().min(1).nullable(),
   categories: categoriesSchema,
-});
+};
+const taggedFactsFields = {
+  ...factsFields,
+  amountFormat: amountTextFormatSchema,
+  amountReenter: z.literal(true).optional(),
+};
+const factsSchema = z.object({ ...taggedFactsFields, amountReview: storedAmountReviewSchema.optional() });
 const metaSchema = {
   id: z.string().min(1),
   createdAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(),
 };
+const postingDraftSchema = z.object({
+  ...metaSchema,
+  status: z.literal("posting"),
+  command: pendingPostingSchema,
+});
 const localEntryDocumentSchema = z.object({
+  v: z.literal(3),
+  postingBatches: z.record(z.string(), postingBatchSchema).optional(),
+  drafts: z.array(
+    z.discriminatedUnion("status", [
+      z.object({ ...metaSchema, status: z.literal("open"), facts: factsSchema }),
+      postingDraftSchema,
+    ]),
+  ),
+});
+const taggedDocumentSchema = z.object({
+  v: z.literal(2),
+  postingBatches: z.record(z.string(), postingBatchSchema).optional(),
+  drafts: z.array(
+    z.discriminatedUnion("status", [
+      z.object({ ...metaSchema, status: z.literal("open"), facts: z.object(taggedFactsFields) }),
+      postingDraftSchema,
+    ]),
+  ),
+});
+const preCurrencyDocumentSchema = z.object({
   v: z.literal(1),
   postingBatches: z.record(z.string(), postingBatchSchema).optional(),
   drafts: z.array(
     z.discriminatedUnion("status", [
-      z.object({
-        ...metaSchema,
-        status: z.literal("open"),
-        facts: factsSchema,
-      }),
-      z.object({
-        ...metaSchema,
-        status: z.literal("posting"),
-        command: pendingPostingSchema,
-      }),
+      z.object({ ...metaSchema, status: z.literal("open"), facts: z.object(factsFields) }),
+      postingDraftSchema,
     ]),
   ),
 });
@@ -161,9 +196,11 @@ export function parseLocalEntryDocument(
   now: number,
 ): ParsedDocument {
   if (raw === null || raw === undefined)
-    return { document: { v: 1, drafts: [] }, dirty: false };
+    return { document: { v: 3, drafts: [] }, dirty: false };
   if (typeof raw === "object" && raw !== null && "v" in raw) {
-    const document = localEntryDocumentSchema.parse(raw);
+    const document = raw.v === 1 ? fromPreCurrencyDocument(preCurrencyDocumentSchema.parse(raw))
+      : raw.v === 2 ? { ...taggedDocumentSchema.parse(raw), v: 3 as const }
+      : localEntryDocumentSchema.parse(raw);
     const drafts = document.drafts.filter((draft) => draft.expiresAt > now);
     return {
       document: { ...document, drafts },
@@ -173,7 +210,7 @@ export function parseLocalEntryDocument(
   const command = parsePendingPosting(raw);
   return {
     document: {
-      v: 1,
+      v: 3,
       drafts: [
         {
           id: command.payload.idempotencyKey,
@@ -185,6 +222,20 @@ export function parseLocalEntryDocument(
       ],
     },
     dirty: true,
+  };
+}
+
+/**
+ * Version 1 Drafts kept their amount text in the pre-currency grammar. It stays verbatim, tagged as such. Version 2
+ * Drafts could not yet record an amount awaiting confirmation; the ones whose text needs rewriting still ask for it
+ * when reopened, because their tag says so.
+ */
+function fromPreCurrencyDocument(document: z.infer<typeof preCurrencyDocumentSchema>): LocalEntryDocument {
+  return {
+    ...document,
+    v: 3,
+    drafts: document.drafts.map((draft) =>
+      draft.status === "open" ? { ...draft, facts: { ...draft.facts, amountFormat: "pre-currency" } } : draft),
   };
 }
 
@@ -340,7 +391,7 @@ export function keepIn(
   const existing = drafts.find((draft) => draft.id === input.draftId);
   if (input.draftId && !existing) throw new LocalEntryDraftGoneError(input.draftId);
   if (existing?.status === "posting")
-    throw new Error("Cannot edit a posting draft");
+    throw new LocalEntryDraftFrozenError(existing.id);
   if (existing?.status === "open") {
     const next: OpenDraft = { ...existing, facts: input.facts };
     return {
@@ -421,6 +472,7 @@ export function factsFromCommand(command: PostableCommand): LocalEntryFacts {
         `${payload.amount.currency} `,
         "",
       ),
+      amountFormat: currentAmountTextFormat(payload.amount.currency),
       accountingDate: payload.accountingDate,
       description: payload.description,
       profileId: payload.sourceFinancialAccountProfileId,
@@ -446,6 +498,7 @@ export function factsFromCommand(command: PostableCommand): LocalEntryFacts {
       ...payload.amount,
       minorUnits: signed,
     }).replace(`${payload.amount.currency} `, ""),
+    amountFormat: currentAmountTextFormat(payload.amount.currency),
     accountingDate: payload.accountingDate,
     description: payload.description,
     profileId: payload.financialAccountProfileId,
@@ -527,6 +580,75 @@ export function removeIn(
     ...document,
     drafts: document.drafts.filter((draft) => draft.id !== id),
   };
+}
+
+/**
+ * The person's discard of one Draft. Only an open Draft is removed. A posting Draft keeps its dispatched
+ * command for retry, and a batch row belongs to its batch, so neither is removed here.
+ */
+export function discardOpenIn(
+  document: LocalEntryDocument,
+  id: LocalEntryDraftId,
+  workspaceId: string,
+  now: number,
+): { document: LocalEntryDocument; outcome: Extract<DiscardOutcome, "discarded" | "frozen" | "gone"> } {
+  const draft = liveDrafts(document, now).find((row) => row.id === id);
+  if (!draft) return { document, outcome: "gone" };
+  if (workspaceOf(draft) !== workspaceId)
+    throw new Error("Draft belongs to another workspace");
+  if (isBatchDraft(document, draft)) throw new Error("Draft belongs to a batch");
+  if (draft.status === "posting") return { document, outcome: "frozen" };
+  return { document: removeIn(document, id), outcome: "discarded" };
+}
+
+/**
+ * Input typed in a Workspace currency that is no longer the Workspace's cannot be posted into the new one.
+ * Removes that Workspace's open Drafts and unsent batch rows in `currency`. A sent command keeps its frozen
+ * retry, which the server refuses in the new currency. `dropped` counts each piece of input once.
+ */
+export function dropUnsentInCurrency(
+  document: LocalEntryDocument,
+  workspaceId: string,
+  currency: string,
+): { document: LocalEntryDocument; dropped: number } {
+  const sent = new Set(document.drafts.flatMap((draft) =>
+    draft.status === "posting" ? [draft.command.payload.idempotencyKey] : []));
+  const batch = document.postingBatches?.[workspaceId];
+  const unsent = (row: StoredPostingBatch["queue"][number]) => row.id !== batch?.pendingItemId &&
+    !sent.has(row.command.payload.idempotencyKey) && row.command.payload.amount.currency === currency;
+  const rows = batch?.queue.filter(unsent) ?? [];
+  const rowDrafts = new Set(rows.flatMap((row) => row.draftId ? [row.draftId] : []));
+  const stale = (draft: LocalEntryDraft) => draft.status === "open" &&
+    draft.facts.workspaceId === workspaceId && draft.facts.currency === currency;
+  const drafts = document.drafts.filter((draft) => !stale(draft));
+  const loose = document.drafts.filter((draft) => stale(draft) && !rowDrafts.has(draft.id)).length;
+  return {
+    dropped: rows.length + loose,
+    document: {
+      ...document,
+      drafts,
+      ...(batch ? { postingBatches: { ...document.postingBatches,
+        [workspaceId]: { ...batch, queue: batch.queue.filter((row) => !unsent(row)) } } } : {}),
+    },
+  };
+}
+
+export function discardLocalEntryDraft(
+  lease: LocalInputLease,
+  subject: string,
+  workspaceId: string,
+  id: LocalEntryDraftId,
+) {
+  if (lease.subject !== subject)
+    return Promise.reject(new Error("Draft belongs to another user"));
+  return mutateLocalEntryDocument(lease, subject, (document, now, dirty) => {
+    const discarded = discardOpenIn(document, id, workspaceId, now);
+    return {
+      document: discarded.document,
+      result: discarded.outcome,
+      write: dirty || discarded.outcome === "discarded",
+    };
+  });
 }
 
 export async function loadPendingPosting(subject: string) {

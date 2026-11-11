@@ -16,7 +16,10 @@
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
         "backgroundColor": "#6d28d9",
         "monochromeImage": "./assets/brand/adaptive-monochrome.png"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.ACTIVITY_RECOGNITION"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -53,6 +56,12 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Use Face ID to unlock your financial information in Lukapp."
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": false
         }
       ],
       "./plugins/with-entry-privacy.cjs",

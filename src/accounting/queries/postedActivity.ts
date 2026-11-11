@@ -1,3 +1,4 @@
+import { placeStatus } from "../placeState";
 import { balances } from "./balances";
 import { AccountingError } from "../errors";
 import { calendarDate } from "../timeZone";
@@ -5,12 +6,12 @@ import { activityRow, profilesByPostingAccount } from "./activityRow";
 import { requireWorkspace } from "../membership";
 import { findActiveOpening } from "../openingControl";
 import { journalContext, toPostedJournalEntry } from "../views";
-import type { AccountingStore, Actor } from "../types";
+import type { AccountingStore, Actor, PlaceStatus } from "../types";
 
 /** Home totals plus an optional preview of the latest 50 journal records. Use postedHistory for more rows. */
 export async function postedActivity(
   store: AccountingStore,
-  input: { actor: Actor; workspaceId: string; month: string; includeRows?: boolean },
+  input: { actor: Actor; workspaceId: string; month: string; includeRows?: boolean; status?: PlaceStatus | "all" },
 ) {
   const workspace = await requireWorkspace(store, input.workspaceId, input.actor);
   const [accounts, entries, context, monthTotals] = await Promise.all([
@@ -39,13 +40,18 @@ export async function postedActivity(
       );
     }));
   return {
-    accounts: await Promise.all(accounts.map(async (account) => {
+    accounts: await Promise.all(accounts.filter(account => input.status === "all" || (input.status === undefined
+      ? ["open", "undoing"].includes(placeStatus(context.profiles.get(account.financialAccountProfileId) ?? {}))
+      : placeStatus(context.profiles.get(account.financialAccountProfileId) ?? {}) === input.status)).map(async (account) => {
       const profile = context.profiles.get(account.financialAccountProfileId);
       if (!profile) throw new AccountingError("financial_account_profile_not_found");
       const opening = await findActiveOpening(store, workspace.id, profile.id);
       const trackingFrom = opening?.accountingDate
+        ?? profile.createdAccountingDate
         ?? (profile.createdAt === undefined ? null : calendarDate(new Date(profile.createdAt), workspace.timeZone));
       return {
+        status: placeStatus(profile),
+        ...(profile.ending ? { endedAt: profile.ending.occurredAt } : {}),
         productKind: profile.productKind,
         ...(profile.emoji ? { emoji: profile.emoji } : {}),
         trackingFrom,

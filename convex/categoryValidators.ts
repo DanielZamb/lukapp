@@ -24,6 +24,7 @@ export const categorySelection = v.union(
     kind: v.literal("preset"),
     presetId: v.string(),
     style: categoryStyle,
+    name: v.optional(v.string()),
   }),
   v.object({
     kind: v.literal("custom"),

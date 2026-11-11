@@ -9,7 +9,14 @@
  */
 
 import type * as accounting from "../accounting.js";
+import type * as accountingEndingBounds from "../accountingEndingBounds.js";
+import type * as accountingEndingChecks from "../accountingEndingChecks.js";
 import type * as accountingErrors from "../accountingErrors.js";
+import type * as accountingPlaceValues from "../accountingPlaceValues.js";
+import type * as accountingPlaces from "../accountingPlaces.js";
+import type * as accountingUndo from "../accountingUndo.js";
+import type * as accountingUndoSnapshot from "../accountingUndoSnapshot.js";
+import type * as accountingUndoValues from "../accountingUndoValues.js";
 import type * as accountingValues from "../accountingValues.js";
 import type * as accountingWrites from "../accountingWrites.js";
 import type * as authConnection from "../authConnection.js";
@@ -20,8 +27,15 @@ import type * as budgetValues from "../budgetValues.js";
 import type * as budgetWrites from "../budgetWrites.js";
 import type * as categoryValidators from "../categoryValidators.js";
 import type * as clerkWebhooks from "../clerkWebhooks.js";
+import type * as crons from "../crons.js";
 import type * as deviceAccess from "../deviceAccess.js";
 import type * as deviceAccessInternal from "../deviceAccessInternal.js";
+import type * as feedback from "../feedback.js";
+import type * as feedbackErrors from "../feedbackErrors.js";
+import type * as feedbackGithub from "../feedbackGithub.js";
+import type * as feedbackImage from "../feedbackImage.js";
+import type * as feedbackStore from "../feedbackStore.js";
+import type * as feedbackValues from "../feedbackValues.js";
 import type * as historyBackfill from "../historyBackfill.js";
 import type * as historyStore from "../historyStore.js";
 import type * as historyValidators from "../historyValidators.js";
@@ -58,7 +72,14 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   accounting: typeof accounting;
+  accountingEndingBounds: typeof accountingEndingBounds;
+  accountingEndingChecks: typeof accountingEndingChecks;
   accountingErrors: typeof accountingErrors;
+  accountingPlaceValues: typeof accountingPlaceValues;
+  accountingPlaces: typeof accountingPlaces;
+  accountingUndo: typeof accountingUndo;
+  accountingUndoSnapshot: typeof accountingUndoSnapshot;
+  accountingUndoValues: typeof accountingUndoValues;
   accountingValues: typeof accountingValues;
   accountingWrites: typeof accountingWrites;
   authConnection: typeof authConnection;
@@ -69,8 +90,15 @@ declare const fullApi: ApiFromModules<{
   budgetWrites: typeof budgetWrites;
   categoryValidators: typeof categoryValidators;
   clerkWebhooks: typeof clerkWebhooks;
+  crons: typeof crons;
   deviceAccess: typeof deviceAccess;
   deviceAccessInternal: typeof deviceAccessInternal;
+  feedback: typeof feedback;
+  feedbackErrors: typeof feedbackErrors;
+  feedbackGithub: typeof feedbackGithub;
+  feedbackImage: typeof feedbackImage;
+  feedbackStore: typeof feedbackStore;
+  feedbackValues: typeof feedbackValues;
   historyBackfill: typeof historyBackfill;
   historyStore: typeof historyStore;
   historyValidators: typeof historyValidators;

@@ -26,7 +26,7 @@ vi.mock("convex/react", () => ({
 }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "test-key" }));
 vi.mock("react-native", () => ({ ActivityIndicator: "spinner" }));
-vi.mock("../../ui/core", () => ({ Screen: "screen", useTheme: () => themes.light }));
+vi.mock("../../ui/core", () => ({ Screen: "screen", useTheme: () => themes.light, useThemeMode: () => "light" }));
 vi.mock("../useWorkspaceCalendar", () => ({
   useWorkspaceCalendar: () => ({ month: "2026-10" }),
 }));
@@ -62,7 +62,7 @@ test("setup shortcut opens the existing Add Budget editor with the first categor
   expect(props).toMatchObject({
     title: "Add Budget",
     categoryId: "food",
-    amount: "",
+    amount: expect.objectContaining({ currency: "COP", editor: expect.objectContaining({ text: "" }) }),
     canSubmit: false,
   });
   await act(async () => props.onDismiss());

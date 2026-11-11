@@ -2,6 +2,9 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
+import { displayedMinorUnits, openAmount, withNativeText } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
 import {
   LocalInputLease,
   runLocalInputWrite,
@@ -128,7 +131,7 @@ for (const saved of entries) {
     expect(editor().editable).toBe(false);
     for (let attempt = 0; attempt < 3; attempt++) {
       await act(async () => {
-        editor().setAmount("-2,00");
+        editor().setAmount(money("-2,00"));
         editor().setDescription("Changed");
         editor().setDate("2020-01-01");
         editor().setProfileId("other");
@@ -137,7 +140,7 @@ for (const saved of entries) {
         editor().setSetup({
           name: "Changed",
           productKind: "cash",
-          amount: "9",
+          amount: money("9"),
           date: "2020-01-01",
         });
         await Promise.all([editor().submit(), editor().submit()]);
@@ -160,20 +163,20 @@ for (const saved of entries) {
 test("a selected category controls the sign during selection and later amount edits", async () => {
   const api = transport();
   const editor = await open(api);
-  await act(async () => editor().setAmount("-1.250,00"));
+  await act(async () => editor().setAmount(money("-1.250,00")));
   await act(async () => editor().setCategories({ ids: ["salary"], primaryId: null }, "Income"));
-  expect(editor().amount).toBe("+1.250,00");
-  await act(async () => editor().setAmount("-27,50"));
-  expect(editor().amount).toBe("+27,50");
+  expect(editor().amount.editor.text).toBe("+1250,00");
+  await act(async () => editor().setAmount(money("-27,50")));
+  expect(editor().amount.editor.text).toBe("+27,50");
   expect(editor().categories.ids).toEqual(["salary"]);
   await act(async () => editor().setCategories({ ids: ["food"], primaryId: null }, "Expense"));
-  expect(editor().amount).toBe("-27,50");
-  await act(async () => editor().setAmount("+2.000,"));
-  expect(editor().amount).toBe("-2.000,");
+  expect(editor().amount.editor.text).toBe("-27,50");
+  await act(async () => editor().setAmount(money("+2.000,")));
+  expect(editor().amount.editor.text).toBe("-2000,");
   expect(editor().categories.ids).toEqual(["food"]);
   await act(async () => editor().setCategories({ ids: [], primaryId: null }, null));
-  await act(async () => editor().setAmount("+3"));
-  expect(editor().amount).toBe("+3");
+  await act(async () => editor().setAmount(money("+3")));
+  expect(editor().amount.editor.text).toBe("+3");
   expect(api.save).not.toHaveBeenCalled();
   expect(api.post).not.toHaveBeenCalled();
 });
@@ -182,10 +185,10 @@ test("signed Normal uses income/expense and clears categories when direction cha
   const api = transport();
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-1,00");
+    editor().setAmount(money("-1,00"));
     editor().setCategories({ ids: ["food"], primaryId: null });
   });
-  await act(async () => editor().setAmount("+1.250,00"));
+  await act(async () => editor().setAmount(money("+1.250,00")));
   expect(editor().categories.ids).toEqual([]);
   expect(editor().direction).toBe("in");
   await act(async () => {
@@ -207,9 +210,9 @@ test("signed Normal uses income/expense and clears categories when direction cha
       userCategoryIds: ["salary"],
     },
   });
-  expect(editor().amount).toBe("-");
+  expect(editor().amount.editor.text).toBe("-");
   await act(async () => {
-    editor().setAmount("-3,00");
+    editor().setAmount(money("-3,00"));
   });
   await act(async () => {
     await editor().submit();
@@ -226,7 +229,7 @@ test("transfer requires different places, clears prior Normal categories and pre
   await act(async () => {
     editor().setCategories({ ids: ["food"], primaryId: null });
     editor().setEntryType("transfer");
-    editor().setAmount("-1.250,00");
+    editor().setAmount(money("-1.250,00"));
   });
   expect(editor().categories.ids).toEqual([]);
   expect(editor().canSubmit).toBe(false);
@@ -261,12 +264,12 @@ test("opening accepts zero, rejects a negative amount and preserves its chosen d
   const editor = await open(api);
   await act(async () => {
     editor().setEntryType("initial");
-    editor().setAmount("-1");
+    editor().setAmount(money("-1"));
   });
   expect(editor().canSubmit).toBe(false);
   await act(async () => {
     editor().setProfileId("loan");
-    editor().setAmount("0");
+    editor().setAmount(money("0"));
     editor().setDate("2026-10-16");
   });
   await act(async () => {
@@ -292,7 +295,7 @@ test("a setup saves all classification facts before posting and leaves a definit
     editor().setSetup({
       name: "Card",
       productKind: "creditCard",
-      amount: "-1",
+      amount: money("-1"),
       date: "2026-10-17",
     }),
   );
@@ -301,7 +304,7 @@ test("a setup saves all classification facts before posting and leaves a definit
     editor().setSetup({
       name: "Card",
       productKind: "creditCard",
-      amount: "12,50",
+      amount: money("12,50"),
       date: "2026-10-16",
     }),
   );
@@ -331,7 +334,7 @@ test("a setup saves all classification facts before posting and leaves a definit
   );
   expect(editor().editable).toBe(true);
   expect(editor().setup?.name).toBe("Card");
-  expect(editor().error).toBe("Locked Period");
+  expect(editor().error).toBe("That month is already closed");
 });
 
 test("a late setup acknowledgement cannot clear a new admission's saved transfer", async () => {
@@ -372,7 +375,7 @@ test("a late setup acknowledgement cannot clear a new admission's saved transfer
     editor().setSetup({
       name: "Card",
       productKind: "creditCard",
-      amount: "0",
+      amount: money("0"),
       date: "2026-10-17",
     }),
   );
@@ -459,7 +462,7 @@ test("an accounting rejection after leaving the screen still reopens the draft",
   api.post.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-12,50");
+    editor().setAmount(money("-12,50"));
     editor().setDescription("Taxi");
   });
   let submitted: Promise<void> | undefined;
@@ -492,14 +495,14 @@ test("adding a zero-balance place carries its emoji and preserves the entry bein
   const editor = await open(api);
   expect(editor().categories).toEqual({ ids: [], primaryId: null });
   await act(async () => {
-    editor().setAmount("-12,50");
+    editor().setAmount(money("-12,50"));
     editor().setDescription("Taxi");
     editor().setDate("2026-10-16");
     editor().setSetup({
       name: "Travel",
       productKind: "cash",
       emoji: "👛",
-      amount: "0",
+      amount: money("0"),
       date: "2026-10-18",
       target: { kind: "source" },
     });
@@ -521,7 +524,7 @@ test("adding a zero-balance place carries its emoji and preserves the entry bein
       idempotencyKey: "entry-1",
     },
   });
-  expect(editor().amount).toBe("-12,50");
+  expect(editor().amount.editor.text).toBe("-12,50");
   expect(editor().description).toBe("Taxi");
   expect(editor().date).toBe("2026-10-16");
   expect(editor().profileId).toBe("new-card");
@@ -534,10 +537,11 @@ test("Transfer persists its selected categories through retry hydration", async 
   const editor = await open(api);
   await act(async () => {
     editor().setEntryType("transfer");
-    editor().setAmount("-25");
+    editor().setAmount(money("-25"));
     editor().setDestinationId("wallet");
     editor().setCategories({ ids: ["travel"], primaryId: "travel" });
   });
+  await act(async () => editor().confirmTransferReview());
   api.post.mockRejectedValueOnce(new Error("Reply lost"));
   await act(async () => {
     await editor().submit();
@@ -562,7 +566,7 @@ test.each(["+125,00", "-125,00"])("account door preserves %s and requires explic
   const api = transport();
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount(amount);
+    editor().setAmount(money(amount));
     editor().setDescription("Savings move");
     editor().setDate("2026-10-17");
     editor().setCategories({ ids: ["food"], primaryId: null });
@@ -570,10 +574,10 @@ test.each(["+125,00", "-125,00"])("account door preserves %s and requires explic
   await act(async () => { editor().beginAccountSetup({ name: "Rainy day", answer: "stillMine", style: { emoji: "🏦", tone: "primary" } }); });
   expect(editor().entryType).toBe("transfer");
   expect(editor().categories.ids).toEqual([]);
-  expect(editor().setup?.amount).toBe("0");
+  expect(editor().setup?.amount.editor.text).toBe("0");
   await act(async () => editor().submit());
   expect(api.post).toHaveBeenCalledTimes(1);
-  expect(editor().amount).toBe(amount);
+  expect(editor().amount.editor.text).toBe(amount);
   expect(editor().description).toBe("Savings move");
   expect(editor().date).toBe("2026-10-17");
   expect(editor().profileId).toBe("bank");
@@ -592,7 +596,7 @@ test.each(["+125,00", "-125,00"])("account door preserves %s and requires explic
 test("debt requires a chosen product; cancellation leaves an incomplete transfer", async () => {
   const api = transport();
   const editor = await open(api);
-  await act(async () => editor().setAmount("-25"));
+  await act(async () => editor().setAmount(money("-25")));
   await act(async () => { editor().beginAccountSetup({ name: "Debt", answer: "payDebt", style: { emoji: "💳", tone: "primary" } }); });
   expect(editor().setup?.productKind).toBeNull();
   expect(editor().canSubmit).toBe(false);
@@ -601,7 +605,7 @@ test("debt requires a chosen product; cancellation leaves an incomplete transfer
   await act(async () => editor().setSetup(null));
   expect(editor().entryType).toBe("transfer");
   expect(editor().destinationId).toBeNull();
-  expect(editor().amount).toBe("-25");
+  expect(editor().amount.editor.text).toBe("-25");
   expect(editor().canSubmit).toBe(false);
 });
 
@@ -610,14 +614,15 @@ test("explicit swap reverses an incoming transfer and still requires separate co
   const api = transport();
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("+125,00");
+    editor().setAmount(money("+125,00"));
     editor().setDescription("From Savings");
     editor().setDate("2026-10-17");
   });
   await act(async () => { editor().beginAccountSetup({ name: "Savings", answer: "stillMine", style: { emoji: "S", tone: "primary" } }); });
   await act(async () => editor().submit());
   await act(async () => editor().swapTransferPlaces());
-  expect(editor()).toMatchObject({ amount: "+125,00", description: "From Savings", date: "2026-10-17", profileId: "new-card", destinationId: "bank", transferReviewRequired: true, canSubmit: false });
+  expect(editor().amount.editor.text).toBe("+125,00");
+  expect(editor()).toMatchObject({ description: "From Savings", date: "2026-10-17", profileId: "new-card", destinationId: "bank", transferReviewRequired: true, canSubmit: false });
   await act(async () => editor().submit());
   expect(api.post).toHaveBeenCalledOnce();
   await act(async () => editor().confirmTransferReview());
@@ -632,7 +637,7 @@ test.each(["source", "destination"])("changing the confirmed transfer %s require
   const api = transport();
   const editor = await open(api);
   await act(async () => {
-    editor().setAmount("-10");
+    editor().setAmount(money("-10"));
     editor().setEntryType("transfer");
     editor().setDescription("Transfer");
   });
@@ -653,4 +658,113 @@ test.each(["source", "destination"])("changing the confirmed transfer %s require
     destinationFinancialAccountProfileId: changed === "destination" ? "loan" : "savings",
     amount: { minorUnits: 1000 },
   } });
+});
+
+test("a Post handler kept before the amount, date, description, categories and Place changed sends what the screen shows", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount(money("-10"));
+    editor().setDescription("Lunch");
+    editor().setDate("2026-10-17");
+    editor().setCategories({ ids: ["food"], primaryId: null }, "Expense");
+  });
+  const kept = editor().submit;
+  await act(async () => {
+    editor().setAmount(money("-25"));
+    editor().setDescription("Dinner");
+    editor().setDate("2026-10-18");
+    editor().setCategories({ ids: ["dining"], primaryId: null }, "Expense");
+    editor().setProfileId("wallet");
+  });
+  await act(async () => { await kept(); });
+  expect(api.post.mock.calls.map(([entry]) => entry)).toEqual([{
+    kind: "expense",
+    payload: {
+      workspaceId: "workspace", financialAccountProfileId: "wallet", amount: { currency: "COP", minorUnits: 2500 },
+      accountingDate: "2026-10-18", description: "Dinner", userCategoryIds: ["dining"], idempotencyKey: "entry-1",
+    },
+  }]);
+});
+
+test("a Post handler kept from a confirmed transfer pair does not post once the destination changed", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount(money("-10"));
+    editor().setEntryType("transfer");
+    editor().setDescription("Transfer");
+  });
+  await act(async () => editor().setDestinationId("savings"));
+  await act(async () => editor().confirmTransferReview());
+  const kept = editor().submit;
+  await act(async () => editor().setDestinationId("loan"));
+  expect(editor()).toMatchObject({ destinationId: "loan", transferReviewRequired: true, canSubmit: false });
+  await act(async () => { await kept(); });
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+  await act(async () => editor().confirmTransferReview());
+  await act(async () => { await kept(); });
+  expect(api.post.mock.calls.map(([entry]) => entry.kind === "transfer" && entry.payload.destinationFinancialAccountProfileId))
+    .toEqual(["loan"]);
+});
+
+test("handlers kept from before a lost reply neither edit the held entry nor rebuild it on the resend", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount(money("-10"));
+    editor().setDescription("Lunch");
+    editor().setDate("2026-10-17");
+  });
+  const kept = { submit: editor().submit, amount: editor().setAmount, description: editor().setDescription, date: editor().setDate,
+    place: editor().setProfileId };
+  await act(async () => { await kept.submit(); });
+  expect(editor().pending).toBe(true);
+  await act(async () => {
+    kept.amount(money("-99"));
+    kept.description("Changed");
+    kept.date("2026-10-18");
+    kept.place("wallet");
+  });
+  expect(editor()).toMatchObject({ description: "Lunch", date: "2026-10-17", profileId: "bank" });
+  await act(async () => { await kept.submit(); });
+  const held = {
+    kind: "expense",
+    payload: {
+      workspaceId: "workspace", financialAccountProfileId: "bank", amount: { currency: "COP", minorUnits: 1000 },
+      accountingDate: "2026-10-17", description: "Lunch", idempotencyKey: "entry-1",
+    },
+  };
+  expect(api.post.mock.calls.map(([entry]) => entry)).toEqual([held, held]);
+});
+
+test("a late amount from an input the form already replaced changes neither the amount nor the categories", async () => {
+  const editor = await open(transport());
+  await act(async () => editor().setAmount(money("+1")));
+  const held = editor().amount;
+  await act(async () => editor().setAmount(money("-5,00")));
+  await act(async () => editor().setCategories({ ids: ["food"], primaryId: null }));
+  await act(async () => editor().setAmount(withNativeText(held, "10")));
+  expect(editor().categories.ids).toEqual(["food"]);
+  expect(displayedMinorUnits(editor().amount)).toBe(-500);
+});
+
+test("a restored frozen Draft shows the amount of the command it holds and resends that command byte for byte", async () => {
+  const api = transport();
+  const command: PendingPosting = {
+    kind: "expense",
+    payload: {
+      workspaceId: "workspace", financialAccountProfileId: "bank", amount: { currency: "COP", minorUnits: 123450 },
+      accountingDate: "2026-10-17", description: "Kept", idempotencyKey: "frozen-key", userCategoryIds: ["food"],
+    },
+  };
+  api.load.mockResolvedValue({ kind: "pending", id: "frozen", command });
+  const editor = await open(api);
+  expect({ text: editor().amount.editor.text, review: editor().amount.review, editable: editor().editable, canSubmit: editor().canSubmit })
+    .toEqual({ text: "-1234,50", review: null, editable: false, canSubmit: true });
+  await act(async () => { await editor().submit(); });
+  expect(JSON.stringify(api.save.mock.calls[0]?.[0])).toBe(JSON.stringify(command));
+  expect(JSON.stringify(api.post.mock.calls[0]?.[0])).toBe(JSON.stringify(command));
 });

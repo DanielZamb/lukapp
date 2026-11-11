@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { useFormState, withFields } from "../amount/useAmountState";
 import { ConvexError } from "convex/values";
+import { useT } from "../../i18n";
+import { rejectionMessage } from "./rejection";
 import type { PendingPosting } from "./pendingPostingSchema";
 import type { PostingTransport } from "./usePostingEditor";
-import type {
-  PostingBatchStorage,
-  StoredPostingBatch,
+import {
+  dispatchedItem,
+  type PostingBatchChange,
+  type PostingBatchStorage,
+  type StoredPostingBatch,
 } from "./postingBatchSchema";
 export type { QueuedPosting } from "./postingBatchSchema";
 
@@ -23,13 +28,17 @@ export function usePostingBatch(
   storage: PostingBatchStorage,
   beforePost?: (queue: BatchDraft[]) => Promise<boolean>,
 ) {
+  const { t } = useT();
   const [state, setState] = useState<StoredPostingBatch>({
     queue: [],
     receipts: { count: 0, net: 0 },
   });
   const current = useRef(state);
-  const [loaded, setLoaded] = useState(false);
-  const [busy, setBusy] = useState(false);
+  /** Whether the stored batch has loaded and whether a change or a post is running, read at the press. */
+  const [progress, setProgress, readProgress] = useFormState({ loaded: false, busy: false });
+  const { loaded, busy } = progress;
+  const setBusy = (value: boolean) => setProgress((now) => withFields(now, { busy: value }));
+  const setLoaded = (value: boolean) => setProgress((now) => withFields(now, { loaded: value }));
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<BatchReceipt | null>(null);
   const lock = useRef(false);
@@ -52,44 +61,42 @@ export function usePostingBatch(
       })
       .catch((failure: unknown) => {
         if (owner.active && !transport.reportFailure?.(failure))
-          setError(
-            "Could not restore the batch on this device. Reopen this page to try again.",
-          );
+          setError(t("posting.batchRestoreFailed"));
       });
     return () => {
       owner.active = false;
     };
   }, [storage, transport]);
 
-  async function persist(
-    owner: { active: boolean },
-    change: (batch: StoredPostingBatch) => StoredPostingBatch,
-  ) {
-    const next = await storage.update((batch) =>
-      owner.active ? change(batch) : batch,
-    );
-    if (!owner.active) return;
-    current.current = next;
-    setState(next);
+  async function apply(owner: { active: boolean }, change: PostingBatchChange) {
+    const result = await storage.apply(change);
+    if (owner.active) {
+      current.current = result.batch;
+      setState(result.batch);
+    }
+    return result;
   }
 
-  async function edit(
-    change: (queue: StoredPostingBatch["queue"]) => StoredPostingBatch["queue"],
-  ) {
+  async function edit(change: Extract<PostingBatchChange, { kind: "keep" | "remove" }>) {
     const owner = lifetime.current;
-    if (!owner.active || !editable || lock.current) return false;
+    const now = readProgress();
+    if (!owner.active || !now.loaded || now.busy || current.current.pendingItemId || lock.current) return false;
     lock.current = true;
     setBusy(true);
     try {
-      await persist(owner, (batch) => ({ ...batch, queue: change(batch.queue) }));
+      const { batch, applied } = await apply(owner, change);
       if (!owner.active) return false;
       setPosted(null);
-      setError("");
-      return true;
+      setError(
+        applied
+          ? ""
+          : t(batch.pendingItemId ? "posting.batchWaiting" : "posting.batchChanged"),
+      );
+      return applied;
     } catch (failure) {
       if (!owner.active) return false;
       if (!transport.reportFailure?.(failure))
-        setError("Could not save the batch on this device. Try again.");
+        setError(t("posting.batchSaveFailed"));
       return false;
     } finally {
       if (owner.active) {
@@ -102,59 +109,40 @@ export function usePostingBatch(
   async function postAll() {
     const owner = lifetime.current;
     if (
-      !owner.active || !loaded || lock.current || current.current.queue.length === 0
+      !owner.active || !readProgress().loaded || lock.current || current.current.queue.length === 0
     ) return;
     lock.current = true;
     setBusy(true);
     setError("");
     setPosted(null);
+    let dispatched: string | undefined;
     try {
       const restored = await storage.load();
       if (!owner.active) return;
       current.current = restored;
       setState(restored);
-      const queue = restored.queue;
-      if (beforePost && !(await beforePost(queue))) return;
+      if (beforePost && !(await beforePost(restored.queue))) return;
       if (!owner.active) return;
-      for (const item of queue) {
-        // Persist retry-only status before any transport operation can outlive this route.
-        await persist(owner, (batch) => ({ ...batch, pendingItemId: item.id }));
+      const reviewed = restored.queue.map((row) => row.id);
+      for (;;) {
+        const claimed = await apply(owner, { kind: "dispatch", among: reviewed });
         if (!owner.active) return;
+        const item = dispatchedItem(claimed.batch);
+        if (!item) break;
+        dispatched = item.id;
         const saved = await transport.save(item.command, item.draftId);
         if (!owner.active) return;
-        await persist(owner, (batch) => ({
-          ...batch,
-          queue: batch.queue.map((row) =>
-            row.id === item.id
-              ? { ...row, draftId: saved.id, command: saved.command }
-              : row,
-          ),
-        }));
+        await apply(owner, { kind: "saved", id: item.id, draftId: saved.id, command: saved.command });
         if (!owner.active) return;
         const receipt = await transport.post(saved.command);
         if (!owner.active) return;
         await transport.clear();
         if (!owner.active) return;
-        await persist(owner, (batch) => {
-          if (!batch.queue.some((row) => row.id === item.id)) return batch;
-          return {
-            ...batch,
-            pendingItemId:
-              batch.pendingItemId === item.id ? undefined : batch.pendingItemId,
-            queue: batch.queue.filter((row) => row.id !== item.id),
-            receipts: {
-              count: batch.receipts.count + 1,
-              net: batch.receipts.net + receipt.amount.minorUnits,
-            },
-          };
-        });
+        await apply(owner, { kind: "posted", id: item.id, minorUnits: receipt.amount.minorUnits });
         if (!owner.active) return;
       }
       const receipt = current.current.receipts;
-      await persist(owner, (batch) => ({
-        ...batch,
-        receipts: { count: 0, net: 0 },
-      }));
+      await apply(owner, { kind: "finish" });
       if (owner.active) setPosted(receipt);
     } catch (failure) {
       if (!owner.active) return;
@@ -162,6 +150,7 @@ export function usePostingBatch(
       const data: unknown =
         failure instanceof ConvexError ? failure.data : null;
       if (
+        dispatched &&
         data &&
         typeof data === "object" &&
         "kind" in data &&
@@ -170,32 +159,15 @@ export function usePostingBatch(
         try {
           await transport.abort();
           if (!owner.active) return;
-          await persist(owner, (batch) => ({
-            ...batch,
-            pendingItemId: undefined,
-            queue: batch.queue.map((row) =>
-              row.id === batch.pendingItemId &&
-              (row.command.kind === "opening" || row.command.kind === "setup")
-                ? { ...row, draftId: undefined }
-                : row,
-            ),
-          }));
+          await apply(owner, { kind: "rejected", id: dispatched });
           if (!owner.active) return;
-          setError(
-            "message" in data && typeof data.message === "string"
-              ? data.message
-              : "Entry was rejected. Edit the draft and try again.",
-          );
+          setError(rejectionMessage(t, failure, "posting.batchRejected"));
         } catch {
           if (!owner.active) return;
-          setError(
-            "Could not clear the saved entry. Post again to check its status.",
-          );
+          setError(t("posting.batchClearFailed"));
         }
       } else {
-        setError(
-          "Could not confirm the batch. Post again to safely retry the remaining drafts.",
-        );
+        setError(t("posting.batchConfirmUncertain"));
       }
     } finally {
       if (owner.active) {
@@ -209,20 +181,16 @@ export function usePostingBatch(
     queue: state.queue,
     busy,
     editable,
+    waiting: !!state.pendingItemId,
     error,
     posted,
     keep: (draft: BatchDraft, editingId?: string) =>
-      edit((queue) => {
-        const item = {
-          ...draft,
-          id: editingId ?? draft.command.payload.idempotencyKey,
-        };
-        return editingId
-          ? queue.map((row) => (row.id === editingId ? item : row))
-          : [...queue, item];
+      edit({
+        kind: "keep",
+        item: { ...draft, id: editingId ?? draft.command.payload.idempotencyKey },
+        editingId,
       }),
     postAll,
-    remove: (id: string) =>
-      edit((queue) => queue.filter((row) => row.id !== id)),
+    remove: (id: string) => edit({ kind: "remove", id }),
   };
 }

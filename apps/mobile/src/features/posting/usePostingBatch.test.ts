@@ -2,6 +2,9 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { openAmount } from "../amount/session";
+
+const money = (text: string, currency = "COP") => openAmount(currency, text);
 import { usePostingBatch, type BatchDraft } from "./usePostingBatch";
 import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
 
@@ -28,8 +31,10 @@ beforeEach(() => memory.clear());
 const lease = new LocalInputLease("owner", "session");
 const storage = () => createPostingBatchStorage(lease, "owner", "workspace");
 let root: ReactTestRenderer | undefined;
+const otherRoots: ReactTestRenderer[] = [];
 afterEach(async () => {
   await act(async () => root?.unmount());
+  await act(async () => otherRoots.splice(0).forEach((other) => other.unmount()));
   vi.unstubAllGlobals();
 });
 const account = {
@@ -125,7 +130,7 @@ async function queueEntry(
   description: string,
 ) {
   await act(async () => {
-    session.get().editor.setAmount(amount);
+    session.get().editor.setAmount(money(amount));
     session.get().editor.setDescription(description);
   });
   let captured: BatchDraft | null = null;
@@ -142,7 +147,7 @@ test("One to Batch captures a postable draft, resets One, and sends nothing unti
   const session = await open();
   expect(session.get().editor.captureForBatch()).toBeNull();
   await queueEntry(session, "-12.500", "Taxi");
-  expect(session.get().editor.amount).toBe("-");
+  expect(session.get().editor.amount.editor.text).toBe("-");
   expect(session.get().editor.description).toBe("");
   expect(session.get().batch.queue[0].command).toMatchObject({
     kind: "expense",
@@ -161,7 +166,7 @@ test("cancelling edits leaves the queue untouched; saving replaces the selected 
   });
   await act(async () => {
     session.get().editor.setDescription("Cancelled");
-    session.get().editor.setAmount("+20");
+    session.get().editor.setAmount(money("+20"));
   });
   expect(session.get().batch.queue).toEqual([item]);
   await act(async () => {
@@ -232,10 +237,30 @@ test("an uncertain partial batch locks edits and retries only the unconfirmed ex
   expect(session.get().batch.posted).toEqual({ count: 2, net: 2000 });
 });
 
+test.each([
+  new ConvexError({ code: "provider_unavailable" }),
+  new ConvexError({ code: "session_verification_required" }),
+  new ConvexError({ code: "device_registration_required" }),
+])("a retry turned away with $data.code after a lost reply keeps the batch waiting on the same entry", async (refusal) => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new Error("Response lost")).mockRejectedValueOnce(refusal);
+  const session = await open(api);
+  await queueEntry(session, "-10", "Taxi");
+  await act(async () => { await session.get().batch.postAll(); });
+  await act(async () => { await session.get().batch.postAll(); });
+  expect(session.get().batch).toMatchObject({ waiting: true, editable: false, posted: null });
+  expect(api.abort).not.toHaveBeenCalled();
+  await act(async () => { await session.get().batch.postAll(); });
+  const first = api.post.mock.calls[0][0];
+  expect(first.payload).toMatchObject({ description: "Taxi", amount: { currency: "COP", minorUnits: 1000 } });
+  expect(api.post.mock.calls.map(([entry]) => entry)).toEqual([first, first, first]);
+  expect(session.get().batch.posted).toEqual({ count: 1, net: -1000 });
+});
+
 test("a definitive rejection reopens the saved draft for correction", async () => {
   const api = transport();
   api.post.mockRejectedValueOnce(
-    new ConvexError({ kind: "accounting", message: "Period is locked" }),
+    new ConvexError({ kind: "accounting", code: "locked_period", message: "Locked Period" }),
   );
   const session = await open(api);
   await queueEntry(session, "-10", "Taxi");
@@ -244,7 +269,7 @@ test("a definitive rejection reopens the saved draft for correction", async () =
   });
   expect(api.abort).toHaveBeenCalledOnce();
   expect(session.get().batch.editable).toBe(true);
-  expect(session.get().batch.error).toBe("Period is locked");
+  expect(session.get().batch.error).toBe("That month is already closed");
   expect(session.get().batch.queue[0].draftId).toBe("key-1");
   expect(session.get().batch.posted).toBeNull();
 });
@@ -365,15 +390,24 @@ test("posting completion removes only confirmed rows from the latest stored batc
   };
   let posting: Promise<void> | undefined;
   await act(async () => { posting = session.get().batch.postAll(); });
-  await storage().update((batch) => ({
-    ...batch,
-    queue: [...batch.queue, newerRow],
-  }));
+  expect(await storage().apply({ kind: "keep", item: newerRow })).toMatchObject({ applied: false });
+  await mutateLocalEntryDocument(lease, "owner", (document) => {
+    const stored = document.postingBatches?.workspace;
+    if (!stored) throw new Error("Expected a stored batch");
+    return {
+      document: {
+        ...document,
+        postingBatches: { workspace: { ...stored, queue: [...stored.queue, newerRow] } },
+      },
+      write: true,
+      result: undefined,
+    };
+  });
   await act(async () => { respond?.(); await posting; });
+  expect(api.post.mock.calls.map(([command]) => command.payload.idempotencyKey)).toEqual(["key-1"]);
   expect((await storage().load()).queue).toEqual([newerRow]);
   expect(session.get().batch.queue).toEqual([newerRow]);
   expect(session.get().batch.posted).toEqual({ count: 1, net: -1000 });
-  expect(api.post).toHaveBeenCalledTimes(1);
 });
 
 test.each(["confirmed", "rejected"])(
@@ -419,7 +453,7 @@ test("an Initial balance rejected by accounting can be edited and posted through
   const session = await open(api);
   await act(async () => {
     session.get().editor.setEntryType("initial");
-    session.get().editor.setAmount("10");
+    session.get().editor.setAmount(money("10"));
   });
   await act(async () => {
     const draft = session.get().editor.captureForBatch();
@@ -435,7 +469,7 @@ test("an Initial balance rejected by accounting can be edited and posted through
     session.get().editor.editBatchDraft(rejected);
   });
   await act(async () => {
-    session.get().editor.setAmount("20");
+    session.get().editor.setAmount(money("20"));
   });
   await act(async () => {
     const draft = session.get().editor.captureForBatch();
@@ -485,4 +519,111 @@ test("Post all waits for one batch budget decision before sending any entry", as
     await posting;
   });
   expect(session.api.post).toHaveBeenCalledTimes(2);
+});
+
+async function openOtherEditor(api: PostingTransport) {
+  let current: ReturnType<typeof usePostingBatch> | undefined;
+  const batchStorage = storage();
+  function OtherEditor() {
+    current = usePostingBatch(api, batchStorage);
+    return null;
+  }
+  await act(async () => {
+    otherRoots.push(create(createElement(OtherEditor)));
+  });
+  return () => {
+    if (!current) throw new Error("Not mounted");
+    return current;
+  };
+}
+function sentFor(apis: ReturnType<typeof transport>[], description: string) {
+  return apis
+    .flatMap((api) => api.post.mock.calls.map(([command]) => command))
+    .filter((command) => "description" in command.payload && command.payload.description.startsWith(description))
+    .map((command) => command.payload);
+}
+
+test("a stale editor cannot replace a row whose dispatch is unconfirmed; that row only ever sends its first command", async () => {
+  const first = transport();
+  first.post.mockRejectedValueOnce(new Error("Response lost"));
+  const session = await open(first);
+  await queueEntry(session, "-10", "Taxi");
+  const taxi = session.get().batch.queue[0];
+  const second = transport();
+  const stale = await openOtherEditor(second);
+  expect(stale().editable).toBe(true);
+  await act(async () => {
+    await session.get().batch.postAll();
+  });
+  expect(stale().editable).toBe(true);
+  const sent = taxi.command;
+  if (sent.kind !== "expense") throw new Error("Expected expense");
+  const edited: BatchDraft = {
+    command: { ...sent, payload: { ...sent.payload, description: "Taxi edited", idempotencyKey: "key-edited" } },
+  };
+  let kept: boolean | undefined;
+  await act(async () => {
+    kept = await stale().keep(edited, taxi.id);
+  });
+  const refreshed = {
+    kept,
+    keys: stale().queue.map((row) => row.command.payload.idempotencyKey),
+    editable: stale().editable,
+    error: stale().error,
+  };
+  await act(async () => {
+    await stale().postAll();
+  });
+  expect(sentFor([first, second], "Taxi")).toEqual([
+    expect.objectContaining({ description: "Taxi", idempotencyKey: "key-1" }),
+    expect.objectContaining({ description: "Taxi", idempotencyKey: "key-1" }),
+  ]);
+  expect(refreshed).toEqual({
+    kept: false,
+    keys: ["key-1"],
+    editable: false,
+    error: "An entry in this batch was sent and its result is not known yet. Post again to check it before changing the batch.",
+  });
+  expect(await storage().load()).toEqual({ queue: [], receipts: { count: 0, net: 0 } });
+  expect(stale().posted).toEqual({ count: 1, net: -1000 });
+});
+
+test("a stale editor cannot remove a row whose dispatch is unconfirmed, and nothing else posts before it", async () => {
+  const first = transport();
+  first.post.mockRejectedValueOnce(new Error("Response lost"));
+  const session = await open(first);
+  await queueEntry(session, "-10", "Taxi");
+  await queueEntry(session, "+30", "Refund");
+  const taxi = session.get().batch.queue[0];
+  const second = transport();
+  const stale = await openOtherEditor(second);
+  await act(async () => {
+    await session.get().batch.postAll();
+  });
+  let removed: boolean | undefined;
+  await act(async () => {
+    removed = await stale().remove(taxi.id);
+  });
+  const refreshed = {
+    removed,
+    stored: (await storage().load()).queue.map((row) => row.command.payload.idempotencyKey),
+    shown: stale().queue.map((row) => row.command.payload.idempotencyKey),
+    editable: stale().editable,
+  };
+  await act(async () => {
+    await stale().postAll();
+  });
+  expect(sentFor([first, second], "Taxi")).toEqual([
+    expect.objectContaining({ idempotencyKey: "key-1" }),
+    expect.objectContaining({ idempotencyKey: "key-1" }),
+  ]);
+  expect(second.post.mock.calls.map(([command]) => command.payload.idempotencyKey)).toEqual(["key-1", "key-2"]);
+  expect(refreshed).toEqual({
+    removed: false,
+    stored: ["key-1", "key-2"],
+    shown: ["key-1", "key-2"],
+    editable: false,
+  });
+  expect(await storage().load()).toEqual({ queue: [], receipts: { count: 0, net: 0 } });
+  expect(stale().posted).toEqual({ count: 2, net: 2000 });
 });

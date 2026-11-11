@@ -2,7 +2,8 @@ import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { NotificationCard, signedAmountText } from "./NotificationCard";
+import { NotificationCard, signedAmount } from "./NotificationCard";
+import { openAmount } from "../amount/session";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
@@ -20,7 +21,7 @@ beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_EN
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
 async function render(props: Partial<React.ComponentProps<typeof NotificationCard>> = {}) {
   await act(async () => { root = create(createElement(NotificationCard, { notification: { text, packageName: "com.nu.production", at: 0 },
-    appLabel: "Nu", currency: "COP", amount: "-32.000", editable: true, onUseAmount, onUseDescription, ...props })); });
+    appLabel: "Nu", currency: "COP", amount: openAmount("COP", "-32.000"), editable: true, onUseAmount, onUseDescription, ...props })); });
 }
 const texts = () => root?.root.findAllByType("text") ?? [];
 const all = () => texts().map((node) => node.children.filter((child) => typeof child === "string").join("")).join("|");
@@ -63,9 +64,29 @@ test("a Candidate without saved text explains that its original notification is 
   expect(all()).not.toContain("Tap an amount");
 });
 
-test("a tapped amount keeps the form's sign", () => {
-  expect(signedAmountText(125_030_000, "COP", "-32.000", "out")).toBe("-1.250.300");
-  expect(signedAmountText(3_200_000, "COP", "50.000", "out")).toBe("32.000");
-  expect(signedAmountText(3_200_000, "COP", "-", "in")).toBe("-32.000");
-  expect(signedAmountText(3_200_000, "COP", "", "out")).toBe("-32.000");
+test("a tapped amount keeps the form's sign and is written in the workspace currency's format", () => {
+  const tapped = (minor: number, currency: string, current: string, fallback: "in" | "out") =>
+    signedAmount(minor, currency, openAmount(currency, current), fallback).editor.text;
+  expect(tapped(125_030_000, "COP", "-32.000", "out")).toBe("-1250300");
+  expect(tapped(3_200_000, "COP", "50.000", "out")).toBe("32000");
+  expect(tapped(3_200_000, "COP", "-", "in")).toBe("-32000");
+  expect(tapped(3_200_000, "COP", "", "out")).toBe("-32000");
+  expect(tapped(125_030_050, "USD", "-32,000", "out")).toBe("-1250300.50");
+  expect(tapped(3_200_000, "USD", "", "in")).toBe("32000");
+});
+
+test("the card reads in Spanish while the bank's text and app name stay as captured", async () => {
+  const { LanguageProvider, formatDateTime } = await import("../../i18n");
+  const at = Date.UTC(2026, 10, 10, 17, 5);
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(NotificationCard, {
+    notification: { text, packageName: "com.nu.production", at }, appLabel: "Nu", currency: "COP", amount: openAmount("COP", "-32.000"), editable: true, onUseAmount, onUseDescription }))); });
+  expect(all()).toContain("Notificación original");
+  expect(all()).toContain("Nu");
+  expect(all()).toContain(formatDateTime("es", at));
+  expect(all()).toContain("Toca un monto para usarlo, o toca dos palabras para la descripción. Los montos subrayados con rayas parecen saldos.");
+  expect(all()).toContain("TIENDA");
+  expect(root?.root.findByProps({ accessibilityLabel: "Notificación de Nu" })).toBeTruthy();
+  expect(texts().some((node) => node.props.accessibilityLabel === "Usar $32.000 como monto")).toBe(true);
+  expect(texts().some((node) => node.props.accessibilityLabel === text)).toBe(true);
+  for (const english of ["Original notification", "Tap an amount", "Dashed amounts"]) expect(all()).not.toContain(english);
 });

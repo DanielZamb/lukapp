@@ -1,3 +1,4 @@
+import { placeStatus } from "./placeState";
 import { AccountingError } from "./errors";
 import { assignedCategoryIds } from "./categories/assignments";
 import { workspaceTimeZone } from "./timeZone";
@@ -29,6 +30,8 @@ export function toWorkspace(
 
 export function toProfile(profile: StoredProfile): FinancialAccountProfile {
   return {
+    status: placeStatus(profile),
+    ...(profile.ending ? { endedAt: profile.ending.occurredAt } : {}),
     id: profile.id,
     workspaceId: profile.workspaceId,
     name: profile.name,

@@ -1,4 +1,7 @@
-import { formatAmount, toMajorUnits } from "../money";
+import type { Language, Translator } from "../../../../../src/i18n";
+import { compactMoney } from "../amount/compact";
+import { formatAmount } from "../money";
+import { historyDateLabel } from "./filter";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../api";
 import type { HistoryRow } from "./types";
@@ -24,11 +27,8 @@ export function historyMovements(rows: HistoryRow[], profileId?: string): Histor
   });
 }
 
-export function historyDate(date: string, currentDate: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long", day: "numeric", timeZone: "UTC",
-    ...(date.slice(0, 4) !== currentDate.slice(0, 4) ? { year: "numeric" } : {}),
-  }).format(new Date(`${date}T00:00:00Z`));
+export function historyDate(date: string, currentDate: string, language: Language) {
+  return historyDateLabel(date, Number(currentDate.slice(0, 4)), language);
 }
 
 export function historyAmount(amount: HistoryRow["amount"], signed = false) {
@@ -37,24 +37,21 @@ export function historyAmount(amount: HistoryRow["amount"], signed = false) {
   return `${amount.minorUnits < 0 ? "−" : signed ? "+" : ""}${symbol}${body}`;
 }
 
-export function compactHistoryAmount(minorUnits: number, currency: string) {
-  const amount = toMajorUnits(Math.abs(minorUnits), currency);
-  const sign = minorUnits < 0 ? "−" : "";
-  const scale = amount >= 1_000_000 ? 1_000_000 : amount >= 1000 ? 1000 : 1;
-  const value = amount / scale;
-  const body = scale === 1 ? String(value) : value.toFixed(value >= 10 || value % 1 === 0 ? 0 : 1);
-  return `${sign}${currency === "COP" || currency === "USD" ? "$" : `${currency} `}${body}${scale === 1_000_000 ? "M" : scale === 1000 ? "K" : ""}`;
+export function compactHistoryAmount(minorUnits: number, currency: string, language: Language) {
+  const symbol = currency === "COP" || currency === "USD" ? "$" : `${currency} `;
+  return `${minorUnits < 0 ? "−" : ""}${symbol}${compactMoney(Math.abs(minorUnits), currency, language, "overview")}`;
 }
 
-export function historyListRow(row: HistoryRow, categories: HistoryCategory[], places: HistoryPlace[], currentDate: string) {
+export function historyListRow(row: HistoryRow, categories: HistoryCategory[], places: HistoryPlace[], currentDate: string,
+  { t, language }: Translator) {
   const primary = row.userCategories.find((category) => category.id === row.primaryUserCategoryId) ?? row.userCategories[0];
   const category = categories.find((category) => category.id === primary?.id);
   const categoryName = primary?.name ?? row.detail;
   const emoji = category?.style.emoji ?? (row.amount.minorUnits > 0 && !primary ? "💸" : "");
   const placeName = places.find((place) => place.id === row.financialAccountProfileId)?.name ?? "";
-  const dateLabel = historyDate(row.date, currentDate);
-  const subtitle = [dateLabel, `${emoji} ${categoryName}`.trim(), placeName].filter(Boolean).join(" · ") +
-    (row.reversed ? " · Reversed" : "");
+  const dateLabel = historyDate(row.date, currentDate, language);
+  const subtitle = [dateLabel, `${emoji} ${categoryName}`.trim(), placeName, row.reversed ? t("review.statusReversed") : ""]
+    .filter(Boolean).join(" · ");
   return { ...row, dateLabel, subtitle, placeName, amountLabel: historyAmount(row.amount, true) };
 }
 

@@ -3,6 +3,7 @@ import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView } from "@g
 import { useMemo, useEffect, useRef, type PropsWithChildren } from "react";
 import { BackHandler, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useT } from "../i18n";
 import { SecondaryButton, useTheme } from "./core";
 import { radius, spacing } from "./tokens";
 
@@ -11,6 +12,7 @@ export function Sheet({ children, onClose, label }: PropsWithChildren<{
   label: string;
 }>) {
   const theme = useTheme();
+  const { t } = useT();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const modal = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
@@ -30,7 +32,7 @@ export function Sheet({ children, onClose, label }: PropsWithChildren<{
     <BottomSheetScrollView accessibilityViewIsModal keyboardShouldPersistTaps="handled"
       contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }]}>
       {children}
-      <SecondaryButton label="Close details" onPress={() => modal.current?.dismiss()} />
+      <SecondaryButton label={t("home.sheetCloseDetails")} onPress={() => modal.current?.dismiss()} />
     </BottomSheetScrollView>
   </BottomSheetModal>;
 }

@@ -8,6 +8,7 @@ export async function run<T>(work: () => Promise<T>): Promise<T> {
     if (error instanceof AccountingError) {
       throw new ConvexError({
         kind: "accounting",
+        ...(error.context ? { context: error.context } : {}),
         code: error.code,
         message: error.message,
       });

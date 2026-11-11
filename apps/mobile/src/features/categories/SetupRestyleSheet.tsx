@@ -8,18 +8,14 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Field, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
+import { useT } from "../../i18n";
 import { spacing, touchTarget } from "../../ui/tokens";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import type { SetupCategory } from "../setup/model";
 import { SetupBackdrop } from "../setup/SearchSheet";
 import { useSetupStyles } from "../setup/styles";
-import {
-  categoryColor,
-  categoryPalette,
-  emojiFrom,
-  fallbackLook,
-  quickEmojis,
-} from "./looks";
+import { categoryColor, categoryOutline, categoryPalette } from "./appearance";
+import { emojiFrom, fallbackLook, quickEmojis } from "./looks";
 import { NatureQuestion } from "./NatureQuestion";
 import { useNatureSuggestion } from "./useNatureSuggestion";
 import { categoryNameKey, type NatureAnswer, type AccountSetupRequest } from "./model";
@@ -47,6 +43,7 @@ export function RestyleSheet({
   const mode = useThemeMode();
   const insets = useSafeAreaInsets();
   const ui = useUi();
+  const { t } = useT();
   const styles = useSetupStyles();
   const sheet = useRef<BottomSheetModal>(null);
   const [name, setName] = useState(target.kind === "edit" ? target.category.name : "");
@@ -67,9 +64,9 @@ export function RestyleSheet({
   );
   const named = target.kind === "create" || target.category.source === "custom";
   const blocked = named && (!trimmed || trimmed.length > 80 || duplicate || (target.kind === "create" && !answer));
-  const color = categoryColor(style, mode) ?? theme.primary;
+  const color = categoryColor(style, mode);
   const preview = {
-    name: trimmed || "Your own",
+    name: trimmed || t("categories.yourOwn"),
     style,
   };
   return (
@@ -93,10 +90,10 @@ export function RestyleSheet({
         </View>
         {named && (
           <Field
-            label="Category name"
+            label={t("categories.nameLabel")}
             InputComponent={BottomSheetTextInput}
-            accessibilityLabel="Category name"
-            placeholder="Name it your way"
+            accessibilityLabel={t("categories.nameLabel")}
+            placeholder={t("categories.namePlaceholder")}
             placeholderTextColor={theme.mutedForeground}
             autoFocus
             value={name}
@@ -116,12 +113,12 @@ export function RestyleSheet({
             <Pressable
               key={emoji}
               accessibilityRole="radio"
-              accessibilityLabel={`Emoji ${emoji}`}
+              accessibilityLabel={t("categories.emojiA11y", { emoji })}
               accessibilityState={{ checked: style.emoji === emoji }}
               style={[
                 styles.icon,
                 style.emoji === emoji && {
-                  borderColor: color,
+                  borderColor: categoryOutline(color, mode),
                   borderWidth: 2,
                   backgroundColor: `${color}24`,
                 },
@@ -136,7 +133,7 @@ export function RestyleSheet({
           ))}
           {keyboard ? (
             <BottomSheetTextInput
-              accessibilityLabel="Type any emoji"
+              accessibilityLabel={t("categories.typeEmoji")}
               autoFocus
               value=""
               style={styles.icon}
@@ -153,7 +150,7 @@ export function RestyleSheet({
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Pick any emoji from your keyboard"
+              accessibilityLabel={t("categories.pickEmojiA11y")}
               style={styles.icon}
               onPress={() => {
                 interact();
@@ -165,7 +162,7 @@ export function RestyleSheet({
           )}
         </View>
         {keyboard && (
-          <Text style={ui.muted}>Pick an emoji from your phone keyboard.</Text>
+          <Text style={ui.muted}>{t("categories.pickEmojiHint")}</Text>
         )}
         <ScrollView
           horizontal
@@ -176,7 +173,7 @@ export function RestyleSheet({
             <Pressable
               key={entry.id}
               accessibilityRole="radio"
-              accessibilityLabel={`Color ${entry.id}`}
+              accessibilityLabel={t("categories.colorA11y", { id: entry.id })}
               accessibilityState={{ checked: style.color === entry.id }}
               onPress={() => {
                 interact();
@@ -205,7 +202,7 @@ export function RestyleSheet({
           ))}
         </ScrollView>
         <PrimaryButton
-          label={target.kind === "edit" ? "Done" : "Add category"}
+          label={target.kind === "edit" ? t("common.done") : t("categories.addCategory")}
           trailingIcon="checkmark"
           disabled={blocked}
           onPress={() => {
@@ -218,7 +215,7 @@ export function RestyleSheet({
           }}
         />
         {target.kind === "edit" && target.category.source === "custom" && onDelete &&
-          <SecondaryButton label="Remove category" tone="danger" onPress={() => { interact(); onDelete(); sheet.current?.dismiss(); }} />}
+          <SecondaryButton label={t("categories.removeCategory")} tone="danger" onPress={() => { interact(); onDelete(); sheet.current?.dismiss(); }} />}
       </BottomSheetScrollView>
     </BottomSheetModal>
   );

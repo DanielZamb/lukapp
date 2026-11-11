@@ -3,6 +3,7 @@ import { useReadableLayout } from "../../ui/themeContext";
 import type { ReadableLayout } from "../../ui/layout";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useT } from "../../i18n";
 import { useTheme } from "../../ui/core";
 import { font, spacing, touchTarget } from "../../ui/tokens";
 import { fullAmount, symbolAmount } from "./amounts";
@@ -15,6 +16,7 @@ export function CapitalFlow({ outMinorUnits, inMinorUnits, symbol, currency }: {
   const theme = useTheme();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
+  const { t, language } = useT();
   const [focus, setFocus] = useState<Focus | null>(null);
   const net = inMinorUnits - outMinorUnits;
   function amount(id: Focus, label: string, value: number, color: string) {
@@ -27,18 +29,18 @@ export function CapitalFlow({ outMinorUnits, inMinorUnits, symbol, currency }: {
         <Text style={styles.muted}>{label}</Text>
         <Text style={[styles.amount, { color }, (id === "net" || focused) && styles.large]}
           numberOfLines={1} adjustsFontSizeToFit={focused} minimumFontScale={0.55}>
-          {focused ? fullAmount(value, symbol, currency) : symbolAmount(value, symbol, "compact", currency)}
+          {focused ? fullAmount(value, symbol, currency) : symbolAmount(value, symbol, "compact", currency, language)}
         </Text>
       </Pressable>
     );
   }
   return (
     <View style={styles.wrap}>
-      {(focus === null || focus === "net") && amount("net", "Net", net, net >= 0 ? theme.primary : theme.foreground)}
+      {(focus === null || focus === "net") && amount("net", t("review.flowNet"), net, net >= 0 ? theme.primary : theme.foreground)}
       {focus !== "net" && (
         <View style={styles.pair}>
-          {(focus === null || focus === "out") && amount("out", "Out", outMinorUnits, theme.foreground)}
-          {(focus === null || focus === "in") && amount("in", "In", inMinorUnits, theme.primary)}
+          {(focus === null || focus === "out") && amount("out", t("review.flowOut"), outMinorUnits, theme.foreground)}
+          {(focus === null || focus === "in") && amount("in", t("review.flowIn"), inMinorUnits, theme.primary)}
         </View>
       )}
     </View>

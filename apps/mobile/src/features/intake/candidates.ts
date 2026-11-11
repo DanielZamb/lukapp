@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import type { IntakeSuggestion } from "../../../../../src/notificationIntake/types";
 import { isReadyCandidate } from "./ready";
 import { suggest } from "./suggest";
+import type { StoredAmountText } from "../amount/storedText";
 
 export { isReadyCandidate };
 
@@ -28,12 +29,18 @@ export type IntakeCandidate = {
   workspaceId: string;
   currency: "COP" | "USD";
   suggestion: StoredSuggestion;
-  reviewAmountText?: string | null;
+  /** The amount text the person typed while reviewing, with its grammar. */
+  reviewAmount?: StoredAmountText | null;
   parserVersion: string;
   consentVersion: string;
   error?: string;
   /** The kept notification text, when the source was set up under disclosure v3. */
   notification?: { text: string; packageName: string; at: number };
+  /**
+   * Open for review at a saved record revision, or pending once its confirmation was dispatched and its outcome is
+   * unknown. A pending Candidate is frozen: it can only be retried with the same command. Legacy documents omit it.
+   */
+  status?: { kind: "review"; revision: number } | { kind: "pending" };
 };
 
 export type IntakeDocument = {
@@ -125,7 +132,7 @@ const MONEY_ACTIVITY = /\b(?:dinero|plata|transfer\p{L}*|transacci\p{L}*|consign
 
 export function isOtherNotification(row: IntakeCandidate) {
   if (!row.notification?.text.trim() || row.error || row.suggestion.amountMinorUnits !== null || row.suggestion.direction !== null ||
-    row.reviewAmountText?.replace(/[-−+\s]/g, "") || MONEY_ACTIVITY.test(row.notification.text)) return false;
+    row.reviewAmount?.text.replace(/[-−+\s]/g, "") || MONEY_ACTIVITY.test(row.notification.text)) return false;
   const suggestion = suggest({ text: row.notification.text });
   return !suggestion.amount && !suggestion.direction && APP_NOTICE.test(row.notification.text);
 }
@@ -145,7 +152,7 @@ export function viewInbox(
   return {
     now: nowRows,
     wait: waitRows,
-    ready: money.filter((row) => isReadyCandidate(row, currency)),
+    ready: money.filter((row) => row.status?.kind === "pending" || isReadyCandidate(row, currency)),
     otherNotifications: live.filter(isOtherNotification),
     count: money.length,
   };

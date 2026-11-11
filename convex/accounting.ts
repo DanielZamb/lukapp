@@ -1,3 +1,8 @@
+import { abortUndo, undoPlace, undoReceipt, undoPreview, undoOperation } from "./accountingUndoValues";
+import { previewUndo, readUndoStatus } from "./accountingUndo";
+import { closePlace as closePlaceArgs, closePlaceReceipt, placeClosure as placeClosureValue } from "./accountingPlaceValues";
+import { placeClosure as readPlaceClosure } from "../src/accounting/commands/closePlace";
+import { placeClosureServices } from "./accountingPlaces";
 import { ConvexError, v, type Infer } from "convex/values";
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { postedHistory as readPostedHistory } from "../src/accounting/queries/postedHistory";
@@ -14,8 +19,10 @@ import {
 } from "./lib/deviceAuthorization";
 import { run } from "./accountingErrors";
 import {
+  defaultPlaceChange, timeZoneChange, functionalCurrencyChange, workspaceSettingReceipt,
   accountSetup,
   accountLook,
+  accountRename,
   accountTransfer,
   openingPosition,
   categoryCreation,
@@ -23,7 +30,7 @@ import {
   categoryUpdate,
   categoryDelete,
   cashActivity,
-  defaults,
+  defaults, workspaceSettings as workspaceSettingsValue,
   inWorkspace,
   periodLock,
   personalSetup,
@@ -47,10 +54,11 @@ import { categoryTotals as readCategoryTotals } from "../src/accounting/queries/
 import { createAccountingCore } from "../src/accounting";
 import { convexHistoryStore } from "./historyStore";
 import { convexReadStore } from "./store";
-import { readPersonalDefaults } from "./personalDefaults";
+import { readWorkspaceSettings, readWorkspaceSettingHistory, readPersonalDefaults } from "./personalDefaults";
 import {
   accountBalance,
   productKind,
+  placeStatus,
   accountNature,
   accountSetupResult,
   accountingPeriod,
@@ -105,6 +113,15 @@ export const createFinancialAccountProfile = action({
   },
 });
 
+export const renameAccount = action({
+  args: accountRename,
+  returns: financialAccountProfile,
+  handler: async (ctx, args): Promise<Infer<typeof financialAccountProfile>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.renameAccount, { ...args, session });
+  },
+});
+
 export const changeAccountLook = action({
   args: accountLook,
   returns: financialAccountProfile,
@@ -115,7 +132,7 @@ export const changeAccountLook = action({
 });
 
 export const listFinancialAccountProfiles = query({
-  args: inWorkspace,
+  args: { ...inWorkspace, status: v.optional(v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("undoing"), v.literal("all"))) },
   returns: v.array(financialAccountProfile),
   handler: async (ctx, args) =>
     run(async () =>
@@ -297,10 +314,11 @@ export const ensurePersonalDefaults = action({
 });
 
 export const postedActivity = query({
-  args: { ...inWorkspace, month: v.string(), includeRows: v.optional(v.boolean()) },
+  args: { ...inWorkspace, month: v.string(), includeRows: v.optional(v.boolean()), status: v.optional(v.union(v.literal("open"), v.literal("closed"), v.literal("undone"), v.literal("undoing"), v.literal("all"))) },
   returns: v.object({
     accounts: v.array(
       v.object({
+        status: placeStatus, endedAt: v.optional(v.number()),
         financialAccountProfileId: v.string(),
         name: v.string(),
         nature: accountNature,
@@ -462,4 +480,90 @@ export const setupFinancialAccountProfile = action({
       session,
     });
   },
+});
+
+export const changeDefaultPlace = action({
+  args: defaultPlaceChange, returns: workspaceSettingReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof workspaceSettingReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.changeDefaultPlace, { ...args, session });
+  },
+});
+
+export const changeWorkspaceTimeZone = action({
+  args: timeZoneChange, returns: workspaceSettingReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof workspaceSettingReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.changeWorkspaceTimeZone, { ...args, session });
+  },
+});
+
+export const changeFunctionalCurrency = action({
+  args: functionalCurrencyChange, returns: workspaceSettingReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof workspaceSettingReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.changeFunctionalCurrency, { ...args, session });
+  },
+});
+
+export const workspaceSettings = query({
+  args: inWorkspace, returns: workspaceSettingsValue,
+  handler: async (ctx, args) => run(async () => readWorkspaceSettings(ctx,
+    await requireWorkspacePermission(ctx, { ...args, permission: "workspace:read" }), args.workspaceId)),
+});
+export const workspaceSettingHistory = query({
+  args: inWorkspace, returns: v.array(workspaceSettingReceipt),
+  handler: async (ctx, args) => run(async () => readWorkspaceSettingHistory(ctx,
+    await requireWorkspacePermission(ctx, { ...args, permission: "workspace:read" }), args.workspaceId)),
+});
+
+export const closePlace = action({
+  args: closePlaceArgs, returns: closePlaceReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof closePlaceReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.closePlace, { ...args, session });
+  },
+});
+
+export const placeClosure = query({
+  args: { workspaceId: v.string(), financialAccountProfileId: v.string() }, returns: placeClosureValue,
+  handler: async (ctx, args) => run(async () => {
+    const actor = await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
+    return readPlaceClosure(convexReadStore(ctx.db), { now: () => new Date() }, placeClosureServices(ctx, actor, args.workspaceId), { ...args, actor });
+  }),
+});
+
+export const abortUndoPlace = action({
+  args: abortUndo, returns: undoReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof undoReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.abortUndoPlace, { ...args, session });
+  },
+});
+export const startUndoPlace = action({
+  args: undoPlace, returns: undoReceipt,
+  handler: async (ctx, args): Promise<Infer<typeof undoReceipt>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.accountingWrites.startUndoPlace, { ...args, session });
+  },
+});
+/**
+ * The preview's fingerprint covers the workspace month read from the clock, and Convex reuses a query's answer for the
+ * same arguments while the data it read is unchanged, whatever the time. `renewal` changes whenever the phone needs a
+ * fresh preview (a new month, a Start refused as stale), so Convex computes one; its value is never read.
+ */
+export const previewUndoPlace = query({
+  args: { workspaceId: v.string(), financialAccountProfileId: v.string(), cursor: v.optional(v.union(v.string(), v.null())),
+    renewal: v.optional(v.string()) }, returns: undoPreview,
+  handler: async (ctx, args) => run(async () => {
+    const actor = await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
+    return previewUndo(ctx, actor, args);
+  }),
+});
+export const placeUndoStatus = query({
+  args: { workspaceId: v.string(), financialAccountProfileId: v.string() }, returns: v.union(undoOperation, v.null()),
+  handler: async (ctx, args) => run(async () => {
+    await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
+    return readUndoStatus(ctx, args.workspaceId, args.financialAccountProfileId);
+  }),
 });

@@ -1,6 +1,7 @@
 import { useAction } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { useMemo, useRef } from "react";
+import { useT } from "../../i18n";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalInputLease } from "../../local-auth/localInput";
 import { api } from "../api";
@@ -16,6 +17,7 @@ import type { PendingPosting } from "./pendingPostingSchema";
 import type { LoadResult, PostingTransport } from "./usePostingEditor";
 
 export function usePostingTransport(subject: string): PostingTransport {
+  const { t } = useT();
   const lease = useLocalInputLease();
   const reportFailure = useDeviceAccessFailure();
   const postingId = useRef<string | undefined>(undefined);
@@ -141,9 +143,9 @@ export function usePostingTransport(subject: string): PostingTransport {
             const receipt = await opening(entry.payload);
             return (
               receipt ?? {
-                description: "Zero starting amount, no entry needed",
+                description: t("posting.receiptZeroOpening"),
                 amount: entry.payload.amount,
-                title: "Confirmed",
+                title: t("posting.receiptConfirmed"),
               }
             );
           }
@@ -153,12 +155,12 @@ export function usePostingTransport(subject: string): PostingTransport {
               description: receipt.financialAccountProfile.name,
               amount: entry.payload.amount,
               financialAccountProfileId: receipt.financialAccountProfile.id,
-              title: "Place added",
+              title: t("posting.receiptPlaceAdded"),
             };
           }
         }
       },
     }),
-    [subject, lease, reportFailure, expense, income, transfer, opening, setup],
+    [subject, lease, reportFailure, expense, income, transfer, opening, setup, t],
   );
 }

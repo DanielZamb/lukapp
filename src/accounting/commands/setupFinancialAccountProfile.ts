@@ -36,7 +36,7 @@ export async function setupFinancialAccountProfile(
       optionalProfileEmoji(previous.emoji) !== emoji ||
       previous.productKind !== input.productKind ||
       previous.accountingDate !== input.accountingDate ||
-      previous.amount.currency !== input.amount.currency ||
+      (previous.originalCurrency ?? previous.amount.currency) !== input.amount.currency ||
       previous.amount.minorUnits !== input.amount.minorUnits
     )
       throw new AccountingError("account_setup_conflict");

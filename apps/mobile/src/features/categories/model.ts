@@ -1,4 +1,6 @@
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
+import { ConvexError } from "convex/values";
+import type { MessageKey, Translator } from "../../../../../src/i18n";
 import { api } from "../api";
 
 export type CategorySelection = FunctionArgs<
@@ -37,6 +39,9 @@ export type CategoryEditor =
 export type EditableCategory = Extract<CategoryEditor, { kind: "custom" }> | {
   kind: "edit"; category: Category; name: string; style: CategoryStyle;
 };
+export function natureLabel(nature: Category["nature"]): MessageKey {
+  return nature === "Income" ? "categories.natureIncome" : nature === "Expense" ? "categories.natureExpense" : "categories.natureUnset";
+}
 export const defaultCategoryStyle: CategoryStyle = {
   emoji: "✨",
   tone: "primary",
@@ -54,4 +59,23 @@ export function selectionKey(selection: CategorySelection) {
   return selection.kind === "preset"
     ? `preset:${selection.presetId}`
     : `custom:${categoryNameKey(selection.name)}`;
+}
+
+export function categoryFailureMessage(error: unknown, { t }: Translator) {
+  if (error instanceof ConvexError && typeof error.data === "object" && error.data && "code" in error.data) {
+    switch (error.data.code) {
+      case "name_required": return t("categories.errorNameRequired");
+      case "category_name_too_long": return t("categories.errorNameTooLong");
+      case "category_name_conflict": return t("categories.errorNameConflict");
+      case "category_not_found": return t("categories.errorNotFound");
+    }
+  }
+  return t("categories.errorSaveChange");
+}
+
+export const natureAnswers: readonly NatureAnswer[] = ["spend", "receive", "stillMine", "payDebt"];
+
+/** The nature a custom category is created with: the person's answer, or the suggestion when it was made for this same name. */
+export function natureAnswer(editor: { name: string; answer: NatureAnswer | null }, suggestion: { suggested: NatureAnswer | null; key?: string }) {
+  return editor.answer ?? (suggestion.key === categoryNameKey(editor.name) ? suggestion.suggested : null);
 }

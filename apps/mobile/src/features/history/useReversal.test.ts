@@ -1,4 +1,7 @@
 import { createElement } from "react";
+import { createTranslator } from "../../../../../src/i18n";
+
+const english = createTranslator("en");
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
 import { ConvexError } from "convex/values";
@@ -21,7 +24,7 @@ afterEach(async () => {
 async function open(api: ReversalTransport, id = "entry") {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let result: ReturnType<typeof useReversal> | undefined;
-  function Harness({ entryId }: { entryId: string }) { result = useReversal("workspace", entryId, api); return null; }
+  function Harness({ entryId }: { entryId: string }) { result = useReversal("workspace", entryId, api, english); return null; }
   await act(async () => { root = create(createElement(Harness, { entryId: id })); });
   return {
     current: () => { if (!result) throw new Error("Hook not mounted"); return result; },
@@ -62,6 +65,20 @@ test("an uncertain response retries the same payload and reopening retains the s
   await act(async () => page.current().request());
   await act(async () => { await page.current().confirm(); });
   expect(api.post.mock.calls[2][0]).toEqual(api.post.mock.calls[0][0]);
+});
+
+test("after a lost reply, retries refused before or after the lookup still repeat the one reversal key of that entry", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new Error("Lost response"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "locked_period", message: "Locked Period" }));
+  const page = await open(api);
+  await act(async () => page.current().request());
+  for (let attempt = 0; attempt < 4; attempt++) await act(async () => { await page.current().confirm(); });
+  expect(api.post.mock.calls.map(([payload]) => payload)).toEqual(Array.from({ length: 4 }, () => ({
+    workspaceId: "workspace", journalEntryId: "entry", idempotencyKey: "mobile-reversal@1:workspace:entry",
+  })));
+  expect(page.current().state).toEqual({ kind: "posted", receipt });
 });
 
 test("late acknowledgements cannot update a different entry mounted in the same controller", async () => {

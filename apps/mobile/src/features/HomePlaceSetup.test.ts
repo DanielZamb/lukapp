@@ -1,8 +1,10 @@
 import * as React from "react";
 import { createElement, type ComponentProps } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { typeAmount } from "./amount/typing.testSupport";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { HomePlaceSetup } from "./HomePlaceSetup";
+import { LanguageProvider } from "../i18n";
 import type { PendingPosting } from "./posting/pendingPostingSchema";
 import type { LoadResult, PostingTransport } from "./posting/usePostingEditor";
 
@@ -66,13 +68,13 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   vi.unstubAllGlobals();
 });
-function props(unlocking = true): ComponentProps<typeof HomePlaceSetup> {
+function props(unlocking = true, currency = "COP"): ComponentProps<typeof HomePlaceSetup> {
   return {
       defaults: {
         purchaseAlertsConsent: false, wantsBudgets: false,
-        workspace: { id: "workspace", functionalCurrency: "COP", timeZone: "America/Bogota",
+        workspace: { id: "workspace", functionalCurrency: currency, timeZone: "America/Bogota",
           currentAccountingPeriod: { year: 2026, month: 10, status: "open" }, kind: "Personal", chartOfAccountsTemplate: "puc@1" },
-        financialAccountProfile: { id: "daily", name: "Daily", productKind: "cash", ledgerAccountId: "ledger", workspaceId: "workspace" },
+        financialAccountProfile: { status: "open", id: "daily", name: "Daily", productKind: "cash", ledgerAccountId: "ledger", workspaceId: "workspace" },
       },
       subject: "owner", unlocking, onClose: state.close,
   };
@@ -95,8 +97,11 @@ test("the second place replaces the entire stack with its saved name after confi
   await render();
   expect(state.load).toHaveBeenCalledWith(undefined, false);
   expect(state.present).toHaveBeenCalledOnce();
-  await act(async () => input("Account name").props.onChangeText("Savings"));
+  await act(async () => input("Place name").props.onChangeText("Savings"));
   await act(async () => input("Balance today").props.onChangeText("12.500"));
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post).not.toHaveBeenCalled();
+  await act(async () => button("Confirm COP 12.500,00").props.onPress());
   await act(async () => button("Add this place").props.onPress());
   expect(state.post).toHaveBeenCalledOnce();
   expect(state.post.mock.calls[0]).toEqual([{
@@ -118,11 +123,11 @@ test("the second place replaces the entire stack with its saved name after confi
 test("an uncertain setup keeps its saved command for an identical retry", async () => {
   state.fail = true;
   await render();
-  await act(async () => input("Account name").props.onChangeText("Savings"));
+  await act(async () => input("Place name").props.onChangeText("Savings"));
   await act(async () => button("Add this place").props.onPress());
   expect(state.close).not.toHaveBeenCalled();
   expect(state.reset).not.toHaveBeenCalled();
-  expect(input("Account name").props.editable).toBe(false);
+  expect(input("Place name").props.editable).toBe(false);
   state.fail = false;
   await act(async () => root.update(createElement(HomePlaceSetup, props(false))));
   await act(async () => button("Retry setup").props.onPress());
@@ -145,7 +150,7 @@ test("a live account-count update before acknowledgement does not suppress the f
   let acknowledge: (() => void) | undefined;
   state.clear.mockImplementationOnce(() => new Promise<void>((resolve) => { acknowledge = resolve; }));
   await render();
-  await act(async () => input("Account name").props.onChangeText("Travel"));
+  await act(async () => input("Place name").props.onChangeText("Travel"));
   await act(async () => button("Add this place").props.onPress());
   expect(state.reset).not.toHaveBeenCalled();
   await act(async () => root.update(createElement(HomePlaceSetup, props(false))));
@@ -174,10 +179,10 @@ test("prototype defaults save a blank name and balance with today's hidden date"
     expect(texts()).not.toContain("Starting date");
     expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityRole === "radio")
       .map((node) => [node.props.accessibilityLabel, node.props.accessibilityState.selected]))
-      .toEqual([["Checking", false], ["Savings", true], ["Wallet", false]]);
+      .toEqual([["Checking account", false], ["Savings account", true], ["Digital wallet", false], ["Cash", false]]);
     expect(root.root.find((node) => String(node.type) === "sheet").props).toMatchObject({ snapPoints: ["80%"], enablePanDownToClose: true,
       enableDynamicSizing: false, keyboardBehavior: "interactive" });
-    await act(async () => input("Account name").props.onChangeText("   "));
+    await act(async () => input("Place name").props.onChangeText("   "));
     await act(async () => button("Add this place").props.onPress());
     expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "New account", productKind: "savingsAccount",
       emoji: "🏦", amount: { currency: "COP", minorUnits: 0 }, accountingDate: "2026-10-18" });
@@ -185,36 +190,149 @@ test("prototype defaults save a blank name and balance with today's hidden date"
 });
 
 test.each([
-  { label: "Checking", productKind: "bankAccount", emoji: "💰" },
-  { label: "Savings", productKind: "savingsAccount", emoji: "🏦" },
-  { label: "Wallet", productKind: "cash", emoji: "👛" },
-])("$label maps to the existing account command and a default look", async ({ label, productKind, emoji }) => {
+  { label: "Checking account", spanish: "Cuenta corriente", productKind: "bankAccount", emoji: "💰" },
+  { label: "Savings account", spanish: "Cuenta de ahorro", productKind: "savingsAccount", emoji: "🏦" },
+  { label: "Digital wallet", spanish: "Billetera digital", productKind: "savingsAccount", emoji: "📱" },
+  { label: "Cash", spanish: "Efectivo", productKind: "cash", emoji: "👛" },
+])("$label maps to the existing account command and a default look", async ({ label, spanish, productKind, emoji }) => {
   await render();
   await act(async () => button(label).props.onPress());
+  expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityState?.selected)
+    .map((node) => node.props.accessibilityLabel)).toEqual([label]);
   await act(async () => input("Balance today").props.onChangeText("abc"));
   await act(async () => button("Add this place").props.onPress());
+  expect(state.post).not.toHaveBeenCalled();
+  await act(async () => input("Balance today").props.onChangeText(""));
+  await act(async () => button("Add this place").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ productKind, emoji, amount: { minorUnits: 0 } });
+  await act(async () => root.unmount());
+  vi.clearAllMocks();
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(HomePlaceSetup, props(false))));
+  });
+  await act(async () => button(spanish).props.onPress());
+  await act(async () => button("Agregar este lugar").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ productKind, emoji });
 });
 
 test("custom look uses the first character and survives changing the kind", async () => {
   await render();
-  await act(async () => button("Checking").props.onPress());
+  await act(async () => button("Checking account").props.onPress());
   expect(texts()).toContain("💰");
   await act(async () => button("Choose emoji").props.onPress());
-  expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityRole === "radio")).toHaveLength(13);
+  expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityRole === "radio")).toHaveLength(14);
   await act(async () => input("Custom emoji").props.onChangeText("🦊extra"));
   await act(async () => button("Use this").props.onPress());
   await act(async () => root.root.findAll((node) => String(node.type) === "sheet")[1].props.onDismiss());
-  await act(async () => button("Wallet").props.onPress());
+  await act(async () => button("Cash").props.onPress());
   await act(async () => button("Add this place").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ productKind: "cash", emoji: "🦊" });
 });
 
 test("pan dismissal drops an unsubmitted draft", async () => {
   await render();
-  await act(async () => input("Account name").props.onChangeText("Discard me"));
+  await act(async () => input("Place name").props.onChangeText("Discard me"));
   await act(async () => root.root.find((node) => String(node.type) === "sheet").props.onDismiss());
   expect(state.close).toHaveBeenCalledOnce();
   expect(state.save).not.toHaveBeenCalled();
   expect(state.post).not.toHaveBeenCalled();
+});
+
+test("in Spanish the sheet reads in Spanish, a blank name stores the Spanish default, and a typed name stays as typed", async () => {
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(HomePlaceSetup, props(true))));
+  });
+  const shown = root.root.findAllByType("text").map((node) => node.children.join(""));
+  expect(shown).toEqual(expect.arrayContaining([
+    "ESTO ABRE EL NIVEL 1", "Agregar un lugar", "Un nombre que reconozcas", "Tipo", "Ícono", "Cambiar", "Saldo de hoy",
+    "Cuenta corriente", "Cuenta de ahorro", "Billetera digital", "Efectivo",
+  ]));
+  expect(input("Nombre del lugar").props.placeholder).toBe("Ahorros");
+  expect(root.root.findAllByType("button").filter((node) => node.props.accessibilityRole === "radio")
+    .map((node) => [node.props.accessibilityLabel, node.props.accessibilityState.selected]))
+    .toEqual([["Cuenta corriente", false], ["Cuenta de ahorro", true], ["Billetera digital", false], ["Efectivo", false]]);
+  await act(async () => button("Agregar este lugar").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "Cuenta nueva", productKind: "savingsAccount" });
+  await act(async () => root.unmount());
+  vi.clearAllMocks();
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(HomePlaceSetup, props(false))));
+  });
+  await act(async () => input("Nombre del lugar").props.onChangeText("Nequi"));
+  await act(async () => button("Agregar este lugar").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "Nequi" });
+});
+
+test.each([
+  ["COP", "12.50", "Use the comma for decimals, for example 12,50", "1234,50"],
+  ["USD", "12,50", "Use the point for decimals, for example 12.50", "1234.50"],
+])("a %s home place balance is typed with the phone's decimal mark; the other separator is refused and nothing is sent",
+  async (currency, wrong, hint, shown) => {
+    await act(async () => { root = create(createElement(HomePlaceSetup, props(true, currency))); });
+    await typeAmount(() => input("Balance today"), wrong, { replacing: true });
+    expect(root.root.findAll((node) => node.props.accessibilityRole === "alert").map((node) => node.children.join(""))).toContain(hint);
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post).not.toHaveBeenCalled();
+    await act(async () => input("Balance today").props.onChangeText(""));
+    await typeAmount(() => input("Balance today"), shown.slice(0, 5));
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post, "a balance ending in its decimal mark is incomplete").not.toHaveBeenCalled();
+    await typeAmount(() => input("Balance today"), "50");
+    expect(input("Balance today").props.value).toBe(shown);
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency, minorUnits: 123450 });
+  });
+
+test.each([["-", "COP"], ["+", "COP"], ["−", "USD"]])("a %s typed into a %s home place balance is refused with the format hint and nothing is sent",
+  async (sign, currency) => {
+    await act(async () => { root = create(createElement(HomePlaceSetup, props(true, currency))); });
+    await typeAmount(() => input("Balance today"), `${sign}500`, { replacing: true });
+    expect(root.root.findAll((node) => node.props.accessibilityRole === "alert").map((node) => node.children.join("")))
+      .toContain(`Type only digits and separators, for example ${currency === "COP" ? "1.234,50" : "1,234.50"}`);
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post).not.toHaveBeenCalled();
+  });
+
+test("a workspace currency change while the balance is typed shows and sends the same amount in the new currency", async () => {
+  await act(async () => { root = create(createElement(HomePlaceSetup, props(true, "COP"))); });
+  await typeAmount(() => input("Balance today"), "12500", { replacing: true });
+  expect(input("Balance today").props.value).toBe("12500");
+  await act(async () => root.update(createElement(HomePlaceSetup, props(true, "USD"))));
+  expect(input("Balance today").props.value).toBe("0");
+  expect(root.root.findAll((node) => node.type === "text").map((node) => node.children.join(""))).toContain("Reads as USD 0.00");
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency: "USD", minorUnits: 0 });
+});
+
+test("after a workspace currency change the balance typed in the new currency is the one sent", async () => {
+  await act(async () => { root = create(createElement(HomePlaceSetup, props(true, "COP"))); });
+  await typeAmount(() => input("Balance today"), "12500", { replacing: true });
+  await act(async () => root.update(createElement(HomePlaceSetup, props(true, "USD"))));
+  await typeAmount(() => input("Balance today"), "1234", { replacing: true });
+  expect(input("Balance today").props.value).toBe("1234");
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency: "USD", minorUnits: 123400 });
+});
+
+test("third review, finding 2: a name handler from the render before the last balance keystroke keeps the balance as typed", async () => {
+  await act(async () => { root = create(createElement(HomePlaceSetup, props(true, "COP"))); });
+  await typeAmount(() => input("Balance today"), "150", { replacing: true });
+  const staleName = input("Place name").props.onChangeText as (text: string) => void;
+  await typeAmount(() => input("Balance today"), "0");
+  await act(async () => staleName("Trip"));
+  expect(input("Balance today").props.value).toBe("1500");
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "Trip", amount: { currency: "COP", minorUnits: 150000 } });
+});
+
+test("a kind chip kept from before a custom emoji was picked keeps that emoji", async () => {
+  await render();
+  const keptCash = button("Cash").props.onPress as () => void;
+  await act(async () => button("Choose emoji").props.onPress());
+  await act(async () => input("Custom emoji").props.onChangeText("🦊"));
+  await act(async () => button("Use this").props.onPress());
+  await act(async () => root.root.findAll((node) => String(node.type) === "sheet")[1].props.onDismiss());
+  await act(async () => keptCash());
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ productKind: "cash", emoji: "🦊" });
 });

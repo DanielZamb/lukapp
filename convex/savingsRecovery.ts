@@ -5,7 +5,7 @@ import { ownerQuery } from "./lib/functions";
 import { requireWorkspacePermission } from "./lib/deviceAuthorization";
 import { verifyCurrentSession } from "./lib/session";
 import {
-  evaluation, activateArgs, activateResult, contributeArgs, contributeResult,
+  evaluation, activateArgs, activateResult, contributeArgs, contributeResult, cancelArgs, cancelResult, correctArgs, correctResult,
 } from "./savingsRecoveryValues";
 import { recoveryReadStore } from "./savingsRecoveryStore";
 import { runRecovery } from "./savingsRecoveryErrors";
@@ -36,5 +36,21 @@ export const recordContribution = action({
   handler: async (ctx, args): Promise<Infer<typeof contributeResult>> => {
     const session = await verifyCurrentSession(ctx.auth);
     return ctx.runMutation(internal.savingsRecoveryWrites.recordContribution, { ...args, session });
+  },
+});
+
+export const cancelPlan = action({
+  args: cancelArgs, returns: cancelResult,
+  handler: async (ctx, args): Promise<Infer<typeof cancelResult>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.savingsRecoveryWrites.cancelPlan, { ...args, session });
+  },
+});
+
+export const correctContribution = action({
+  args: correctArgs, returns: correctResult,
+  handler: async (ctx, args): Promise<Infer<typeof correctResult>> => {
+    const session = await verifyCurrentSession(ctx.auth);
+    return ctx.runMutation(internal.savingsRecoveryWrites.correctContribution, { ...args, session });
   },
 });

@@ -1,3 +1,12 @@
+import { abortUndoOperation, startUndo } from "./accountingUndo";
+import { abortUndo, undoPlace, undoReceipt } from "./accountingUndoValues";
+import { closePlace as closePlaceArgs, closePlaceReceipt } from "./accountingPlaceValues";
+import { closePlace as runClosePlace } from "../src/accounting/commands/closePlace";
+import { placeClosingServices } from "./accountingPlaces";
+import { renameAccount as rename } from "../src/accounting/commands/renameAccount";
+import { cancelReopenedPlans } from "../src/savingsRecovery/cancelReopenedPlans";
+import { recoveryWriteStore } from "./savingsRecoveryStore";
+import { runRecovery } from "./savingsRecoveryErrors";
 import { v } from "convex/values";
 import { changeAccountLook as changeLook } from "../src/accounting/commands/changeAccountLook";
 import { internalMutation } from "./_generated/server";
@@ -11,12 +20,14 @@ import { createUserCategory as createCategory } from "../src/accounting/commands
 import { restyleUserCategory as restyleCategory } from "../src/accounting/commands/restyleUserCategory";
 import { updateUserCategory as updateCategory } from "../src/accounting/commands/updateUserCategory";
 import { deleteUserCategory as deleteCategory } from "../src/accounting/commands/deleteUserCategory";
-import { ensurePersonalDefaults as ensureDefaults } from "./personalDefaults";
+import { changeWorkspaceSetting, ensurePersonalDefaults as ensureDefaults } from "./personalDefaults";
 import { convexStore } from "./store";
 import { run } from "./accountingErrors";
 import {
+  defaultPlaceChange, timeZoneChange, functionalCurrencyChange, workspaceSettingReceipt,
   accountSetup,
   accountLook,
+  accountRename,
   accountTransfer,
   openingPosition,
   categoryCreation,
@@ -37,6 +48,16 @@ import {
   postedJournalEntry,
 } from "./validators";
 import { createCategoryResult, userCategory } from "./categoryValidators";
+
+export const renameAccount = internalMutation({
+  args: { ...accountRename, session: liveSession }, returns: financialAccountProfile,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, {
+      session, workspaceId: args.workspaceId, permission: "workspace:admin",
+    });
+    return run(() => rename(convexStore(ctx.db), { ...args, actor }));
+  },
+});
 
 export const changeAccountLook = internalMutation({
   args: { ...accountLook, session: liveSession },
@@ -126,12 +147,17 @@ export const reversePostedEntry = internalMutation({
       workspaceId: args.workspaceId,
       permission: "accounting:correct",
     });
-    return run(() =>
-      createAccountingCore(convexStore(ctx.db)).reversePostedEntry({
+    return run(() => runRecovery(async () => {
+      const reversed = await createAccountingCore(convexStore(ctx.db)).reversePostedEntry({
         ...args,
         actor,
-      }),
-    );
+      });
+      if (!reversed.replay) await cancelReopenedPlans(recoveryWriteStore(ctx, args.workspaceId), {
+        workspaceId: args.workspaceId, actorId: actor.userId, now: Date.now(),
+        cause: { kind: "transfer_reversed", transferJournalEntryId: args.journalEntryId, reversalJournalEntryId: reversed.id },
+      });
+      return reversed;
+    }));
   },
 });
 export const ensurePersonalDefaults = internalMutation({
@@ -233,5 +259,65 @@ export const setupFinancialAccountProfile = internalMutation({
     return run(() =>
       createAccountingCore(convexStore(ctx.db)).setupFinancialAccountProfile({ ...args, actor }),
     );
+  },
+});
+
+export const changeDefaultPlace = internalMutation({
+  args: { ...defaultPlaceChange, session: liveSession }, returns: workspaceSettingReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    return run(() => changeWorkspaceSetting(ctx, actor, {
+      workspaceId: args.workspaceId, idempotencyKey: args.idempotencyKey, setting: "defaultPlace",
+      value: args.financialAccountProfileId, expectedValue: args.expectedFinancialAccountProfileId,
+    }));
+  },
+});
+
+export const changeWorkspaceTimeZone = internalMutation({
+  args: { ...timeZoneChange, session: liveSession }, returns: workspaceSettingReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    return run(() => changeWorkspaceSetting(ctx, actor, {
+      workspaceId: args.workspaceId, idempotencyKey: args.idempotencyKey, setting: "timeZone",
+      value: args.timeZone, expectedValue: args.expectedTimeZone,
+    }));
+  },
+});
+
+export const changeFunctionalCurrency = internalMutation({
+  args: { ...functionalCurrencyChange, session: liveSession }, returns: workspaceSettingReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    return run(() => changeWorkspaceSetting(ctx, actor, {
+      workspaceId: args.workspaceId, idempotencyKey: args.idempotencyKey, setting: "functionalCurrency",
+      value: args.functionalCurrency, expectedValue: args.expectedFunctionalCurrency,
+    }));
+  },
+});
+
+export const closePlace = internalMutation({
+  args: { ...closePlaceArgs, session: liveSession }, returns: closePlaceReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "accounting:post" });
+    return run(() => runClosePlace(convexStore(ctx.db), { now: () => new Date() }, placeClosingServices(ctx, actor, args.workspaceId), { ...args, actor }));
+  },
+});
+
+export const startUndoPlace = internalMutation({
+  args: { ...undoPlace, session: liveSession }, returns: undoReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "accounting:correct" });
+    return run(() => startUndo(ctx, actor, args));
+  },
+});
+
+export const abortUndoPlace = internalMutation({
+  args: { ...abortUndo, session: liveSession }, returns: undoReceipt,
+  handler: async (ctx, { session, ...args }) => {
+    const actor = await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "workspace:admin" });
+    await requireSubmission(ctx, { session, workspaceId: args.workspaceId, permission: "accounting:correct" });
+    return run(() => abortUndoOperation(ctx, actor, args.operationId, args.workspaceId));
   },
 });

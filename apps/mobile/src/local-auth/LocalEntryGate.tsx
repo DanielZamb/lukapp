@@ -29,6 +29,7 @@ import {
   unlockBiometry,
   writeInstallMarker,
 } from "./nativeEntry";
+import { useT } from "../i18n";
 import { Header, PrimaryButton, SecondaryButton, Screen, useUi } from "../ui/core";
 import { BrandMark, BrandSplash } from "../ui/Brand";
 
@@ -40,6 +41,7 @@ export function LocalEntryGate({
   renderSignIn: (onSessionCreated: (sessionId: string, signal: AbortSignal) => Promise<void>) => ReactNode;
 }) {
   const ui = useUi();
+  const { t } = useT();
   const { isLoaded, userId, sessionId } = useAuth();
   const clerk = useClerk();
   const clerkRef = useRef(clerk);
@@ -130,7 +132,7 @@ export function LocalEntryGate({
     return true;
   }, [controller, lease, userId, sessionId]);
   if (state.kind === "sign-in")
-    return <>{state.movedTo && <Text style={ui.body}>Access moved to {state.movedTo}</Text>}{renderSignIn(onSessionCreated)}</>;
+    return <>{state.movedTo && <Text style={ui.body}>{t("access.movedTo", { device: state.movedTo })}</Text>}{renderSignIn(onSessionCreated)}</>;
   if (state.kind === "checking") return <BrandSplash />;
   if (
     state.kind === "open" &&
@@ -188,65 +190,53 @@ export function LocalEntryGate({
       <Header
         title={
           state.kind === "revocation"
-            ? state.movedTo ? `Access moved to ${state.movedTo}` : "Device access ended"
+            ? state.movedTo ? t("access.movedTo", { device: state.movedTo }) : t("access.endedTitle")
             : state.kind === "reauthentication"
-            ? "Sign in again"
+            ? t("access.reauthTitle")
             : state.kind === "unavailable"
-              ? "Local protection unavailable"
-              : "Lukapp is locked"
+              ? t("access.protectionUnavailableTitle")
+              : t("access.lockedTitle")
         }
       />
       {state.kind === "revocation" && (
         <>
           <Text style={ui.body}>
-            {state.cleanup === "running"
-              ? "Removing local input and signing out…"
-              : "Local cleanup could not finish. Your information stays locked."}
+            {state.cleanup === "running" ? t("access.cleanupRunning") : t("access.cleanupFailed")}
           </Text>
           {state.cleanup === "running" ? <ActivityIndicator /> : (
-            <PrimaryButton label="Retry cleanup" onPress={() => void controller.retryCleanup()} />
+            <PrimaryButton label={t("access.retryCleanup")} onPress={() => void controller.retryCleanup()} />
           )}
         </>
       )}
       {state.kind === "locked" && (
         <>
-          <Text style={ui.body}>
-            Use strong biometrics to open your financial information.
-          </Text>
+          <Text style={ui.body}>{t("access.lockedBody")}</Text>
           <PrimaryButton
-            label="Unlock Lukapp"
+            label={t("access.unlock")}
             onPress={() => void controller.unlock()}
           />
           <SecondaryButton
-            label="Sign in instead"
+            label={t("access.signInInstead")}
             onPress={() => void controller.reauthenticate()}
           />
         </>
       )}
       {state.kind === "reauthentication" && (
         <>
-          <Text style={ui.body}>
-            Complete Clerk sign-in, then set up strong biometric re-entry.
-            Device PIN and weak biometrics cannot unlock Lukapp.
-          </Text>
+          <Text style={ui.body}>{t("access.reauthBody")}</Text>
           <PrimaryButton
-            label="Sign in again"
+            label={t("access.reauthButton")}
             onPress={() => void controller.reauthenticate()}
           />
         </>
       )}
       {state.kind === "unavailable" && (
-        <Text style={ui.body}>
-          Your information stays locked. Close and reopen the app after checking
-          device security and storage.
-        </Text>
+        <Text style={ui.body}>{t("access.protectionUnavailableBody")}</Text>
       )}
       {state.kind === "authenticating" && (
         <>
           <ActivityIndicator />
-          <Text style={ui.body}>
-            Confirming biometrics…
-          </Text>
+          <Text style={ui.body}>{t("access.confirmingBiometrics")}</Text>
         </>
       )}
     </Screen>

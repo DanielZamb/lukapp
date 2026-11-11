@@ -4,6 +4,12 @@ import { calendarDate, nextWorkspaceMidnight } from "./timeZones";
 
 export function useWorkspaceCalendar(timeZone: string) {
   const [now, setNow] = useState(() => new Date());
+  const [zone, setZone] = useState(timeZone);
+  if (zone !== timeZone) {
+    // The last tick was armed for the old zone's midnight; read the clock again for the new one.
+    setZone(timeZone);
+    setNow(new Date());
+  }
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const tick = () => setNow(new Date());

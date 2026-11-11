@@ -1,4 +1,7 @@
 import { expect, test } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
+
+const { t } = createTranslator("en");
 import { appInitial, likelyBankApp, orderSources, productKindLabel, timeZoneCity } from "./appCatalog";
 
 test("bank-like names and packages are likely bank apps; whole words only", () => {
@@ -19,6 +22,7 @@ test("likely bank apps sort first, then by name", () => {
 
 test("labels are human readable", () => {
   expect(appInitial(" águila")).toBe("Á"); expect(appInitial("")).toBe("?");
-  expect(productKindLabel("savingsAccount")).toBe("Savings"); expect(productKindLabel("other")).toBe("Account");
+  expect(productKindLabel(t, "savingsAccount")).toBe("Savings account"); expect(productKindLabel(t, "other")).toBe("Account");
+  expect(productKindLabel(createTranslator("es").t, "savingsAccount")).toBe("Cuenta de ahorro");
   expect(timeZoneCity("America/Bogota")).toBe("Bogota"); expect(timeZoneCity("America/New_York")).toBe("New York");
 });

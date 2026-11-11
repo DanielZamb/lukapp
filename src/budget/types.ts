@@ -4,6 +4,7 @@ export type BudgetRevision = {
   categoryId: string;
   effectiveMonth: string;
   limitMinorUnits: number;
+  kind?: "amount" | "spendNothing" | "remove";
   expectedRevisionId: string | null;
   sequence: number;
   idempotencyKey: string;
@@ -20,11 +21,18 @@ export type SetCategoryLimit = {
   idempotencyKey: string;
 };
 
+export type CategoryLimitTarget = Omit<SetCategoryLimit, "limit">;
+export type ChangeCategoryLimit = CategoryLimitTarget & {
+  change: { kind: "amount"; limit: SetCategoryLimit["limit"] }
+    | { kind: "spendNothing" } | { kind: "remove" };
+};
+
 export type BudgetCategory = {
   id: string;
   name: string;
   emoji: string;
   nature?: "Expense" | "Income";
+  deletedAt?: number;
 };
 
 export type BudgetReadStore = {

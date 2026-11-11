@@ -8,6 +8,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import CategoryLookRoute from "../../../app/category-look";
 import type { categoryLook } from "./model";
+import { LanguageProvider } from "../../i18n";
 
 type Input = Parameters<typeof categoryLook>[0];
 const provider = vi.hoisted(() => ({
@@ -56,7 +57,7 @@ beforeEach(() => {
   provider.categoryId = "food";
   entries = [entry("Groceries", "2026-10-02", 150000)];
   budget = {
-    month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true,
+    month: "2026-10", currentMonth: "2026-10", currency: "COP", totalsOverlap: true, removedLimits: [],
     jars: [{ category: { id: "food", name: "Food", emoji: "🍋" }, revisionId: "revision", limitMinorUnits: 200000, consumptionMinorUnits: 150000 }],
     availableCategories: [],
   };
@@ -181,4 +182,37 @@ test("the category content waits for Convex and handles a removed category", asy
   await update();
   expect(texts()).toContain("This category is no longer available.");
   expect(texts()).not.toContain("Nothing in this category yet");
+});
+
+test.each([
+  { color: "#2E7D32", outline: "#2E7D32", edge: false },
+  { color: "#FFF3B0", outline: "#8a8a8a", edge: true },
+])("a stored exact color $color renders on the look chip and the jar", async ({ color, outline, edge }) => {
+  const base = provider.query.getMockImplementation();
+  provider.query.mockImplementation((reference, ...rest) => getFunctionName(reference) === "accounting:listUserCategories"
+    ? [{ ...categories[0], style: { emoji: "🍋", tone: "positive", color } }] : base?.(reference, ...rest));
+  await render();
+  const chip = screen().findAll((node) => node.type === "view" && Array.isArray(node.props.style) &&
+    node.props.style.some((style: { backgroundColor?: string }) => style?.backgroundColor === `${color}24`));
+  expect(chip.map((node) => node.props.style[1])).toEqual([{ backgroundColor: `${color}24`, borderColor: outline }]);
+  const ring = { borderWidth: 1, borderColor: "#8a8a8a" };
+  expect(jars()[0].props.style.slice(1)).toEqual([{ backgroundColor: `${color}22` }, edge ? ring : null]);
+  expect(jars()[0].findAllByType("view")[1].props.style.slice(1)).toEqual([{ width: "25%", backgroundColor: color }, edge ? ring : null]);
+});
+
+test.each([
+  { lang: "en" as const, spend: 0, hint: ["Spend nothing", "Nothing spent"] },
+  { lang: "en" as const, spend: 50000, hint: ["Spend nothing", "COP 500 over"] },
+  { lang: "en" as const, spend: -30000, hint: ["Spend nothing", "Nothing spent"] },
+  { lang: "es" as const, spend: 0, hint: ["Sin gastos", "No has gastado nada"] },
+  { lang: "es" as const, spend: 50000, hint: ["Sin gastos", "COP 500 de más"] },
+])("a spend-nothing jar reads like the Budget board in $lang with $spend spent", async ({ lang, spend, hint }) => {
+  entries = spend === 0 ? [] : [entry(spend > 0 ? "Pizza" : "Refund", "2026-10-02", spend)];
+  budget.jars = [{ category: { id: "food", name: "Food", emoji: "🍋" }, revisionId: "zero", limitMinorUnits: 0, consumptionMinorUnits: spend }];
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: lang }, createElement(CategoryLookRoute)));
+  });
+  const shown = texts();
+  expect(shown.slice(shown.indexOf(hint[0]), shown.indexOf(hint[0]) + 2)).toEqual(hint);
+  expect(shown.some((text) => /still in the jar|Over the|en el frasco|Te pasaste de/.test(text))).toBe(false);
 });

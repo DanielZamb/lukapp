@@ -5,9 +5,18 @@ import { useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
+import { useT } from "../../i18n";
 import { Screen } from "../../ui/core";
 import { api } from "../api";
-import { movedCopy, recoveryMoney, type RecoveryCandidate } from "./model";
+import {
+  movedCopy,
+  openCancelledPlan,
+  recoveryMoney,
+  type RecoveryCandidate,
+  type RecoveryContribution,
+  type RecoveryPlanView,
+} from "./model";
+import { RecoveryCancelScreen, RecoveryCorrectScreen } from "./RecoveryLifecycleScreens";
 import {
   RecoveryActivated,
   RecoveryCandidates,
@@ -16,25 +25,40 @@ import {
   RecoveryMoved,
   RecoveryPlanList,
   RecoveryPlanScreen,
+  RecoveryUnreadable,
+  type RecoveryPlanNotice,
 } from "./RecoveryScreens";
-import { useRecoveryEditor, type RecoveryEditorSeed } from "./useRecoveryEditor";
-import { useRecoveryMove } from "./useRecoveryMove";
+import { useUnresolvedRecovery } from "./unresolved";
+import { useRecoveryEditor, type RecoveryEditorSeed, type RecoveryEditorTransport } from "./useRecoveryEditor";
+import { useRecoveryCancel, useRecoveryCorrection } from "./useRecoveryLifecycle";
+import { useRecoveryMove, type RecoveryMoveTransport } from "./useRecoveryMove";
 
+type PlanView = { name: "plan"; id: string; notice?: RecoveryPlanNotice; caller?: PlanView };
+type CandidatesView = { name: "candidates"; parent: PlanView | null };
 type View =
   | { name: "entry" }
-  | { name: "candidates"; parentPlanId: string | null }
-  | { name: "draft"; key: string; candidate: RecoveryCandidate; parentPlanId: string | null }
+  | CandidatesView
+  | { name: "draft"; key: string; candidate: RecoveryCandidate; replacesPlanId: string | null; from: CandidatesView | PlanView }
   | { name: "activated"; title: string; installmentMinorUnits: number; currency: string; activationMonth: string }
-  | { name: "plan"; id: string }
-  | { name: "move"; key: string; id: string }
+  | PlanView
+  | { name: "move"; key: string; plan: PlanView }
+  | { name: "cancel"; key: string; plan: PlanView }
+  | { name: "correct"; key: string; plan: PlanView; contributionId: string }
   | {
     name: "moved";
-    planId: string;
+    plan: PlanView;
     title: string;
     movedMinorUnits: number;
     countedMinorUnits: number;
     currency: string;
   };
+
+/** A plan already open in this chain is returned to as it was; any other plan opens one step further. */
+function linkedPlan(from: PlanView, id: string): PlanView {
+  for (let open: PlanView | undefined = from; open; open = open.caller)
+    if (open.id === id) return open;
+  return { name: "plan", id, caller: from };
+}
 
 export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }: {
   workspaceId: string;
@@ -46,10 +70,14 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   const [refreshKey, refresh] = useState(Crypto.randomUUID);
   const [view, setView] = useState<View>({ name: "entry" });
   const board = useQuery(api.savingsRecovery.evaluate, { workspaceId, refreshKey });
+  const unresolved = useUnresolvedRecovery(workspaceId, board?.plans);
   const interact = useLocalEntryInteraction();
+  const { t } = useT();
   const back = () => {
-    if (view.name === "candidates" && view.parentPlanId) {
-      setView({ name: "plan", id: view.parentPlanId });
+    if (view.name === "plan" && view.caller) {
+      setView(view.caller);
+    } else if (view.name === "candidates" && view.parent) {
+      setView(view.parent);
     } else if (view.name === "plan" && board && board.plans.length > 1) {
       setView({ name: "entry" });
     } else if (view.name !== "activated" && view.name !== "moved") {
@@ -58,11 +86,15 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   };
   useRecoveryBack(
     view.name === "activated" || view.name === "moved"
-      || (view.name === "candidates" && view.parentPlanId !== null)
-      || (view.name === "plan" && !!board && board.plans.length > 1)
+      || (view.name === "candidates" && view.parent !== null)
+      || (view.name === "plan" && (!!view.caller || (!!board && board.plans.length > 1)))
       ? back : null,
   );
-  if (!board) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+  if (!board || unresolved.reading) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
+  if ((view.name === "draft" || view.name === "move") && unresolved.unreadable) {
+    const caller = view.name === "draft" ? view.from : view.plan;
+    return <Unreadable onRetry={() => { interact(); unresolved.retryRead(); }} onBack={() => setView(caller)} />;
+  }
   if (view.name === "draft") {
     return (
       <Draft
@@ -72,8 +104,11 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
           currency: board.currency,
           candidate: view.candidate,
           destinations: board.destinations,
+          replacesPlanId: view.replacesPlanId,
+          unresolved: unresolved.activation(view.candidate.journalEntryId),
         }}
-        onClose={() => setView({ name: "candidates", parentPlanId: view.parentPlanId })}
+        phone={{ keep: unresolved.keepActivation, forget: unresolved.forgetActivation }}
+        onClose={() => setView(view.from)}
         onSaved={(receipt) => {
           refresh(Crypto.randomUUID());
           setView({
@@ -93,11 +128,11 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
     );
   }
   if (view.name === "moved") {
-    const live = board.plans.find((item) => item.id === view.planId);
-    if (!live) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    const live = board.plans.find((item) => item.id === view.plan.id);
+    if (!live) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <RecoveryMoved
-        title={`${recoveryMoney({ currency: view.currency, minorUnits: view.movedMinorUnits })} moved`}
+        title={t("recovery.movedTitle", { amount: recoveryMoney({ currency: view.currency, minorUnits: view.movedMinorUnits }) })}
         detail={movedCopy({
           currency: view.currency,
           title: view.title,
@@ -105,15 +140,15 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
           countedMinorUnits: view.countedMinorUnits,
           recoveredMinorUnits: live.recoveredMinorUnits,
           targetMinorUnits: live.targetMinorUnits,
-        })}
-        onViewPlan={() => setView({ name: "plan", id: view.planId })}
+        }, t)}
+        onViewPlan={() => setView(view.plan)}
         onHome={onHome}
       />
     );
   }
   if (view.name === "move") {
-    const plan = board.plans.find((item) => item.id === view.id);
-    if (!plan) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    const plan = board.plans.find((item) => item.id === view.plan.id);
+    if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
     return (
       <Move
         key={view.key}
@@ -121,12 +156,14 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
         timeZone={timeZone}
         plan={plan}
         sources={board.sources}
-        onClose={() => setView({ name: "plan", id: plan.id })}
+        unresolved={unresolved.move(plan.id)}
+        phone={{ keep: unresolved.keepMove, forget: unresolved.forgetMove }}
+        onClose={() => setView(view.plan)}
         onMoved={(receipt) => {
           refresh(Crypto.randomUUID());
           setView({
             name: "moved",
-            planId: plan.id,
+            plan: view.plan,
             title: plan.title,
             movedMinorUnits: receipt.transfer.amount.minorUnits,
             countedMinorUnits: receipt.contribution.amountMinorUnits,
@@ -136,16 +173,72 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
       />
     );
   }
+  if (view.name === "cancel") {
+    const plan = board.plans.find((item) => item.id === view.plan.id);
+    if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
+    return (
+      <Cancel
+        key={view.key}
+        workspaceId={workspaceId}
+        plan={plan}
+        onClose={() => setView(view.plan)}
+        onCancelled={() => {
+          refresh(Crypto.randomUUID());
+          setView({ ...view.plan, notice: "cancelled" });
+        }}
+      />
+    );
+  }
+  if (view.name === "correct") {
+    const plan = board.plans.find((item) => item.id === view.plan.id);
+    const contribution = plan?.contributionHistory.find((item) => item.id === view.contributionId);
+    if (!plan || !contribution) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
+    return (
+      <Correct
+        key={view.key}
+        workspaceId={workspaceId}
+        plan={plan}
+        plans={board.plans}
+        contribution={contribution}
+        onClose={() => setView(view.plan)}
+        onCorrected={() => {
+          refresh(Crypto.randomUUID());
+          setView({ ...view.plan, notice: "corrected" });
+        }}
+      />
+    );
+  }
   if (view.name === "plan" || (view.name === "entry" && board.plans.length === 1)) {
     const plan = view.name === "plan" ? board.plans.find((item) => item.id === view.id) : board.plans[0];
-    if (!plan) return <Screen><ActivityIndicator accessibilityLabel="Loading Recovery" /></Screen>;
+    if (!plan) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
+    const shown: PlanView = view.name === "plan" ? view : { name: "plan", id: plan.id };
+    const replacement = board.candidates.find((item) => item.journalEntryId === plan.sourceJournalEntryId) ?? null;
     return (
       <RecoveryPlanScreen
         plan={plan}
+        plans={board.plans}
         month={board.currentMonth}
+        timeZone={timeZone}
+        replacement={replacement}
+        notice={shown.notice}
+        unconfirmedMove={unresolved.move(plan.id) !== null}
         onBack={back}
-        onMove={() => { interact(); setView({ name: "move", key: Crypto.randomUUID(), id: plan.id }); }}
-        onFind={() => setView({ name: "candidates", parentPlanId: plan.id })}
+        onMove={() => { interact(); setView({ name: "move", key: Crypto.randomUUID(), plan: shown }); }}
+        onFind={() => setView({ name: "candidates", parent: shown })}
+        onCancel={() => { interact(); setView({ name: "cancel", key: Crypto.randomUUID(), plan: shown }); }}
+        onReplace={() => {
+          if (!replacement) return;
+          interact();
+          setView({
+            name: "draft", key: Crypto.randomUUID(), candidate: replacement,
+            replacesPlanId: plan.id, from: shown,
+          });
+        }}
+        onPlan={(id) => { interact(); setView(linkedPlan(shown, id)); }}
+        onFix={(contributionId) => {
+          interact();
+          setView({ name: "correct", key: Crypto.randomUUID(), plan: shown, contributionId });
+        }}
       />
     );
   }
@@ -155,7 +248,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
       setView({ name: "plan", id });
     }} />;
   }
-  const parentPlanId = view.name === "candidates" ? view.parentPlanId : null;
+  const parent = view.name === "candidates" ? view.parent : null;
   return (
     <RecoveryCandidates
       currency={board.currency}
@@ -164,30 +257,36 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
       onBack={back}
       onStart={(candidate) => {
         interact();
-        setView({ name: "draft", key: Crypto.randomUUID(), candidate, parentPlanId });
+        setView({
+          name: "draft", key: Crypto.randomUUID(), candidate,
+          replacesPlanId: openCancelledPlan(board.plans, candidate.journalEntryId)?.id ?? null,
+          from: { name: "candidates", parent },
+        });
       }}
     />
   );
 }
 
 function Draft({
-  seed, onClose, onSaved,
+  seed, phone, onClose, onSaved,
 }: {
   seed: RecoveryEditorSeed;
+  phone: Pick<RecoveryEditorTransport, "keep" | "forget">;
   onClose: () => void;
-  onSaved: Parameters<typeof useRecoveryEditor>[1]["onSaved"];
+  onSaved: RecoveryEditorTransport["onSaved"];
 }) {
   const save = useAction(api.savingsRecovery.activatePlan);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
-  const editor = useRecoveryEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved });
-  const back = () => { if (editor.canDismiss) onClose(); };
+  const editor = useRecoveryEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved, ...phone });
+  const back = () => editor.dismiss(onClose);
   useRecoveryBack(back);
   return (
     <RecoveryDraft
       candidate={seed.candidate}
       currency={seed.currency}
       destinations={seed.destinations}
+      replacing={!!seed.replacesPlanId}
       {...editor}
       onMonths={(count) => { interact(); editor.onMonths(count); }}
       onAmount={(value) => { interact(); editor.onAmount(value); }}
@@ -199,22 +298,20 @@ function Draft({
 }
 
 function Move({
-  workspaceId, timeZone, plan, sources, onClose, onMoved,
-}: {
-  workspaceId: string;
-  timeZone: string;
-  plan: Parameters<typeof useRecoveryMove>[0]["plan"];
-  sources: Parameters<typeof useRecoveryMove>[0]["sources"];
+  workspaceId, timeZone, plan, sources, unresolved, phone, onClose, onMoved,
+}: Omit<Parameters<typeof useRecoveryMove>[0], "unresolved"> & {
+  unresolved: Parameters<typeof useRecoveryMove>[0]["unresolved"];
+  phone: Pick<RecoveryMoveTransport, "keep" | "forget">;
   onClose: () => void;
-  onMoved: Parameters<typeof useRecoveryMove>[1]["onMoved"];
+  onMoved: RecoveryMoveTransport["onMoved"];
 }) {
   const contribute = useAction(api.savingsRecovery.recordContribution);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
-  const move = useRecoveryMove({ workspaceId, timeZone, plan, sources }, {
-    move: contribute, reportFailure, newKey: Crypto.randomUUID, onMoved,
+  const move = useRecoveryMove({ workspaceId, timeZone, plan, sources, unresolved }, {
+    move: contribute, reportFailure, newKey: Crypto.randomUUID, onMoved, ...phone,
   });
-  const back = () => { if (move.canDismiss) onClose(); };
+  const back = () => move.dismiss(onClose);
   useRecoveryBack(back);
   return (
     <RecoveryMoveScreen
@@ -227,6 +324,67 @@ function Move({
       onBack={back}
     />
   );
+}
+
+function Cancel({
+  workspaceId, plan, onClose, onCancelled,
+}: {
+  workspaceId: string;
+  plan: RecoveryPlanView;
+  onClose: () => void;
+  onCancelled: () => void;
+}) {
+  const cancel = useAction(api.savingsRecovery.cancelPlan);
+  const reportFailure = useDeviceAccessFailure();
+  const interact = useLocalEntryInteraction();
+  const form = useRecoveryCancel({ workspaceId, plan }, { cancel, reportFailure, newKey: Crypto.randomUUID, onCancelled });
+  const back = () => form.dismiss(onClose);
+  useRecoveryBack(back);
+  return (
+    <RecoveryCancelScreen
+      plan={plan}
+      {...form}
+      onReason={(value) => { interact(); form.onReason(value); }}
+      onConfirm={() => { interact(); void form.submit(); }}
+      onBack={back}
+    />
+  );
+}
+
+function Correct({
+  workspaceId, plan, plans, contribution, onClose, onCorrected,
+}: {
+  workspaceId: string;
+  plan: RecoveryPlanView;
+  plans: RecoveryPlanView[];
+  contribution: RecoveryContribution;
+  onClose: () => void;
+  onCorrected: () => void;
+}) {
+  const correct = useAction(api.savingsRecovery.correctContribution);
+  const reportFailure = useDeviceAccessFailure();
+  const interact = useLocalEntryInteraction();
+  const form = useRecoveryCorrection({ workspaceId, plan, plans, contribution }, {
+    correct, reportFailure, newKey: Crypto.randomUUID, onCorrected,
+  });
+  const back = () => form.dismiss(onClose);
+  useRecoveryBack(back);
+  return (
+    <RecoveryCorrectScreen
+      plan={plan}
+      contribution={contribution}
+      {...form}
+      onTarget={(target) => { interact(); form.onTarget(target); }}
+      onReason={(value) => { interact(); form.onReason(value); }}
+      onSave={() => { interact(); void form.submit(); }}
+      onBack={back}
+    />
+  );
+}
+
+function Unreadable({ onRetry, onBack }: { onRetry: () => void; onBack: () => void }) {
+  useRecoveryBack(onBack);
+  return <RecoveryUnreadable onRetry={onRetry} onBack={onBack} />;
 }
 
 function useRecoveryBack(onBack: (() => void) | null) {

@@ -2,7 +2,9 @@ import * as React from "react";
 import { createElement, useEffect } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { ActionTile, Choice, Field, ListGroup, ListRow, useSetThemeMode } from "./core";
+import { ActionTile, Choice, ConfirmationScreen, Field, LanguageToggle, ListGroup, ListRow, useSetThemeMode } from "./core";
+import { LanguageProvider } from "../i18n";
+import { ThemeProvider } from "./themeContext";
 import { themes, type ThemeMode } from "./tokens";
 import { withThemeProvider } from "./testTheme";
 
@@ -15,6 +17,8 @@ vi.mock("react-native", () => ({
   ScrollView: "scroll",
   TextInput: "input",
   ActivityIndicator: "spinner",
+  KeyboardAvoidingView: "keyboard-viewport",
+  Platform: { OS: "ios" },
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
 }));
 
@@ -131,4 +135,21 @@ test.each(["light", "dark"] as const)("Choice preserves its selected and disable
   expect(button?.props.disabled).toBe(true);
   const style = Object.assign({}, ...button?.props.style.filter(Boolean));
   expect(style).toMatchObject({ backgroundColor: themes[mode].secondary, borderColor: themes[mode].primary, minHeight: 76, opacity: 0.45 });
+});
+
+test("built-in labels follow the chosen language and the language choice stacks at the largest text", async () => {
+  const spanish = (child: React.ReactElement, reflow = false) => createElement(LanguageProvider, { initialPreference: "es" },
+    createElement(ThemeProvider, { layout: { reflow, pagePadding: 16 } }, child));
+  await act(async () => {
+    root = create(spanish(createElement(ConfirmationScreen, { title: "Listo", detail: "Guardado", onContinue: vi.fn() })));
+  });
+  expect(root?.root.findAllByType("button").map((node) => node.props.accessibilityLabel)).toEqual(["Continuar"]);
+  await act(async () => root?.update(spanish(createElement(LanguageToggle))));
+  const segments = () => root?.root.findAllByType("button") ?? [];
+  expect(segments().map((node) => node.props.accessibilityLabel)).toEqual(["Usar el idioma del celular", "English", "Español"]);
+  expect(segments().map((node) => node.props.style[1])).toEqual([{ flexBasis: "30%" }, { flexBasis: "30%" }, { flexBasis: "30%" }]);
+  await act(async () => root?.update(spanish(createElement(LanguageToggle), true)));
+  expect(segments().map((node) => node.props.style[1])).toEqual([false, false, false]);
+  const group = root?.root.find((node) => node.props.accessibilityRole === "radiogroup" && typeof node.type === "string");
+  expect([group?.props.style].flat(3).filter(Boolean).reduce((all, part) => ({ ...all, ...part }), {}).flexDirection).toBe("column");
 });

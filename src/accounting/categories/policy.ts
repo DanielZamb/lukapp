@@ -24,6 +24,7 @@ const concepts = [
     "groceries",
     "mercado",
     "alimentos",
+    "comida",
   ]),
   concept("dining", "Dining", "Expense", "519560", "5320", [
     "dining",

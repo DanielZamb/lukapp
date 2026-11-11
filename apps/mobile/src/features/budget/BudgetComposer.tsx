@@ -1,14 +1,18 @@
 import { useMemo } from "react";
 import type { Theme } from "../../ui/tokens";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Header, PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Header, PrimaryButton, Screen, useTheme, useThemeMode, useUi } from "../../ui/core";
+import { categoryOutline, faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
-import { formatAmount, formatMoney, minorUnitFactor, parseMoney } from "../money";
+import { useT } from "../../i18n";
+import { formatMoney, minorUnitFactor } from "../money";
+import { AmountField } from "../amount/AmountField";
+import { amountOfMinorUnits, displayedMinorUnits } from "../amount/session";
 import { jarPresentation, type BudgetCategory } from "./model";
 import type { useBudgetEditor } from "./useBudgetEditor";
 
 type Props = Pick<ReturnType<typeof useBudgetEditor>,
-  "amount" | "editable" | "busy" | "pending" | "canSubmit" | "canDismiss" | "error" | "onAmount"> & {
+  "amount" | "amountIssue" | "editable" | "busy" | "pending" | "canSubmit" | "canDismiss" | "error" | "onAmount"> & {
   category: BudgetCategory;
   currency: string;
   spentMinorUnits: number;
@@ -25,43 +29,46 @@ export function limitSuggestions(spentMinorUnits: number, currency: string) {
 
 export function BudgetComposer(props: Props) {
   const theme = useTheme();
+  const mode = useThemeMode();
   const ui = useUi();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  let limit = 0;
-  try { limit = parseMoney(props.amount, "es-CO", props.currency); } catch { /* Incomplete input stays editable. */ }
-  const { over, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
+  const { t } = useT();
+  const limit = displayedMinorUnits(props.amount) ?? 0;
+  const { status, fill } = jarPresentation({ category: props.category, limitMinorUnits: limit, consumptionMinorUnits: props.spentMinorUnits });
+  const over = status === "over";
   const money = (minorUnits: number) => formatMoney({ currency: props.currency, minorUnits }, { hideZeroDecimals: true });
   return (
     <Screen contentStyle={styles.page}>
-      <Header eyebrow="BUDGET" title={`Limit for ${props.category.name}`} onBack={props.canDismiss ? props.onBack : undefined} />
-      <View style={[styles.spentChip, { backgroundColor: `${props.color}24`, borderColor: props.color }]}>
+      <Header eyebrow={t("budget.eyebrow")} title={t("budget.limitFor", { name: props.category.name })} onBack={props.canDismiss ? props.onBack : undefined} />
+      <View style={[styles.spentChip, { backgroundColor: `${props.color}24`, borderColor: categoryOutline(props.color, mode) }]}>
         <Text style={styles.emoji}>{props.category.emoji}</Text>
-        <Text style={styles.chipText}>{money(props.spentMinorUnits)} out this month</Text>
+        <Text style={styles.chipText}>{t("budget.composerSpent", { amount: money(props.spentMinorUnits) })}</Text>
       </View>
       <View style={styles.board}>
-        <Text style={styles.label}>Stay under</Text>
-        <TextInput accessibilityLabel="Monthly limit" keyboardType="decimal-pad" placeholder="0"
-          placeholderTextColor={theme.mutedForeground} value={props.amount} onChangeText={props.onAmount}
-          editable={props.editable} style={styles.amount} />
-        <View accessibilityRole="progressbar" accessibilityLabel="Remaining jar"
-          accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100), text: `${money(limit - props.spentMinorUnits)} remaining` }}
-          style={[styles.jar, { backgroundColor: over ? `${theme.danger}33` : `${props.color}22` }]}>
-          <View style={{ height: "100%", width: `${fill * 100}%`, backgroundColor: props.color, borderRadius: radius.full }} />
+        <Text style={styles.label}>{t("budget.stayUnder")}</Text>
+        <AmountField session={props.amount} onChange={props.onAmount} inputAccessibilityLabel={t("budget.monthlyLimitA11y")}
+          placeholder="0" editable={props.editable} inputStyle={styles.amount} />
+        <View accessibilityRole="progressbar" accessibilityLabel={t("budget.composerJarA11y")}
+          accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100), text: t("budget.composerJarValue", { amount: money(limit - props.spentMinorUnits) }) }}
+          style={[styles.jar, { backgroundColor: over ? `${theme.danger}33` : `${props.color}22` }, !over && faintEdge(props.color, mode)]}>
+          <View style={[{ height: "100%", width: `${fill * 100}%`, backgroundColor: props.color, borderRadius: radius.full }, faintEdge(props.color, mode)]} />
         </View>
-        <Text style={styles.hint}>{over ? "This jar is already empty." : "What is still in the jar. Spent eats it."}</Text>
+        <Text style={styles.hint}>{over ? t("budget.composerEmpty") : t("budget.composerHint")}</Text>
       </View>
       <View style={styles.suggestions}>
         {limitSuggestions(props.spentMinorUnits, props.currency).map((value) => (
           <Pressable key={value} accessibilityRole="button" accessibilityLabel={money(value)}
             accessibilityState={{ selected: limit === value, disabled: !props.editable }} disabled={!props.editable}
-            onPress={() => props.onAmount(formatAmount(value, props.currency, { hideZeroDecimals: true }))}
+            onPress={() => props.onAmount(amountOfMinorUnits(props.currency, value, { hideZeroDecimals: true }))}
             style={[styles.chip, limit === value && styles.selected]}>
             <Text style={styles.chipText}>{money(value)}</Text>
           </Pressable>
         ))}
       </View>
+      {props.editable && (props.amountIssue === "zero" || props.amountIssue === "notPositive")
+        && <Text accessibilityRole="alert" style={ui.error}>{t("lifecycle.limitNotPositive")}</Text>}
       {!!props.error && <Text accessibilityRole="alert" style={ui.error}>{props.error}</Text>}
-      <PrimaryButton label={props.busy ? "Saving…" : props.pending ? "Retry save" : "Save this limit"}
+      <PrimaryButton label={props.busy ? t("budget.saving") : props.pending ? t("budget.retrySave") : t("budget.saveLimit")}
         trailingIcon="checkmark" disabled={!props.canSubmit} pending={props.busy} onPress={props.onSave} />
     </Screen>
   );

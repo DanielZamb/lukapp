@@ -7,15 +7,17 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import type { Theme } from "../src/ui/tokens";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
-import { monthLabel, recoveryPlansRowDetail } from "../src/features/budget/model";
+import { plansDoorDetail, recoveryMonthName } from "../src/features/recovery/model";
 import { useWorkspaceCalendar } from "../src/features/useWorkspaceCalendar";
+import { useT } from "../src/i18n";
 import { Header, ListGroup, Screen, useUi, useTheme } from "../src/ui/core";
 import { font, fontSize, radius, spacing } from "../src/ui/tokens";
 
 export default function PlansRoute() {
   const defaults = usePersonalDefaults();
+  const { t } = useT();
   return defaults ? <Plans workspaceId={defaults.workspace.id} timeZone={defaults.workspace.timeZone} />
-    : defaults === null ? <Redirect href="/" /> : <Screen><ActivityIndicator accessibilityLabel="Loading Plans" /></Screen>;
+    : defaults === null ? <Redirect href="/" /> : <Screen><ActivityIndicator accessibilityLabel={t("recovery.doorLoading")} /></Screen>;
 }
 
 function planStyles(theme: Theme) {
@@ -38,17 +40,19 @@ function Plans({ workspaceId, timeZone }: { workspaceId: string; timeZone: strin
   const calendar = useWorkspaceCalendar(timeZone);
   const theme = useTheme();
   const styles = useMemo(() => planStyles(theme), [theme]);
-  const month = monthLabel(calendar.month, "month");
+  const translator = useT();
+  const { t } = translator;
+  const month = recoveryMonthName(calendar.month, translator);
   const recovery = useQuery(api.savingsRecovery.evaluate, { workspaceId, month: calendar.month });
-  const recoveryDetail = recovery === undefined ? "" : recoveryPlansRowDetail(recovery.plans);
+  const recoveryDetail = recovery === undefined ? "" : plansDoorDetail(recovery.plans, translator);
   return (
     <Screen contentStyle={styles.page}>
-      <Header title="Plans" eyebrow="LOOKING AHEAD" onBack={() => router.back()} />
+      <Header title={t("recovery.doorTitle")} eyebrow={t("recovery.doorEyebrow")} onBack={() => router.back()} />
       <ListGroup>
-        <PlanRow title={`${month} budget`} detail="This month's limits" icon="flag-outline" onPress={() => router.push("/budget")} />
-        <PlanRow title="Savings recovery" detail={recoveryDetail} icon="trending-up-outline" onPress={() => router.push("/recovery")} />
+        <PlanRow title={t("recovery.doorBudget", { month })} detail={t("recovery.doorBudgetDetail")} icon="flag-outline" onPress={() => router.push("/budget")} />
+        <PlanRow title={t("recovery.title")} detail={recoveryDetail} icon="trending-up-outline" onPress={() => router.push("/recovery")} />
       </ListGroup>
-      <Text style={styles.note}>Budget is the {month} plan. Recovery is a sibling destination. It is not a budget row.</Text>
+      <Text style={styles.note}>{t("recovery.doorNote", { month })}</Text>
     </Screen>
   );
 }
@@ -59,8 +63,9 @@ function PlanRow({ title, detail, icon, onPress, isLast }: {
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => planStyles(theme), [theme]);
+  const { t } = useT();
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${detail}`} onPress={onPress}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("recovery.doorRowA11y", { title, detail })} onPress={onPress}
       style={[styles.row, isLast && styles.lastRow]}>
       <View style={styles.icon}><Ionicons name={icon} size={20} color={theme.foreground} /></View>
       <View style={styles.copy}>

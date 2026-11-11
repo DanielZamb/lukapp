@@ -1,20 +1,7 @@
-import { toMajorUnits } from "../money";
+import type { Language, MessageKey, Translator } from "../../../../../src/i18n";
+import { formatDayMonth, formatLongDate, formatMonthName } from "../../../../../src/i18n/format";
+import { formatAmount, toMajorUnits } from "../money";
 import type { HistoryRow } from "./types";
-
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-] as const;
 
 export type DateRangeId = "all" | "7d" | `${number}-${string}`;
 
@@ -36,17 +23,18 @@ export type HistoryQuery = {
 
 export type HistoryFilterContext = {
   today: string;
+  language: Language;
   profileNames: Readonly<Record<string, string>>;
 };
 
 export type SortKey = "date" | "amount" | "place" | "category";
 export type SortDir = "asc" | "desc";
 
-export const sortLabels: Record<SortKey, Record<SortDir, string>> = {
-  date: { desc: "Newest first", asc: "Oldest first" },
-  amount: { desc: "Biggest first", asc: "Smallest first" },
-  place: { asc: "Place A to Z", desc: "Place Z to A" },
-  category: { asc: "Category A to Z", desc: "Category Z to A" },
+export const sortLabels: Record<SortKey, Record<SortDir, MessageKey>> = {
+  date: { desc: "review.sortNewest", asc: "review.sortOldest" },
+  amount: { desc: "review.sortBiggest", asc: "review.sortSmallest" },
+  place: { asc: "review.sortPlaceAsc", desc: "review.sortPlaceDesc" },
+  category: { asc: "review.sortCategoryAsc", desc: "review.sortCategoryDesc" },
 };
 
 export const sortDefaults: Record<SortKey, SortDir> = {
@@ -69,16 +57,11 @@ function monthBounds(year: number, month: number) {
   return { from, to };
 }
 
-export function dateRanges(today: string): DateRangeEntry[] {
+function rangeBounds(today: string): Omit<DateRangeEntry, "label">[] {
   const [year, month] = today.split("-").map(Number);
-  const ranges: DateRangeEntry[] = [
-    { id: "all", label: "All time", from: null, to: null },
-    {
-      id: "7d",
-      label: "Last 7 days",
-      from: calendarAddDays(today, -6),
-      to: today,
-    },
+  const ranges: Omit<DateRangeEntry, "label">[] = [
+    { id: "all", from: null, to: null },
+    { id: "7d", from: calendarAddDays(today, -6), to: today },
   ];
   for (let offset = 0; offset < 3; offset++) {
     const cursor = new Date(Date.UTC(year, month - 1 - offset, 1));
@@ -86,20 +69,27 @@ export function dateRanges(today: string): DateRangeEntry[] {
     const monthIndex = cursor.getUTCMonth() + 1;
     const id = `${monthYear}-${String(monthIndex).padStart(2, "0")}` as DateRangeId;
     const { from, to: monthEnd } = monthBounds(monthYear, monthIndex);
-    ranges.push({
-      id,
-      label: MONTH_NAMES[monthIndex - 1] ?? String(monthIndex),
-      from,
-      to: offset === 0 ? today : monthEnd,
-    });
+    ranges.push({ id, from, to: offset === 0 ? today : monthEnd });
   }
   return ranges;
 }
 
-export function historyDateLabel(dateKey: string, workspaceYear: number): string {
+function rangeLabel(id: DateRangeId, { t, language }: Translator) {
+  if (id === "all") return t("review.allTime");
+  if (id === "7d") return t("review.last7Days");
+  const [year, month] = id.split("-").map(Number);
+  return formatMonthName(language, Date.UTC(year, month - 1, 1), { timeZone: "UTC" });
+}
+
+export function dateRanges(today: string, translator: Translator): DateRangeEntry[] {
+  return rangeBounds(today).map(({ id, from, to }) => ({ id, label: rangeLabel(id, translator), from, to }));
+}
+
+/** Date keys are workspace calendar days already, so they are read in UTC. */
+export function historyDateLabel(dateKey: string, workspaceYear: number, language: Language): string {
   const [year, month, day] = dateKey.split("-").map(Number);
-  const label = `${MONTH_NAMES[month - 1] ?? month} ${day}`;
-  return year === workspaceYear ? label : `${label}, ${year}`;
+  const date = Date.UTC(year, month - 1, day);
+  return year === workspaceYear ? formatDayMonth(language, date, "UTC") : formatLongDate(language, date, "UTC");
 }
 
 function profileName(row: HistoryRow, profileNames: Readonly<Record<string, string>>) {
@@ -117,8 +107,11 @@ function primaryCategoryName(row: HistoryRow) {
   return row.userCategories[0]?.name ?? "";
 }
 
-function majorUnitDigits(amount: HistoryRow["amount"]) {
-  return String(toMajorUnits(Math.abs(amount.minorUnits), amount.currency));
+/** The amount as plain digits and as it is shown, so a search typed either way finds the row. It is never parsed. */
+function amountSearchText(amount: HistoryRow["amount"]) {
+  const minorUnits = Math.abs(amount.minorUnits);
+  return [String(toMajorUnits(minorUnits, amount.currency)), formatAmount(minorUnits, amount.currency),
+    formatAmount(minorUnits, amount.currency, { hideZeroDecimals: true })].join(" ");
 }
 
 function searchHaystack(
@@ -131,8 +124,8 @@ function searchHaystack(
     row.detail,
     ...row.userCategories.map((category) => category.name),
     profileName(row, context.profileNames),
-    majorUnitDigits(row.amount),
-    historyDateLabel(row.date, workspaceYear),
+    amountSearchText(row.amount),
+    historyDateLabel(row.date, workspaceYear, context.language),
   ]
     .join(" ")
     .toLowerCase();
@@ -148,7 +141,7 @@ export function filterHistory(
   const custom = query.customFrom !== null || query.customTo !== null;
   const range = custom
     ? { from: query.customFrom, to: query.customTo }
-    : dateRanges(context.today).find((entry) => entry.id === query.range);
+    : rangeBounds(context.today).find((entry) => entry.id === query.range);
   const needle = query.search.trim().toLowerCase();
 
   return rows.filter((row) => {

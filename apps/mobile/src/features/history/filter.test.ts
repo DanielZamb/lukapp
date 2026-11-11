@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { createTranslator } from "../../../../../src/i18n";
 import {
   dateRanges,
   filterHistory,
@@ -12,6 +13,7 @@ import type { HistoryRow } from "./types";
 const today = "2026-08-23";
 const context: HistoryFilterContext = {
   today,
+  language: "en",
   profileNames: { daily: "Daily", savings: "Savings" },
 };
 
@@ -74,7 +76,7 @@ const baseQuery = (): HistoryQuery => ({
 });
 
 test("dateRanges follows the workspace today with all, seven days, and three months", () => {
-  expect(dateRanges(today)).toEqual([
+  expect(dateRanges(today, createTranslator("en"))).toEqual([
     { id: "all", label: "All time", from: null, to: null },
     { id: "7d", label: "Last 7 days", from: "2026-08-17", to: "2026-08-23" },
     { id: "2026-08", label: "August", from: "2026-08-01", to: "2026-08-23" },
@@ -84,8 +86,8 @@ test("dateRanges follows the workspace today with all, seven days, and three mon
 });
 
 test("historyDateLabel adds the year outside the workspace year", () => {
-  expect(historyDateLabel("2026-08-22", 2026)).toBe("August 22");
-  expect(historyDateLabel("2025-12-31", 2026)).toBe("December 31, 2025");
+  expect(historyDateLabel("2026-08-22", 2026, "en")).toBe("August 22");
+  expect(historyDateLabel("2025-12-31", 2026, "en")).toBe("December 31, 2025");
 });
 
 test("filterHistory keeps every row when place and category filters are empty", () => {

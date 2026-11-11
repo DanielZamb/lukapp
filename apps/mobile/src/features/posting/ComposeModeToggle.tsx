@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Theme } from "../../ui/tokens";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../ui/core";
+import { useT } from "../../i18n";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export function ComposeModeToggle({
@@ -15,6 +16,7 @@ export function ComposeModeToggle({
   disabled?: boolean;
   onMode: (mode: "one" | "batch") => void;
 }) {
+  const { t } = useT();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
@@ -25,17 +27,17 @@ export function ComposeModeToggle({
           accessibilityRole="tab"
           accessibilityLabel={
             value === "one"
-              ? "One"
+              ? t("posting.modeOne")
               : count > 0
-                ? `Batch, ${count} waiting`
-                : "Batch"
+                ? t("posting.modeBatchWaitingA11y", { count })
+                : t("posting.modeBatch")
           }
           accessibilityState={{ selected: value === mode, disabled }}
           disabled={disabled}
           onPress={() => onMode(value)}
           style={[styles.segment, value === mode && styles.active]}
         >
-          <Text style={[styles.label, value === mode && styles.activeLabel]}>{value === "one" ? "One" : "Batch"}</Text>
+          <Text style={[styles.label, value === mode && styles.activeLabel]}>{value === "one" ? t("posting.modeOne") : t("posting.modeBatch")}</Text>
           {value === "batch" && count > 0 && (
             <View style={styles.badge}>
               <Text style={styles.count}>{count}</Text>

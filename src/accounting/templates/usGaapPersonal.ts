@@ -28,6 +28,8 @@ export const usGaapPersonalTemplate = {
     loan: "2110",
   },
   accounts: [
+    { code: "6170", name: "Loss of money on Place closure", use: "expense" },
+    { code: "4970", name: "Debt forgiveness income", use: "income" },
     // 1 Assets
     { code: "1110", name: "Certificates of deposit", use: "general", reportingConcept: "us-gaap:CertificatesOfDepositAtCarryingValue" },
     { code: "1120", name: "Investment fund units", use: "general", reportingConcept: "us-gaap:EquitySecuritiesFvNi" },

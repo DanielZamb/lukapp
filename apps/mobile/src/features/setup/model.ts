@@ -4,12 +4,18 @@ import type {
   CategorySelection,
   CategoryStyle,
 } from "../categories/model";
-import { parseMoney } from "../money";
+import type { Translator } from "../../../../../src/i18n";
+import { sendableMinorUnits, type AmountAtPress } from "../amount/session";
+import { amountRefusal } from "../amount/hints";
 
 export type SetupCategory = {
   name: string;
   style: CategoryStyle;
-} & ({ source: "starter" } | { source: "custom"; answer: FlowAnswer });
+} & (
+  /** `starterName` is the built-in English name the server's presets are matched by; `name` is what the person saw. */
+  | { source: "starter"; starterName?: string }
+  | { source: "custom"; answer: FlowAnswer }
+);
 export type SetupSummary = {
   categories: SetupCategory[];
   currency: string;
@@ -25,10 +31,13 @@ export function setupSelections(
   return categories.map((category) => {
     const preset =
       category.source === "starter"
-        ? presets.find((preset) => preset.name === category.name)
+        ? presets.find((preset) => preset.name === (category.starterName ?? category.name))
         : undefined;
     return preset
-      ? { kind: "preset", presetId: preset.id, style: category.style }
+      ? {
+          kind: "preset", presetId: preset.id, style: category.style,
+          ...(category.name === preset.name ? {} : { name: category.name }),
+        }
       : {
           kind: "custom",
           name: category.name,
@@ -37,8 +46,12 @@ export function setupSelections(
         };
   });
 }
-export function startingAmount(text: string, currency: string) {
-  const minorUnits = text.trim() ? parseMoney(text, "es-CO", currency) : 0;
-  if (minorUnits < 0) throw new Error("Enter zero or the amount you hold.");
+/** The starting amount to send. Blank means zero; text that is not a complete amount is refused, never guessed. */
+export function startingAmount(amount: AmountAtPress, currency: string, { t }: Translator) {
+  if (amount.currency !== currency) throw new Error(t("amount.currencyChanged"));
+  if (!amount.editor.text.trim()) return 0;
+  const minorUnits = sendableMinorUnits(amount, currency);
+  if (minorUnits === null) throw new Error(amountRefusal(amount, t));
+  if (minorUnits < 0) throw new Error(t("setup.startingNegative"));
   return minorUnits;
 }

@@ -9,7 +9,9 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useMemo, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme, useUi } from "../../ui/core";
+import { formatShortDate, useT, type Language, type MessageKey } from "../../i18n";
+import { useTheme, useThemeMode, useUi } from "../../ui/core";
+import { categoryColor, categoryOutline } from "../categories/appearance";
 import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 import { dateRanges, sortDefaults, sortLabels, type HistoryQuery, type SortDir, type SortKey } from "./filter";
 import type { HistoryCategory, HistoryPlace } from "./listModel";
@@ -25,9 +27,8 @@ type Props = {
   today: string;
 };
 
-function shortDate(key: string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
-    .format(new Date(`${key}T12:00:00Z`));
+function shortDate(key: string, language: Language) {
+  return formatShortDate(language, new Date(`${key}T12:00:00Z`), "UTC");
 }
 
 function toggle(ids: string[], id: string) {
@@ -38,21 +39,26 @@ export function HistoryFilters(props: Props) {
   const theme = useTheme();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
+  const translator = useT();
+  const { t, tn, language } = translator;
   const { query, sort, places, categories, today } = props;
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const place = places.find((place) => place.id === query.profileIds[0]);
   const category = categories.find((category) => category.id === query.categoryIds[0]);
-  const placesLabel = query.profileIds.length === 0 ? "All places" : query.profileIds.length === 1 ?
-    place?.name ?? "1 place" : `${query.profileIds.length} places`;
-  const categoriesLabel = query.categoryIds.length === 0 ? "All categories" : query.categoryIds.length === 1 && category ?
-    `${category.style.emoji} ${category.name}` : `${query.categoryIds.length} categories`;
+  const placesLabel = query.profileIds.length === 0 ? t("review.allPlaces") : query.profileIds.length === 1 ?
+    place?.name ?? tn("review.placeCount", 1) : tn("review.placeCount", query.profileIds.length);
+  const categoriesLabel = query.categoryIds.length === 0 ? t("review.allCategories") : query.categoryIds.length === 1 && category ?
+    `${category.style.emoji} ${category.name}` : tn("review.categoryCount", query.categoryIds.length);
   const custom = query.customFrom !== null || query.customTo !== null;
-  const datesLabel = custom ? `${query.customFrom ? shortDate(query.customFrom) : "Start"} – ${query.customTo ? shortDate(query.customTo) : "today"}` :
-    query.range === "all" ? "Dates" : dateRanges(today).find((range) => range.id === query.range)?.label ?? "Dates";
+  const datesLabel = custom ? t("review.dateSpan", {
+    from: query.customFrom ? shortDate(query.customFrom, language) : t("review.dateStart"),
+    to: query.customTo ? shortDate(query.customTo, language) : t("review.dateToday"),
+  }) : query.range === "all" ? t("review.dates")
+    : dateRanges(today, translator).find((range) => range.id === query.range)?.label ?? t("review.dates");
 
   return <>
     <View style={styles.chips}>
-      <FilterChip label={sortLabels[sort.key][sort.dir]} icon="swap-vertical"
+      <FilterChip label={t(sortLabels[sort.key][sort.dir])} icon="swap-vertical"
         active={sort.key !== "date" || sort.dir !== "desc"} onPress={() => setSheet("sort")} />
       <FilterChip label={placesLabel} active={query.profileIds.length > 0} onPress={() => setSheet("places")} />
       <FilterChip label={categoriesLabel} active={query.categoryIds.length > 0} onPress={() => setSheet("categories")} />
@@ -76,17 +82,24 @@ function FilterChip({ label, active, icon, onPress }: {
   </Pressable>;
 }
 
-const sortOptions: { key: SortKey; label: string }[] = [
-  { key: "date", label: "Date" }, { key: "amount", label: "Amount" },
-  { key: "place", label: "Place" }, { key: "category", label: "Category" },
+const sortOptions: { key: SortKey; label: MessageKey }[] = [
+  { key: "date", label: "review.sortDate" }, { key: "amount", label: "review.sortAmount" },
+  { key: "place", label: "review.sortPlace" }, { key: "category", label: "review.sortCategory" },
 ];
+
+const sheetTitles: Record<Sheet, MessageKey> = {
+  sort: "review.sheetSort", places: "review.sheetPlaces", categories: "review.sheetCategories", dates: "review.sheetDates",
+};
 
 function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, categories, today }: Props & {
   sheet: Sheet; onClose: () => void;
 }) {
   const ui = useUi();
   const theme = useTheme();
+  const mode = useThemeMode();
   const layout = useReadableLayout();
+  const translator = useT();
+  const { t, language } = translator;
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
   const modal = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
@@ -105,43 +118,43 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
     <BottomSheetScrollView keyboardShouldPersistTaps="handled" stickyHeaderIndices={sheet === "categories" ? [0] : undefined}
       contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xl }]}>
       <View style={sheet === "categories" ? styles.searchHeader : undefined}>
-        <Text style={ui.label}>{sheet === "sort" ? "SORT BY" : sheet === "places" ? "PLACES" : sheet === "categories" ? "CATEGORIES" : "DATES"}</Text>
-        {sheet === "categories" && <BottomSheetTextInput accessibilityLabel="Search categories" placeholder="Search categories" value={search}
+        <Text style={ui.label}>{t(sheetTitles[sheet])}</Text>
+        {sheet === "categories" && <BottomSheetTextInput accessibilityLabel={t("review.searchCategories")} placeholder={t("review.searchCategories")} value={search}
           onChangeText={setSearch} placeholderTextColor={theme.mutedForeground} style={styles.input} />}
       </View>
       {sheet === "categories" ? <View style={styles.chips}>
-          <Pressable accessibilityRole="checkbox" accessibilityLabel="All categories"
+          <Pressable accessibilityRole="checkbox" accessibilityLabel={t("review.allCategories")}
             accessibilityState={{ checked: query.categoryIds.length === 0 }} onPress={() => onQuery({ ...query, categoryIds: [] })}
             style={[styles.chip, query.categoryIds.length === 0 && styles.selected]}>
-            <Text style={styles.chipText}>All categories</Text>
+            <Text style={styles.chipText}>{t("review.allCategories")}</Text>
           </Pressable>
           {matchedCategories.map((category) => {
             const selected = query.categoryIds.includes(category.id);
-            const color = theme[category.style.tone];
+            const color = categoryColor(category.style, mode);
             return <Pressable key={category.id} accessibilityRole="checkbox" accessibilityLabel={category.name}
               accessibilityState={{ checked: selected }} onPress={() => onQuery({ ...query, categoryIds: toggle(query.categoryIds, category.id) })}
-              style={[styles.chip, selected && { borderColor: color, borderWidth: 2, backgroundColor: `${color}3D` }]}>
+              style={[styles.chip, selected && { borderColor: categoryOutline(color, mode), borderWidth: 2, backgroundColor: `${color}3D` }]}>
               <Text style={styles.emoji}>{category.style.emoji}</Text><Text style={styles.chipText}>{category.name}</Text>
             </Pressable>;
           })}
-          {matchedCategories.length === 0 && <Text style={ui.muted}>{`No category matches "${search.trim()}".`}</Text>}
+          {matchedCategories.length === 0 && <Text style={ui.muted}>{t("review.noCategoryMatch", { query: search.trim() })}</Text>}
       </View> : <>
         {sheet === "sort" && <>
           {sortOptions.map(({ key, label }) => {
             const selected = key === sort.key;
-            return <Pressable key={key} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ selected }}
+            return <Pressable key={key} accessibilityRole="radio" accessibilityLabel={t(label)} accessibilityState={{ selected }}
               onPress={() => onSort({ key, dir: selected ? sort.dir === "asc" ? "desc" : "asc" : sortDefaults[key] })}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-              <Text style={styles.rowTitle}>{label}</Text>
+              <Text style={styles.rowTitle}>{t(label)}</Text>
               <View style={styles.sortState}>
-                <Text style={selected ? styles.sortText : ui.muted}>{sortLabels[key][selected ? sort.dir : sortDefaults[key]]}</Text>
+                <Text style={[selected ? styles.sortText : ui.muted, styles.shrink]}>{t(sortLabels[key][selected ? sort.dir : sortDefaults[key]])}</Text>
                 {selected && <Ionicons name={sort.dir === "desc" ? "arrow-down" : "arrow-up"} size={18} color={theme.primary} />}
               </View>
             </Pressable>;
           })}
-          <Text style={ui.muted}>Tap the active one to flip the order.</Text>
+          <Text style={ui.muted}>{t("review.sortFlipHint")}</Text>
         </>}
-        {sheet === "places" && [{ id: null, name: "All places" }, ...places].map((place) => {
+        {sheet === "places" && [{ id: null, name: t("review.allPlaces") }, ...places].map((place) => {
           const checked = place.id === null ? query.profileIds.length === 0 : query.profileIds.includes(place.id);
           return <Pressable key={place.id ?? "all"} accessibilityRole="checkbox" accessibilityLabel={place.name}
             accessibilityState={{ checked }} onPress={() => onQuery({ ...query,
@@ -153,19 +166,19 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
         })}
         {sheet === "dates" && <>
           <View style={styles.chips}>
-            {dateRanges(today).map((range) => {
+            {dateRanges(today, translator).map((range) => {
               const selected = !custom && range.id === query.range;
               return <Pressable key={range.id} accessibilityRole="radio" accessibilityLabel={range.label} accessibilityState={{ selected }}
                 onPress={() => { setPickerFor(null); onQuery({ ...query, range: range.id, customFrom: null, customTo: null }); }}
                 style={[styles.chip, selected && styles.selected]}><Text style={styles.chipText}>{range.label}</Text></Pressable>;
             })}
           </View>
-          <Text style={styles.fieldLabel}>Or choose your own</Text>
+          <Text style={styles.fieldLabel}>{t("review.customDates")}</Text>
           <View style={styles.dateFields}>
             {(["customFrom", "customTo"] as const).map((field) => <Pressable key={field} accessibilityRole="button"
-              accessibilityLabel={field === "customFrom" ? "Pick the from date" : "Pick the to date"}
+              accessibilityLabel={field === "customFrom" ? t("review.pickFrom") : t("review.pickTo")}
               onPress={() => setPickerFor(field)} style={[styles.input, styles.dateButton]}>
-              <Text style={styles.chipText}>{query[field] ? shortDate(query[field]) : field === "customFrom" ? "From" : "To"}</Text>
+              <Text style={styles.chipText}>{query[field] ? shortDate(query[field], language) : field === "customFrom" ? t("review.from") : t("review.to")}</Text>
               <Ionicons name="calendar-outline" size={18} color={theme.mutedForeground} />
             </Pressable>)}
           </View>
@@ -177,8 +190,8 @@ function FilterSheet({ sheet, onClose, query, onQuery, sort, onSort, places, cat
                 const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
                 onQuery({ ...query, [pickerFor]: key });
               }} />
-            {Platform.OS === "ios" && <Pressable accessibilityRole="button" accessibilityLabel="Done choosing date"
-              onPress={() => setPickerFor(null)} style={styles.row}><Text style={styles.sortText}>Done</Text></Pressable>}
+            {Platform.OS === "ios" && <Pressable accessibilityRole="button" accessibilityLabel={t("review.doneChoosingDate")}
+              onPress={() => setPickerFor(null)} style={styles.row}><Text style={styles.sortText}>{t("common.done")}</Text></Pressable>}
           </>}
         </>}
       </>}
@@ -210,7 +223,8 @@ function createStyles(theme: Theme, layout: ReadableLayout) {
     },
     row: { minHeight: touchTarget, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
     rowTitle: { color: theme.foreground, fontFamily: font.semibold, fontSize: 16, flexShrink: 1 },
-    sortState: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+    sortState: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: spacing.xs },
+    shrink: { flexShrink: 1, textAlign: "right" },
     sortText: { color: theme.primary, fontFamily: font.bold, fontSize: 14 },
     fieldLabel: { color: theme.foreground, fontFamily: font.semibold, fontSize: 14 },
     dateFields: { flexDirection: layout.reflow ? "column" : "row", gap: spacing.sm },

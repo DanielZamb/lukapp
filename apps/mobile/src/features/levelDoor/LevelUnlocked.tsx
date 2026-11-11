@@ -2,28 +2,33 @@ import type { Theme } from "../../ui/tokens";
 import { useMemo } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { StyleSheet, Text, View } from "react-native";
-import { PrimaryButton, Screen, useTheme } from "../../ui/core";
+import { PrimaryButton, Screen, useTheme, useThemeMode } from "../../ui/core";
+import { categoryOutline } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { formatMoney } from "../money";
+import { useT } from "../../i18n";
 import type { LevelUnlock } from "./model";
 
 export function LevelUnlocked({ unlock, onHome }: { unlock: LevelUnlock; onHome: () => void }) {
   const theme = useTheme();
+  const mode = useThemeMode();
+  const { t } = useT();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return <Screen contentStyle={styles.page}>
     <View style={styles.completion}>
       <View style={styles.checkmark}>
         <Ionicons name="checkmark" size={32} color={theme.primaryForeground} />
       </View>
-      <Text accessibilityRole="header" style={styles.title}>{unlock.door === "budget" ? "Limit is on" : "A second place"}</Text>
-      {unlock.door === "budget" && <View style={[styles.chip, { backgroundColor: `${unlock.color}24`, borderColor: unlock.color }]}>
+      <Text accessibilityRole="header" style={styles.title}>{unlock.door === "budget" ? t("home.levelLimitTitle") : t("home.levelPlaceTitle")}</Text>
+      {unlock.door === "budget" && <View style={[styles.chip, { backgroundColor: `${unlock.color}24`, borderColor: categoryOutline(unlock.color, mode) }]}>
         <Text style={styles.emoji}>{unlock.emoji}</Text>
-        <Text style={styles.chipText}>{unlock.category} · {formatMoney({ currency: unlock.currency, minorUnits: unlock.limitMinorUnits }, { hideZeroDecimals: true })}</Text>
+        <Text style={styles.chipText}>{unlock.category} · {unlock.limitMinorUnits === 0 ? t("budget.spendNothing")
+          : formatMoney({ currency: unlock.currency, minorUnits: unlock.limitMinorUnits }, { hideZeroDecimals: true })}</Text>
       </View>}
       <Text style={styles.copy}>{unlock.door === "budget"
-        ? "Alerts will watch this line. You can add another place whenever money lives in more than one."
-        : `${unlock.accountName.trim() || "The new place"} is live. Moving money between places is now a thing, and any category can take a limit.`}</Text>
-      <View style={styles.action}><PrimaryButton label="Back to the month" trailingIcon="home-outline" onPress={onHome} /></View>
+        ? t("home.levelLimitBody")
+        : t("home.levelPlaceBody", { name: unlock.accountName?.trim() || t("home.levelNewPlace") })}</Text>
+      <View style={styles.action}><PrimaryButton label={t("home.levelHome")} trailingIcon="home-outline" onPress={onHome} /></View>
     </View>
   </Screen>;
 }

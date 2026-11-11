@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { budgetAttention } from "../apps/mobile/src/features/attention/model";
+import { createTranslator } from "../src/i18n";
 import { accountingFixture, groceries } from "../src/accounting/convexHarness";
 import { api } from "./_generated/api";
 
@@ -21,7 +22,7 @@ test("Alerts and Home follow posted Convex spending, category limits, reversals,
   const food = await category("Food", "🍋");
   const travel = await category("Travel", "🚕");
   const unlimited = await category("Unlimited", "🏷️");
-  const read = async (month = "2026-09") => budgetAttention(await t.query(api.budget.evaluate, { workspaceId, month }));
+  const read = async (month = "2026-09") => budgetAttention(await t.query(api.budget.evaluate, { workspaceId, month }), createTranslator("en"));
   expect(await read()).toEqual({ rows: [], home: null, bellLabel: "Alerts, nothing needs attention" });
   for (const categoryId of [food, travel]) {
     await t.action(api.budget.setCategoryLimit, {

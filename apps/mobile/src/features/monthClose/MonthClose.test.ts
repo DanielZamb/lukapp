@@ -107,11 +107,11 @@ test("the route displays Convex query results and sends each review row to its d
     workspaceId: "workspace", month: "2026-10",
   });
   expect(text()).toContain("October spending\nCOP 6.543,21");
-  expect(text()).toContain("2 Financial Accounts checked");
-  expect(text()).toContain("2 still local. Intake is not a statement.");
+  expect(text()).toContain("2 places checked");
+  expect(text()).toContain("2 are still only on this phone. Notifications don't replace your statement.");
   expect(text()).toContain("COP 350,50 due this month");
   await act(async () => row("Notification Candidates").props.onPress());
-  await act(async () => row("Account balances").props.onPress());
+  await act(async () => row("Place balances").props.onPress());
   await act(async () => row("Savings recovery").props.onPress());
   expect(source.replace.mock.calls).toEqual([["/drafts"]]);
   expect(source.push.mock.calls).toEqual([["/overview"], ["/recovery"]]);
@@ -165,6 +165,6 @@ test("Month Close counts only Candidates in the requested month across both inbo
   source.intake.now = [{ suggestion: { accountingDate: "2026-10-01" } }];
   source.intake.wait = [{ suggestion: { accountingDate: "2026-09-30" } }, { suggestion: { accountingDate: "2026-11-01" } }];
   await act(async () => { root = create(createElement(MonthCloseRoute)); });
-  expect(text()).toContain("1 still local. Intake is not a statement.");
-  expect(text()).not.toContain("3 still local");
+  expect(text()).toContain("1 is still only on this phone. Notifications don't replace your statement.");
+  expect(text()).not.toContain("3 are still only on this phone");
 });

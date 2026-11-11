@@ -26,6 +26,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { font, fontSize, radius, spacing, themes, touchTarget } from "./tokens";
 import { useThemeContext } from "./themeContext";
+import { languageNames, languages, useLanguage, useT } from "../i18n";
 
 export {
   ThemeProvider,
@@ -81,12 +82,13 @@ export function Header({
   titleStyle?: StyleProp<TextStyle>;
 }) {
   const { theme, ui, styles } = useCore();
+  const { t } = useT();
   return (
     <View style={styles.header}>
       {onBack && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t("common.back")}
           onPress={onBack}
           style={styles.icon}
         >
@@ -104,7 +106,7 @@ export function Header({
       {onUser && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Your profile"
+          accessibilityLabel={t("common.yourProfile")}
           onPress={onUser}
           style={styles.icon}
         >
@@ -340,6 +342,7 @@ export function Choice({
 
 export function AppearanceToggle() {
   const { theme, styles, mode, setMode } = useCore();
+  const { t } = useT();
   return (
     <View style={styles.segmented}>
       <Pressable
@@ -349,7 +352,7 @@ export function AppearanceToggle() {
         style={[styles.segment, mode === "light" && styles.segmentSelected]}
       >
         <Ionicons name="sunny-outline" size={20} color={theme.foreground} />
-        <Text style={styles.segmentText}>Light</Text>
+        <Text style={styles.segmentText}>{t("settings.light")}</Text>
       </Pressable>
       <Pressable
         accessibilityRole="radio"
@@ -358,8 +361,34 @@ export function AppearanceToggle() {
         style={[styles.segment, mode === "dark" && styles.segmentSelected]}
       >
         <Ionicons name="moon-outline" size={20} color={theme.foreground} />
-        <Text style={styles.segmentText}>Dark</Text>
+        <Text style={styles.segmentText}>{t("settings.dark")}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+/** Device language, or an explicit English or Spanish choice that persists on this phone. */
+export function LanguageToggle() {
+  const { styles, layout } = useCore();
+  const { t, preference, setPreference } = useLanguage();
+  const options = [
+    { value: "system" as const, label: t("settings.languageSystem"), a11y: t("settings.languageSystemA11y") },
+    ...languages.map((value) => ({ value, label: languageNames[value], a11y: languageNames[value] })),
+  ];
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={t("settings.language")} style={[styles.segmented, { flexWrap: "wrap" }]}>
+      {options.map((option) => (
+        <Pressable
+          key={option.value}
+          accessibilityRole="radio"
+          accessibilityLabel={option.a11y}
+          accessibilityState={{ selected: preference === option.value }}
+          onPress={() => setPreference(option.value)}
+          style={[styles.segment, !layout.reflow && { flexBasis: "30%" }, preference === option.value && styles.segmentSelected]}
+        >
+          <Text style={styles.segmentText}>{option.label}</Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
@@ -469,7 +498,7 @@ export function ConfirmationScreen({
   title,
   detail,
   onContinue,
-  buttonLabel = "Continue",
+  buttonLabel,
 }: {
   title: string;
   detail: string;
@@ -477,6 +506,7 @@ export function ConfirmationScreen({
   buttonLabel?: string;
 }) {
   const { theme, styles } = useCore();
+  const { t } = useT();
   return (
     <Screen contentStyle={styles.confirmationContent}>
       <View style={styles.confirmation}>
@@ -485,7 +515,7 @@ export function ConfirmationScreen({
         </View>
         <Text style={styles.confirmTitle}>{title}</Text>
         <Text style={styles.confirmDetail}>{detail}</Text>
-        <PrimaryButton label={buttonLabel} onPress={onContinue} />
+        <PrimaryButton label={buttonLabel ?? t("home.confirmationContinue")} onPress={onContinue} />
       </View>
     </Screen>
   );

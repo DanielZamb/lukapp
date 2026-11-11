@@ -5,12 +5,14 @@ import { useWorkspaceCalendar } from "./useWorkspaceCalendar";
 export function usePersonalDefaults() {
   return useQuery(api.accounting.personalDefaults, {});
 }
-export function usePostedActivity(workspaceId: string, timeZone: string) {
+/** Balances of open Places by default; a Place's own page and the Places list also read ended ones. */
+export function usePostedActivity(workspaceId: string, timeZone: string, status?: "all") {
   const { month } = useWorkspaceCalendar(timeZone);
   return useQuery(api.accounting.postedActivity, {
     workspaceId,
     month,
     includeRows: false,
+    ...(status ? { status } : {}),
   });
 }
 export function useRecentActivity(workspaceId: string, count: number, financialAccountProfileId?: string) {

@@ -1,5 +1,6 @@
 import React from "react";
 import { Text, TextInput, View } from "react-native";
+import { useT } from "../i18n";
 import { Header, PrimaryButton, Screen, SecondaryButton, useUi, useTheme } from "../ui/core";
 
 export function NamedDeviceStep({
@@ -21,23 +22,22 @@ export function NamedDeviceStep({
 }) {
   const ui = useUi();
   const theme = useTheme();
+  const { t } = useT();
   return (
     <Screen>
-      <Header title="Name this device" eyebrow="YOUR DEVICES" />
-      <Text style={ui.body}>
-        Choose a name so you can recognize this phone.
-      </Text>
+      <Header title={t("access.nameTitle")} eyebrow={t("access.devicesEyebrow")} />
+      <Text style={ui.body}>{t("access.nameBody")}</Text>
       <View style={ui.section}>
-        <Text style={ui.label}>DEVICE NAME</Text>
+        <Text style={ui.label}>{t("access.nameLabel")}</Text>
         <TextInput
-          accessibilityLabel="Device name"
+          accessibilityLabel={t("access.nameA11y")}
           value={name}
           onChangeText={onNameChange}
           editable={!busy}
           autoCapitalize="words"
           autoCorrect={false}
           maxLength={80}
-          placeholder="My phone"
+          placeholder={t("access.namePlaceholder")}
           placeholderTextColor={theme.mutedForeground}
           style={ui.input}
         />
@@ -48,11 +48,11 @@ export function NamedDeviceStep({
         </Text>
       )}
       <PrimaryButton
-        label={busy ? "Registering…" : "Register device"}
+        label={busy ? t("access.registering") : t("access.register")}
         disabled={!canSubmit || busy}
         onPress={onSubmit}
       />
-      <SecondaryButton label="Sign out" disabled={busy} onPress={onSignOut} />
+      <SecondaryButton label={t("access.signOut")} disabled={busy} onPress={onSignOut} />
     </Screen>
   );
 }

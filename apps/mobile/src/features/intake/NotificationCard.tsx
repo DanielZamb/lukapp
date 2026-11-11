@@ -6,10 +6,11 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme, useThemeMode } from "../../ui/core";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
-import { formatAmount, parseMoney } from "../money";
+import { amountOfMinorUnits, amountSign, displayedMinorUnits, type AmountSession } from "../amount/session";
 import { appInitial } from "./appCatalog";
 import { IconTile } from "./IntakeParts";
 import { pieces, suggest, type Mention } from "./suggest";
+import { formatDateTime, useT } from "../../i18n";
 
 export type KeptNotification = { text: string; packageName: string; at: number };
 
@@ -30,12 +31,13 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
   notification: KeptNotification;
   appLabel?: string;
   currency: string;
-  /** The form's current signed amount text. */
-  amount: string;
+  /** The form's current signed amount. */
+  amount: AmountSession;
   editable: boolean;
   onUseAmount(minorUnits: number): void;
   onUseDescription(text: string): void;
 }) {
+  const { t, language } = useT();
   const theme = useTheme();
   const dark = useThemeMode() === "dark";
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -43,7 +45,8 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
   const [revealed, setRevealed] = useState(false);
   const [anchor, setAnchor] = useState<number | null>(null);
   const accent = dark ? DARK_PRIMARY_TEXT : theme.primary;
-  const current = (() => { try { return Math.abs(parseMoney(amount, "es-CO", currency)); } catch { return null; } })();
+  const typed = displayedMinorUnits(amount);
+  const current = typed === null ? null : Math.abs(typed);
   const chosen = suggestion.amounts.find((mention) => mention.minor === current) ?? null;
   const hidden = suggestion.sensitive !== null && !revealed;
   const label = appLabel ?? notification.packageName;
@@ -63,29 +66,29 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
     : kind === "direction" ? { textDecorationLine: "underline" as const }
     : kind === "when" ? { color: theme.mutedForeground } : null;
 
-  return <View style={styles.card} accessibilityLabel={`Notification from ${label}`}>
-    <Text style={styles.app}>Original notification</Text>
+  return <View style={styles.card} accessibilityLabel={t("inbox.cardA11y", { app: label })}>
+    <Text style={styles.app}>{t("inbox.cardTitle")}</Text>
     <View style={styles.head}>
       <IconTile letter={appInitial(label)} tone="accent" />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.app} numberOfLines={1}>{label}</Text>
-        <Text style={styles.meta}>{new Date(notification.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</Text>
+        <Text style={styles.app} numberOfLines={2}>{label}</Text>
+        <Text style={styles.meta}>{formatDateTime(language, notification.at)}</Text>
       </View>
     </View>
     {!notification.text.trim() ? <>
-      <Text style={styles.app}>Notification text unavailable</Text>
-      <Text style={styles.meta}>No notification text was saved for this Candidate. Check the bank app before entering its details.</Text>
+      <Text style={styles.app}>{t("inbox.cardTextUnavailable")}</Text>
+      <Text style={styles.meta}>{t("inbox.cardTextUnavailableBody")}</Text>
     </> : hidden ? <>
-      <Text style={styles.meta}>Hidden. It looks like a security code.</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Show the notification" onPress={() => setRevealed(true)} style={styles.reveal}>
-        <Text style={[styles.app, { color: accent }]}>Show it anyway</Text>
+      <Text style={styles.meta}>{t("inbox.cardHidden")}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("inbox.cardShowA11y")} onPress={() => setRevealed(true)} style={styles.reveal}>
+        <Text style={[styles.app, { color: accent }]}>{t("inbox.cardShow")}</Text>
       </Pressable>
     </> : <>
       <Text style={styles.text} accessibilityLabel={notification.text}>
         {pieces(suggestion, chosen).map((piece) => {
           if (piece.mention) {
             const mention = piece.mention;
-            return <Text key={piece.start} accessibilityRole="button" accessibilityLabel={`Use ${piece.text} as the amount`}
+            return <Text key={piece.start} accessibilityRole="button" accessibilityLabel={t("inbox.cardUseAmountA11y", { amount: piece.text })}
               onPress={editable ? () => { setAnchor(null); onUseAmount(mention.minor); } : undefined} style={span(piece.kind, mention)}>{piece.text}</Text>;
           }
           let offset = piece.start;
@@ -98,18 +101,22 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
         })}
       </Text>
       <Text accessibilityLiveRegion="polite" style={styles.meta}>
-        {anchor !== null ? "Now tap the last word of the description."
-          : editable ? `${suggestion.amounts.length ? "Tap an amount to use it" : "Enter the amount below"}, or tap two words for the description.${suggestion.amounts.some((mention) => mention.role === "balance") ? " Dashed amounts look like balances." : ""}`
-          : "From this notification."}
+        {anchor !== null ? t("inbox.cardHintLastWord")
+          : editable ? [
+            t(suggestion.amounts.length ? "inbox.cardHintTapAmount" : "inbox.cardHintEnterAmount"),
+            ...(suggestion.amounts.some((mention) => mention.role === "balance") ? [t("inbox.cardHintBalances")] : []),
+          ].join(" ")
+          : t("inbox.cardReadOnly")}
       </Text>
     </>}
   </View>;
 }
 
-/** The form's amount text for a tapped amount, keeping the sign the form already has. */
-export function signedAmountText(minorUnits: number, currency: string, current: string, fallback: "in" | "out" | null) {
-  const text = current.trim();
-  // "-" alone is the form's empty expense; an empty form falls back to the suggested direction.
-  const negative = /^[-−]/.test(text) || (text === "" && fallback === "out");
-  return `${negative ? "-" : ""}${formatAmount(minorUnits, currency, { hideZeroDecimals: true })}`;
+/**
+ * The form's amount for a tapped notification amount: the already extracted minor units, written in the workspace
+ * currency's format, keeping the sign the form already has. An empty form falls back to the suggested direction.
+ */
+export function signedAmount(minorUnits: number, currency: string, current: AmountSession, fallback: "in" | "out" | null) {
+  const negative = amountSign(current) === "-" || (current.editor.text.trim() === "" && fallback === "out");
+  return amountOfMinorUnits(currency, negative ? -minorUnits : minorUnits, { hideZeroDecimals: true });
 }

@@ -1,16 +1,18 @@
 import * as React from "react";
-import { createElement, createRef } from "react";
+import { createElement, createRef, useState } from "react";
 import { ScrollView } from "react-native";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { PostingForm } from "./PostingForm";
-import { emptyPostingForm } from "./PostingForm.fixtures";
+import { emptyPostingForm, transferPostingForm } from "./PostingForm.fixtures";
 import { ListRow } from "../../ui/core";
 import { PlaceSheet } from "./PlaceSheet";
 import { AccountSetupForm } from "./AccountSetupForm";
 import type { PlaceDraft } from "./usePostingEditor";
 import { usePostingEditor, type PostingTransport } from "./usePostingEditor";
+import { LanguageProvider } from "../../i18n";
+import { openAmount } from "../amount/session";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("react-native-safe-area-context", () => ({
@@ -23,6 +25,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetTextInput: "input",
 }));
 vi.mock("react-native", () => ({
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   KeyboardAvoidingView: "keyboard-viewport",
   Text: "text",
   View: "view",
@@ -65,7 +68,7 @@ const handlers = {
   onDone: vi.fn(),
 };
 
-test.each([false, true])("typing a new expense preserves its sign and grouping, batch=%s", async (saveToBatch) => {
+test.each([false, true])("typing a new expense keeps its sign and the digits exactly as typed, batch=%s", async (saveToBatch) => {
   const post = vi.fn<PostingTransport["post"]>(async () => ({
     description: "",
     amount: { currency: "COP", minorUnits: 1250000 },
@@ -100,19 +103,31 @@ test.each([false, true])("typing a new expense preserves its sign and grouping, 
     });
   }
   await act(async () => { root = create(createElement(Composer)); });
-  const input = () => root!.root.findByProps({ accessibilityLabel: "Signed amount" });
-  expect(input().props.value).toBe("-0");
+  const input = () => root!.root.find((node) => node.type === "input" && node.props.accessibilityLabel === "Signed amount");
+  const submit = () => root!.root.findByProps({
+    accessibilityLabel: saveToBatch ? "Add to batch" : "Post",
+    accessibilityRole: "button",
+  }).props.onPress();
+  const sign = () => root!.root.findAll((node) => node.props.accessibilityLabel === "minus").map((node) => node.children.join(""));
+  expect(input().props.value).toBe("");
+  expect(sign()).toEqual(["−"]);
   for (const digit of "12500") {
     await act(async () => input().props.onChangeText(`${input().props.value}${digit}`));
   }
-  expect(input().props.value).toBe("-12.500");
-  await act(async () => input().props.onChangeText("-12abc500"));
-  expect(input().props.value).toBe("-12.500");
-  await act(async () => root!.root.findByProps({
-    accessibilityLabel: saveToBatch ? "Add to batch" : "Post",
-    accessibilityRole: "button",
-  }).props.onPress());
-  const command = saveToBatch ? queued[0]?.command : post.mock.calls[0]?.[0];
+  expect(input().props.value).toBe("12500");
+  expect(sign()).toEqual(["−"]);
+  await act(async () => input().props.onChangeText("12abc500"));
+  expect(input().props.value).toBe("12abc500");
+  await act(async () => submit());
+  expect(saveToBatch ? queued : post.mock.calls).toEqual(saveToBatch ? [null] : []);
+  await act(async () => input().props.onChangeText(""));
+  await act(async () => input().props.onChangeText("12.500"));
+  expect(input().props.value).toBe("12.500");
+  await act(async () => submit());
+  expect(saveToBatch ? queued.at(-1) : post.mock.calls[0]).toBeFalsy();
+  await act(async () => root!.root.findByProps({ accessibilityLabel: "Confirm COP 12.500,00", accessibilityRole: "button" }).props.onPress());
+  await act(async () => submit());
+  const command = saveToBatch ? queued.at(-1)?.command : post.mock.calls[0]?.[0];
   expect(command).toMatchObject({
     kind: "expense",
     payload: { amount: { currency: "COP", minorUnits: 1250000 } },
@@ -148,7 +163,7 @@ test("one entry follows the prototype order with an open description and one Pos
   }
   const inputs = root!.root.findAllByType("input");
   expect(inputs.map((node) => node.props.placeholder)).toEqual([
-    "-0",
+    "0",
     "What was it",
   ]);
   expect(inputs[1].props.multiline).toBe(true);
@@ -255,12 +270,12 @@ test("From searches trimmed names and emoji, excludes To, and adds a place", asy
   expect(text()).toBe("To\n🐷\nSavings\nAdd a place");
 });
 
-test("Add a place offers the three mapped types, emoji look, and balance today", async () => {
+test("Add a place offers the four mapped types, emoji look, and balance today", async () => {
   const value: PlaceDraft = {
     name: "Travel",
     productKind: "bankAccount",
     emoji: "🐷",
-    amount: "0",
+    amount: openAmount("COP", "0"),
     date: "2026-10-18",
   };
   const onChange = vi.fn();
@@ -282,7 +297,7 @@ test("Add a place offers the three mapped types, emoji look, and balance today",
     );
   });
   expect(text()).toContain(
-    "Add a place\nName you recognize\nType\nChecking\nSavings\nWallet\nLook\n🐷\nChange\nBalance today\nAdd this place",
+    "Add a place\nName you recognize\nType\nChecking account\nSavings account\nDigital wallet\nCash\nLook\n🐷\nChange\nBalance today\nReads as COP 0,00\nAdd this place",
   );
   const types = root!.root
     .findByProps({ accessibilityLabel: "Place type" })
@@ -293,19 +308,50 @@ test("Add a place offers the three mapped types, emoji look, and balance today",
   expect(onChange.mock.calls.map(([draft]) => draft.productKind)).toEqual([
     "bankAccount",
     "savingsAccount",
+    "savingsAccount",
     "cash",
   ]);
   await act(async () =>
     root!.root.findByProps({ accessibilityLabel: "Emoji 🏦" }).props.onPress(),
   );
   await act(async () => root!.root.findByProps({ accessibilityLabel: "Use this", accessibilityRole: "button" }).props.onPress());
-  expect(onChange).toHaveBeenLastCalledWith({ ...value, emoji: "🏦" });
+  expect(onChange).toHaveBeenLastCalledWith({ emoji: "🏦" });
   expect(
     root!.root
       .findAllByType("input")
       .find((node) => node.props.accessibilityLabel === "Balance today")?.props
       .value,
   ).toBe("0");
+});
+
+test.each([
+  { language: "en" as const, group: "Place type", labels: ["Checking account", "Savings account", "Digital wallet", "Cash"] },
+  { language: "es" as const, group: "Tipo de lugar", labels: ["Cuenta corriente", "Cuenta de ahorro", "Billetera digital", "Efectivo"] },
+])("each Place kind reads in $language, sends its stored kind and stays the only one selected", async ({ language, group, labels }) => {
+  const sent: string[] = [];
+  function Host() {
+    const [value, setValue] = useState<PlaceDraft>({ name: "Travel", productKind: "bankAccount", emoji: "🐷", amount: openAmount("COP", "0"), date: "2026-10-18" });
+    return createElement(AccountSetupForm, {
+      sheetRef: createRef<BottomSheetModal>(), value, currency: "COP", editable: true, busy: false, pending: false, error: "",
+      canSubmit: true, onSubmit: vi.fn(), onDismiss: vi.fn(),
+      onChange: (change: Partial<PlaceDraft>) => { sent.push(change.productKind ?? "none"); setValue((current) => ({ ...current, ...change })); },
+    });
+  }
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: language }, createElement(Host)));
+  });
+  const chips = () => root!.root.findByProps({ accessibilityLabel: group }).findAllByType("button");
+  const checked = () => chips().filter((node) => node.props.accessibilityState.checked).map((node) => node.props.accessibilityLabel);
+  expect(chips().map((node) => node.props.accessibilityLabel)).toEqual(labels);
+  expect(checked()).toEqual([labels[0]]);
+  const selections: string[][] = [];
+  for (const label of [...labels].reverse()) {
+    await act(async () => chips().find((node) => node.props.accessibilityLabel === label)!.props.onPress());
+    selections.push(checked());
+  }
+  expect(sent).toEqual(["cash", "savingsAccount", "savingsAccount", "bankAccount"]);
+  expect(selections).toEqual([...labels].reverse().map((label) => [label]));
+  expect(root!.root.findByProps({ accessibilityLabel: group }).props.style).toMatchObject({ flexDirection: "row", flexWrap: "wrap" });
 });
 
 test("source note is optional and sits under the header", async () => {
@@ -374,4 +420,50 @@ test("transfer confirmation and its blocking reason are inside the posting scree
   await act(async () => scroll.findByProps({ accessibilityLabel: "Swap From and To", accessibilityRole: "button" }).props.onPress());
   expect(onConfirm).toHaveBeenCalledOnce();
   expect(onSwap).toHaveBeenCalledOnce();
+});
+
+const englishFormCopy = ["Post money", "NEW ENTRY", "Description", "Date occurred", "Initial balance", "Swap From and To", "Move money between places"];
+
+test("the form reads in Colombian Spanish with no English labels left", async () => {
+  const { LanguageProvider } = await import("../../i18n");
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" },
+      createElement(PostingForm, { ...transferPostingForm, ...handlers, transferReview: { required: true, canConfirm: true, onSwap: vi.fn(), onConfirm: vi.fn() } })));
+  });
+  const shown = text();
+  for (const copy of ["Registrar plata", "NUEVO MOVIMIENTO", "Descripción", "Fecha del movimiento", "Saldo inicial", "Transferencia",
+    "De", "Para", "Intercambiar De y Para", "Confirmar De y Para", "Registrar"])
+    expect(shown).toContain(copy);
+  expect(shown).toContain("Pasa plata entre tus lugares.");
+  for (const copy of englishFormCopy) expect(shown).not.toContain(copy);
+  expect(root?.root.find((node) => node.type === "input" && node.props.accessibilityLabel === "Monto con signo").props.placeholder).toBe("0");
+  expect(root?.root.findByProps({ accessibilityLabel: "Descripción" }).props.placeholder).toBe("¿Qué fue?");
+});
+
+test("adding a place reads in Spanish, including the debt balance question", async () => {
+  const { LanguageProvider } = await import("../../i18n");
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(AccountSetupForm, {
+      sheetRef: createRef<BottomSheetModal>(),
+      value: { name: "", productKind: "creditCard", emoji: "💳", amount: openAmount("COP", "0"), date: "2026-11-10" },
+      currency: "COP", editable: true, busy: false, pending: true, error: "", canSubmit: true,
+      onChange: vi.fn(), onSubmit: vi.fn(), onDismiss: vi.fn(),
+    })));
+  });
+  const shown = text();
+  for (const copy of ["Agregar un lugar", "OTRO LUGAR", "Un nombre que reconozcas", "Tarjeta de crédito", "Préstamo",
+    "¿Cuánto debes todavía?", "Reintentar", "Esta configuración quedó guardada para reintentar."])
+    expect(shown).toContain(copy);
+  for (const copy of ["Add a place", "Name you recognize", "Credit card", "How much do you still owe?", "Retry setup"])
+    expect(shown).not.toContain(copy);
+});
+
+test("Confirm From and To reports the pair it showed", async () => {
+  const onConfirm = vi.fn();
+  await act(async () => { root = create(createElement(PostingForm, {
+    ...emptyPostingForm, ...handlers, entryType: "transfer",
+    transferReview: { required: true, canConfirm: true, pair: { from: "daily", to: "wallet" }, onConfirm, onSwap: vi.fn() },
+  })); });
+  await act(async () => root!.root.findByType(ScrollView).findByProps({ accessibilityLabel: "Confirm From and To", accessibilityRole: "button" }).props.onPress());
+  expect(onConfirm.mock.calls).toEqual([[{ from: "daily", to: "wallet" }]]);
 });

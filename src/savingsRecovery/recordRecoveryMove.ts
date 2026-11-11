@@ -1,3 +1,6 @@
+import { requireOpenPlace } from "../accounting/placeState";
+import { requireContributablePlan, requireContributionDate } from "./lifecycle";
+import { ALL_MONTHS, planProgress } from "./progress";
 import { isAssetProductKind, RecoveryError, requireIdempotencyKey } from "./policy";
 import { recordContribution } from "./recordContribution";
 import type { RecoveryContribution, RecoveryWriteStore } from "./types";
@@ -33,8 +36,13 @@ export async function recordRecoveryMove(
   const plan = (await store.listPlans()).find((item) => item.id === input.planId);
   if (!plan || plan.workspaceId !== input.workspaceId)
     throw new RecoveryError("plan_not_found");
-  if (!prior && await store.findReversalOf(plan.sourceJournalEntryId))
-    throw new RecoveryError("expense_not_recoverable");
+  if (!prior) {
+    await requireContributablePlan(store, plan.id, input.workspaceId);
+    requireContributionDate(plan, input.accountingDate);
+    const progress = await planProgress(plan, await store.listContributions(), async id =>
+      Boolean(await store.findReversalOf(id)), ALL_MONTHS, await store.listCorrections());
+    if (progress.remainingMinorUnits === 0) throw new RecoveryError("plan_already_complete");
+  }
   const profiles = await store.listProfiles();
   const source = profiles.find((profile) => profile.id === input.sourceFinancialAccountProfileId);
   if (!source || source.workspaceId !== input.workspaceId || !isAssetProductKind(source.productKind))
@@ -42,6 +50,7 @@ export async function recordRecoveryMove(
   const destination = profiles.find((profile) => profile.id === plan.destinationFinancialAccountProfileId);
   if (!destination || destination.workspaceId !== input.workspaceId || !isAssetProductKind(destination.productKind))
     throw new RecoveryError("destination_must_be_asset");
+  if (!prior) { requireOpenPlace(source); requireOpenPlace(destination); }
   // A retry goes back through the U03 transfer command with the same key, so its own
   // idempotency check rejects any changed account, amount, date, description or currency.
   const posted = await postTransfer({

@@ -1,3 +1,6 @@
+import { cancelPlan } from "./cancelPlan";
+import { correctContribution } from "./correctContribution";
+import { cancelReopenedPlans } from "./cancelReopenedPlans";
 import { expect, test } from "vitest";
 import { activatePlan } from "./activatePlan";
 import { evaluateWorkspace } from "./evaluate";
@@ -5,6 +8,8 @@ import { recordContribution } from "./recordContribution";
 import { recordRecoveryMove, type PostRecoveryTransfer } from "./recordRecoveryMove";
 import { RecoveryError } from "./policy";
 import type {
+  RecoveryCancellation,
+  RecoveryCorrection,
   RecoveryContribution,
   RecoveryLedgerEntry,
   RecoveryPlan,
@@ -14,6 +19,8 @@ import type {
 
 function memory() {
   const plans: RecoveryPlan[] = [];
+  const cancellations: RecoveryCancellation[] = [];
+  const corrections: RecoveryCorrection[] = [];
   const contributions: RecoveryContribution[] = [];
   const entries = new Map<string, RecoveryLedgerEntry>();
   const reversals = new Map<string, string>();
@@ -23,6 +30,10 @@ function memory() {
   ];
   let next = 1;
   const store: RecoveryWriteStore = {
+    listCancellations: async () => cancellations,
+    listCorrections: async () => corrections,
+    insertCancellation: async item => { const saved = { ...item, id: 'cancel-' + next++ }; cancellations.push(saved); return saved; },
+    insertCorrection: async item => { const saved = { ...item, id: 'correct-' + next++ }; corrections.push(saved); return saved; },
     functionalCurrency: async () => "COP",
     timeZone: async () => "America/Bogota",
     listPlans: async () => plans,
@@ -35,9 +46,14 @@ function memory() {
     },
     listExpenseEntries: async () => [...entries.values()].filter((entry) =>
       entry.policy === "cash-expense@1" && !entry.reversesEntryId && !reversals.has(entry.id)),
-    findPlanRequest: async (key) => plans.find((plan) => plan.idempotencyKey === key) ?? null,
+    findPlanRequest: async (key) => {
+      const plan = plans.find(item => item.idempotencyKey === key);
+      if (!plan) return null;
+      const { activationDate: _activationDate, ...receipt } = plan;
+      return receipt;
+    },
     findContributionRequest: async (key) =>
-      contributions.find((contribution) => contribution.idempotencyKey === key) ?? null,
+      contributions.find((contribution) => contribution.idempotencyKey === key && !contribution.correctsContributionId) ?? null,
     insertPlan: async (plan) => {
       const saved = { ...plan, id: `plan-${next++}` };
       plans.push(saved);
@@ -221,4 +237,232 @@ test("a crash after the transfer posts retries the same pair under one key", asy
   });
   expect(replay).toEqual({ ...first, replay: true });
   expect(await s.store.listContributions()).toHaveLength(1);
+});
+
+function cancelInput(planId: string, key = "cancel") {
+  return { workspaceId: "ws", planId, idempotencyKey: key, actorId: "owner", now: Date.UTC(2026, 8, 20) };
+}
+function correctInput(contributionId: string, targetPlanId?: string) {
+  return { workspaceId: "ws", contributionId, targetPlanId, reason: "Wrong attribution", idempotencyKey: "correct", actorId: "owner", now: Date.UTC(2026, 9, 2) };
+}
+
+async function anotherPlan(s: ReturnType<typeof memory>, id = "expense-2", amount = 1_200_000) {
+  s.put({ ...s.expense, id, amountMinorUnits: amount });
+  return (await s.activate({ sourceJournalEntryId: id, idempotencyKey: id, installmentMinorUnits: amount / 6 })).plan;
+}
+
+test("cancellation releases principal without unpaid premium, including after correction or reversal", async () => {
+  const s = memory();
+  const { plan } = await s.activate();
+  s.transfer();
+  const gift = await s.contribute("xfer-1");
+  const first = await cancelPlan(s.store, cancelInput(plan.id));
+  expect(await cancelPlan(s.store, cancelInput(plan.id))).toEqual({ ...first, replay: true });
+  expect((await s.read()).candidates).toMatchObject([{ amountMinorUnits: 1_000_000 }]);
+  await correctContribution(s.store, correctInput(gift.contribution.id));
+  expect((await s.read()).candidates).toMatchObject([{ amountMinorUnits: 1_200_000 }]);
+  expect((await s.read()).plans[0]).toMatchObject({ status: "cancelled", remainingMinorUnits: 0, dueMinorUnits: 0, recoveredMinorUnits: 0 });
+  const replacement = await s.activate({ replacesPlanId: plan.id, idempotencyKey: "replace", installmentMinorUnits: 200_000 });
+  expect(replacement.plan.principalMinorUnits).toBe(1_200_000);
+  await expect(cancelPlan(s.store, { ...cancelInput(plan.id), planId: replacement.plan.id }))
+    .rejects.toMatchObject({ code: "idempotency_key_conflict" });
+  await expect(cancelPlan(s.store, cancelInput(plan.id, "other"))).rejects.toMatchObject({ code: "plan_already_cancelled" });
+});
+
+test("partial transfer capacity can be shared, corrected, and reused without exceeding the real transfer", async () => {
+  const s = memory();
+  const { plan } = await s.activate({ installmentMinorUnits: 200_000 });
+  const target = await anotherPlan(s);
+  s.transfer("large", 1_300_000);
+  const gift = await s.contribute("large");
+  expect(gift.contribution.amountMinorUnits).toBe(1_200_000);
+  const shared = await recordContribution(s.store, { ...cancelInput(target.id, "shared"), transferJournalEntryId: "large" });
+  expect(shared.contribution.amountMinorUnits).toBe(100_000);
+  await expect(recordContribution(s.store, { ...cancelInput(target.id, "over-capacity"), transferJournalEntryId: "large" }))
+    .rejects.toMatchObject({ code: "transfer_already_attributed" });
+  const correction = await correctContribution(s.store, correctInput(gift.contribution.id));
+  expect(await correctContribution(s.store, correctInput(gift.contribution.id))).toEqual({ ...correction, replay: true });
+  const reused = await recordContribution(s.store, { ...cancelInput(target.id, "reused"), transferJournalEntryId: "large" });
+  expect(reused.contribution.amountMinorUnits).toBe(1_100_000);
+  expect((await s.read()).plans.find(p => p.id === plan.id)?.recoveredMinorUnits).toBe(0);
+  expect((await s.read()).plans.find(p => p.id === target.id)?.recoveredMinorUnits).toBe(1_200_000);
+  expect(await s.contribute("large")).toEqual({ ...gift, replay: true });
+});
+
+test("correction rejects completed, suspended, wrong-destination and pre-activation targets without appending", async () => {
+  const s = memory();
+  const { plan } = await s.activate();
+  const small = await anotherPlan(s, "small", 120_000);
+  s.transfer();
+  const gift = await s.contribute("xfer-1");
+  const input = correctInput(gift.contribution.id, small.id);
+  await expect(correctContribution(s.store, input)).rejects.toMatchObject({ code: "correction_exceeds_plan_remaining" });
+  const target = await anotherPlan(s);
+  s.put({ id: "reverse-source", workspaceId: "ws", policy: "reversal@1", description: "Reversal", accountingDate: "2026-09-19", amountMinorUnits: 1_200_000, reversesEntryId: target.sourceJournalEntryId });
+  await expect(correctContribution(s.store, { ...input, targetPlanId: target.id })).rejects.toMatchObject({ code: "expense_not_recoverable" });
+  s.profiles.push({ id: "elsewhere", workspaceId: "ws", name: "Elsewhere", productKind: "savingsAccount" });
+  s.put({ ...s.expense, id: "third" });
+  const wrong = await s.activate({ sourceJournalEntryId: "third", destinationFinancialAccountProfileId: "elsewhere", idempotencyKey: "third" });
+  await expect(correctContribution(s.store, { ...input, targetPlanId: wrong.plan.id })).rejects.toMatchObject({ code: "transfer_destination_mismatch" });
+  expect(await s.store.listCorrections()).toEqual([]);
+  expect((await s.store.listContributions()).map(c => c.id)).toEqual([gift.contribution.id]);
+  expect((await s.read()).plans.find(p => p.id === plan.id)?.recoveredMinorUnits).toBe(230_000);
+});
+
+test("correction chains retain each attribution and a later ledger reversal voids the active replacement", async () => {
+  const s = memory();
+  await s.activate();
+  const target = await anotherPlan(s);
+  s.transfer();
+  const original = await s.contribute("xfer-1");
+  const first = await correctContribution(s.store, correctInput(original.contribution.id, target.id));
+  if (!first.replacementContribution) throw Error("Missing replacement");
+  const third = await anotherPlan(s, "third");
+  const second = await correctContribution(s.store, { ...correctInput(first.replacementContribution.id, third.id), idempotencyKey: "correct-again" });
+  expect(second.replacementContribution?.amountMinorUnits).toBe(230_000);
+  expect(await correctContribution(s.store, correctInput(original.contribution.id, target.id))).toEqual({ ...first, replay: true });
+  s.put({ id: "reverse-transfer", workspaceId: "ws", policy: "reversal@1", description: "Reversal", accountingDate: "2026-10-02", amountMinorUnits: 230_000, reversesEntryId: "xfer-1" });
+  const view = await s.read();
+  expect(view.plans.map(p => p.recoveredMinorUnits)).toEqual([0, 0, 0]);
+  expect(view.plans.flatMap(p => p.contributionHistory).map(c => c.status).sort()).toEqual(["corrected", "corrected", "voided"]);
+});
+
+test("late recording cannot claim a transfer before the plan's activation date in its timezone", async () => {
+  const s = memory();
+  await s.activate({ now: Date.parse("2026-09-19T02:00:00Z") });
+  s.transfer();
+  expect((await s.contribute("xfer-1")).contribution.amountMinorUnits).toBe(230_000);
+  const late = memory();
+  await late.activate({ now: Date.parse("2026-09-19T05:00:00Z") });
+  late.transfer();
+  await expect(late.contribute("xfer-1")).rejects.toMatchObject({ code: "transfer_predates_activation" });
+});
+
+test("re-attribution refuses a transfer whose existing active claims already exceed its capacity", async () => {
+  const s = memory();
+  await s.activate();
+  const target = await anotherPlan(s);
+  s.transfer();
+  const gift = await s.contribute("xfer-1");
+  await s.store.insertContribution({ ...gift.contribution, planId: target.id, amountMinorUnits: 1, idempotencyKey: "legacy-extra" });
+  await expect(correctContribution(s.store, correctInput(gift.contribution.id, target.id)))
+    .rejects.toMatchObject({ code: "transfer_capacity_exceeded" });
+  expect(await s.store.listCorrections()).toEqual([]);
+  expect(await s.store.listContributions()).toHaveLength(2);
+});
+
+async function completedReplacement(s: ReturnType<typeof memory>, transferAmount = 1_000_000) {
+  const { plan: a } = await s.activate();
+  s.transfer("partial-a");
+  const partial = await s.contribute("partial-a");
+  await cancelPlan(s.store, cancelInput(a.id, "cancel-a"));
+  const { plan: b } = await s.activate({ replacesPlanId: a.id, idempotencyKey: "activate-b",
+    installmentCount: 4, installmentMinorUnits: 250_000 });
+  s.transfer("complete-b", transferAmount);
+  const completed = await recordContribution(s.store, { ...cancelInput(b.id, "complete-b"), transferJournalEntryId: "complete-b" });
+  await correctContribution(s.store, { ...correctInput(partial.contribution.id), idempotencyKey: "release-a" });
+  return { a, b, completed };
+}
+
+test.each(["reversal", "correction"])("%s appends one automatic cancellation for reopened B in an A/B/C chain", async kind => {
+  const s = memory();
+  const { a, b, completed } = await completedReplacement(s);
+  const { plan: c } = await s.activate({ idempotencyKey: "activate-c", installmentCount: 4, installmentMinorUnits: 50_000 });
+  const now = Date.UTC(2026, 10, 2, 12);
+  if (kind === "reversal") {
+    s.put({ id: "reverse-b", workspaceId: "ws", policy: "reversal@1", description: "Reverse B transfer",
+      accountingDate: "2026-11-02", amountMinorUnits: 1_000_000, reversesEntryId: "complete-b" });
+    const input = { workspaceId: "ws", actorId: "owner", now,
+      cause: { kind: "transfer_reversed" as const, transferJournalEntryId: "complete-b", reversalJournalEntryId: "reverse-b" } };
+    await cancelReopenedPlans(s.store, input);
+    await cancelReopenedPlans(s.store, input);
+  } else {
+    const input = { ...correctInput(completed.contribution.id), now, idempotencyKey: "remove-b" };
+    const receipt = await correctContribution(s.store, input);
+    expect(await correctContribution(s.store, input)).toEqual({ ...receipt, replay: true });
+  }
+  const view = await evaluateWorkspace(s.store, { now });
+  expect(view.plans.find(p => p.id === a.id)).toMatchObject({ status: "cancelled", cancellation: { origin: { kind: "person" } } });
+  expect(view.plans.find(p => p.id === b.id)).toMatchObject({ status: "cancelled", recoveredMinorUnits: 0, remainingMinorUnits: 0,
+    cancellation: { eventTime: now, recordedAt: now, origin: { kind: "automatic", unfinishedPlanId: c.id,
+      cause: kind === "reversal"
+        ? { kind: "transfer_reversed", transferJournalEntryId: "complete-b", reversalJournalEntryId: "reverse-b" }
+        : { kind: "contribution_corrected", contributionId: completed.contribution.id },
+    } },
+  });
+  expect(view.plans.find(p => p.id === c.id)).toMatchObject({ status: "active", principalMinorUnits: 200_000,
+    installmentCount: 4, installmentMinorUnits: 50_000, remainingMinorUnits: 200_000, cancellation: undefined });
+  expect(view.plans.filter(p => p.status === "active" || p.status === "suspended").map(p => p.id)).toEqual([c.id]);
+  expect(await s.store.listCancellations()).toHaveLength(2);
+  await expect(cancelPlan(s.store, cancelInput(b.id, "manual-b"))).rejects.toMatchObject({ code: "plan_already_cancelled" });
+  await cancelPlan(s.store, cancelInput(c.id, "cancel-c"));
+  expect((await evaluateWorkspace(s.store, { now })).candidates).toMatchObject([{ amountMinorUnits: 1_200_000 }]);
+});
+
+test.each(["reversal", "correction"])("the latest completed plan reopens after %s without another unfinished plan", async kind => {
+  const s = memory();
+  const { b, completed } = await completedReplacement(s);
+  if (kind === "reversal") {
+    s.put({ id: "reverse-b", workspaceId: "ws", policy: "reversal@1", description: "Reverse",
+      accountingDate: "2026-10-02", amountMinorUnits: 1_000_000, reversesEntryId: "complete-b" });
+    await cancelReopenedPlans(s.store, { workspaceId: "ws", actorId: "owner", now: Date.UTC(2026, 9, 2),
+      cause: { kind: "transfer_reversed", transferJournalEntryId: "complete-b", reversalJournalEntryId: "reverse-b" } });
+  } else {
+    await correctContribution(s.store, { ...correctInput(completed.contribution.id), idempotencyKey: "remove-b" });
+  }
+  expect((await s.read()).plans.find(p => p.id === b.id)).toMatchObject({ status: "active", recoveredMinorUnits: 0,
+    remainingMinorUnits: 1_000_000, canCancel: true, cancellation: undefined });
+  expect(await s.store.listCancellations()).toHaveLength(1);
+});
+
+test.each(["reversal", "correction"])("%s of an unfinished plan does not append a cancellation", async kind => {
+  const s = memory();
+  const { plan } = await s.activate();
+  s.transfer();
+  const gift = await s.contribute("xfer-1");
+  if (kind === "reversal") {
+    s.put({ id: "reverse", workspaceId: "ws", policy: "reversal@1", description: "Reverse",
+      accountingDate: "2026-09-18", amountMinorUnits: 230_000, reversesEntryId: "xfer-1" });
+    await cancelReopenedPlans(s.store, { workspaceId: "ws", actorId: "owner", now: Date.UTC(2026, 9, 2),
+      cause: { kind: "transfer_reversed", transferJournalEntryId: "xfer-1", reversalJournalEntryId: "reverse" } });
+  } else {
+    await correctContribution(s.store, correctInput(gift.contribution.id));
+  }
+  expect((await s.read()).plans[0]).toMatchObject({ id: plan.id, status: "active", recoveredMinorUnits: 0, remainingMinorUnits: 1_380_000 });
+  expect(await s.store.listCancellations()).toEqual([]);
+});
+
+test("one transfer reopening two completed plans retains the most recently activated plan", async () => {
+  const s = memory();
+  const { b } = await completedReplacement(s, 1_200_000);
+  const { plan: c } = await s.activate({ idempotencyKey: "activate-c", installmentCount: 4, installmentMinorUnits: 50_000,
+    now: Date.UTC(2026, 8, 18) });
+  const gift = await recordContribution(s.store, { ...cancelInput(c.id, "complete-c"), transferJournalEntryId: "complete-b" });
+  expect(gift.contribution.amountMinorUnits).toBe(200_000);
+  expect((await s.read()).plans.filter(p => p.status === "completed").map(p => p.id)).toEqual([c.id, b.id]);
+  s.put({ id: "reverse-both", workspaceId: "ws", policy: "reversal@1", description: "Reverse shared transfer",
+    accountingDate: "2026-10-02", amountMinorUnits: 1_200_000, reversesEntryId: "complete-b" });
+  await cancelReopenedPlans(s.store, { workspaceId: "ws", actorId: "owner", now: Date.UTC(2026, 9, 2),
+    cause: { kind: "transfer_reversed", transferJournalEntryId: "complete-b", reversalJournalEntryId: "reverse-both" } });
+  const view = await evaluateWorkspace(s.store, { now: Date.UTC(2026, 9, 2) });
+  expect(view.plans.find(p => p.id === b.id)).toMatchObject({ status: "cancelled", cancellation: { origin: { kind: "automatic", unfinishedPlanId: c.id } } });
+  expect(view.plans.filter(p => p.status === "active").map(p => p.id)).toEqual([c.id]);
+});
+
+test("an already unfinished plan stays even if the next reopened plan was activated more recently", async () => {
+  const s = memory();
+  const { b } = await completedReplacement(s);
+  const { plan: c } = await s.activate({ idempotencyKey: "activate-c", installmentCount: 4, installmentMinorUnits: 50_000,
+    now: Date.UTC(2026, 8, 18) });
+  s.transfer("complete-c", 200_000);
+  await recordContribution(s.store, { ...cancelInput(c.id, "complete-c"), transferJournalEntryId: "complete-c" });
+  for (const [transferId, reversalId] of [["complete-b", "reverse-b"], ["complete-c", "reverse-c"]]) {
+    s.put({ id: reversalId, workspaceId: "ws", policy: "reversal@1", description: "Reverse",
+      accountingDate: "2026-10-02", amountMinorUnits: transferId === "complete-b" ? 1_000_000 : 200_000, reversesEntryId: transferId });
+    await cancelReopenedPlans(s.store, { workspaceId: "ws", actorId: "owner", now: Date.UTC(2026, 9, 2),
+      cause: { kind: "transfer_reversed", transferJournalEntryId: transferId, reversalJournalEntryId: reversalId } });
+  }
+  const view = await evaluateWorkspace(s.store, { now: Date.UTC(2026, 9, 2) });
+  expect(view.plans.find(p => p.id === c.id)).toMatchObject({ status: "cancelled", cancellation: { origin: { kind: "automatic", unfinishedPlanId: b.id } } });
+  expect(view.plans.filter(p => p.status === "active").map(p => p.id)).toEqual([b.id]);
 });

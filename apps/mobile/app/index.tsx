@@ -9,6 +9,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { usePersonalDefaults, usePostedActivity } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { HomePlaceSetup } from "../src/features/HomePlaceSetup";
+import { FeedbackIntroCard } from "../src/features/feedback/FeedbackIntroCard";
 import { experienceLevel } from "../src/features/levelDoor/model";
 import { formatMoney } from "../src/features/money";
 import { Setup } from "../src/features/Setup";
@@ -20,6 +21,7 @@ import { useInboxCount } from "../src/features/useInboxCount";
 import { Header, PrimaryButton, Screen, useTheme, useUi } from "../src/ui/core";
 import { font, fontSize, radius, spacing, touchTarget } from "../src/ui/tokens";
 import { BrandLogo } from "../src/ui/Brand";
+import { formatMonthName, useT } from "../src/i18n";
 
 function Home({
   defaults,
@@ -30,20 +32,24 @@ function Home({
 }) {
   const ui = useUi();
   const theme = useTheme();
+  const translator = useT();
+  const { t, tn, language } = translator;
   const styles = useMemo(() => createStyles(theme, ui), [theme, ui]);
   const { workspace } = defaults;
   const { id: workspaceId, functionalCurrency: currency, timeZone } = workspace;
   const calendar = useWorkspaceCalendar(timeZone);
   const activity = usePostedActivity(workspaceId, timeZone);
   const budget = useQuery(api.budget.evaluate, { workspaceId, month: calendar.month });
-  const attention = budget && budgetAttention(budget);
+  const attention = budget && budgetAttention(budget, translator);
   const inboxCount = useInboxCount({ subject, workspaceId, currency });
   const actions = useRef<BottomSheetModal>(null);
   const [placeOpen, setPlaceOpen] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const accountCount = activity?.accounts.length ?? 0;
-  const level = experienceLevel(accountCount, budget?.jars.length ?? 0);
-  const month = new Intl.DateTimeFormat("en", { month: "long", timeZone }).format(calendar.now);
+  const level = experienceLevel(accountCount, budget);
+  const month = formatMonthName(language, calendar.now, { timeZone, capitalize: false });
+  const draftsDetail = inboxCount ? t("home.toReview", { count: inboxCount }) : t("home.nothingWaiting");
+  const plansDetail = t("home.plansDetail", { month });
   const totalMinorUnits = activity?.accounts.reduce((sum, account) => {
     const { minorUnits } = account.balance;
     if (account.nature === "Liability") return sum - minorUnits;
@@ -55,12 +61,12 @@ function Home({
       <View style={styles.header}>
         <View style={{ flex: 1, gap: spacing.sm }}>
           <BrandLogo width={104} />
-          <Text style={ui.label}>THIS MONTH</Text>
+          <Text style={ui.label}>{t("home.thisMonth")}</Text>
         </View>
         {level === 1 && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={attention?.bellLabel ?? "Alerts, loading"}
+            accessibilityLabel={attention?.bellLabel ?? t("home.alertsLoading")}
             onPress={() => router.push("/alerts")}
             style={styles.iconButton}
           >
@@ -74,32 +80,32 @@ function Home({
         )}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Open user and workspace"
+          accessibilityLabel={t("home.openSettings")}
           onPress={() => router.push("/settings")}
           style={styles.iconButton}
         >
           <Ionicons name="person-outline" size={22} color={theme.foreground} />
         </Pressable>
       </View>
-      {posted && <Text accessibilityRole="alert" style={ui.body}>✓ Posted</Text>}
+      {posted && <Text accessibilityRole="alert" style={ui.body}>{t("home.posted")}</Text>}
       <View style={{ gap: spacing.xs }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="See places"
+        <Pressable accessibilityRole="button" accessibilityLabel={t("home.seePlaces")}
           onPress={() => router.push("/places")} hitSlop={spacing.md}>
-          <Text style={styles.muted}>What you have now</Text>
+          <Text style={styles.muted}>{t("home.whatYouHave")}</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="What do you want to do?"
+        <Pressable accessibilityRole="button" accessibilityLabel={t("home.whatToDo")}
           onPress={() => actions.current?.present()} style={{ minHeight: touchTarget }}>
           {totalMinorUnits !== undefined ? (
             <Text adjustsFontSizeToFit numberOfLines={1} style={[ui.hero, styles.hero]}>
               {formatMoney({ currency, minorUnits: totalMinorUnits }, { hideZeroDecimals: true })}
             </Text>
-          ) : <ActivityIndicator accessibilityLabel="Loading balances" />}
+          ) : <ActivityIndicator accessibilityLabel={t("home.loadingBalances")} />}
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="See places"
+        <Pressable accessibilityRole="button" accessibilityLabel={t("home.seePlaces")}
           onPress={() => router.push("/places")} hitSlop={spacing.md}>
           {activity ? (
             <Text style={styles.muted}>
-              {accountCount === 1 ? "One pool · See this place" : `Across ${accountCount} places`}
+              {accountCount === 1 ? t("home.onePool") : tn("home.acrossPlaces", accountCount)}
             </Text>
           ) : null}
         </Pressable>
@@ -119,7 +125,7 @@ function Home({
         </Pressable>
       )}
       <Pressable accessibilityRole="button"
-        accessibilityLabel={`Drafts, ${inboxCount ? `${inboxCount} to review` : "Nothing waiting"}`}
+        accessibilityLabel={`${t("home.drafts")}, ${draftsDetail}`}
         onPress={() => router.push("/drafts")} style={[styles.tile, styles.primaryTile]}>
         <View style={styles.tileTop}>
           <Ionicons name="document-text-outline" size={26} color={theme.primaryForeground} />
@@ -128,51 +134,50 @@ function Home({
           ) : null}
         </View>
         <View style={{ gap: spacing.xs }}>
-          <Text style={[styles.tileTitle, styles.primaryText]}>Drafts</Text>
-          <Text style={styles.primaryDetail}>
-            {inboxCount ? `${inboxCount} to review` : "Nothing waiting"}
-          </Text>
+          <Text style={[styles.tileTitle, styles.primaryText]}>{t("home.drafts")}</Text>
+          <Text style={styles.primaryDetail}>{draftsDetail}</Text>
         </View>
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Overview, This month, by category"
+      <Pressable accessibilityRole="button" accessibilityLabel={`${t("home.overview")}, ${t("home.overviewDetail")}`}
         onPress={() => router.push("/overview")} style={styles.tile}>
         <Ionicons name="pie-chart-outline" size={26} color={theme.foreground} />
         <View style={{ gap: spacing.xs }}>
-          <Text style={styles.tileTitle}>Overview</Text>
-          <Text style={styles.muted}>This month, by category</Text>
+          <Text style={styles.tileTitle}>{t("home.overview")}</Text>
+          <Text style={styles.muted}>{t("home.overviewDetail")}</Text>
         </View>
       </Pressable>
       {level === 1 && (
-        <Pressable accessibilityRole="button" accessibilityLabel={`Plans, ${month} budget and recovery`}
+        <Pressable accessibilityRole="button" accessibilityLabel={`${t("home.plans")}, ${plansDetail}`}
           onPress={() => router.push("/plans")} style={styles.plansRow}>
           <Ionicons name="layers-outline" size={22} color={theme.foreground} />
           <View style={{ flex: 1, gap: spacing.xs }}>
-            <Text style={[ui.body, { fontFamily: font.semibold }]}>Plans</Text>
-            <Text style={styles.muted}>{month} budget and recovery</Text>
+            <Text style={[ui.body, { fontFamily: font.semibold }]}>{t("home.plans")}</Text>
+            <Text style={styles.muted}>{plansDetail}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.mutedForeground} />
         </Pressable>
       )}
+      <FeedbackIntroCard placement="home" />
       <BottomSheetModal ref={actions} enablePanDownToClose
         backdropComponent={(props) => <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} />}
         backgroundStyle={styles.sheetSurface}
         handleIndicatorStyle={{ backgroundColor: theme.ring }}>
         <BottomSheetView style={styles.sheetBody}>
-          <Text accessibilityRole="header" style={styles.sheetTitle}>What do you want to do?</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Create a place, Another pocket for money"
+          <Text accessibilityRole="header" style={styles.sheetTitle}>{t("home.whatToDo")}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t("home.createPlace")}, ${t("home.createPlaceDetail")}`}
             disabled={activity === undefined || budget === undefined}
             onPress={() => { actions.current?.dismiss(); setPlaceOpen(true); }} style={styles.choice}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.choiceTitle}>Create a place</Text>
-              <Text style={styles.muted}>Another pocket for money</Text>
+              <Text style={styles.choiceTitle}>{t("home.createPlace")}</Text>
+              <Text style={styles.muted}>{t("home.createPlaceDetail")}</Text>
             </View>
             <Ionicons name="wallet-outline" size={22} color={theme.foreground} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Create a tx, Post money"
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t("home.createEntry")}, ${t("home.createEntryDetail")}`}
             onPress={() => { actions.current?.dismiss(); router.push("/post"); }} style={styles.choice}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.choiceTitle}>Create a tx</Text>
-              <Text style={styles.muted}>Post money</Text>
+              <Text style={styles.choiceTitle}>{t("home.createEntry")}</Text>
+              <Text style={styles.muted}>{t("home.createEntryDetail")}</Text>
             </View>
             <Ionicons name="create-outline" size={22} color={theme.foreground} />
           </Pressable>
@@ -248,6 +253,7 @@ function ReadyIndex({
   defaults: Exclude<ReturnType<typeof usePersonalDefaults>, undefined>;
   userId: string;
 }) {
+  const { t } = useT();
   const [view, setView] = useState<EntryView>(() =>
     defaults ? { kind: "home" } : { kind: "setup" },
   );
@@ -282,9 +288,9 @@ function ReadyIndex({
   if (!defaults)
     return (
       <Screen>
-        <Header title="Home" />
+        <Header title={t("home.homeTitle")} />
         <PrimaryButton
-          label="Start setup"
+          label={t("home.startSetup")}
           onPress={() => setView({ kind: "setup" })}
         />
       </Screen>

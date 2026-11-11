@@ -30,16 +30,19 @@ import {
 } from "./usePostingBatch";
 import { categoryColor } from "../categories/appearance";
 import type { Category } from "../categories/model";
+import { useT, type Translator } from "../../i18n";
 
 type Row = { category: string; place: string; emoji: string; color: string };
 export function batchRowFor({
   item,
   categories,
   profiles,
+  t,
 }: {
   item: QueuedPosting;
   categories: Pick<Category, "id" | "name" | "style">[] | undefined;
   profiles: { id: string; name: string }[] | undefined;
+  t: Translator["t"];
 }): Row {
   const command = item.command;
   const payload = command.payload;
@@ -64,12 +67,12 @@ export function batchRowFor({
         ?.map(
           (id) =>
             categories?.find((row) => row.id === id)?.name ??
-            "Saved category",
+            t("posting.savedCategory"),
         )
-        .join(" · ") || "No category",
+        .join(" · ") || t("posting.batchNoCategory"),
     place:
       profiles?.find((row) => row.id === profileId)?.name ??
-      "No account",
+      t("posting.batchNoAccount"),
     emoji: category?.style.emoji ?? "💰",
     color: category ? categoryColor(category.style) : theme.primary,
   };
@@ -102,6 +105,7 @@ export function BatchNativeStack({
   onOne: () => void;
   rowFor: (item: QueuedPosting) => Row;
 }) {
+  const { t, tn } = useT();
   const ui = useUi();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -146,7 +150,7 @@ export function BatchNativeStack({
   const back = (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Leave the batch"
+      accessibilityLabel={t("posting.batchLeave")}
       onPress={onBack}
       style={styles.back}
     >
@@ -156,12 +160,12 @@ export function BatchNativeStack({
   const headerPost = showHeaderPost ? (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Post ${queue.length}`}
+      accessibilityLabel={t("posting.batchPostCount", { count: queue.length })}
       disabled={batch.busy}
       onPress={() => void batch.postAll()}
       style={styles.headerPost}
     >
-      <Text style={styles.headerPostText}>Post {queue.length}</Text>
+      <Text style={styles.headerPostText}>{t("posting.batchPostCount", { count: queue.length })}</Text>
     </Pressable>
   ) : (
     <View />
@@ -176,7 +180,7 @@ export function BatchNativeStack({
       {Platform.OS === "web" && (
         <View style={styles.webHeader}>
           {back}
-          <Text style={ui.title}>Batch</Text>
+          <Text style={ui.title}>{t("posting.batchTitle")}</Text>
           {headerPost}
         </View>
       )}
@@ -195,15 +199,14 @@ export function BatchNativeStack({
         />
         <Text style={styles.muted}>
           {queue.length === 0
-            ? "Add the transactions you want to post together. They stay on this device until you post."
-            : `${queue.length} ${queue.length === 1 ? "draft" : "drafts"} held on this device. Nothing is posted yet.`}
+            ? t("posting.batchIntroEmpty")
+            : tn("posting.batchHeld", queue.length)}
         </Text>
         {queue.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>The batch is empty</Text>
+            <Text style={styles.emptyTitle}>{t("posting.batchEmptyTitle")}</Text>
             <Text style={styles.muted}>
-              Every one you add lands here with its amount, so you can check the
-              net before it posts.
+              {t("posting.batchEmptyBody")}
             </Text>
           </View>
         ) : (
@@ -219,7 +222,7 @@ export function BatchNativeStack({
                 <Pressable
                   key={item.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`Edit ${description || "untitled draft"}`}
+                  accessibilityLabel={t("posting.batchEditA11y", { title: description || t("posting.batchUntitledA11y") })}
                   disabled={!batch.editable}
                   onPress={() => onEdit(item)}
                   style={styles.row}
@@ -230,10 +233,10 @@ export function BatchNativeStack({
                     <Text style={{ fontSize: 16 }}>{row.emoji}</Text>
                   </View>
                   <View style={styles.rowCopy}>
-                    <Text style={styles.rowTitle} numberOfLines={1}>
-                      {description || "Untitled"}
+                    <Text style={styles.rowTitle} numberOfLines={2}>
+                      {description || t("posting.batchUntitled")}
                     </Text>
-                    <Text style={styles.rowMeta} numberOfLines={1}>
+                    <Text style={styles.rowMeta} numberOfLines={2}>
                       {row.category} · {row.place}
                     </Text>
                   </View>
@@ -244,7 +247,7 @@ export function BatchNativeStack({
                   </Text>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${description || "untitled draft"}`}
+                    accessibilityLabel={t("posting.batchRemoveA11y", { title: description || t("posting.batchUntitledA11y") })}
                     disabled={!batch.editable}
                     hitSlop={12}
                     onPress={(event) => {
@@ -265,13 +268,13 @@ export function BatchNativeStack({
             {totals.out > 0 && totals.incoming > 0 && (
               <>
                 <View style={styles.splitRow}>
-                  <Text style={styles.muted}>Out</Text>
+                  <Text style={styles.muted}>{t("posting.batchOut")}</Text>
                   <Text style={styles.rowAmount}>
                     {signedBatchMoney(-totals.out, currency)}
                   </Text>
                 </View>
                 <View style={styles.splitRow}>
-                  <Text style={styles.muted}>In</Text>
+                  <Text style={styles.muted}>{t("posting.batchIn")}</Text>
                   <Text style={styles.rowAmount}>
                     {signedBatchMoney(totals.incoming, currency)}
                   </Text>
@@ -279,7 +282,7 @@ export function BatchNativeStack({
               </>
             )}
             <View style={styles.netRow}>
-              <Text style={styles.netLabel}>NET</Text>
+              <Text style={styles.netLabel}>{t("posting.batchNet")}</Text>
               <Text
                 style={[styles.netValue, totals.net > 0 && styles.positive]}
                 numberOfLines={1}
@@ -291,7 +294,7 @@ export function BatchNativeStack({
           </View>
         )}
         <SecondaryButton
-          label="Add one"
+          label={t("posting.batchAddOne")}
           trailingIcon="add"
           disabled={!batch.editable}
           onPress={onAdd}
@@ -304,7 +307,7 @@ export function BatchNativeStack({
             }}
           >
             <PrimaryButton
-              label={`Post ${queue.length}`}
+              label={t("posting.batchPostCount", { count: queue.length })}
               trailingIcon="checkmark"
               pending={batch.busy}
               onPress={() => void batch.postAll()}
@@ -331,18 +334,18 @@ export function BatchNativeStack({
             />
           </View>
           <View style={styles.rowCopy}>
-            <Text style={styles.rowTitle}>Posted {posted.count}</Text>
+            <Text style={styles.rowTitle}>{tn("posting.batchPosted", posted.count)}</Text>
             <Text style={styles.rowMeta}>
-              Net {signedBatchMoney(posted.net, currency)} · this month
+              {t("posting.batchPostedNet", { amount: signedBatchMoney(posted.net, currency) })}
             </Text>
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Done"
+            accessibilityLabel={t("common.done")}
             onPress={onBack}
             style={styles.back}
           >
-            <Text style={styles.rowTitle}>Done</Text>
+            <Text style={styles.rowTitle}>{t("common.done")}</Text>
           </Pressable>
         </View>
       )}
@@ -357,7 +360,7 @@ export function BatchNativeStack({
         style={StyleSheet.absoluteFill}
         contentStyle={{ backgroundColor: theme.background }}
         headerConfig={{
-          title: "Batch",
+          title: t("posting.batchTitle"),
           largeTitle: Platform.OS === "ios",
           hideBackButton: true,
           hideShadow: true,
@@ -371,7 +374,7 @@ export function BatchNativeStack({
             <>
               <ScreenStackHeaderLeftView>
                 {back}
-                {Platform.OS !== "ios" && <Text style={ui.title}>Batch</Text>}
+                {Platform.OS !== "ios" && <Text style={ui.title}>{t("posting.batchTitle")}</Text>}
               </ScreenStackHeaderLeftView>
               <ScreenStackHeaderRightView>
                 {headerPost}

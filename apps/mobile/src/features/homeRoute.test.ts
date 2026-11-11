@@ -4,6 +4,8 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 vi.mock("../ui/Brand", () => ({ BrandLogo: "brand-logo", BrandMark: "brand-mark", BrandSplash: "brand-splash" }));
 import Index from "../../app/index";
+import { LanguageProvider } from "../i18n";
+import { catalogs } from "../../../../src/i18n";
 import type { BudgetJar } from "./budget/model";
 
 type MockPlace = { minorUnits: number; nature?: "Asset" | "Liability" };
@@ -11,6 +13,7 @@ const state = vi.hoisted(() => ({
   accounts: [{ minorUnits: 8_500_000_00 }] as MockPlace[],
   currency: "COP",
   hasLimit: false,
+  removedLimit: false,
   balancesLoading: false,
   budgetLoading: false,
   inboxCount: 0 as number | undefined,
@@ -30,6 +33,7 @@ vi.mock("convex/react", () => ({ useQuery: (...args: unknown[]) => {
       category: { id: "food", name: "Food", emoji: "🍋" },
       limitMinorUnits: 100_00, consumptionMinorUnits: 0,
     }] : [],
+    removedLimits: state.removedLimit ? [{ categoryId: "food", revisionId: "removal", effectiveMonth: "2026-10" }] : [],
   };
 } }));
 vi.mock("./activity", () => ({
@@ -81,6 +85,7 @@ beforeEach(() => {
   state.accounts = [{ minorUnits: 8_500_000_00 }];
   state.currency = "COP";
   state.hasLimit = false;
+  state.removedLimit = false;
   state.balancesLoading = false;
   state.budgetLoading = false;
   state.inboxCount = 0;
@@ -109,9 +114,11 @@ test.each([
   { accounts: [{ minorUnits: 100 }, { minorUnits: 0 }, { minorUnits: -100 }], hasLimit: false, level: 1 },
   { accounts: [{ minorUnits: 100 }], hasLimit: true, level: 1 },
   { accounts: [], hasLimit: false, level: 0 },
-])("Home level $level with $accounts and category limit $hasLimit", async ({ accounts, hasLimit, level }) => {
+  { accounts: [{ minorUnits: 100 }], hasLimit: false, removedLimit: true, level: 1 },
+])("Home level $level with $accounts and category limit $hasLimit", async ({ accounts, hasLimit, removedLimit = false, level }) => {
   state.accounts = accounts;
   state.hasLimit = hasLimit;
+  state.removedLimit = removedLimit;
   await render();
   const bells = root.root.findAll((node) => String(node.type) === "icon").filter((node) => node.props.name === "notifications-outline");
   expect(bells).toHaveLength(level);
@@ -124,7 +131,7 @@ test("level 0 renders balance and prototype copy, with only the user header acti
   expect(texts()).toEqual([
     "THIS MONTH", "What you have now", "COP 8.500.000", "One pool · See this place",
     "Drafts", "Nothing waiting", "Overview", "This month, by category",
-    "What do you want to do?", "Create a place", "Another pocket for money", "Create a tx", "Post money",
+    "What do you want to do?", "Create a place", "Another pocket for money", "Add an entry", "Record an expense or income",
   ]);
   expect(root.root.findAll((node) => node.props.accessibilityRole === "progressbar")).toHaveLength(0);
   await act(async () => button("Open user and workspace").props.onPress());
@@ -171,7 +178,7 @@ test("amount opens a pan-to-close sheet, dismissal stays home, and choices open 
   await act(async () => root.root.find((node) => String(node.type) === "place-setup").props.onClose());
   expect(root.root.findAll((node) => String(node.type) === "place-setup")).toHaveLength(0);
   expect(state.push).not.toHaveBeenCalled();
-  await act(async () => button("Create a tx, Post money").props.onPress());
+  await act(async () => button("Add an entry, Record an expense or income").props.onPress());
   expect(state.push.mock.calls).toEqual([["/post"]]);
 });
 
@@ -192,7 +199,7 @@ test("Home retains USD cents in the real balance total", async () => {
   state.currency = "USD";
   state.accounts = [{ minorUnits: 100_25 }, { minorUnits: 20_10, nature: "Liability" }];
   await render();
-  expect(texts()).toContain("USD 80,15");
+  expect(texts()).toContain("USD 80.15");
 });
 
 test("a liability balance reduces what you have instead of increasing it", async () => {
@@ -228,4 +235,33 @@ test.each([
   await act(async () => root.update(createElement(Index)));
   expect(texts()).not.toContain(title);
   expect(button("Alerts, nothing needs attention").findAllByType("text")).toHaveLength(0);
+});
+
+test("Home reads in Colombian Spanish with the workspace month, counted places and alert summary", async () => {
+  state.accounts = [{ minorUnits: 500_00 }, { minorUnits: 250_00 }];
+  state.inboxCount = 3;
+  alertJars = [{ category: { id: "food", name: "Food", emoji: "🍋" }, limitMinorUnits: 100_00, consumptionMinorUnits: 150_00 }];
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(Index))); });
+  expect(texts()).toEqual([
+    "ESTE MES", "1", "Lo que tienes ahora", "COP 750", "En 2 lugares",
+    "Food se pasó del tope", "COP 50 de más", "3",
+    "Borradores", "3 por revisar", "Resumen", "Este mes, por categoría",
+    "Planes", "Presupuesto de octubre y ahorros",
+    "¿Qué quieres hacer?", "Crear un lugar", "Otro bolsillo para tu plata", "Registrar un movimiento", "Registra un gasto o un ingreso",
+  ]);
+  const labels = root.root.findAllByType("button").map((node) => node.props.accessibilityLabel);
+  expect(labels).toEqual(expect.arrayContaining([
+    "Alertas, 1 categoría se pasó del tope", "Abrir usuario y espacio", "Ver lugares", "¿Qué quieres hacer?",
+    "Food se pasó del tope, COP 50 de más", "Borradores, 3 por revisar", "Resumen, Este mes, por categoría",
+    "Planes, Presupuesto de octubre y ahorros",
+  ]));
+  const english = new Set(Object.values(catalogs.en.home));
+  expect([...texts(), ...labels].filter((text) => english.has(text))).toEqual([]);
+});
+
+test("one place and nothing waiting read in Spanish", async () => {
+  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "es" }, createElement(Index))); });
+  expect(texts()).toContain("Todo junto · Ver este lugar");
+  expect(texts()).toContain("Nada pendiente");
+  expect(button("Borradores, Nada pendiente")).toBeDefined();
 });

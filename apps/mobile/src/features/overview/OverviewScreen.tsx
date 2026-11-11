@@ -1,11 +1,12 @@
-import { toMajorUnits } from "../money";
 import type { Theme } from "../../ui/tokens";
 import { useReadableLayout } from "../../ui/themeContext";
 import type { ReadableLayout } from "../../ui/layout";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, Screen, useTheme, useUi } from "../../ui/core";
+import { useT } from "../../i18n";
+import { Header, PrimaryButton, Screen, useTheme, useThemeMode, useUi } from "../../ui/core";
+import { categoryColor, categoryInk, categoryOutline, faintEdge } from "../categories/appearance";
 import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
 import { currencyDisplayPrefix } from "../money";
 import { compactAmount, symbolAmount } from "./amounts";
@@ -20,8 +21,11 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
 }) {
   const ui = useUi();
   const theme = useTheme();
+  const mode = useThemeMode();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
+  const { t, language } = useT();
+  const compact = (minorUnits: number, currency: string) => compactAmount(minorUnits, currency, language);
   const [view, setView] = useState<"list" | "spend" | "remaining">("list");
   const symbol = data ? currencyDisplayPrefix(data.currency) : "$";
   const categories = data?.categories ?? [];
@@ -34,20 +38,20 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
   const maxSpend = Math.max(1, ...categories.map((category) => category.spendMinorUnits));
   return (
     <Screen>
-      <Header title="Overview" eyebrow="THIS MONTH" onBack={onBack} />
+      <Header title={t("review.overviewTitle")} eyebrow={t("review.overviewEyebrow")} onBack={onBack} />
       {data ? <CapitalFlow outMinorUnits={data.outMinorUnits} inMinorUnits={data.inMinorUnits} symbol={symbol} currency={data.currency} />
-        : <ActivityIndicator accessibilityLabel="Loading Overview" />}
-      <PrimaryButton label="Go to tx history" trailingIcon="receipt-outline" onPress={onHistory} />
+        : <ActivityIndicator accessibilityLabel={t("review.overviewLoading")} />}
+      <PrimaryButton label={t("review.overviewHistory")} trailingIcon="receipt-outline" onPress={onHistory} />
       <View accessibilityRole="radiogroup" style={styles.toggle}>
-        <ViewOption label="List" icon="list-outline" selected={view === "list"} onPress={() => setView("list")} />
-        <ViewOption label="Bars" icon="bar-chart-outline" selected={view !== "list"}
+        <ViewOption label={t("review.overviewList")} icon="list-outline" selected={view === "list"} onPress={() => setView("list")} />
+        <ViewOption label={t("review.overviewBars")} icon="bar-chart-outline" selected={view !== "list"}
           onPress={() => setView((current) => current === "list" ? "spend" : current)} />
       </View>
-      {data && (categories.length === 0 ? <Text style={ui.muted}>No categories yet.</Text> : view === "list" ? (
+      {data && (categories.length === 0 ? <Text style={ui.muted}>{t("review.overviewEmpty")}</Text> : view === "list" ? (
         <View style={styles.group}>
           {categories.map((category, index) => {
             const left = remaining(category);
-            const color = theme[category.style.tone];
+            const color = categoryColor(category.style, mode);
             const over = left !== null && left < 0;
             return (
               <Pressable key={category.id} accessibilityRole="button" accessibilityLabel={category.name}
@@ -56,9 +60,9 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
                 <View style={styles.categoryCopy}>
                   <Text style={styles.name}>{category.name}</Text>
                   <View style={styles.trail}>
-                    <Text style={styles.value} numberOfLines={layout.reflow ? undefined : 1}>{symbolAmount(category.spendMinorUnits, symbol, "grouped", data.currency)}</Text>
-                    {left !== null && <Text style={[styles.left, { color: over ? theme.danger : color }]}>
-                      {compactAmount(toMajorUnits(Math.abs(left), data.currency))} {over ? "over" : "left"}
+                    <Text style={styles.value} numberOfLines={layout.reflow ? undefined : 1}>{symbolAmount(category.spendMinorUnits, symbol, "grouped", data.currency, language)}</Text>
+                    {left !== null && <Text style={[styles.left, { color: over ? theme.danger : categoryInk(color, mode) }]}>
+                      {t(over ? "review.amountOver" : "review.amountLeft", { amount: compact(Math.abs(left), data.currency) })}
                     </Text>}
                   </View>
                 </View>
@@ -69,27 +73,27 @@ export function OverviewScreen({ data, onBack, onHistory, onCategory }: {
         </View>
       ) : (
         <View style={styles.chart}>
-          {showRemaining && <Text style={styles.muted}>{"What's left"}</Text>}
+          {showRemaining && <Text style={styles.muted}>{t("review.whatsLeft")}</Text>}
           {barRows.map((category) => {
             const left = remaining(category);
             const over = showRemaining && left !== null && left < 0;
-            const color = over ? theme.danger : theme[category.style.tone];
+            const color = over ? theme.danger : categoryColor(category.style, mode);
             const fill = showRemaining ? remainingFill(category) : Math.max(0, Math.min(1, category.spendMinorUnits / maxSpend));
             const value = showRemaining && left !== null
-              ? `${compactAmount(toMajorUnits(Math.abs(left), data.currency))}${over ? " over" : ""}`
-              : compactAmount(toMajorUnits(category.spendMinorUnits, data.currency));
+              ? over ? t("review.amountOver", { amount: compact(Math.abs(left), data.currency) }) : compact(Math.abs(left), data.currency)
+              : compact(category.spendMinorUnits, data.currency);
             return (
               <Pressable key={category.id} accessibilityRole="button"
-                accessibilityLabel={showRemaining ? `${category.name}, what's left` : category.name}
-                accessibilityHint={hasLimit ? "Toggle spending and what's left" : undefined}
+                accessibilityLabel={showRemaining ? t("review.barWhatsLeftA11y", { name: category.name }) : category.name}
+                accessibilityHint={hasLimit ? t("review.barToggleHint") : undefined}
                 onPress={() => { if (hasLimit) setView(showRemaining ? "spend" : "remaining"); }}
                 style={({ pressed }) => [styles.barRow, pressed && hasLimit && styles.pressed]}>
                 <Text style={styles.emoji}>{category.style.emoji}</Text>
-                <View accessibilityRole="progressbar" accessibilityLabel={`${category.name}, ${showRemaining ? "remaining limit" : "share of largest spend"}`}
+                <View accessibilityRole="progressbar" accessibilityLabel={t(showRemaining ? "review.barRemainingA11y" : "review.barShareA11y", { name: category.name })}
                   accessibilityValue={{ min: 0, max: 100, now: Math.round(fill * 100) }} style={styles.track}>
-                  <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: color }]} />
+                  <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: color }, faintEdge(color, mode)]} />
                 </View>
-                <Text style={[styles.barValue, over && { color: theme.danger }]} numberOfLines={1}>{value}</Text>
+                <Text style={[styles.barValue, over && { color: theme.danger }]} numberOfLines={2}>{value}</Text>
               </Pressable>
             );
           })}
@@ -118,13 +122,15 @@ function CategoryCoin({ category }: { category: OverviewCategory }) {
   const theme = useTheme();
   const layout = useReadableLayout();
   const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
+  const mode = useThemeMode();
   const left = remaining(category);
   const over = left !== null && left < 0;
-  const color = theme[category.style.tone];
+  const color = categoryColor(category.style, mode);
+  const outline = categoryOutline(color, mode);
   return (
     <View style={[styles.coin, {
       backgroundColor: over ? `${theme.danger}2e` : `${color}14`,
-      borderColor: over ? theme.danger : `${color}55`, borderWidth: over ? 2 : 1,
+      borderColor: over ? theme.danger : outline === color ? `${color}55` : outline, borderWidth: over ? 2 : 1,
     }]}>
       {left !== null && !over && <View style={[styles.coinFill, { height: `${remainingFill(category) * 100}%`, backgroundColor: `${color}3d` }]} />}
       <Text style={styles.coinEmoji}>{category.style.emoji}</Text>

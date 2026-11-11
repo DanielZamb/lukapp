@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { getFunctionName } from "convex/server";
@@ -250,6 +251,20 @@ test("a failed create leaves the selection and editor available for retry", asyn
 });
 
 
+test("after a lost reply, a create refused before the server looked can be sent again as the same named category", async () => {
+  const picker = await open([category("food")]);
+  await act(async () => picker.sheet().onCreate());
+  await act(async () => picker.sheet().onName("Weekend"));
+  await act(async () => picker.sheet().onAnswer("spend"));
+  provider.create.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockResolvedValueOnce({ kind: "category", category: category("weekend") });
+  for (let attempt = 0; attempt < 3; attempt++) await act(async () => picker.sheet().onConfirm());
+  const weekend = { workspaceId: "workspace", selection: { kind: "custom", name: "Weekend", answer: "spend", style: expect.anything() } };
+  expect(provider.create.mock.calls.map(([request]) => request)).toEqual([weekend, weekend, weekend]);
+  expect(picker.value()).toEqual({ ids: ["weekend"], primaryId: null });
+});
+
 test("unknown custom names require an explicit allowed answer and reset it on rename", async () => {
   const picker = await open([]);
   await act(async () => picker.sheet().onCreate());
@@ -275,7 +290,7 @@ test.each(["stillMine", "payDebt"] as const)("%s routes to account setup without
   expect(provider.create).not.toHaveBeenCalled();
   expect(provider.account).toHaveBeenCalledWith({ name: "My place", answer, style: { emoji: "✨", tone: "primary", color: "h270" } });
   expect(picker.sheet().editor?.kind).toBe("custom");
-  expect(picker.sheet().error).toContain("unavailable");
+  expect(picker.sheet().error).toContain("You can't add a place here");
   expect(picker.close).not.toHaveBeenCalled();
   provider.account.mockReturnValueOnce(true);
   await act(async () => picker.sheet().onConfirm());
@@ -300,4 +315,24 @@ test("the current name receives a visible suggestion that can be overridden", as
   await act(async () => picker.sheet().onName("Unrecognized later name"));
   expect(picker.sheet().suggested).toBeNull();
   expect(picker.sheet().canConfirm).toBe(false);
+});
+
+test("a Save kept from the render before the last keystrokes creates the name and look the sheet shows", async () => {
+  const picker = await open([category("food")]);
+  await act(async () => picker.sheet().onCreate());
+  await act(async () => picker.sheet().onName("Week"));
+  await act(async () => picker.sheet().onAnswer("spend"));
+  const kept = picker.sheet().onConfirm;
+  await act(async () => picker.sheet().onName("Weekend"));
+  await act(async () => kept());
+  expect(provider.create).not.toHaveBeenCalled();
+  await act(async () => {
+    picker.sheet().onAnswer("spend");
+    picker.sheet().onStyle({ emoji: "🎉", tone: "primary", color: "olive" });
+  });
+  provider.create.mockResolvedValueOnce({ kind: "category", category: category("weekend") });
+  await act(async () => kept());
+  expect(provider.create.mock.calls.map(([request]) => request)).toEqual([{ workspaceId: "workspace", selection: {
+    kind: "custom", name: "Weekend", answer: "spend", style: { emoji: "🎉", tone: "primary", color: "olive" },
+  } }]);
 });

@@ -1,3 +1,4 @@
+import { optionalDescription } from "../descriptions";
 import { AccountingError } from "../errors";
 import { requireWorkspace } from "../membership";
 import { periodFromAccountingDate } from "../period";
@@ -28,6 +29,7 @@ export async function reversePostedEntry(
     journalEntryId: string;
     accountingDate?: string;
     description?: string;
+    reversalDescriptionPrefix?: string;
     idempotencyKey: string;
   },
 ): Promise<PostedJournalEntry> {
@@ -51,9 +53,11 @@ export async function reversePostedEntry(
   if (accountingDate < original.accountingDate) {
     throw new AccountingError("reversal_date_before_original");
   }
+  const prefix = optionalDescription(input.reversalDescriptionPrefix);
+  if (prefix !== undefined && input.description !== undefined) throw new AccountingError("description_invalid");
   const draft = {
     accountingDate,
-    description: input.description ?? `Reversal: ${original.description}`,
+    description: input.description ?? `${prefix ?? "Reversal:"} ${original.description}`,
     idempotencyKey: input.idempotencyKey,
     policy: "reversal@1" as const,
     reversesEntryId: original.id,

@@ -3,6 +3,7 @@ import { nativeCaptureSchema, type NativeCapture } from "../../../modules/notifi
 import { calendarDate } from "../timeZones";
 import type { IntakeCandidate } from "./candidates";
 import { suggest } from "./suggest";
+import { amountTextFormatSchema, preCurrencyReviewAgrees, storedAmountReviewSchema, type StoredAmountText } from "../amount/storedText";
 
 /** Parser version recorded for candidates suggested from the kept notification text. */
 export const TEXT_SUGGESTION_VERSION = "suggest-v2";
@@ -67,6 +68,7 @@ export const outcomeSchema = z.discriminatedUnion("ok", [
 export const mappingSchema = z.object({
   sourceSelectionId: z.string().regex(/^[!-~]{1,64}$/), packageName: z.string().max(255).regex(/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/),
   workspaceId: text, financialAccountProfileId: text, currency,
+  /** The workspace zone when the source was set up. Captures are dated in the workspace's zone when they are ingested. */
   timeZone: text.refine((zone) => { try { new Intl.DateTimeFormat("en", { timeZone: zone }); return true; } catch { return false; } }),
 }).strict();
 export type SourceMapping = z.infer<typeof mappingSchema>;
@@ -77,7 +79,10 @@ const activeSchema = z.object({
     z.object({ kind: z.literal("native"), capture: nativeCaptureSchema, mapping: mappingSchema, accountingDate: text }).strict(),
     z.object({ kind: z.literal("legacy") }).strict(),
   ]),
-  originalSuggestion: originalSchema, review: reviewSchema, reviewAmountText: z.string().max(256).nullable().default(null),
+  originalSuggestion: originalSchema, review: reviewSchema, reviewAmountText: z.string().max(256).nullable(),
+  reviewAmountFormat: amountTextFormatSchema.nullable(), reviewAmountReenter: z.literal(true).optional(),
+  /** Version 5: the review text still awaits the person's confirmation, so closing and reopening cannot skip it. */
+  reviewAmountReview: storedAmountReviewSchema.optional(),
   parserVersion: text, consentVersion: text,
   status: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("review"), error: z.string().optional(), currencyReviewed: z.boolean() }).strict(),
@@ -91,7 +96,7 @@ const configureSchema = z.object({
   sources: z.array(z.object({ packageName: text, sourceSelectionId: text }).strict()).max(16),
 }).strict();
 export const stateSchema = z.object({
-  v: z.literal(3), records: z.array(z.discriminatedUnion("kind", [activeSchema, terminalSchema])).max(512),
+  v: z.literal(5), records: z.array(z.discriminatedUnion("kind", [activeSchema, terminalSchema])).max(512),
   mappings: z.array(mappingSchema).max(64), activeSelectionIds: z.array(text).max(16),
   pendingConfigure: configureSchema.nullable(),
   legacyMigration: z.object({ digest: z.string().regex(/^[a-f0-9]{64}$/) }).strict().nullable().default(null),
@@ -101,11 +106,13 @@ export const stateSchema = z.object({
   }
   if (state.activeSelectionIds.some((id) => !state.mappings.some((m) => m.sourceSelectionId === id)))
     ctx.addIssue({ code: "custom", message: "Missing active mapping" });
+  if (state.records.some((r) => r.kind === "active" && (r.reviewAmountText === null) !== (r.reviewAmountFormat === null)))
+    ctx.addIssue({ code: "custom", message: "Review amount text without its format" });
 });
 export type CandidateState = z.infer<typeof stateSchema>;
 export type CandidateRecord = CandidateState["records"][number];
 export type ActiveCandidate = z.infer<typeof activeSchema>;
-export const emptyState = (): CandidateState => ({ v: 3, records: [], mappings: [], activeSelectionIds: [], pendingConfigure: null, legacyMigration: null });
+export const emptyState = (): CandidateState => ({ v: 5, records: [], mappings: [], activeSelectionIds: [], pendingConfigure: null, legacyMigration: null });
 export function utf8Bytes(value: string) {
   let size = 0;
   for (const c of value) { const n = c.codePointAt(0) ?? 0; size += n <= 127 ? 1 : n <= 2047 ? 2 : n <= 65535 ? 3 : 4; }
@@ -118,32 +125,62 @@ export function serializeState(state: CandidateState) {
   if (utf8Bytes(value) > 1_048_576) throw new Error("CAPACITY_EXCEEDED");
   return value;
 }
+function fromVersion2(raw: unknown) {
+  const old = z.object({ v: z.literal(2), records: z.array(z.unknown()) }).passthrough().parse(raw);
+  const records = old.records.map((record) => {
+    const row = z.object({ kind: z.enum(["active", "terminal"]) }).passthrough().parse(record);
+    if (row.kind === "terminal") return record;
+    const active = z.object({ currency, originalSuggestion: reviewSchema }).passthrough().parse(row);
+    return { ...active, originalSuggestion: { ...active.originalSuggestion, currency: active.currency } };
+  });
+  return { ...old, v: 3, records };
+}
+/**
+ * Version 3 review text was typed in the pre-currency grammar. It stays verbatim, tagged as such. Text whose reading
+ * disagrees with the review's saved amount is kept but marked for re-entry, so neither value wins by default.
+ */
+function fromVersion3(raw: unknown) {
+  const old = z.object({ v: z.literal(3), records: z.array(z.unknown()) }).passthrough().parse(raw);
+  const records = old.records.map((record) => {
+    const row = z.object({ kind: z.enum(["active", "terminal"]) }).passthrough().parse(record);
+    if (row.kind === "terminal") return record;
+    const active = z.object({ currency, review: reviewSchema, reviewAmountText: z.string().nullable().default(null) })
+      .passthrough().parse(row);
+    const typed = active.reviewAmountText;
+    return { ...active, reviewAmountFormat: typed === null ? null : "pre-currency",
+      ...(typed !== null && !preCurrencyReviewAgrees(typed, active.currency, active.review) ? { reviewAmountReenter: true } : {}) };
+  });
+  return { ...old, v: 4 as const, records };
+}
+/** Version 4 documents have no pending confirmation on any review text; they read unchanged. */
+function fromVersion4(raw: unknown) {
+  return { ...z.object({ v: z.literal(4) }).passthrough().parse(raw), v: 5 };
+}
 export function parseState(value: string | null): CandidateState {
   if (value === null) return emptyState();
   const raw: unknown = JSON.parse(value);
   const version = z.object({ v: z.number() }).parse(raw).v;
-  if (version === 2) {
-    const old = z.object({ v: z.literal(2), records: z.array(z.unknown()) }).passthrough().parse(raw);
-    const records = old.records.map((record) => {
-      const row = z.object({ kind: z.enum(["active", "terminal"]) }).passthrough().parse(record);
-      if (row.kind === "terminal") return record;
-      const active = z.object({ currency, originalSuggestion: reviewSchema }).passthrough().parse(row);
-      return { ...active, originalSuggestion: { ...active.originalSuggestion, currency: active.currency } };
-    });
-    return stateSchema.parse({ ...old, v: 3, records });
-  }
+  if (version === 2) return stateSchema.parse(fromVersion4(fromVersion3(fromVersion2(raw))));
+  if (version === 3) return stateSchema.parse(fromVersion4(fromVersion3(raw)));
+  if (version === 4) return stateSchema.parse(fromVersion4(raw));
   return stateSchema.parse(raw);
+}
+/** The review text the person typed, with the grammar it was typed in. */
+export function reviewAmountOf(row: ActiveCandidate): StoredAmountText | null {
+  if (row.reviewAmountText === null || row.reviewAmountFormat === null) return null;
+  return { text: row.reviewAmountText, format: row.reviewAmountFormat, ...(row.reviewAmountReenter ? { reenter: true } : {}),
+    ...(row.reviewAmountReview ? { review: row.reviewAmountReview } : {}) };
 }
 export function prune(state: CandidateState, now: number): CandidateState {
   return { ...state, records: state.records.filter((r) => r.expiresAt > now) };
 }
-export function ingest(state: CandidateState, capture: NativeCapture, mapping: SourceMapping, digest: string): CandidateState {
+export function ingest(state: CandidateState, capture: NativeCapture, mapping: SourceMapping, digest: string, timeZone: string): CandidateState {
   const prior = state.records.find((r) => r.id === capture.captureId);
   if (prior) {
     if (prior.digest !== digest) throw new Error("CAPTURE_CONFLICT");
     return state;
   }
-  const accountingDate = calendarDate(new Date(capture.notificationAt), mapping.timeZone);
+  const accountingDate = calendarDate(new Date(capture.notificationAt), timeZone);
   const { currency: suggestedCurrency, parserVersion, ...suggested } = suggestionFor(capture, mapping);
   const suggestion = { ...suggested, description: suggested.description.slice(0, 1024),
     accountingDate, financialAccountProfileId: mapping.financialAccountProfileId, userCategoryIds: [], primaryUserCategoryId: null };
@@ -152,8 +189,8 @@ export function ingest(state: CandidateState, capture: NativeCapture, mapping: S
   const row: ActiveCandidate = {
     id: capture.captureId, digest, expiresAt: capture.expiresAt, createdAt: capture.capturedAt, recordRevision: 0,
     kind: "active", workspaceId: mapping.workspaceId, currency: suggestedCurrency ?? mapping.currency,
-    origin: { kind: "native", capture, mapping, accountingDate }, originalSuggestion: { ...suggestion, currency: suggestedCurrency }, review: suggestion, reviewAmountText: null,
-    parserVersion, consentVersion: capture.consentVersion,
+    origin: { kind: "native", capture, mapping, accountingDate }, originalSuggestion: { ...suggestion, currency: suggestedCurrency }, review: suggestion,
+    reviewAmountText: null, reviewAmountFormat: null, parserVersion, consentVersion: capture.consentVersion,
     status: { kind: "review", currencyReviewed: currencyKnown,
       ...(currencyKnown ? {} : { error: "Review unresolved currency" }) },
   };
@@ -172,7 +209,8 @@ export function notificationOf(row: ActiveCandidate): { text: string; packageNam
 export function projectCandidate(row: ActiveCandidate): IntakeCandidate {
   const notification = notificationOf(row);
   return { id: row.id, createdAt: row.createdAt, expiresAt: row.expiresAt, workspaceId: row.workspaceId, ...(notification ? { notification } : {}),
-    currency: row.currency, suggestion: row.review, reviewAmountText: row.reviewAmountText, parserVersion: row.parserVersion, consentVersion: row.consentVersion,
+    currency: row.currency, suggestion: row.review, reviewAmount: reviewAmountOf(row), parserVersion: row.parserVersion, consentVersion: row.consentVersion,
+    status: row.status.kind === "review" ? { kind: "review", revision: row.recordRevision } : { kind: "pending" },
     ...(row.status.kind === "review" ? (row.status.error ? { error: row.status.error } : {}) : { error: "Confirmation pending. Open to retry." }) };
 }
 export function evidenceFor(row: ActiveCandidate) {
