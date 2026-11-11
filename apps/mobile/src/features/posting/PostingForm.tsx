@@ -34,7 +34,6 @@ export type PostingFormProps = {
   amount: AmountSession;
   /** Set when a saved amount reopened in a new form or could not be read. */
   amountNotice?: AmountNotice | null;
-  /** True while the chosen category decides the sign. */
   description: string;
   date: string;
   place: string;

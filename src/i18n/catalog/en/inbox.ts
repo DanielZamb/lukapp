@@ -87,7 +87,7 @@ export const inbox = {
   reviewCurrencyUnresolved: "currency unresolved",
   reviewDirectionIn: "Original direction in",
   reviewDirectionOut: "Original direction out",
-  reviewDirectionUnresolved: "Direction unresolved. Enter a signed amount.",
+  reviewDirectionUnresolved: "Direction unresolved. The category you choose sets it",
   reviewImported: "Imported Candidate. Review all facts before posting.",
 
   cardA11y: "Notification from {app}",

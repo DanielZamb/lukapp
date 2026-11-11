@@ -179,7 +179,7 @@ test("the review note is one sentence per language around the stored source, amo
   const dollars = { ...complete, currency: "USD" as const };
   expect(await noteFor(dollars, "es")).toContain("Monto original 45,123.45 USD.");
   expect(await noteFor(partials[0]!, "es")).toContain("No pudimos leer el monto. Según la notificación, la plata entra.");
-  expect(await noteFor(partials[1]!, "es")).toContain("No se sabe si la plata entra o sale. Escribe el monto con signo.");
+  expect(await noteFor(partials[1]!, "es")).toContain("No se sabe si la plata entra o sale. La categoría que elijas lo define. Moneda a revisar");
 });
 
 test.each([

@@ -90,7 +90,7 @@ export const inbox: Messages<typeof en> = {
   reviewCurrencyUnresolved: "moneda sin identificar",
   reviewDirectionIn: "Según la notificación, la plata entra",
   reviewDirectionOut: "Según la notificación, la plata sale",
-  reviewDirectionUnresolved: "No se sabe si la plata entra o sale. Escribe el monto con signo.",
+  reviewDirectionUnresolved: "No se sabe si la plata entra o sale. La categoría que elijas lo define",
   reviewImported: "Movimiento por revisar importado. Revisa todos los datos antes de registrar.",
 
   cardA11y: "Notificación de {app}",

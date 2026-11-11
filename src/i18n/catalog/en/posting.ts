@@ -160,7 +160,7 @@ export const posting = {
   rejectAccountRequired: "Choose the place this money moves from.",
   rejectDescriptionRequired: "Add a description before posting.",
   rejectAmountInvalid: "Enter a valid amount before posting.",
-  rejectDirectionInvalid: "Enter a signed amount: negative for money out, positive for money in.",
+  rejectDirectionInvalid: "Choose a category so we know whether the money came in or went out.",
   rejectWorkspaceNotFound: "This workspace is no longer available.",
   entryChanged: "The entry changed after the Budget check. Check it and post again.",
   budgetUnchecked: "We couldn't check your Budget. Try posting again.",
