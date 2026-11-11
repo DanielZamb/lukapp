@@ -10,12 +10,13 @@ import { parseLocalEntryDocument, type LocalEntryDraft, type LocalEntryDraftsPor
 import type { PendingPosting } from "../posting/pendingPostingSchema";
 import { usePostingEditor, type PostingTransport } from "../posting/usePostingEditor";
 import { createCandidateBinding } from "../intake/postingBinding";
-import { emptyState, ingest, serializeState, type ActiveCandidate } from "../intake/durableState";
+import { commandFor, emptyState, ingest, serializeState, type ActiveCandidate } from "../intake/durableState";
 import { IntakeService } from "../intake/service";
 import { viewInbox } from "../intake/candidates";
 import { confirmReadyCandidates } from "../intake/confirmReady";
 import { capture, fixture, mapping, now } from "../intake/service.testSupport";
-import { confirmAmount, openAmount, toggleAmountSign, withNativeText } from "./session";
+import { amountSendable, confirmAmount, displayedMinorUnits, openAmount, toggleAmountSign, withNativeText } from "./session";
+import type { AmountTextFormat, StoredAmountReview } from "./storedText";
 
 let root: ReactTestRenderer | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
@@ -250,6 +251,101 @@ test("third review, finding 1: a Candidate marked for re-entry is not Ready and 
   await confirmReadyCandidates(f.service, candidates, dispatch);
   expect(dispatch).not.toHaveBeenCalled();
   expect(f.service.read(capture.captureId)).toMatchObject({ status: { kind: "review" }, reviewAmountReenter: true, review: { amountMinorUnits: 999 } });
+});
+
+test("fourth review, finding B: a version-3 USD Candidate whose text opens converted is not Ready, and Confirm all Ready leaves it", async () => {
+  const f = await candidateSavedBefore("USD", "-1.234,50", 123450);
+  const dispatch = vi.fn(async (command: ConfirmCandidateInput) => confirmed(command));
+  const editor = await openCandidate(f.service, "USD", dispatch);
+  expect(editor().amount.review).toEqual({ pasted: false, converted: { previous: "-1.234,50" } });
+  await act(async () => root?.unmount()); root = undefined;
+  const candidates = f.service.candidates();
+  expect(viewInbox({ v: 1, candidates }, mapping.workspaceId, now, "USD").ready).toEqual([]);
+  const batch = vi.fn(async (_items: ConfirmCandidateInput[]) => ({ results: [] }));
+  await confirmReadyCandidates(f.service, candidates, batch);
+  expect(batch).not.toHaveBeenCalled();
+  await expect(f.service.beginConfirmation(capture.captureId, f.service.read(capture.captureId)!.recordRevision)).rejects.toThrow();
+  expect(f.service.read(capture.captureId)).toMatchObject({ status: { kind: "review" } });
+});
+
+type Saved = { text: string; format: AmountTextFormat; minorUnits: number; direction: "in" | "out"; ready: { COP: boolean; USD: boolean } };
+/**
+ * Review texts with the saved amount beside them, and whether each may be confirmed in a batch as it is in a COP and a
+ * USD workspace, stated from the grammars: pre-currency text reads with dot groups and comma decimals and must read
+ * the same in the workspace format; text tagged with a format reads verbatim in that format's own workspace and is
+ * rewritten for confirmation in the other; unreadable text, or text whose money differs from the saved amount, never is.
+ */
+const saved: Saved[] = [
+  { text: "-1.234,50", format: "pre-currency", minorUnits: 123450, direction: "out", ready: { COP: true, USD: false } },
+  { text: "-1234", format: "pre-currency", minorUnits: 123400, direction: "out", ready: { COP: true, USD: true } },
+  { text: "1.234,5", format: "pre-currency", minorUnits: 123450, direction: "in", ready: { COP: true, USD: false } },
+  { text: "-1.23", format: "pre-currency", minorUnits: 123, direction: "out", ready: { COP: false, USD: false } },
+  { text: "-1.234,50", format: "cop/1", minorUnits: 123450, direction: "out", ready: { COP: true, USD: false } },
+  { text: "-1234,5", format: "cop/1", minorUnits: 123450, direction: "out", ready: { COP: true, USD: false } },
+  { text: "-1,234.50", format: "usd/1", minorUnits: 123450, direction: "out", ready: { COP: false, USD: true } },
+  { text: "1234.5", format: "usd/1", minorUnits: 123450, direction: "in", ready: { COP: false, USD: true } },
+  { text: "-1.234,50", format: "legacy-es-CO/1", minorUnits: 123450, direction: "out", ready: { COP: true, USD: false } },
+  { text: "-1.234,50", format: "cop/1", minorUnits: 999, direction: "out", ready: { COP: false, USD: false } },
+];
+const reviews: Array<StoredAmountReview | undefined> = [undefined, { reason: "pasted", previous: null }, { reason: "converted", previous: "-1.234,50" }];
+type Restored = { version: 2 | 3 | 4 | 5; currency: "COP" | "USD"; saved: Saved; review: StoredAmountReview | undefined };
+/** Every intake state version the migrations accept: 2 and 3 carry pre-currency text only, 5 alone a pending review. */
+const restored: Restored[] = ([2, 3, 4, 5] as const).flatMap((version) => (["COP", "USD"] as const).flatMap((currency) =>
+  saved.filter((entry) => version >= 4 || entry.format === "pre-currency")
+    .flatMap((entry) => (version === 5 ? reviews : [undefined]).map((review) => ({ version, currency, saved: entry, review })))));
+
+async function candidateRestored({ version, currency, saved: entry, review }: Restored) {
+  const f = fixture();
+  const state = ingest(emptyState(), { ...capture, currency, description: "Market" }, { ...mapping, currency }, "a".repeat(64), mapping.timeZone);
+  const row = state.records[0] as ActiveCandidate;
+  const { reviewAmountFormat: _format, ...untagged } = { ...row, reviewAmountText: entry.text,
+    review: { ...row.review, amountMinorUnits: entry.minorUnits, direction: entry.direction } };
+  const { currency: _currency, ...original } = row.originalSuggestion;
+  const record = version === 2 ? { ...untagged, originalSuggestion: original } : version === 3 ? untagged
+    : { ...untagged, reviewAmountFormat: entry.format, ...(review ? { reviewAmountReview: review } : {}) };
+  f.setValue(JSON.stringify({ ...state, v: version, mappings: [{ ...mapping, currency }], activeSelectionIds: [mapping.sourceSelectionId], records: [record] }));
+  f.setPages([{ captures: [], nextCursor: null }]);
+  await f.service.refresh();
+  return f;
+}
+
+test.each(restored.map((entry) => [`v${entry.version} ${entry.currency} ${entry.saved.format} ${JSON.stringify(entry.saved.text)} saved as ${entry.saved.minorUnits}${entry.review ? ` awaiting ${entry.review.reason}` : ""}`, entry] as const))(
+  "fourth review, finding B: %s is confirmed in a batch exactly when opening it alone would send that money as it is",
+  async (_name, entry) => {
+    const f = await candidateRestored(entry);
+    const signed = (entry.saved.direction === "out" ? -1 : 1) * entry.saved.minorUnits;
+    const dispatch = vi.fn(async (command: ConfirmCandidateInput) => confirmed(command));
+    const editor = await openCandidate(f.service, entry.currency, dispatch);
+    const alone = amountSendable(editor().amount) ? displayedMinorUnits(editor().amount) : null;
+    await act(async () => root?.unmount()); root = undefined;
+    const candidates = f.service.candidates();
+    const ready = viewInbox({ v: 1, candidates }, mapping.workspaceId, now, entry.currency).ready.map((candidate) => candidate.id);
+    const batch = vi.fn(async (items: ConfirmCandidateInput[]) => ({ results: items.map((item) => ({ candidateId: item.candidateId, ok: true as const, result: confirmed(item) })) }));
+    await confirmReadyCandidates(f.service, candidates, batch);
+    const posted = batch.mock.calls.flatMap(([items]) => items.map((item) => (item.confirmed.direction === "out" ? -1 : 1) * item.confirmed.amount.minorUnits));
+    const expected = !entry.review && entry.saved.ready[entry.currency];
+    expect(ready).toEqual(expected ? [capture.captureId] : []);
+    expect(posted).toEqual(expected ? [signed] : []);
+    expect(alone === signed, "opening it alone sends the saved money as it is").toBe(expected);
+  },
+);
+
+test("fourth review, finding B: a frozen Candidate whose saved text would now open converted is sent again byte for byte", async () => {
+  const f = fixture();
+  const state = ingest(emptyState(), { ...capture, currency: "USD", description: "Market" }, { ...mapping, currency: "USD" }, "a".repeat(64), mapping.timeZone);
+  const row = { ...state.records[0] as ActiveCandidate, reviewAmountText: "-1.234,50", reviewAmountFormat: "pre-currency" as const };
+  const reviewed: ActiveCandidate = { ...row, review: { ...row.review, amountMinorUnits: 123450, direction: "out", description: "Market" },
+    status: { kind: "review", currencyReviewed: true } };
+  const command = commandFor(reviewed);
+  f.setValue(serializeState({ ...state, mappings: [{ ...mapping, currency: "USD" }], activeSelectionIds: [mapping.sourceSelectionId],
+    records: [{ ...reviewed, recordRevision: 1, status: { kind: "submitting", command, startedAt: now - 10 } }] }));
+  f.setPages([{ captures: [], nextCursor: null }]);
+  await f.service.refresh();
+  const candidates = f.service.candidates();
+  expect(viewInbox({ v: 1, candidates }, mapping.workspaceId, now, "USD").ready.map((candidate) => candidate.id)).toEqual([capture.captureId]);
+  const batch = vi.fn(async (_items: ConfirmCandidateInput[]) => ({ results: [] }));
+  await confirmReadyCandidates(f.service, candidates, batch);
+  expect(batch.mock.calls.map(([items]) => JSON.stringify(items))).toEqual([JSON.stringify([command])]);
 });
 
 test("a rewritten Draft awaits confirmation until confirmed, through keeping, a sign change and reopening", async () => {
