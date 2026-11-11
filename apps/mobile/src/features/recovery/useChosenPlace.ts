@@ -18,29 +18,36 @@ export function endedPlaceRefusal(code: string): Unavailable | null {
 export type UnavailablePlace = { id: string; label: string; detail: string };
 
 /**
- * One Place picked from a live list. The choice is only ever the id the person tapped: when that Place leaves the
- * list or the server refuses it, it stays chosen and marked unavailable until the person picks another, never
- * silently replaced by whichever Place remains.
+ * One Place picked from a live list, kept in its owner's form. The choice is only ever the id the person tapped: when
+ * that Place leaves the list or the server refuses it, it stays chosen and marked unavailable until the person picks
+ * another, never silently replaced by whichever Place remains.
  */
-export function useChosenPlace(live: RecoveryPlace[], initial: string | null) {
+export type PlaceChoice = { readonly id: string | null; readonly refused: Readonly<Record<string, Unavailable>> };
+
+export const placeChoice = (id: string | null): PlaceChoice => ({ id, refused: {} });
+export const choosePlace = (choice: PlaceChoice, id: string): PlaceChoice => ({ ...choice, id });
+export const refusePlace = (choice: PlaceChoice, id: string, why: Unavailable): PlaceChoice =>
+  ({ ...choice, refused: { ...choice.refused, [id]: why } });
+
+/** Why the chosen Place cannot take money from `live`, or null when it can. */
+export function unavailableReason(choice: PlaceChoice, live: readonly RecoveryPlace[]): Unavailable | null {
+  if (choice.id === null) return null;
+  return choice.refused[choice.id] ?? (live.some((place) => place.id === choice.id) ? null : "gone");
+}
+
+/** How an unavailable choice reads, named as the person last saw it even after it left the list. */
+export function useChosenPlace(live: RecoveryPlace[], choice: PlaceChoice): UnavailablePlace | null {
   const { t } = useT();
-  const [id, setId] = useState(initial);
-  const [refused, setRefused] = useState<Record<string, Unavailable>>({});
   const [names, setNames] = useState<Record<string, string>>({});
   const unseen = live.filter((place) => names[place.id] !== place.name);
   if (unseen.length) setNames((current) => ({ ...current, ...Object.fromEntries(unseen.map((place) => [place.id, place.name])) }));
-  const offered = live.filter((place) => !refused[place.id]);
-  const reason: Unavailable | null = id === null ? null : refused[id] ?? (offered.some((place) => place.id === id) ? null : "gone");
-  const name = id === null ? "" : names[id] ?? live.find((place) => place.id === id)?.name ?? "";
-  const unavailable: UnavailablePlace | null = id === null || reason === null ? null : {
+  const id = choice.id;
+  const reason = unavailableReason(choice, live);
+  if (id === null || reason === null) return null;
+  const name = names[id] ?? live.find((place) => place.id === id)?.name ?? "";
+  return {
     id,
     label: t(reason === "ended" ? "placeEnding.closedName" : reason === "undoing" ? "placeEnding.undoingName" : "recovery.placeUnavailable", { name }),
     detail: t(reason === "ended" ? "placeEnding.postingPlaceEnded" : reason === "undoing" ? "placeEnding.postingPlaceUndoing" : "recovery.placeGone", { name }),
-  };
-  return {
-    id,
-    unavailable,
-    choose: setId,
-    refuse: (refusedId: string, why: Unavailable) => setRefused((current) => ({ ...current, [refusedId]: why })),
   };
 }

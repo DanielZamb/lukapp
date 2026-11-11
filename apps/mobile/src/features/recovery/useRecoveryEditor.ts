@@ -1,10 +1,9 @@
-import { useState } from "react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
 import { useFrozenCommand } from "../useFrozenCommand";
 import { amountOfMinorUnits, amountSendable, displayedMinorUnits, sendableMinorUnits, type AmountSession } from "../amount/session";
-import { useAmountState } from "../amount/useAmountState";
+import { useFormState } from "../amount/useAmountState";
 import {
   DEFAULT_INSTALLMENT_COUNT,
   INSTALLMENT_COUNTS,
@@ -13,9 +12,13 @@ import {
   type RecoveryCandidate,
   type RecoveryPlace,
 } from "./model";
-import { endedPlaceRefusal, useChosenPlace } from "./useChosenPlace";
+import {
+  choosePlace, endedPlaceRefusal, placeChoice, refusePlace, unavailableReason, useChosenPlace, type PlaceChoice,
+} from "./useChosenPlace";
 
 type MonthCount = (typeof INSTALLMENT_COUNTS)[number];
+/** What the person sets on the proposal: the plan is built from one snapshot of it, read at the press. */
+type Proposal = { months: MonthCount; amount: AmountSession; destination: PlaceChoice };
 
 type Request = FunctionArgs<typeof api.savingsRecovery.activatePlan>;
 type Receipt = FunctionReturnType<typeof api.savingsRecovery.activatePlan>;
@@ -57,16 +60,18 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   const { t } = useT();
   const defaultDestination = seed.destinations.find((place) => place.productKind === "savingsAccount")
     ?? seed.destinations[0] ?? null;
-  const [installmentCount, setInstallmentCount] = useState<MonthCount>(DEFAULT_INSTALLMENT_COUNT);
-  const [amount, setAmount, readAmount] = useAmountState(() => installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)));
-  const destination = useChosenPlace(seed.destinations, defaultDestination?.id ?? null);
-  const destinationId = destination.id;
+  const [form, setForm, readForm] = useFormState<Proposal>(() => ({
+    months: DEFAULT_INSTALLMENT_COUNT,
+    amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)),
+    destination: placeChoice(defaultDestination?.id ?? null),
+  }));
+  const unavailable = useChosenPlace(seed.destinations, form.destination);
   const command = useFrozenCommand<Request, Receipt>({
     send: transport.save, reportFailure: transport.reportFailure, onDone: transport.onSaved,
     settles: (code) => activationSettles.has(code),
     onRefused: (code, request) => {
       const ended = endedPlaceRefusal(code);
-      if (ended) destination.refuse(request.destinationFinancialAccountProfileId, ended);
+      if (ended) setForm((now) => ({ ...now, destination: refusePlace(now.destination, request.destinationFinancialAccountProfileId, ended) }));
     },
   });
   const { state } = command;
@@ -76,34 +81,35 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     : !refusal || endedPlaceRefusal(refusal.code) ? ""
       : t(refusal.code === "expense_already_recovered" ? "recovery.draftAlreadyRecovered"
         : replacementRefusals[refusal.code] ?? "recovery.draftRejected");
-  const suggestion = suggestionFor(seed.candidate.amountMinorUnits, installmentCount, displayedMinorUnits(amount) ?? 0);
-  const ready = suggestion.valid && amountSendable(amount);
+  const suggestion = suggestionFor(seed.candidate.amountMinorUnits, form.months, displayedMinorUnits(form.amount) ?? 0);
+  const ready = suggestion.valid && amountSendable(form.amount);
   function build(): Request | null {
-    const typed = sendableMinorUnits(readAmount());
-    const pressed = typed === null ? null : suggestionFor(seed.candidate.amountMinorUnits, installmentCount, typed);
-    if (!destinationId || destination.unavailable || !pressed?.valid) return null;
+    const now = readForm();
+    const typed = sendableMinorUnits(now.amount);
+    const pressed = typed === null ? null : suggestionFor(seed.candidate.amountMinorUnits, now.months, typed);
+    const destinationId = now.destination.id;
+    if (!destinationId || unavailableReason(now.destination, seed.destinations) || !pressed?.valid) return null;
     return {
       workspaceId: seed.workspaceId,
       sourceJournalEntryId: seed.candidate.journalEntryId,
       destinationFinancialAccountProfileId: destinationId,
-      installmentCount,
+      installmentCount: now.months,
       installmentMinorUnits: pressed.installmentMinorUnits,
       idempotencyKey: transport.newKey(),
       ...(seed.replacesPlanId ? { replacesPlanId: seed.replacesPlanId } : {}),
     };
   }
   return {
-    installmentCount, amount, destinationId, unavailable: destination.unavailable, busy: command.busy, pending, error,
-    editable: !command.frozen, suggestion,
-    canSubmit: !command.busy && (pending || (!!destinationId && !destination.unavailable && ready)),
+    installmentCount: form.months, amount: form.amount, destinationId: form.destination.id, unavailable, busy: command.busy,
+    pending, error, editable: !command.frozen, suggestion,
+    canSubmit: !command.busy && (pending || (!!form.destination.id && !unavailable && ready)),
     canDismiss: !command.frozen,
     onMonths: (count: MonthCount) => {
-      if (!command.canEdit()) return;
-      setInstallmentCount(count);
-      setAmount(installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, count)));
+      if (command.canEdit())
+        setForm((now) => ({ ...now, months: count, amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, count)) }));
     },
-    onAmount: (value: AmountSession) => { if (command.canEdit() && value.currency === seed.currency) setAmount(value); },
-    onDestination: (id: string) => { if (command.canEdit()) destination.choose(id); },
+    onAmount: (value: AmountSession) => { if (command.canEdit() && value.currency === seed.currency) setForm((now) => ({ ...now, amount: value })); },
+    onDestination: (id: string) => { if (command.canEdit()) setForm((now) => ({ ...now, destination: choosePlace(now.destination, id) })); },
     submit: async () => { await command.submit(build); },
   };
 }

@@ -107,6 +107,8 @@ test("a violation planted beside an exempt declaration, in the same file, is sti
 const amountFolder = "apps/mobile/src/features/amount/";
 const sessionConstructors = ["openAmount", "openAmountIn", "amountOfMinorUnits", "openSavedAmount"];
 const renderEffects = new Set(["useEffect", "useLayoutEffect", "useInsertionEffect", "useMemo"]);
+/** The hooks whose state a handler reads with `read()`; `useFormState` is `useAmountState` for a whole form. */
+const pressStates = new Set(["useAmountState", "useFormState"]);
 
 function parse(file: string, source: string) {
   return ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -162,7 +164,7 @@ function capturedAmounts(file: string, source: string): string[] {
   const owners: Array<{ owner: ts.FunctionLikeDeclaration; value: string }> = [];
   const findOwners = (node: ts.Node) => {
     if (ts.isVariableDeclaration(node) && node.initializer && ts.isCallExpression(node.initializer)
-      && ts.isIdentifier(node.initializer.expression) && node.initializer.expression.text === "useAmountState"
+      && ts.isIdentifier(node.initializer.expression) && pressStates.has(node.initializer.expression.text)
       && ts.isArrayBindingPattern(node.name)) {
       const [first] = node.name.elements;
       let owner: ts.Node = node.parent;
@@ -309,7 +311,7 @@ test("every amount a production handler sends is read from its owner's state at 
   expect([...carriers]).toEqual(expect.arrayContaining(["AmountSession", "LineDraft", "PlaceDraft"]));
   const found = [...sources].flatMap(([file, source]) => amountReadsOutsidePress(file, source, carriers));
   expect(found).toEqual([]);
-  const owners = [...sources].filter(([file, source]) => !file.startsWith(amountFolder) && /\buseAmountState\s*[<(]/.test(source))
+  const owners = [...sources].filter(([file, source]) => !file.startsWith(amountFolder) && /\buse(Amount|Form)State\s*[<(]/.test(source))
     .map(([file]) => file).sort();
   expect(owners).toEqual([
     "apps/mobile/src/features/Setup.tsx",

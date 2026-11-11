@@ -3,11 +3,13 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT } from "../../i18n";
 import type { api } from "../api";
 import { amountOfMinorUnits, amountSendable, displayedMinorUnits, sendableMinorUnits, type AmountSession } from "../amount/session";
-import { useAmountState } from "../amount/useAmountState";
+import { useFormState } from "../amount/useAmountState";
 import { defaultAccountingDate } from "../timeZones";
 import { useFrozenCommand } from "../useFrozenCommand";
 import type { RecoveryPlace, RecoveryPlanView } from "./model";
-import { endedPlaceRefusal, useChosenPlace } from "./useChosenPlace";
+import {
+  choosePlace, endedPlaceRefusal, placeChoice, refusePlace, unavailableReason, useChosenPlace, type PlaceChoice,
+} from "./useChosenPlace";
 
 type Request = FunctionArgs<typeof api.savingsRecovery.recordContribution>;
 type Receipt = FunctionReturnType<typeof api.savingsRecovery.recordContribution>;
@@ -35,6 +37,9 @@ const moveSettles: ReadonlySet<string> = new Set([
   "ledger_summary_not_ready", "ledger_totals_out_of_range",
 ]);
 
+/** What the person sets on Move money: the movement is built from one snapshot of it, read at the press. */
+type Movement = { amount: AmountSession; source: PlaceChoice };
+
 export function useRecoveryMove(
   seed: { workspaceId: string; timeZone: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
   transport: RecoveryMoveTransport,
@@ -42,16 +47,19 @@ export function useRecoveryMove(
   const { t } = useT();
   const defaultSource = seed.sources.find((place) => place.id !== seed.plan.destinationFinancialAccountProfileId)
     ?? null;
-  const source = useChosenPlace(seed.sources, defaultSource?.id ?? null);
-  const sourceId = source.id;
-  const [amount, setAmount, readAmount] = useAmountState(() => amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }));
+  const [form, setForm, readForm] = useFormState<Movement>(() => ({
+    amount: amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }),
+    source: placeChoice(defaultSource?.id ?? null),
+  }));
+  const unavailable = useChosenPlace(seed.sources, form.source);
+  const sourceId = form.source.id;
   const [sameSource, setSameSource] = useState(false);
   const command = useFrozenCommand<Request, Receipt>({
     send: transport.move, reportFailure: transport.reportFailure, onDone: transport.onMoved,
     settles: (code) => moveSettles.has(code),
     onRefused: (code, request) => {
       const ended = endedPlaceRefusal(code);
-      if (ended) source.refuse(request.sourceFinancialAccountProfileId, ended);
+      if (ended) setForm((now) => ({ ...now, source: refusePlace(now.source, request.sourceFinancialAccountProfileId, ended) }));
     },
   });
   const { state } = command;
@@ -60,16 +68,18 @@ export function useRecoveryMove(
   const error = pending ? t("recovery.moveUncertain")
     : sameSource ? t("recovery.moveSameSource")
       : refusal && !endedPlaceRefusal(refusal.code) ? t("recovery.moveRejected") : "";
-  const shownMinorUnits = amountSendable(amount) ? displayedMinorUnits(amount) ?? 0 : 0;
+  const shownMinorUnits = amountSendable(form.amount) ? displayedMinorUnits(form.amount) ?? 0 : 0;
   function build(): Request | null {
-    const minorUnits = sendableMinorUnits(readAmount()) ?? 0;
-    if (seed.plan.status === "suspended" || !sourceId || minorUnits <= 0 || source.unavailable) return null;
-    setSameSource(sourceId === seed.plan.destinationFinancialAccountProfileId);
-    if (sourceId === seed.plan.destinationFinancialAccountProfileId) return null;
+    const now = readForm();
+    const minorUnits = sendableMinorUnits(now.amount) ?? 0;
+    const from = now.source.id;
+    if (seed.plan.status === "suspended" || !from || minorUnits <= 0 || unavailableReason(now.source, seed.sources)) return null;
+    setSameSource(from === seed.plan.destinationFinancialAccountProfileId);
+    if (from === seed.plan.destinationFinancialAccountProfileId) return null;
     return {
       workspaceId: seed.workspaceId,
       planId: seed.plan.id,
-      sourceFinancialAccountProfileId: sourceId,
+      sourceFinancialAccountProfileId: from,
       amount: { currency: seed.plan.currency, minorUnits },
       accountingDate: defaultAccountingDate(seed.timeZone),
       description: t("recovery.moveDescription", { title: seed.plan.title }),
@@ -77,12 +87,12 @@ export function useRecoveryMove(
     };
   }
   return {
-    sourceId, unavailable: source.unavailable, amount, busy: command.busy, pending, error, editable: !command.frozen,
-    canSubmit: !command.busy && (pending || (seed.plan.status === "active" && !!sourceId && !source.unavailable
+    sourceId, unavailable, amount: form.amount, busy: command.busy, pending, error, editable: !command.frozen,
+    canSubmit: !command.busy && (pending || (seed.plan.status === "active" && !!sourceId && !unavailable
       && sourceId !== seed.plan.destinationFinancialAccountProfileId && shownMinorUnits > 0)),
     canDismiss: !command.frozen,
-    onSource: (id: string) => { if (command.canEdit()) source.choose(id); },
-    onAmount: (value: AmountSession) => { if (command.canEdit() && value.currency === seed.plan.currency) setAmount(value); },
+    onSource: (id: string) => { if (command.canEdit()) setForm((now) => ({ ...now, source: choosePlace(now.source, id) })); },
+    onAmount: (value: AmountSession) => { if (command.canEdit() && value.currency === seed.plan.currency) setForm((now) => ({ ...now, amount: value })); },
     submit: async () => { await command.submit(build); },
   };
 }

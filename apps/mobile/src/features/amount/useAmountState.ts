@@ -24,3 +24,10 @@ export function useAmountState<T>(initial: T | (() => T)) {
   const read = useCallback(() => latest.current as unknown as AtPress<T>, []);
   return [value, set, read] as const;
 }
+
+/**
+ * Everything a command is built from, held the one way a press can read it. Render with the value; a handler reads
+ * `read()` and builds and validates its command from that one snapshot, never from a render's copy of a field or
+ * anything computed from it. Amounts inside read as `useAmountState` reads them.
+ */
+export const useFormState = useAmountState;
