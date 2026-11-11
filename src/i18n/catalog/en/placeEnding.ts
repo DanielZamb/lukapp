@@ -153,6 +153,7 @@ export const placeEnding = {
   undoConfirmTitle: "Undo {name}",
   undoLoading: "Working out what changes…",
   undoChanged: "This place's movements changed, so the numbers were refreshed. Check them and type the name again.",
+  undoMonthChanged: "A new month started, so the numbers were refreshed. Check them and type the name again.",
   undoEntries_one: "This reverses {count} movement.",
   undoEntries_other: "This reverses {count} movements.",
   undoLocked_one: "Of these, {count} is from a month you already closed.",

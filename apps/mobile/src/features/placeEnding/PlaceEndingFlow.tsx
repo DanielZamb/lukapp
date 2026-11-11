@@ -22,6 +22,7 @@ import {
   UndoConfirmScreen, UnreadableScreen, UnresolvedScreen, type PickOption,
 } from "./PlaceEndingScreens";
 import { useSourceBlocker } from "./sources";
+import { useUndoPreview } from "./undoPreview";
 import { useUnresolvedEnding } from "./unresolved";
 
 /** A resent request refused as stale was never recorded; the person starts a fresh review. */
@@ -88,14 +89,15 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const [receipt, setReceipt] = useState<CloseReceipt | null>(null);
   const [reviewed, setReviewed] = useState<Reviewed | null>(null);
   const [notice, setNotice] = useState<StaleNotice | null>(null);
-  const [shownPreview, setShownPreview] = useState<string | null>(null);
-  const [previewChanged, setPreviewChanged] = useState(false);
+  /** The preview whose numbers are on the confirmation, and the workspace month the server read it in. */
+  const [shownPreview, setShownPreview] = useState<{ fingerprint: string; month: string } | null>(null);
+  /** Why those numbers were refreshed under the person, if they were. */
+  const [previewChanged, setPreviewChanged] = useState<MessageKey | null>(null);
   const [resolvedNotice, setResolvedNotice] = useState<string | null>(null);
   const [sendBlock, setSendBlock] = useState<SourceBlocker | null>(null);
   const nextLine = useRef(0);
   const leaving = useRef(false);
   const categories = useQuery(api.accounting.listUserCategories, act === "close" ? { workspaceId } : "skip");
-  const preview = useQuery(api.accounting.previewUndoPlace, act === "undo" ? { workspaceId, financialAccountProfileId: profileId, cursor: null } : "skip");
   const { blocker: sources, atSend: sourcesAtSend } = useSourceBlocker(workspaceId, profileId);
   const refusal = useRef<ReturnType<typeof refusalOf>>(null);
   const refusalCode = (error: unknown) => { refusal.current = refusalOf(error); return refusal.current?.code ?? null; };
@@ -118,6 +120,12 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     settles: settlesEnding, keep: (request) => unresolved.keep({ act: "undo", request }), forget: settle,
     onDone: () => leave(onStarted),
   });
+  // The preview is read again in a new month, and after a Start refused as stale, which a subscription alone can miss.
+  const staleStart = undo.state.name === "open" && undo.state.refusal?.code === "place_undo_preview_stale"
+    ? undo.state.refusal.request.idempotencyKey : null;
+  const [renewedFor, setRenewedFor] = useState("");
+  if (staleStart !== null && staleStart !== renewedFor) setRenewedFor(staleStart);
+  const preview = useUndoPreview(act === "undo" ? { workspaceId, financialAccountProfileId: profileId } : null, `${calendar.month} ${renewedFor}`);
   /** The unknown-outcome message, and why the latest retry was turned away if it was. */
   const uncertainMessage = (ending: Act, state: CommandState<unknown>) => state.name !== "uncertain" ? ""
     : [t(ending === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain"), ...(state.refusal ? [heldReason(state.refusal, translator)] : [])].join(" ");
@@ -144,7 +152,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     if (place && place.status !== "open") return leave(onBack);
     if (command.state.name === "open" && command.state.refusal) command.release();
     if (adding) return setAdding(false);
-    if (step.name === "confirm") { setShownPreview(null); setPreviewChanged(false); }
+    if (step.name === "confirm") { setShownPreview(null); setPreviewChanged(null); }
     if (step.name === "lines" || step.name === "review") setNotice(null);
     if (steps.length > 1) return setSteps((current) => current.slice(0, -1));
     leave(onBack);
@@ -176,11 +184,12 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   }
   // The Undo preview changed while its numbers were on the confirmation: those numbers and the typed name no longer count.
   if (act === "undo" && step.name === "confirm" && preview && !locked) {
-    if (shownPreview === null) setShownPreview(preview.fingerprint);
-    else if (preview.fingerprint !== shownPreview) {
-      setShownPreview(preview.fingerprint);
+    const month = preview.closure.accountingDate.slice(0, 7);
+    if (shownPreview === null) setShownPreview({ fingerprint: preview.fingerprint, month });
+    else if (preview.fingerprint !== shownPreview.fingerprint) {
+      setShownPreview({ fingerprint: preview.fingerprint, month });
       setTyped("");
-      setPreviewChanged(true);
+      setPreviewChanged(month === shownPreview.month ? "placeEnding.undoChanged" : "placeEnding.undoMonthChanged");
       if (undo.state.name === "open" && undo.state.refusal) undo.release();
     }
   }
@@ -218,7 +227,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     setReviewed(chosen === "close" ? live : null);
     setNotice(null);
     setShownPreview(null);
-    setPreviewChanged(false);
+    setPreviewChanged(null);
     setSteps([{ name: "choose" }, sequence(chosen)[0]!]);
   }
 
@@ -340,7 +349,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
 
   if (step.name === "confirm") {
     const snapshot = preview?.snapshot ?? null;
-    return <UndoConfirmScreen name={name} balance={balance} snapshot={snapshot} changed={previewChanged}
+    return <UndoConfirmScreen name={name} balance={balance} snapshot={snapshot} changed={previewChanged && t(previewChanged)}
       replacement={replacementChoice} onRepickDefault={repickDefault} typed={typed} editable={!undo.frozen}
       onTyped={(value) => { if (undo.canEdit()) { interact(); setTyped(value); } }}
       busy={undo.busy} uncertain={undo.state.name === "uncertain"} error={error} onBack={locked ? undefined : back}

@@ -156,6 +156,7 @@ export const placeEnding: Messages<typeof en> = {
   undoConfirmTitle: "Deshacer {name}",
   undoLoading: "Calculando qué cambia…",
   undoChanged: "Los movimientos de este lugar cambiaron, así que actualizamos las cifras. Revísalas y vuelve a escribir el nombre.",
+  undoMonthChanged: "Empezó un mes nuevo, así que actualizamos las cifras. Revísalas y vuelve a escribir el nombre.",
   undoEntries_one: "Esto reversa {count} movimiento.",
   undoEntries_other: "Esto reversa {count} movimientos.",
   undoLocked_one: "De esos, {count} es de un mes que ya cerraste.",
