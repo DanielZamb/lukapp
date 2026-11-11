@@ -15,7 +15,7 @@ vi.mock("react-native", () => ({
 import { LanguageProvider, useLanguage } from "../../i18n";
 import { AmountField } from "./AmountField";
 import { samsungPhone } from "./phone.testSupport";
-import { amountMinorUnits, openAmount, type AmountSession } from "./session";
+import { amountMinorUnits, openAmount, openSavedAmount, type AmountSession } from "./session";
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); });
@@ -24,8 +24,8 @@ afterEach(async () => { await act(async () => root?.unmount()); root = undefined
 const sent: Array<{ currency: string; minorUnits: number }> = [];
 let replaceSession: (session: AmountSession) => void = () => {};
 
-function Owner({ currency, opened }: { currency: string; opened?: string }) {
-  const [session, setSession] = useState<AmountSession>(() => openAmount(currency, opened));
+function Owner({ currency, opened, initial }: { currency: string; opened?: string; initial?: AmountSession }) {
+  const [session, setSession] = useState<AmountSession>(() => initial ?? openAmount(currency, opened));
   replaceSession = setSession;
   const language = useLanguage();
   if (session.currency !== currency) setSession(openAmount(currency));
@@ -46,6 +46,14 @@ async function render(currency: string, language: "en" | "es" = "en", opened?: s
   await act(async () => { root?.unmount(); });
   await act(async () => {
     root = create(createElement(LanguageProvider, { initialPreference: language }, createElement(Owner, { currency, opened })));
+  });
+  return samsungPhone(input);
+}
+async function renderSession(initial: AmountSession) {
+  sent.length = 0;
+  await act(async () => { root?.unmount(); });
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Owner, { currency: initial.currency, initial })));
   });
   return samsungPhone(input);
 }
@@ -172,6 +180,36 @@ test("finding 3: a paste awaits confirmation through edits that restore it, and 
     expect(sent).toEqual([]);
     expect(button(`Confirm USD ${text === "1,234" ? "1,234.00" : "1,234.50"}`)).toBeTruthy();
   }
+});
+
+test("third review, finding 3: a converted saved amount awaits confirmation through a sign change", async () => {
+  const phone = await renderSession(openSavedAmount("CLP", { text: "-500,", format: "pre-currency" }).session);
+  expect(texts()).toContain("You saved this as -500,. It now shows as CLP 500.");
+  await phone.press(button("Switch the amount between minus and plus"));
+  await send();
+  expect(sent).toEqual([]);
+  await phone.press(button("Confirm CLP 500"));
+  await send();
+  expect(sent).toEqual([{ currency: "CLP", minorUnits: 500 }]);
+});
+
+test("third review, finding 3: a converted saved amount awaits confirmation after its separators are deleted, until the text is cleared", async () => {
+  let phone = await renderSession(openSavedAmount("USD", { text: "1.234,50", format: "legacy-es-CO/1" }).session);
+  expect(input().props.value).toBe("1,234.50");
+  for (let index = 0; index < 3; index++) await phone.backspace();
+  await phone.select(2);
+  await phone.backspace();
+  expect(phone.text).toBe("1234");
+  await send();
+  expect(sent).toEqual([]);
+  expect(texts()).toContain("You saved this as 1.234,50. It now shows as USD 1,234.00.");
+  phone = await renderSession(openSavedAmount("USD", { text: "1.234,50", format: "legacy-es-CO/1" }).session);
+  await phone.select(0, phone.text.length);
+  await phone.backspace();
+  expect(phone.text).toBe("");
+  await phone.type("12");
+  await send();
+  expect(sent).toEqual([{ currency: "USD", minorUnits: 1200 }]);
 });
 
 test("finding 4: a typed amount replaced in one change by another with the same separators awaits confirmation", async () => {
