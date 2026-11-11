@@ -24,8 +24,11 @@ const seed: RecoveryEditorSeed = {
     { id: "savings", name: "Savings", productKind: "savingsAccount" },
   ],
 };
+type Request = Parameters<RecoveryEditorTransport["save"]>[0];
+/** What the phone keeps of a sent activation while its outcome is unknown. */
+const phone: { request: Request | null } = { request: null };
 let root: ReactTestRenderer | undefined;
-afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root?.unmount()); root = undefined; phone.request = null; vi.unstubAllGlobals(); });
 function transport() {
   let sequence = 0;
   return {
@@ -41,9 +44,11 @@ function transport() {
       },
     })),
     onSaved: vi.fn(), newKey: () => `activate-${++sequence}`, reportFailure: vi.fn(() => false),
+    keep: vi.fn(async (request: Request) => { phone.request = request; }),
+    forget: vi.fn(async (request: Request) => { if (phone.request?.idempotencyKey === request.idempotencyKey) phone.request = null; }),
   } satisfies RecoveryEditorTransport;
 }
-async function open(api: RecoveryEditorTransport, initial = seed, language?: "es") {
+async function open(api: RecoveryEditorTransport, initial: RecoveryEditorSeed = { ...seed, unresolved: phone.request }, language?: "es") {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let editor: ReturnType<typeof useRecoveryEditor> | undefined;
@@ -226,7 +231,7 @@ test("a Submit handler kept before months changed resends the held plan unchange
   expect(editor()).toMatchObject({ installmentCount: 4, destinationId: "savings" });
 });
 
-test.fails("known exposure: an activation held after a lost reply is lost with the screen, so reopening sends a new key", async () => {
+test("an activation held after a lost reply stays on the phone, so reopening resends it under its own key", async () => {
   const api = transport();
   api.save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const editor = await open(api);

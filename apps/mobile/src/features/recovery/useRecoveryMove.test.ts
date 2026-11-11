@@ -27,8 +27,13 @@ const sources: RecoveryPlace[] = [
   { id: "daily", name: "Daily", productKind: "bankAccount" },
   { id: "savings", name: "Savings", productKind: "savingsAccount" },
 ];
+type Request = Parameters<RecoveryMoveTransport["move"]>[0];
+/** What the phone keeps of a sent movement while its outcome is unknown. */
+const phone: { request: Request | null } = { request: null };
 let root: ReactTestRenderer | undefined;
-afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+afterEach(async () => {
+  await act(async () => root?.unmount()); root = undefined; phone.request = null; vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals();
+});
 function transport() {
   let sequence = 0;
   return {
@@ -43,11 +48,13 @@ function transport() {
       },
     })),
     onMoved: vi.fn(), newKey: () => `move-${++sequence}`, reportFailure: vi.fn(() => false),
+    keep: vi.fn(async (request: Request) => { phone.request = request; }),
+    forget: vi.fn(async (request: Request) => { if (phone.request?.idempotencyKey === request.idempotencyKey) phone.request = null; }),
   } satisfies RecoveryMoveTransport;
 }
 async function open(
   api: RecoveryMoveTransport,
-  seed = { workspaceId: "workspace", plan, sources, timeZone: "America/Bogota" },
+  seed: Parameters<typeof useRecoveryMove>[0] = { workspaceId: "workspace", plan, sources, timeZone: "America/Bogota", unresolved: phone.request },
   language?: "es",
 ) {
   vi.stubGlobal("React", React);
@@ -330,7 +337,7 @@ test("a Move money handler kept before a lost reply resends the held movement, n
   expect(api.move.mock.calls.map(([request]) => request)).toEqual([first, first]);
 });
 
-test.fails("known exposure: a Move money held after a lost reply is lost with the screen, so reopening sends a new key", async () => {
+test("a Move money held after a lost reply stays on the phone, so reopening resends it under its own key", async () => {
   const api = transport();
   api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const move = await open(api);

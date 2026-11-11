@@ -27,6 +27,17 @@ import { RecoveryMoveScreen } from "./RecoveryScreens";
 import { RecoveryCorrectScreen } from "./RecoveryLifecycleScreens";
 import RecoveryRoute from "../../../app/recovery";
 
+const phone = vi.hoisted(() => new Map<string, string>());
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: async (key: string) => phone.get(key) ?? null,
+  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
+  deleteItemAsync: async (key: string) => { phone.delete(key); },
+}));
+vi.mock("../../local-auth/localInput", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
+  const lease = new actual.LocalInputLease("owner", "session");
+  return { ...actual, useLocalInputLease: () => lease };
+});
 vi.mock("react-native", () => ({
   Platform: { OS: "ios" },
   KeyboardAvoidingView: "keyboard-viewport",
@@ -101,6 +112,7 @@ let root: ReactTestRenderer | undefined;
 afterEach(async () => {
   await act(async () => root?.unmount());
   root = undefined;
+  phone.clear();
   vi.unstubAllGlobals();
   vi.resetAllMocks();
   uuid.next = () => "activation-key";
@@ -476,6 +488,59 @@ test("a retry refused after the server found no earlier plan answers it and unlo
   expect(screen.findByType(RecoveryDraft).props).toMatchObject({ pending: false, editable: true, canDismiss: true,
     error: "This expense already has a recovery plan." });
 });
+
+/** The app is closed and opened again: nothing survives but what the phone stored. */
+async function restart(...args: Parameters<typeof open>) {
+  await act(async () => root?.unmount());
+  root = undefined;
+  return open(...args);
+}
+function counting() {
+  let count = 0;
+  uuid.next = () => `uuid-${++count}`;
+}
+
+test("a transfer whose reply was lost is resent under its own key after the app restarts", async () => {
+  counting();
+  remote.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const first = await open([plan], true);
+  await act(async () => { button(first.screen, "Move money for October").props.onPress(); });
+  await act(async () => { button(first.screen, "Post transfer").props.onPress(); });
+  const { screen } = await restart([plan], true);
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ pending: true, editable: false,
+    error: "Could not confirm the transfer. Retry to safely check the same movement." });
+  remote.move.mockImplementationOnce(async (request) => moveReceipt(request));
+  await act(async () => { button(screen, "Retry transfer").props.onPress(); });
+  const sent = remote.move.mock.calls.map(([request]) => request);
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toEqual(sent[0]);
+});
+
+test("an activation whose reply was lost is resent under its own key after the app restarts", async () => {
+  counting();
+  remote.activate.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const first = await open();
+  await act(async () => { first.screen.findByType(ListRow).props.onPress(); });
+  await act(async () => { button(first.screen, "Activate plan").props.onPress(); });
+  const { screen } = await restart();
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ pending: true, editable: false,
+    error: "Could not confirm activation. Retry to safely check the same plan." });
+  remote.activate.mockImplementationOnce(async (request) => activationReceipt(request));
+  await act(async () => { button(screen, "Retry activation").props.onPress(); });
+  const sent = remote.activate.mock.calls.map(([request]) => request);
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toEqual(sent[0]);
+});
+
+function activationReceipt(request: Parameters<RecoveryEditorTransport["save"]>[0], replay = true) {
+  return {
+    replay,
+    plan: { ...request, id: "dental-plan", title: "Dental care", principalMinorUnits: 48_000_000,
+      impliedAnnualRateBps: 0, currency: "COP", activationMonth: "2026-10", createdBy: "owner", createdAt: 1 },
+  };
+}
 
 function contribution(id: string, over: Partial<RecoveryContribution> = {}): RecoveryContribution {
   return {
