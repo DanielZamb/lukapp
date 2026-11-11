@@ -56,38 +56,63 @@ type Snapshot = {
   otherPlaces: Array<{ financialAccountProfileId: string; name: string; balanceChange: Money }>;
   currentMonthExpenseChange: Money; currentMonthIncomeChange: Money;
 };
-const remote = vi.hoisted(() => ({
-  places: [] as unknown[], closure: null as unknown, blockers: [] as unknown[], snapshot: null as unknown,
-  close: vi.fn(), undo: vi.fn(), pages: vi.fn(), version: 0, listeners: new Set<() => void>(),
-}));
+const remote = vi.hoisted(() => {
+  const value = {
+    places: [] as unknown[], closure: null as unknown, blockers: [] as unknown[], snapshot: null as unknown,
+    close: vi.fn(), undo: vi.fn(), pages: vi.fn(), version: 0, listeners: new Set<() => void>(),
+    /** The workspace day on the server's clock and on this phone's; they turn at nearly the same moment, not exactly. */
+    serverDay: "2026-11-10", phoneDay: "2026-11-10",
+    /** The whole preview the server computes now. Like the real one, its fingerprint covers the workspace month. */
+    preview: () => {
+      const month = value.serverDay.slice(0, 7);
+      const current = value.snapshot as { fingerprint: string } | null;
+      const snapshot = current && month !== "2026-11" ? { ...current, fingerprint: `${current.fingerprint}@${month}` } : current;
+      return { fingerprint: snapshot?.fingerprint ?? "", snapshot, closure: { ...value.closure as object, accountingDate: value.serverDay },
+        canUndo: value.blockers.length === 0, blockers: value.blockers, operation: null,
+        // A single page of a larger ledger: the confirmation must not mistake it for the whole preview.
+        page: { entriesToReverse: 1, alreadyReversed: 0, lockedMonthEntries: 0, earlierOpenMonthEntries: 0, otherPlaces: [],
+          currentMonthExpenseChange: { currency: "COP", minorUnits: 0 }, currentMonthIncomeChange: { currency: "COP", minorUnits: 0 },
+          scannedLines: 10, isDone: false, continueCursor: "c1" } };
+    },
+  };
+  return value;
+});
 function serverChange(change: () => void) {
   change();
   remote.version++;
   for (const listener of remote.listeners) listener();
 }
-vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: "2026-11-10", month: "2026-11", now: new Date() }) }));
-vi.mock("convex/react", async () => {
-  const { getFunctionName } = await import("convex/server");
+/** Time passes with no data change, so no subscribed query runs again; only this phone's calendar sees it. */
+function timePasses(change: () => void) {
+  change();
+  for (const listener of remote.listeners) listener();
+}
+vi.mock("../useWorkspaceCalendar", async () => {
   const { useSyncExternalStore } = await import("react");
   const subscribe = (listener: () => void) => { remote.listeners.add(listener); return () => { remote.listeners.delete(listener); }; };
-  const preview = () => {
-    const current = remote.snapshot as Snapshot | null;
-    return { fingerprint: current?.fingerprint ?? "", snapshot: current, closure: remote.closure, canUndo: remote.blockers.length === 0,
-      blockers: remote.blockers, operation: null,
-      // A single page of a larger ledger: the confirmation must not mistake it for the whole preview.
-      page: { entriesToReverse: 1, alreadyReversed: 0, lockedMonthEntries: 0, earlierOpenMonthEntries: 0, otherPlaces: [],
-        currentMonthExpenseChange: { currency: "COP", minorUnits: 0 }, currentMonthIncomeChange: { currency: "COP", minorUnits: 0 },
-        scannedLines: 10, isDone: false, continueCursor: "c1" } };
-  };
+  return { useWorkspaceCalendar: () => {
+    const date = useSyncExternalStore(subscribe, () => remote.phoneDay);
+    return { date, month: date.slice(0, 7), now: new Date() };
+  } };
+});
+vi.mock("convex/react", async () => {
+  const { getFunctionName } = await import("convex/server");
+  const { useRef, useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => { remote.listeners.add(listener); return () => { remote.listeners.delete(listener); }; };
   const client = { query: (...args: unknown[]) => remote.pages(...args) };
   return {
     useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
       useSyncExternalStore(subscribe, () => remote.version);
-      if (args === "skip") return undefined;
+      // A subscription answers again only when data it read changes; a new subscription reads afresh.
+      const subscription = useRef<{ version: number; value: unknown } | null>(null);
+      if (args === "skip") { subscription.current = null; return undefined; }
       const name = getFunctionName(ref);
       if (name === "accounting:listFinancialAccountProfiles") return remote.places;
       if (name === "accounting:placeClosure") return remote.closure;
-      if (name === "accounting:previewUndoPlace") return preview();
+      if (name === "accounting:previewUndoPlace") {
+        if (subscription.current?.version !== remote.version) subscription.current = { version: remote.version, value: remote.preview() };
+        return subscription.current.value;
+      }
       if (name === "accounting:listUserCategories") return [];
       return undefined;
     },
@@ -123,6 +148,8 @@ let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
 beforeEach(() => {
   phone.clear();
+  remote.serverDay = "2026-11-10";
+  remote.phoneDay = "2026-11-10";
   failing.writes = 0;
   failing.deletes = 0;
   vi.stubGlobal("React", React);
@@ -191,6 +218,82 @@ test("a preview that changes while the confirmation is open refreshes its number
   await ui.type("Place name to confirm", "Wallet");
   await ui.press("Undo Wallet");
   expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["after-a-new-expense"]);
+});
+
+const monthNotice = "A new month started, so the numbers were refreshed. Check them and type the name again.";
+/** Start as the server runs it: a fingerprint other than the one it computes now is stale. */
+async function startOnServer(request: { previewFingerprint: string }) {
+  if (request.previewFingerprint !== remote.preview().fingerprint)
+    throw new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" });
+  return operation({ kind: "pending" });
+}
+
+test("a new month while the confirmation is open reads the preview again, clears the typed name and asks to confirm the new numbers", async () => {
+  remote.serverDay = remote.phoneDay = "2026-11-30";
+  remote.undo.mockImplementation(startOnServer);
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => timePasses(() => { remote.serverDay = remote.phoneDay = "2026-12-01"; }));
+  await settle();
+  expect(ui.alerts()).toEqual([monthNotice]);
+  expect(ui.input("Place name to confirm").props.value).toBe("");
+  expect(ui.disabled("Undo Wallet")).toBe(true);
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["reviewed-snapshot@2026-12"]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a start refused as stale because the server's month turned before this phone's reads the preview again and asks to confirm again", async () => {
+  remote.serverDay = remote.phoneDay = "2026-11-30";
+  remote.undo.mockImplementation(startOnServer);
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  remote.serverDay = "2026-12-01";
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual([monthNotice]);
+  expect(ui.input("Place name to confirm").props.value).toBe("");
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => [request.idempotencyKey, request.previewFingerprint]))
+    .toEqual([["key-1", "reviewed-snapshot"], ["key-2", "reviewed-snapshot@2026-12"]]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a new month that arrives with a new movement refreshes the confirmation once and binds both", async () => {
+  remote.serverDay = remote.phoneDay = "2026-11-30";
+  remote.undo.mockImplementation(startOnServer);
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => serverChange(() => {
+    remote.serverDay = remote.phoneDay = "2026-12-01";
+    remote.snapshot = snapshot({ fingerprint: "after-a-new-expense", entriesToReverse: 8 });
+  }));
+  await settle();
+  expect(ui.alerts()).toEqual([monthNotice]);
+  expect(ui.texts()).toContain("This reverses 8 movements.");
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["after-a-new-expense@2026-12"]);
+});
+
+test("this phone's month turning before the server's keeps the typed name when the numbers are the same", async () => {
+  remote.serverDay = remote.phoneDay = "2026-11-30";
+  remote.undo.mockImplementation(startOnServer);
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => timePasses(() => { remote.phoneDay = "2026-12-01"; }));
+  await settle();
+  expect(ui.alerts()).toEqual([]);
+  expect(ui.input("Place name to confirm").props.value).toBe("Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["reviewed-snapshot"]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
 });
 
 test("a preview that changes before the confirmation opens needs no notice", async () => {
