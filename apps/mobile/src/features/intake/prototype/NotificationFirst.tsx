@@ -15,7 +15,7 @@ import { api } from "../../api";
 import { formatAmount } from "../../money";
 import { AmountField } from "../../amount/AmountField";
 import { amountOfMinorUnits, amountSendable, displayedMinorUnits, openAmount, sendableMinorUnits } from "../../amount/session";
-import { useAmountState } from "../../amount/useAmountState";
+import { useAmountState, useFormState, withFields } from "../../amount/useAmountState";
 import { currentAmountTextFormat } from "../../amount/currencyFormat";
 import { calendarDate } from "../../timeZones";
 import { useLocalEntryDrafts } from "../../useLocalEntryDrafts";
@@ -131,11 +131,18 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
   const [chosen, setChosen] = useState<Mention | null>(suggestion.amount);
   const [amount, setAmount, readAmount] = useAmountState(() => suggestion.amount
     ? amountOfMinorUnits(currency, suggestion.amount.minor, { hideZeroDecimals: true }) : openAmount(currency));
-  const [direction, setDirection] = useState<Direction>(suggestion.direction?.value ?? "out");
-  const [description, setDescription] = useState(suggestion.counterparty?.value ?? "");
-  const [anchor, setAnchor] = useState<number | null>(null);
-  const [profileId, setProfileId] = useState(mapped?.workspaceId === workspaceId ? mapped.financialAccountProfileId : defaultProfileId);
-  const [busy, setBusy] = useState(false);
+  /** The fields the Draft is kept from, read at the press. */
+  const [draft, setDraft, readDraft] = useFormState<{ direction: Direction; description: string; anchor: number | null; profileId: string; busy: boolean }>(() => ({
+    direction: suggestion.direction?.value ?? "out", description: suggestion.counterparty?.value ?? "", anchor: null,
+    profileId: mapped?.workspaceId === workspaceId ? mapped.financialAccountProfileId : defaultProfileId, busy: false,
+  }));
+  const field = (patch: Partial<typeof draft>) => setDraft((now) => withFields(now, patch));
+  const { direction, description, anchor, profileId, busy } = draft;
+  const setDirection = (value: Direction) => field({ direction: value });
+  const setDescription = (value: string) => field({ description: value });
+  const setAnchor = (value: number | null) => field({ anchor: value });
+  const setProfileId = (value: string) => field({ profileId: value });
+  const setBusy = (value: boolean) => field({ busy: value });
   const [error, setError] = useState("");
   const hidden = suggestion.sensitive !== null && !revealed;
   const minor = amountSendable(amount) ? displayedMinorUnits(amount) ?? 0 : 0;
@@ -147,20 +154,22 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
     setAmount(amountOfMinorUnits(currency, mention.minor, { hideZeroDecimals: true }));
   }
   function tapWord(start: number, end: number) {
-    if (anchor === null) { setAnchor(start); setDescription(suggestion.text.slice(start, end)); return; }
-    const from = Math.min(anchor, start);
-    const to = Math.max(end, anchor + 1);
+    const first = readDraft().anchor;
+    if (first === null) { setAnchor(start); setDescription(suggestion.text.slice(start, end)); return; }
+    const from = Math.min(first, start);
+    const to = Math.max(end, first + 1);
     setDescription(suggestion.text.slice(from, to).replace(/\s+/g, " ").replace(/[.,;:]$/, "").trim());
     setAnchor(null);
   }
   async function startDraft() {
     const minor = sendableMinorUnits(readAmount()) ?? 0;
-    if (busy || !(minor > 0)) return;
+    const now = readDraft();
+    if (now.busy || !(minor > 0)) return;
     setBusy(true); setError("");
     try {
       const draftId = await drafts.port.keep({ facts: {
-        workspaceId, currency, entryType: "normal", amountText: `${direction === "out" ? "-" : ""}${formatAmount(minor, currency, { hideZeroDecimals: true })}`, amountFormat: currentAmountTextFormat(currency),
-        accountingDate: calendarDate(new Date(arrival.at), timeZone), description: description.slice(0, 120), profileId, destinationId: null,
+        workspaceId, currency, entryType: "normal", amountText: `${now.direction === "out" ? "-" : ""}${formatAmount(minor, currency, { hideZeroDecimals: true })}`, amountFormat: currentAmountTextFormat(currency),
+        accountingDate: calendarDate(new Date(arrival.at), timeZone), description: now.description.slice(0, 120), profileId: now.profileId, destinationId: null,
         categories: { ids: [], primaryId: null },
       } });
       router.push({ pathname: "/post", params: { draftId } });
@@ -169,11 +178,13 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
     } finally { setBusy(false); }
   }
 
-  const span = (kind: string) => kind === "amount" ? { color: accent, fontFamily: font.bold, backgroundColor: `${theme.primary}26` }
-    : kind === "balance" ? { color: theme.mutedForeground, textDecorationLine: "underline" as const, textDecorationStyle: "dashed" as const }
-    : kind === "direction" ? { textDecorationLine: "underline" as const, color: direction === "in" ? theme.positive : theme.foreground }
-    : kind === "counterparty" ? { fontFamily: font.semibold, backgroundColor: `${theme.warning}2e` }
-    : kind === "when" ? { color: theme.mutedForeground } : {};
+  const spans: Record<string, object> = {
+    amount: { color: accent, fontFamily: font.bold, backgroundColor: `${theme.primary}26` },
+    balance: { color: theme.mutedForeground, textDecorationLine: "underline" as const, textDecorationStyle: "dashed" as const },
+    direction: { textDecorationLine: "underline" as const, color: direction === "in" ? theme.positive : theme.foreground },
+    counterparty: { fontFamily: font.semibold, backgroundColor: `${theme.warning}2e` },
+    when: { color: theme.mutedForeground },
+  };
 
   const notification = <View style={{ borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary, padding: spacing.lg, gap: spacing.sm }}>
     <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
@@ -190,7 +201,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
       {pieces(suggestion, chosen).map((piece) => {
         const bold = piece.start < suggestion.titleLength ? { fontFamily: font.bold } : {};
         if (piece.mention) return <Text key={piece.start} accessibilityRole="button" accessibilityLabel={`Use ${piece.text}`}
-          onPress={() => choose(piece.mention as Mention)} style={[bold, span(piece.kind)]}>{piece.text}</Text>;
+          onPress={() => choose(piece.mention as Mention)} style={[bold, spans[piece.kind] ?? {}]}>{piece.text}</Text>;
         if (variant === "B") {
           let offset = piece.start;
           return piece.text.split(/(\s+)/).map((word) => {
@@ -198,10 +209,10 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
             if (!word.trim()) return word;
             const picked = anchor === start;
             return <Text key={start} onPress={() => tapWord(start, start + word.length)}
-              style={[bold, span(piece.kind), picked && { backgroundColor: `${theme.primary}40` }]}>{word}</Text>;
+              style={[bold, spans[piece.kind] ?? {}, picked && { backgroundColor: `${theme.primary}40` }]}>{word}</Text>;
           });
         }
-        return <Text key={piece.start} style={[bold, span(piece.kind)]}>{piece.text}</Text>;
+        return <Text key={piece.start} style={[bold, spans[piece.kind] ?? {}]}>{piece.text}</Text>;
       })}
     </Text>}
     {arrival.today ? <Text style={[ui.muted, { fontSize: 13 }]}>Today's parser: {arrival.today}</Text> : null}
