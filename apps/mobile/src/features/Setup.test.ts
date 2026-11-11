@@ -714,3 +714,14 @@ test.each([
     await press(start);
     expect(backend.ensure.mock.calls.map(([payload]) => [payload.functionalCurrency, payload.startingMinorUnits])).toEqual([[currency, 123450]]);
   });
+
+test("third review, finding 2: a Start tracking handler from the render before the last keystroke saves the starting amount as typed", async () => {
+  await open();
+  await reveal();
+  await press("I already know my spending. I want budgets.");
+  await typeKeys("Starting amount", "150");
+  const stale = node("Start tracking").props.onPress as () => void;
+  await typeKeys("Starting amount", "0");
+  await act(async () => { stale(); });
+  expect(backend.ensure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ startingMinorUnits: 150000 }));
+});
