@@ -90,7 +90,7 @@ export function AmountField(props: AmountFieldProps) {
   const keyEnabled = props.editable && decimals;
   const refused = !!hint || !!props.message?.error;
   const shown = editor.kind === "complete" ? formatMoney({ currency, minorUnits: editor.minorUnits }) : null;
-  /** The grouped reading of the text. Its line is always laid out, so the keys never move while the person types. */
+  /** The grouped reading of the text. Its one line is always laid out, so the keys never move while the person types. */
   const reading = review ? null : shown;
   const reviewed = review && editor.kind === "complete" ? formatMoney({ currency, minorUnits: Math.abs(editor.minorUnits) }) : null;
   return (
@@ -187,7 +187,8 @@ export function AmountField(props: AmountFieldProps) {
         <Text accessibilityRole="alert" style={ui.error}>{props.message.error}</Text>
       ) : (
         <>
-          <Text style={ui.muted} importantForAccessibility={reading ? "auto" : "no-hide-descendants"}
+          <Text style={[ui.muted, styles.reading]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
+            importantForAccessibility={reading ? "auto" : "no-hide-descendants"}
             accessibilityElementsHidden={!reading}>{reading ? t("amount.reading", { amount: reading }) : "\u00a0"}</Text>
           {props.message?.helper ? <Text style={ui.muted}>{props.message.helper}</Text> : null}
         </>
@@ -203,6 +204,7 @@ function createStyles(theme: Theme) {
     input: { flex: 1, minWidth: 0 },
     boxed: { width: "auto" },
     review: { gap: spacing.sm, paddingVertical: spacing.xs },
+    reading: { lineHeight: Math.round(fontSize.body * 1.4) },
     key: {
       minWidth: touchTarget,
       minHeight: touchTarget,
