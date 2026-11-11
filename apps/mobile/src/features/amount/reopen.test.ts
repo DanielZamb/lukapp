@@ -12,6 +12,8 @@ import { usePostingEditor, type PostingTransport } from "../posting/usePostingEd
 import { createCandidateBinding } from "../intake/postingBinding";
 import { emptyState, ingest, serializeState, type ActiveCandidate } from "../intake/durableState";
 import { IntakeService } from "../intake/service";
+import { viewInbox } from "../intake/candidates";
+import { confirmReadyCandidates } from "../intake/confirmReady";
 import { capture, fixture, mapping, now } from "../intake/service.testSupport";
 import { confirmAmount, openAmount, toggleAmountSign, withNativeText } from "./session";
 
@@ -238,6 +240,16 @@ test("a Candidate edit whose saved text and saved amount disagree asks for re-en
   await act(async () => { await editor().submit(); });
   expect(dispatch).not.toHaveBeenCalled();
   expect(serializeState(f.state())).toContain("\"reviewAmountReenter\":true");
+});
+
+test("third review, finding 1: a Candidate marked for re-entry is not Ready and Confirm all Ready leaves it untouched", async () => {
+  const f = await candidateSavedBefore("USD", "-1.234,50", 999);
+  const candidates = f.service.candidates();
+  expect(viewInbox({ v: 1, candidates }, mapping.workspaceId, now, "USD").ready).toEqual([]);
+  const dispatch = vi.fn(async (_items: ConfirmCandidateInput[]) => ({ results: [] }));
+  await confirmReadyCandidates(f.service, candidates, dispatch);
+  expect(dispatch).not.toHaveBeenCalled();
+  expect(f.service.read(capture.captureId)).toMatchObject({ status: { kind: "review" }, reviewAmountReenter: true, review: { amountMinorUnits: 999 } });
 });
 
 test("a rewritten Draft awaits confirmation until confirmed, through keeping, a sign change and reopening", async () => {
