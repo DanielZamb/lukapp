@@ -294,14 +294,22 @@ export function reactNativeInput(input: () => ReactTestInstance, platform: "andr
       caret = clamp(command.selection ?? caret);
       if (focused && platform === "android") reportCaret();
     },
-    /** JavaScript receives the oldest event the native view sent. */
-    async deliver() {
+    /**
+     * JavaScript receives the oldest event the native view sent. `owner` runs first in the same task, before React
+     * renders, as an owner's own change does when it lands between a native event and the render that would show it.
+     */
+    async deliver(owner?: () => void) {
       const event = events.shift();
-      if (!event) return;
+      if (!event) {
+        if (owner) await act(async () => owner());
+        observe();
+        return;
+      }
       const target = event.node;
       const props = target === node ? target.props : event.handlers;
       const carried = platform === "ios" ? { text: event.text } : {};
       await act(async () => {
+        owner?.();
         if (event.kind === "change") props.onChangeText?.(event.text);
         else if (event.kind === "selection") props.onSelectionChange?.({ nativeEvent: { selection: event.selection, ...carried } });
         else if (event.kind === "focus") props.onFocus?.({ nativeEvent: carried });
@@ -312,6 +320,8 @@ export function reactNativeInput(input: () => ReactTestInstance, platform: "andr
       if (target === node && event.kind === "selection") pushedSelection = event.selection;
       observe();
     },
+    /** Reads what JavaScript rendered: a new input, or text and caret to push to the native view. */
+    sync() { observe(); },
     /** A control outside the input, such as the field's own keys. */
     async press(control: ReactTestInstance) {
       observe();
