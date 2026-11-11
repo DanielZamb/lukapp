@@ -940,3 +940,16 @@ test("closing the layer keeps a typed report and its capture, but deletes an unt
   await untouched.machine.dispose();
   expect(untouched.deleted).toEqual([shot.uri]);
 });
+
+test("two presses of Cancel on a typed report ask once and discard nothing", async () => {
+  const h = harness();
+  await h.machine.open("shake", "/history");
+  h.write();
+  h.machine.requestCancel();
+  h.machine.requestCancel();
+  await Promise.resolve();
+  expect(h.phase()).toMatchObject({ kind: "editing", confirm: "discard" });
+  expect(h.report().fields.title).toBe("Balance looks wrong");
+  expect(h.deleted).toEqual([]);
+  expect(h.drafts.stored?.fields.title).toBe("Balance looks wrong");
+});
