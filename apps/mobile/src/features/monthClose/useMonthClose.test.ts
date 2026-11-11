@@ -228,3 +228,12 @@ test("a failed lock keeps its retry when the month rolls over before the server 
   expect(api.lock.mock.calls.map(([input]) => input.period)).toEqual([october, october]);
   expect(page.current().phase).toMatchObject({ kind: "closed", period: october });
 });
+
+test("a Confirm that showed another month locks nothing", async () => {
+  const api = transport();
+  const page = await open(api, ready({}));
+  await act(async () => page.current().request());
+  await act(async () => { await page.current().confirm({ year: 2026, month: 9 }); });
+  expect(api.lock).not.toHaveBeenCalled();
+  expect(page.current().phase).toEqual({ kind: "confirm", period: october });
+});
