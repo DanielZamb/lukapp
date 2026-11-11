@@ -165,8 +165,8 @@ export function AmountField(props: AmountFieldProps) {
       {review && reviewed ? (
         <View style={styles.review} accessibilityLiveRegion="polite">
           <Text style={ui.body}>
-            {review.reason === "converted" && review.previous !== null
-              ? t("amount.reviewConverted", { previous: review.previous, amount: reviewed })
+            {review.converted && review.converted.previous !== null
+              ? t("amount.reviewConverted", { previous: review.converted.previous, amount: reviewed })
               : t("amount.reviewPasted", { amount: reviewed })}
           </Text>
           <Pressable

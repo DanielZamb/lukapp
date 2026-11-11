@@ -15,11 +15,17 @@ import {
 } from "./storedText";
 
 /**
- * An amount the person must confirm before it is sent: text the app rewrote from an older saved format, or text that
- * arrived several characters at once, such as a paste, carrying a separator. The requirement holds through every
- * later edit while the text still has a separator, so editing and restoring cannot skip it.
+ * Why the amount shown still awaits the person's confirmation. The two reasons are kept apart because different edits
+ * resolve them, and confirming the amount resolves both.
+ *
+ * `pasted`: several characters arrived at once carrying a separator, as a paste does. It ends when the text has no
+ * separator left, since digits alone read the same in every convention.
+ *
+ * `converted`: the app rewrote a saved amount from an older format; `previous` is the text it was saved as. It ends
+ * only when the text is cleared, since until then some of the rewrite is still there: a sign change, a digit or a
+ * deleted separator leaves the rest of it unconfirmed.
  */
-export type AmountReview = Readonly<{ reason: AmountReviewReason; previous: string | null }>;
+export type AmountReview = Readonly<{ pasted: boolean; converted: Readonly<{ previous: string | null }> | null }>;
 
 /**
  * One editing session of one amount field, bound to one currency. The text is exactly what the native field shows:
@@ -67,8 +73,8 @@ export function amountOfMinorUnits(
   return openAmountIn(format, currency, `${sign}${formatMinorUnits(Math.abs(minorUnits), format, options)}`);
 }
 
-function requireReview(session: AmountSession, reason: AmountReviewReason, previous: string | null): AmountSession {
-  return { ...session, review: { reason, previous } };
+function reviewOf(reason: AmountReviewReason, previous: string | null): AmountReview {
+  return reason === "converted" ? { pasted: false, converted: { previous } } : { pasted: true, converted: null };
 }
 
 /**
@@ -81,8 +87,8 @@ export function openSavedAmount(
   format: AmountFormat = amountFormat(currency),
 ): { session: AmountSession; notice: AmountNotice | null } {
   const opened = openStoredAmountText(stored, currency, format);
-  const awaiting = (reason: AmountReviewReason, previous: string | null) =>
-    requireReview({ currency, editor: literalEditor(format, opened.text), review: null }, reason, previous);
+  const awaiting = (reason: AmountReviewReason, previous: string | null): AmountSession =>
+    ({ currency, editor: literalEditor(format, opened.text), review: reviewOf(reason, previous) });
   if (opened.notice?.kind === "converted")
     return { session: awaiting("converted", stored.review?.previous ?? opened.notice.previous), notice: opened.notice };
   if (stored.review && !opened.notice) return { session: awaiting(stored.review.reason, stored.review.previous), notice: null };
@@ -99,12 +105,18 @@ export function displayedMinorUnits(session: AmountSession): number | null {
   return session.editor.kind === "complete" ? session.editor.minorUnits : null;
 }
 
-/** The text to save for this session, with the grammar it was typed in and any confirmation it still awaits. */
+/**
+ * The text to save for this session, with the grammar it was typed in and any confirmation it still awaits. A pending
+ * conversion is saved over a pending paste: it reopens awaiting confirmation through every edit a paste would, and more.
+ */
 export function storedAmountOf(session: AmountSession): StoredAmountText {
+  const { review } = session;
+  const stored = review?.converted ? { reason: "converted" as const, previous: review.converted.previous }
+    : review?.pasted ? { reason: "pasted" as const, previous: null } : null;
   return {
     text: session.editor.text,
     format: amountTextFormatOf(session.editor.format.convention),
-    ...(session.review ? { review: { reason: session.review.reason, previous: session.review.previous } } : {}),
+    ...(stored ? { review: stored } : {}),
   };
 }
 
@@ -122,20 +134,32 @@ function written(previous: string, next: string) {
   return next.slice(start, next.length - end);
 }
 
-function withText(session: AmountSession, text: string, review: AmountReview | null): AmountSession {
-  return { ...session, editor: literalEditor(session.editor.format, text), review: review && hasSeparator(text) ? review : null };
+function isBlank(text: string) {
+  return /^\s*[+−-]?\s*$/.test(text);
+}
+
+/** The confirmation still awaited once the text is `text`; `pasted` says the edit itself wrote like a paste. */
+function reviewAfter(review: AmountReview | null, text: string, pasted: boolean): AmountReview | null {
+  const next = {
+    pasted: pasted || (review?.pasted === true && hasSeparator(text)),
+    converted: isBlank(text) ? null : review?.converted ?? null,
+  };
+  if (!next.pasted && !next.converted) return null;
+  return review && review.pasted === next.pasted && review.converted === next.converted ? review : next;
+}
+
+function withText(session: AmountSession, text: string, pasted = false): AmountSession {
+  return { ...session, editor: literalEditor(session.editor.format, text), review: reviewAfter(session.review, text, pasted) };
 }
 
 /**
  * The session after the native field reported its text. The text is taken as it is. When the edit wrote more than
  * one character and a separator among them, as a paste does, the amount awaits confirmation; a keystroke writes one.
- * A confirmation still pending stays while the text has any separator.
  */
 export function withNativeText(session: AmountSession, text: string): AmountSession {
   if (text === session.editor.text) return session;
   const wrote = written(session.editor.text, text);
-  const pasted = wrote.length > 1 && hasSeparator(wrote);
-  return withText(session, text, pasted ? { reason: "pasted", previous: null } : session.review);
+  return withText(session, text, wrote.length > 1 && hasSeparator(wrote));
 }
 
 /**
@@ -150,7 +174,7 @@ export function withDecimalMark(session: AmountSession, caret: number): { sessio
   const at = Math.max(0, Math.min(caret, text.length));
   const before = text.slice(0, at);
   const insert = /^\s*[+−-]?$/.test(before) ? `0${mark}` : mark;
-  return { session: withText(session, before + insert + text.slice(at), session.review), caret: at + insert.length };
+  return { session: withText(session, before + insert + text.slice(at)), caret: at + insert.length };
 }
 
 /** The person confirms the amount shown. */
@@ -163,11 +187,11 @@ export function amountSign(session: AmountSession): "+" | "-" | "" {
   return sign === "+" ? "+" : sign === "-" || sign === "−" ? "-" : "";
 }
 
-/** Writes `sign` in front of the amount and changes nothing else. */
+/** Writes `sign` in front of the amount and changes nothing else, including what still awaits confirmation. */
 export function withAmountSign(session: AmountSession, sign: "+" | "-"): AmountSession {
   const { text } = session.editor;
   const next = sign + text.trimStart().replace(/^[+−-]/, "");
-  return next === text ? session : withText(session, next, session.review);
+  return next === text ? session : { ...session, editor: literalEditor(session.editor.format, next) };
 }
 
 export function toggleAmountSign(session: AmountSession): AmountSession {
