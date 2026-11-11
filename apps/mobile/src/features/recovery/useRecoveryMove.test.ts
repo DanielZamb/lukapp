@@ -121,7 +121,7 @@ test("the same source and destination never posts", async () => {
   expect(api.move).not.toHaveBeenCalled();
 });
 
-test("unmounted acknowledgements cannot finish a newer movement", async () => {
+test("an unmounted acknowledgement cannot finish a newer screen, which resends the movement that was unconfirmed when it opened", async () => {
   const api = transport();
   let resolve: ((value: Awaited<ReturnType<RecoveryMoveTransport["move"]>>) => void) | undefined;
   api.move.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
@@ -144,7 +144,7 @@ test("unmounted acknowledgements cannot finish a newer movement", async () => {
   });
   expect(api.onMoved).not.toHaveBeenCalled();
   await act(async () => { await current().submit(); });
-  expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-2"]);
+  expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
 });
 
 test.each(["", "0", "-1", "1.23", "2.300,123", "abc"])("invalid hero amount %s blocks posting", async (amount) => {

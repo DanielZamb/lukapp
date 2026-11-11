@@ -250,6 +250,8 @@ export function RecoveryPlanScreen(props: {
   timeZone: string;
   replacement: RecoveryCandidate | null;
   notice?: RecoveryPlanNotice;
+  /** This phone sent a movement for the plan and never learned its outcome. */
+  unconfirmedMove?: boolean;
   onBack: () => void;
   onMove: () => void;
   onFind: () => void;
@@ -322,7 +324,10 @@ export function RecoveryPlanScreen(props: {
       {plan.status === "suspended" && (
         <Text style={ui.muted}>{t("recovery.planSuspended")}</Text>
       )}
-      {!complete && plan.status === "active" && plan.acceptsContributions && (
+      {props.unconfirmedMove ? <>
+        <Text accessibilityRole="alert" style={ui.error}>{t("recovery.moveUncertain")}</Text>
+        <PrimaryButton label={t("recovery.moveUnconfirmedOpen")} trailingIcon="refresh" onPress={props.onMove} />
+      </> : !complete && plan.status === "active" && plan.acceptsContributions && (
         <PrimaryButton
           label={t("recovery.planMove", { month: recoveryMonthName(props.month, translator) })}
           trailingIcon="swap-horizontal"
@@ -418,6 +423,19 @@ export function RecoveryMoveScreen(props: {
         trailingIcon="checkmark"
       />
       <Text style={ui.muted}>{t("recovery.moveFootnote")}</Text>
+    </Screen>
+  );
+}
+
+/** The phone's saved Recovery requests can't be read, so nothing new is sent until they can. */
+export function RecoveryUnreadable({ onRetry, onBack }: { onRetry: () => void; onBack: () => void }) {
+  const ui = useUi();
+  const { t, locale } = useT();
+  return (
+    <Screen>
+      <Header title={t("recovery.unreadableTitle")} eyebrow={t("recovery.title").toLocaleUpperCase(locale)} onBack={onBack} />
+      <Text style={ui.body}>{t("recovery.unreadableBody")}</Text>
+      <PrimaryButton label={t("recovery.unreadableRetry")} trailingIcon="refresh" onPress={onRetry} />
     </Screen>
   );
 }

@@ -18,6 +18,10 @@ export type RecoveryMoveTransport = {
   newKey: () => string;
   reportFailure: (error: unknown) => boolean;
   onMoved: (receipt: Receipt) => void;
+  /** Saves a new movement on the phone before it first leaves; if that fails, nothing is sent. */
+  keep: (request: Request) => Promise<void>;
+  /** Removes the saved movement once its outcome is known. */
+  forget: (request: Request) => Promise<void>;
 };
 
 /**
@@ -41,31 +45,40 @@ const moveSettles: ReadonlySet<string> = new Set([
 type Movement = { amount: AmountSession; source: PlaceChoice };
 
 export function useRecoveryMove(
-  seed: { workspaceId: string; timeZone: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
+  seed: {
+    workspaceId: string; timeZone: string; plan: RecoveryPlanView; sources: RecoveryPlace[];
+    /** A movement for this plan sent before the screen opened whose outcome is unknown: shown, and only resent. */
+    unresolved?: Request | null;
+  },
   transport: RecoveryMoveTransport,
 ) {
   const { t } = useT();
   const defaultSource = seed.sources.find((place) => place.id !== seed.plan.destinationFinancialAccountProfileId)
     ?? null;
-  const [form, setForm, readForm] = useFormState<Movement>(() => ({
+  const [form, setForm, readForm] = useFormState<Movement>(() => seed.unresolved ? {
+    amount: amountOfMinorUnits(seed.unresolved.amount.currency, seed.unresolved.amount.minorUnits, { hideZeroDecimals: true }),
+    source: placeChoice(seed.unresolved.sourceFinancialAccountProfileId),
+  } : {
     amount: amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }),
     source: placeChoice(defaultSource?.id ?? null),
-  }));
+  });
   const unavailable = useChosenPlace(seed.sources, form.source);
   const sourceId = form.source.id;
   const [sameSource, setSameSource] = useState(false);
   const command = useFrozenCommand<Request, Receipt>({
     send: transport.move, reportFailure: transport.reportFailure, onDone: transport.onMoved,
+    keep: transport.keep, forget: transport.forget,
     settles: (code) => moveSettles.has(code),
     onRefused: (code, request) => {
       const ended = endedPlaceRefusal(code);
       if (ended) setForm((now) => ({ ...now, source: refusePlace(now.source, request.sourceFinancialAccountProfileId, ended) }));
     },
-  });
+  }, seed.unresolved ?? null);
   const { state } = command;
   const pending = state.name === "uncertain";
   const refusal = state.name === "open" ? state.refusal : null;
   const error = pending ? t("recovery.moveUncertain")
+    : state.name === "unsaved" ? t("recovery.notSaved")
     : sameSource ? t("recovery.moveSameSource")
       : refusal && !endedPlaceRefusal(refusal.code) ? t("recovery.moveRejected") : "";
   const shownMinorUnits = amountSendable(form.amount) ? displayedMinorUnits(form.amount) ?? 0 : 0;

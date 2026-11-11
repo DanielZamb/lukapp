@@ -141,7 +141,7 @@ const places: RecoveryPlace[] = [
 function Proposal({ currency, sent }: { currency: Currency; sent: number[] }) {
   const transport: RecoveryEditorTransport = {
     save: async (request) => { sent.push(request.installmentMinorUnits); return {} as never; },
-    newKey: () => "plan-key", reportFailure: () => false, onSaved: noop,
+    newKey: () => "plan-key", reportFailure: () => false, onSaved: noop, keep: async () => {}, forget: async () => {},
   };
   const editor = useRecoveryEditor({ workspaceId: "workspace", currency, candidate, destinations: places }, transport);
   return createElement(RecoveryDraft, { ...editor, candidate, currency, destinations: places, onSave: () => void editor.submit(), onBack: noop });
@@ -157,7 +157,7 @@ const plan = (currency: Currency): RecoveryPlanView => ({
 function Move({ currency, sent }: { currency: Currency; sent: number[] }) {
   const transport: RecoveryMoveTransport = {
     move: async (request) => { sent.push(request.amount.minorUnits); return {} as never; },
-    newKey: () => "move-key", reportFailure: () => false, onMoved: noop,
+    newKey: () => "move-key", reportFailure: () => false, onMoved: noop, keep: async () => {}, forget: async () => {},
   };
   const move = useRecoveryMove({ workspaceId: "workspace", timeZone: "America/Bogota", plan: plan(currency), sources: places }, transport);
   return createElement(RecoveryMoveScreen, { ...move, plan: plan(currency), sources: places, onBack: noop });

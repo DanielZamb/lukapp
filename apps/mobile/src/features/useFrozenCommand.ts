@@ -50,10 +50,14 @@ export type CommandState<Request> =
 
 export type CommandOutcome = "done" | "refused" | "uncertain" | "unsent";
 
-export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<Request, Receipt>) {
-  const [state, setState] = useState<CommandState<Request>>({ name: "open", refusal: null });
+/**
+ * `unresolved` is a request sent before this screen opened whose outcome is still unknown, such as one saved on the
+ * phone: the screen opens holding it, and pressing again resends it as a retry.
+ */
+export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<Request, Receipt>, unresolved: Request | null = null) {
+  const [state, setState] = useState<CommandState<Request>>(unresolved === null ? { name: "open", refusal: null } : { name: "uncertain", refusal: null });
   /** A request whose outcome is unknown. Until something answers it, it is the only request that can be sent. */
-  const held = useRef<Request | null>(null);
+  const held = useRef<Request | null>(unresolved);
   const sending = useRef(false);
   const lifetime = useRef({ active: false });
   useLayoutEffect(() => {

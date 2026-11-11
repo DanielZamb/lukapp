@@ -74,6 +74,11 @@ export const recovery = {
   moveRejected: "The movement was rejected. Check the source and amount, then try again.",
   moveUncertain: "Could not confirm the transfer. Retry to safely check the same movement.",
   moveDescription: "Recovery: {title}",
+  moveUnconfirmedOpen: "See the transfer",
+  notSaved: "This phone couldn't save the request before sending it, so nothing was sent. Try again.",
+  unreadableTitle: "We couldn't read this phone's saved request",
+  unreadableBody: "An earlier transfer or plan activation may be waiting on this phone. Try reading it again before starting anything new.",
+  unreadableRetry: "Try again",
 
   movedTitle: "{amount} moved",
   movedProgress: "Your {title} plan is now {percent}% complete. Your savings place's balance is separate from plan progress.",

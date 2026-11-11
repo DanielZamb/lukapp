@@ -2,6 +2,7 @@ import { clearPendingExpense } from "./localEntryDrafts";
 import { clearNativeIntake } from "./intake/cleanup";
 import { clearReportDraft } from "./feedback/draftStore";
 import { clearUnresolvedEndings } from "./placeEnding/unresolved";
+import { clearUnresolvedRecovery } from "./recovery/unresolved";
 
 const fileWipes = new Set<() => Promise<void>>();
 
@@ -20,6 +21,7 @@ export async function clearLocalInput(subject: string) {
     clearNativeIntake(subject),
     clearReportDraft(subject),
     clearUnresolvedEndings(subject),
+    clearUnresolvedRecovery(subject),
     ...[...fileWipes].map((wipe) => wipe()),
   ]);
 }
