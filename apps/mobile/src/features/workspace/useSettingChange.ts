@@ -104,6 +104,8 @@ export function useSettingChange<S extends Setting>(
     busy: command.busy,
     uncertain: state.name === "uncertain",
     locked: command.frozen,
+    /** Whether a request is sending or held at the press, which a stale render cannot tell. */
+    atPress: command.atPress,
     /** Sends `value` against the value last read. While the outcome is unknown it resends that exact request. */
     submit: (value: string) => command.submit(() =>
       value === seed.current ? null : requests[setting](seed.workspaceId, value, seed.current, transport.newKey())),

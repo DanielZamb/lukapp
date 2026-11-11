@@ -343,6 +343,7 @@ test("every amount a production handler sends is read from its owner's state at 
     "apps/mobile/src/features/recovery/useRecoveryEditor.ts",
     "apps/mobile/src/features/recovery/useRecoveryLifecycle.ts",
     "apps/mobile/src/features/recovery/useRecoveryMove.ts",
+    "apps/mobile/src/features/workspace/WorkspaceSettings.tsx",
   ]);
 });
 
