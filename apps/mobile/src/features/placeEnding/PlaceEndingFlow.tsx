@@ -415,9 +415,12 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
           setReviewChanged(true);
           return null;
         }
-        return now.lines.some((line) => choiceOf(line)?.unavailable) || (now.replacement && placeChoice(now.replacement, places, t).unavailable) ? null
-          : closeRequest({ reviewed: shown, workspaceId, place: { id: profileId, name }, lines: now.lines, replacement: now.replacement,
-            idempotencyKey: Crypto.randomUUID() }, t);
+        if (now.lines.some((line) => choiceOf(line)?.unavailable) || (now.replacement && placeChoice(now.replacement, places, t).unavailable)) return null;
+        const request = closeRequest({ reviewed: shown, workspaceId, place: { id: profileId, name }, lines: now.lines, replacement: now.replacement,
+          idempotencyKey: Crypto.randomUUID() }, t);
+        // An amount that can no longer be sent as shown (a paste awaiting confirmation) is a changed answer too.
+        if (!request) setReviewChanged(true);
+        return request;
       });
     }} />;
 }

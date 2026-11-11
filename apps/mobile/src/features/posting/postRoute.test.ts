@@ -889,3 +889,36 @@ test("two presses of Post open one Budget warning, and two presses of Continue p
   await act(async () => { press(); });
   expect(posted()).toEqual([12_000_000]);
 });
+
+async function marketCandidateWithFood() {
+  queryData.categories = [foodCategory];
+  const candidate = intakeFixture();
+  candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
+  await candidate.service.refresh();
+  candidateService = candidate.service;
+  route.candidateId = "capture-1";
+  confirmOne.mockResolvedValue({ status: "posted", description: "Market", amount: { currency: "COP", minorUnits: -45000 } });
+  await mount();
+  await act(async () => { await Promise.resolve(); });
+  await act(async () => formProps().onCategory());
+  const sheet = () => root!.root.find((node) => String(node.type) === "category-sheet");
+  await act(async () => sheet().props.onSelect("food"));
+  await act(async () => sheet().props.onDone());
+}
+
+test("fifth review: Post on a money-out Candidate with a category confirms it when no Budget is crossed", async () => {
+  queryData.budget = (month) => ({ month, jars: [] });
+  await marketCandidateWithFood();
+  await act(async () => { await formProps().onPost(); });
+  expect(confirmOne).toHaveBeenCalledTimes(1);
+});
+
+test("fifth review: a money-out Candidate that crosses a Budget is warned first and confirmed only on Continue", async () => {
+  queryData.budget = (month) => ({ month, jars: [{ ...foodJar, limitMinorUnits: 10_000 }] });
+  await marketCandidateWithFood();
+  await act(async () => { await formProps().onPost(); });
+  expect(confirmOne).not.toHaveBeenCalled();
+  expect(warning()).toBeDefined();
+  await act(async () => { warning().props.onPress(); });
+  expect(confirmOne).toHaveBeenCalledTimes(1);
+});

@@ -392,9 +392,9 @@ export function usePostingEditor(
       categories: { ids: [], primaryId: null },
     };
   }
-  /** The entry the form would send now, or null when it holds no sendable entry of its own. */
+  /** The entry the form would send now, a Candidate's included; null when it is setup, already sent, or not sendable. */
   function entrySnapshot(now: ReadAtPress<Editor>): EntrySnapshot | null {
-    if (now.setup || now.pending || intake) return null;
+    if (now.setup || now.pending || intake?.held) return null;
     const minorUnits = sendableMinorUnits(now.amount, account.currency);
     if (minorUnits === null) return null;
     const { ids, primaryId } = now.classification.value;

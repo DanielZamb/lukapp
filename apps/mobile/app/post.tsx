@@ -322,7 +322,11 @@ function PostMoney({
       return;
     }
     const snapshot = editor.snapshot();
-    if (!snapshot) return;
+    if (!snapshot) {
+      // Nothing here to check against a Budget (a held entry): submit validates and sends it, or says why not.
+      void editor.submit();
+      return;
+    }
     const month = snapshot.date.slice(0, 7);
     checking.current = true;
     try {
