@@ -111,6 +111,8 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
     busy: state.name === "sending",
     frozen: state.name === "sending" || state.name === "uncertain",
     canEdit: () => lifetime.current.active && !sending.current && !held.current,
+    /** Where the command stands at the press: sending, holding a request whose outcome is unknown, or open. */
+    atPress: (): "sending" | "held" | "open" => sending.current ? "sending" : held.current ? "held" : "open",
     submit,
     /** Sends again a request whose outcome was already unknown before this screen opened, such as one saved on the phone. */
     resend: (request: Request) => {

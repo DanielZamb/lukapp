@@ -1,3 +1,4 @@
+import { useFormState } from "../amount/useAmountState";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useAction } from "convex/react";
 import { ConvexError } from "convex/values";
@@ -50,7 +51,7 @@ export function DevicesScreen({ onBack }: { onBack: () => void }) {
   const interact = useLocalEntryInteraction();
   const install = useCurrentInstall();
   const [devices, setDevices] = useState<DeviceList>({ kind: "loading" });
-  const [step, setStep] = useState<Step>({ kind: "list" });
+  const [step, setStep, readStep] = useFormState<Step>({ kind: "list" });
   const [notice, setNotice] = useState("");
   const mounted = useRef(true);
   const latestLoad = useRef(0);
@@ -100,8 +101,9 @@ export function DevicesScreen({ onBack }: { onBack: () => void }) {
     void load();
   }
   function closeStep() {
-    if (busy) return;
-    if (uncertain) return showStoredList(t("lifecycle.devicesChecked"));
+    const at = command.atPress();
+    if (at === "sending") return;
+    if (at === "held") return showStoredList(t("lifecycle.devicesChecked"));
     command.release();
     setStep({ kind: "list" });
   }
@@ -143,14 +145,17 @@ export function DevicesScreen({ onBack }: { onBack: () => void }) {
           onChangeText={(value) => {
             if (!command.canEdit()) return;
             interact();
-            setStep({ ...step, name: value });
+            setStep((now) => now.kind === "rename" ? { ...now, name: value } : now);
           }} />
         {uncertain ? alert(t("lifecycle.renameUncertain")) : refusal && alert(t("lifecycle.renameFailed"))}
         <PrimaryButton label={busy ? t("lifecycle.saving") : uncertain ? t("lifecycle.sendAgain") : t("lifecycle.renameSave")}
           trailingIcon="checkmark" disabled={!uncertain && (!!issue || !changed || !install)} pending={busy}
           onPress={() => {
-            if (!install || (!uncertain && (issue || !changed))) return;
-            void send({ kind: "rename", request: { ...install, label: name } });
+            const now = readStep();
+            if (now.kind !== "rename") return;
+            const typed = now.name.trim();
+            if (!install || (command.atPress() !== "held" && (!typed || typed === now.device.label))) return;
+            void send({ kind: "rename", request: { ...install, label: typed } });
           }} />
         {uncertain ? checkDevices : <SecondaryButton label={t("common.cancel")} disabled={busy} onPress={closeStep} />}
       </Screen>
@@ -173,7 +178,11 @@ export function DevicesScreen({ onBack }: { onBack: () => void }) {
           label={busy ? t(remove ? "lifecycle.removing" : "lifecycle.signingOutOthers")
             : uncertain ? t("lifecycle.sendAgain")
             : t(remove ? "lifecycle.removeConfirm" : "lifecycle.signOutOthersConfirm")}
-          onPress={() => void send(step.kind === "remove" ? { kind: "remove", device: step.device } : { kind: "signOutOthers" })} />}
+          onPress={() => {
+            const now = readStep();
+            if (now.kind === "remove") void send({ kind: "remove", device: { ...now.device } });
+            else if (now.kind === "signOutOthers") void send({ kind: "signOutOthers" });
+          }} />}
         {uncertain ? checkDevices
           : <SecondaryButton label={remove ? t("lifecycle.keepAccess") : t("common.cancel")} disabled={busy} onPress={closeStep} />}
       </Screen>

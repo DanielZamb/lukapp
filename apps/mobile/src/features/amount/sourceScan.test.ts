@@ -334,6 +334,7 @@ test("every amount a production handler sends is read from its owner's state at 
     "apps/mobile/src/features/budget/useBudgetEditor.ts",
     "apps/mobile/src/features/categories/CategoryManager.tsx",
     "apps/mobile/src/features/categories/useCategoryPicker.ts",
+    "apps/mobile/src/features/devices/DevicesScreen.tsx",
     "apps/mobile/src/features/intake/prototype/NotificationFirst.tsx",
     "apps/mobile/src/features/placeEnding/PlaceEndingFlow.tsx",
     "apps/mobile/src/features/places/usePlaceRename.ts",
