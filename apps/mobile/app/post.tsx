@@ -17,6 +17,7 @@ import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate } from "../src/features/money";
 import { openAmount, sendableMinorUnits } from "../src/features/amount/session";
+import { useFormState, withFields, type AtPress } from "../src/features/amount/useAmountState";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
@@ -50,6 +51,15 @@ import {
 } from "../src/features/categories/transactionSelection";
 
 type Defaults = NonNullable<ReturnType<typeof usePersonalDefaults>>;
+/** The entry fields a route check reads, as the editor renders them or reads them at a press. */
+type EntryView = ReturnType<ReturnType<typeof usePostingEditor>["read"]> | ReturnType<typeof usePostingEditor>;
+/** What this route shows around the entry, read with `readRoute()` at a press. */
+type RouteState = {
+  placeTarget: "source" | "destination";
+  mode: "one" | "batch";
+  editingId: string | undefined;
+  impact: { description: string; hits: PostingBudgetImpact } | null;
+};
 function PostMoney({
   defaults,
   subject,
@@ -71,9 +81,9 @@ function PostMoney({
   const theme = useTheme();
   const recordInteraction = useLocalEntryInteraction();
   const [categoryVisible, setCategoryVisible] = useState(false);
-  const [placeTarget, setPlaceTarget] = useState<"source" | "destination">(
-    "source",
-  );
+  const [route, setRoute, readRoute] = useFormState<RouteState>({ placeTarget: "source", mode: "one", editingId: undefined, impact: null });
+  const routeChange = (patch: Partial<RouteState>) => setRoute((now) => withFields(now, patch));
+  const { placeTarget, mode, impact } = route;
   const [placePickerOpen, setPlacePickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const categories = useQuery(api.accounting.listUserCategories, {
@@ -145,12 +155,10 @@ function PostMoney({
     Keyboard.dismiss();
     return new Promise<boolean>((resolve) => {
       batchDecision.current = resolve;
-      setImpact({ description: t("posting.batchImpactTitle"), hits });
+      routeChange({ impact: { description: t("posting.batchImpactTitle"), hits } });
     });
   });
-  const [mode, setMode] = useState<"one" | "batch">("one");
   const [composing, setComposing] = useState(false);
-  const [editingId, setEditingId] = useState<string | undefined>();
   useEffect(() => {
     if (Platform.OS !== "android" || !placePickerOpen) return;
     const subscription = BackHandler.addEventListener(
@@ -164,7 +172,7 @@ function PostMoney({
   }, [placePickerOpen]);
   const closeCompose = useCallback(() => {
     setComposing(false);
-    setEditingId(undefined);
+    routeChange({ editingId: undefined });
     setCategoryVisible(false);
     dateSheet.current?.dismiss();
     placeSheet.current?.dismiss();
@@ -214,29 +222,29 @@ function PostMoney({
   const keptDestination = destination || editor.entryType !== "transfer" ? undefined
     : allProfiles?.find((place) => place.id === editor.destinationId);
   const unavailablePlace = unavailablePlaceReason(keptSource, t) ?? unavailablePlaceReason(keptDestination, t);
-  const needsBudgetCheck =
-    editor.entryType === "normal" &&
-    editor.direction === "out" &&
-    !editor.pending;
+  /** What decides whether the entry may post or join the batch, from the entry as rendered or as read at a press. */
+  const checksOf = (entry: EntryView) => {
+    const categoryValid = entry.entryType !== "normal"
+      || (entry.categories.ids.length > 0 && canPostCategories({ ids: [...entry.categories.ids], primaryId: entry.categories.primaryId }, categories));
+    const placesValid = !!profiles?.some((place) => place.id === entry.profileId)
+      && (entry.entryType !== "transfer" || !!profiles?.some((place) => place.id === entry.destinationId));
+    return {
+      categoryValid,
+      placesValid,
+      completeEntry: entry.description.trim().length > 0 && categoryValid && placesValid,
+      needsBudgetCheck: entry.entryType === "normal" && entry.direction === "out" && !entry.pending,
+    };
+  };
+  const queueable = (entry: EntryView, at: AtPress<RouteState> | RouteState) =>
+    entry.canSubmit && !entry.setup && !at.impact && checksOf(entry).completeEntry && !entry.pending && !candidateId;
+  const { categoryValid, placesValid, completeEntry, needsBudgetCheck } = checksOf(editor);
   const budget = useQuery(
     api.budget.evaluate,
     needsBudgetCheck
       ? { workspaceId: workspace.id, month: editor.date.slice(0, 7) }
       : "skip",
   );
-  const [impact, setImpact] = useState<{
-    description: string;
-    hits: PostingBudgetImpact;
-  } | null>(null);
   const categoryEnabled = editor.entryType === "normal";
-  const categoryValid =
-    !categoryEnabled ||
-    ((editor.entryType === "transfer" || editor.categories.ids.length > 0) &&
-      canPostCategories(editor.categories, categories));
-  const placesValid =
-    !!profile &&
-    (editor.entryType !== "transfer" ||
-      !!profiles?.some((place) => place.id === editor.destinationId));
   const setup = editor.setup;
   useEffect(() => {
     if (editor.blockedByPendingPostings) router.replace("/drafts");
@@ -273,7 +281,6 @@ function PostMoney({
         <ActivityIndicator />
       </Screen>
     );
-  const completeEntry = editor.description.trim().length > 0 && categoryValid && placesValid;
   const blockedReason = unavailablePlace ?? (!editor.description.trim() ? t("posting.blockedDescription")
     : !profile ? t("posting.blockedPlace")
     : editor.entryType === "transfer" && !destination ? t("posting.blockedDestination")
@@ -281,17 +288,12 @@ function PostMoney({
     : !categoryValid ? t("posting.blockedCategory")
     : !editor.canSubmit ? t("posting.blockedAmount")
     : needsBudgetCheck && budget === undefined ? t("posting.checkingBudget") : undefined);
-  const canQueue =
-    editor.canSubmit &&
-    !setup &&
-    !impact &&
-    completeEntry &&
-    !editor.pending &&
-    !candidateId;
+  const canQueue = queueable(editor, route);
   async function saveToBatch() {
-    if (!canQueue) return false;
+    const at = readRoute();
+    if (!queueable(editor.read(), at)) return false;
     const draft = editor.captureForBatch();
-    if (!draft || !(await batch.keep(draft, editingId))) return false;
+    if (!draft || !(await batch.keep(draft, at.editingId))) return false;
     editor.resetComposer();
     closeCompose();
     return true;
@@ -317,8 +319,8 @@ function PostMoney({
         onBatch={
           !candidateId && !editor.pending && !setup
             ? () => {
-                if (canQueue) void saveToBatch();
-                setMode("batch");
+                void saveToBatch();
+                routeChange({ mode: "batch" });
               }
             : undefined
         }
@@ -351,6 +353,7 @@ function PostMoney({
         transferReview={editor.entryType === "transfer" ? {
           required: editor.transferReviewRequired,
           canConfirm: placesValid && !!editor.destinationId && editor.destinationId !== editor.profileId,
+          pair: editor.destinationId ? { from: editor.profileId, to: editor.destinationId } : undefined,
           onSwap: editor.swapTransferPlaces,
           onConfirm: editor.confirmTransferReview,
         } : undefined}
@@ -385,13 +388,13 @@ function PostMoney({
         onEntryType={(value) => interaction(() => editor.setEntryType(value))}
         onBack={mode === "batch" ? closeCompose : () => router.back()}
         onPlace={() => {
-          setPlaceTarget("source");
+          routeChange({ placeTarget: "source" });
           setSearch("");
           setPlacePickerOpen(true);
           placeSheet.current?.present();
         }}
         onDestination={() => {
-          setPlaceTarget("destination");
+          routeChange({ placeTarget: "destination" });
           setSearch("");
           setPlacePickerOpen(true);
           placeSheet.current?.present();
@@ -401,25 +404,25 @@ function PostMoney({
           if (!setup) dateSheet.current?.present();
         }}
         onPost={() => {
-          if (mode === "batch") {
+          const at = readRoute();
+          if (at.mode === "batch") {
             void saveToBatch();
             return;
           }
-          if (
-            impact || !editor.canSubmit || setup ||
-            (!editor.pending && (!categoryValid || !placesValid))
-          ) return;
-          if (needsBudgetCheck) {
+          const entry = editor.read();
+          const checks = checksOf(entry);
+          if (at.impact || !entry.canSubmit || entry.setup || (!entry.pending && !checks.completeEntry)) return;
+          if (checks.needsBudgetCheck) {
             const typed = sendableMinorUnits(editor.readAmount());
             if (!budget || typed === null) return;
             const hits = postingBudgetImpact({
               jars: budget.jars,
-              categoryIds: editor.categories.ids,
+              categoryIds: [...entry.categories.ids],
               expenseMinorUnits: -typed,
             });
             if (hits.length) {
               Keyboard.dismiss();
-              setImpact({ description: editor.description.trim(), hits });
+              routeChange({ impact: { description: entry.description.trim(), hits } });
               return;
             }
           }
@@ -435,7 +438,7 @@ function PostMoney({
           onAccountSetup={(request) => {
             if (!editor.beginTransfer()) return false;
             destinationRequest.current = request;
-            setPlaceTarget("destination");
+            routeChange({ placeTarget: "destination" });
             setSearch("");
             setPlacePickerOpen(true);
             placeSheet.current?.present();
@@ -471,7 +474,7 @@ function PostMoney({
         }}
         onSelect={(id) =>
           interaction(() => {
-            if (placeTarget === "source") editor.setProfileId(id);
+            if (readRoute().placeTarget === "source") editor.setProfileId(id);
             else editor.setDestinationId(id);
             destinationRequest.current = null;
             setPlacePickerOpen(false);
@@ -487,8 +490,8 @@ function PostMoney({
               productKind: request?.answer === "payDebt" ? null : "bankAccount",
               emoji: request?.style.emoji ?? "💰",
               target:
-                placeTarget === "destination"
-                  ? { kind: "destination", sourceProfileId: editor.profileId }
+                readRoute().placeTarget === "destination"
+                  ? { kind: "destination", sourceProfileId: editor.read().profileId }
                   : { kind: "source" },
             };
             placeSheet.current?.dismiss();
@@ -542,12 +545,12 @@ function PostMoney({
           currency={workspace.functionalCurrency}
       {...impact}
       onReconsider={() => {
-        setImpact(null);
+        routeChange({ impact: null });
         batchDecision.current?.(false);
         batchDecision.current = null;
       }}
       onContinue={() => {
-        setImpact(null);
+        routeChange({ impact: null });
         if (batchDecision.current) {
           batchDecision.current(true);
           batchDecision.current = null;
@@ -573,19 +576,19 @@ function PostMoney({
         onCancel={closeCompose}
         onAdd={() => {
           editor.resetComposer();
-          setEditingId(undefined);
+          routeChange({ editingId: undefined });
           setComposing(true);
         }}
         onEdit={(item) => {
           if (editor.editBatchDraft(item)) {
-            setEditingId(item.id);
+            routeChange({ editingId: item.id });
             setComposing(true);
           }
         }}
         onBack={() => router.back()}
         onOne={() => {
           editor.resetComposer();
-          setMode("one");
+          routeChange({ mode: "one" });
         }}
         rowFor={(item) => batchRowFor({ item, categories, profiles: allProfiles?.map((place) => ({ ...place, name: placeLabel(place, t) })), t })}
       />
