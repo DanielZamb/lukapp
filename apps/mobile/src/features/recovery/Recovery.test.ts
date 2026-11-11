@@ -1336,3 +1336,15 @@ test("a renamed destination place shows its new name on the plan and the draft w
     installmentCount: 4, installmentMinorUnits: 12_000_000, idempotencyKey: "dental-key",
   }]]);
 });
+
+test("two presses of the plan's Cancel plan open its confirmation and send nothing; a Cancel kept after Keep plan sends nothing", async () => {
+  const { screen } = await open([repair], true);
+  const first = button(screen, "Cancel plan").props.onPress as () => void;
+  await act(async () => { first(); first(); });
+  expect(screen.findByType(Header).props).toMatchObject({ title: "Cancel this plan?" });
+  expect(remote.cancel).not.toHaveBeenCalled();
+  const kept = button(screen, "Cancel plan").props.onPress as () => void;
+  await act(async () => { button(screen, "Keep plan").props.onPress(); });
+  await act(async () => { kept(); });
+  expect(remote.cancel).not.toHaveBeenCalled();
+});
