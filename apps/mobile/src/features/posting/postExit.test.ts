@@ -498,3 +498,16 @@ test("Save changes on a Draft another screen already sent shows that entry and l
   expect(nav.stack).toEqual(["drafts"]);
   expect((await stored()).map((draft) => [draft.id, draft.status])).toEqual([["taxi", "posting"]]);
 });
+
+test("a Discard kept from a discard confirmation the person cancelled discards nothing", async () => {
+  const two = keepIn(keepIn({ v: 3, drafts: [] }, { facts: taxi }, now, () => "taxi").document,
+    { facts: { ...taxi, description: "Lunch" } }, now, () => "lunch");
+  await seed(two.document);
+  await openPost({ draftId: "taxi" });
+  await act(async () => button("Discard draft").props.onPress());
+  const kept = button("Discard").props.onPress as () => void;
+  await act(async () => button("Cancel").props.onPress());
+  await act(async () => { kept(); });
+  expect(nav.stack).toEqual(["drafts", "post"]);
+  expect((await stored()).map((draft) => draft.id)).toEqual(["taxi", "lunch"]);
+});
