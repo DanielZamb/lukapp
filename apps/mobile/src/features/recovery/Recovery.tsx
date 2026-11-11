@@ -266,7 +266,7 @@ function Draft({
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
   const editor = useRecoveryEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved });
-  const back = () => { if (editor.canDismiss) onClose(); };
+  const back = () => editor.dismiss(onClose);
   useRecoveryBack(back);
   return (
     <RecoveryDraft
@@ -300,7 +300,7 @@ function Move({
   const move = useRecoveryMove({ workspaceId, timeZone, plan, sources }, {
     move: contribute, reportFailure, newKey: Crypto.randomUUID, onMoved,
   });
-  const back = () => { if (move.canDismiss) onClose(); };
+  const back = () => move.dismiss(onClose);
   useRecoveryBack(back);
   return (
     <RecoveryMoveScreen
@@ -327,7 +327,7 @@ function Cancel({
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
   const form = useRecoveryCancel({ workspaceId, plan }, { cancel, reportFailure, newKey: Crypto.randomUUID, onCancelled });
-  const back = () => { if (form.canDismiss) onClose(); };
+  const back = () => form.dismiss(onClose);
   useRecoveryBack(back);
   return (
     <RecoveryCancelScreen
@@ -356,7 +356,7 @@ function Correct({
   const form = useRecoveryCorrection({ workspaceId, plan, plans, contribution }, {
     correct, reportFailure, newKey: Crypto.randomUUID, onCorrected,
   });
-  const back = () => { if (form.canDismiss) onClose(); };
+  const back = () => form.dismiss(onClose);
   useRecoveryBack(back);
   return (
     <RecoveryCorrectScreen
