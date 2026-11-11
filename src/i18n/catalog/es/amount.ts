@@ -6,6 +6,8 @@ export const amount: Messages<typeof en> = {
   decimalPointA11y: "Escribir punto decimal en {currency}",
   noDecimalsA11y: "Los montos en {currency} no llevan decimales",
   signA11y: "Cambiar el monto entre menos y más",
+  signMinus: "menos",
+  signPlus: "más",
   markComma: "la coma",
   markPoint: "el punto",
   hintDecimal: "Usa {mark} para los decimales, por ejemplo {example}",

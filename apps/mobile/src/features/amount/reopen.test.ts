@@ -207,7 +207,7 @@ test("finding 5: a Candidate's pasted amount still awaits confirmation after clo
   const f = await candidateSavedBefore("COP", "-1.234,50", 123450);
   const dispatch = vi.fn(async (command: ConfirmCandidateInput) => confirmed(command));
   let editor = await openCandidate(f.service, "COP", dispatch);
-  await act(async () => { editor().setDescription("Market"); editor().setAmount(withNativeText(editor().amount, "-1.234")); });
+  await act(async () => { editor().setDescription("Market"); editor().setAmount(withNativeText(editor().amount, "1.234")); });
   expect(editor().amount.review).toEqual({ pasted: true, converted: null });
   await act(async () => root?.unmount()); root = undefined;
   expect(serializeState(f.state())).toContain("\"reviewAmountReview\":{\"reason\":\"pasted\",\"previous\":null}");
@@ -275,9 +275,9 @@ test("an amount edited and restored to the same characters is saved as the sessi
   const store = port(savedBefore("USD", "-1.234,50"));
   const { editor } = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
   expect(editor().amount.editor.text).toBe("-1,234.50");
-  await act(async () => { editor().setAmount(withNativeText(editor().amount, "-1,234.5")); });
+  await act(async () => { editor().setAmount(withNativeText(editor().amount, "1,234.5")); });
   expect(editor().amount.editor.text).toBe("-1,234.5");
-  await act(async () => { editor().setAmount(withNativeText(editor().amount, "-1,234.50")); });
+  await act(async () => { editor().setAmount(withNativeText(editor().amount, "1,234.50")); });
   expect(editor().amount.editor.text).toBe("-1,234.50");
   await act(async () => { await editor().keepDraft(); });
   expect(store.kept.at(-1)?.facts).toMatchObject({ amountText: "-1,234.50", amountFormat: "usd/1",
@@ -289,7 +289,7 @@ test("a pasted amount kept in a Draft reopens still awaiting confirmation", asyn
   const store = port([]);
   const first = await openEditor({ currency: "USD", drafts: store.value, api });
   const blank = first.editor().amount;
-  await act(async () => { first.editor().setAmount(withNativeText(blank, "-1,234")); });
+  await act(async () => { first.editor().setAmount(withNativeText(blank, "1,234")); });
   await act(async () => { first.editor().setDescription("Rent"); });
   expect(first.editor().canSubmit).toBe(false);
   await act(async () => { await first.editor().keepDraft(); });

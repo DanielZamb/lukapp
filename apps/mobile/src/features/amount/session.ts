@@ -27,12 +27,16 @@ import {
  */
 export type AmountReview = Readonly<{ pasted: boolean; converted: Readonly<{ previous: string | null }> | null }>;
 
+export type AmountSign = "" | "+" | "-";
+
 /**
- * One editing session of one amount field, bound to one currency. The text is exactly what the native field shows:
- * the app never regroups it while the person types, so the amount is always the text read with the strict grammar.
- * A new currency starts a new session; a language change does not touch it.
+ * One editing session of one amount field, bound to one currency. The native text is exactly what the native field
+ * shows: the app never regroups it while the person types. The sign is held beside it, set by the sign key or the
+ * owner and never written into the native text, so no keystroke racing the sign key can drop it. `editor` reads the
+ * sign followed by the native text with the strict grammar; a sign typed into the native text as well reads as two
+ * signs and is refused. A new currency starts a new session; a language change does not touch it.
  */
-export type AmountSession = Readonly<{ currency: string; editor: AmountEditorState; review: AmountReview | null }>;
+export type AmountSession = Readonly<{ currency: string; sign: AmountSign; editor: AmountEditorState; review: AmountReview | null }>;
 
 /** The editor state for text exactly as written, read with the strict grammar and never rewritten. */
 export function literalEditor(format: AmountFormat, text: string): AmountEditorState {
@@ -54,8 +58,24 @@ function openedText(format: AmountFormat, text: string): string {
   return ungrouped !== signed && createAmountEditor(format, ungrouped).text === signed ? ungrouped : text;
 }
 
+/** The text the native field shows: the session's text without the sign held beside it. */
+export function nativeText(session: AmountSession): string {
+  return session.editor.text.slice(session.sign.length);
+}
+
+function signed(format: AmountFormat, sign: AmountSign, native: string): Pick<AmountSession, "sign" | "editor"> {
+  return { sign, editor: literalEditor(format, sign + native) };
+}
+
+/** Text the app opens, with its leading sign moved beside the native text. */
+function opening(format: AmountFormat, text: string): Pick<AmountSession, "sign" | "editor"> {
+  const sign = /^\s*([+−-])/.exec(text);
+  if (!sign) return signed(format, "", text);
+  return signed(format, sign[1] === "+" ? "+" : "-", text.slice(sign[0].length));
+}
+
 export function openAmountIn(format: AmountFormat, currency: string, text = ""): AmountSession {
-  return { currency, editor: literalEditor(format, openedText(format, text)), review: null };
+  return { currency, ...opening(format, openedText(format, text)), review: null };
 }
 
 export function openAmount(currency: string, text = ""): AmountSession {
@@ -88,7 +108,7 @@ export function openSavedAmount(
 ): { session: AmountSession; notice: AmountNotice | null } {
   const opened = openStoredAmountText(stored, currency, format);
   const awaiting = (reason: AmountReviewReason, previous: string | null): AmountSession =>
-    ({ currency, editor: literalEditor(format, opened.text), review: reviewOf(reason, previous) });
+    ({ currency, ...opening(format, opened.text), review: reviewOf(reason, previous) });
   if (opened.notice?.kind === "converted")
     return { session: awaiting("converted", stored.review?.previous ?? opened.notice.previous), notice: opened.notice };
   if (stored.review && !opened.notice) return { session: awaiting(stored.review.reason, stored.review.previous), notice: null };
@@ -148,8 +168,8 @@ function reviewAfter(review: AmountReview | null, text: string, pasted: boolean)
   return review && review.pasted === next.pasted && review.converted === next.converted ? review : next;
 }
 
-function withText(session: AmountSession, text: string, pasted = false): AmountSession {
-  return { ...session, editor: literalEditor(session.editor.format, text), review: reviewAfter(session.review, text, pasted) };
+function withText(session: AmountSession, native: string, pasted = false): AmountSession {
+  return { ...session, ...signed(session.editor.format, session.sign, native), review: reviewAfter(session.review, native, pasted) };
 }
 
 /**
@@ -157,18 +177,19 @@ function withText(session: AmountSession, text: string, pasted = false): AmountS
  * one character and a separator among them, as a paste does, the amount awaits confirmation; a keystroke writes one.
  */
 export function withNativeText(session: AmountSession, text: string): AmountSession {
-  if (text === session.editor.text) return session;
-  const wrote = written(session.editor.text, text);
+  const before = nativeText(session);
+  if (text === before) return session;
+  const wrote = written(before, text);
   return withText(session, text, wrote.length > 1 && hasSeparator(wrote));
 }
 
 /**
- * Writes this currency's decimal mark at `caret`, with a leading 0 when no digit comes before it, and says where the
- * caret goes. Text that already has the mark only moves the caret after it.
+ * Writes this currency's decimal mark at `caret` in the native text, with a leading 0 when no digit comes before it,
+ * and says where the caret goes. Text that already has the mark only moves the caret after it.
  */
 export function withDecimalMark(session: AmountSession, caret: number): { session: AmountSession; caret: number } {
-  const { text, format } = session.editor;
-  const mark = format.convention.decimal;
+  const text = nativeText(session);
+  const mark = session.editor.format.convention.decimal;
   const existing = text.indexOf(mark);
   if (existing >= 0) return { session, caret: existing + 1 };
   const at = Math.max(0, Math.min(caret, text.length));
@@ -182,18 +203,15 @@ export function confirmAmount(session: AmountSession): AmountSession {
   return session.review === null ? session : { ...session, review: null };
 }
 
-export function amountSign(session: AmountSession): "+" | "-" | "" {
-  const sign = session.editor.text.trimStart()[0];
-  return sign === "+" ? "+" : sign === "-" || sign === "−" ? "-" : "";
+export function amountSign(session: AmountSession): AmountSign {
+  return session.sign;
 }
 
-/** Writes `sign` in front of the amount and changes nothing else, including what still awaits confirmation. */
+/** Sets the sign held beside the native text and changes nothing else, including what still awaits confirmation. */
 export function withAmountSign(session: AmountSession, sign: "+" | "-"): AmountSession {
-  const { text } = session.editor;
-  const next = sign + text.trimStart().replace(/^[+−-]/, "");
-  return next === text ? session : { ...session, editor: literalEditor(session.editor.format, next) };
+  return sign === session.sign ? session : { ...session, ...signed(session.editor.format, sign, nativeText(session)) };
 }
 
 export function toggleAmountSign(session: AmountSession): AmountSession {
-  return withAmountSign(session, amountSign(session) === "-" ? "+" : "-");
+  return withAmountSign(session, session.sign === "-" ? "+" : "-");
 }

@@ -15,15 +15,21 @@ import { amountMinorUnits, confirmAmount, displayedMinorUnits, openAmountIn, typ
 
 /**
  * The second review's independent emulator and reference model (reports/mvp-2026-11-10/amount-field/
- * r8-independent-emulator.test.ts), adapted to a field that shows the typed text and controls the caret only after its
- * own keys. The reference keeps a plain string with "." for decimals and reads it with its own arithmetic. The phone
- * keeps the native text and caret; a field write is "dropped" when a keystroke reaches the phone first, as React Native
- * drops a command older than the native text, and that keystroke's event then reaches the field.
+ * r8-independent-emulator.test.ts), adapted to a field that shows the typed text, holds the sign beside it, and
+ * controls the caret only after its decimal key. The reference keeps a plain string with "." for decimals and a
+ * separate sign, and reads them with its own arithmetic. The phone keeps the native text and caret; a field write is
+ * "dropped" when a keystroke reaches the phone first, as React Native drops a command older than the native text, and
+ * that keystroke's event then reaches the field. The sign key writes nothing, so it has nothing to drop.
  */
 type Phone = ReturnType<typeof phoneFor>;
 let root: ReactTestRenderer;
 let session: AmountSession;
 const input = () => root.root.findByType("input" as never);
+/** The sign the field shows beside the native text. */
+const shownSign = () => {
+  const label = root.root.findAll((node) => node.type === "text" && ["minus", "plus"].includes(node.props.accessibilityLabel))[0]?.props.accessibilityLabel;
+  return label === "minus" ? "-" : label === "plus" ? "+" : "";
+};
 
 async function mount(cop: boolean, precision: 0 | 2 | 3): Promise<Phone> {
   vi.stubGlobal("React", React);
@@ -81,7 +87,7 @@ function phoneFor(cop: boolean) {
 }
 
 class Reference {
-  text = ""; a = 0; b = 0;
+  text = ""; sign = ""; a = 0; b = 0;
   constructor(public precision: number, public cop: boolean) {}
   edit(kind: string, inserted = "") {
     if ((kind === "back" && this.a === 0 && this.b === 0) || (kind === "delete" && this.a === this.text.length && this.b === this.a)) return;
@@ -91,11 +97,7 @@ class Reference {
       inserted = /^[+-]?$/.test(this.text.slice(0, a)) ? "0." : ".";
     }
     if (kind === "sign") {
-      const sign = this.text[0] === "-" ? "+" : "-";
-      const had = /^[+-]/.test(this.text);
-      const fromEnd = this.text.length - this.b;
-      this.text = sign + this.text.slice(had ? 1 : 0);
-      this.a = this.b = Math.max(1, this.text.length - fromEnd);
+      this.sign = this.sign === "-" ? "+" : "-";
       return;
     }
     if (a === b && kind === "back") a = Math.max(0, a - 1);
@@ -106,11 +108,11 @@ class Reference {
   }
   shown() { return this.cop ? this.text.replace(".", ",") : this.text; }
   value(): number | null {
-    if (!/^[+-]?\d+(\.\d+)?$/.test(this.text)) return null;
-    const [whole, fraction = ""] = this.text.replace(/^[+-]/, "").split(".");
+    if (!/^\d+(\.\d+)?$/.test(this.text)) return null;
+    const [whole, fraction = ""] = this.text.split(".");
     if (fraction.length > this.precision || (this.precision === 0 && this.text.includes("."))) return null;
     const v = Number(whole) * 10 ** this.precision + Number(fraction.padEnd(this.precision, "0") || "0");
-    return Number.isSafeInteger(v) ? (this.text[0] === "-" && v ? -v : v) : null;
+    return Number.isSafeInteger(v) ? (this.sign === "-" && v ? -v : v) : null;
   }
 }
 
@@ -160,8 +162,7 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
           reference.edit("decimal"); await phone.key("decimal", drop);
           if (drop) { intact = false; drops++; await phone.edit(digit); }
         } else if (k < 0.87) {
-          reference.edit("sign"); await phone.key("sign", drop);
-          if (drop) { intact = false; drops++; await phone.edit(digit); }
+          reference.edit("sign"); await phone.key("sign", false);
         }
         else if (k < 0.94) { const pasted = String(10 + Math.floor(random() * 90)); reference.edit("type", pasted); await phone.edit(pasted); }
         else {
@@ -173,17 +174,17 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
           expect(amountMinorUnits(session)).toBeNull();
           const confirm = root.root.findAll((node) => String(node.props.accessibilityLabel).startsWith("Confirm ") && typeof node.props.onPress === "function")[0];
           await act(async () => confirm.props.onPress());
-          expect(amountMinorUnits(session)).toBe(1234 * 10 ** precision);
+          expect(amountMinorUnits(session)).toBe((reference.sign === "-" ? -1 : 1) * 1234 * 10 ** precision);
           await phone.select(0, phone.text.length); await phone.edit("", -1);
           reference.text = ""; reference.a = reference.b = 0;
         }
         actions++;
         const visible = phone.text;
         expect(input().props.value, `field shows the phone's text after step ${step}`).toBe(visible);
-        expect(displayedMinorUnits(session), `value of ${JSON.stringify(visible)}`).toBe(reads(visible, cop, precision));
+        expect(displayedMinorUnits(session), `value of ${JSON.stringify(visible)}`).toBe(reads(shownSign() + visible, cop, precision));
         if (session.review) expect(amountMinorUnits(session)).toBeNull();
         if (intact) compared++;
-        if (intact && (visible !== reference.shown() || displayedMinorUnits(session) !== reference.value()
+        if (intact && (visible !== reference.shown() || shownSign() !== reference.sign || displayedMinorUnits(session) !== reference.value()
           || phone.caret[0] !== reference.a || phone.caret[1] !== reference.b)) { divergences++; intact = false; }
       }
       await act(async () => { root?.unmount(); });

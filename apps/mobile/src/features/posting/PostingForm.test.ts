@@ -107,18 +107,21 @@ test.each([false, true])("typing a new expense keeps its sign and the digits exa
     accessibilityLabel: saveToBatch ? "Add to batch" : "Post",
     accessibilityRole: "button",
   }).props.onPress();
-  expect(input().props.value).toBe("-");
+  const sign = () => root!.root.findAll((node) => node.props.accessibilityLabel === "minus").map((node) => node.children.join(""));
+  expect(input().props.value).toBe("");
+  expect(sign()).toEqual(["−"]);
   for (const digit of "12500") {
     await act(async () => input().props.onChangeText(`${input().props.value}${digit}`));
   }
-  expect(input().props.value).toBe("-12500");
-  await act(async () => input().props.onChangeText("-12abc500"));
-  expect(input().props.value).toBe("-12abc500");
+  expect(input().props.value).toBe("12500");
+  expect(sign()).toEqual(["−"]);
+  await act(async () => input().props.onChangeText("12abc500"));
+  expect(input().props.value).toBe("12abc500");
   await act(async () => submit());
   expect(saveToBatch ? queued : post.mock.calls).toEqual(saveToBatch ? [null] : []);
   await act(async () => input().props.onChangeText(""));
-  await act(async () => input().props.onChangeText("-12.500"));
-  expect(input().props.value).toBe("-12.500");
+  await act(async () => input().props.onChangeText("12.500"));
+  expect(input().props.value).toBe("12.500");
   await act(async () => submit());
   expect(saveToBatch ? queued.at(-1) : post.mock.calls[0]).toBeFalsy();
   await act(async () => root!.root.findByProps({ accessibilityLabel: "Confirm COP 12.500,00", accessibilityRole: "button" }).props.onPress());

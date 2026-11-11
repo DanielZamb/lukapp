@@ -5,7 +5,7 @@ import { useThemeContext } from "../../ui/themeContext";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import { amountHint } from "./hints";
-import { confirmAmount, toggleAmountSign, withDecimalMark, withNativeText, type AmountSession } from "./session";
+import { confirmAmount, nativeText, toggleAmountSign, withDecimalMark, withNativeText, type AmountSession } from "./session";
 
 type Caret = { start: number; end: number };
 
@@ -29,8 +29,9 @@ export type AmountFieldProps = {
 
 /**
  * The one input for an amount. The native field owns the text: the field reads it literally on every change and never
- * rewrites it while the person types, so the amount is always the text as shown. The grouped reading appears under
- * it. The decimal and sign keys are the only edits the field writes itself, and the caret is placed only after them.
+ * rewrites it while the person types, so the amount is always the text as shown. The sign is shown beside the input
+ * and never written into it. The grouped reading appears under it. The decimal key is the only edit the field writes
+ * into the native text itself, and the caret is placed only after it.
  *
  * The text the input shows is the field's own state, set in the same event as React Native's record of the native
  * text, so an owner that renders the field late, as a bottom sheet's portal does, cannot push an older text back. An
@@ -44,31 +45,31 @@ export function AmountField(props: AmountFieldProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const latest = useRef(props.session);
   const emitted = useRef(new WeakSet<AmountSession>());
-  const caret = useRef<Caret>({ start: props.session.editor.text.length, end: props.session.editor.text.length });
+  const caret = useRef<Caret>({ start: nativeText(props.session).length, end: nativeText(props.session).length });
   const focused = useRef(false);
-  const [input, setInput] = useState({ seen: props.session, text: props.session.editor.text, generation: 0, autoFocus: false });
+  const [input, setInput] = useState({ seen: props.session, text: nativeText(props.session), generation: 0, autoFocus: false });
   const [placed, setPlaced] = useState<Caret | undefined>(undefined);
   let { generation } = input;
   if (input.seen !== props.session) {
     const owner = !emitted.current.has(props.session);
-    const replaced = owner && (props.session.currency !== latest.current.currency || props.session.editor.text !== input.text);
+    const replaced = owner && (props.session.currency !== latest.current.currency || nativeText(props.session) !== input.text);
     if (owner) latest.current = props.session;
     if (replaced) {
       generation += 1;
-      const end = props.session.editor.text.length;
+      const end = nativeText(props.session).length;
       caret.current = { start: end, end };
       if (placed) setPlaced(undefined);
     }
     setInput(replaced
-      ? { seen: props.session, text: props.session.editor.text, generation, autoFocus: focused.current }
+      ? { seen: props.session, text: nativeText(props.session), generation, autoFocus: focused.current }
       : { ...input, seen: props.session });
-  } else if (!props.editable && input.text !== latest.current.editor.text) {
-    setInput({ ...input, text: latest.current.editor.text });
+  } else if (!props.editable && input.text !== nativeText(latest.current)) {
+    setInput({ ...input, text: nativeText(latest.current) });
   }
   const current = useRef(generation);
   current.current = generation;
   const session = latest.current;
-  const { editor, currency, review } = session;
+  const { editor, currency, review, sign } = session;
   const { decimal } = editor.format.convention;
   const decimals = editor.format.precision > 0;
   const hint = amountHint(session, t);
@@ -79,11 +80,11 @@ export function AmountField(props: AmountFieldProps) {
     emitted.current.add(next);
     props.onChange(next);
   }
-  /** An edit of the field's own keys, with the caret it leaves. */
+  /** A write of the field's decimal key into the native text, with the caret it leaves. */
   function press(next: AmountSession, at: number) {
     caret.current = { start: at, end: at };
     setPlaced({ start: at, end: at });
-    setInput((shown) => ({ ...shown, text: next.editor.text }));
+    setInput((shown) => ({ ...shown, text: nativeText(next) }));
     emit(next);
   }
   const mine = generation;
@@ -97,6 +98,11 @@ export function AmountField(props: AmountFieldProps) {
     <View style={styles.field}>
       {props.label ? <Text style={shared.fieldLabel}>{props.label}</Text> : null}
       <View style={styles.row}>
+        {sign ? (
+          <Text style={[styles.signText, props.inputStyle, styles.signLayout]} accessibilityLabel={t(sign === "-" ? "amount.signMinus" : "amount.signPlus")}>
+            {sign === "-" ? "−" : "+"}
+          </Text>
+        ) : null}
         <Input
           key={generation}
           autoFocus={input.autoFocus}
@@ -133,12 +139,7 @@ export function AmountField(props: AmountFieldProps) {
             accessibilityLabel={t("amount.signA11y")}
             accessibilityState={{ disabled: !props.editable || props.sign.disabled === true }}
             disabled={!props.editable || props.sign.disabled === true}
-            onPress={() => {
-              const before = latest.current.editor.text;
-              const next = toggleAmountSign(latest.current);
-              const fromEnd = before.length - caret.current.end;
-              press(next, Math.max(1, next.editor.text.length - fromEnd));
-            }}
+            onPress={() => emit(toggleAmountSign(latest.current))}
             style={({ pressed }) => [styles.key, (!props.editable || props.sign?.disabled) && styles.keyDisabled, pressed && styles.pressed]}
           >
             <Text style={styles.keyText}>+/−</Text>
@@ -202,6 +203,8 @@ function createStyles(theme: Theme) {
     field: { gap: spacing.xs },
     row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
     input: { flex: 1, minWidth: 0 },
+    signText: { fontFamily: font.bold, fontSize: fontSize.body, color: theme.foreground },
+    signLayout: { flex: 0, width: "auto", minWidth: spacing.md, minHeight: 0, paddingHorizontal: 0, textAlign: "center" },
     boxed: { width: "auto" },
     review: { gap: spacing.sm, paddingVertical: spacing.xs },
     reading: { lineHeight: Math.round(fontSize.body * 1.4) },

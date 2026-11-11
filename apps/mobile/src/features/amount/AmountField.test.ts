@@ -293,7 +293,7 @@ test("finding 8: a session the owner replaces is not overwritten by a change sti
   expect(sent).toEqual([{ currency: "USD", minorUnits: 9900 }]);
 });
 
-test("the sign key writes only the sign and keeps the caret the same distance from the end", async () => {
+test("the sign key changes only the sign shown beside the phone's text, and leaves that text and its caret alone", async () => {
   const phone = await render("COP");
   await phone.type("12345");
   await phone.select(3);
@@ -301,13 +301,30 @@ test("the sign key writes only the sign and keeps the caret the same distance fr
   expect(phone.text).toBe("123,45");
   expect(phone.caret).toEqual({ start: 4, end: 4 });
   await phone.press(button("Switch the amount between minus and plus"));
-  expect(phone.text).toBe("-123,45");
-  expect(phone.caret).toEqual({ start: 5, end: 5 });
+  expect(phone.text).toBe("123,45");
+  expect(phone.caret).toEqual({ start: 4, end: 4 });
+  expect(root!.root.findAll((node) => node.type === "text" && node.props.accessibilityLabel === "minus").map((node) => node.children.join(""))).toEqual(["−"]);
   await send();
   await phone.press(button("Switch the amount between minus and plus"));
   await send();
   expect(sent).toEqual([{ currency: "COP", minorUnits: -12345 }, { currency: "COP", minorUnits: 12345 }]);
-  expect(phone.text).toBe("+123,45");
+  expect(phone.text).toBe("123,45");
+  expect(root!.root.findAll((node) => node.type === "text" && node.props.accessibilityLabel === "plus").map((node) => node.children.join(""))).toEqual(["+"]);
+  await phone.type("9");
+  expect(phone.text).toBe("123,945");
+  await send();
+  expect(sent).toHaveLength(2);
+});
+
+test("a sign typed into the phone's text beside the sign the app holds reads as two signs and is never sent", async () => {
+  const phone = await render("USD");
+  await phone.type("5");
+  await phone.press(button("Switch the amount between minus and plus"));
+  await phone.select(0);
+  await phone.type("-");
+  expect(phone.text).toBe("-5");
+  await send();
+  expect(sent).toEqual([]);
 });
 
 test("the decimal key moves the caret after a mark already written, and starts with 0 before any digit", async () => {
@@ -380,7 +397,8 @@ test("a lone zero is selected on focus so the first key replaces it", async () =
 
 test("an amount the app opens grouped shows without its group marks and reads the same", async () => {
   await render("COP", "en", "-1.234.567,50");
-  expect(input().props.value).toBe("-1234567,50");
+  expect(input().props.value).toBe("1234567,50");
+  expect(texts()).toContain("−");
   expect(texts()).toContain("Reads as −COP 1.234.567,50");
   await render("COP", "en", "1.23");
   expect(input().props.value).toBe("1.23");

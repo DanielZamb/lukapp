@@ -3,6 +3,8 @@ export const amount = {
   decimalPointA11y: "Type a decimal point for {currency}",
   noDecimalsA11y: "{currency} amounts have no decimals",
   signA11y: "Switch the amount between minus and plus",
+  signMinus: "minus",
+  signPlus: "plus",
   markComma: "comma",
   markPoint: "point",
   hintDecimal: "Use the {mark} for decimals, for example {example}",
