@@ -51,8 +51,12 @@ vi.mock("react-native-reanimated", () => ({
   useSharedValue: (value: unknown) => React.useRef({ value }).current,
   Easing: { out: (value: unknown) => value, exp: () => {} },
 }));
+const hardware = vi.hoisted(() => ({ listeners: [] as Array<() => boolean> }));
 vi.mock("react-native", () => ({
-  BackHandler: { addEventListener: () => ({ remove() {} }) },
+  BackHandler: { addEventListener: (_event: string, listener: () => boolean) => {
+    hardware.listeners.push(listener);
+    return { remove() { hardware.listeners = hardware.listeners.filter((item) => item !== listener); } };
+  } },
   Text: "text", View: "view", Pressable: "button", TextInput: "input",
   ScrollView: "scroll", ActivityIndicator: "spinner",
   Platform: { OS: "android", select: (values: { android?: unknown }) => values.android },
@@ -184,4 +188,17 @@ test("creating and restyling a category keeps setup answers after both sheets cl
   expectAnswers();
   expect(control("Weekend").findAllByType("text")[0].children).toEqual(["🍔"]);
   expect(control("Weekend").props.accessibilityState.checked).toBe(true);
+});
+
+test("Android Back closes only the nested category editor and keeps setup answers", async () => {
+  await mount(); await press("Add your own category");
+  await act(async () => control("Category name").props.onChangeText("Lunch category"));
+  let handled = false;
+  await act(async () => { handled = [...hardware.listeners].reverse().some((listener) => listener()); });
+  expect(handled).toBe(true);
+  await settle();
+  expect(screen().findAllByType(BottomSheetModal)).toHaveLength(1);
+  expectAnswers();
+  await press("Add your own category");
+  expect(control("Category name").props.value).toBe("");
 });

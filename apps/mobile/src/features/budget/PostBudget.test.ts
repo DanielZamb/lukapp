@@ -39,7 +39,7 @@ vi.mock("@react-navigation/native", () => ({ usePreventRemove: () => {} }));
 vi.mock("expo-router", () => ({
   useNavigation: () => navigation, useLocalSearchParams: () => ({}), router: { replace: vi.fn(), back: vi.fn() }, Redirect: "Redirect" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 vi.mock("react-native", () => ({
   KeyboardAvoidingView: "keyboard-viewport",
   Text: "Text", View: "View", Pressable: "Button", ScrollView: "ScrollView", TextInput: "Input", ActivityIndicator: "Spinner",

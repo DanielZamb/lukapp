@@ -4,8 +4,9 @@ import {
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { SheetModal } from "../../ui/SheetModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Field, PrimaryButton, SecondaryButton, useTheme, useThemeMode, useUi } from "../../ui/core";
 import { useT } from "../../i18n";
@@ -55,9 +56,6 @@ export function RestyleSheet({
   const answer = override ?? nature.suggested;
   const [keyboard, setKeyboard] = useState(false);
   const interact = useLocalEntryInteraction();
-  useEffect(() => {
-    sheet.current?.present();
-  }, []);
   const trimmed = name.trim();
   const duplicate = names.some(
     (item) => !(target.kind === "edit" && item === target.category.name) && categoryNameKey(item) === categoryNameKey(trimmed),
@@ -70,8 +68,12 @@ export function RestyleSheet({
     style,
   };
   return (
-    <BottomSheetModal
-      ref={sheet}
+    <SheetModal
+      sheetRef={sheet}
+      presentOnMount
+      trackPresentation
+      androidBack
+      busy={false}
       topInset={insets.top}
       stackBehavior="push"
       enablePanDownToClose
@@ -217,6 +219,6 @@ export function RestyleSheet({
         {target.kind === "edit" && target.category.source === "custom" && onDelete &&
           <SecondaryButton label={t("categories.removeCategory")} tone="danger" onPress={() => { interact(); onDelete(); sheet.current?.dismiss(); }} />}
       </BottomSheetScrollView>
-    </BottomSheetModal>
+    </SheetModal>
   );
 }

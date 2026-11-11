@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Text, View } from "react-native";
-import { Header, Screen, SecondaryButton, useTheme, useUi } from "../../ui/core";
+import { ActivityIndicator, Platform, View } from "react-native";
+import { Header, Screen, SecondaryButton, Text, useTheme, useUi } from "../../ui/core";
 import { radius, spacing } from "../../ui/tokens";
 import { useIntakeService, useIntakeSnapshot } from "./IntakeProvider";
 import type { DiagnosticList, DiagnosticRecord } from "../../../modules/notification-intake";
@@ -42,9 +42,9 @@ export function ArrivalInspector({ onBack }: { onBack(): void }) {
     <Header title={detail.packageName} eyebrow={t("inbox.inspectEyebrowDetail")} onBack={() => setDetail(null)} />
     {error ? <AlertLine>{error}</AlertLine> : null}
     <Muted>{t("inbox.inspectOutcome", { outcome: detail.parser.outcome, reasons: detail.parser.reasons.join(", ") || t("inbox.inspectNoReasons") })}</Muted>
-    <Text selectable style={ui.muted}>{t("inbox.inspectIds", { capture: detail.captureId, arrival: detail.id, when: when(detail.capturedAt) })}</Text>
+    <Text selectable preset="body" tone="muted">{t("inbox.inspectIds", { capture: detail.captureId, arrival: detail.id, when: when(detail.capturedAt) })}</Text>
     <View style={{ backgroundColor: theme.secondary, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, padding: spacing.lg }}>
-      <Text selectable style={[ui.body, { fontFamily: Platform.OS === "android" ? "monospace" : "Menlo", fontSize: 13, lineHeight: 19 }]}>
+      <Text selectable preset="systemFootnote" tone="default" style={{ fontFamily: Platform.OS === "android" ? "monospace" : "Menlo" }}>
         {JSON.stringify(detail, null, 2)}
       </Text>
     </View>

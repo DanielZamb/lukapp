@@ -31,7 +31,8 @@ import {
 } from "./nativeEntry";
 import { useT } from "../i18n";
 import { Header, PrimaryButton, SecondaryButton, Screen, useUi } from "../ui/core";
-import { BrandMark, BrandSplash } from "../ui/Brand";
+import { BrandMark } from "../ui/Brand";
+import { ConnectingScreen, connectingPhase } from "../ui/ConnectingScreen";
 
 export function LocalEntryGate({
   children,
@@ -133,19 +134,12 @@ export function LocalEntryGate({
   }, [controller, lease, userId, sessionId]);
   if (state.kind === "sign-in")
     return <>{state.movedTo && <Text style={ui.body}>{t("access.movedTo", { device: state.movedTo })}</Text>}{renderSignIn(onSessionCreated)}</>;
-  if (state.kind === "checking") return <BrandSplash />;
-  if (
-    state.kind === "open" &&
-    (!controller.isOpenFor(
+  const phase = connectingPhase({ gate: "local", state: state.kind,
+    sessionReady: state.kind !== "open" || (controller.isOpenFor(
       userId && sessionId ? { subject: userId, sessionId } : null,
-    ) ||
-      controller.needsPathUnlock(path))
-  )
-    return (
-      <Screen>
-        <ActivityIndicator />
-      </Screen>
-    );
+    ) && !controller.needsPathUnlock(path)),
+  });
+  if (phase === "protection" || phase === "session") return <ConnectingScreen phase={phase} />;
   if (state.kind === "open" || state.kind === "admission" || state.kind === "enrolling")
     return (
       <View

@@ -98,6 +98,7 @@ function Drafts({
     <DraftsScreen
       onSources={() => router.push("/intake")}
       intakeWarning={intake.warning}
+      sourcesStatus={intake.sources}
       drafts={drafts.items}
       discardNotices={[...discardNotices, ...intake.notices].slice(-64)}
       onDismissDiscardNotices={async () => {

@@ -13,6 +13,7 @@ import type { EntryDetail, HistoryRow } from "./types";
 import { reversalFailureMessage } from "./useReversal";
 
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
+vi.mock("@react-navigation/native", () => ({ useIsFocused: () => true }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "sheet", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",

@@ -8,11 +8,12 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { useWindowDimensions } from "react-native";
+import { Platform, useWindowDimensions } from "react-native";
 import { defaultLayout, readableLayout, type ReadableLayout } from "./layout";
-import { themes, type Theme, type ThemeMode } from "./tokens";
+import { controls, themes, type Theme, type ThemeMode } from "./tokens";
 import { createCoreStyles, createUiStyles, type CoreStyles, type UiStyles } from "./styles";
 import { readThemeMode, writeThemeMode } from "./themeModeStorage";
+import { effectiveFontScale, readTextSize, writeTextSize, type StoredTextSize, type TextSizePreference } from "./textSize";
 
 type ThemeContextValue = {
   mode: ThemeMode;
@@ -24,6 +25,14 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+/** `fontScale` is the text size drawn for; `systemScale` is the phone's own, which the platform applies by itself. */
+const NativeTextContext = createContext({ fontScale: 1, systemScale: 1, nonlinearAndroid: false });
+export function useNativeTextMetrics() { return useContext(NativeTextContext); }
+
+type TextSizeValue = StoredTextSize & { loaded: boolean; choose: (preference: TextSizePreference) => void };
+const TextSizeContext = createContext<TextSizeValue>({ preference: "phone", asked: true, loaded: true, choose: () => {} });
+/** The app's own text size: the stored choice, whether the first-run question was answered, and how to change it. */
+export function useTextSize() { return useContext(TextSizeContext); }
 
 const fallbackTheme = themes.light;
 const fallbackBundle: ThemeContextValue = {
@@ -36,9 +45,25 @@ const fallbackBundle: ThemeContextValue = {
 };
 
 export function ResponsiveThemeProvider({ children }: PropsWithChildren) {
-  const { width, fontScale } = useWindowDimensions();
+  const { width, fontScale: systemScale } = useWindowDimensions();
+  const [stored, setStored] = useState<StoredTextSize & { loaded: boolean }>({ preference: "phone", asked: false, loaded: false });
+  const chose = useRef(false);
+  useEffect(() => {
+    void readTextSize().then((value) => { if (!chose.current) setStored({ ...value, loaded: true }); })
+      .catch(() => { if (!chose.current) setStored((now) => ({ ...now, loaded: true })); });
+  }, []);
+  const choose = useCallback((preference: TextSizePreference) => {
+    chose.current = true;
+    setStored({ preference, asked: true, loaded: true });
+    void writeTextSize(preference).catch(() => {});
+  }, []);
+  const fontScale = effectiveFontScale(systemScale, stored.preference);
   const layout = useMemo(() => readableLayout({ width, fontScale }), [width, fontScale]);
-  return <ThemeProvider layout={layout}>{children}</ThemeProvider>;
+  const metrics = useMemo(() => ({ fontScale, systemScale, nonlinearAndroid: Platform.OS === "android" && Number(Platform.Version) >= 34 }), [fontScale, systemScale]);
+  const textSize = useMemo(() => ({ ...stored, choose }), [stored, choose]);
+  return <TextSizeContext.Provider value={textSize}><NativeTextContext.Provider value={metrics}>
+    <ThemeProvider layout={layout}>{children}</ThemeProvider>
+  </NativeTextContext.Provider></TextSizeContext.Provider>;
 }
 
 export function ThemeProvider({ children, layout = defaultLayout }: PropsWithChildren<{ layout?: ReadableLayout }>) {
@@ -86,4 +111,12 @@ export function useThemeMode() {
 
 export function useSetThemeMode() {
   return useThemeContext().setMode;
+}
+
+export function useTier() {
+  return useReadableLayout().tier;
+}
+
+export function useControls() {
+  return controls[useTier()];
 }

@@ -6,9 +6,11 @@ import { openAmount } from "../amount/session";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import type { PlaceDraft } from "./usePostingEditor";
 import { AccountSetupForm } from "./AccountSetupForm";
+import { readableLayout } from "../../ui/layout";
 import { themes } from "../../ui/tokens";
 import { ThemeProvider, useSetThemeMode } from "../../ui/themeContext";
 
+const platform = vi.hoisted(() => ({ OS: "android" }));
 const back = vi.hoisted(() => ({ listeners: new Set<() => boolean>() }));
 
 vi.mock("@gorhom/bottom-sheet", async () => ({
@@ -21,6 +23,7 @@ vi.mock("@gorhom/bottom-sheet", async () => ({
   BottomSheetScrollView: "scroll",
   BottomSheetTextInput: "input",
   BottomSheetBackdrop: "backdrop",
+  BottomSheetFooter: "footer",
 }));
 vi.mock("@gorhom/bottom-sheet/src/hooks", async () =>
   vi.importActual("@gorhom/bottom-sheet/src/hooks/useBottomSheetModalInternal"));
@@ -59,10 +62,11 @@ vi.mock("react-native", () => ({
   } },
   Text: "text", View: "view", Pressable: "button", TextInput: "input",
   ScrollView: "scroll", ActivityIndicator: "spinner",
-  Platform: { OS: "android", select: (values: { android?: unknown }) => values.android },
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
+  Platform: { get OS() { return platform.OS; }, select: (values: { android?: unknown; ios?: unknown; default?: unknown }) => (platform.OS === "ios" ? values.ios : values.android) ?? values.default },
+  AccessibilityInfo: { setAccessibilityFocus: vi.fn(), announceForAccessibility: vi.fn() }, findNodeHandle: () => 42,
+  StyleSheet: { create: (value: unknown) => value, flatten: flat, hairlineWidth: 1 },
 }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 
 const typedAmount = (text: string) => expect.objectContaining({ editor: expect.objectContaining({ text }) });
@@ -89,6 +93,7 @@ function Setup({ initialValue = initial }: { initialValue?: PlaceDraft }) {
 }
 
 beforeEach(() => {
+  platform.OS = "android";
   vi.stubGlobal("React", React);
   vi.stubGlobal("__DEV__", false);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -263,7 +268,7 @@ test.each(["light", "dark"] as const)("Look has circular themed choices and cust
   expect(choice).toMatchObject({ backgroundColor: themes[mode].secondary, borderColor: themes[mode].primary });
   const input = screen().findByProps({ accessibilityLabel: "Custom emoji" });
   expect(input.props.placeholder).toBe("Or type your own");
-  expect(input.props.style).toMatchObject({ backgroundColor: themes[mode].secondary, color: themes[mode].foreground });
+  expect(flat(input.props.style)).toMatchObject({ backgroundColor: themes[mode].secondary, color: themes[mode].foreground });
 });
 
 
@@ -281,5 +286,40 @@ test("debt setup starts without a chosen kind, offers both products and asks wha
   expect(screen().findByType(AccountSetupForm).props.value.productKind).toBe("loan");
   await act(async () => button("Credit card").props.onPress());
   expect(screen().findByType(AccountSetupForm).props.value.productKind).toBe("creditCard");
+  expect(submitted).not.toHaveBeenCalled();
+});
+
+function flat(value: unknown): Record<string, unknown> {
+  return Array.isArray(value) ? Object.assign({}, ...value.map(flat)) : typeof value === "object" && value !== null ? Object.fromEntries(Object.entries(value)) : {};
+}
+function ScaledSetup({ scale }: { scale: number }) {
+  return createElement(ThemeProvider, { layout: readableLayout({ width: 320, fontScale: scale }) },
+    createElement(BottomSheetModalProvider, null, createElement(Setup)));
+}
+
+test("an in-process tier change keeps both open sheet owners and unsaved setup and Look answers", async () => {
+  platform.OS = "ios";
+  await act(async () => { root = create(createElement(ScaledSetup, { scale: 1 })); });
+  await act(async () => screen().findByProps({ accessibilityLabel: "Place name" }).props.onChangeText("Half typed place"));
+  await act(async () => screen().findByProps({ accessibilityLabel: "Balance today" }).props.onChangeText("1234"));
+  await act(async () => button("Choose emoji").props.onPress());
+  await settle();
+  await act(async () => screen().findByProps({ accessibilityLabel: "Custom emoji" }).props.onChangeText("🌿"));
+  const owners = screen().findAllByType(BottomSheetModal);
+  expect(owners).toHaveLength(2);
+  const reference = screen().findByType(AccountSetupForm).props.sheetRef;
+  for (const scale of [1.5, 2, 1]) {
+    await act(async () => root?.update(createElement(ScaledSetup, { scale })));
+    await settle();
+    expect(screen().findAllByType(BottomSheetModal)).toEqual(owners);
+    expect(screen().findAll((node) => String(node.type) === "native-sheet")).toHaveLength(2);
+    expect(screen().findByType(AccountSetupForm).props.sheetRef).toBe(reference);
+    expect(screen().findByProps({ accessibilityLabel: "Custom emoji" }).props.value).toBe("🌿");
+    expect(screen().findByType(AccountSetupForm).props.value).toEqual({ ...initial, name: "Half typed place", amount: typedAmount("1234") });
+    expect(dismissed).not.toHaveBeenCalled();
+  }
+  await act(async () => button("Use this").props.onPress());
+  await settle();
+  expect(screen().findByType(AccountSetupForm).props.value).toEqual({ ...initial, name: "Half typed place", amount: typedAmount("1234"), emoji: "🌿" });
   expect(submitted).not.toHaveBeenCalled();
 });

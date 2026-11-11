@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useT } from "../i18n";
 import { useIntakeService, useIntakeSnapshot } from "./intake/IntakeProvider";
-import { intakeWarning } from "./intake/presentation";
+import { intakeSourcesStatus, intakeWarning } from "./intake/presentation";
 import { viewInbox } from "./intake/candidates";
 import type { DiscardNotice } from "./localDiscardNotices";
 
@@ -26,6 +26,6 @@ export function useIntakeCandidates(input: { subject: string; workspaceId: strin
     if (status && "epoch" in status) await service.dismissNotices(status.notices.map((notice) => notice.id));
     await service.refresh();
   }, [service]);
-  return { ...view, warning: intakeWarning(snapshot, translator), supported: snapshot.status ? "epoch" in snapshot.status : null, status: snapshot.status, count: snapshot.loaded ? view.count : null, error: snapshot.error,
+  return { ...view, warning: intakeWarning(snapshot, translator), sources: intakeSourcesStatus(snapshot, translator), supported: snapshot.status ? "epoch" in snapshot.status : null, status: snapshot.status, count: snapshot.loaded ? view.count : null, error: snapshot.error,
     refresh: service.refresh, read, notices, dismissNotices, service };
 }

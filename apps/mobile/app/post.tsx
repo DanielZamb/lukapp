@@ -4,21 +4,25 @@ import { CategoryPicker } from "../src/features/categories/CategoryPicker";
 import type { AccountSetupRequest } from "../src/features/categories/model";
 import { useAuth } from "@clerk/expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import {
-  BottomSheetModal,
-  BottomSheetView,
-  BottomSheetModalProvider,
-} from "@gorhom/bottom-sheet";
+import { type BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { useAction, useConvex, useQuery } from "convex/react";
 import { Redirect, router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Keyboard, Platform, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  BackHandler,
+  Keyboard,
+  Platform,
+  View,
+} from "react-native";
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
-import { formatMoney, localDate } from "../src/features/money";
+import { formatAmount, formatMoney, localDate } from "../src/features/money";
 import { openAmount } from "../src/features/amount/session";
 import { useFormState, withFields, type ReadAtPress } from "../src/features/amount/useAmountState";
 import { confirmShown, sameValue, showing, type Shown } from "../src/features/confirmation";
+import { categoryColor } from "../src/features/categories/appearance";
+import type { Category } from "../src/features/categories/model";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
@@ -26,10 +30,33 @@ import {
   type PostingBudgetImpact,
 } from "../src/features/budget/postingImpact";
 import { defaultAccountingDate } from "../src/features/timeZones";
-import { PrimaryButton, Header, Screen, SecondaryButton, useTheme, useUi } from "../src/ui/core";
+import {
+  ActionBar,
+  CenteredMoment,
+  ChoiceRow,
+  Header,
+  IconTile,
+  Presentation,
+  PrimaryButton,
+  Screen,
+  SecondaryButton,
+  SheetHeader,
+  Text,
+  useTheme,
+  useUi,
+} from "../src/ui/core";
+import { SheetProvider } from "../src/ui/SheetProvider";
+import { Sheet } from "../src/ui/Sheet";
+import { PickerSheet } from "../src/ui/PickerSheet";
 import { spacing } from "../src/ui/tokens";
-import { PostingForm } from "../src/features/posting/PostingForm";
-import { BatchNativeStack, batchRowFor } from "../src/features/posting/BatchNativeStack";
+import {
+  PostingForm,
+  postingDateOptions,
+} from "../src/features/posting/PostingForm";
+import {
+  BatchNativeStack,
+  batchRowFor,
+} from "../src/features/posting/BatchNativeStack";
 import { usePostingBatch } from "../src/features/posting/usePostingBatch";
 import { PlaceSheet } from "../src/features/posting/PlaceSheet";
 import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
@@ -99,6 +126,11 @@ function PostMoney({
   const { placeTarget, mode, impact, notice } = route;
   const [placePickerOpen, setPlacePickerOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [receiptCategory, setReceiptCategory] = useState<Pick<
+    Category,
+    "name" | "style"
+  > | null>(null);
   const categories = useQuery(api.accounting.listUserCategories, {
     workspaceId: defaults.workspace.id,
   });
@@ -117,6 +149,7 @@ function PostMoney({
   const destinationRequest = useRef<AccountSetupRequest | null>(null);
   const setupAfterPicker = useRef<Omit<PlaceDraft, "amount" | "date"> | null>(null);
   const { workspace, financialAccountProfile: defaultProfile } = defaults;
+  const dateOptions = postingDateOptions(workspace.timeZone, translator);
   const drafts = useLocalEntryDrafts({
     subject,
     workspaceId: workspace.id,
@@ -252,6 +285,10 @@ function PostMoney({
   const queueable = (entry: EntryView, at: Pick<RouteState, "impact"> | ReadAtPress<Pick<RouteState, "impact">>) =>
     entry.canSubmit && !entry.setup && !at.impact && checksOf(entry).completeEntry && !entry.pending && !candidateId;
   const { categoryValid, placesValid, completeEntry, needsBudgetCheck } = checksOf(editor);
+  const selectedCategory = categories?.find(
+    (category) =>
+      category.id === (editor.categories.primaryId ?? editor.categories.ids[0]),
+  );
   const budget = useQuery(
     api.budget.evaluate,
     needsBudgetCheck
@@ -282,12 +319,35 @@ function PostMoney({
       : undefined;
   if (candidateId && missingCandidate)
     return (
-      <Screen>
-        <Header title={t("posting.title")} onBack={() => router.back()} />
-        <Text accessibilityRole="alert" style={ui.error}>
-          {t("posting.candidateMissing")}
-        </Text>
-      </Screen>
+      <Presentation
+        legacy={
+          <Screen>
+            <Header title={t("posting.title")} onBack={() => router.back()} />
+            <Text preset="caption" accessibilityRole="alert" style={ui.error}>
+              {t("posting.candidateMissing")}
+            </Text>
+          </Screen>
+        }
+      >
+        <Screen
+          footer={
+            <ActionBar
+              primary={{
+                label: t("posting.openDrafts"),
+                icon: "arrow-forward",
+                onPress: () => router.replace("/drafts"),
+              }}
+            />
+          }
+        >
+          <CenteredMoment
+            icon="eye-off-outline"
+            tone="soft"
+            title={t("posting.candidateGoneTitle")}
+            body={t("posting.candidateGoneBody")}
+          />
+        </Screen>
+      </Presentation>
     );
   if (candidateId && !binding)
     return (
@@ -316,6 +376,7 @@ function PostMoney({
     const entry = editor.read();
     const checks = checksOf(entry);
     if (at.impact || checking.current || !entry.canSubmit || entry.setup || (!entry.pending && !checks.completeEntry)) return;
+    setReceiptCategory(categories?.find((category) => category.id === (entry.categories.primaryId ?? entry.categories.ids[0])) ?? null);
     routeChange({ notice: null });
     if (!checks.needsBudgetCheck) {
       void editor.submit();
@@ -412,6 +473,34 @@ function PostMoney({
         currency={workspace.functionalCurrency}
         place={profile ? `${profile.emoji ?? "💰"} ${profile.name}`
           : keptSource && unavailablePlaceReason(keptSource, t) ? `${keptSource.emoji ?? "💰"} ${placeLabel(keptSource, t)}` : t("posting.pick")}
+        placeLook={
+          profile
+            ? { name: profile.name, emoji: profile.emoji ?? "💰" }
+            : undefined
+        }
+        destinationLook={
+          destination
+            ? { name: destination.name, emoji: destination.emoji ?? "💰" }
+            : undefined
+        }
+        categoryLook={
+          selectedCategory
+            ? {
+                name: editor.categories.ids
+                  .map(
+                    (id) =>
+                      categories?.find((category) => category.id === id)
+                        ?.name ?? t("posting.savedCategory"),
+                  )
+                  .join(" · "),
+                emoji: selectedCategory.style.emoji,
+                color: {
+                  light: categoryColor(selectedCategory.style),
+                  dark: categoryColor(selectedCategory.style, "dark"),
+                },
+              }
+            : undefined
+        }
         destination={
           destination
             ? `${destination.emoji ?? "💰"} ${destination.name}`
@@ -464,6 +553,30 @@ function PostMoney({
             })
             : null
         }
+        receipt={
+          mode !== "batch" && editor.posted
+            ? {
+                description: editor.posted.description || t("posting.untitledEntry"),
+                minorUnits: editor.posted.amount.minorUnits,
+                amount: formatAmount(
+                  Math.abs(editor.posted.amount.minorUnits),
+                  editor.posted.amount.currency,
+                  { hideZeroDecimals: true },
+                ),
+                category: receiptCategory
+                  ? {
+                      name: receiptCategory.name,
+                      emoji: receiptCategory.style.emoji,
+                      color: {
+                        light: categoryColor(receiptCategory.style),
+                        dark: categoryColor(receiptCategory.style, "dark"),
+                      },
+                    }
+                  : undefined,
+              }
+            : undefined
+        }
+        onAnother={() => interaction(() => editor.resetComposer())}
         onAmountChange={(value) => interaction(() => editor.setAmount(value))}
         onDescriptionChange={(value) =>
           interaction(() => editor.setDescription(value))
@@ -573,14 +686,100 @@ function PostMoney({
           editor.setSetup(null);
         }}
       />
-      <BottomSheetModal
-        ref={dateSheet}
-        backgroundStyle={{ backgroundColor: theme.background }}
-        snapPoints={["55%"]}
-        enableDynamicSizing={false}
+      <PickerSheet
+        sheetRef={dateSheet}
+        busy={!editor.editable}
+        stickyHeader={false}
+        onDismiss={() => setCalendarOpen(false)}
+        footer={
+          <ActionBar
+            primary={{
+              label: t("common.done"),
+              icon: "checkmark",
+              onPress: () => dateSheet.current?.dismiss(),
+              disabled: !editor.editable,
+            }}
+          />
+        }
+        scrollProps={{
+          contentContainerStyle: {
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: 24,
+            gap: 32,
+          },
+        }}
+
+        legacyFooter={null}
+        legacyBody={
+          <>
+            <BottomSheetView style={{ padding: spacing.xxl, gap: spacing.xl }}>
+              <Header title={t("posting.dateSheetTitle")} />
+              <DateTimePicker
+                value={new Date(`${editor.date}T12:00:00`)}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(_, selected) => {
+                  if (selected)
+                    interaction(() => editor.setDate(localDate(selected)));
+                  if (Platform.OS !== "ios") dateSheet.current?.dismiss();
+                }}
+              />
+              <SecondaryButton
+                label={t("common.done")}
+                onPress={() => dateSheet.current?.dismiss()}
+              />
+            </BottomSheetView>
+          </>
+        }
+        legacyNativeModalProps={{
+          backgroundStyle: { backgroundColor: theme.background },
+          snapPoints: ["55%"],
+          enableDynamicSizing: false,
+          topInset: undefined,
+          handleIndicatorStyle: undefined,
+          backdropComponent: undefined,
+          enablePanDownToClose: undefined,
+          enableContentPanningGesture: undefined,
+          keyboardBehavior: undefined,
+          keyboardBlurBehavior: undefined,
+        }}
+        legacyBodyMode="native"
       >
-        <BottomSheetView style={{ padding: spacing.xxl, gap: spacing.xl }}>
-          <Header title={t("posting.dateSheetTitle")} />
+        <SheetHeader
+          title={t("posting.dateSheetTitle")}
+          eyebrow={t("posting.title").toUpperCase()}
+          onClose={() => dateSheet.current?.dismiss()}
+          disabled={!editor.editable}
+        />
+        <View style={{ gap: spacing.sm }}>
+          {dateOptions.map((option) => (
+            <ChoiceRow
+              key={option.value}
+              presentation="option"
+              label={option.label}
+              selected={editor.date === option.value}
+              disabled={!editor.editable}
+              onPress={() => interaction(() => editor.setDate(option.value))}
+            />
+          ))}
+          <ChoiceRow
+            presentation="option"
+            label={t("posting.datePick")}
+            leading={
+              <IconTile icon="calendar-outline" tone="neutral" size={36} />
+            }
+            selected={
+              !dateOptions.some((option) => editor.date === option.value)
+            }
+            disabled={!editor.editable}
+            onPress={() => setCalendarOpen(true)}
+          />
+        </View>
+        <Text variant="status" tone="muted">
+          {t("posting.datePickHint")}
+        </Text>
+        {calendarOpen && (
           <DateTimePicker
             value={new Date(`${editor.date}T12:00:00`)}
             mode="date"
@@ -588,19 +787,28 @@ function PostMoney({
             onChange={(_, selected) => {
               if (selected)
                 interaction(() => editor.setDate(localDate(selected)));
-              if (Platform.OS !== "ios") dateSheet.current?.dismiss();
+              if (Platform.OS !== "ios") {
+                setCalendarOpen(false);
+                dateSheet.current?.dismiss();
+              }
             }}
           />
-          <SecondaryButton
-            label={t("common.done")}
-            onPress={() => dateSheet.current?.dismiss()}
-          />
-        </BottomSheetView>
-      </BottomSheetModal>
+        )}
+      </PickerSheet>
     </>
   );
   const impactSheet = impact && (
-    <PostingImpactSheet shown={impact} currency={workspace.functionalCurrency} onContinue={continueImpact} onReconsider={reconsiderImpact} />
+    <PostingImpactSheet shown={impact} currency={workspace.functionalCurrency}
+      categoryColors={Object.fromEntries(
+        (categories ?? []).map((category) => [
+          category.id,
+          {
+            light: categoryColor(category.style),
+            dark: categoryColor(category.style, "dark"),
+          },
+        ]),
+      )}
+      onContinue={continueImpact} onReconsider={reconsiderImpact} />
   );
   if (mode === "one")
     return (
@@ -616,7 +824,7 @@ function PostMoney({
         batch={batch}
         currency={workspace.functionalCurrency}
         composing={composing}
-        compose={<BottomSheetModalProvider>{form}</BottomSheetModalProvider>}
+        compose={<SheetProvider>{form}</SheetProvider>}
         onCancel={closeCompose}
         onAdd={() => {
           editor.resetComposer();

@@ -23,7 +23,7 @@ vi.mock("react-native", () => ({
   ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", View: "View", ScrollView: "ScrollView", TextInput: "TextInput",
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
 }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
 
 const en = createTranslator("en");

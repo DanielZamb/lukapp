@@ -28,7 +28,8 @@ vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date:
 vi.mock("../history/HistoryScreen", () => ({ HistoryScreen: "HistoryScreen" }));
 vi.mock("../history/EntryDetailSheet", () => ({ EntryDetailSheet: "EntryDetailSheet" }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "Icon" }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+vi.mock("@gorhom/bottom-sheet", () => import("../../ui/bottomSheet.testSupport"));
 vi.mock("react-native", () => ({
   Platform: { OS: "android" }, KeyboardAvoidingView: "KeyboardAvoidingView",
   Text: "Text", View: "View", Pressable: "Pressable", ScrollView: "ScrollView", ActivityIndicator: "ActivityIndicator",

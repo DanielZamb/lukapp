@@ -1,5 +1,6 @@
 import { formatDateTime, type Translator } from "../../i18n";
 import type { IntakeSnapshot } from "./service";
+import type { SourcesStatus } from "../DraftsScreen";
 
 const gapWarnings = {
   overflow: "inbox.intakeWarningGapOverflow",
@@ -29,4 +30,15 @@ export function intakeActionError(t: Translator["t"], error: unknown): string {
   if (message === "Mapping unavailable") return t("inbox.errorMapping");
   if (code === "UNSUPPORTED" || message === "UNSUPPORTED") return t("inbox.errorUnsupported");
   return t("inbox.errorGeneric");
+}
+
+/** The intake state in one fact, for the Notification intake row on Candidates. */
+export function intakeSourcesStatus(snapshot: IntakeSnapshot, { t, tn }: Translator): SourcesStatus | undefined {
+  const status = snapshot.status;
+  if (!status || !("epoch" in status)) return undefined;
+  const apps = snapshot.state.activeSelectionIds.length;
+  if (status.storageState !== "healthy" || snapshot.wipePending) return { state: { label: t("inbox.statusBlocked"), tone: "danger", icon: "lock-closed-outline" }, text: t("inbox.statusNothingRead") };
+  if (status.access !== "granted") return { state: { label: t("inbox.statusNeedsAccess"), tone: "warning", icon: "notifications-outline" } };
+  if (status.connection !== "connected") return { state: { label: t("inbox.statusNotConnected"), tone: "warning", icon: "pulse-outline" } };
+  return { state: { label: t("inbox.statusConnected"), tone: "positive", icon: "checkmark" }, text: apps ? tn("inbox.statusReading", apps) : t("inbox.statusReadingNone") };
 }

@@ -65,7 +65,7 @@ test.each([
 ])("Spanish Appearance and Language choices stack at the largest text size (reflow $reflow)", async ({ reflow, direction }) => {
   state.profiles = [{ id: "daily", name: "Mi plata" }];
   await act(async () => {
-    root = create(createElement(ThemeProvider, { layout: { reflow, pagePadding: 16 } },
+    root = create(createElement(ThemeProvider, { layout: { tier: reflow ? "reflow" as const : "default" as const, reflow, pagePadding: 16, touchTarget: 44 } },
       createElement(LanguageProvider, { initialPreference: "es" }, createElement(SettingsRoute))));
   });
   const radios = root!.root.findAll((node) => node.type === "button" && node.props.accessibilityRole === "radio");

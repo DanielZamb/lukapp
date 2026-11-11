@@ -1,8 +1,7 @@
-import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Image, StyleSheet, View } from "react-native";
 import { useT } from "../i18n";
-import { useThemeMode } from "./core";
-import { font, spacing } from "./tokens";
+import { Text, useThemeMode, useTier } from "./core";
+import { font } from "./tokens";
 
 const artwork = {
   light: {
@@ -27,28 +26,24 @@ export function BrandMark({ size = 56 }: { size?: number }) {
     resizeMode="contain" style={{ width: size, height: size * 107 / 100 }} />;
 }
 
-export function BrandSplash() {
-  const mode = useThemeMode();
+export function ConnectingMark() {
+  const large = useTier() === "xxxl";
+  return <Image source={require("../../assets/brand/symbol-inverse.png")} accessible={false}
+    style={{ width: large ? 96 : 120, height: large ? 102 : 128 }} resizeMode="contain" />;
+}
+
+export function ConnectingSignature() {
+  const large = useTier() === "xxxl";
   const { t } = useT();
-  return <SafeAreaView style={[styles.splash, { backgroundColor: mode === "dark" ? "#21132f" : "#6d28d9" }]}>
-    <View style={styles.signature}>
-      <Image source={require("../../assets/brand/symbol-inverse.png")} accessible={false}
-        style={styles.symbol} resizeMode="contain" />
-      <Image source={require("../../assets/brand/wordmark-inverse.png")} accessibilityLabel="Lukapp"
-        style={styles.wordmark} resizeMode="contain" />
-      <Text style={styles.promise}>{t("access.splashPromise")}</Text>
-      <ActivityIndicator color="#f5f3ff" accessibilityLabel={t("access.checkingProtection")} />
-    </View>
-    <Text style={styles.footer}>{t("access.splashFooter")}</Text>
-  </SafeAreaView>;
+  return <View style={styles.signature}>
+    <Image source={require("../../assets/brand/wordmark-inverse.png")} accessibilityLabel="Lukapp"
+      style={{ width: large ? 128 : 146, height: large ? 46 : 52 }} resizeMode="contain" />
+    <Text variant="screen" style={styles.promise}>{t("access.splashPromise")}</Text>
+  </View>;
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, padding: spacing.xxl, alignItems: "center" },
-  signature: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.lg },
-  symbol: { width: 144, height: 154 },
-  wordmark: { width: 176, height: 62 },
+  signature: { alignItems: "center", alignSelf: "stretch", gap: 36 },
   promise: { color: "#f5f3ff", fontFamily: font.regular, fontSize: 26, lineHeight: 32,
-    textAlign: "center", marginTop: spacing.xl, marginBottom: spacing.md },
-  footer: { color: "#e9ddff", fontFamily: font.regular, fontSize: 12, textAlign: "center", paddingBottom: spacing.xxl },
+    letterSpacing: 0, textAlign: "center" },
 });

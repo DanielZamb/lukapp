@@ -86,4 +86,8 @@ export const budget = {
   errorWorkspace: "We couldn't find your Budget. Close and reopen it.",
   errorOutOfRange: "This amount is too large. Try a smaller one.",
   errorKeyConflict: "This change didn't match the one sent before. Try again.",
+  impactTitle: "Budget would cross",
+  impactPostAnyway: "Post anyway",
+  impactOverAmount: "{amount} over",
+  impactBodyLarge: "Posting still works. A budget never blocks.",
 } as const;

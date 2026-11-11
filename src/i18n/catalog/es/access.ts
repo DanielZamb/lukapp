@@ -66,4 +66,11 @@ export const access: Messages<typeof en> = {
   checkingProtection: "Revisando la protección local",
   splashPromise: "Las lucas tienen\nun para qué.",
   splashFooter: "Tus lucas. Tu manera de vivir.",
+  phaseProtection: "Desbloqueando Lukapp…",
+  phaseSession: "Abriendo tu sesión…",
+  phaseAccount: "Conectando con tu cuenta…",
+  phaseDevice: "Revisando este celular…",
+  phaseData: "Trayendo tus lucas…",
+  stillConnecting: "Seguimos conectando…",
+  connectingA11y: "Lukapp se está conectando",
 };

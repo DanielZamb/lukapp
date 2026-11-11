@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
+import { intakeConfirmOutcome } from "../../../../../src/notificationIntake/outcome";
 import { afterEach, expect, test, vi } from "vitest";
 import { openAmount } from "../amount/session";
 
@@ -239,6 +240,9 @@ test.each(["intake", "accounting"])("an idempotency conflict from %s retains the
   expect(retry().description).toBe("Groceries");
   expect(retry().error).toBe("Could not confirm posting. Retry to safely check the same entry.");
 });
+
+// Parked with the SEN-99 backend rule (candidate_confirmation_conflict), which is not in this branch: see the merge commit.
+test.todo("a changed confirmation conflict retains the Candidate and shows failure without a success receipt");
 
 test("a definite accounting rejection fails the Candidate and never aborts a Draft", async () => {
   const api = transport();

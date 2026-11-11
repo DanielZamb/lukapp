@@ -1,10 +1,11 @@
 import type { Theme } from "../../ui/tokens";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, useEffect, useRef } from "react";
-import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { Header, PrimaryButton, Screen, SecondaryButton, useTheme } from "../../ui/core";
-import { font, radius, spacing } from "../../ui/tokens";
+import { Animated, Easing, Platform, Pressable, StyleSheet, View } from "react-native";
+import { ActionBar, FactRow, Group, Header, IconTile, Presentation, PrimaryButton, Screen, SecondaryButton, Text, useTheme } from "../../ui/core";
+import { radius, spacing } from "../../ui/tokens";
 import { useT } from "../../i18n";
+import { LeadIcon } from "./IntakeParts";
 
 export function WarningIconButton({ onPress }: { onPress: () => void }) {
   const { t } = useT();
@@ -61,21 +62,40 @@ export function ReconciliationWarning({ onBack }: { onBack: () => void }) {
   const { t } = useT();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const fact = (icon: "notifications-off-outline" | "refresh-outline" | "receipt-outline", label: string, value: string) =>
+    <FactRow label={label} value={value} leading={<IconTile icon={icon} tone="neutral" size={48} />} />;
   return (
-    <Screen>
+    <Presentation legacy={<Screen>
       <Header title={t("inbox.reconcileTitle")} eyebrow={t("inbox.reconcileEyebrow")} onBack={onBack} />
       <View style={styles.detail}>
         <Ionicons name="alert-circle-outline" size={36} color={theme.foreground} />
-        <Text style={styles.detailTitle}>{t("inbox.reconcileHeadline")}</Text>
-        <Text style={styles.warningCopy}>{t("inbox.reconcileBody")}</Text>
+        <Text preset="detailName" tone="default" style={styles.narrow}>{t("inbox.reconcileHeadline")}</Text>
+        <Text preset="warningBody" tone="default">{t("inbox.reconcileBody")}</Text>
       </View>
       <View style={styles.facts}>
-        <Text style={styles.body}>{t("inbox.reconcileMissing")}</Text>
-        <Text style={styles.body}>{t("inbox.reconcileDelayed")}</Text>
-        <Text style={styles.body}>{t("inbox.reconcileHistory")}</Text>
+        <Text preset="bodyCopy" tone="muted">{t("inbox.reconcileMissing")}</Text>
+        <Text preset="bodyCopy" tone="muted">{t("inbox.reconcileDelayed")}</Text>
+        <Text preset="bodyCopy" tone="muted">{t("inbox.reconcileHistory")}</Text>
       </View>
       <PrimaryButton label={t("inbox.reconcileOk")} onPress={onBack} />
-    </Screen>
+    </Screen>}>
+      <Screen footer={<ActionBar primary={{ label: t("inbox.reconcileOk"), icon: "checkmark", onPress: onBack }} />}>
+        <Header title={t("inbox.reconcileTitleLarge")} eyebrow={t("inbox.reconcileEyebrowLarge")} onBack={onBack} />
+        <View style={styles.hero}>
+          <LeadIcon icon="warning-outline" tone="warning" />
+          <Text variant="section" accessibilityRole="header">{t("inbox.shortcutTitle")}</Text>
+          <Text variant="body" tone="muted">{t("inbox.reconcileBody")}</Text>
+        </View>
+        <View style={styles.stack}>
+          <Text variant="section" accessibilityRole="header">{t("inbox.reconcileWrong")}</Text>
+          <Group pairGap={12}>
+            {fact("notifications-off-outline", t("inbox.factMissing"), t("inbox.factMissingValue"))}
+            {fact("refresh-outline", t("inbox.factRepeated"), t("inbox.factRepeatedValue"))}
+            {fact("receipt-outline", t("inbox.factSettles"), t("inbox.factSettlesValue"))}
+          </Group>
+        </View>
+      </Screen>
+    </Presentation>
   );
 }
 
@@ -94,18 +114,28 @@ export function MonthCloseWarning({
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
-    <Screen>
+    <Presentation legacy={<Screen>
       <Header title={t("inbox.monthCloseTitle", { month })} eyebrow={t("inbox.monthCloseEyebrow")} onBack={onBack} />
       <View style={styles.monthMessage}>
-        <Text style={styles.monthCount}>{count}</Text>
-        <Text style={styles.monthTitle}>{tn("inbox.monthCloseCount", count)}</Text>
-        <Text style={styles.body}>{t("inbox.monthCloseBody", { month })}</Text>
+        <Text preset="monthCount" style={styles.count}>{count}</Text>
+        <Text preset="monthTitle" tone="default" style={styles.narrow}>{tn("inbox.monthCloseCount", count)}</Text>
+        <Text preset="bodyCopy" tone="muted">{t("inbox.monthCloseBody", { month })}</Text>
       </View>
       <View style={styles.actions}>
         <PrimaryButton label={t("inbox.monthCloseReview")} onPress={onBack} />
         <SecondaryButton label={t("inbox.monthCloseAnyway")} onPress={onContinue} />
       </View>
-    </Screen>
+    </Screen>}>
+      <Screen footer={<ActionBar primary={{ label: t("inbox.monthCloseReview"), icon: "arrow-forward", onPress: onBack }}
+        secondary={{ label: t("inbox.monthCloseAnywayShort"), onPress: onContinue }} />}>
+        <Header title={t("inbox.monthCloseTitle", { month })} eyebrow={t("inbox.monthCloseEyebrow")} onBack={onBack} />
+        <View style={styles.hero}>
+          <Text variant="label" tone="muted">{t("inbox.stillOnPhone")}</Text>
+          <Text variant="screen">{tn("inbox.candidateCount", count)}</Text>
+          <Text variant="body" tone="muted">{t("inbox.noBlockMonthClose")}</Text>
+        </View>
+      </Screen>
+    </Presentation>
   );
 }
 
@@ -122,27 +152,16 @@ function createStyles(theme: Theme) {
     backgroundColor: "#fff7ed",
   },
   detail: { gap: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.section },
-  detailTitle: {
-    maxWidth: 330, color: theme.foreground, fontSize: 30, lineHeight: 36, fontFamily: font.extrabold,
-  },
-  warningCopy: { color: theme.foreground, fontSize: 18, lineHeight: 27, fontFamily: font.regular },
-  body: { color: theme.mutedForeground, fontSize: 16, lineHeight: 24, fontFamily: font.regular },
+  narrow: { maxWidth: 330 },
   facts: {
     gap: spacing.lg, paddingVertical: spacing.xl,
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.border,
   },
-  disclosureIcon: {
-    width: 72, height: 72, borderRadius: radius.lg, backgroundColor: theme.secondary,
-    alignItems: "center", justifyContent: "center",
-  },
-  health: {
-    gap: spacing.xs, paddingVertical: spacing.xl, borderBottomWidth: 1, borderBottomColor: theme.border,
-  },
-  healthState: { color: theme.foreground, fontSize: 28, lineHeight: 33, fontFamily: font.extrabold },
-  healthCheck: { color: theme.mutedForeground, fontSize: 14, lineHeight: 20, fontFamily: font.regular },
   monthMessage: { gap: spacing.md, paddingTop: spacing.xl, paddingBottom: spacing.section },
-  monthCount: { color: theme.primary, fontSize: 64, lineHeight: 68, fontFamily: font.extrabold, letterSpacing: -2 },
-  monthTitle: { maxWidth: 330, color: theme.foreground, fontSize: 28, lineHeight: 34, fontFamily: font.extrabold },
+  count: { color: theme.primary },
   actions: { gap: spacing.lg, paddingTop: spacing.xl },
+  // XXXL (D4): hero block and a titled stack.
+  hero: { gap: 8, paddingTop: 4 },
+  stack: { gap: 12 },
   });
 }

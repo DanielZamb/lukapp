@@ -30,5 +30,6 @@ test("native Clerk uses the approved palette and radius without changing the And
     "expo-font", { fonts: ["./node_modules/@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf"] },
   ]);
   expect(config.expo.android.package).toBe("com.lukapp.u01.dev");
+  expect(config.expo.ios.bundleIdentifier).toBe("com.lukapp.u01.dev");
   expect(config.expo.version).toBe("0.1.0");
 });

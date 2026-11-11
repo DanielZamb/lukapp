@@ -1,26 +1,52 @@
 import { AmountField } from "../amount/AmountField";
+import { AmountFrame } from "../../ui/AmountField";
 import type { AmountSession } from "../amount/session";
 import type { AmountNotice } from "../amount/storedText";
+import { defaultAccountingDate } from "../timeZones";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { ComposeModeToggle } from "./ComposeModeToggle";
 import type { TransferPair } from "./usePostingEditor";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import type { Theme } from "../../ui/tokens";
-import { useReadableLayout } from "../../ui/themeContext";
-import { useT } from "../../i18n";
-import type { ReadableLayout } from "../../ui/layout";
-import { Header, ListGroup, ListRow, PrimaryButton, SecondaryButton, Screen, useUi, useTheme } from "../../ui/core";
-import { font, fontSize, radius, spacing, touchTarget } from "../../ui/tokens";
+import {
+  ActionBar,
+  CenteredMoment,
+  ChipSet,
+  EmojiTile,
+  Field,
+  Group,
+  Header,
+  IconTile,
+  InlineNotice,
+  ListGroup,
+  ListRow,
+  MoneyHero,
+  Presentation,
+  PrimaryButton,
+  SecondaryButton,
+  Screen,
+  Text,
+  useTextPreset,
+  useUi,
+  useTheme,
+} from "../../ui/core";
+import { formatDayMonth, useT, type Translator } from "../../i18n";
+import { font, radius, spacing, touchTarget } from "../../ui/tokens";
 
 export type EntryType = "normal" | "initial" | "transfer";
+
+export function postingDateOptions(timeZone: string, { t, language }: Translator, now = new Date()) {
+  const today = defaultAccountingDate(timeZone, now);
+  const previous = new Date(`${today}T12:00:00Z`);
+  previous.setUTCDate(previous.getUTCDate() - 1);
+  const yesterday = previous.toISOString().slice(0, 10);
+  return [
+    { value: today, label: t("posting.dateToday", { date: formatDayMonth(language, new Date(`${today}T12:00:00Z`), "UTC") }) },
+    { value: yesterday, label: t("posting.dateYesterday", { date: formatDayMonth(language, previous, "UTC") }) },
+  ];
+}
+
 export type PostingFormProps = {
   entryType?: EntryType;
   onEntryType?: (value: EntryType) => void;
@@ -48,6 +74,24 @@ export type PostingFormProps = {
   canSubmit: boolean;
   error: string;
   posted: string | null;
+  receipt?: {
+    description: string;
+    amount: string;
+    minorUnits: number;
+    category?: {
+      name: string;
+      emoji: string;
+      color: ComponentProps<typeof EmojiTile>["color"];
+    };
+  };
+  onAnother?: () => void;
+  placeLook?: { name: string; emoji: string };
+  destinationLook?: { name: string; emoji: string };
+  categoryLook?: {
+    name: string;
+    emoji: string;
+    color: ComponentProps<typeof EmojiTile>["color"];
+  };
   onAmountChange: (value: AmountSession) => void;
   onDescriptionChange: (value: string) => void;
   onBack: () => void;
@@ -73,7 +117,7 @@ export type PostingFormProps = {
   };
 };
 
-function postingFormStyles(theme: Theme, layout: ReadableLayout) {
+function postingFormStyles(theme: Theme) {
   return StyleSheet.create({
     rowTitle: { fontFamily: font.bold },
     rowValue: { fontFamily: font.semibold },
@@ -105,52 +149,17 @@ function postingFormStyles(theme: Theme, layout: ReadableLayout) {
       alignItems: "center",
       justifyContent: "center",
     },
-    openField: { gap: spacing.xs },
-    fieldLabel: {
-      fontFamily: font.semibold,
-      fontSize: 14,
-      color: theme.mutedForeground,
-    },
-    description: {
-      minHeight: 44,
-      padding: 0,
-      fontFamily: font.regular,
-      fontSize: fontSize.body,
-      lineHeight: 24,
-      color: theme.foreground,
-    },
     bannerTitle: {
       fontFamily: font.bold,
-      fontSize: fontSize.body,
       color: theme.foreground,
     },
     detail: {
       fontFamily: font.regular,
-      fontSize: fontSize.label,
       color: theme.mutedForeground,
     },
     segmentText: {
       fontFamily: font.bold,
-      fontSize: fontSize.body,
       color: theme.foreground,
-    },
-    amountRow: {
-      flexDirection: layout.reflow ? "column" : "row",
-      alignItems: layout.reflow ? "stretch" : "center",
-      gap: spacing.sm,
-      minHeight: 72,
-    },
-    currency: {
-      fontFamily: font.semibold,
-      fontSize: 28,
-      color: theme.mutedForeground,
-    },
-    amountField: { flex: layout.reflow ? 0 : 1 },
-    amount: {
-      fontFamily: font.extrabold,
-      fontSize: fontSize.hero,
-      minHeight: 64,
-      padding: 0,
     },
     types: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
     chip: {
@@ -167,7 +176,6 @@ function postingFormStyles(theme: Theme, layout: ReadableLayout) {
     chipText: {
       flexShrink: 1,
       fontFamily: font.semibold,
-      fontSize: (fontSize.label + fontSize.body) / 2,
       color: theme.foreground,
     },
   });
@@ -179,9 +187,52 @@ export function PostingForm(props: PostingFormProps) {
   const notice = props.amountNotice?.kind === "reenter" ? t("amount.noticeReenter", { previous: props.amountNotice.previous }) : null;
   const ui = useUi();
   const theme = useTheme();
-  const layout = useReadableLayout();
-  const styles = useMemo(() => postingFormStyles(theme, layout), [theme, layout]);
-  return (
+  const styles = useMemo(() => postingFormStyles(theme), [theme]);
+  const [focusedField, setFocusedField] = useState<"description" | null>(null);
+  const amountInput = useTextPreset("amountInput", { minHeight: 64, padding: 0 });
+  const amountField = (
+    <AmountFrame
+      currency={props.currency}
+      legacyCurrency={props.currency === "COP" ? "$" : props.currency}
+      direction={
+        props.entryType === "transfer"
+          ? undefined
+          : props.amount.sign === "-"
+            ? "out"
+            : "in"
+      }
+      directionLabel={
+        props.entryType === "transfer" ? t("posting.formMovesBetween") : undefined
+      }
+    >
+      <AmountField
+        session={props.amount}
+        onChange={props.onAmountChange}
+        editable={props.editable}
+        inputAccessibilityLabel={t("posting.formAmountA11y")}
+        placeholder="0"
+        sign={{ disabled: props.signLocked === true }}
+        notice={notice}
+        inputStyle={[amountInput.style, { color: signOnly ? theme.mutedForeground : theme.foreground }]}
+      />
+    </AmountFrame>
+  );
+  const descriptionField = (
+    <Field
+      presentation="description"
+      label={t("posting.formDescription")}
+      accessibilityLabel={t("posting.formDescription")}
+      autoFocus={focusedField === "description" || undefined}
+      onFocus={() => setFocusedField("description")}
+      value={props.description}
+      onChangeText={props.onDescriptionChange}
+      editable={props.editable}
+      placeholder={t("posting.formDescriptionPlaceholder")}
+      maxLength={500}
+      multiline
+    />
+  );
+  const legacy = (
     <Screen
       contentStyle={{ gap: spacing.xl }}
       footer={
@@ -199,8 +250,10 @@ export function PostingForm(props: PostingFormProps) {
               />
             </View>
             <View style={{ flex: 1, gap: spacing.xs }}>
-              <Text style={styles.bannerTitle}>{t("posting.formPosted")}</Text>
-              <Text style={styles.detail} numberOfLines={2}>
+              <Text preset="bodyStrong" style={styles.bannerTitle}>
+                {t("posting.formPosted")}
+              </Text>
+              <Text preset="caption" style={styles.detail} numberOfLines={2}>
                 {props.posted}
               </Text>
             </View>
@@ -210,7 +263,9 @@ export function PostingForm(props: PostingFormProps) {
               onPress={props.onDone}
               style={styles.done}
             >
-              <Text style={styles.segmentText}>{t("common.done")}</Text>
+              <Text preset="bodyStrong" style={styles.segmentText}>
+                {t("common.done")}
+              </Text>
             </Pressable>
           </View>
         ) : null
@@ -218,7 +273,9 @@ export function PostingForm(props: PostingFormProps) {
     >
       <Header title={t("posting.title")} eyebrow={t("posting.eyebrow")} onBack={props.onBack} />
       {props.notification ?? (props.sourceNote ? (
-        <Text style={styles.detail}>{props.sourceNote}</Text>
+        <Text preset="caption" style={styles.detail}>
+          {props.sourceNote}
+        </Text>
       ) : null)}
       {!props.saveToBatch && (
         <ComposeModeToggle
@@ -230,23 +287,7 @@ export function PostingForm(props: PostingFormProps) {
           }}
         />
       )}
-      <View style={styles.amountRow}>
-        <Text style={styles.currency}>
-          {props.currency === "COP" ? "$" : props.currency}
-        </Text>
-        <View style={styles.amountField}>
-          <AmountField
-            session={props.amount}
-            onChange={props.onAmountChange}
-            editable={props.editable}
-            inputAccessibilityLabel={t("posting.formAmountA11y")}
-            placeholder="0"
-            sign={{ disabled: props.signLocked === true }}
-            notice={notice}
-            inputStyle={[styles.amount, { color: signOnly ? theme.mutedForeground : theme.foreground }]}
-          />
-        </View>
-      </View>
+      {amountField}
       <View
         accessibilityRole="radiogroup"
         accessibilityLabel={t("posting.formEntryTypeA11y")}
@@ -284,24 +325,13 @@ export function PostingForm(props: PostingFormProps) {
               },
             ]}
           >
-            <Text style={styles.chipText}>{label}</Text>
+            <Text preset="rowMoney" style={styles.chipText}>
+              {label}
+            </Text>
           </Pressable>
         ))}
       </View>
-      <View style={styles.openField}>
-        <Text style={styles.fieldLabel}>{t("posting.formDescription")}</Text>
-        <TextInput
-          accessibilityLabel={t("posting.formDescription")}
-          value={props.description}
-          onChangeText={props.onDescriptionChange}
-          editable={props.editable}
-          placeholder={t("posting.formDescriptionPlaceholder")}
-          maxLength={500}
-          multiline
-          placeholderTextColor={theme.mutedForeground}
-          style={styles.description}
-        />
-      </View>
+      {descriptionField}
       <ListGroup>
         <ListRow
           title={props.entryType === "transfer" ? t("posting.formFrom") : t("posting.formPlace")}
@@ -340,30 +370,47 @@ export function PostingForm(props: PostingFormProps) {
           onPress={props.editable ? props.onDate : undefined}
         />
       </ListGroup>
-      {props.entryType === "transfer" && <View style={ui.section}>
-        <Text style={styles.detail}>{t("posting.formTransferHelp")}</Text>
-        {props.transferReview && <>
-          <SecondaryButton label={t("posting.formSwap")} disabled={!props.editable || !props.transferReview.canConfirm}
-            onPress={props.transferReview.onSwap} />
-          {props.transferReview.required && <PrimaryButton label={t("posting.formConfirmPlaces")}
-            disabled={!props.editable || !props.transferReview.canConfirm}
-            onPress={() => props.transferReview?.onConfirm(props.transferReview.pair)} />}
-        </>}
-      </View>}
-      {!!props.blockedReason && !props.canSubmit && !props.pending && <Text style={styles.detail}>{props.blockedReason}</Text>}
+      {props.entryType === "transfer" && (
+        <View style={ui.section}>
+          <Text preset="caption" style={styles.detail}>
+            {t("posting.formTransferHelp")}
+          </Text>
+          {props.transferReview && (
+            <>
+              <SecondaryButton
+                label={t("posting.formSwap")}
+                disabled={!props.editable || !props.transferReview.canConfirm}
+                onPress={props.transferReview.onSwap}
+              />
+              {props.transferReview.required && (
+                <PrimaryButton
+                  label={t("posting.formConfirmPlaces")}
+                  disabled={!props.editable || !props.transferReview.canConfirm}
+                  onPress={() => props.transferReview?.onConfirm(props.transferReview.pair)}
+                />
+              )}
+            </>
+          )}
+        </View>
+      )}
+      {!!props.blockedReason && !props.canSubmit && !props.pending && (
+        <Text preset="caption" style={styles.detail}>
+          {props.blockedReason}
+        </Text>
+      )}
       {props.categoryNeedsPrimary && (
-        <Text style={styles.detail}>
+        <Text preset="caption" style={styles.detail}>
           {t("posting.formPrimaryHint")}
         </Text>
       )}
       {props.loading && <ActivityIndicator color={theme.primary} />}
       {!!props.error && (
-        <Text accessibilityRole="alert" style={ui.error}>
+        <Text preset="caption" accessibilityRole="alert" style={ui.error}>
           {props.error}
         </Text>
       )}
       {props.pending && (
-        <Text style={styles.detail}>
+        <Text preset="caption" style={styles.detail}>
           {t("posting.formPendingNote")}
         </Text>
       )}
@@ -385,5 +432,272 @@ export function PostingForm(props: PostingFormProps) {
       )}
       {props.secondaryActions}
     </Screen>
+  );
+  const postLabel = props.saveToBatch
+    ? t("posting.formAddToBatch")
+    : props.busy
+      ? t("posting.formPosting")
+      : props.pending
+        ? t("posting.formRetry")
+        : t("posting.formPost");
+  const posted = !props.saveToBatch && props.posted !== null;
+  const transferConfirmation =
+    props.entryType === "transfer" && props.transferReview?.required
+      ? props.transferReview
+      : undefined;
+  const reason =
+    props.blockedReason && !props.canSubmit && !props.pending
+      ? props.blockedReason
+      : undefined;
+  return (
+    <Presentation legacy={legacy}>
+      <Screen
+        footer={
+          posted ? (
+            <ActionBar
+              primary={{
+                label: t("common.done"),
+                onPress: props.onDone,
+                icon: "checkmark",
+              }}
+              secondary={
+                props.onAnother
+                  ? {
+                      label: t("posting.formPostAnother"),
+                      onPress: props.onAnother,
+                      icon: "add",
+                    }
+                  : undefined
+              }
+            />
+          ) : (
+            <ActionBar
+              primary={
+                transferConfirmation
+                  ? {
+                      label: t("posting.formConfirmPlaces"),
+                      onPress: () => transferConfirmation.onConfirm(transferConfirmation.pair),
+                      disabled:
+                        !props.editable || !transferConfirmation.canConfirm,
+                      icon: "checkmark",
+                    }
+                  : {
+                      label: postLabel,
+                      onPress: props.onPost,
+                      disabled: !props.canSubmit,
+                      icon: props.saveToBatch
+                        ? "add"
+                        : props.pending
+                          ? "refresh-outline"
+                          : "checkmark",
+                    }
+              }
+              status={
+                reason && !transferConfirmation?.canConfirm ? (
+                  <InlineNotice tone="warning" title={reason} />
+                ) : undefined
+              }
+            />
+          )
+        }
+      >
+        {posted ? (
+          <CenteredMoment
+            icon="checkmark"
+            tone="positive"
+            title={t("posting.formPosted")}
+            body={props.receipt?.description ?? props.posted ?? undefined}
+            amount={
+              props.receipt ? (
+                <MoneyHero
+                  currency={props.currency}
+                  amount={props.receipt.amount}
+                  negative={props.receipt.minorUnits < 0}
+                  tone={props.receipt.minorUnits > 0 ? "positive" : "default"}
+                  align="center"
+                />
+              ) : undefined
+            }
+            chip={
+              props.receipt?.category ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <EmojiTile
+                    emoji={props.receipt.category.emoji}
+                    color={props.receipt.category.color}
+                    size={36}
+                  />
+                  <Text variant="rowTitle">{props.receipt.category.name}</Text>
+                </View>
+              ) : undefined
+            }
+          />
+        ) : (
+          <>
+            <Header
+              title={props.saveToBatch ? t("posting.formAddToBatch") : t("posting.title")}
+              eyebrow={
+                props.saveToBatch
+                  ? t("posting.formBatchEyebrow", { count: props.batchCount ?? 0 })
+                  : t("posting.eyebrow")
+              }
+              onBack={props.onBack}
+            />
+            {props.notification ?? (props.sourceNote ? (
+              <Text variant="meta" tone="muted">
+                {props.sourceNote}
+              </Text>
+            ) : null)}
+            {props.pending ? (
+              <InlineNotice
+                tone="danger"
+                title={t("posting.formCouldntPost")}
+                detail={t("posting.formSavedForRetry")}
+              />
+            ) : props.error ? (
+              <InlineNotice
+                tone="danger"
+                title={t("posting.formCouldntPost")}
+                detail={props.error}
+              />
+            ) : null}
+            {!props.saveToBatch && (
+              <ComposeModeToggle
+                mode="one"
+                count={props.batchCount}
+                disabled={!props.onBatch || !props.editable}
+                onMode={(mode) => {
+                  if (mode === "batch") props.onBatch?.();
+                }}
+              />
+            )}
+            {amountField}
+            <ChipSet
+              label={t("posting.formEntryTypeA11y")}
+              options={[
+                {
+                  value: "normal",
+                  label: t("posting.formTypeNormal"),
+                  disabled:
+                    !props.editable ||
+                    !props.onEntryType ||
+                    props.lockEntryType,
+                },
+                {
+                  value: "transfer",
+                  label: t("posting.formTypeTransfer"),
+                  disabled:
+                    !props.editable ||
+                    !props.onEntryType ||
+                    props.lockEntryType,
+                },
+                {
+                  value: "initial",
+                  label: t("posting.formTypeInitial"),
+                  wide: true,
+                  disabled:
+                    !props.editable ||
+                    !props.onEntryType ||
+                    props.lockEntryType,
+                },
+              ]}
+              value={props.entryType ?? "normal"}
+              onChange={(value) => props.onEntryType?.(value)}
+            />
+            {descriptionField}
+            <Group
+              title={
+                props.entryType === "transfer" ? t("posting.formBetween") : t("posting.formEntryDetails")
+              }
+              pairGap={12}
+            >
+              <ListRow
+                presentation="field"
+                title={props.entryType === "transfer" ? t("posting.formFrom") : t("posting.formPlace")}
+                value={props.placeLook?.name ?? props.place}
+                leading={
+                  <EmojiTile
+                    emoji={props.placeLook?.emoji ?? "💰"}
+                    color={theme.primary}
+                  />
+                }
+                onPress={props.editable ? props.onPlace : undefined}
+              />
+              {props.entryType === "transfer" && (
+                <ListRow
+                  presentation="field"
+                  title={t("posting.formTo")}
+                  value={
+                    props.destinationLook?.name ??
+                    props.destination ??
+                    t("posting.formChoosePlace")
+                  }
+                  leading={
+                    <EmojiTile
+                      emoji={props.destinationLook?.emoji ?? "💰"}
+                      color={theme.primary}
+                    />
+                  }
+                  onPress={props.editable ? props.onDestination : undefined}
+                />
+              )}
+              {(props.entryType ?? "normal") === "normal" && (
+                <ListRow
+                  presentation="field"
+                  title={t("posting.formCategory")}
+                  value={props.categoryLook?.name ?? props.category}
+                  leading={
+                    <EmojiTile
+                      emoji={props.categoryLook?.emoji ?? "🏷️"}
+                      color={props.categoryLook?.color ?? theme.primary}
+                    />
+                  }
+                  onPress={
+                    props.editable && props.categoryEnabled !== false
+                      ? props.onCategory
+                      : undefined
+                  }
+                />
+              )}
+              <ListRow
+                presentation="field"
+                title={t("posting.formDate")}
+                value={props.date}
+                leading={<IconTile icon="calendar-outline" tone="neutral" />}
+                onPress={props.editable ? props.onDate : undefined}
+              />
+            </Group>
+            {props.entryType === "transfer" && (
+              <>
+                {props.transferReview && (
+                  <SecondaryButton
+                    label={t("posting.formSwap")}
+                    disabled={
+                      !props.editable || !props.transferReview.canConfirm
+                    }
+                    onPress={props.transferReview.onSwap}
+                  />
+                )}
+                <Text variant="meta" tone="muted">
+                  {t("posting.formTransferHint")}
+                </Text>
+              </>
+            )}
+            {props.categoryNeedsPrimary && (
+              <Text variant="meta" tone="muted">
+                {t("posting.formPrimaryHint")}
+              </Text>
+            )}
+            {props.loading && <ActivityIndicator color={theme.primary} />}
+            {props.secondaryActions}
+          </>
+        )}
+      </Screen>
+    </Presentation>
   );
 }

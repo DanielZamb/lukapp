@@ -1,7 +1,7 @@
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "00000000-0000-4000-8000-000000000001" }));
 import * as React from "react";
-import { createElement, useImperativeHandle, useState, type ComponentProps } from "react";
+import { createElement, forwardRef, useEffect, useImperativeHandle, useState, type ComponentProps } from "react";
 import type { PendingPosting } from "./pendingPostingSchema";
 import type { PostingFormProps } from "./PostingForm";
 import { BatchNativeStack } from "./BatchNativeStack";
@@ -20,6 +20,11 @@ import { getFunctionName } from "convex/server";
 import type { Category } from "../categories/model";
 import type { BudgetJar } from "../budget/model";
 import { withNativeText } from "../amount/session";
+import { ThemeProvider, useSetThemeMode } from "../../ui/themeContext";
+import type { ThemeMode } from "../../ui/tokens";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { SheetModal, type NativeSheetProps } from "../../ui/SheetModal";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 vi.hoisted(() => {
   (globalThis as { __DEV__?: boolean }).__DEV__ = false;
@@ -47,6 +52,7 @@ const navigation = vi.hoisted(() => {
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
 const convexQuery = vi.hoisted(() => vi.fn());
+const createCategory = vi.hoisted(() => vi.fn());
 const queryData = vi.hoisted(() => {
   const state: { categories: Category[]; profiles: Array<{ id: string; name: string; status?: string }>; currency: string; defaultProfileId: string;
     allProfiles?: Array<{ id: string; name: string; status?: string }>;
@@ -72,7 +78,8 @@ vi.mock("expo-router", () => ({
   }),
 }));
 vi.mock("convex/react", () => ({
-  useAction: () => confirmOne,
+  useAction: (reference: Parameters<typeof getFunctionName>[0]) =>
+    getFunctionName(reference).endsWith(":createUserCategory") ? createCategory : confirmOne,
   useConvex: () => ({ query: convexQuery }),
   useQuery: (reference: Parameters<typeof getFunctionName>[0], args?: { status?: string; month?: string }) => {
     const name = getFunctionName(reference);
@@ -84,7 +91,13 @@ vi.mock("convex/react", () => ({
 }));
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "picker" }));
 vi.mock("@gorhom/bottom-sheet", () => ({
-  BottomSheetModal: "sheet",
+  BottomSheetModal: forwardRef(function NativeModal({ children, ...props }: NativeSheetProps & { children?: React.ReactNode }, ref) {
+    useImperativeHandle(ref, () => ({
+      present: () => props.onChange?.(0, 0, 0),
+      dismiss: () => { props.onChange?.(-1, 0, 0); props.onDismiss?.(); },
+    }));
+    return createElement("sheet", props, children);
+  }),
   BottomSheetView: "sheet-view",
   BottomSheetScrollView: "sheet-scroll",
   BottomSheetTextInput: "input",
@@ -127,7 +140,8 @@ vi.mock("./postingBatchStorage", () => {
   };
   return { usePostingBatchStorage: () => storage };
 });
-vi.mock("./PostingForm", () => ({
+vi.mock("./PostingForm", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./PostingForm")>(),
   PostingForm: (props: PostingFormProps) => {
     form.sourceNote = props.sourceNote;
     form.props = props;
@@ -137,13 +151,10 @@ vi.mock("./PostingForm", () => ({
 vi.mock("../categories/CategorySheet", () => ({
   CategorySheet: ({ sheetRef, ...props }: CategorySheetProps) => {
     const [visible, setVisible] = useState(false);
-    useImperativeHandle(sheetRef, () => ({
-      present: () => setVisible(true),
-      dismiss: () => { setVisible(false); props.onDismiss(); },
-      snapToIndex: vi.fn(), snapToPosition: vi.fn(), expand: vi.fn(),
-      collapse: vi.fn(), close: vi.fn(), forceClose: vi.fn(),
-    }));
-    return visible ? createElement("category-sheet", props) : null;
+    return createElement(SheetModal, { sheetRef, presentOnMount: false, trackPresentation: true, androidBack: true,
+      busy: props.busy, onDismiss: props.onDismiss, onChange: (index) => setVisible(index >= 0),
+      children: visible ? createElement("category-sheet", props) : null,
+    });
   },
 }));
 vi.mock("./PlaceSheet", async (importOriginal) => {
@@ -167,7 +178,7 @@ vi.mock("./AccountSetupForm", () => ({
   },
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
-vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ top: 24, bottom: 16, left: 0, right: 0 }) }));
 vi.mock("react-native-screens", () => ({
   ScreenStack: "stack",
   ScreenStackItem: "screen",
@@ -233,6 +244,31 @@ test("a new entry passes no source note", async () => {
   await mount();
   expect(form.sourceNote).toBeUndefined();
 });
+
+function Appearance({ mode }: { mode: ThemeMode }) {
+  const setMode = useSetThemeMode();
+  useEffect(() => setMode(mode), [mode, setMode]);
+  return createElement(PostRoute);
+}
+
+test.each(["light", "dark"] as const)(
+  "date preserves the fdd9a85 default picker configuration in %s",
+  async (mode) => {
+    await act(async () => {
+      root = create(createElement(ThemeProvider, null, createElement(Appearance, { mode })));
+    });
+    const modal = root!.root.findAllByType(BottomSheetModal).find((node) => node.findAllByType(DateTimePicker).length === 1)!;
+    const { children, ref, backdropComponent, ...props } = modal.props;
+    const configuration = Object.fromEntries(Object.entries(props).filter(([key, value]) => value !== undefined && typeof value !== "function" && !key.startsWith("on")));
+    expect({ props: configuration, hasBackdrop: typeof backdropComponent === "function" }).toMatchSnapshot();
+    expect(configuration).toEqual({
+      backgroundStyle: { backgroundColor: mode === "light" ? "#ffffff" : "#0a0a0a" },
+      snapPoints: ["55%"],
+      enableDynamicSizing: false,
+    });
+    expect(backdropComponent).toBeUndefined();
+  },
+);
 
 function formProps() {
   if (!form.props) throw new Error("Post form is not mounted");
@@ -346,6 +382,14 @@ test("a negative draft can choose income without closing the picker and posts th
   await act(async () => sheet().props.onDone());
   await act(async () => formProps().onPost());
   expect(writes.post).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ kind: "income", payload: expect.objectContaining({ userCategoryIds: ["salary"], amount: { currency: "COP", minorUnits: 12500 } }) }));
+  expect(formProps().category).toBe("Pick");
+  expect(formProps().receipt).toMatchObject({
+    description: "Category first salary", amount: "125", minorUnits: 12500,
+    category: { name: "Salary", emoji: "F" },
+  });
+  await act(async () => formProps().onAnother?.());
+  expect(formProps()).toMatchObject({ posted: null, receipt: undefined, amount: typedAmount("-"), description: "" });
+  expect(writes.post).toHaveBeenCalledOnce();
 });
 
 test("Initial balance can enable Post without a category", async () => {
@@ -619,6 +663,44 @@ test.each([
   }));
 });
 
+test.each(["one", "batch"] as const)("category creation and cancellation preserve the actual %s posting draft", async (mode) => {
+  platform.os = "android";
+  queryData.categories = [{
+    id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food",
+    nature: "Expense", natureSource: "answered", classification: { kind: "fallback", version: "test" },
+    style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
+  }];
+  await mount();
+  if (mode === "batch") {
+    await act(async () => formProps().onBatch?.());
+    await act(async () => root!.root.findByType(BatchNativeStack).props.onAdd());
+  }
+  await act(async () => { formProps().onAmountChange(money("-7")); formProps().onDescriptionChange("Navigation lunch"); });
+  const date = formProps().date;
+  const sheet = () => root!.root.find((node) => String(node.type) === "category-sheet");
+  await act(async () => formProps().onCategory());
+  await act(async () => sheet().props.onSelect("food"));
+  await act(async () => sheet().props.onCreate());
+  await act(async () => sheet().props.onName("Unfinished category"));
+  await act(async () => { expect(back.handler?.()).toBe(true); });
+  expect(formProps()).toMatchObject({ amount: typedAmount("-7"), description: "Navigation lunch", date, category: "F Food" });
+  await act(async () => formProps().onCategory());
+  expect(sheet().props.editor).toBeNull();
+  await act(async () => sheet().props.onCreate());
+  await act(async () => sheet().props.onName("Lunch category"));
+  await act(async () => sheet().props.onAnswer("spend"));
+  const category = { ...queryData.categories[0], id: "lunch", name: "Lunch category" };
+  createCategory.mockResolvedValueOnce({ kind: "category", category });
+  await act(async () => { const confirm = sheet().props.onConfirm; confirm(); confirm(); });
+  expect(createCategory).toHaveBeenCalledOnce();
+  queryData.categories.push(category);
+  await act(async () => root!.update(createElement(PostRoute)));
+  expect(root!.root.findAll((node) => String(node.type) === "category-sheet")).toHaveLength(0);
+  expect(formProps()).toMatchObject({ amount: typedAmount("-7"), description: "Navigation lunch", date, category: "F Food · F Lunch category", canSubmit: true });
+  if (mode === "batch") expect(root!.root.findByType(BatchNativeStack).props.composing).toBe(true);
+  expect(routeBack).not.toHaveBeenCalled();
+  expect(writes.save).not.toHaveBeenCalled(); expect(writes.post).not.toHaveBeenCalled();
+});
 
 test("Candidate navigation waits for persistent review before dispatching removal", async () => {
   const candidate = intakeFixture();

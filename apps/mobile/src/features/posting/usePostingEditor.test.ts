@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
+import { accountingErrorMessages } from "../../../../../src/accounting/errors";
 import { afterEach, expect, test, vi } from "vitest";
 import { displayedMinorUnits, openAmount, withNativeText } from "../amount/session";
 
@@ -80,6 +81,9 @@ const common = {
   description: "Example",
   idempotencyKey: "saved-key",
 } as const;
+
+// Parked with the SEN-97 backend rule (repayment_exceeds_debt), which is not in this branch: see the merge commit.
+test.todo("a debt-cap rejection keeps the transfer facts editable and posts the corrected amount with a new key");
 const entries: PendingPosting[] = [
   {
     kind: "income",

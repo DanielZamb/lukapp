@@ -89,4 +89,8 @@ export const budget: Messages<typeof en> = {
   errorWorkspace: "No pudimos encontrar tu presupuesto. Ciérralo y vuelve a abrirlo.",
   errorOutOfRange: "Este monto es demasiado grande. Prueba con uno menor.",
   errorKeyConflict: "Este cambio no coincide con el que enviaste antes. Vuelve a intentar.",
+  impactTitle: "Te pasarías del tope",
+  impactPostAnyway: "Registrar igual",
+  impactOverAmount: "{amount} de más",
+  impactBodyLarge: "El movimiento se registra igual. El presupuesto nunca lo bloquea.",
 };
