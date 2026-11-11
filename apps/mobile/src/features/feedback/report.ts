@@ -390,12 +390,20 @@ export class ReportMachine {
     if (previous !== flattened.uri) await this.deps.deleteCapture(previous);
   }
 
+  /** Asks to leave. A typed report asks for confirmation first; asking again while it is open does nothing. */
   requestCancel() {
     const phase = this.snapshot.phase;
-    if (phase.kind === "editing" && !phase.practice && hasTypedText(phase.report.fields) && !phase.confirm)
+    if ((phase.kind === "editing" || phase.kind === "failed") && phase.confirm) return;
+    if (phase.kind === "editing" && !phase.practice && hasTypedText(phase.report.fields))
       void this.set({ ...phase, confirm: "discard" });
-    else if (phase.kind === "failed" && !phase.confirm) void this.set({ ...phase, confirm: "discard" });
+    else if (phase.kind === "failed") void this.set({ ...phase, confirm: "discard" });
     else if (phase.kind === "editing" || phase.kind === "resuming" || phase.kind === "capturing") void this.discard();
+  }
+
+  /** Discards the report the discard confirmation asked about, only while that confirmation is open. */
+  async confirmDiscard() {
+    const phase = this.snapshot.phase;
+    if ((phase.kind === "editing" || phase.kind === "failed") && phase.confirm === "discard") await this.discard();
   }
 
   dismissConfirm() {

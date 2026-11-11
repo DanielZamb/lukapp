@@ -941,6 +941,21 @@ test("closing the layer keeps a typed report and its capture, but deletes an unt
   expect(untouched.deleted).toEqual([shot.uri]);
 });
 
+test("Discard kept from a discard confirmation the person dismissed discards nothing", async () => {
+  const h = harness();
+  await h.machine.open("shake", "/history");
+  h.write();
+  h.machine.requestCancel();
+  h.machine.dismissConfirm();
+  await h.machine.confirmDiscard();
+  expect(h.phase()).toMatchObject({ kind: "editing", confirm: null });
+  expect(h.deleted).toEqual([]);
+  h.machine.requestCancel();
+  await h.machine.confirmDiscard();
+  expect(h.phase().kind).toBe("idle");
+  expect(h.deleted).toEqual([shot.uri]);
+});
+
 test("two presses of Cancel on a typed report ask once and discard nothing", async () => {
   const h = harness();
   await h.machine.open("shake", "/history");
