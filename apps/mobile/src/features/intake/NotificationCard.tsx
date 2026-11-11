@@ -3,12 +3,11 @@
 // came from and lets the person correct it by tapping the notification:
 // an amount to use it, or a first and a last word for the description.
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useTheme, useThemeMode } from "../../ui/core";
-import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
+import { Pressable, StyleSheet, Text as Span, View } from "react-native";
+import { Presentation, Text, useControls, useTheme, useThemeMode } from "../../ui/core";
+import { font, radius, spacing, xxxl, type Theme } from "../../ui/tokens";
 import { amountOfMinorUnits, amountSign, displayedMinorUnits, type AmountSession } from "../amount/session";
-import { appInitial } from "./appCatalog";
-import { IconTile } from "./IntakeParts";
+import { AppTile } from "./IntakeParts";
 import { pieces, suggest, type Mention } from "./suggest";
 import { formatDateTime, useT } from "../../i18n";
 
@@ -20,10 +19,7 @@ function createStyles(theme: Theme) {
   return StyleSheet.create({
     card: { borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.secondary, padding: spacing.lg, gap: spacing.sm },
     head: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-    app: { fontFamily: font.semibold, fontSize: fontSize.body, color: theme.foreground },
-    meta: { fontFamily: font.regular, fontSize: 13, lineHeight: 18, color: theme.mutedForeground },
-    text: { fontFamily: font.regular, fontSize: fontSize.body, lineHeight: 26, color: theme.foreground },
-    reveal: { minHeight: touchTarget, justifyContent: "center", alignSelf: "flex-start" },
+    reveal: { justifyContent: "center", alignSelf: "flex-start" },
   });
 }
 
@@ -41,6 +37,7 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
   const theme = useTheme();
   const dark = useThemeMode() === "dark";
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const controls = useControls();
   const suggestion = useMemo(() => suggest({ text: notification.text }), [notification.text]);
   const [revealed, setRevealed] = useState(false);
   const [anchor, setAnchor] = useState<number | null>(null);
@@ -66,41 +63,41 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
     : kind === "direction" ? { textDecorationLine: "underline" as const }
     : kind === "when" ? { color: theme.mutedForeground } : null;
 
-  return <View style={styles.card} accessibilityLabel={t("inbox.cardA11y", { app: label })}>
-    <Text style={styles.app}>{t("inbox.cardTitle")}</Text>
+  const content = <>
+    <Text preset="rowName" tone="default">{t("inbox.cardTitle")}</Text>
     <View style={styles.head}>
-      <IconTile letter={appInitial(label)} tone="accent" />
+      <AppTile packageName={notification.packageName} label={label} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.app} numberOfLines={2}>{label}</Text>
-        <Text style={styles.meta}>{formatDateTime(language, notification.at)}</Text>
+        <Text preset="rowName" tone="default" numberOfLines={2}>{label}</Text>
+        <Text preset="noticeMeta" tone="muted">{formatDateTime(language, notification.at)}</Text>
       </View>
     </View>
     {!notification.text.trim() ? <>
-      <Text style={styles.app}>{t("inbox.cardTextUnavailable")}</Text>
-      <Text style={styles.meta}>{t("inbox.cardTextUnavailableBody")}</Text>
+      <Text preset="rowName" tone="default">{t("inbox.cardTextUnavailable")}</Text>
+      <Text preset="noticeMeta" tone="muted">{t("inbox.cardTextUnavailableBody")}</Text>
     </> : hidden ? <>
-      <Text style={styles.meta}>{t("inbox.cardHidden")}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("inbox.cardShowA11y")} onPress={() => setRevealed(true)} style={styles.reveal}>
-        <Text style={[styles.app, { color: accent }]}>{t("inbox.cardShow")}</Text>
+      <Text preset="noticeMeta" tone="muted">{t("inbox.cardHidden")}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("inbox.cardShowA11y")} onPress={() => setRevealed(true)} style={[styles.reveal, { minHeight: controls.touchTarget }]}>
+        <Text preset="rowName" style={{ color: accent }}>{t("inbox.cardShow")}</Text>
       </Pressable>
     </> : <>
-      <Text style={styles.text} accessibilityLabel={notification.text}>
+      <Text preset="noticeText" tone="default" accessibilityLabel={notification.text}>
         {pieces(suggestion, chosen).map((piece) => {
           if (piece.mention) {
             const mention = piece.mention;
-            return <Text key={piece.start} accessibilityRole="button" accessibilityLabel={t("inbox.cardUseAmountA11y", { amount: piece.text })}
-              onPress={editable ? () => { setAnchor(null); onUseAmount(mention.minor); } : undefined} style={span(piece.kind, mention)}>{piece.text}</Text>;
+            return <Span key={piece.start} accessibilityRole="button" accessibilityLabel={t("inbox.cardUseAmountA11y", { amount: piece.text })}
+              onPress={editable ? () => { setAnchor(null); onUseAmount(mention.minor); } : undefined} style={span(piece.kind, mention)}>{piece.text}</Span>;
           }
           let offset = piece.start;
           return piece.text.split(/(\s+)/).map((word) => {
             const start = offset; offset += word.length;
             if (!word.trim()) return word;
-            return <Text key={start} onPress={editable ? () => useWord(start, start + word.length) : undefined}
-              style={[span(piece.kind), anchor === start && { backgroundColor: `${theme.primary}40` }]}>{word}</Text>;
+            return <Span key={start} onPress={editable ? () => useWord(start, start + word.length) : undefined}
+              style={[span(piece.kind), anchor === start && { backgroundColor: `${theme.primary}40` }]}>{word}</Span>;
           });
         })}
       </Text>
-      <Text accessibilityLiveRegion="polite" style={styles.meta}>
+      <Text accessibilityLiveRegion="polite" preset="noticeMeta" tone="muted">
         {anchor !== null ? t("inbox.cardHintLastWord")
           : editable ? [
             t(suggestion.amounts.length ? "inbox.cardHintTapAmount" : "inbox.cardHintEnterAmount"),
@@ -109,7 +106,9 @@ export function NotificationCard({ notification, appLabel, currency, amount, edi
           : t("inbox.cardReadOnly")}
       </Text>
     </>}
-  </View>;
+  </>;
+  const card = (style: object) => <View style={style} accessibilityLabel={t("inbox.cardA11y", { app: label })}>{content}</View>;
+  return <Presentation legacy={card(styles.card)}>{card([styles.card, { borderRadius: xxxl.radius.card }])}</Presentation>;
 }
 
 /**

@@ -8,14 +8,16 @@ import {
   Geist_800ExtraBold,
 } from "@expo-google-fonts/geist";
 import { ClerkProvider, useAuth, useClerk } from "@clerk/expo";
+import { SheetProvider } from "../src/ui/SheetProvider";
+import { ContextPillHost } from "../src/ui/ContextPill";
 import { tokenCache } from "@clerk/expo/token-cache";
-import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { ConvexReactClient, useConvexAuth, useQuery } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Stack, type ErrorBoundaryProps } from "expo-router";
 import { useEffect, useLayoutEffect } from "react";
 import * as SplashScreen from "expo-splash-screen";
-import { ActivityIndicator, Text } from "react-native";
+import { Text } from "react-native";
+import { ConnectingProvider, ConnectingScreen, connectingPhase } from "../src/ui/ConnectingScreen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { api } from "../src/features/api";
@@ -89,19 +91,9 @@ function Admission() {
     api.authConnection.connection,
     isAuthenticated ? {} : "skip",
   );
-  if (!isLoaded || isLoading)
-    return (
-      <Screen>
-        <ActivityIndicator />
-        <Text style={ui.body}>{t("access.connecting")}</Text>
-      </Screen>
-    );
-  if (!isSignedIn)
-    return (
-      <Screen>
-        <ActivityIndicator />
-      </Screen>
-    );
+  const phase = connectingPhase({ gate: "admission", clerkLoaded: isLoaded, signedIn: !!isSignedIn,
+    convexLoading: isLoading, authenticated: isAuthenticated, connection: connection?.status ?? "pending" });
+  if (phase === "session" || phase === "account") return <ConnectingScreen phase={phase} />;
   if (
     !isAuthenticated ||
     connection?.status === "not-owner" ||
@@ -114,16 +106,10 @@ function Admission() {
         <SecondaryButton label={t("access.signOut")} onPress={() => void signOut()} />
       </Screen>
     );
-  if (!connection)
-    return (
-      <Screen>
-        <ActivityIndicator />
-      </Screen>
-    );
   return (
     <DeviceAdmissionGate>
     <FeedbackAdmission />
-    <IntakeProvider>
+    <ContextPillHost admitted><SheetProvider><IntakeProvider>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="level-unlocked" options={{ gestureEnabled: false }} />
@@ -145,7 +131,7 @@ function Admission() {
       <Stack.Screen name="categories" />
       <Stack.Screen name="oauth-callback" />
     </Stack>
-    </IntakeProvider>
+    </IntakeProvider></SheetProvider></ContextPillHost>
     </DeviceAdmissionGate>
   );
 }
@@ -177,6 +163,7 @@ export default function Layout() {
         <LanguageProvider>
         <ThemeProvider>
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+          <ConnectingProvider>
           <LocalEntryGate
             renderSignIn={(onSessionCreated) => (
               <PrebuiltSignIn onSessionCreated={onSessionCreated} />
@@ -184,12 +171,11 @@ export default function Layout() {
           >
             <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
               <FeedbackHost>
-                <BottomSheetModalProvider>
-                  <Admission />
-                </BottomSheetModalProvider>
+                <Admission />
               </FeedbackHost>
             </ConvexProviderWithClerk>
           </LocalEntryGate>
+          </ConnectingProvider>
         </ClerkProvider>
         </ThemeProvider>
         </LanguageProvider>

@@ -1,3 +1,11 @@
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+vi.mock("react-native-reanimated", () => ({ default: {} }));
+vi.mock("../../ui/ConnectingScreen", async importOriginal => ({
+  ...await importOriginal<typeof import("../../ui/ConnectingScreen")>(),
+  ConnectingScreen: "connecting-screen",
+  ConnectingHandover: ({ ready, children }: import("react").PropsWithChildren<{ ready: boolean }>) =>
+    ready ? children : createElement("connecting-screen", { phase: "data" }),
+}));
 import { themes } from "../../ui/tokens";
 import * as React from "react";
 import { createElement, type ComponentProps } from "react";
@@ -33,6 +41,16 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetView: "view",
 }));
 vi.mock("../../ui/core", () => ({
+  ActionBar: () => null,
+  IconButton: "button",
+  AlertDot: () => null,
+  BrandBand: ({ legacy }: { legacy: React.ReactNode }) => legacy,
+  BrandBandChip: () => null,
+  DestinationRow: () => null,
+  MoneyHero: () => null,
+  Presentation: ({ legacy }: { legacy: React.ReactNode }) => legacy,
+  PreviewGroup: ({ legacy }: { legacy: React.ReactNode }) => legacy,
+  Text: "text",
   Screen: "screen",
   Header: "header",
   PrimaryButton: "button",

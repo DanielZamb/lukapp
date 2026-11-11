@@ -66,14 +66,15 @@ vi.mock("react-native-safe-area-context", () => ({
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
 vi.mock("@gorhom/bottom-sheet", async () => {
-  const { forwardRef, useState, useImperativeHandle, createElement } =
+  const { forwardRef, useState, useEffect, useImperativeHandle, createElement } =
     await import("react");
   return {
     BottomSheetModal: forwardRef(function Modal(
-      { children, onDismiss }: PropsWithChildren<{ onDismiss?: () => void }>,
+      { children, onDismiss, onChange }: PropsWithChildren<{ onDismiss?: () => void; onChange?: (index: number) => void }>,
       ref,
     ) {
       const [open, setOpen] = useState(false);
+      useEffect(() => { if (open) onChange?.(0); }, [open]);
       useImperativeHandle(ref, () => ({
         present: () => setOpen(true),
         dismiss: () => {
@@ -667,7 +668,7 @@ test("at the largest text the purchase-alert choices stack and size to their Spa
     await act(async () => root?.unmount());
     await act(async () => {
       root = create(createElement(LanguageProvider, { initialPreference: "es" },
-        createElement(ThemeProvider, { layout: { reflow, pagePadding: 16 } },
+        createElement(ThemeProvider, { layout: { tier: reflow ? "reflow" as const : "default" as const, reflow, pagePadding: 16, touchTarget: 44 } },
           createElement(Setup, { subject: "owner", onComplete: vi.fn(), onCancel: vi.fn() }))));
     });
     await act(async () => root?.root.findByType(SetupCategories).props.onChange([starterSelection(starterCategories[0])]));

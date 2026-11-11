@@ -139,7 +139,7 @@ test.each(["light", "dark"] as const)("Choice preserves its selected and disable
 
 test("built-in labels follow the chosen language and the language choice stacks at the largest text", async () => {
   const spanish = (child: React.ReactElement, reflow = false) => createElement(LanguageProvider, { initialPreference: "es" },
-    createElement(ThemeProvider, { layout: { reflow, pagePadding: 16 } }, child));
+    createElement(ThemeProvider, { layout: { tier: reflow ? "reflow" as const : "default" as const, reflow, pagePadding: 16, touchTarget: 44 } }, child));
   await act(async () => {
     root = create(spanish(createElement(ConfirmationScreen, { title: "Listo", detail: "Guardado", onContinue: vi.fn() })));
   });

@@ -4,6 +4,8 @@ import { ActivityIndicator } from "react-native";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { theme } from "../../ui/core";
+import { ThemeProvider } from "../../ui/themeContext";
+import { readableLayout } from "../../ui/layout";
 import { OverviewScreen } from "./OverviewScreen";
 import type { MonthOverview } from "./model";
 
@@ -35,6 +37,10 @@ afterEach(async () => {
   root = undefined;
   vi.unstubAllGlobals();
 });
+function flatStyle(value: unknown): Record<string, unknown> {
+  if (Array.isArray(value)) return Object.assign({}, ...value.map(flatStyle));
+  return typeof value === "object" && value !== null ? Object.fromEntries(Object.entries(value)) : {};
+}
 function texts(node: ReactTestInstance) { return node.findAllByType("text").map((text) => text.children.join("")); }
 function screen() { if (!root) throw new Error("Overview not mounted"); return root.root; }
 function button(label: string) {
@@ -95,8 +101,8 @@ test("List is default with spend, draining/flat coins, colored remaining amounts
   ]);
   const overText = button("Over").findAllByType("text").find((node) => node.children.join("") === "1K over");
   const leftText = button("Partial").findAllByType("text").find((node) => node.children.join("") === "8K left");
-  expect(overText?.props.style[1].color).toBe(theme.danger);
-  expect(leftText?.props.style[1].color).toBe(theme.positive);
+  expect(flatStyle(overText?.props.style).color).toBe(theme.danger);
+  expect(flatStyle(leftText?.props.style).color).toBe(theme.positive);
   const coinFills = screen().findAllByType("view").filter((node) => Array.isArray(node.props.style) && node.props.style[1]?.height);
   expect(coinFills.map((node) => node.props.style[1].height)).toEqual(["80%", "100%"]);
   await press("Back"); await press("Go to history"); await press("Partial");
@@ -117,7 +123,7 @@ test("Bars toggle to limited categories in remaining order, clamp over to zero, 
   ]);
   expect(percentages()).toEqual([0, 100, 80]);
   expect(texts(button("Over, what's left"))).toEqual(["🍔", "1K over"]);
-  expect(button("Over, what's left").findAllByType("text")[1].props.style[1].color).toBe(theme.danger);
+  expect(flatStyle(button("Over, what's left").findAllByType("text")[1].props.style).color).toBe(theme.danger);
   await press("Partial, what's left");
   expect(percentages()).toEqual([100, 80, 40, 0]);
   await press("Partial"); await press("List"); await press("Bars");
@@ -156,7 +162,7 @@ test("exact and palette colors render in coins, remaining amounts and bars, with
     { id: "pale", name: "Pale", style: { emoji: "🧁", tone: "primary", color: "#FFF3B0" }, spendMinorUnits: 100000, limitMinorUnits: 1000000 },
     { id: "food", name: "Food", style: { emoji: "🛒", tone: "positive", color: "h150" }, spendMinorUnits: 100000, limitMinorUnits: 1000000 },
   ] });
-  const left = (label: string) => button(label).findAllByType("text").find((node) => node.children.join("").endsWith("left"))?.props.style[1].color;
+  const left = (label: string) => button(label).findAllByType("text").find((node) => node.children.join("").endsWith("left"))?.props.style[2].color;
   expect(["Gym", "Pale", "Food"].map(left)).toEqual(["#2E7D32", "#0a0a0a", "#0a0a0a"]);
   const coin = (label: string) => button(label).findAllByType("view")[0].props.style[1];
   expect(["Gym", "Pale", "Food"].map((label) => [coin(label).backgroundColor, coin(label).borderColor])).toEqual([
@@ -169,4 +175,89 @@ test("exact and palette colors render in coins, remaining amounts and bars, with
     [{ width: "50%", backgroundColor: "#FFF3B0" }, { borderWidth: 1, borderColor: "#8a8a8a" }],
     [{ width: "50%", backgroundColor: "#218c57" }, null],
   ]);
+});
+
+async function renderLarge(value: MonthOverview) {
+  const callbacks = { onBack: vi.fn(), onHistory: vi.fn(), onCategory: vi.fn() };
+  await act(async () => {
+    root = create(createElement(ThemeProvider, { layout: readableLayout({ width: 320, fontScale: 1.5 }) },
+      createElement(OverviewScreen, { data: value, monthLabel: "June", ...callbacks })));
+  });
+  return callbacks;
+}
+
+test("XXXL previews four categories and View all reveals the remaining categories without leaving Overview", async () => {
+  const callbacks = await renderLarge({ ...data, categories: [
+    ...data.categories,
+    { ...data.categories[0], id: "fifth", name: "Fifth", spendMinorUnits: 0 },
+    { ...data.categories[0], id: "sixth", name: "Sixth", spendMinorUnits: 0 },
+  ] });
+  expect(texts(screen())).toEqual(expect.arrayContaining(["JUNE", "Where it went", "Over", "Unlimited", "Partial", "Unused", "View all 6 categories"]));
+  expect(texts(screen())).not.toContain("Fifth");
+  expect(texts(screen())).not.toContain("Sixth");
+  await press("View all 6 categories");
+  expect(texts(screen())).toEqual(expect.arrayContaining(["Fifth", "Sixth"]));
+  expect(texts(screen())).not.toContain("View all 6 categories");
+  expect(callbacks.onHistory).not.toHaveBeenCalled();
+  await press("Sixth, $0");
+  expect(callbacks.onCategory).toHaveBeenCalledExactlyOnceWith("sixth");
+});
+
+test("XXXL Bars shows spending shares and returns to the list summary", async () => {
+  await renderLarge({ ...data, outMinorUnits: 1_000_000 });
+  expect(texts(screen())).toContain("Net");
+  expect(texts(screen())).toContain("Go to history");
+  await press("Bars");
+  expect(texts(screen())).not.toContain("Net");
+  expect(texts(screen())).not.toContain("Go to history");
+  expect(texts(screen())).toEqual(expect.arrayContaining(["Where it went", "Longest bar is the most spent", "50% of June", "40% of June", "20% of June", "0% of June"]));
+  await press("List");
+  expect(texts(screen())).toContain("Net");
+  expect(texts(screen())).toContain("Go to history");
+  expect(texts(screen())).not.toContain("Longest bar is the most spent");
+});
+
+test("XXXL zero spending has finite zero shares", async () => {
+  await renderLarge({ ...data, outMinorUnits: 0, categories: data.categories.map(category => ({ ...category, spendMinorUnits: 0 })) });
+  await press("Bars");
+  expect(texts(screen()).filter(text => text === "0% of June")).toHaveLength(4);
+  expect(texts(screen()).join(" ")).not.toMatch(/NaN|Infinity/);
+});
+
+
+test("Overview preserves expanded categories and the selected view across runtime tier changes", async () => {
+  const value = { ...data, categories: [...data.categories, { ...data.categories[0], id: "fifth", name: "Fifth", spendMinorUnits: 0 }] };
+  const callbacks = await renderLarge(value);
+  const changeScale = async (fontScale: number) => {
+    await act(async () => root?.update(createElement(ThemeProvider, { layout: readableLayout({ width: 320, fontScale }) },
+      createElement(OverviewScreen, { data: value, monthLabel: "June", ...callbacks }))));
+  };
+  await press("View all 5 categories");
+  await changeScale(1);
+  await changeScale(1.5);
+  expect(texts(screen())).toContain("Fifth");
+  expect(texts(screen())).not.toContain("View all 5 categories");
+  await press("Bars");
+  await changeScale(1);
+  expect(button("Bars").props.accessibilityState.checked).toBe(true);
+  await changeScale(2);
+  expect(button("Bars").props.accessibilityState.selected).toBe(true);
+  expect(texts(screen())).toContain("Longest bar is the most spent");
+  expect(texts(screen())).not.toContain("Net");
+});
+
+
+test("Overview retains its focused full amount when leaving and returning to the default tier", async () => {
+  const callbacks = { onBack: vi.fn(), onHistory: vi.fn(), onCategory: vi.fn() };
+  const changeScale = async (fontScale: number) => {
+    const tree = createElement(ThemeProvider, { layout: readableLayout({ width: 320, fontScale }) },
+      createElement(OverviewScreen, { data, ...callbacks }));
+    await act(async () => { if (root) root.update(tree); else root = create(tree); });
+  };
+  await changeScale(1);
+  await press("Net");
+  await changeScale(1.5);
+  await changeScale(1);
+  expect(button("Net").props.accessibilityState.expanded).toBe(true);
+  expect(texts(button("Net"))).toEqual(["Net", "−$1.000.000,00"]);
 });

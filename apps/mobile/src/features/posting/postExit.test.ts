@@ -128,7 +128,7 @@ vi.mock("./postingBatchStorage", () => {
 });
 vi.mock("./PostingForm", async () => {
   const { createElement: element } = await import("react");
-  return { PostingForm: (props: PostingFormProps) => { form.props = props; return element("form", null, props.secondaryActions); } };
+  return { PostingForm: (props: PostingFormProps) => { form.props = props; return element("form", null, props.secondaryActions); }, postingDateOptions: () => [] };
 });
 vi.mock("../categories/CategoryPicker", () => ({ CategoryPicker: () => null }));
 vi.mock("./PlaceSheet", () => ({ PlaceSheet: () => null }));

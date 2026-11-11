@@ -2,8 +2,8 @@ import type { FunctionReturnType } from "convex/server";
 import { useConvex } from "convex/react";
 import * as Crypto from "expo-crypto";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import { Choice, Header, PrimaryButton, Screen, SecondaryButton, useUi } from "../../ui/core";
+import { ActivityIndicator, View } from "react-native";
+import { Choice, Group, Header, Presentation, PrimaryButton, Screen, SecondaryButton, Text, useUi } from "../../ui/core";
 import { spacing } from "../../ui/tokens";
 import { api } from "../api";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
@@ -13,7 +13,7 @@ import type { SourceMapping } from "./durableState";
 import { IntakeSelectionPicker } from "./IntakeSelectionPicker";
 import { ArrivalInspector } from "./ArrivalInspector";
 import type { IntakeService } from "./service";
-import { ActionBar, AlertLine, Card, CheckRow, FactRow, HeroState, IconTile, Muted, NavRow, NoteCard, SectionHeading, TextButton, type Tone } from "./IntakeParts";
+import { ActionBar, AlertLine, AppTile, Card, CheckRow, FactRow, HeroState, IconTile, Muted, NavRow, NoteCard, SectionHeading, TextButton, type Tone } from "./IntakeParts";
 import { appInitial, likelyBankApp, orderSources, productKindLabel, timeZoneCity } from "./appCatalog";
 import { intakeActionError } from "./presentation";
 import { formatDateTime, useT, type MessageKey } from "../../i18n";
@@ -154,7 +154,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
     {error ? <AlertLine>{error}</AlertLine> : null}
     {snapshot.error && snapshot.error !== "UNSUPPORTED" ? <AlertLine>{intakeActionError(t, new Error(snapshot.error))}</AlertLine> : null}
   </>;
-  const pendingLine = pending ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{t("inbox.pendingLine", { action: t(pending) })}</Text> : null;
+  const pendingLine = pending ? <Text accessibilityLiveRegion="polite" preset="body" tone="muted">{t("inbox.pendingLine", { action: t(pending) })}</Text> : null;
 
   if (current.kind === "inspect") return <ArrivalInspector onBack={() => setStep({ kind: "hub" })} />;
 
@@ -172,15 +172,15 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
         <FactRow icon="mail-outline" tone="warning" title={t("inbox.disclosureEmail")} detail={emailWarning} />
       </View>
       {diagnostics ? <View style={ui.section}>
-        <Text style={ui.label}>{t("inbox.disclosureBeta")}</Text>
+        <Text variant="label" tone="muted">{t("inbox.disclosureBeta")}</Text>
         <Muted>{t("inbox.disclosureBetaBody")}</Muted>
       </View> : null}
       <View style={ui.section}>
         <TextButton label={readFull ? t("inbox.disclosureHide") : t("inbox.disclosureRead")} expanded={readFull} onPress={() => setReadFull((value) => !value)} />
         {readFull ? <>
-          <Text style={ui.body}>{t(diagnostics ? "inbox.disclosureFullDiagnostics" : "inbox.disclosureFull")}</Text>
-          <Text style={ui.body}>{t("inbox.disclosureReconcile")}</Text>
-          <Text style={ui.muted}>{t("inbox.disclosurePreference")}</Text>
+          <Text preset="body" tone="default">{t(diagnostics ? "inbox.disclosureFullDiagnostics" : "inbox.disclosureFull")}</Text>
+          <Text preset="body" tone="default">{t("inbox.disclosureReconcile")}</Text>
+          <Text preset="body" tone="muted">{t("inbox.disclosurePreference")}</Text>
         </> : null}
       </View>
       <Card>
@@ -193,7 +193,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
   if (current.kind === "wipe") {
     return <Screen footer={<ActionBar>
       {pendingLine}
-      <SecondaryButton label={t("inbox.wipeAction")} tone="danger" disabled={pending !== null} onPress={() => {
+      <SecondaryButton label={t("inbox.wipeAction")} tone="danger" icon="trash-outline" disabled={pending !== null} onPress={() => {
         void perform("inbox.pendingWiping", async () => { await service.disableAndWipe(); setAcknowledged(false); }, false)
           .then(() => setStep({ kind: "hub" }));
       }} />
@@ -238,11 +238,14 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
       {ready ? <Muted>{t("inbox.workspaceLine", { currency: ready.workspace.functionalCurrency, city: timeZoneCity(ready.workspace.timeZone) })}</Muted> : null}
       {!ready ? <ActivityIndicator accessibilityLabel={t("inbox.placeLoadingA11y")} />
         : !profiles.length ? <AlertLine>{t("inbox.placeNone")}</AlertLine>
-        : <View accessibilityRole="radiogroup" style={{ gap: spacing.sm }}>
-          {profiles.map((profile) => <Choice key={profile.id} label={profile.name} detail={productKindLabel(t, profile.productKind)}
-            selected={current.profileId === profile.id} disabled={!canConfigure}
-            onPress={() => { if (canConfigure) setStep({ ...current, profileId: profile.id }); }} />)}
-        </View>}
+        : (() => {
+          const choices = profiles.map((profile) => <Choice key={profile.id} label={profile.name} detail={productKindLabel(t, profile.productKind)}
+            emoji={profile.emoji ?? "💰"} selected={current.profileId === profile.id} disabled={!canConfigure}
+            onPress={() => { if (canConfigure) setStep({ ...current, profileId: profile.id }); }} />);
+          return <Presentation legacy={<View accessibilityRole="radiogroup" style={{ gap: spacing.sm }}>{choices}</View>}>
+            <View accessibilityRole="radiogroup"><Group>{choices}</Group></View>
+          </Presentation>;
+        })()}
       <Muted>{t("inbox.placeLater", { app: label })}</Muted>
     </Screen>;
   }
@@ -268,7 +271,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
         <NavRow leading={<IconTile icon="wallet-outline" tone={accountMissing(mapping) ? "danger" : "accent"} />} title={t("inbox.appAlertsGoTo")}
           status={accountName(mapping)} statusTone={accountMissing(mapping) ? "danger" : undefined}
           accessibilityLabel={t("inbox.appAlertsGoToA11y", { place: accountName(mapping) })} />
-        <NavRow last leading={<IconTile letter={appInitial(label)} tone="accent" />} title={t("inbox.appPackage")} status={mapping.packageName}
+        <NavRow last leading={<AppTile packageName={mapping.packageName} label={label} />} title={t("inbox.appPackage")} status={mapping.packageName}
           accessibilityLabel={t("inbox.appPackageA11y", { package: mapping.packageName })} />
       </Card>
       {mapping.workspaceId !== workspaceId ? <Muted>{t("inbox.appOtherWorkspace")}</Muted> : null}
@@ -304,6 +307,9 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
       : snapshot.status.reason === "native_module_missing" ? t("inbox.unsupportedModule")
       : t("inbox.errorUnsupported")
     : null;
+
+  const refresh = <SecondaryButton label={t("inbox.refreshStatus")} icon="refresh-outline" disabled={pending !== null || snapshot.wipePending}
+    onPress={() => { setRevision((value) => value + 1); void perform("inbox.pendingRefreshing", () => service.refresh(), false); }} />;
 
   return <Screen footer={next || pending ? <ActionBar>
     {pendingLine}
@@ -346,7 +352,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
           const label = appLabel(mapping.packageName);
           const problem = appMissing(mapping) ? t("inbox.problemNotInstalled") : accountMissing(mapping) ? t("inbox.problemPlaceUnavailable") : null;
           const line = problem ? t("inbox.rowProblemTo", { problem, place: accountName(mapping) }) : t("inbox.rowTo", { place: accountName(mapping) });
-          return <NavRow key={mapping.sourceSelectionId} last={index === active.length - 1} leading={<IconTile letter={appInitial(label)} tone="accent" />}
+          return <NavRow key={mapping.sourceSelectionId} last={index === active.length - 1} leading={<AppTile packageName={mapping.packageName} label={label} />}
             title={label} status={line} statusTone={problem ? "danger" : undefined} accessibilityLabel={t("inbox.rowA11y", { app: label, line })}
             onPress={() => setStep({ kind: "app", packageName: mapping.packageName })} />;
         })}
@@ -355,7 +361,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
         : catalog.kind === "failed" ? <AlertLine>{t("inbox.catalogFailed")}</AlertLine>
         : !catalog.sources.length ? <Muted>{t("inbox.noInstalledApps")}</Muted> : null}
       {active.length ? <>
-        <SecondaryButton label={t("inbox.addAnotherApp")} disabled={!canChange || !ready} onPress={() => withAcknowledgement({ kind: "addApp" })} />
+        <SecondaryButton label={t("inbox.addAnotherApp")} icon="add" disabled={!canChange || !ready} onPress={() => withAcknowledgement({ kind: "addApp" })} />
         <Muted>{t("inbox.addProof")}</Muted>
       </> : null}
     </View> : null}
@@ -374,13 +380,14 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
       <Muted>{status.lastConnectedAt === null ? t("inbox.checkedNever", { checked: when(status.checkedAt) })
         : t("inbox.checkedLast", { checked: when(status.checkedAt), connected: when(status.lastConnectedAt) })}</Muted>
       {status.pendingCount > 0 ? <Muted>{tn("inbox.pendingCaptures", status.pendingCount)}</Muted> : null}
-      {status.connection !== "connected" ? <SecondaryButton label={t("inbox.retryListener")} disabled={blocked || status.access !== "granted"}
+      {status.connection !== "connected" ? <SecondaryButton label={t("inbox.retryListener")} icon="pulse-outline" disabled={blocked || status.access !== "granted"}
         onPress={() => { if (!blocked && status.access === "granted") void perform("inbox.pendingRetryingConnection", () => service.retryConnection()); }} /> : null}
-      <SecondaryButton label={t("inbox.androidSettings")} disabled={blocked} onPress={() => withAcknowledgement({ kind: "settings" })} />
+      {/* D4 keeps Refresh with the phone's status; the default page keeps it below. */}
+      <Presentation legacy={null}>{refresh}</Presentation>
+      <SecondaryButton label={t("inbox.androidSettings")} icon="notifications-outline" disabled={blocked} onPress={() => withAcknowledgement({ kind: "settings" })} />
     </View> : null}
 
-    <SecondaryButton label={t("inbox.refreshStatus")} disabled={pending !== null || snapshot.wipePending}
-      onPress={() => { setRevision((value) => value + 1); void perform("inbox.pendingRefreshing", () => service.refresh(), false); }} />
+    {status ? <Presentation legacy={refresh} /> : refresh}
 
     {status?.notices.length ? <View style={ui.section}>
       <SectionHeading title={t("inbox.skippedHeading")} meta={t("inbox.skippedMeta")} />
@@ -402,7 +409,7 @@ export function IntakeSetup({ workspaceId, onBack, onPrototype }: {
     </Card> : null}
 
     {ready ? <Muted>{t("inbox.workspaceLine", { currency: ready.workspace.functionalCurrency, city: timeZoneCity(ready.workspace.timeZone) })}</Muted> : null}
-    {supported && !snapshot.wipePending ? <SecondaryButton label={t("inbox.wipeAction")} tone="danger" disabled={pending !== null} onPress={() => setStep({ kind: "wipe" })} /> : null}
+    {supported && !snapshot.wipePending ? <SecondaryButton label={t("inbox.wipeAction")} tone="danger" icon="trash-outline" disabled={pending !== null} onPress={() => setStep({ kind: "wipe" })} /> : null}
 
     {catalogOpen && ready ? <IntakeSelectionPicker title={t("inbox.pickerTitle")} eyebrow={t("inbox.pickerEyebrow", { count: ready.sources.length })} searchLabel={t("inbox.pickerSearch")} guidance={emailWarning}
       options={orderSources(ready.sources).map((source) => ({ id: source.packageName, label: source.label, detail: source.packageName,

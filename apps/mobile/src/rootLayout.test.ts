@@ -25,6 +25,9 @@ vi.mock("react-native", () => ({
   Appearance: { getColorScheme: () => "light", addChangeListener: () => ({ remove: () => {} }) },
 }));
 vi.mock("./local-auth/LocalEntryGate", () => ({ LocalEntryGate: "local-entry" }));
+vi.mock("./ui/ConnectingScreen", () => ({ ConnectingProvider: "connecting", ConnectingScreen: "connecting-screen", connectingPhase: () => null }));
+vi.mock("./ui/ContextPill", () => ({ ContextPillHost: "pill-host" }));
+vi.mock("./ui/SheetProvider", () => ({ SheetProvider: "sheets" }));
 vi.mock("./local-auth/PrebuiltSignIn", () => ({ PrebuiltSignIn: "sign-in" }));
 vi.mock("./local-auth/accessFailure", () => ({ useDeviceAccessFailure: () => report }));
 vi.mock("./features/intake/IntakeProvider", () => ({ IntakeProvider: "intake" }));

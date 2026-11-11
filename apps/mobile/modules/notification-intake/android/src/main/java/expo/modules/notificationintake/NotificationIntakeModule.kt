@@ -1,7 +1,14 @@
 package expo.modules.notificationintake
 
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.provider.Settings
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+import kotlin.math.roundToInt
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -21,6 +28,25 @@ class NotificationIntakeModule : Module() {
     catch (e: IntakeFailure) { throw CodedException(e.code, e.code, null) }
     catch (_: org.json.JSONException) { throw CodedException("INVALID_INPUT", "INVALID_INPUT", null) }
     catch (_: IllegalArgumentException) { throw CodedException("INVALID_INPUT", "INVALID_INPUT", null) }
+
+  /** Launcher apps this app may see under Android package visibility (the manifest's MAIN/LAUNCHER query). */
+  private fun launcherPackages(): List<String> {
+    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    return intake.context.packageManager.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }
+      .distinct().filter { it != intake.context.packageName }
+  }
+
+  private fun iconPng(icon: Drawable, px: Int): String {
+    val bitmap = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+    val bounds = icon.copyBounds()
+    icon.setBounds(0, 0, px, px)
+    icon.draw(Canvas(bitmap))
+    icon.bounds = bounds
+    val out = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+    bitmap.recycle()
+    return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+  }
 
   override fun definition() = ModuleDefinition {
     Name("NotificationIntake")
@@ -42,11 +68,27 @@ class NotificationIntakeModule : Module() {
     AsyncFunction("getStatus") { call { intake.repository.status(intake.access()) } }
     AsyncFunction("listSources") { call {
       if (intake.repository.status(intake.access()).text("storageState") != "healthy") throw IntakeFailure("CORRUPT_STATE")
-      val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-      intake.context.packageManager.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }
-        .distinct().filter { it != intake.context.packageName }.map { pkg ->
+      launcherPackages().map { pkg ->
           mapOf("packageName" to pkg, "label" to intake.context.packageManager.getApplicationLabel(intake.context.packageManager.getApplicationInfo(pkg, 0)).toString())
         }.sortedBy { it.getValue("label").lowercase() }
+    } }
+    // App logos for the sources list, as base64 PNG keyed by package. Only launcher apps
+    // this app can already see are drawn; anything else is left out and shows its letter.
+    AsyncFunction("listSourceIcons") { input: Map<String, Any?> -> call {
+      val request = json(input)
+      val names = request.getJSONArray("packageNames")
+      val dp = request.getInt("size")
+      if (names.length() > 64 || dp < 16 || dp > 96) throw IllegalArgumentException("icon request")
+      val px = (dp * intake.context.resources.displayMetrics.density).roundToInt().coerceIn(16, 288)
+      val visible = launcherPackages().toSet()
+      val icons = JSONObject()
+      for (index in 0 until names.length()) {
+        val pkg = names.getString(index)
+        if (pkg !in visible || icons.has(pkg)) continue
+        try { icons.put(pkg, iconPng(intake.context.packageManager.getApplicationIcon(pkg), px)) }
+        catch (_: PackageManager.NameNotFoundException) {}
+      }
+      icons
     } }
     AsyncFunction("openAccessSettings") {
       intake.context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

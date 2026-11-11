@@ -1,51 +1,47 @@
 import type { Theme } from "../../ui/tokens";
-import { useReadableLayout } from "../../ui/themeContext";
-import type { ReadableLayout } from "../../ui/layout";
-import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useMemo } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useT } from "../../i18n";
-import { useTheme } from "../../ui/core";
-import { font, spacing } from "../../ui/tokens";
+import { FlowSummary, Text, useReflowStyles, useTheme } from "../../ui/core";
+import { spacing } from "../../ui/tokens";
 import { compactHistoryAmount, historyAmount } from "./listModel";
 
-type Focus = "net" | "out" | "in";
+export type Focus = "net" | "out" | "in";
 
-export function CapitalFlow({ out, inn, currency }: { out: number; inn: number; currency: string }) {
+export function CapitalFlow({ out, inn, currency, focus, onFocus }: { out: number; inn: number; currency: string; focus: Focus | null; onFocus: (focus: Focus | null) => void }) {
   const theme = useTheme();
-  const layout = useReadableLayout();
-  const styles = useMemo(() => createStyles(theme, layout), [theme, layout]);
+  const reflow = useReflowStyles();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { t, language } = useT();
-  const [focus, setFocus] = useState<Focus | null>(null);
   const net = inn - out;
   function figure(id: Focus, label: string, minorUnits: number) {
     const selected = focus === id;
     const color = id === "in" || (id === "net" && net >= 0) ? theme.primary : theme.foreground;
     return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: selected }}
-      onPress={() => setFocus(selected ? null : id)} style={[styles.figure, id !== "net" && styles.side]}>
-      <Text style={styles.label}>{label}</Text>
-      <Text numberOfLines={1} adjustsFontSizeToFit={selected} minimumFontScale={0.55}
-        style={[styles.amount, (id === "net" || selected) && styles.large, { color }]}>
+      onPress={() => onFocus(selected ? null : id)} style={[styles.figure, id !== "net" && [styles.side, reflow.flex(1, 0)]]}>
+      <Text preset="rowSubtitle" style={styles.label}>{label}</Text>
+      <Text preset={id === "net" || selected ? "flowFocus" : "flowAmount"} numberOfLines={1} adjustsFontSizeToFit={selected} minimumFontScale={0.55}
+        style={{ color }}>
         {selected ? historyAmount({ currency, minorUnits }) : compactHistoryAmount(minorUnits, currency, language)}
       </Text>
     </Pressable>;
   }
-  return <View style={styles.wrap}>
+  const legacy = <View style={styles.wrap}>
     {(focus === null || focus === "net") && figure("net", t("review.flowNet"), net)}
-    {focus !== "net" && <View style={styles.pair}>
+    {focus !== "net" && <View style={[styles.pair, reflow.row("flex-end", "stretch")]}>
       {(focus === null || focus === "out") && figure("out", t("review.flowOut"), out)}
       {(focus === null || focus === "in") && figure("in", t("review.flowIn"), inn)}
     </View>}
   </View>;
+  return <FlowSummary net={net} out={out} in={inn} currency={currency} legacy={legacy} />;
 }
 
-function createStyles(theme: Theme, layout: ReadableLayout) {
+function createStyles(theme: Theme) {
   return StyleSheet.create({
     wrap: { gap: spacing.sm, alignSelf: "stretch" },
-    pair: { flexDirection: layout.reflow ? "column" : "row", gap: spacing.lg, alignItems: layout.reflow ? "stretch" : "flex-end" },
+    pair: { gap: spacing.lg },
     figure: { gap: 2 },
-    side: { flex: layout.reflow ? 0 : 1, minWidth: 0 },
-    label: { color: theme.mutedForeground, fontFamily: font.regular, fontSize: 14, lineHeight: 20 },
-    amount: { fontFamily: font.extrabold, fontSize: 22, lineHeight: 26, letterSpacing: -0.4 },
-    large: { fontSize: 36, lineHeight: 40, letterSpacing: -0.8 },
+    side: { minWidth: 0 },
+    label: { color: theme.mutedForeground },
   });
 }

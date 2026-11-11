@@ -19,6 +19,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetBackdrop: "backdrop",
 }));
 vi.mock("react-native", () => ({
+  BackHandler: { addEventListener: () => ({ remove() {} }) },
   Text: "text", View: "view", Pressable: "button", ScrollView: "scroll",
   TextInput: "input", ActivityIndicator: "spinner",
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
@@ -78,6 +79,7 @@ test("the category sheet uses sticky search, selectable emoji discs and an Add y
   await act(async () => add?.props.onPress());
   expect(value.onCreate).toHaveBeenCalledOnce();
 });
+
 
 test.each([
   ["", "No categories yet."],

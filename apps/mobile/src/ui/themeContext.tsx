@@ -8,9 +8,9 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { useWindowDimensions } from "react-native";
+import { Platform, useWindowDimensions } from "react-native";
 import { defaultLayout, readableLayout, type ReadableLayout } from "./layout";
-import { themes, type Theme, type ThemeMode } from "./tokens";
+import { controls, themes, type Theme, type ThemeMode } from "./tokens";
 import { createCoreStyles, createUiStyles, type CoreStyles, type UiStyles } from "./styles";
 import { readThemeMode, writeThemeMode } from "./themeModeStorage";
 
@@ -24,6 +24,8 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const NativeTextContext = createContext({ fontScale: 1, nonlinearAndroid: false });
+export function useNativeTextMetrics() { return useContext(NativeTextContext); }
 
 const fallbackTheme = themes.light;
 const fallbackBundle: ThemeContextValue = {
@@ -38,7 +40,8 @@ const fallbackBundle: ThemeContextValue = {
 export function ResponsiveThemeProvider({ children }: PropsWithChildren) {
   const { width, fontScale } = useWindowDimensions();
   const layout = useMemo(() => readableLayout({ width, fontScale }), [width, fontScale]);
-  return <ThemeProvider layout={layout}>{children}</ThemeProvider>;
+  const metrics = useMemo(() => ({ fontScale, nonlinearAndroid: Platform.OS === "android" && Number(Platform.Version) >= 34 }), [fontScale]);
+  return <NativeTextContext.Provider value={metrics}><ThemeProvider layout={layout}>{children}</ThemeProvider></NativeTextContext.Provider>;
 }
 
 export function ThemeProvider({ children, layout = defaultLayout }: PropsWithChildren<{ layout?: ReadableLayout }>) {
@@ -86,4 +89,12 @@ export function useThemeMode() {
 
 export function useSetThemeMode() {
   return useThemeContext().setMode;
+}
+
+export function useTier() {
+  return useReadableLayout().tier;
+}
+
+export function useControls() {
+  return controls[useTier()];
 }

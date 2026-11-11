@@ -63,4 +63,11 @@ export const access = {
   checkingProtection: "Checking local protection",
   splashPromise: "Las lucas tienen\nun para qué.",
   splashFooter: "Tus lucas. Tu manera de vivir.",
+  phaseProtection: "Unlocking Lukapp…",
+  phaseSession: "Opening your session…",
+  phaseAccount: "Connecting to your account…",
+  phaseDevice: "Checking this phone…",
+  phaseData: "Getting your lucas…",
+  stillConnecting: "Still connecting…",
+  connectingA11y: "Lukapp is connecting",
 } as const;

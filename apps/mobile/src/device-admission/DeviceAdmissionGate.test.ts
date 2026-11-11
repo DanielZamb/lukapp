@@ -1,4 +1,13 @@
 import * as React from "react";
+vi.mock("../ui/Brand", () => ({ ConnectingMark: "brand-mark", ConnectingSignature: "brand-signature" }));
+vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area" }));
+vi.mock("react-native-reanimated", () => ({ default: {} }));
+vi.mock("../ui/ConnectingScreen", async importOriginal => ({
+  ...await importOriginal<typeof import("../ui/ConnectingScreen")>(),
+  ConnectingScreen: "connecting-screen",
+  ConnectingHandover: ({ ready, children }: import("react").PropsWithChildren<{ ready: boolean }>) =>
+    ready ? children : createElement("connecting-screen", { phase: "data" }),
+}));
 import { createElement, useEffect } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { getFunctionName, type FunctionReturnType } from "convex/server";
@@ -48,6 +57,7 @@ vi.mock("@clerk/expo", () => ({ useClerk: () => ({ signOut: sdk.signOut }) }));
 vi.mock("expo-constants", () => ({ default: { nativeAppVersion: "0.1.0" } }));
 vi.mock("react-native", () => ({
   Platform: { OS: "android" },
+  StyleSheet: { create: (styles: unknown) => styles },
   ActivityIndicator: "spinner", Text: "text", TextInput: "input", View: "view",
 }));
 vi.mock("../ui/core", () => ({
@@ -135,7 +145,7 @@ test("registration sends only allowed metadata and waits for the query acknowled
     installId: "existing-install-marker", label: "My phone", platform: "android", appVersion: "0.1.0",
   });
   expect(mounts).toBe(0);
-  expect(JSON.stringify(root?.toJSON())).toContain("Confirming device access");
+  expect(JSON.stringify(root?.toJSON())).toContain("connecting-screen");
   await update({ status: "registered", wipeLocalInput: false });
   expect(mounts).toBe(1);
 });
@@ -167,7 +177,7 @@ test("a known install reclaims without showing the naming form", async () => {
   });
   expect(sdk.queryArgs[0]).toEqual({ installId: "existing-install-marker", platform: "android" });
   expect(JSON.stringify(root?.toJSON())).not.toContain("Name this device");
-  expect(JSON.stringify(root?.toJSON())).toContain("Confirming device access");
+  expect(JSON.stringify(root?.toJSON())).toContain("connecting-screen");
   expect(sdk.register).toHaveBeenCalledExactlyOnceWith({
     installId: "existing-install-marker", label: "U01 Android", platform: "android", appVersion: "0.1.0",
   });
@@ -332,7 +342,7 @@ test("a same-install candidate attempts verified reclaim and offers replacement 
     installId: "existing-install-marker", label: "Old Android", platform: "android", appVersion: "0.1.0",
   });
   expect(root?.root.findAllByProps({ label: "Use this phone instead" })).toHaveLength(0);
-  expect(JSON.stringify(root?.toJSON())).toContain("Confirming device access");
+  expect(JSON.stringify(root?.toJSON())).toContain("connecting-screen");
   await act(async () => refuse(new ConvexError({ code: "device_slot_occupied", occupiedLabel: "Old Android" })));
   expect(root?.root.findAllByProps({ label: "Use this phone instead" })).toHaveLength(1);
   expect(sdk.replace).not.toHaveBeenCalled();
@@ -387,8 +397,8 @@ test("closed access and revocation read in Spanish and stay distinguishable", as
   expect(spoken()).toContain("El acceso pasó a iPhone de Ana");
   await act(async () => root?.unmount());
   await openInSpanish({ status: "pending" });
-  expect(spoken()).toContain("Confirmando el acceso de este celular…");
-  expect(button("Revisar de nuevo")).toBeDefined();
+  // While waiting, the gate hands over to the connecting screen, which carries its own Check again and Sign out.
+  expect(root?.root.findAll((node) => String(node.type) === "connecting-screen").map((node) => node.props.phase)).toEqual(["device"]);
 });
 
 test("a Register handler kept from before the last keystrokes registers the name the screen shows", async () => {

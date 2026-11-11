@@ -214,6 +214,7 @@ export function CategorySheet(props: CategorySheetProps) {
     <PickerSheet
       sheetRef={props.sheetRef}
       busy={props.busy}
+      androidBack
       stickyHeader={!props.editor}
       onDismiss={props.onDismiss}
     >

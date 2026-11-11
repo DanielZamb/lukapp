@@ -196,7 +196,11 @@ test("batch chips use the primary category palette colour and update after a res
   ] satisfies NonNullable<Parameters<typeof batchRowFor>[0]["categories"]>;
   const rowFor = () => batchRowFor({ item, categories, profiles: [{ id: "wallet", name: "Wallet" }], t: createTranslator("en").t });
   await render({ ...batch(), queue: [item] }, { rowFor });
-  const chip = () => root!.root.findAllByType("text").find((node) => node.children.join("") === "🚌")!.parent!;
+  const chip = () => {
+    let node = root!.root.findAllByType("text").find((node) => node.children.join("") === "🚌")!;
+    while (node.parent && node.type !== "view") node = node.parent;
+    return node;
+  };
   expect(chip().props.style).toContainEqual({ backgroundColor: "#218c2122" });
   expect(copy()).toContain("Food · Travel · Wallet");
   categories[1].style.color = "h240";

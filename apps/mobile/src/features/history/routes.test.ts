@@ -1,13 +1,16 @@
 import * as React from "react";
+import { createRequire } from "node:module";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { ActivityIndicator } from "react-native";
+import { ScrollView, ActivityIndicator } from "react-native";
 import { createElement, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { getFunctionName, type FunctionReference } from "convex/server";
 import type { EntryDetail, HistoryRow } from "./types";
 import type { ReversalTransport } from "./useReversal";
+import { ThemeProvider } from "../../ui/themeContext";
+import { readableLayout } from "../../ui/layout";
 
 const provider = vi.hoisted(() => ({
   params: {} as { profileId?: string; entryId?: string },
@@ -16,32 +19,39 @@ const provider = vi.hoisted(() => ({
   loadAll: vi.fn(), loadPlace: vi.fn(), push: vi.fn(), back: vi.fn(),
   details: new Map<string, EntryDetail>(), post: vi.fn<ReversalTransport["post"]>(),
   detailQuery: vi.fn(), present: vi.fn(), dismiss: vi.fn(), hardwareBack: undefined as (() => boolean) | undefined,
+  budgetQuery: vi.fn(), calendarDate: "2026-10-18",
 }));
 vi.mock("../../local-auth/localInput", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
   const lease = new actual.LocalInputLease("owner", "session");
   return { ...actual, useLocalInputLease: () => lease };
 });
+vi.mock("@clerk/expo", () => ({ useAuth: () => ({ userId: "owner" }) }));
+vi.mock("../HomePlaceSetup", () => ({ HomePlaceSetup: "place-setup" }));
 vi.mock("expo-router", () => ({
   router: { push: provider.push, back: provider.back }, Redirect: "redirect", useLocalSearchParams: () => provider.params,
 }));
 vi.mock("@expo/vector-icons/Ionicons", () => ({ default: "icon" }));
+vi.mock("../../ui/KeyboardFrame", () => ({ KeyboardFrame: ({ children }: { children: ReactNode }) => children }));
+vi.mock("../../ui/ContextPill", () => ({ useContextPill: () => ({ summaryProps: {}, scrollProps: {} }) }));
+vi.mock("@react-navigation/native", () => ({ useIsFocused: () => true }));
 vi.mock("react-native-safe-area-context", () => ({ SafeAreaView: "safe-area", useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("@gorhom/bottom-sheet", async () => {
   const { forwardRef, useImperativeHandle, createElement } = await import("react");
   return {
-    BottomSheetModal: forwardRef(({ children, onDismiss, ...props }: { children?: ReactNode; onDismiss: () => void }, ref) => {
-      useImperativeHandle(ref, () => ({ present: provider.present, dismiss: () => { provider.dismiss(); onDismiss(); } }), [onDismiss]);
-      return createElement("sheet", { ...props, onDismiss }, children);
+    BottomSheetModal: forwardRef(({ children, onDismiss, onChange, ...props }: { children?: ReactNode; onDismiss: () => void; onChange?: (index: number) => void }, ref) => {
+      useImperativeHandle(ref, () => ({ present: () => { provider.present(); onChange?.(0); }, dismiss: () => { provider.dismiss(); onDismiss(); } }), [onDismiss]);
+      return createElement("sheet", { ...props, onDismiss, onChange }, children, "footerComponent" in props && typeof props.footerComponent === "function" ? props.footerComponent({}) : null);
     }),
-    BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
+    BottomSheetFooter: "sheet-footer", BottomSheetScrollView: "sheet-scroll", BottomSheetTextInput: "input", BottomSheetBackdrop: "backdrop",
   };
 });
 vi.mock("@react-native-community/datetimepicker", () => ({ default: "calendar" }));
 vi.mock("react-native", () => ({
+  useWindowDimensions: () => ({ width: 320, height: 800, fontScale: 1.5, scale: 1 }),
   KeyboardAvoidingView: "keyboard-viewport",
   Platform: { OS: "android" }, Text: "text", View: "view", Pressable: "button", ScrollView: "scroll", TextInput: "input", ActivityIndicator: "spinner",
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
+  StyleSheet: { create: (value: unknown) => value, flatten: (value: unknown) => Array.isArray(value) ? Object.assign({}, ...value) : value, hairlineWidth: 1 },
   BackHandler: { addEventListener: (_event: string, callback: () => boolean) => {
     provider.hardwareBack = callback;
     return { remove: () => { provider.hardwareBack = undefined; } };
@@ -60,7 +70,7 @@ vi.mock("../activity", () => ({
     balance: { currency: "COP", minorUnits: 0 }, trackingFrom: "2026-10-01",
   }] }), useRecentActivity: () => ({ page: [] }),
 }));
-vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: "2026-10-18", month: "2026-10" }) }));
+vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: provider.calendarDate, month: provider.calendarDate.slice(0, 7) }) }));
 vi.mock("convex/react", () => ({
   usePaginatedQuery: (_query: unknown, args: "skip" | { financialAccountProfileId?: string }) => {
     if (args === "skip") return { results: [], status: "LoadingFirstPage", loadMore: provider.loadPlace };
@@ -68,9 +78,13 @@ vi.mock("convex/react", () => ({
   },
   useQuery: (query: FunctionReference<"query">, args: { journalEntryId?: string; financialAccountProfileId?: string }) => {
     if (getFunctionName(query) === "accounting:listJournalEntries") return [];
-    if (getFunctionName(query) === "budget:evaluate") return {
-      month: "2026-10", currentMonth: "2026-10", currency: "COP", jars: [], availableCategories: [], totalsOverlap: true,
-    };
+    if (getFunctionName(query) === "accounting:listFinancialAccountProfiles") return [
+      { id: "daily", name: "Daily", emoji: "👛", productKind: "cash", status: "open" },
+      { id: "family", name: "Family", emoji: "🐷", productKind: "savingsAccount", status: "open" },
+    ];
+    if (getFunctionName(query) === "budget:evaluate") { provider.budgetQuery(args); return {
+      month: "2026-10", currentMonth: "2026-10", currency: "COP", jars: [], removedLimits: [], availableCategories: [], totalsOverlap: true,
+    }; }
     if (args.journalEntryId) {
       provider.detailQuery(args);
       return provider.details.get(`${args.journalEntryId}:${args.financialAccountProfileId ?? "all"}`) ?? provider.details.get(args.journalEntryId);
@@ -87,6 +101,12 @@ import HistoryRoute from "../../../app/history";
 import OverviewRoute from "../../../app/overview";
 import AccountRoute from "../../../app/account";
 import EntryRoute from "../../../app/entry";
+import PlacesRoute from "../../../app/places";
+
+const navigationRequire = createRequire(import.meta.url);
+const { StackRouter, StackActions, CommonActions }: Pick<typeof import("@react-navigation/native"), "StackRouter" | "StackActions" | "CommonActions"> = await import(
+  navigationRequire.resolve("@react-navigation/routers", { paths: [navigationRequire.resolve("@react-navigation/native")] }),
+);
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => {
@@ -97,13 +117,18 @@ beforeEach(() => {
   provider.place = { results: [], status: "LoadingFirstPage" };
   provider.details = new Map([["100", detail]]);
   provider.hardwareBack = undefined;
+  provider.calendarDate = "2026-10-18";
   vi.clearAllMocks();
+  provider.push.mockReset(); provider.back.mockReset();
   provider.post.mockReset().mockResolvedValue(receipt);
 });
 afterEach(async () => {
   await act(async () => root?.unmount()); root = undefined;
   vi.unstubAllGlobals();
 });
+function flatStyle(style: unknown): Record<string, unknown> {
+  return Array.isArray(style) ? Object.assign({}, ...style.map(flatStyle)) : style && typeof style === "object" ? Object.fromEntries(Object.entries(style)) : {};
+}
 function text() { return root?.root.findAllByType("text").map((node) => node.children.join("")).join("\n") ?? ""; }
 function button(label: string) {
   const found = root?.root.findAllByType("button").find((node) => node.props.accessibilityLabel === label);
@@ -214,8 +239,8 @@ test("sheet loads detail and swaps original and reversal contents without pushin
   await act(async () => button("View reversal").props.onPress());
   expect(text()).toContain("MONEY IN");
   expect(text()).toContain("Reversal: Older receipt\n+$1.500\nReversal");
-  expect(root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1.500")?.props.style)
-    .toContainEqual({ color: "#6d28d9" });
+  expect(flatStyle(root?.root.findAllByType("text").find((node) => node.children.join("") === "+$1.500")?.props.style).color)
+    .toBe("#6d28d9");
   expect(text()).not.toContain("View reversal");
   await act(async () => button("View original entry").props.onPress());
   expect(text()).toContain("MONEY OUT");
@@ -268,6 +293,22 @@ test("sheet retries an uncertain reversal with the same correction identity", as
     { workspaceId: "ws", journalEntryId: "100", idempotencyKey: "mobile-reversal@1:ws:100" },
     { workspaceId: "ws", journalEntryId: "100", idempotencyKey: "mobile-reversal@1:ws:100" },
   ]);
+});
+
+test.each(["Close details", "native dismissal"])("default failed reversal permits leaving through %s while the failed hook has no cancel action", async (exit) => {
+  provider.post.mockRejectedValueOnce(new Error("Lost response"));
+  await openDetail();
+  await act(async () => button("Reverse entry").props.onPress());
+  await act(async () => button("Confirm reversal").props.onPress());
+  expect(text()).toContain("Could not confirm the reversal.");
+  expect(root?.root.findAllByType("button").some((node) => node.props.accessibilityLabel === "Keep entry")).toBe(false);
+  if (exit === "Close details") await act(async () => button("Close details").props.onPress());
+  else await act(async () => root?.root.findByType(BottomSheetModal).props.onDismiss());
+  expect(root?.root.findAllByType(BottomSheetModal)).toHaveLength(0);
+  expect(provider.post).toHaveBeenCalledOnce();
+  await act(async () => button("Older receipt, −$1.500").props.onPress());
+  expect(button("Reverse entry")).toBeDefined();
+  expect(text()).not.toContain("Could not confirm the reversal.");
 });
 
 test("closing during submission fences the late receipt and reopening starts with fresh controls", async () => {
@@ -397,8 +438,8 @@ test.each([
     const hero = root?.root.findByType(BottomSheetModal).findAllByType("text")
       .find((node) => node.children.join("") === (positive ? "+$25" : "−$25"));
     expect(hero?.children.join("")).toBe(positive ? "+$25" : "−$25");
-    if (positive) expect(hero?.props.style).toContainEqual({ color: "#6d28d9" });
-    else expect(hero?.props.style).not.toContainEqual({ color: "#6d28d9" });
+    if (positive) expect(flatStyle(hero?.props.style).color).toBe("#6d28d9");
+    else expect(flatStyle(hero?.props.style).color).not.toBe("#6d28d9");
     expect(provider.detailQuery).toHaveBeenLastCalledWith({
       workspaceId: "ws", journalEntryId: minorUnits === amount ? "100" : "reversal",
       financialAccountProfileId: profileId ?? "daily",
@@ -431,4 +472,99 @@ test("a recovery transfer shows its places as From and To, never as a category",
   expect(labels).not.toContain("My money → El guardado");
   expect(labels).not.toContain("Category");
   expect(provider.post).not.toHaveBeenCalled();
+});
+
+test.each(["outgoing", "incoming"])("XXXL history passes place looks and the entry month from the %s transfer row", async direction => {
+  provider.calendarDate = "2026-11-02";
+  const transfer = { ...detail, row: { ...detail.row, userCategories: [], primaryUserCategoryId: undefined,
+    transfer: { from: { id: "daily", name: "Daily" }, to: { id: "family", name: "Family" } } } };
+  provider.details.set("100", transfer);
+  provider.all = { results: [transfer.row], status: "Exhausted" };
+  await act(async () => { root = create(createElement(ThemeProvider,
+    { layout: readableLayout({ width: 320, fontScale: 1.5 }) }, createElement(HistoryRoute))); });
+  const movement = root?.root.findAllByType("button").find(node =>
+    node.props.accessibilityLabel?.startsWith("Transfer,") && node.props.accessibilityLabel.includes(direction === "outgoing" ? "−" : "+"));
+  if (!movement) throw new Error(`Missing ${direction} transfer row`);
+  await act(async () => movement.props.onPress());
+  expect(provider.detailQuery).toHaveBeenLastCalledWith({ workspaceId: "ws", journalEntryId: "100", financialAccountProfileId: direction === "outgoing" ? "daily" : "family" });
+  for (const [label, name, emoji] of [["From", "Daily", "👛"], ["To", "Family", "🐷"]]) {
+    const fact = root?.root.findAllByType("view").find(node => node.props.accessibilityLabel === `${label}, ${name}`);
+    expect(fact?.findAllByType("text").map(node => node.children.join(""))).toEqual([emoji, label, name]);
+  }
+  expect(provider.budgetQuery).toHaveBeenLastCalledWith({ workspaceId: "ws", month: "2026-10" });
+  expect(root?.root.findByType(BottomSheetModal).props.enablePanDownToClose).toBe(true);
+});
+
+test("standalone entry queries its accounting month while the workspace calendar is later", async () => {
+  provider.params = { entryId: "100" };
+  provider.calendarDate = "2026-11-02";
+  await act(async () => { root = create(createElement(EntryRoute)); });
+  expect(text()).toContain("Older receipt");
+  expect(provider.budgetQuery).toHaveBeenLastCalledWith({ workspaceId: "ws", month: "2026-10" });
+});
+
+test("Android Back from a place filter keeps the history caller and selected place", async () => {
+  provider.params = { profileId: "daily" };
+  provider.all = { results: rows, status: "Exhausted" };
+  provider.place = { results: [rows[100]], status: "Exhausted" };
+  await act(async () => { root = create(createElement(HistoryRoute)); });
+  await act(async () => button("Daily").props.onPress());
+  expect(provider.hardwareBack).toBeDefined();
+  await act(async () => { expect(provider.hardwareBack?.()).toBe(true); });
+  expect(root!.root.findAllByType(BottomSheetModal)).toHaveLength(0);
+  expect(button("Daily").props.accessibilityState.selected).toBe(true);
+  expect(text()).toContain("1 of 1");
+  expect(provider.back).not.toHaveBeenCalled();
+  await act(async () => button("Go back").props.onPress());
+  expect(provider.back).toHaveBeenCalledOnce();
+});
+
+test.each(["receipt", "account"] as const)("Places %s path retains its scope through filter/detail dismissal and returns to its caller", async (path) => {
+  const stack = StackRouter({ initialRouteName: "places" });
+  const options = { routeNames: ["places", "account", "history"], routeParamList: {}, routeGetIdList: {} };
+  let state = stack.getInitialState(options);
+  provider.push.mockImplementation((href: { pathname: string; params: { profileId: string } }) => {
+    state = stack.getRehydratedState(stack.getStateForAction(state, StackActions.push(href.pathname.slice(1), href.params), options) ?? state, options);
+  });
+  provider.back.mockImplementation(() => { state = stack.getRehydratedState(stack.getStateForAction(state, CommonActions.goBack(), options) ?? state, options); });
+  async function showCurrent() {
+    const current = state.routes[state.index];
+    provider.params = current.params ?? {};
+    const Component = current.name === "places" ? PlacesRoute : current.name === "account" ? AccountRoute : HistoryRoute;
+    await act(async () => {
+      if (root) root.update(createElement(Component));
+      else root = create(createElement(Component));
+    });
+  }
+  provider.all = { results: rows, status: "Exhausted" };
+  provider.place = { results: [rows[100]], status: "Exhausted" };
+  await showCurrent();
+  await act(async () => button(path === "receipt" ? "History for Daily" : "Daily").props.onPress());
+  await showCurrent();
+  if (path === "account") {
+    await act(async () => button("See in history").props.onPress());
+    await showCurrent();
+  }
+  expect(state.routes.map((route) => route.name)).toEqual(path === "receipt" ? ["places", "history"] : ["places", "account", "history"]);
+  expect(state.routes[state.index].params).toEqual({ profileId: "daily" });
+  expect(button("Daily").props.accessibilityState.selected).toBe(true);
+  expect(text()).toContain("1 of 1"); expect(text()).not.toContain("Newer posting");
+  await act(async () => button("Daily").props.onPress());
+  await act(async () => { expect(provider.hardwareBack?.()).toBe(true); });
+  await act(async () => button("Older receipt, −$1.500").props.onPress());
+  await act(async () => button("Close details").props.onPress());
+  expect(button("Daily").props.accessibilityState.selected).toBe(true);
+  expect(text()).toContain("1 of 1");
+  expect(state.routes[state.index].name).toBe("history");
+  expect(provider.back).not.toHaveBeenCalled();
+  await act(async () => button("Go back").props.onPress());
+  await showCurrent();
+  expect(state.routes[state.index].name).toBe(path === "receipt" ? "places" : "account");
+  expect(provider.back).toHaveBeenCalledOnce();
+  if (path === "account") {
+    expect(state.routes[state.index].params).toEqual({ profileId: "daily" });
+    await act(async () => button("Back").props.onPress());
+    await showCurrent();
+    expect(state.routes[state.index].name).toBe("places");
+  }
 });
