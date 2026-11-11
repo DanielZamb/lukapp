@@ -243,3 +243,24 @@ test("an activation held after a lost reply stays on the phone, so reopening res
   await act(async () => { await reopened().submit(); });
   expect(api.save.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["activate-1", "activate-1"]);
 });
+
+test("a reopened activation shows the stored terms, ignores edits and resends them as a retry that a refusal before lookup cannot settle", async () => {
+  phone.request = {
+    workspaceId: "workspace", sourceJournalEntryId: "exp-1", destinationFinancialAccountProfileId: "daily",
+    installmentCount: 6, installmentMinorUnits: 200_000, idempotencyKey: "activate-0",
+  };
+  const stored = phone.request;
+  const api = transport();
+  api.save.mockRejectedValueOnce(new ConvexError({ code: "session_inactive" }));
+  const editor = await open(api, undefined, "es");
+  expect(editor()).toMatchObject({ installmentCount: 6, amount: typedAmount("2000"), destinationId: "daily", pending: true, editable: false,
+    error: "No pudimos confirmar la activación. Reintenta: revisamos el mismo plan sin duplicarlo." });
+  await act(async () => { editor().onMonths(12); editor().onDestination("savings"); });
+  await act(async () => { await editor().submit(); });
+  expect(editor()).toMatchObject({ installmentCount: 6, destinationId: "daily", pending: true });
+  expect(phone.request).toEqual(stored);
+  await act(async () => { await editor().submit(); });
+  expect(api.save.mock.calls.map(([request]) => request)).toEqual([stored, stored]);
+  expect(api.keep).not.toHaveBeenCalled();
+  expect(phone.request).toBeNull();
+});

@@ -349,3 +349,40 @@ test("a Move money held after a lost reply stays on the phone, so reopening rese
   await act(async () => { await reopened().submit(); });
   expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
 });
+
+test("a movement sent in English and reopened in Spanish resends its stored description, not a translated one", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const move = await open(api);
+  await act(async () => { await move().submit(); });
+  await act(async () => root?.unmount());
+  root = undefined;
+  vi.setSystemTime(new Date("2026-11-02T12:00:00Z"));
+  const reopened = await open(api, undefined, "es");
+  expect(reopened()).toMatchObject({ pending: true, editable: false, sourceId: "daily", amount: typedAmount("2300"),
+    error: "No pudimos confirmar la transferencia. Reintenta: revisamos la misma transferencia sin duplicarla." });
+  await act(async () => { await reopened().submit(); });
+  expect(api.move.mock.calls.map(([request]) => request)).toEqual([0, 1].map(() => ({
+    workspaceId: "workspace", planId: "plan-1", sourceFinancialAccountProfileId: "daily",
+    amount: { currency: "COP", minorUnits: 230_000 }, accountingDate: "2026-10-17",
+    description: "Recovery: Laptop repair", idempotencyKey: "move-1",
+  })));
+});
+
+test("a reopened movement cannot be edited or replaced by a new one before it is settled", async () => {
+  phone.request = {
+    workspaceId: "workspace", planId: "plan-1", sourceFinancialAccountProfileId: "savings",
+    amount: { currency: "COP", minorUnits: 100_000 }, accountingDate: "2026-10-17", description: "Recovery: Laptop repair", idempotencyKey: "move-1",
+  };
+  const stored = phone.request;
+  const api = transport();
+  const move = await open(api);
+  const kept = move();
+  await act(async () => { kept.onAmount(money("9.000")); kept.onSource("daily"); });
+  expect(move()).toMatchObject({ sourceId: "savings", amount: typedAmount("1000"), editable: false, canDismiss: false, canSubmit: true });
+  await act(async () => { await kept.submit(); });
+  expect(api.move.mock.calls.map(([request]) => request)).toEqual([stored]);
+  expect(api.keep).not.toHaveBeenCalled();
+  expect(phone.request).toBeNull();
+});

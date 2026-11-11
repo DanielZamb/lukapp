@@ -28,10 +28,18 @@ import { RecoveryCorrectScreen } from "./RecoveryLifecycleScreens";
 import RecoveryRoute from "../../../app/recovery";
 
 const phone = vi.hoisted(() => new Map<string, string>());
+/** How many of the next writes or deletes the phone's secure store fails, as a full or locked keychain does. */
+const failing = vi.hoisted(() => ({ writes: 0, deletes: 0 }));
 vi.mock("expo-secure-store", () => ({
   getItemAsync: async (key: string) => phone.get(key) ?? null,
-  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
-  deleteItemAsync: async (key: string) => { phone.delete(key); },
+  setItemAsync: async (key: string, value: string) => {
+    if (failing.writes > 0) { failing.writes--; throw new Error("keychain write failed"); }
+    phone.set(key, value);
+  },
+  deleteItemAsync: async (key: string) => {
+    if (failing.deletes > 0) { failing.deletes--; throw new Error("keychain delete failed"); }
+    phone.delete(key);
+  },
 }));
 vi.mock("../../local-auth/localInput", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
@@ -113,6 +121,8 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   root = undefined;
   phone.clear();
+  failing.writes = 0;
+  failing.deletes = 0;
   vi.unstubAllGlobals();
   vi.resetAllMocks();
   uuid.next = () => "activation-key";
@@ -598,6 +608,120 @@ test("a stored activation stays while the expense shows only a cancelled plan wi
   await act(async () => { button(screen, "Retry activation").props.onPress(); });
   expect(remote.activate.mock.calls.map(([request]) => request)).toEqual([{ ...sentActivation, replacesPlanId: "dental-old" }]);
   expect(phone.has(storedKey)).toBe(false);
+});
+
+test.each([
+  { name: "cancelled", shown: { ...plan, status: "cancelled" as const, canCancel: false, acceptsContributions: false, dueMinorUnits: 0 }, code: "plan_cancelled" },
+  { name: "completed", shown: { ...plan, status: "completed" as const, acceptsContributions: false, remainingMinorUnits: 0, dueMinorUnits: 0 }, code: "plan_already_complete" },
+  { name: "with its source Place closed", shown: plan, code: "financial_account_profile_ended" },
+])("a stored transfer for a plan $name meanwhile is still reachable, and its retry's refusal settles it", async ({ shown, code }) => {
+  storeOnPhone({ act: "move", request: sentMove });
+  const { screen } = await open([shown], true);
+  expect(button(screen, "See the transfer")).toBeDefined();
+  expect(screen.findAll((node) => node.type === Text && node.children.join("") === "Could not confirm the transfer. Retry to safely check the same movement.")).toHaveLength(1);
+  await act(async () => { button(screen, "See the transfer").props.onPress(); });
+  expect(screen.findByType(Header).props.onBack).toBeUndefined();
+  remote.move.mockRejectedValueOnce(new ConvexError({ kind: "recovery", code }));
+  await act(async () => { button(screen, "Retry transfer").props.onPress(); });
+  expect(remote.move.mock.calls.map(([request]) => request)).toEqual([sentMove]);
+  expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ pending: false, editable: true, canDismiss: true });
+  expect(phone.has(storedKey)).toBe(false);
+  await act(async () => { screen.findByType(Header).props.onBack(); });
+  expect(screen.findByType(RecoveryPlanScreen).props.unconfirmedMove).toBe(false);
+});
+
+test("a retry turned away before the server looked keeps the stored transfer frozen and on the phone across another restart", async () => {
+  storeOnPhone({ act: "move", request: sentMove });
+  const first = await open([plan], true);
+  await act(async () => { button(first.screen, "See the transfer").props.onPress(); });
+  remote.move.mockRejectedValueOnce(new ConvexError({ code: "device_revoked" }));
+  await act(async () => { button(first.screen, "Retry transfer").props.onPress(); });
+  expect(first.screen.findByType(RecoveryMoveScreen).props).toMatchObject({ pending: true, editable: false });
+  expect(storedRequests()).toEqual([{ act: "move", request: sentMove }]);
+  const { screen } = await restart([plan], true);
+  await act(async () => { button(screen, "See the transfer").props.onPress(); });
+  remote.move.mockImplementationOnce(async (request) => moveReceipt(request));
+  await act(async () => { button(screen, "Retry transfer").props.onPress(); });
+  expect(remote.move.mock.calls.map(([request]) => request)).toEqual([sentMove, sentMove]);
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test("a stored request for a plan this workspace no longer shows neither blocks other plans nor disappears", async () => {
+  storeOnPhone({ act: "move", request: { ...sentMove, planId: "gone" } }, { act: "move", request: { ...sentMove, workspaceId: "other" } });
+  counting();
+  const { screen } = await open([plan], true);
+  expect(screen.findByType(RecoveryPlanScreen).props.unconfirmedMove).toBe(false);
+  await act(async () => { button(screen, "Move money for October").props.onPress(); });
+  remote.move.mockImplementationOnce(async (request) => moveReceipt(request));
+  await act(async () => { button(screen, "Post transfer").props.onPress(); });
+  expect(remote.move.mock.calls.map(([request]) => request.planId)).toEqual(["repair"]);
+  expect(remote.move.mock.calls[0][0].idempotencyKey).not.toBe("move-1");
+  expect(storedRequests()).toEqual([{ act: "move", request: { ...sentMove, planId: "gone" } }, { act: "move", request: { ...sentMove, workspaceId: "other" } }]);
+});
+
+test.each(["header", "android"])("an unreadable store sends nothing new, %s back returns to the plan twice, and Try again reads it again", async (method) => {
+  phone.set(storedKey, "{not json");
+  const { screen } = await open([plan], true);
+  for (let round = 0; round < 2; round++) {
+    await act(async () => { button(screen, "Move money for October").props.onPress(); });
+    expect(screen.findAllByType(RecoveryMoveScreen)).toHaveLength(0);
+    expect(screen.findByType(Header).props.title).toBe("We couldn't read this phone's saved request");
+    expect(JSON.stringify(root?.toJSON())).toContain("An earlier transfer or plan activation may be waiting on this phone. Try reading it again before starting anything new.");
+    await act(async () => { if (method === "header") screen.findByType(Header).props.onBack(); else stack.goBack(); });
+    expect(screen.findByType(RecoveryPlanScreen).props.plan.id).toBe("repair");
+  }
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans", "recovery"]);
+  await act(async () => { button(screen, "Move money for October").props.onPress(); });
+  storeOnPhone({ act: "move", request: sentMove });
+  await act(async () => { button(screen, "Try again").props.onPress(); });
+  expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ pending: true, editable: false });
+  expect(remote.move).not.toHaveBeenCalled();
+});
+
+test("an unreadable store keeps a proposal from starting until it can be read", async () => {
+  phone.set(storedKey, JSON.stringify({ v: 1, requests: [{ act: "activate", request: { ...sentActivation, note: "x" } }] }));
+  const { screen } = await open();
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  expect(screen.findAllByType(RecoveryDraft)).toHaveLength(0);
+  expect(screen.findByType(Header).props.title).toBe("We couldn't read this phone's saved request");
+  await act(async () => { screen.findByType(Header).props.onBack(); });
+  expect(screen.findByType(RecoveryCandidates)).toBeDefined();
+  expect(remote.activate).not.toHaveBeenCalled();
+});
+
+test("when the phone can't save the request nothing is sent, and the next press sends once it can", async () => {
+  counting();
+  const { screen } = await open([plan], true);
+  await act(async () => { button(screen, "Move money for October").props.onPress(); });
+  failing.writes = 1;
+  await act(async () => { button(screen, "Post transfer").props.onPress(); });
+  expect(remote.move).not.toHaveBeenCalled();
+  expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ pending: false, editable: true, canDismiss: true,
+    error: "This phone couldn't save the request before sending it, so nothing was sent. Try again." });
+  let saved: unknown;
+  remote.move.mockImplementationOnce(async (request) => { saved = storedRequests(); return moveReceipt(request); });
+  await act(async () => { button(screen, "Post transfer").props.onPress(); });
+  expect(remote.move).toHaveBeenCalledOnce();
+  expect(saved).toEqual([{ act: "move", request: remote.move.mock.calls[0][0] }]);
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test("a known outcome the phone fails to delete doesn't hold the person, and its leftover settles from the board after a restart", async () => {
+  storeOnPhone({ act: "move", request: sentMove });
+  const first = await open([plan], true);
+  await act(async () => { button(first.screen, "See the transfer").props.onPress(); });
+  failing.deletes = 1;
+  remote.move.mockImplementationOnce(async (request) => moveReceipt(request));
+  await act(async () => { button(first.screen, "Retry transfer").props.onPress(); });
+  expect(JSON.stringify(root?.toJSON())).toContain("COP 300.000 moved");
+  expect(storedRequests()).toEqual([{ act: "move", request: sentMove }]);
+  await act(async () => { button(first.screen, "View recovery plan").props.onPress(); });
+  expect(first.screen.findByType(RecoveryPlanScreen).props.unconfirmedMove).toBe(false);
+  const recorded = { ...plan, contributionHistory: [contribution("oct", { idempotencyKey: "move-1", contributionDate: "2026-10-17" })] };
+  const { screen } = await restart([recorded], true);
+  expect(screen.findByType(RecoveryPlanScreen).props.unconfirmedMove).toBe(false);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(remote.move).toHaveBeenCalledOnce();
 });
 
 function activationReceipt(request: Parameters<RecoveryEditorTransport["save"]>[0], replay = true) {
