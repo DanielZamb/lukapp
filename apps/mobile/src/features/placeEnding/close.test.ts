@@ -1092,7 +1092,7 @@ test("a Close handler kept before the default place was chosen again sends nothi
   expect(ui.texts()).toContain("Daily becomes your default place.");
   await act(async () => kept());
   expect(remote.close).not.toHaveBeenCalled();
-  expect(ui.alerts()).toContain("Your answers changed before you confirmed. Check them and close again.");
+  expect(ui.alerts()).toContain("Your answers changed before you confirmed. Check them and confirm again.");
   await ui.press("Close Wallet");
   expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(0),
     reviewedAccountingDate: "2026-11-10", replacementDefaultFinancialAccountProfileId: "daily", lines: [] }]]);

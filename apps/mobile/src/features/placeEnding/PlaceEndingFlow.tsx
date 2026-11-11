@@ -170,7 +170,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     if (now.act === "undo") undo.dismissRefusal(); else close.dismissRefusal();
     if (now.adding) return change({ adding: false });
     const at = now.steps[now.steps.length - 1]!;
-    if (at.name === "confirm") { setShownPreview(null); setPreviewChanged(null); }
+    if (at.name === "confirm") { setShownPreview(null); setPreviewChanged(null); setReviewChanged(false); }
     if (at.name === "lines" || at.name === "review") { setNotice(null); setReviewChanged(false); }
     if (now.steps.length > 1) return moveSteps((current) => current.slice(0, -1));
     leave(onBack);
@@ -375,16 +375,22 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   if (step.name === "confirm") {
     const snapshot = preview?.snapshot ?? null;
     return <UndoConfirmScreen name={name} balance={balance} snapshot={snapshot} changed={previewChanged && t(previewChanged)}
-      replacement={replacementChoice} onRepickDefault={repickDefault} typed={typed} editable={!undo.frozen}
+      replacement={replacementChoice} replacementId={replacement} onRepickDefault={repickDefault} typed={typed} editable={!undo.frozen}
       onTyped={(value) => { if (undo.canEdit()) { interact(); change({ typed: value }); } }}
-      busy={undo.busy} uncertain={undo.state.name === "uncertain"} error={error} onBack={locked ? undefined : back}
+      busy={undo.busy} uncertain={undo.state.name === "uncertain"} error={reviewChanged ? t("placeEnding.reviewChanged") : error}
+      onBack={locked ? undefined : back}
       canConfirm={!undo.busy && (undo.state.name === "uncertain"
         || (!!snapshot && !waiting && !replacementChoice?.unavailable && typedNameMatches(typed, name)))}
-      onConfirm={(shown) => {
+      onConfirm={(shown, shownReplacement) => {
         interact();
+        setReviewChanged(false);
         if (undo.canEdit() && !clearToSend()) return;
         void undo.submit(() => {
           const now = readFlow();
+          if (now.replacement !== shownReplacement) {
+            setReviewChanged(true);
+            return null;
+          }
           return shown && typedNameMatches(now.typed, name) && !(now.replacement && placeChoice(now.replacement, places, t).unavailable)
             ? undoRequest({ previewFingerprint: shown.fingerprint, workspaceId, placeId: profileId, replacement: now.replacement,
               idempotencyKey: Crypto.randomUUID() }, t)
