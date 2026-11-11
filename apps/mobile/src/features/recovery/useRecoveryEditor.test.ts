@@ -225,3 +225,16 @@ test("a Submit handler kept before months changed resends the held plan unchange
   expect(api.save.mock.calls.map(([request]) => request)).toEqual([first, first]);
   expect(editor()).toMatchObject({ installmentCount: 4, destinationId: "savings" });
 });
+
+test.fails("known exposure: an activation held after a lost reply is lost with the screen, so reopening sends a new key", async () => {
+  const api = transport();
+  api.save.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const editor = await open(api);
+  await act(async () => { await editor().submit(); });
+  expect(editor().pending).toBe(true);
+  await act(async () => root?.unmount());
+  root = undefined;
+  const reopened = await open(api);
+  await act(async () => { await reopened().submit(); });
+  expect(api.save.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["activate-1", "activate-1"]);
+});

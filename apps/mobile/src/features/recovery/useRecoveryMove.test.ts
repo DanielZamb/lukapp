@@ -329,3 +329,16 @@ test("a Move money handler kept before a lost reply resends the held movement, n
   };
   expect(api.move.mock.calls.map(([request]) => request)).toEqual([first, first]);
 });
+
+test.fails("known exposure: a Move money held after a lost reply is lost with the screen, so reopening sends a new key", async () => {
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const move = await open(api);
+  await act(async () => { await move().submit(); });
+  expect(move().pending).toBe(true);
+  await act(async () => root?.unmount());
+  root = undefined;
+  const reopened = await open(api);
+  await act(async () => { await reopened().submit(); });
+  expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
+});
