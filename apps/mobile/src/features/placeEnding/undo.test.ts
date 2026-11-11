@@ -71,6 +71,7 @@ vi.mock("convex/react", async () => {
         currentMonthExpenseChange: { currency: "COP", minorUnits: 0 }, currentMonthIncomeChange: { currency: "COP", minorUnits: 0 },
         scannedLines: 10, isDone: false, continueCursor: "c1" } };
   };
+  const client = { query: (...args: unknown[]) => remote.pages(...args) };
   return {
     useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
       useSyncExternalStore(subscribe, () => remote.version);
@@ -83,7 +84,7 @@ vi.mock("convex/react", async () => {
       return undefined;
     },
     useAction: (ref: Parameters<typeof getFunctionName>[0]) => getFunctionName(ref) === "accounting:closePlace" ? remote.close : remote.undo,
-    useConvex: () => ({ query: remote.pages }),
+    useConvex: () => client,
   };
 });
 const router = vi.hoisted(() => ({ back: vi.fn(), dismissTo: vi.fn(), push: vi.fn(), replace: vi.fn(), canGoBack: vi.fn(() => true) }));
