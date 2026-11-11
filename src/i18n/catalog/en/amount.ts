@@ -1,8 +1,4 @@
 export const amount = {
-  decimalCommaA11y: "Type a decimal comma for {currency}",
-  decimalPointA11y: "Type a decimal point for {currency}",
-  noDecimalsA11y: "{currency} amounts have no decimals",
-  signA11y: "Switch the amount between minus and plus",
   signMinus: "minus",
   signPlus: "plus",
   markComma: "comma",

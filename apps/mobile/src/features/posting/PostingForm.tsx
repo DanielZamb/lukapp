@@ -35,7 +35,6 @@ export type PostingFormProps = {
   /** Set when a saved amount reopened in a new form or could not be read. */
   amountNotice?: AmountNotice | null;
   /** True while the chosen category decides the sign. */
-  signLocked?: boolean;
   description: string;
   date: string;
   place: string;
@@ -241,7 +240,6 @@ export function PostingForm(props: PostingFormProps) {
             editable={props.editable}
             inputAccessibilityLabel={t("posting.formAmountA11y")}
             placeholder="0"
-            sign={{ disabled: props.signLocked === true }}
             notice={notice}
             inputStyle={[styles.amount, { color: signOnly ? theme.mutedForeground : theme.foreground }]}
           />

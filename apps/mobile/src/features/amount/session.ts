@@ -54,10 +54,9 @@ export function openingOf(value: unknown): AmountOpening | null {
 
 /**
  * One editing session of one amount field, bound to one currency. The native text is exactly what the native field
- * shows: the app never regroups it while the person types. The sign is held beside it, set by the sign key or the
- * owner and never written into the native text, so no keystroke racing the sign key can drop it. `editor` reads the
- * sign followed by the native text with the strict grammar; a sign typed into the native text as well reads as two
- * signs and is refused. A new currency starts a new session with a new opening; a language change does not touch it.
+ * shows: the app never regroups it while the person types. The sign is held beside it, set by the owner (for an
+ * entry, from its category) and never written into the native text. `editor` reads the sign followed by the native
+ * text with the strict grammar; a sign typed into the native text is refused, whatever sign the session holds. A new currency starts a new session with a new opening; a language change does not touch it.
  */
 export type AmountSession = Readonly<{
   currency: string;
@@ -93,7 +92,11 @@ export function nativeText(session: AmountSession): string {
 }
 
 function signed(format: AmountFormat, sign: AmountSign, native: string): Pick<AmountSession, "sign" | "editor"> {
-  return { sign, editor: literalEditor(format, sign + native) };
+  const text = sign + native;
+  const typed = /[+−-]/.exec(native);
+  if (!typed) return { sign, editor: literalEditor(format, text) };
+  return { sign, editor: { format, text, selection: { start: text.length, end: text.length }, generatedGroups: [], kind: "invalid",
+    issue: { code: "not_a_number", character: typed[0], index: sign.length + typed.index } } };
 }
 
 /** Text the app opens, with its leading sign moved beside the native text. */
@@ -240,22 +243,6 @@ export function withNativeText(session: AmountSession, text: string): AmountSess
   return withText(session, text, wrote.length > 1 && hasSeparator(wrote));
 }
 
-/**
- * Writes this currency's decimal mark at `caret` in the native text, with a leading 0 when no digit comes before it,
- * and says where the caret goes. Text that already has the mark only moves the caret after it.
- */
-export function withDecimalMark(session: AmountSession, caret: number): { session: AmountSession; caret: number } {
-  const text = nativeText(session);
-  const mark = session.editor.format.convention.decimal;
-  const existing = text.indexOf(mark);
-  if (existing >= 0) return { session, caret: existing + 1 };
-  const at = Math.max(0, Math.min(caret, text.length));
-  const before = text.slice(0, at);
-  const insert = /^\s*[+−-]?$/.test(before) ? `0${mark}` : mark;
-  const placed = at + insert.length;
-  return { session: withText(session, before + insert + text.slice(at)), caret: placed };
-}
-
 /** How many digits come before the decimal mark, or null without one. */
 function wholeDigits(session: AmountSession): number | null {
   const { text } = session.editor;
@@ -291,8 +278,4 @@ export function amountSign(session: AmountSession): AmountSign {
 /** Sets the sign held beside the native text and changes nothing else, including what still awaits confirmation. */
 export function withAmountSign(session: AmountSession, sign: "+" | "-"): AmountSession {
   return sign === session.sign ? session : { ...session, ...signed(session.editor.format, sign, nativeText(session)) };
-}
-
-export function toggleAmountSign(session: AmountSession): AmountSession {
-  return withAmountSign(session, session.sign === "-" ? "+" : "-");
 }
