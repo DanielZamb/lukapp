@@ -392,7 +392,7 @@ test("an unavailable destination freezes the report; Retry repeats the identical
   expect(h.phase()).toEqual({ kind: "sent", result: sent });
 });
 
-test.each([
+test.each<Record<string, string | number>>([
   { code: "provider_unavailable" },
   { code: "rate_limited", retryAfterMs: 60_000 },
   { code: "invalid_report", field: "title" },

@@ -192,7 +192,7 @@ test.each([
   const dispatch = vi.fn(async (command: ConfirmCandidateInput) => resultFor(command));
   dispatch.mockRejectedValueOnce(new Error("offline")).mockRejectedValueOnce(refusal);
   const binding = createCandidateBinding({ service: f.service, candidateId: capture.captureId, workspaceId: mapping.workspaceId, dispatch, translator: createTranslator("en") });
-  const confirmed = { ...binding.originalSuggestion, amount: { currency: "COP" as const, minorUnits: 45000 } };
+  const confirmed = { ...binding.originalSuggestion, direction: "out" as const, amount: { currency: "COP" as const, minorUnits: 45000 } };
   await expect(binding.confirm(confirmed)).rejects.toThrow("offline");
   await expect(binding.confirm(confirmed)).rejects.toBe(refusal);
   expect(rowOf(f.service).status.kind).toBe("submitting");

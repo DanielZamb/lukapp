@@ -12,7 +12,7 @@ import { viewInbox } from "./candidates";
 import { capture, fixture, mapping, now } from "./service.testSupport";
 import { accountingErrorMessages } from "../../../../../src/accounting/errors";
 import { changedFields } from "../../../../../src/notificationIntake/policy";
-import type { ConfirmCandidateInput, ConfirmCandidateResult } from "../../../../../src/notificationIntake/types";
+import type { CandidateConfirmResult, ConfirmCandidateInput, ConfirmCandidateResult } from "../../../../../src/notificationIntake/types";
 
 function item(candidateId: string): ConfirmCandidateInput {
   return {
@@ -102,8 +102,8 @@ async function lostThenAnswered(error: string) {
   const f = fixture();
   await f.service.refresh();
   const ready = () => viewInbox({ v: 1, candidates: f.service.candidates() }, mapping.workspaceId, now, "COP").ready;
-  const confirm = vi.fn(async (items: ConfirmCandidateInput[]) => ({
-    results: items.map((command) => ({ candidateId: command.candidateId, ok: true as const, result: postedFor(command) })),
+  const confirm = vi.fn(async (items: ConfirmCandidateInput[]): Promise<{ results: CandidateConfirmResult[] }> => ({
+    results: items.map((command) => ({ candidateId: command.candidateId, ok: true, result: postedFor(command) })),
   }));
   confirm.mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValueOnce({ results: [{ candidateId: capture.captureId, ok: false, error }] });
