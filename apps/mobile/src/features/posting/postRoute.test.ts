@@ -18,6 +18,8 @@ import { emptyState, serializeState } from "../intake/durableState";
 import { NotificationCard } from "../intake/NotificationCard";
 import { getFunctionName } from "convex/server";
 import type { Category } from "../categories/model";
+import type { BudgetJar } from "../budget/model";
+import { withNativeText } from "../amount/session";
 
 vi.hoisted(() => {
   (globalThis as { __DEV__?: boolean }).__DEV__ = false;
@@ -44,10 +46,13 @@ const navigation = vi.hoisted(() => {
 });
 const platform = vi.hoisted(() => ({ os: "ios" }));
 const confirmOne = vi.hoisted(() => vi.fn());
+const convexQuery = vi.hoisted(() => vi.fn());
 const queryData = vi.hoisted(() => {
   const state: { categories: Category[]; profiles: Array<{ id: string; name: string; status?: string }>; currency: string; defaultProfileId: string;
-    allProfiles?: Array<{ id: string; name: string; status?: string }> } =
-    { categories: [], profiles: [], currency: "COP", defaultProfileId: "daily" };
+    allProfiles?: Array<{ id: string; name: string; status?: string }>;
+    /** The Budget the server evaluates for a month. */
+    budget: (month: string) => { month: string; jars: BudgetJar[] } } =
+    { categories: [], profiles: [], currency: "COP", defaultProfileId: "daily", budget: (month) => ({ month, jars: [] }) };
   return state;
 });
 let candidateService: ReturnType<typeof intakeFixture>["service"];
@@ -68,12 +73,12 @@ vi.mock("expo-router", () => ({
 }));
 vi.mock("convex/react", () => ({
   useAction: () => confirmOne,
-  useConvex: () => ({ query: vi.fn() }),
-  useQuery: (reference: Parameters<typeof getFunctionName>[0], args?: { status?: string }) => {
+  useConvex: () => ({ query: convexQuery }),
+  useQuery: (reference: Parameters<typeof getFunctionName>[0], args?: { status?: string; month?: string }) => {
     const name = getFunctionName(reference);
     if (name.endsWith(":listUserCategories")) return queryData.categories;
     if (name.endsWith(":listFinancialAccountProfiles")) return args?.status === "all" ? queryData.allProfiles ?? queryData.profiles : queryData.profiles;
-    if (name.endsWith(":evaluate")) return { jars: [] };
+    if (name.endsWith(":evaluate")) return queryData.budget(args?.month ?? "");
     return [];
   },
 }));
@@ -171,6 +176,7 @@ vi.mock("react-native-screens", () => ({
 }));
 vi.mock("react-native", () => ({
   KeyboardAvoidingView: "keyboard-viewport",
+  Keyboard: { dismiss: () => {} },
   Text: "text",
   View: "view",
   Pressable: "button",
@@ -200,8 +206,10 @@ beforeEach(() => {
   queryData.allProfiles = undefined;
   queryData.currency = "COP";
   queryData.defaultProfileId = "daily";
+  queryData.budget = (month) => ({ month, jars: [] });
   back.handler = undefined;
   vi.clearAllMocks();
+  convexQuery.mockImplementation(async (_reference: unknown, args: { month: string }) => queryData.budget(args.month));
   platform.os = "ios";
   const candidate = intakeFixture();
   candidate.setValue(serializeState({ ...emptyState(), mappings: [{ ...mapping, workspaceId: "workspace", financialAccountProfileId: "daily" }] }));
@@ -819,4 +827,51 @@ test("a transfer confirmation kept from an earlier pair does not confirm the pai
   await act(async () => { formProps().onPost(); });
   expect(writes.post.mock.calls.map(([command]) => command.kind === "transfer" && [command.payload.sourceFinancialAccountProfileId,
     command.payload.destinationFinancialAccountProfileId])).toEqual([["daily", "card"]]);
+});
+
+const foodCategory: Category = {
+  id: "food", workspaceId: "workspace", name: "Food", normalizedName: "food", nature: "Expense", natureSource: "answered",
+  classification: { kind: "fallback", version: "test" }, style: { emoji: "F", tone: "primary" }, resolvedPostingAccountCode: "expense",
+};
+const foodJar: BudgetJar = { category: { id: "food", name: "Food", emoji: "F" }, limitMinorUnits: 1_000_000, consumptionMinorUnits: 0 };
+
+/** A Food expense ready to post: amount, description and category, chosen the way the form's controls do. */
+async function foodExpense(amount: string) {
+  queryData.categories = [foodCategory];
+  writes.save.mockImplementation(async (command: PendingPosting) => ({ id: "saved", command }));
+  writes.post.mockImplementation(async (command: PendingPosting) => ({ description: "Lunch", amount: command.payload.amount }));
+  await mount();
+  await act(async () => {
+    formProps().onAmountChange(money(amount));
+    formProps().onDescriptionChange("Lunch");
+  });
+  await act(async () => formProps().onCategory());
+  const sheet = () => root!.root.find((node) => String(node.type) === "category-sheet");
+  await act(async () => sheet().props.onSelect("food"));
+  await act(async () => sheet().props.onDone());
+}
+const posted = () => writes.post.mock.calls.map(([command]: [PendingPosting]) => command.payload.amount.minorUnits);
+const warning = () => root!.root.findAll((node) => node.props.label === "Continue anyway" && typeof node.props.onPress === "function")[0];
+
+test("fourth review, finding 2: Continue on a Budget warning never posts an amount the warning was not checked against", async () => {
+  queryData.budget = (month) => ({ month, jars: [foodJar] });
+  await foodExpense("-120000");
+  await act(async () => { await formProps().onPost(); });
+  expect(warning()).toBeDefined();
+  await act(async () => formProps().onAmountChange(withNativeText(formProps().amount, "240000")));
+  await act(async () => { warning().props.onPress(); });
+  expect(posted()).toEqual([]);
+  await act(async () => { await formProps().onPost(); });
+  await act(async () => { warning().props.onPress(); });
+  expect(posted()).toEqual([24_000_000]);
+});
+
+test("fourth review, finding 3: a kept Post handler checks the Budget of the month the entry is in at the press", async () => {
+  queryData.budget = (month) => ({ month, jars: month === "2026-09" ? [foodJar] : [] });
+  await foodExpense("-120000");
+  const kept = formProps().onPost;
+  await act(async () => root!.root.find((node) => String(node.type) === "picker").props.onChange({}, new Date(2026, 8, 15, 12)));
+  await act(async () => { await kept(); });
+  expect(posted()).toEqual([]);
+  expect(warning()).toBeDefined();
 });
