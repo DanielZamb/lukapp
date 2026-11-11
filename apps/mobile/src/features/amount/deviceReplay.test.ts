@@ -90,6 +90,7 @@ test.each(recordings)("replaying %s from the phone shows the text the phone show
   }
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Owner))); });
   const input = () => root!.root.find((node) => node.type === "input");
+  input().props.onFocus();
   const key = (label: RegExp) => root!.root.find((node) => node.type === "button" && label.test(String(node.props.accessibilityLabel)));
   const sends: Array<number | null> = [];
   const expected = withoutWrittenSign[name] ?? recording;
@@ -98,7 +99,7 @@ test.each(recordings)("replaying %s from the phone shows the text the phone show
     else if (event.kind === "selection") await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: event } }));
     else if (event.kind === "decimal") await act(async () => key(/^Type a decimal/).props.onPress());
     else if (event.kind === "sign") await act(async () => key(/^Switch the amount/).props.onPress());
-    else if (event.kind === "replace") await act(async () => replace(openAmount(event.currency, event.text)));
+    else if (event.kind === "replace") { await act(async () => replace(openAmount(event.currency, event.text))); input().props.onFocus(); }
     else if (event.kind === "send") sends.push(amountMinorUnits(session));
   }
   expect(input().props.value).toBe(expected.finalText);

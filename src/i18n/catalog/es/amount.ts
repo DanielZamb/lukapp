@@ -22,5 +22,6 @@ export const amount: Messages<typeof en> = {
   reviewPasted: "Pegaste {amount}. Revisa que esté bien antes de seguir.",
   reviewConfirm: "Confirmar {amount}",
   reviewRequired: "Confirma el monto antes de seguir.",
+  awaitingPhone: "Un momento: el separador decimal todavía está llegando al campo.",
   noticeReenter: "No pudimos leer el monto guardado antes ({previous}). Escríbelo de nuevo.",
 };

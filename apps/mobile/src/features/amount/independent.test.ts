@@ -40,6 +40,7 @@ async function mount(cop: boolean, precision: 0 | 2 | 3): Promise<Phone> {
     return createElement(AmountField, { session: value, onChange: setValue, editable: true, inputAccessibilityLabel: "Amount", sign: {} });
   }
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Owner))); });
+  input().props.onFocus();
   return phoneFor(cop);
 }
 
@@ -54,17 +55,23 @@ function phoneFor(cop: boolean) {
       else input().props.onSelectionChange({ nativeEvent: { selection: { start, end } } });
     });
   }
-  /** What the field rendered lands on the phone unless a newer keystroke came first. */
-  function settle(drop: boolean) {
+  /**
+   * What the field rendered lands on the phone unless a newer keystroke came first. A landed write that placed the
+   * caret is reported back as that caret only, as the phone does.
+   */
+  async function settle(drop: boolean) {
     const now = shown();
     if (drop) return;
     if (now.text !== text) { text = now.text; start = end = Math.min(end, text.length); }
-    if (now.selection) { start = now.selection.start; end = now.selection.end; }
+    if (now.selection && (now.selection.start !== start || now.selection.end !== end)) {
+      start = now.selection.start; end = now.selection.end;
+      await emit("selection");
+    }
   }
   return {
     get text() { return text; },
     get caret() { return [start, end]; },
-    async select(a: number, b = a) { start = a; end = b; await emit("selection"); settle(false); },
+    async select(a: number, b = a) { start = a; end = b; await emit("selection"); await settle(false); },
     async edit(insert: string, del: 0 | -1 | 1 = 0) {
       let a = start, b = end;
       if (a === b && del === -1) a = Math.max(0, a - 1);
@@ -75,13 +82,13 @@ function phoneFor(cop: boolean) {
       text = next; start = end = a + insert.length;
       if (next !== shown().text) await emit("text");
       if (moved) await emit("selection");
-      settle(false);
+      await settle(false);
     },
     async key(kind: "sign" | "decimal", drop: boolean) {
       const label = kind === "sign" ? "Switch the amount between minus and plus" : `Type a decimal ${cop ? "comma" : "point"} for ${cop ? "COP" : "USD"}`;
       const button = root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0];
       await act(async () => button.props.onPress());
-      settle(drop);
+      await settle(drop);
     },
   };
 }
@@ -183,6 +190,7 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
         expect(input().props.value, `field shows the phone's text after step ${step}`).toBe(visible);
         expect(displayedMinorUnits(session), `value of ${JSON.stringify(visible)}`).toBe(reads(shownSign() + visible, cop, precision));
         if (session.review) expect(amountMinorUnits(session)).toBeNull();
+        else expect(amountMinorUnits(session), `sendable once the phone shows ${JSON.stringify(visible)}`).toBe(displayedMinorUnits(session));
         if (intact) compared++;
         if (intact && (visible !== reference.shown() || shownSign() !== reference.sign || displayedMinorUnits(session) !== reference.value()
           || phone.caret[0] !== reference.a || phone.caret[1] !== reference.b)) { divergences++; intact = false; }

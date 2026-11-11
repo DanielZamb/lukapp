@@ -5,7 +5,7 @@ import { useThemeContext } from "../../ui/themeContext";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import { amountHint } from "./hints";
-import { confirmAmount, nativeText, toggleAmountSign, withDecimalMark, withNativeText, type AmountSession } from "./session";
+import { confirmAmount, nativeText, toggleAmountSign, withDecimalMark, withNativeCaret, withNativeText, type AmountSession } from "./session";
 
 type Caret = { start: number; end: number };
 
@@ -88,6 +88,13 @@ export function AmountField(props: AmountFieldProps) {
     emit(next);
   }
   const mine = generation;
+  /** The phone's text, from a change or from the end of editing. */
+  function report(text: string) {
+    if (mine !== current.current || !props.editable) return;
+    if (placed) setPlaced(undefined);
+    setInput((shown) => ({ ...shown, text }));
+    emit(withNativeText(latest.current, text));
+  }
   const keyEnabled = props.editable && decimals;
   const refused = !!hint || !!props.message?.error;
   const shown = editor.kind === "complete" ? formatMoney({ currency, minorUnits: editor.minorUnits }) : null;
@@ -120,16 +127,13 @@ export function AmountField(props: AmountFieldProps) {
           selectionColor={theme.primary}
           onFocus={() => { focused.current = true; }}
           onBlur={() => { focused.current = false; }}
-          onChangeText={(text) => {
-            if (mine !== current.current || !props.editable) return;
-            if (placed) setPlaced(undefined);
-            setInput((shown) => ({ ...shown, text }));
-            emit(withNativeText(latest.current, text));
-          }}
+          onChangeText={(text) => report(text)}
+          onEndEditing={({ nativeEvent: { text } }) => report(text)}
           onSelectionChange={({ nativeEvent: { selection } }) => {
             if (mine !== current.current) return;
             caret.current = { start: selection.start, end: selection.end };
             if (placed) setPlaced(undefined);
+            emit(withNativeCaret(latest.current, selection));
           }}
           style={[props.label ? [shared.fieldInput, styles.boxed, refused && shared.fieldInputInvalid] : null, styles.input, props.inputStyle]}
         />
@@ -154,7 +158,7 @@ export function AmountField(props: AmountFieldProps) {
           disabled={!props.editable}
           onPress={() => {
             if (!keyEnabled) return;
-            const next = withDecimalMark(latest.current, caret.current.end);
+            const next = withDecimalMark(latest.current, caret.current.end, focused.current);
             press(next.session, next.caret);
           }}
           style={({ pressed }) => [styles.key, !keyEnabled && styles.keyDisabled, pressed && styles.pressed]}
