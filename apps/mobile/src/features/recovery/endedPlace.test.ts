@@ -51,6 +51,7 @@ function editorTransport() {
   return {
     save: vi.fn<RecoveryEditorTransport["save"]>(),
     onSaved: vi.fn(), newKey: () => `activate-${++sequence}`, reportFailure: vi.fn(() => false),
+    keep: vi.fn(async () => {}), forget: vi.fn(async () => {}),
   } satisfies RecoveryEditorTransport;
 }
 function moveTransport() {
@@ -58,6 +59,7 @@ function moveTransport() {
   return {
     move: vi.fn<RecoveryMoveTransport["move"]>(),
     onMoved: vi.fn(), newKey: () => `move-${++sequence}`, reportFailure: vi.fn(() => false),
+    keep: vi.fn(async () => {}), forget: vi.fn(async () => {}),
   } satisfies RecoveryMoveTransport;
 }
 

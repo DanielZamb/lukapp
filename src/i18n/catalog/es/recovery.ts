@@ -77,6 +77,11 @@ export const recovery: Messages<typeof en> = {
   moveRejected: "No pudimos hacer la transferencia. Revisa el origen y el monto, y vuelve a intentarlo.",
   moveUncertain: "No pudimos confirmar la transferencia. Reintenta: revisamos la misma transferencia sin duplicarla.",
   moveDescription: "Recuperar ahorros: {title}",
+  moveUnconfirmedOpen: "Ver la transferencia",
+  notSaved: "Este celular no pudo guardar la solicitud antes de enviarla, así que no se envió nada. Intenta otra vez.",
+  unreadableTitle: "No pudimos leer la solicitud guardada en este celular",
+  unreadableBody: "Puede que una transferencia o la activación de un plan esté esperando en este celular. Vuelve a intentar leerla antes de empezar algo nuevo.",
+  unreadableRetry: "Intentar otra vez",
 
   movedTitle: "Pasaste {amount}",
   movedProgress: "Tu plan {title} ya va en el {percent}%. El saldo de tu lugar de ahorro va aparte del avance del plan.",

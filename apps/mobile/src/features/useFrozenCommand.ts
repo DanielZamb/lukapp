@@ -45,15 +45,24 @@ export type CommandState<Request> =
   /** The copy couldn't be saved, so the request never left; the person can edit and send again. */
   | { name: "unsaved" }
   | { name: "sending" }
-  /** The request is held until its outcome is known; `refusal` is why the latest resend was turned away, if it was. */
-  | { name: "uncertain"; refusal: string | null };
+  /**
+   * The request is held until its outcome is known; `refusal` is why the latest resend was turned away, if it was.
+   * `carried` says it is the request the screen opened with, which its caller still holds, so leaving loses nothing.
+   */
+  | { name: "uncertain"; refusal: string | null; carried: boolean };
 
 export type CommandOutcome = "done" | "refused" | "uncertain" | "unsent";
 
-export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<Request, Receipt>) {
-  const [state, setState] = useState<CommandState<Request>>({ name: "open", refusal: null });
+/**
+ * `unresolved` is a request sent before this screen opened whose outcome is still unknown, such as one saved on the
+ * phone: the screen opens holding it, and pressing again resends it as a retry.
+ */
+export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<Request, Receipt>, unresolved: Request | null = null) {
+  const [state, setState] = useState<CommandState<Request>>(unresolved === null ? { name: "open", refusal: null }
+    : { name: "uncertain", refusal: null, carried: true });
   /** A request whose outcome is unknown. Until something answers it, it is the only request that can be sent. */
-  const held = useRef<Request | null>(null);
+  const held = useRef<Request | null>(unresolved);
+  const opened = useRef(unresolved);
   const sending = useRef(false);
   const lifetime = useRef({ active: false });
   useLayoutEffect(() => {
@@ -100,7 +109,7 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
         transport.onRefused?.(code, request);
         return "refused";
       }
-      setState({ name: "uncertain", refusal: code });
+      setState({ name: "uncertain", refusal: code, carried: request === opened.current });
       return "uncertain";
     } finally {
       sending.current = false;
@@ -111,6 +120,8 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
     busy: state.name === "sending",
     frozen: state.name === "sending" || state.name === "uncertain",
     canEdit: () => lifetime.current.active && !sending.current && !held.current,
+    /** Whether the screen can close at the press: nothing is sending, and nothing is held that only this screen knows. */
+    canLeave: () => lifetime.current.active && !sending.current && (held.current === null || held.current === opened.current),
     /** Where the command stands at the press: sending, holding a request whose outcome is unknown, or open. */
     atPress: (): "sending" | "held" | "open" => sending.current ? "sending" : held.current ? "held" : "open",
     submit,

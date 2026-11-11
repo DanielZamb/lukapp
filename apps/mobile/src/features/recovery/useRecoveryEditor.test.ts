@@ -24,8 +24,11 @@ const seed: RecoveryEditorSeed = {
     { id: "savings", name: "Savings", productKind: "savingsAccount" },
   ],
 };
+type Request = Parameters<RecoveryEditorTransport["save"]>[0];
+/** What the phone keeps of a sent activation while its outcome is unknown. */
+const phone: { request: Request | null } = { request: null };
 let root: ReactTestRenderer | undefined;
-afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root?.unmount()); root = undefined; phone.request = null; vi.unstubAllGlobals(); });
 function transport() {
   let sequence = 0;
   return {
@@ -41,9 +44,11 @@ function transport() {
       },
     })),
     onSaved: vi.fn(), newKey: () => `activate-${++sequence}`, reportFailure: vi.fn(() => false),
+    keep: vi.fn(async (request: Request) => { phone.request = request; }),
+    forget: vi.fn(async (request: Request) => { if (phone.request?.idempotencyKey === request.idempotencyKey) phone.request = null; }),
   } satisfies RecoveryEditorTransport;
 }
-async function open(api: RecoveryEditorTransport, initial = seed, language?: "es") {
+async function open(api: RecoveryEditorTransport, initial: RecoveryEditorSeed = { ...seed, unresolved: phone.request }, language?: "es") {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let editor: ReturnType<typeof useRecoveryEditor> | undefined;
@@ -226,7 +231,7 @@ test("a Submit handler kept before months changed resends the held plan unchange
   expect(editor()).toMatchObject({ installmentCount: 4, destinationId: "savings" });
 });
 
-test.fails("known exposure: an activation held after a lost reply is lost with the screen, so reopening sends a new key", async () => {
+test("an activation held after a lost reply stays on the phone, so reopening resends it under its own key", async () => {
   const api = transport();
   api.save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const editor = await open(api);
@@ -237,4 +242,25 @@ test.fails("known exposure: an activation held after a lost reply is lost with t
   const reopened = await open(api);
   await act(async () => { await reopened().submit(); });
   expect(api.save.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["activate-1", "activate-1"]);
+});
+
+test("a reopened activation shows the stored terms, ignores edits and resends them as a retry that a refusal before lookup cannot settle", async () => {
+  phone.request = {
+    workspaceId: "workspace", sourceJournalEntryId: "exp-1", destinationFinancialAccountProfileId: "daily",
+    installmentCount: 6, installmentMinorUnits: 200_000, idempotencyKey: "activate-0",
+  };
+  const stored = phone.request;
+  const api = transport();
+  api.save.mockRejectedValueOnce(new ConvexError({ code: "session_inactive" }));
+  const editor = await open(api, undefined, "es");
+  expect(editor()).toMatchObject({ installmentCount: 6, amount: typedAmount("2000"), destinationId: "daily", pending: true, editable: false,
+    error: "No pudimos confirmar la activación. Reintenta: revisamos el mismo plan sin duplicarlo." });
+  await act(async () => { editor().onMonths(12); editor().onDestination("savings"); });
+  await act(async () => { await editor().submit(); });
+  expect(editor()).toMatchObject({ installmentCount: 6, destinationId: "daily", pending: true });
+  expect(phone.request).toEqual(stored);
+  await act(async () => { await editor().submit(); });
+  expect(api.save.mock.calls.map(([request]) => request)).toEqual([stored, stored]);
+  expect(api.keep).not.toHaveBeenCalled();
+  expect(phone.request).toBeNull();
 });

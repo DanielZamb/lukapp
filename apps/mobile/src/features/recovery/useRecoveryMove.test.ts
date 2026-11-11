@@ -27,8 +27,13 @@ const sources: RecoveryPlace[] = [
   { id: "daily", name: "Daily", productKind: "bankAccount" },
   { id: "savings", name: "Savings", productKind: "savingsAccount" },
 ];
+type Request = Parameters<RecoveryMoveTransport["move"]>[0];
+/** What the phone keeps of a sent movement while its outcome is unknown. */
+const phone: { request: Request | null } = { request: null };
 let root: ReactTestRenderer | undefined;
-afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+afterEach(async () => {
+  await act(async () => root?.unmount()); root = undefined; phone.request = null; vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals();
+});
 function transport() {
   let sequence = 0;
   return {
@@ -43,11 +48,13 @@ function transport() {
       },
     })),
     onMoved: vi.fn(), newKey: () => `move-${++sequence}`, reportFailure: vi.fn(() => false),
+    keep: vi.fn(async (request: Request) => { phone.request = request; }),
+    forget: vi.fn(async (request: Request) => { if (phone.request?.idempotencyKey === request.idempotencyKey) phone.request = null; }),
   } satisfies RecoveryMoveTransport;
 }
 async function open(
   api: RecoveryMoveTransport,
-  seed = { workspaceId: "workspace", plan, sources, timeZone: "America/Bogota" },
+  seed: Parameters<typeof useRecoveryMove>[0] = { workspaceId: "workspace", plan, sources, timeZone: "America/Bogota", unresolved: phone.request },
   language?: "es",
 ) {
   vi.stubGlobal("React", React);
@@ -114,7 +121,7 @@ test("the same source and destination never posts", async () => {
   expect(api.move).not.toHaveBeenCalled();
 });
 
-test("unmounted acknowledgements cannot finish a newer movement", async () => {
+test("an unmounted acknowledgement cannot finish a newer screen, which resends the movement that was unconfirmed when it opened", async () => {
   const api = transport();
   let resolve: ((value: Awaited<ReturnType<RecoveryMoveTransport["move"]>>) => void) | undefined;
   api.move.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
@@ -137,7 +144,7 @@ test("unmounted acknowledgements cannot finish a newer movement", async () => {
   });
   expect(api.onMoved).not.toHaveBeenCalled();
   await act(async () => { await current().submit(); });
-  expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-2"]);
+  expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
 });
 
 test.each(["", "0", "-1", "1.23", "2.300,123", "abc"])("invalid hero amount %s blocks posting", async (amount) => {
@@ -330,7 +337,7 @@ test("a Move money handler kept before a lost reply resends the held movement, n
   expect(api.move.mock.calls.map(([request]) => request)).toEqual([first, first]);
 });
 
-test.fails("known exposure: a Move money held after a lost reply is lost with the screen, so reopening sends a new key", async () => {
+test("a Move money held after a lost reply stays on the phone, so reopening resends it under its own key", async () => {
   const api = transport();
   api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
   const move = await open(api);
@@ -341,4 +348,41 @@ test.fails("known exposure: a Move money held after a lost reply is lost with th
   const reopened = await open(api);
   await act(async () => { await reopened().submit(); });
   expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
+});
+
+test("a movement sent in English and reopened in Spanish resends its stored description, not a translated one", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const move = await open(api);
+  await act(async () => { await move().submit(); });
+  await act(async () => root?.unmount());
+  root = undefined;
+  vi.setSystemTime(new Date("2026-11-02T12:00:00Z"));
+  const reopened = await open(api, undefined, "es");
+  expect(reopened()).toMatchObject({ pending: true, editable: false, sourceId: "daily", amount: typedAmount("2300"),
+    error: "No pudimos confirmar la transferencia. Reintenta: revisamos la misma transferencia sin duplicarla." });
+  await act(async () => { await reopened().submit(); });
+  expect(api.move.mock.calls.map(([request]) => request)).toEqual([0, 1].map(() => ({
+    workspaceId: "workspace", planId: "plan-1", sourceFinancialAccountProfileId: "daily",
+    amount: { currency: "COP", minorUnits: 230_000 }, accountingDate: "2026-10-17",
+    description: "Recovery: Laptop repair", idempotencyKey: "move-1",
+  })));
+});
+
+test("a reopened movement cannot be edited or replaced by a new one before it is settled", async () => {
+  phone.request = {
+    workspaceId: "workspace", planId: "plan-1", sourceFinancialAccountProfileId: "savings",
+    amount: { currency: "COP", minorUnits: 100_000 }, accountingDate: "2026-10-17", description: "Recovery: Laptop repair", idempotencyKey: "move-1",
+  };
+  const stored = phone.request;
+  const api = transport();
+  const move = await open(api);
+  const kept = move();
+  await act(async () => { kept.onAmount(money("9.000")); kept.onSource("daily"); });
+  expect(move()).toMatchObject({ sourceId: "savings", amount: typedAmount("1000"), editable: false, canDismiss: true, canSubmit: true });
+  await act(async () => { await kept.submit(); });
+  expect(api.move.mock.calls.map(([request]) => request)).toEqual([stored]);
+  expect(api.keep).not.toHaveBeenCalled();
+  expect(phone.request).toBeNull();
 });

@@ -28,12 +28,18 @@ export type RecoveryEditorSeed = {
   candidate: RecoveryCandidate;
   destinations: RecoveryPlace[];
   replacesPlanId?: string | null;
+  /** An activation for this expense sent before the screen opened whose outcome is unknown: shown, and only resent. */
+  unresolved?: Request | null;
 };
 export type RecoveryEditorTransport = {
   save: (request: Request) => Promise<Receipt>;
   newKey: () => string;
   reportFailure: (error: unknown) => boolean;
   onSaved: (receipt: Receipt) => void;
+  /** Saves a new activation on the phone before it first leaves; if that fails, nothing is sent. */
+  keep: (request: Request) => Promise<void>;
+  /** Removes the saved activation once its outcome is known. */
+  forget: (request: Request) => Promise<void>;
 };
 /**
  * activatePlan (src/savingsRecovery/activatePlan.ts) looks for the plan under the key at line 19, after checking only the
@@ -60,24 +66,30 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   const { t } = useT();
   const defaultDestination = seed.destinations.find((place) => place.productKind === "savingsAccount")
     ?? seed.destinations[0] ?? null;
-  const [form, setForm, readForm] = useFormState<Proposal>(() => ({
+  const [form, setForm, readForm] = useFormState<Proposal>(() => seed.unresolved ? {
+    months: seed.unresolved.installmentCount as MonthCount,
+    amount: installmentAmount(seed.currency, seed.unresolved.installmentMinorUnits),
+    destination: placeChoice(seed.unresolved.destinationFinancialAccountProfileId),
+  } : {
     months: DEFAULT_INSTALLMENT_COUNT,
     amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)),
     destination: placeChoice(defaultDestination?.id ?? null),
-  }));
+  });
   const unavailable = useChosenPlace(seed.destinations, form.destination);
   const command = useFrozenCommand<Request, Receipt>({
     send: transport.save, reportFailure: transport.reportFailure, onDone: transport.onSaved,
+    keep: transport.keep, forget: transport.forget,
     settles: (code) => activationSettles.has(code),
     onRefused: (code, request) => {
       const ended = endedPlaceRefusal(code);
       if (ended) setForm((now) => ({ ...now, destination: refusePlace(now.destination, request.destinationFinancialAccountProfileId, ended) }));
     },
-  });
+  }, seed.unresolved ?? null);
   const { state } = command;
   const pending = state.name === "uncertain";
   const refusal = state.name === "open" ? state.refusal : null;
   const error = pending ? t("recovery.draftUncertain")
+    : state.name === "unsaved" ? t("recovery.notSaved")
     : !refusal || endedPlaceRefusal(refusal.code) ? ""
       : t(refusal.code === "expense_already_recovered" ? "recovery.draftAlreadyRecovered"
         : replacementRefusals[refusal.code] ?? "recovery.draftRejected");
@@ -103,8 +115,8 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     installmentCount: form.months, amount: form.amount, destinationId: form.destination.id, unavailable, busy: command.busy,
     pending, error, editable: !command.frozen, suggestion,
     canSubmit: !command.busy && (pending || (!!form.destination.id && !unavailable && ready)),
-    canDismiss: !command.frozen,
-    dismiss: (close: () => void) => { if (command.canEdit()) close(); },
+    canDismiss: !command.frozen || (state.name === "uncertain" && state.carried),
+    dismiss: (close: () => void) => { if (command.canLeave()) close(); },
     onMonths: (count: MonthCount) => {
       if (command.canEdit())
         setForm((now) => ({ ...now, months: count, amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, count)) }));

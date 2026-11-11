@@ -25,11 +25,13 @@ import {
   RecoveryMoved,
   RecoveryPlanList,
   RecoveryPlanScreen,
+  RecoveryUnreadable,
   type RecoveryPlanNotice,
 } from "./RecoveryScreens";
-import { useRecoveryEditor, type RecoveryEditorSeed } from "./useRecoveryEditor";
+import { useUnresolvedRecovery } from "./unresolved";
+import { useRecoveryEditor, type RecoveryEditorSeed, type RecoveryEditorTransport } from "./useRecoveryEditor";
 import { useRecoveryCancel, useRecoveryCorrection } from "./useRecoveryLifecycle";
-import { useRecoveryMove } from "./useRecoveryMove";
+import { useRecoveryMove, type RecoveryMoveTransport } from "./useRecoveryMove";
 
 type PlanView = { name: "plan"; id: string; notice?: RecoveryPlanNotice; caller?: PlanView };
 type CandidatesView = { name: "candidates"; parent: PlanView | null };
@@ -68,6 +70,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
   const [refreshKey, refresh] = useState(Crypto.randomUUID);
   const [view, setView] = useState<View>({ name: "entry" });
   const board = useQuery(api.savingsRecovery.evaluate, { workspaceId, refreshKey });
+  const unresolved = useUnresolvedRecovery(workspaceId, board?.plans);
   const interact = useLocalEntryInteraction();
   const { t } = useT();
   const back = () => {
@@ -87,7 +90,11 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
       || (view.name === "plan" && (!!view.caller || (!!board && board.plans.length > 1)))
       ? back : null,
   );
-  if (!board) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
+  if (!board || unresolved.reading) return <Screen><ActivityIndicator accessibilityLabel={t("recovery.loading")} /></Screen>;
+  if ((view.name === "draft" || view.name === "move") && unresolved.unreadable) {
+    const caller = view.name === "draft" ? view.from : view.plan;
+    return <Unreadable onRetry={() => { interact(); unresolved.retryRead(); }} onBack={() => setView(caller)} />;
+  }
   if (view.name === "draft") {
     return (
       <Draft
@@ -98,7 +105,9 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
           candidate: view.candidate,
           destinations: board.destinations,
           replacesPlanId: view.replacesPlanId,
+          unresolved: unresolved.activation(view.candidate.journalEntryId),
         }}
+        phone={{ keep: unresolved.keepActivation, forget: unresolved.forgetActivation }}
         onClose={() => setView(view.from)}
         onSaved={(receipt) => {
           refresh(Crypto.randomUUID());
@@ -147,6 +156,8 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
         timeZone={timeZone}
         plan={plan}
         sources={board.sources}
+        unresolved={unresolved.move(plan.id)}
+        phone={{ keep: unresolved.keepMove, forget: unresolved.forgetMove }}
         onClose={() => setView(view.plan)}
         onMoved={(receipt) => {
           refresh(Crypto.randomUUID());
@@ -210,6 +221,7 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
         timeZone={timeZone}
         replacement={replacement}
         notice={shown.notice}
+        unconfirmedMove={unresolved.move(plan.id) !== null}
         onBack={back}
         onMove={() => { interact(); setView({ name: "move", key: Crypto.randomUUID(), plan: shown }); }}
         onFind={() => setView({ name: "candidates", parent: shown })}
@@ -256,16 +268,17 @@ export function Recovery({ workspaceId, timeZone, onBack, onViewPlans, onHome }:
 }
 
 function Draft({
-  seed, onClose, onSaved,
+  seed, phone, onClose, onSaved,
 }: {
   seed: RecoveryEditorSeed;
+  phone: Pick<RecoveryEditorTransport, "keep" | "forget">;
   onClose: () => void;
-  onSaved: Parameters<typeof useRecoveryEditor>[1]["onSaved"];
+  onSaved: RecoveryEditorTransport["onSaved"];
 }) {
   const save = useAction(api.savingsRecovery.activatePlan);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
-  const editor = useRecoveryEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved });
+  const editor = useRecoveryEditor(seed, { save, reportFailure, newKey: Crypto.randomUUID, onSaved, ...phone });
   const back = () => editor.dismiss(onClose);
   useRecoveryBack(back);
   return (
@@ -285,20 +298,18 @@ function Draft({
 }
 
 function Move({
-  workspaceId, timeZone, plan, sources, onClose, onMoved,
-}: {
-  workspaceId: string;
-  timeZone: string;
-  plan: Parameters<typeof useRecoveryMove>[0]["plan"];
-  sources: Parameters<typeof useRecoveryMove>[0]["sources"];
+  workspaceId, timeZone, plan, sources, unresolved, phone, onClose, onMoved,
+}: Omit<Parameters<typeof useRecoveryMove>[0], "unresolved"> & {
+  unresolved: Parameters<typeof useRecoveryMove>[0]["unresolved"];
+  phone: Pick<RecoveryMoveTransport, "keep" | "forget">;
   onClose: () => void;
-  onMoved: Parameters<typeof useRecoveryMove>[1]["onMoved"];
+  onMoved: RecoveryMoveTransport["onMoved"];
 }) {
   const contribute = useAction(api.savingsRecovery.recordContribution);
   const reportFailure = useDeviceAccessFailure();
   const interact = useLocalEntryInteraction();
-  const move = useRecoveryMove({ workspaceId, timeZone, plan, sources }, {
-    move: contribute, reportFailure, newKey: Crypto.randomUUID, onMoved,
+  const move = useRecoveryMove({ workspaceId, timeZone, plan, sources, unresolved }, {
+    move: contribute, reportFailure, newKey: Crypto.randomUUID, onMoved, ...phone,
   });
   const back = () => move.dismiss(onClose);
   useRecoveryBack(back);
@@ -369,6 +380,11 @@ function Correct({
       onBack={back}
     />
   );
+}
+
+function Unreadable({ onRetry, onBack }: { onRetry: () => void; onBack: () => void }) {
+  useRecoveryBack(onBack);
+  return <RecoveryUnreadable onRetry={onRetry} onBack={onBack} />;
 }
 
 function useRecoveryBack(onBack: (() => void) | null) {
