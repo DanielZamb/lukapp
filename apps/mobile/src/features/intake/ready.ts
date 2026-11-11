@@ -1,5 +1,6 @@
 import type { Translator } from "../../i18n";
-import { storedAmountSendable, type StoredAmountText } from "../amount/storedText";
+import type { StoredAmountText } from "../amount/storedText";
+import { candidateSendsAsSaved } from "./amountText";
 
 export function currencyMismatchReason(
   t: Translator["t"],
@@ -33,7 +34,7 @@ export function isReadyCandidate(
     Number.isSafeInteger(candidate.suggestion.amountMinorUnits) &&
     candidate.suggestion.amountMinorUnits > 0 &&
     !!candidate.suggestion.financialAccountProfileId &&
-    storedAmountSendable(candidate.reviewAmount) &&
+    !!candidate.currency && candidateSendsAsSaved({ ...candidate, currency: candidate.currency }) &&
     (!workspaceCurrency || candidate.currency === workspaceCurrency)
   );
 }

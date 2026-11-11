@@ -137,6 +137,16 @@ export function sendableMinorUnits(amount: AmountAtPress): number | null {
   return amountSendable(amount) ? displayedMinorUnits(amount) : null;
 }
 
+/**
+ * The signed minor units a saved amount sends as it opens in `currency`'s editor, or null when opening it asks the
+ * person to confirm it or type it again, or it is not a whole amount. This is the one answer to whether a saved
+ * amount may be sent as it is, for the single-entry form and for any batch alike.
+ */
+export function savedAmountAsOpened(currency: string, stored: StoredAmountText): number | null {
+  const { session } = openSavedAmount(currency, stored);
+  return amountSendable(session) ? displayedMinorUnits(session) : null;
+}
+
 /** The signed minor units the field shows, whether or not they still await confirmation. Never send these. */
 export function displayedMinorUnits(session: AmountSession): number | null {
   return session.editor.kind === "complete" ? session.editor.minorUnits : null;

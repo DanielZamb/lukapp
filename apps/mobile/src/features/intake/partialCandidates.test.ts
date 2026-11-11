@@ -47,7 +47,7 @@ test.each(partials)("partial facts %j persist once before ack and remain Needs r
   const view = viewInbox({ v: 1, candidates: f.service.candidates() }, mapping.workspaceId, now, "COP");
   expect(view.ready).toEqual([]); expect(view.now.map((row) => row.id)).toEqual([capture.captureId]);
   const dispatch = vi.fn();
-  await expect(confirmReadyCandidates(f.service, f.service.candidates(), dispatch)).rejects.toThrow();
+  await expect(confirmReadyCandidates(f.service, f.service.candidates(), dispatch)).resolves.toBe(0);
   expect(dispatch).not.toHaveBeenCalled();
   expect(f.state().records[0]).toMatchObject({ status: { kind: "review" } });
 });
