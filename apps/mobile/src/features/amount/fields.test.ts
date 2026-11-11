@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement, createRef, useLayoutEffect, useRef, type ReactElement } from "react";
+import { createElement, createRef, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -33,23 +33,26 @@ import { RecoveryDraft, RecoveryMoveScreen } from "../recovery/RecoveryScreens";
 import type { RecoveryCandidate, RecoveryPlace, RecoveryPlanView } from "../recovery/model";
 import { useRecoveryEditor, type RecoveryEditorTransport } from "../recovery/useRecoveryEditor";
 import { useRecoveryMove, type RecoveryMoveTransport } from "../recovery/useRecoveryMove";
-import { openAmount } from "./session";
+import { amountOfMinorUnits, openAmount } from "./session";
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); });
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
 
 type Currency = "COP" | "USD";
-type Harness = { sent: number[]; element: ReactElement };
 type Field = {
   name: string;
   input: (language: Language, currency: Currency) => string;
   submit: (language: Language) => string;
-  mount: (currency: Currency) => Harness;
+  owner: (currency: Currency, sent: number[]) => ReactElement;
   /** Text in the field before typing, which the person clears first. */
   starts?: boolean;
   accepts?: (minorUnits: number) => boolean;
+  /** The owner's own replacement of the amount, when it has one, as the person or the app triggers it. */
+  replaces?: string;
 };
+/** The rendered owner's replacement of its amount. */
+let replaceOwnerAmount: () => void = () => {};
 
 const account = (currency: Currency) => ({ workspaceId: "workspace", financialAccountProfileId: "cash", currency, timeZone: "America/Bogota" });
 function postingTransport(sent: number[]): PostingTransport {
@@ -69,6 +72,7 @@ const formHandlers = { onDescriptionChange: noop, onBack: noop, onPlace: noop, o
 
 function PostComposer({ currency, sent, batch }: { currency: Currency; sent: number[]; batch: boolean }) {
   const editor = usePostingEditor(account(currency), postingTransport(sent));
+  replaceOwnerAmount = editor.resetComposer;
   return createElement(PostingForm, {
     ...emptyPostingForm, ...formHandlers, currency, amount: editor.amount, onAmountChange: editor.setAmount,
     amountNotice: editor.amountNotice, signLocked: editor.signLocked, editable: editor.editable, canSubmit: editor.canSubmit,
@@ -83,6 +87,8 @@ function PostComposer({ currency, sent, batch }: { currency: Currency; sent: num
 
 function PlaceSetup({ currency, sent }: { currency: Currency; sent: number[] }) {
   const editor = usePostingEditor(account(currency), postingTransport(sent));
+  replaceOwnerAmount = () => editor.setSetup({ name: "Trip", productKind: "savingsAccount", emoji: "🏦", amount: openAmount(currency, "0"),
+    date: "2026-11-10", target: { kind: "source" } });
   const started = useRef(false);
   useLayoutEffect(() => {
     if (started.current || !editor.editable) return;
@@ -113,18 +119,21 @@ const jar: BudgetJar & { revisionId: string } = { category: food, limitMinorUnit
 function Composer({ currency, sent }: { currency: Currency; sent: number[] }) {
   const editor = useBudgetEditor({ workspaceId: "workspace", month: "2026-11", currency, initialCategoryId: "food", jar: null, removedLimits: [] },
     budgetTransport(sent));
+  replaceOwnerAmount = editor.onResetAmount;
   return createElement(BudgetComposer, { ...editor, category: food, currency, spentMinorUnits: 100_000, color: "#047857",
     onSave: () => void editor.submit(), onBack: noop });
 }
 function AddSheet({ currency, sent }: { currency: Currency; sent: number[] }) {
   const editor = useBudgetEditor({ workspaceId: "workspace", month: "2026-11", currency, initialCategoryId: "food", jar: null, removedLimits: [] },
     budgetTransport(sent));
+  replaceOwnerAmount = () => editor.onAmount(amountOfMinorUnits(currency, 250_000));
   return createElement(BudgetEditorSheet, { ...editor, title: "Add Budget", monthLabel: "November 2026", currency, policyCopy: "",
     categories: [food], categoryFixed: false, onSave: () => void editor.submit(), onDismiss: noop });
 }
 function LimitSheet({ currency, sent }: { currency: Currency; sent: number[] }) {
   const seed = { workspaceId: "workspace", month: "2026-11", currency, jar, removedLimits: [] };
   const editor = useBudgetEditor(seed, budgetTransport(sent));
+  replaceOwnerAmount = editor.onResetAmount;
   return createElement(BudgetLimitSheet, { ...editor, month: "2026-11", currency, jar: seed.jar, color: "#047857",
     previousMonth: "2026-10", previousSpendMinorUnits: 0, onLimit: noop, onSave: () => void editor.submit(),
     onSpendNothing: noop, onRemove: noop, onDismiss: noop });
@@ -144,6 +153,7 @@ function Proposal({ currency, sent }: { currency: Currency; sent: number[] }) {
     newKey: () => "plan-key", reportFailure: () => false, onSaved: noop, keep: async () => {}, forget: async () => {},
   };
   const editor = useRecoveryEditor({ workspaceId: "workspace", currency, candidate, destinations: places }, transport);
+  replaceOwnerAmount = () => editor.onMonths(6);
   return createElement(RecoveryDraft, { ...editor, candidate, currency, destinations: places, onSave: () => void editor.submit(), onBack: noop });
 }
 const plan = (currency: Currency): RecoveryPlanView => ({
@@ -165,29 +175,40 @@ function Move({ currency, sent }: { currency: Currency; sent: number[] }) {
 
 const label = (language: Language) => createTranslator(language).t;
 const fields: Field[] = [
-  { name: "Post one entry", input: (l) => label(l)("posting.formAmountA11y"), submit: (l) => label(l)("posting.formPost"),
-    mount: (currency) => { const sent: number[] = []; return { sent, element: createElement(PostComposer, { currency, sent, batch: false }) }; } },
-  { name: "Post batch row", input: (l) => label(l)("posting.formAmountA11y"), submit: (l) => label(l)("posting.formAddToBatch"),
-    mount: (currency) => { const sent: number[] = []; return { sent, element: createElement(PostComposer, { currency, sent, batch: true }) }; } },
-  { name: "place setup balance", input: (l) => label(l)("posting.setupBalance"), submit: (l) => label(l)("posting.setupSubmit"), starts: true,
-    mount: (currency) => { const sent: number[] = []; return { sent, element: createElement(PlaceSetup, { currency, sent }) }; } },
-  { name: "Budget creation", input: (l) => label(l)("budget.monthlyLimitA11y"), submit: (l) => label(l)("budget.saveLimit"),
-    mount: (currency) => { const sent: number[] = []; return { sent, element: createElement(Composer, { currency, sent }) }; } },
-  { name: "Budget add sheet", input: (l, c) => label(l)("budget.limitInA11y", { currency: c }), submit: (l) => label(l)("budget.saveBudget"),
-    mount: (currency) => { const sent: number[] = []; return { sent, element: createElement(AddSheet, { currency, sent }) }; } },
-  { name: "Budget limit sheet", input: (l, c) => label(l)("lifecycle.limitInputA11y", { currency: c }),
+  { name: "Post one entry", replaces: "the composer is reset", input: (l) => label(l)("posting.formAmountA11y"), submit: (l) => label(l)("posting.formPost"),
+    owner: (currency, sent) => createElement(PostComposer, { currency, sent, batch: false }) },
+  { name: "Post batch row", replaces: "the composer is reset", input: (l) => label(l)("posting.formAmountA11y"), submit: (l) => label(l)("posting.formAddToBatch"),
+    owner: (currency, sent) => createElement(PostComposer, { currency, sent, batch: true }) },
+  { name: "place setup balance", replaces: "a new place draft opens", input: (l) => label(l)("posting.setupBalance"), submit: (l) => label(l)("posting.setupSubmit"), starts: true,
+    owner: (currency, sent) => createElement(PlaceSetup, { currency, sent }) },
+  { name: "Budget creation", replaces: "the amount is reset", input: (l) => label(l)("budget.monthlyLimitA11y"), submit: (l) => label(l)("budget.saveLimit"),
+    owner: (currency, sent) => createElement(Composer, { currency, sent }) },
+  { name: "Budget add sheet", replaces: "a shortcut replaces the amount", input: (l, c) => label(l)("budget.limitInA11y", { currency: c }), submit: (l) => label(l)("budget.saveBudget"),
+    owner: (currency, sent) => createElement(AddSheet, { currency, sent }) },
+  { name: "Budget limit sheet", replaces: "the amount is reset", input: (l, c) => label(l)("lifecycle.limitInputA11y", { currency: c }),
     submit: (l) => label(l)("budget.saveMonth", { month: monthInSentence("2026-11", l) }),
-    starts: true, mount: (currency) => { const sent: number[] = []; return { sent, element: createElement(LimitSheet, { currency, sent }) }; } },
-  { name: "Recovery proposal", input: (l, c) => label(l)("recovery.draftMonthly", { currency: c }), submit: (l) => label(l)("recovery.draftActivate"),
+    starts: true, owner: (currency, sent) => createElement(LimitSheet, { currency, sent }) },
+  { name: "Recovery proposal", replaces: "a month count replaces the amount", input: (l, c) => label(l)("recovery.draftMonthly", { currency: c }), submit: (l) => label(l)("recovery.draftActivate"),
     starts: true, accepts: (minor) => minor >= 100_000 && minor <= 400_000,
-    mount: (currency) => { const sent: number[] = []; return { sent, element: createElement(Proposal, { currency, sent }) }; } },
+    owner: (currency, sent) => createElement(Proposal, { currency, sent }) },
   { name: "Recovery Move money", input: (l, c) => label(l)("recovery.moveAmountA11y", { currency: c }), submit: (l) => label(l)("recovery.moveSubmit"),
-    starts: true, mount: (currency) => { const sent: number[] = []; return { sent, element: createElement(Move, { currency, sent }) }; } },
+    starts: true, owner: (currency, sent) => createElement(Move, { currency, sent }) },
 ];
 
-async function render(field: Field, currency: Currency, language: Language) {
-  const harness = field.mount(currency);
-  await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: language }, harness.element)); });
+let switchCurrency: (currency: Currency) => void = () => {};
+/** The field's owner in a workspace whose currency can change while the screen is open. */
+function Workspace({ field, initial, sent }: { field: Field; initial: Currency; sent: number[] }) {
+  const [currency, setCurrency] = useState(initial);
+  switchCurrency = setCurrency;
+  return field.owner(currency, sent);
+}
+
+async function render(field: Field, initial: Currency, language: Language) {
+  const sent: number[] = [];
+  let currency = initial;
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: language }, createElement(Workspace, { field, initial, sent })));
+  });
   const input = () => root!.root.find((node) => node.type === "input" && node.props.accessibilityLabel === field.input(language, currency));
   const control = (name: string) => root!.root.find((node: ReactTestInstance) =>
     typeof node.type === "string" && (node.props.accessibilityLabel === name || node.props.label === name) && !!node.props.onPress);
@@ -210,7 +231,11 @@ async function render(field: Field, currency: Currency, language: Language) {
   const alerts = () => root!.root.findAll((node) => node.type === "text" && node.props.accessibilityRole === "alert")
     .map((node) => node.children.join(""));
   if (field.starts) await act(async () => input().props.onChangeText(""));
-  return { sent: harness.sent, input, submit, saveHandler, type, decimal, alerts };
+  /** The workspace currency becomes `next`; `during` runs before the owner's render, as a late native event does. */
+  const switchTo = async (next: Currency, during: () => void = () => {}) => {
+    await act(async () => { switchCurrency(next); currency = next; during(); });
+  };
+  return { sent, input, submit, saveHandler, type, decimal, alerts, switchTo };
 }
 
 const wrongKeyHint = {
@@ -303,3 +328,41 @@ test("third review, finding 2: a place name handler from the render before the l
   await screen.submit();
   expect(screen.sent).toEqual([150000]);
 });
+
+for (const field of fields)
+  test(`${field.name}: a COP keystroke that arrives after the workspace currency becomes USD changes nothing on screen or sent`, async () => {
+    const outcome = async (late: boolean) => {
+      const screen = await render(field, "COP", "en");
+      await screen.type("1.00");
+      const old = screen.input().props.onChangeText as (text: string) => void;
+      await screen.switchTo("USD", () => { if (late) old("1.000"); });
+      const shown = screen.input().props.value as string;
+      await screen.submit();
+      await act(async () => root?.unmount());
+      root = undefined;
+      return { shown, sent: [...screen.sent] };
+    };
+    const quiet = await outcome(false);
+    const raced = await outcome(true);
+    expect(raced).toEqual(quiet);
+    expect(quiet.shown, "the owner reopened its amount in USD").not.toMatch(/^1\.00/);
+  });
+
+for (const field of fields.filter((each) => each.replaces))
+  test(`${field.name}: a keystroke that arrives after ${field.replaces} changes nothing on screen or sent`, async () => {
+    const outcome = async (late: boolean) => {
+      const screen = await render(field, "COP", "en");
+      await screen.type("15");
+      const old = screen.input().props.onChangeText as (text: string) => void;
+      await act(async () => { replaceOwnerAmount(); if (late) old("150"); });
+      const shown = screen.input().props.value as string;
+      await screen.submit();
+      await act(async () => root?.unmount());
+      root = undefined;
+      return { shown, sent: [...screen.sent] };
+    };
+    const quiet = await outcome(false);
+    const raced = await outcome(true);
+    expect(raced).toEqual(quiet);
+    expect(raced.shown).not.toMatch(/150$/);
+  });

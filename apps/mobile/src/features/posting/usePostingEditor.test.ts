@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
-import { openAmount } from "../amount/session";
+import { displayedMinorUnits, openAmount, withNativeText } from "../amount/session";
 
 const money = (text: string, currency = "COP") => openAmount(currency, text);
 import {
@@ -738,4 +738,15 @@ test("handlers kept from before a lost reply neither edit the held entry nor reb
     },
   };
   expect(api.post.mock.calls.map(([entry]) => entry)).toEqual([held, held]);
+});
+
+test("a late amount from an input the form already replaced changes neither the amount nor the categories", async () => {
+  const editor = await open(transport());
+  await act(async () => editor().setAmount(money("+1")));
+  const held = editor().amount;
+  await act(async () => editor().setAmount(money("-5,00")));
+  await act(async () => editor().setCategories({ ids: ["food"], primaryId: null }));
+  await act(async () => editor().setAmount(withNativeText(held, "10")));
+  expect(editor().categories.ids).toEqual(["food"]);
+  expect(displayedMinorUnits(editor().amount)).toBe(-500);
 });
