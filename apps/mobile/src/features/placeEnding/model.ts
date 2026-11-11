@@ -1,7 +1,8 @@
 import { ConvexError } from "convex/values";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { formatDateTime, formatList, formatLongDate, type MessageKey, type Translator } from "../../i18n";
-import { amountMinorUnits, type AmountSession } from "../amount/session";
+import { amountSendable, displayedMinorUnits, sendableMinorUnits, type AmountSession } from "../amount/session";
+import type { AtPress } from "../amount/useAmountState";
 import { formatMoney } from "../money";
 import type { api } from "../api";
 
@@ -166,7 +167,7 @@ export function categoryChoice(target: { id: string; name: string }, categories:
 
 /** The positive amount a line explains, or null while it is incomplete, unconfirmed or not positive. */
 export function lineMinorUnits(line: LineDraft) {
-  const minorUnits = amountMinorUnits(line.amount);
+  const minorUnits = amountSendable(line.amount) ? displayedMinorUnits(line.amount) : null;
   return minorUnits !== null && minorUnits > 0 ? minorUnits : null;
 }
 
@@ -194,7 +195,7 @@ export function closeRequest(input: {
   workspaceId: string;
   place: { id: string; name: string };
   reviewed: Reviewed;
-  lines: readonly LineDraft[];
+  lines: readonly AtPress<LineDraft>[];
   replacement: string | null;
   idempotencyKey: string;
 }, t: Translator["t"]): CloseRequest | null {
@@ -203,7 +204,7 @@ export function closeRequest(input: {
   const description = t("placeEnding.closingDescription", { place: input.place.name });
   const adjustment = t("placeEnding.adjustmentDescription", { place: input.place.name });
   const lines = input.lines.map((line): CloseRequest["lines"][number] => {
-    const amount = { currency: balance.currency, minorUnits: lineMinorUnits(line)! };
+    const amount = { currency: balance.currency, minorUnits: sendableMinorUnits(line.amount)! };
     const { kind } = answerSpec(line.answer);
     if (kind === "transfer") return { kind, otherFinancialAccountProfileId: line.target!.id, amount, description };
     if (kind === "expense") return { kind, userCategoryId: line.target!.id, amount, description };

@@ -124,12 +124,21 @@ export function openSavedAmount(
   return { session: openAmountIn(format, currency, opened.text), notice: opened.notice };
 }
 
+declare const atPress: unique symbol;
+/** An amount read from its owner's state at the moment of a press. Only `useAmountState` hands one out. */
+export type AmountAtPress = AmountSession & { readonly [atPress]: true };
+
 /**
- * The signed minor units to send: a complete amount the person does not still have to confirm and the phone has shown.
- * Anything else is null.
+ * Whether the amount may be sent: complete, not awaiting the person's confirmation, and shown by the phone. For
+ * enabling a control while rendering; a handler sends `sendableMinorUnits` of the amount it reads.
  */
-export function amountMinorUnits(session: AmountSession): number | null {
-  return session.review === null && session.unreported === null ? displayedMinorUnits(session) : null;
+export function amountSendable(session: AmountSession): boolean {
+  return session.editor.kind === "complete" && session.review === null && session.unreported === null;
+}
+
+/** The signed minor units to send, of an amount read at the moment of the press; null when it may not be sent. */
+export function sendableMinorUnits(amount: AmountAtPress): number | null {
+  return amountSendable(amount) ? displayedMinorUnits(amount) : null;
 }
 
 /** The signed minor units the field shows, whether or not they still await confirmation. Never send these. */

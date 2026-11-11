@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement, useState } from "react";
+import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { expect, test, vi } from "vitest";
 
@@ -11,7 +11,8 @@ vi.mock("react-native", () => ({
 import { copAmountConvention, usdAmountConvention } from "../../../../../src/accounting/currencies";
 import { LanguageProvider } from "../../i18n";
 import { AmountField } from "./AmountField";
-import { amountMinorUnits, confirmAmount, displayedMinorUnits, openAmountIn, type AmountSession } from "./session";
+import { confirmAmount, displayedMinorUnits, openAmountIn, sendableMinorUnits, type AmountAtPress, type AmountSession } from "./session";
+import { useAmountState } from "./useAmountState";
 
 /**
  * The second review's independent emulator and reference model (reports/mvp-2026-11-10/amount-field/
@@ -24,6 +25,7 @@ import { amountMinorUnits, confirmAmount, displayedMinorUnits, openAmountIn, typ
 type Phone = ReturnType<typeof phoneFor>;
 let root: ReactTestRenderer;
 let session: AmountSession;
+let read: () => AmountAtPress;
 const input = () => root.root.findByType("input" as never);
 /** The sign the field shows beside the native text. */
 const shownSign = () => {
@@ -35,8 +37,9 @@ async function mount(cop: boolean, precision: 0 | 2 | 3): Promise<Phone> {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   function Owner() {
-    const [value, setValue] = useState(() => openAmountIn({ convention: cop ? copAmountConvention : usdAmountConvention, precision }, cop ? "COP" : "USD"));
+    const [value, setValue, readValue] = useAmountState(() => openAmountIn({ convention: cop ? copAmountConvention : usdAmountConvention, precision }, cop ? "COP" : "USD"));
     session = value;
+    read = readValue;
     return createElement(AmountField, { session: value, onChange: setValue, editable: true, inputAccessibilityLabel: "Amount", sign: {} });
   }
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Owner))); });
@@ -178,10 +181,10 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
           await phone.select(0, phone.text.length); await phone.edit("", -1); await phone.edit(pasted);
           expect(input().props.value).toBe(pasted);
           expect(session.review, "a pasted group mark awaits confirmation").not.toBeNull();
-          expect(amountMinorUnits(session)).toBeNull();
+          expect(sendableMinorUnits(read())).toBeNull();
           const confirm = root.root.findAll((node) => String(node.props.accessibilityLabel).startsWith("Confirm ") && typeof node.props.onPress === "function")[0];
           await act(async () => confirm.props.onPress());
-          expect(amountMinorUnits(session)).toBe((reference.sign === "-" ? -1 : 1) * 1234 * 10 ** precision);
+          expect(sendableMinorUnits(read())).toBe((reference.sign === "-" ? -1 : 1) * 1234 * 10 ** precision);
           await phone.select(0, phone.text.length); await phone.edit("", -1);
           reference.text = ""; reference.a = reference.b = 0;
         }
@@ -189,8 +192,8 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
         const visible = phone.text;
         expect(input().props.value, `field shows the phone's text after step ${step}`).toBe(visible);
         expect(displayedMinorUnits(session), `value of ${JSON.stringify(visible)}`).toBe(reads(shownSign() + visible, cop, precision));
-        if (session.review) expect(amountMinorUnits(session)).toBeNull();
-        else expect(amountMinorUnits(session), `sendable once the phone shows ${JSON.stringify(visible)}`).toBe(displayedMinorUnits(session));
+        if (session.review) expect(sendableMinorUnits(read())).toBeNull();
+        else expect(sendableMinorUnits(read()), `sendable once the phone shows ${JSON.stringify(visible)}`).toBe(displayedMinorUnits(session));
         if (intact) compared++;
         if (intact && (visible !== reference.shown() || shownSign() !== reference.sign || displayedMinorUnits(session) !== reference.value()
           || phone.caret[0] !== reference.a || phone.caret[1] !== reference.b)) { divergences++; intact = false; }

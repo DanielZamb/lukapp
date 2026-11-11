@@ -6,7 +6,8 @@ import { z } from "zod";
 import { useT, type MessageKey } from "../../i18n";
 import { admissionFailure } from "../../device-admission/failure";
 import { api } from "../api";
-import { amountMinorUnits, amountOfMinorUnits, displayedMinorUnits, openAmount, type AmountSession } from "../amount/session";
+import { amountOfMinorUnits, amountSendable, displayedMinorUnits, openAmount, sendableMinorUnits, type AmountAtPress, type AmountSession } from "../amount/session";
+import { useAmountState } from "../amount/useAmountState";
 import type { BudgetJar, RemovedLimit } from "./model";
 
 type AmountArgs = FunctionArgs<typeof api.budget.setCategoryLimit>;
@@ -50,7 +51,7 @@ const refusals: Record<string, { message: MessageKey; closes: boolean }> = {
   idempotency_key_invalid: { message: "budget.errorRejected", closes: false },
 };
 
-function readAmount(amount: AmountSession, currentMinorUnits: number | undefined):
+function limitIssue(amount: AmountSession, currentMinorUnits: number | undefined):
   { minorUnits: number; issue: AmountIssue | null } {
   if (!amount.editor.text.trim()) return { minorUnits: 0, issue: "empty" };
   const minorUnits = displayedMinorUnits(amount);
@@ -58,6 +59,13 @@ function readAmount(amount: AmountSession, currentMinorUnits: number | undefined
   if (minorUnits === 0) return { minorUnits, issue: "zero" };
   if (minorUnits < 0) return { minorUnits, issue: "notPositive" };
   return { minorUnits, issue: minorUnits === currentMinorUnits ? "unchanged" : null };
+}
+
+/** Whether `act` may be sent for this category and limit amount. */
+function readyFor(act: LimitAct, categoryId: string | null, amount: AmountSession, seed: BudgetEditorSeed) {
+  if (act === "amount") return !!categoryId && !limitIssue(amount, seed.jar?.limitMinorUnits).issue && amountSendable(amount);
+  if (act === "spendNothing") return !!categoryId && seed.jar?.limitMinorUnits !== 0;
+  return !!seed.jar;
 }
 
 function startingAmount(seed: BudgetEditorSeed) {
@@ -78,7 +86,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
   const translator = useT();
   const { t } = translator;
   const [categoryId, setCategoryId] = useState<string | null>(seed.jar?.category.id ?? seed.initialCategoryId ?? null);
-  const [amount, setAmount] = useState(() => startingAmount(seed));
+  const [amount, setAmount, readAmount] = useAmountState(() => startingAmount(seed));
   if (amount.currency !== seed.currency) setAmount(startingAmount(seed));
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
@@ -94,35 +102,33 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  const { minorUnits, issue } = readAmount(amount, seed.jar?.limitMinorUnits);
-  const ready: Record<LimitAct, boolean> = {
-    amount: !!categoryId && !issue && amountMinorUnits(amount) !== null,
-    spendNothing: !!categoryId && seed.jar?.limitMinorUnits !== 0,
-    remove: !!seed.jar,
-  };
-  const canSend = (act: LimitAct) => !busy && !blocked && (pendingAct ? pendingAct === act : ready[act]);
+  const { minorUnits, issue } = limitIssue(amount, seed.jar?.limitMinorUnits);
+  const canSend = (act: LimitAct) => !busy && !blocked && (pendingAct ? pendingAct === act : readyFor(act, categoryId, readAmount(), seed));
 
-  function build(act: LimitAct, selectedCategoryId: string): LimitCommand {
+  function build(act: LimitAct, selectedCategoryId: string, pressed: AmountAtPress): LimitCommand {
     const target = {
       workspaceId: seed.workspaceId, categoryId: selectedCategoryId, effectiveMonth: seed.month,
       expectedRevisionId: seed.jar?.revisionId
         ?? seed.removedLimits.find((removed) => removed.categoryId === selectedCategoryId)?.revisionId ?? null,
       idempotencyKey: transport.newKey(),
     };
-    return act === "amount" ? { kind: act, args: { ...target, limit: { currency: seed.currency, minorUnits } } }
-      : { kind: act, args: target };
+    if (act !== "amount") return { kind: act, args: target };
+    const limit = sendableMinorUnits(pressed);
+    if (limit === null) throw new Error("Limit amount is not sendable");
+    return { kind: act, args: { ...target, limit: { currency: seed.currency, minorUnits: limit } } };
   }
 
   async function send(act: LimitAct) {
     const mounted = lifetime.current;
     const selectedCategoryId = command.current?.args.categoryId ?? categoryId;
     if (!mounted.active || submitting.current || blocked || !selectedCategoryId) return;
-    if (command.current ? command.current.kind !== act : !ready[act]) return;
+    const pressed = readAmount();
+    if (command.current ? command.current.kind !== act : !readyFor(act, selectedCategoryId, pressed, seed)) return;
     submitting.current = true;
     setBusy(true);
     setError("");
     try {
-      const frozen = command.current ?? build(act, selectedCategoryId);
+      const frozen = command.current ?? build(act, selectedCategoryId, pressed);
       command.current = frozen;
       setPendingAct(frozen.kind);
       const receipt = await transport.send(frozen);

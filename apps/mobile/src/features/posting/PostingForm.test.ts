@@ -314,7 +314,7 @@ test("Add a place offers the four mapped types, emoji look, and balance today", 
     root!.root.findByProps({ accessibilityLabel: "Emoji 🏦" }).props.onPress(),
   );
   await act(async () => root!.root.findByProps({ accessibilityLabel: "Use this", accessibilityRole: "button" }).props.onPress());
-  expect(onChange).toHaveBeenLastCalledWith({ ...value, emoji: "🏦" });
+  expect(onChange).toHaveBeenLastCalledWith({ emoji: "🏦" });
   expect(
     root!.root
       .findAllByType("input")
@@ -333,7 +333,7 @@ test.each([
     return createElement(AccountSetupForm, {
       sheetRef: createRef<BottomSheetModal>(), value, currency: "COP", editable: true, busy: false, pending: false, error: "",
       canSubmit: true, onSubmit: vi.fn(), onDismiss: vi.fn(),
-      onChange: (next: PlaceDraft) => { sent.push(next.productKind ?? "none"); setValue(next); },
+      onChange: (change: Partial<PlaceDraft>) => { sent.push(change.productKind ?? "none"); setValue((current) => ({ ...current, ...change })); },
     });
   }
   await act(async () => {

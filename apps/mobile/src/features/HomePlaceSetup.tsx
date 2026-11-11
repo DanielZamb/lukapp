@@ -72,8 +72,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   function pickKind(next: PlaceKind) {
     if (!setup || !editor.editable) return;
     interact(); setKind(next);
-    editor.setSetup({ ...setup, productKind: kindDetails[next].productKind,
-      emoji: emojiChanged ? setup.emoji : kindDetails[next].emoji });
+    editor.changeSetup({ productKind: kindDetails[next].productKind, ...(emojiChanged ? {} : { emoji: kindDetails[next].emoji }) });
   }
   return <>
     {editor.loading && <ActivityIndicator accessibilityLabel={t("home.addPlaceLoading")} />}
@@ -95,7 +94,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
           <Text style={styles.fieldLabel}>{t("home.addPlaceName")}</Text>
           <BottomSheetTextInput accessibilityLabel={t("home.addPlaceNameA11y")} placeholder={t("home.addPlaceNamePlaceholder")} placeholderTextColor={theme.mutedForeground}
             value={name} editable={editor.editable} style={styles.input} onChangeText={(value) => {
-              interact(); setName(value); editor.setSetup({ ...setup, name: value.trim() || t("home.addPlaceDefaultName") });
+              interact(); setName(value); editor.changeSetup({ name: value.trim() || t("home.addPlaceDefaultName") });
             }} />
         </View>
         <View style={styles.field}>
@@ -118,7 +117,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
           <AmountField session={setup.amount} editable={editor.editable} inputAccessibilityLabel={t("home.addPlaceBalance")}
             placeholder="0" InputComponent={BottomSheetTextInput} inputStyle={styles.input}
             onChange={(value: AmountSession) => { interact();
-              editor.setSetup({ ...setup, amount: value });
+              editor.changeSetup({ amount: value });
             }} />
         </View>
         {!!editor.error && <Text accessibilityRole="alert" style={ui.error}>{editor.error}</Text>}
@@ -133,7 +132,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
       </BottomSheetScrollView>}
     </BottomSheetModal>
     {emojiOpen && setup && <EmojiSheet emoji={setup.emoji ?? kindDetails[kind].emoji}
-      onPick={(emoji) => { setEmojiChanged(true); editor.setSetup({ ...setup, emoji }); }}
+      onPick={(emoji) => { setEmojiChanged(true); editor.changeSetup({ emoji }); }}
       onUse={() => {}} onDismiss={() => setEmojiOpen(false)} />}
   </>;
 }

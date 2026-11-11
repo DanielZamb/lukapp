@@ -6,7 +6,7 @@ import { Choice, Field, Header, ListGroup, ListRow, PrimaryButton, Screen, Secon
 import { useReadableLayout } from "../../ui/themeContext";
 import { font, radius, spacing } from "../../ui/tokens";
 import { AmountField } from "../amount/AmountField";
-import type { AmountSession } from "../amount/session";
+import { amountSendable, type AmountSession } from "../amount/session";
 import { api } from "../api";
 import { formatMoney } from "../money";
 import type { UnresolvedEnding } from "./unresolved";
@@ -181,7 +181,7 @@ export function LinesScreen({ name, situation, balance, lines, adding, editable,
         </ListGroup>}
         <AmountField label={t("placeEnding.lineAmount")} inputAccessibilityLabel={t("placeEnding.lineAmountA11y", { answer: label })}
           session={line.amount} editable={editable} onChange={(amount) => onAmount(line.id, amount)}
-          message={{ error: line.amount.editor.kind === "complete" && line.amount.review === null && lineMinorUnits(line) === null
+          message={{ error: amountSendable(line.amount) && lineMinorUnits(line) === null
             ? t("placeEnding.lineAmountPositive") : undefined }} />
         <SecondaryButton label={t("placeEnding.removeLine")} accessibilityLabel={t("placeEnding.removeLineA11y", { answer: label })}
           disabled={!editable} onPress={() => onRemove(line.id)} />

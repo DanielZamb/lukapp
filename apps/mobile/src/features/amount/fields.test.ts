@@ -92,7 +92,7 @@ function PlaceSetup({ currency, sent }: { currency: Currency; sent: number[] }) 
   });
   return createElement(AccountSetupForm, {
     sheetRef: createRef<BottomSheetModal>(), value: editor.setup, currency, editable: editor.editable, busy: editor.busy,
-    pending: editor.pending, error: editor.error, canSubmit: editor.canSubmit, onChange: editor.setSetup,
+    pending: editor.pending, error: editor.error, canSubmit: editor.canSubmit, onChange: editor.changeSetup,
     onSubmit: () => void editor.submit(), onDismiss: noop,
   });
 }

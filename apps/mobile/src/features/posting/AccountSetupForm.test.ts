@@ -83,7 +83,7 @@ function Setup({ initialValue = initial }: { initialValue?: PlaceDraft }) {
   useEffect(() => { sheet.current?.present(); }, []);
   return createElement(AccountSetupForm, {
     sheetRef: sheet, value, currency: "COP", editable: true, busy: false,
-    pending: false, error: "", canSubmit: true, onChange: setValue,
+    pending: false, error: "", canSubmit: true, onChange: (change: Partial<PlaceDraft>) => setValue((current) => current && { ...current, ...change }),
     onSubmit: submitted, onDismiss() { dismissed(); setValue(null); },
   });
 }

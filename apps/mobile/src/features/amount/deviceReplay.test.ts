@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createElement, useState } from "react";
+import { createElement } from "react";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -16,7 +16,8 @@ vi.mock("react-native", () => ({
 
 import { LanguageProvider } from "../../i18n";
 import { AmountField } from "./AmountField";
-import { amountMinorUnits, openAmount, type AmountSession } from "./session";
+import { openAmount, sendableMinorUnits, type AmountAtPress, type AmountSession } from "./session";
+import { useAmountState } from "./useAmountState";
 
 type Event =
   | { kind: "text"; text: string }
@@ -80,11 +81,12 @@ test("the recordings cover typing, editing, pasting, the field's keys and an own
 });
 
 test.each(recordings)("replaying %s from the phone shows the text the phone showed and sends what it sent", async (name, recording) => {
-  let session: AmountSession = openAmount(recording.currency, recording.initialText);
+  const initial: AmountSession = openAmount(recording.currency, recording.initialText);
   let replace: (next: AmountSession) => void = () => {};
+  let read: () => AmountAtPress = () => { throw new Error("Not rendered"); };
   function Owner() {
-    const [value, setValue] = useState(session);
-    session = value;
+    const [value, setValue, readValue] = useAmountState(initial);
+    read = readValue;
     replace = setValue;
     return createElement(AmountField, { session: value, onChange: setValue, editable: true, inputAccessibilityLabel: "Amount", sign: {} });
   }
@@ -100,7 +102,7 @@ test.each(recordings)("replaying %s from the phone shows the text the phone show
     else if (event.kind === "decimal") await act(async () => key(/^Type a decimal/).props.onPress());
     else if (event.kind === "sign") await act(async () => key(/^Switch the amount/).props.onPress());
     else if (event.kind === "replace") { await act(async () => replace(openAmount(event.currency, event.text))); input().props.onFocus(); }
-    else if (event.kind === "send") sends.push(amountMinorUnits(session));
+    else if (event.kind === "send") sends.push(sendableMinorUnits(read()));
   }
   expect(input().props.value).toBe(expected.finalText);
   expect(sends).toEqual(expected.sends);

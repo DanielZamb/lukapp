@@ -63,7 +63,7 @@ export function DeferredAccountSetup({ request, subject, workspaceId, profileId,
       <SecondaryButton label={t("setup.deferredLater")} onPress={finish} />}
     <AccountSetupForm sheetRef={sheet} value={editor.setup} currency={currency}
       editable={editor.editable} busy={editor.busy} pending={editor.pending} error={editor.error}
-      canSubmit={editor.canSubmit} onChange={editor.setSetup} onSubmit={() => {
+      canSubmit={editor.canSubmit} onChange={editor.changeSetup} onSubmit={() => {
         if (!editor.canSubmit) return;
         submitted.current = true;
         void editor.submit();

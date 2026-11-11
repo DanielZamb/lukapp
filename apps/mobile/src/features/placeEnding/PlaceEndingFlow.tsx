@@ -7,6 +7,7 @@ import { formatLongDate, useT, type MessageKey } from "../../i18n";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { amountOfMinorUnits, openAmount, type AmountSession } from "../amount/session";
+import { useAmountState } from "../amount/useAmountState";
 import { api } from "../api";
 import { formatMoney } from "../money";
 import { refusalCodeOf, useFrozenCommand } from "../useFrozenCommand";
@@ -82,7 +83,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const [act, setAct] = useState<Act | null>(null);
   const [steps, setSteps] = useState<Step[]>([{ name: "choose" }]);
   const [replacement, setReplacement] = useState<string | null>(null);
-  const [lines, setLines] = useState<LineDraft[]>([]);
+  const [lines, setLines, readLines] = useAmountState<LineDraft[]>([]);
   const [adding, setAdding] = useState(false);
   const [typed, setTyped] = useState("");
   const [receipt, setReceipt] = useState<CloseReceipt | null>(null);
@@ -268,7 +269,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
       onSelect={(id) => { interact(); setReplacement(id); }}
       onContinue={replacement && others.some((item) => item.id === replacement) ? advance : undefined} onBack={back} />;
 
-  const findLine = (id: string) => lines.find((line) => line.id === id);
+  const findLine = (id: string) => readLines().find((line) => line.id === id);
   function update(id: string, change: Partial<LineDraft>) {
     setLines((current) => current.map((line) => line.id === id ? { ...line, ...change } : line));
   }
@@ -277,11 +278,12 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   function addLine(answer: Answer) {
     if (!close.canEdit()) return;
     interact();
-    const remaining = remainingMinorUnits(balance, lines);
+    const current = readLines();
+    const remaining = remainingMinorUnits(balance, current);
     const { kind } = answerSpec(answer);
     const only = kind === "transfer" && others.length === 1 ? { id: others[0]!.id, name: others[0]!.name } : null;
     const line: LineDraft = { id: `line-${nextLine.current++}`, answer, target: only, amount: amountFor(remaining) };
-    const nextLines = [...lines, line];
+    const nextLines = [...current, line];
     setLines(nextLines);
     setAdding(false);
     if (kind === "adjustment" || only) {
@@ -294,7 +296,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   function pickTarget(lineId: string, option: PickOption) {
     if (!close.canEdit()) return;
     interact();
-    const nextLines = lines.map((line) => line.id === lineId ? { ...line, target: { id: option.id, name: option.label } } : line);
+    const nextLines = readLines().map((line) => line.id === lineId ? { ...line, target: { id: option.id, name: option.label } } : line);
     setLines(nextLines);
     const rest = steps.slice(0, -1);
     const firstAnswer = rest[rest.length - 1]?.name === "lines" && nextLines.length === 1 && nextLines.every(lineComplete)
@@ -370,7 +372,10 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     onConfirm={() => {
       interact();
       if (!close.frozen && !clearToSend()) return;
-      void close.submit(() => unavailable ? null
-        : closeRequest({ reviewed: basis, workspaceId, place: { id: profileId, name }, lines, replacement, idempotencyKey: Crypto.randomUUID() }, t));
+      void close.submit(() => {
+        const pressed = readLines();
+        return pressed.some((line) => choiceOf(line)?.unavailable) || replacementChoice?.unavailable ? null
+          : closeRequest({ reviewed: basis, workspaceId, place: { id: profileId, name }, lines: pressed, replacement, idempotencyKey: Crypto.randomUUID() }, t);
+      });
     }} />;
 }

@@ -15,7 +15,8 @@ vi.mock("react-native", () => ({
 import { LanguageProvider, useLanguage } from "../../i18n";
 import { AmountField } from "./AmountField";
 import { samsungPhone } from "./phone.testSupport";
-import { amountMinorUnits, openAmount, openSavedAmount, type AmountSession } from "./session";
+import { openAmount, openSavedAmount, sendableMinorUnits, type AmountSession } from "./session";
+import { useAmountState } from "./useAmountState";
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); });
@@ -25,7 +26,7 @@ const sent: Array<{ currency: string; minorUnits: number }> = [];
 let replaceSession: (session: AmountSession) => void = () => {};
 
 function Owner({ currency, opened, initial }: { currency: string; opened?: string; initial?: AmountSession }) {
-  const [session, setSession] = useState<AmountSession>(() => initial ?? openAmount(currency, opened));
+  const [session, setSession, read] = useAmountState<AmountSession>(() => initial ?? openAmount(currency, opened));
   replaceSession = setSession;
   const language = useLanguage();
   if (session.currency !== currency) setSession(openAmount(currency));
@@ -34,8 +35,8 @@ function Owner({ currency, opened, initial }: { currency: string; opened?: strin
     createElement("button", {
       accessibilityLabel: "Send", accessibilityRole: "button",
       onPress: () => {
-        const minorUnits = amountMinorUnits(session);
-        if (minorUnits !== null) sent.push({ currency: session.currency, minorUnits });
+        const minorUnits = sendableMinorUnits(read());
+        if (minorUnits !== null) sent.push({ currency: read().currency, minorUnits });
       },
     }),
     createElement("button", { accessibilityLabel: "Spanish", accessibilityRole: "button", onPress: () => language.setPreference("es") }));
@@ -488,11 +489,11 @@ test("an owner that renders the field a commit late, as a bottom sheet's portal 
 
 test("a field that is not editable shows its owner's text and takes no native change", async () => {
   function Frozen() {
-    const [session, setSession] = useState(() => openAmount("USD", "12"));
+    const [session, setSession, read] = useAmountState(() => openAmount("USD", "12"));
     return createElement("view", null,
       createElement(AmountField, { session, onChange: setSession, editable: false, inputAccessibilityLabel: "Amount" }),
       createElement("button", { accessibilityLabel: "Send", accessibilityRole: "button",
-        onPress: () => { const minorUnits = amountMinorUnits(session); if (minorUnits !== null) sent.push({ currency: "USD", minorUnits }); } }));
+        onPress: () => { const minorUnits = sendableMinorUnits(read()); if (minorUnits !== null) sent.push({ currency: "USD", minorUnits }); } }));
   }
   sent.length = 0;
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Frozen))); });
