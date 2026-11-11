@@ -72,3 +72,10 @@ export function categoryFailureMessage(error: unknown, { t }: Translator) {
   }
   return t("categories.errorSaveChange");
 }
+
+export const natureAnswers: readonly NatureAnswer[] = ["spend", "receive", "stillMine", "payDebt"];
+
+/** The nature a custom category is created with: the person's answer, or the suggestion when it was made for this same name. */
+export function natureAnswer(editor: { name: string; answer: NatureAnswer | null }, suggestion: { suggested: NatureAnswer | null; key?: string }) {
+  return editor.answer ?? (suggestion.key === categoryNameKey(editor.name) ? suggestion.suggested : null);
+}
