@@ -18,6 +18,7 @@ export const amount: Messages<typeof en> = {
   hintNotNumber: "Escribe solo números y separadores, por ejemplo {example}",
   hintTooLarge: "El monto es demasiado grande.",
   reading: "Se lee como {amount}",
+  readingChanged: "Ahora se lee como {amount}",
   reviewConverted: "Lo guardaste como {previous}. Ahora aparece como {amount}.",
   reviewPasted: "Pegaste {amount}. Revisa que esté bien antes de seguir.",
   reviewConfirm: "Confirmar {amount}",

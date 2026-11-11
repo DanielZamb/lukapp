@@ -1,11 +1,14 @@
-import { useMemo, useRef, useState, type ComponentProps, type ComponentType } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType } from "react";
+import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
 import { useT } from "../../i18n";
 import { useThemeContext } from "../../ui/themeContext";
 import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import { amountHint } from "./hints";
-import { confirmAmount, nativeText, toggleAmountSign, withDecimalMark, withNativeCaret, withNativeText, type AmountSession } from "./session";
+import {
+  confirmAmount, displayedMinorUnits, nativeText, readingShifted, toggleAmountSign, withDecimalMark, withNativeCaret, withNativeText,
+  type AmountSession,
+} from "./session";
 
 type Caret = { start: number; end: number };
 
@@ -38,6 +41,10 @@ export type AmountFieldProps = {
  * echo of a session the field emitted is never adopted, since it may be older than the last one. Any other session is
  * the owner's: one with other text or currency gets a new native input, so a change in flight from the old one cannot
  * reach it. While the field is not editable it shows the owner's text and takes no native change.
+ *
+ * The reading speaks up, in words and weight rather than colour alone, when a change could be misread at a glance:
+ * it says the amount now reads differently, becomes a polite live region on Android and is announced on iOS. It
+ * keeps its single line, so nothing moves under the person's thumb.
  */
 export function AmountField(props: AmountFieldProps) {
   const { t } = useT();
@@ -47,6 +54,8 @@ export function AmountField(props: AmountFieldProps) {
   const emitted = useRef(new WeakSet<AmountSession>());
   const caret = useRef<Caret>({ start: nativeText(props.session).length, end: nativeText(props.session).length });
   const focused = useRef(false);
+  const seen = useRef<AmountSession | null>(displayedMinorUnits(props.session) === null ? null : props.session);
+  const [shifted, setShifted] = useState(false);
   const [input, setInput] = useState({ seen: props.session, text: nativeText(props.session), generation: 0, autoFocus: false });
   const [placed, setPlaced] = useState<Caret | undefined>(undefined);
   let { generation } = input;
@@ -55,6 +64,8 @@ export function AmountField(props: AmountFieldProps) {
     const replaced = owner && (props.session.currency !== latest.current.currency || nativeText(props.session) !== input.text);
     if (owner) latest.current = props.session;
     if (replaced) {
+      seen.current = displayedMinorUnits(props.session) === null ? null : props.session;
+      if (shifted) setShifted(false);
       generation += 1;
       const end = nativeText(props.session).length;
       caret.current = { start: end, end };
@@ -76,6 +87,10 @@ export function AmountField(props: AmountFieldProps) {
   const Input = props.InputComponent ?? TextInput;
   function emit(next: AmountSession) {
     if (next === latest.current) return;
+    if (next.editor.text !== latest.current.editor.text) {
+      setShifted(readingShifted(seen.current, next));
+      if (displayedMinorUnits(next) !== null) seen.current = next;
+    }
     latest.current = next;
     emitted.current.add(next);
     props.onChange(next);
@@ -100,6 +115,11 @@ export function AmountField(props: AmountFieldProps) {
   const shown = editor.kind === "complete" ? formatMoney({ currency, minorUnits: editor.minorUnits }) : null;
   /** The grouped reading of the text. Its one line is always laid out, so the keys never move while the person types. */
   const reading = review ? null : shown;
+  const emphasized = shifted && reading !== null;
+  const spoken = reading === null ? null : t(emphasized ? "amount.readingChanged" : "amount.reading", { amount: reading });
+  useEffect(() => {
+    if (emphasized && spoken && Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(spoken);
+  }, [emphasized, spoken]);
   const reviewed = review && editor.kind === "complete" ? formatMoney({ currency, minorUnits: Math.abs(editor.minorUnits) }) : null;
   return (
     <View style={styles.field}>
@@ -192,9 +212,10 @@ export function AmountField(props: AmountFieldProps) {
         <Text accessibilityRole="alert" style={ui.error}>{props.message.error}</Text>
       ) : (
         <>
-          <Text style={[ui.muted, styles.reading]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
+          <Text style={[ui.muted, styles.reading, emphasized && styles.readingShifted]} numberOfLines={1} adjustsFontSizeToFit
+            minimumFontScale={0.5} accessibilityLiveRegion={emphasized ? "polite" : "none"}
             importantForAccessibility={reading ? "auto" : "no-hide-descendants"}
-            accessibilityElementsHidden={!reading}>{reading ? t("amount.reading", { amount: reading }) : "\u00a0"}</Text>
+            accessibilityElementsHidden={!reading}>{spoken ?? "\u00a0"}</Text>
           {props.message?.helper ? <Text style={ui.muted}>{props.message.helper}</Text> : null}
         </>
       )}
@@ -212,6 +233,7 @@ function createStyles(theme: Theme) {
     boxed: { width: "auto" },
     review: { gap: spacing.sm, paddingVertical: spacing.xs },
     reading: { lineHeight: Math.round(fontSize.body * 1.4) },
+    readingShifted: { fontFamily: font.bold, color: theme.foreground },
     key: {
       minWidth: touchTarget,
       minHeight: touchTarget,

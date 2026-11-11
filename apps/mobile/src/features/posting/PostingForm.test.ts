@@ -25,6 +25,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetTextInput: "input",
 }));
 vi.mock("react-native", () => ({
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   KeyboardAvoidingView: "keyboard-viewport",
   Text: "text",
   View: "view",

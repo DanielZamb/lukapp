@@ -233,6 +233,29 @@ export function withDecimalMark(session: AmountSession, caret: number, typing: b
   return { session: { ...withText(session, before + insert + text.slice(at)), unreported: typing ? { caret: placed } : null }, caret: placed };
 }
 
+/** How many digits come before the decimal mark, or null without one. */
+function wholeDigits(session: AmountSession): number | null {
+  const { text } = session.editor;
+  const at = text.indexOf(session.editor.format.convention.decimal);
+  return at < 0 ? null : text.slice(0, at).replace(/\D/g, "").length;
+}
+
+/**
+ * Whether the reading moved in a way a glance could misread, measured from `seen`, the last amount the person could
+ * read: the decimal mark appeared or now has a different number of digits before it, or the value changed tenfold
+ * or more either way. Nothing is inferred about how the change was made.
+ */
+export function readingShifted(seen: AmountSession | null, next: AmountSession): boolean {
+  const before = seen ? displayedMinorUnits(seen) : null;
+  const after = displayedMinorUnits(next);
+  if (!seen || before === null || after === null) return false;
+  const mark = wholeDigits(next);
+  if (mark !== null && mark !== wholeDigits(seen)) return true;
+  const was = Math.abs(before);
+  const is = Math.abs(after);
+  return was !== 0 && is !== 0 && (is >= 10 * was || was >= 10 * is);
+}
+
 /** The person confirms the amount shown. */
 export function confirmAmount(session: AmountSession): AmountSession {
   return session.review === null ? session : { ...session, review: null };

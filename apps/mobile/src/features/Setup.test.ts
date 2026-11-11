@@ -48,6 +48,7 @@ vi.mock("convex/react", () => ({
   },
 }));
 vi.mock("react-native", () => ({
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   KeyboardAvoidingView: "keyboard-viewport",
   BackHandler: { addEventListener: () => ({ remove() {} }) },
   Platform: { OS: "ios" },

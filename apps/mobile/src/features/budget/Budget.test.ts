@@ -53,6 +53,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetModal: "Sheet", BottomSheetScrollView: "SheetScroll", BottomSheetBackdrop: "Backdrop", BottomSheetTextInput: "SheetInput",
 }));
 vi.mock("react-native", () => ({
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   BackHandler: { addEventListener: (_: string, listener: () => boolean) => {
     backListeners.push(listener);
     return { remove: () => { backListeners.splice(backListeners.indexOf(listener), 1); } };

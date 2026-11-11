@@ -222,7 +222,7 @@ test("third review, finding 4: the sign key never writes the native text, so a k
   await send();
   await phone.type("3", { racing: true });
   expect(phone.text).toBe("123");
-  expect(texts()).toContain("Reads as −USD 123.00");
+  expect(texts()).toContain("Now reads as −USD 123.00");
   await send();
   expect(sent).toEqual([{ currency: "USD", minorUnits: -1200 }, { currency: "USD", minorUnits: -12300 }]);
 });
