@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { getFunctionName } from "convex/server";
@@ -249,6 +250,20 @@ test("a failed create leaves the selection and editor available for retry", asyn
   expect(picker.close).not.toHaveBeenCalled();
 });
 
+
+test("after a lost reply, a create refused before the server looked can be sent again as the same named category", async () => {
+  const picker = await open([category("food")]);
+  await act(async () => picker.sheet().onCreate());
+  await act(async () => picker.sheet().onName("Weekend"));
+  await act(async () => picker.sheet().onAnswer("spend"));
+  provider.create.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockResolvedValueOnce({ kind: "category", category: category("weekend") });
+  for (let attempt = 0; attempt < 3; attempt++) await act(async () => picker.sheet().onConfirm());
+  const weekend = { workspaceId: "workspace", selection: { kind: "custom", name: "Weekend", answer: "spend", style: expect.anything() } };
+  expect(provider.create.mock.calls.map(([request]) => request)).toEqual([weekend, weekend, weekend]);
+  expect(picker.value()).toEqual({ ids: ["weekend"], primaryId: null });
+});
 
 test("unknown custom names require an explicit allowed answer and reset it on rename", async () => {
   const picker = await open([]);

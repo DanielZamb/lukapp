@@ -67,6 +67,20 @@ test("an uncertain response retries the same payload and reopening retains the s
   expect(api.post.mock.calls[2][0]).toEqual(api.post.mock.calls[0][0]);
 });
 
+test("after a lost reply, retries refused before or after the lookup still repeat the one reversal key of that entry", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new Error("Lost response"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "locked_period", message: "Locked Period" }));
+  const page = await open(api);
+  await act(async () => page.current().request());
+  for (let attempt = 0; attempt < 4; attempt++) await act(async () => { await page.current().confirm(); });
+  expect(api.post.mock.calls.map(([payload]) => payload)).toEqual(Array.from({ length: 4 }, () => ({
+    workspaceId: "workspace", journalEntryId: "entry", idempotencyKey: "mobile-reversal@1:workspace:entry",
+  })));
+  expect(page.current().state).toEqual({ kind: "posted", receipt });
+});
+
 test("late acknowledgements cannot update a different entry mounted in the same controller", async () => {
   const api = transport();
   let finish: ((value: typeof receipt) => void) | undefined;

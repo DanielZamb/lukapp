@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { expect, test, vi } from "vitest";
 import { createTranslator } from "../../../../../src/i18n";
 vi.mock("expo", () => ({ requireOptionalNativeModule: () => null }));
@@ -179,4 +180,24 @@ test("the review note is one sentence per language around the stored source, amo
   expect(await noteFor(dollars, "es")).toContain("Monto original 45,123.45 USD.");
   expect(await noteFor(partials[0]!, "es")).toContain("No pudimos leer el monto. Según la notificación, la plata entra.");
   expect(await noteFor(partials[1]!, "es")).toContain("No se sabe si la plata entra o sale. Escribe el monto con signo.");
+});
+
+test.each([
+  new ConvexError({ code: "provider_unavailable" }),
+  new ConvexError({ code: "session_verification_required" }),
+  new ConvexError({ code: "permission_denied" }),
+])("one Candidate whose reply was lost stays frozen when the retry is refused with $data.code, and goes again unchanged", async (refusal) => {
+  const f = fixture();
+  await f.service.refresh();
+  const dispatch = vi.fn(async (command: ConfirmCandidateInput) => resultFor(command));
+  dispatch.mockRejectedValueOnce(new Error("offline")).mockRejectedValueOnce(refusal);
+  const binding = createCandidateBinding({ service: f.service, candidateId: capture.captureId, workspaceId: mapping.workspaceId, dispatch, translator: createTranslator("en") });
+  const confirmed = { ...binding.originalSuggestion, amount: { currency: "COP" as const, minorUnits: 45000 } };
+  await expect(binding.confirm(confirmed)).rejects.toThrow("offline");
+  await expect(binding.confirm(confirmed)).rejects.toBe(refusal);
+  expect(rowOf(f.service).status.kind).toBe("submitting");
+  await binding.confirm({ ...confirmed, description: "Edited after the refusal" });
+  const first = dispatch.mock.calls[0]![0];
+  expect(first).toMatchObject({ candidateId: "capture-1", confirmed: { description: "Market", amount: { currency: "COP", minorUnits: 45000 } } });
+  expect(dispatch.mock.calls.map(([command]) => command)).toEqual([first, first, first]);
 });
