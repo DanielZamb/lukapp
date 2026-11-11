@@ -8,10 +8,15 @@
  * @module
  */
 
-import type * as accountingUndo from "../accountingUndo.js";
-import type * as accountingUndoValues from "../accountingUndoValues.js";
 import type * as accounting from "../accounting.js";
+import type * as accountingEndingBounds from "../accountingEndingBounds.js";
+import type * as accountingEndingChecks from "../accountingEndingChecks.js";
 import type * as accountingErrors from "../accountingErrors.js";
+import type * as accountingPlaceValues from "../accountingPlaceValues.js";
+import type * as accountingPlaces from "../accountingPlaces.js";
+import type * as accountingUndo from "../accountingUndo.js";
+import type * as accountingUndoSnapshot from "../accountingUndoSnapshot.js";
+import type * as accountingUndoValues from "../accountingUndoValues.js";
 import type * as accountingValues from "../accountingValues.js";
 import type * as accountingWrites from "../accountingWrites.js";
 import type * as authConnection from "../authConnection.js";
@@ -66,10 +71,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  accountingUndo: typeof accountingUndo;
-  accountingUndoValues: typeof accountingUndoValues;
   accounting: typeof accounting;
+  accountingEndingBounds: typeof accountingEndingBounds;
+  accountingEndingChecks: typeof accountingEndingChecks;
   accountingErrors: typeof accountingErrors;
+  accountingPlaceValues: typeof accountingPlaceValues;
+  accountingPlaces: typeof accountingPlaces;
+  accountingUndo: typeof accountingUndo;
+  accountingUndoSnapshot: typeof accountingUndoSnapshot;
+  accountingUndoValues: typeof accountingUndoValues;
   accountingValues: typeof accountingValues;
   accountingWrites: typeof accountingWrites;
   authConnection: typeof authConnection;
