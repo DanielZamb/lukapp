@@ -32,7 +32,6 @@ export function RenameSheet({ seed, rename, onDismiss }: {
     return () => subscription.remove();
   }, []);
   const save = () => {
-    if (!form.canSubmit) return;
     interact();
     void form.submit();
   };
