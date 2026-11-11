@@ -95,12 +95,12 @@ test("a duplicate normalized name blocks saving without a request", async () => 
 test("deletion requires confirmation and cancel sends no delete request", async () => {
   await render(); await openCategory();
   await act(async () => sheet().onDelete?.());
-  expect(sheet().confirmingDelete).toBe(true);
+  expect(sheet().deleting?.snapshot).toEqual({ categoryId: "cafe", name: "Café" });
   expect(provider.remove).not.toHaveBeenCalled();
   await act(async () => sheet().onCancelDelete?.());
-  expect(sheet().confirmingDelete).toBe(false);
+  expect(sheet().deleting).toBeNull();
   await act(async () => sheet().onDelete?.());
-  await act(async () => sheet().onDelete?.());
+  await act(async () => sheet().onConfirmDelete?.(sheet().deleting!));
   expect(provider.remove).toHaveBeenCalledExactlyOnceWith({ workspaceId: "workspace", categoryId: "cafe" });
 });
 
@@ -140,14 +140,15 @@ test("a category detail link opens that category and search narrows the list", a
   expect(tree().findAllByType(ListRow).map((row) => row.props.title)).toEqual(["Salary"]);
 });
 
-test("a Delete kept from the confirming render deletes nothing once the confirmation was cancelled", async () => {
+test("a Confirm delete kept from the confirming render deletes nothing once the confirmation was cancelled", async () => {
   await render(); await openCategory();
   await act(async () => sheet().onDelete?.());
-  const kept = sheet().onDelete;
+  const shown = sheet().deleting!;
+  const kept = sheet().onConfirmDelete;
   await act(async () => sheet().onCancelDelete?.());
-  await act(async () => kept?.());
+  await act(async () => kept?.(shown));
   expect(provider.remove).not.toHaveBeenCalled();
-  expect(sheet().confirmingDelete).toBe(true);
+  expect(sheet().deleting).toBeNull();
 });
 
 test("a Save kept from before the name changed renames to the name the sheet shows", async () => {
@@ -166,4 +167,24 @@ test("fourth review, finding 4: two presses of the first Delete, before the shee
   const first = sheet().onDelete;
   await act(async () => { first?.(); first?.(); });
   expect(provider.remove).not.toHaveBeenCalled();
+  expect(sheet().deleting?.snapshot).toEqual({ categoryId: "cafe", name: "Café" });
+  const confirm = sheet().onConfirmDelete!;
+  const shown = sheet().deleting!;
+  await act(async () => { confirm(shown); confirm(shown); });
+  expect(provider.remove).toHaveBeenCalledExactlyOnceWith({ workspaceId: "workspace", categoryId: "cafe" });
+});
+
+test("a confirmation kept from one category deletes nothing after a late row press opens another", async () => {
+  provider.categories = [category, { ...category, id: "salary", name: "Salary", normalizedName: "salary", nature: "Income" }];
+  await render();
+  const row = (title: string) => tree().findAllByType(ListRow).find((each) => each.props.title === title)!.props.onPress as () => void;
+  await act(async () => row("Café")());
+  await act(async () => sheet().onDelete?.());
+  const shown = sheet().deleting!;
+  const confirm = sheet().onConfirmDelete!;
+  const salary = row("Salary");
+  await act(async () => { salary(); confirm(shown); });
+  expect(provider.remove).not.toHaveBeenCalled();
+  expect(sheet().editor).toMatchObject({ kind: "edit", category: { id: "salary" } });
+  expect(sheet().deleting).toBeNull();
 });

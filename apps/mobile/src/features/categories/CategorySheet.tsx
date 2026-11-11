@@ -1,4 +1,5 @@
 import type { Theme } from "../../ui/tokens";
+import type { Shown } from "../confirmation";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
   type BottomSheetModal,
@@ -43,10 +44,28 @@ export type CategorySheetProps = {
   onPrimary?: (id: string) => void;
   onDone?: () => void;
   onCreateEncompassing?: () => void;
+  /** Asks to delete the category; it never deletes. */
   onDelete?: () => void;
-  confirmingDelete?: boolean;
+  /** The deletion awaiting confirmation, as the sheet shows it. */
+  deleting?: Shown<DeletionView> | null;
+  /** Confirms the deletion the sheet showed. */
+  onConfirmDelete?: (shown: Shown<DeletionView>) => void;
   onCancelDelete?: () => void;
 };
+/** The category a delete confirmation shows. */
+export type DeletionView = Readonly<{ categoryId: string; name: string }>;
+
+function DeleteConfirmation({ deleting, busy, onConfirmDelete, onCancelDelete }:
+  Pick<CategorySheetProps, "busy" | "onConfirmDelete" | "onCancelDelete"> & { deleting: Shown<DeletionView> }) {
+  const ui = useUi();
+  const { t } = useT();
+  return <>
+    <Text style={ui.title}>{t("categories.deleteTitle", { name: deleting.snapshot.name })}</Text>
+    <Text style={ui.muted}>{t("categories.deleteBody")}</Text>
+    <SecondaryButton label={t("categories.keepCategory")} disabled={busy} onPress={() => onCancelDelete?.()} />
+    <SecondaryButton label={t("categories.confirmDelete")} tone="danger" disabled={busy} onPress={() => onConfirmDelete?.(deleting)} />
+  </>;
+}
 
 function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor: NonNullable<CategorySheetProps["editor"]> }) {
   const mode = useThemeMode();
@@ -175,13 +194,9 @@ function CategoryAppearance({ editor, ...props }: CategorySheetProps & { editor:
         onPress={props.onConfirm}
       />
       {editor.kind === "edit" && props.onDelete && <View style={ui.section}>
-        {props.confirmingDelete && <>
-          <Text style={ui.title}>{t("categories.deleteTitle", { name: editor.category.name })}</Text>
-          <Text style={ui.muted}>{t("categories.deleteBody")}</Text>
-          <SecondaryButton label={t("categories.keepCategory")} disabled={props.busy} onPress={() => props.onCancelDelete?.()} />
-        </>}
-        <SecondaryButton label={props.confirmingDelete ? t("categories.confirmDelete") : t("categories.deleteCategory")} tone="danger"
-          disabled={props.busy} onPress={props.onDelete} />
+        {props.deleting ? <DeleteConfirmation {...props} deleting={props.deleting} /> : (
+          <SecondaryButton label={t("categories.deleteCategory")} tone="danger" disabled={props.busy} onPress={props.onDelete} />
+        )}
       </View>}
       </>}
     </View>

@@ -127,7 +127,7 @@ function Harness() {
 function observation() {
   const props = manager(); const editor = props.editor;
   return structuredClone({ editor, name: editor?.kind === "custom" || editor?.kind === "edit" ? editor.name : "", answer: props.answer,
-    busy: props.busy, confirmingDelete: props.confirmingDelete ?? false, error: props.error, canConfirm: props.canConfirm,
+    busy: props.busy, confirmingDelete: !!props.deleting, error: props.error, canConfirm: props.canConfirm,
     requests: runtime.requests, native: runtime.native, handoff: runtime.handoff ?? null, rows: runtime.rows,
     selected: runtime.selection, options: picker().options ?? [], canClassify: canPostCategories(runtime.selection, runtime.rows),
   });
@@ -257,7 +257,7 @@ function enabled(seed: Seed, m: Monitor): Event[] {
   if (!props.editor) return events;
   const cancelPhase = seed.lane === "cancel" && !m.canceled;
   if (seed.operation === "delete") {
-    if (!props.confirmingDelete) events.push("DeleteArm");
+    if (!props.deleting) events.push("DeleteArm");
     else { if (!m.kept) events.push("Keep"); if (!cancelPhase && m.attempts < 2) events.push("DeleteConfirm"); }
     if (cancelPhase && runtime.native.presented) events.push("NativeDismiss");
     return events;
