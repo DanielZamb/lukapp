@@ -534,6 +534,72 @@ test("an activation whose reply was lost is resent under its own key after the a
   expect(sent[1]).toEqual(sent[0]);
 });
 
+const storedKey = "lukapp.recovery.unresolved.owner";
+const storeOnPhone = (...requests: unknown[]) => phone.set(storedKey, JSON.stringify({ v: 1, requests }));
+const storedRequests = () => phone.has(storedKey) ? JSON.parse(phone.get(storedKey)!).requests : [];
+const sentMove = {
+  workspaceId: "workspace", planId: "repair", sourceFinancialAccountProfileId: "daily",
+  amount: { currency: "COP", minorUnits: 30_000_000 }, accountingDate: "2026-10-17",
+  description: "Recovery: Emergency repair", idempotencyKey: "move-1",
+};
+const sentActivation = {
+  workspaceId: "workspace", sourceJournalEntryId: "dental", destinationFinancialAccountProfileId: "savings",
+  installmentCount: 4, installmentMinorUnits: 12_000_000, idempotencyKey: "plan-1",
+};
+const dentalPlan = (over: Partial<RecoveryPlanView> = {}): RecoveryPlanView => ({
+  ...plan, id: "dental-plan", title: "Dental care", sourceJournalEntryId: "dental", sourceTitle: "Dental care",
+  principalMinorUnits: 48_000_000, installmentCount: 4, installmentMinorUnits: 12_000_000,
+  recoveredMinorUnits: 0, remainingMinorUnits: 48_000_000, targetMinorUnits: 48_000_000, dueMinorUnits: 12_000_000, ...over,
+});
+
+test("a stored transfer the plan's history lists under its key is settled, and Move money starts a new movement", async () => {
+  storeOnPhone({ act: "move", request: sentMove });
+  const recorded = { ...plan, contributionHistory: [contribution("oct", { idempotencyKey: "move-1", contributionDate: "2026-10-17" })] };
+  const { screen } = await open([recorded], true);
+  expect(screen.findByType(RecoveryPlanScreen).props.unconfirmedMove).toBe(false);
+  expect(phone.has(storedKey)).toBe(false);
+  await act(async () => { button(screen, "Move money for October").props.onPress(); });
+  expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ pending: false, editable: true, error: "" });
+});
+
+test("a stored transfer another phone's movement does not answer stays unconfirmed and resends itself", async () => {
+  storeOnPhone({ act: "move", request: sentMove });
+  const elsewhere = { ...plan, contributionHistory: [contribution("oct", { idempotencyKey: "other-phone" })] };
+  const { screen } = await open([elsewhere], true);
+  expect(screen.findByType(RecoveryPlanScreen).props.unconfirmedMove).toBe(true);
+  await act(async () => { button(screen, "See the transfer").props.onPress(); });
+  remote.move.mockImplementationOnce(async (request) => moveReceipt(request));
+  await act(async () => { button(screen, "Retry transfer").props.onPress(); });
+  expect(remote.move.mock.calls.map(([request]) => request)).toEqual([sentMove]);
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test.each([
+  ["a plan with its terms", dentalPlan()],
+  ["a cancelled plan with its terms", dentalPlan({ status: "cancelled", remainingMinorUnits: 0, dueMinorUnits: 0 })],
+  ["another phone's running plan with other terms", dentalPlan({ installmentCount: 6, installmentMinorUnits: 8_000_000 })],
+  ["a completed plan", dentalPlan({ status: "completed", remainingMinorUnits: 0, dueMinorUnits: 0, installmentCount: 12 })],
+])("a stored activation is settled once the board shows %s for its expense", async (_case, shown) => {
+  storeOnPhone({ act: "activate", request: sentActivation }, { act: "move", request: sentMove });
+  await open([plan, shown]);
+  expect(storedRequests()).toEqual([{ act: "move", request: sentMove }]);
+});
+
+test("a stored activation stays while the expense shows only a cancelled plan with other terms, and the proposal resends it", async () => {
+  const earlier = dentalPlan({ id: "dental-old", status: "cancelled", installmentCount: 6, installmentMinorUnits: 8_000_000,
+    remainingMinorUnits: 0, dueMinorUnits: 0 });
+  storeOnPhone({ act: "activate", request: { ...sentActivation, replacesPlanId: "dental-old" } });
+  const { screen } = await open([earlier]);
+  await act(async () => { button(screen, "Find another expense").props.onPress(); });
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ pending: true, editable: false, installmentCount: 4,
+    error: "Could not confirm activation. Retry to safely check the same plan." });
+  remote.activate.mockImplementationOnce(async (request) => activationReceipt(request));
+  await act(async () => { button(screen, "Retry activation").props.onPress(); });
+  expect(remote.activate.mock.calls.map(([request]) => request)).toEqual([{ ...sentActivation, replacesPlanId: "dental-old" }]);
+  expect(phone.has(storedKey)).toBe(false);
+});
+
 function activationReceipt(request: Parameters<RecoveryEditorTransport["save"]>[0], replay = true) {
   return {
     replay,
