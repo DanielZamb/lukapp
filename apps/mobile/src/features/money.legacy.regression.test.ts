@@ -1,7 +1,8 @@
 import { expect, test, vi } from "vitest";
 import { currencyDisplayPrefix, formatAmount, formatMoney } from "./money";
 import { readPreCurrencyAmount } from "./amount/preCurrency";
-import { amountMinorUnits, confirmAmount, displayedMinorUnits, openAmount, withNativeText } from "./amount/session";
+import { sendableMinorUnits, confirmAmount, displayedMinorUnits, openAmount, withNativeText } from "./amount/session";
+import { pressed } from "./amount/pressed.testSupport";
 
 vi.mock("expo-secure-store", () => ({}));
 import { suggest } from "./intake/suggest";
@@ -80,11 +81,11 @@ test.each(entered)("text %s entered into an empty field (old sanitizer gave %s, 
     if (typeof result === "number") {
       expect(displayedMinorUnits(session), currency).toBe(result);
       const pastedSeparator = /[.,]/.test(raw);
-      expect(amountMinorUnits(session), currency).toBe(pastedSeparator ? null : result);
-      expect(amountMinorUnits(confirmAmount(session)), currency).toBe(result);
+      expect(sendableMinorUnits(pressed(session)), currency).toBe(pastedSeparator ? null : result);
+      expect(sendableMinorUnits(pressed(confirmAmount(session))), currency).toBe(result);
     } else {
       expect(session.editor.kind, currency).toBe(result);
-      expect(amountMinorUnits(session), currency).toBeNull();
+      expect(sendableMinorUnits(pressed(session)), currency).toBeNull();
     }
   }
 });
@@ -112,8 +113,8 @@ test.each(preCurrency)("COP and BHD fields read correct Colombian text %s as the
     const changed: Record<string, number | "incomplete"> = { "-0": 0, "12,": "incomplete" };
     const expected = raw in changed ? changed[raw] : old;
     if (expected === "incomplete") expect(session.editor.kind).toBe("incomplete");
-    else if (expected === null) expect(amountMinorUnits(session)).toBeNull();
-    else expect(amountMinorUnits(session)).toBe(expected);
+    else if (expected === null) expect(sendableMinorUnits(pressed(session))).toBeNull();
+    else expect(sendableMinorUnits(pressed(session))).toBe(expected);
   }
 });
 

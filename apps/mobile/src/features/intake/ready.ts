@@ -1,4 +1,5 @@
 import type { Translator } from "../../i18n";
+import { storedAmountSendable, type StoredAmountText } from "../amount/storedText";
 
 export function currencyMismatchReason(
   t: Translator["t"],
@@ -13,6 +14,8 @@ export function isReadyCandidate(
   candidate: {
     error?: string;
     currency?: string;
+    /** The amount text saved from the single-entry review, which may still await confirmation or re-entry. */
+    reviewAmount?: StoredAmountText | null;
     suggestion: {
       description: string;
       amountMinorUnits: number | null;
@@ -30,6 +33,7 @@ export function isReadyCandidate(
     Number.isSafeInteger(candidate.suggestion.amountMinorUnits) &&
     candidate.suggestion.amountMinorUnits > 0 &&
     !!candidate.suggestion.financialAccountProfileId &&
+    storedAmountSendable(candidate.reviewAmount) &&
     (!workspaceCurrency || candidate.currency === workspaceCurrency)
   );
 }

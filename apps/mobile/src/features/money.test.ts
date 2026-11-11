@@ -2,7 +2,8 @@ import { expect, test, vi } from "vitest";
 import { formatMoney, currencyDisplayPrefix } from "./money";
 import { createTranslator } from "../../../../src/i18n";
 import { amountHint } from "./amount/hints";
-import { amountMinorUnits, openAmount, withNativeText } from "./amount/session";
+import { sendableMinorUnits, openAmount, withNativeText } from "./amount/session";
+import { pressed } from "./amount/pressed.testSupport";
 
 function typed(currency: string, keys: string) {
   let session = openAmount(currency);
@@ -18,14 +19,14 @@ test.each([
 ])("typing %s in a COP field shows exactly %s", (keys, text, minorUnits) => {
   const session = typed("COP", keys);
   expect(session.editor.text).toBe(text);
-  expect(amountMinorUnits(session)).toBe(minorUnits);
+  expect(sendableMinorUnits(pressed(session))).toBe(minorUnits);
 });
 
 test("typing and reading an amount work without Intl on Hermes", () => {
   vi.stubGlobal("Intl", undefined);
   try {
-    expect(amountMinorUnits(typed("COP", "-012500"))).toBe(-1250000);
-    expect(amountMinorUnits(typed("USD", "-1,234.5"))).toBe(-123450);
+    expect(sendableMinorUnits(pressed(typed("COP", "-012500")))).toBe(-1250000);
+    expect(sendableMinorUnits(pressed(typed("USD", "-1,234.5")))).toBe(-123450);
   } finally {
     vi.unstubAllGlobals();
   }
@@ -40,15 +41,15 @@ test.each([
   ["+12,5", 1250],
   [" 0 ", 0],
 ])("COP %s reads as exactly %i minor units", (input, expected) => {
-  expect(amountMinorUnits(openAmount("COP", input))).toBe(expected);
+  expect(sendableMinorUnits(pressed(openAmount("COP", input)))).toBe(expected);
 });
 test("a dot groups thousands in COP, without guessing", () => {
-  expect(amountMinorUnits(openAmount("COP", "1.234"))).toBe(123400);
+  expect(sendableMinorUnits(pressed(openAmount("COP", "1.234")))).toBe(123400);
 });
 test("parses exact safe-integer boundaries without BigInt on Hermes", () => {
   vi.stubGlobal("BigInt", undefined);
   try {
-    const read = (text: string) => amountMinorUnits(openAmount("COP", text));
+    const read = (text: string) => sendableMinorUnits(pressed(openAmount("COP", text)));
     expect(read("90.071.992.547.409,91")).toBe(Number.MAX_SAFE_INTEGER);
     expect(read("-90.071.992.547.409,91")).toBe(-Number.MAX_SAFE_INTEGER);
     expect(read("00090071992547409,90")).toBe(Number.MAX_SAFE_INTEGER - 1);
@@ -72,7 +73,7 @@ test.each([
   "1.23.456",
   "90071992547410",
 ])("rejects malformed or unsafe input %s", (input) => {
-  expect(amountMinorUnits(openAmount("COP", input))).toBeNull();
+  expect(sendableMinorUnits(pressed(openAmount("COP", input)))).toBeNull();
 });
 test.each([["COP", "$"], ["USD", "$"], ["EUR", "€"], ["JPY", "¥"], ["AED", "AED "]])("currency %s has display prefix %s without formatToParts", (currency, expected) => {
   const formatToParts = Object.getOwnPropertyDescriptor(Intl.NumberFormat.prototype, "formatToParts");
@@ -110,21 +111,21 @@ test.each([
   ["BHD", "1,234", 1234, "BHD 1,234"],
   ["USD", "1.23", 123, "USD 1.23"],
 ])("%s input and display preserve ISO minor-unit precision", (currency, text, minorUnits, formatted) => {
-  expect(amountMinorUnits(openAmount(currency, text))).toBe(minorUnits);
+  expect(sendableMinorUnits(pressed(openAmount(currency, text)))).toBe(minorUnits);
   expect(formatMoney({ currency, minorUnits })).toBe(formatted);
 });
 
 test.each([["JPY", "1,1"], ["BHD", "1,2345"]])("%s rejects fractional digits beyond its precision", (currency, text) => {
-  expect(amountMinorUnits(openAmount(currency, text))).toBeNull();
+  expect(sendableMinorUnits(pressed(openAmount(currency, text)))).toBeNull();
 });
 
 
 test("currency-aware editing preserves three decimal places and rejects fractions for yen", () => {
   expect(typed("BHD", "1,234").editor.text).toBe("1,234");
-  expect(amountMinorUnits(typed("BHD", "1,234"))).toBe(1234);
+  expect(sendableMinorUnits(pressed(typed("BHD", "1,234")))).toBe(1234);
   const yen = typed("JPY", "100,5");
   expect(yen.editor.text).toBe("100,5");
-  expect(amountMinorUnits(yen)).toBeNull();
+  expect(sendableMinorUnits(pressed(yen))).toBeNull();
 });
 
 test("full monetary display preserves exact safe-integer boundaries without Intl", () => {
@@ -139,6 +140,6 @@ test("full monetary display preserves exact safe-integer boundaries without Intl
 
 test("typing in zero- and three-decimal currencies keeps the text exactly as typed", () => {
   expect(typed("JPY", "10005").editor.text).toBe("10005");
-  expect(amountMinorUnits(typed("JPY", "10005"))).toBe(10005);
-  expect(amountMinorUnits(typed("BHD", "1.234"))).toBe(1_234_000);
+  expect(sendableMinorUnits(pressed(typed("JPY", "10005")))).toBe(10005);
+  expect(sendableMinorUnits(pressed(typed("BHD", "1.234")))).toBe(1_234_000);
 });

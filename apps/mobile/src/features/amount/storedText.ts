@@ -55,6 +55,11 @@ function isBlank(text: string) {
   return /^[+−-]?$/.test(text.trim());
 }
 
+/** Whether a saved amount may be sent as it is: the person need not confirm it first, nor type it again. */
+export function storedAmountSendable(stored: StoredAmountText | null | undefined): boolean {
+  return !stored?.review && !stored?.reenter;
+}
+
 /** The signed minor units a saved text meant under its own grammar, or null when it has no readable amount. */
 export function storedAmountMinorUnits(stored: StoredAmountText, currency: string): number | null {
   if (stored.reenter) return null;

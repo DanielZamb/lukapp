@@ -3,7 +3,8 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
 import { refusalCodeOf } from "../useFrozenCommand";
-import { amountMinorUnits, amountOfMinorUnits, displayedMinorUnits, type AmountSession } from "../amount/session";
+import { amountOfMinorUnits, amountSendable, displayedMinorUnits, sendableMinorUnits, type AmountSession } from "../amount/session";
+import { useAmountState } from "../amount/useAmountState";
 import {
   DEFAULT_INSTALLMENT_COUNT,
   INSTALLMENT_COUNTS,
@@ -44,7 +45,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   const defaultDestination = seed.destinations.find((place) => place.productKind === "savingsAccount")
     ?? seed.destinations[0] ?? null;
   const [installmentCount, setInstallmentCount] = useState<MonthCount>(DEFAULT_INSTALLMENT_COUNT);
-  const [amount, setAmount] = useState(() => installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)));
+  const [amount, setAmount, readAmount] = useAmountState(() => installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)));
   const destination = useChosenPlace(seed.destinations, defaultDestination?.id ?? null);
   const destinationId = destination.id;
   const [busy, setBusy] = useState(false);
@@ -59,12 +60,14 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     return () => { mounted.active = false; };
   }, []);
   const suggestion = suggestionFor(seed.candidate.amountMinorUnits, installmentCount, displayedMinorUnits(amount) ?? 0);
-  const ready = suggestion.valid && amountMinorUnits(amount) !== null;
+  const ready = suggestion.valid && amountSendable(amount);
   const editable = !busy && !pending;
   async function submit() {
     const mounted = lifetime.current;
     const selected = request.current?.destinationFinancialAccountProfileId ?? destinationId;
-    if (!mounted.active || submitting.current || !selected || (!request.current && (!ready || destination.unavailable))) return;
+    const typed = sendableMinorUnits(readAmount());
+    const pressed = typed === null ? null : suggestionFor(seed.candidate.amountMinorUnits, installmentCount, typed);
+    if (!mounted.active || submitting.current || !selected || (!request.current && (!pressed?.valid || destination.unavailable))) return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -74,7 +77,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
         sourceJournalEntryId: seed.candidate.journalEntryId,
         destinationFinancialAccountProfileId: selected,
         installmentCount,
-        installmentMinorUnits: suggestion.installmentMinorUnits,
+        installmentMinorUnits: pressed!.installmentMinorUnits,
         idempotencyKey: transport.newKey(),
         ...(seed.replacesPlanId ? { replacesPlanId: seed.replacesPlanId } : {}),
       };

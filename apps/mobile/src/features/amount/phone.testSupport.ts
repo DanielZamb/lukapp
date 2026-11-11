@@ -7,10 +7,12 @@ export type Caret = { start: number; end: number };
  * Samsung Keyboard (fixtures in ./fixtures). An edit changes the native text and caret, then reports the text and,
  * when the caret moved, the caret. Typing over a range and pasting first report a stale collapsed caret. A text or
  * caret the JavaScript side renders differently from what native last reported is a command that lands only while no
- * newer native edit exists, as React Native's event count rule does; `racing` lets the next edit come first.
+ * newer native edit exists, as React Native's event count rule does; `racing` lets the next edit come first. The
+ * input is focused, as it is while the person types; a remounted input is focused again, as autoFocus does.
  */
 export function samsungPhone(input: () => ReactTestInstance) {
   let node = input();
+  node.props.onFocus?.();
   let text: string = node.props.value;
   let caret: Caret = { start: text.length, end: text.length };
   let count = 0;
@@ -24,6 +26,7 @@ export function samsungPhone(input: () => ReactTestInstance) {
     const current = input();
     if (current !== node) {
       node = current;
+      node.props.onFocus?.();
       text = current.props.value;
       caret = { start: text.length, end: text.length };
       reportedText = text;

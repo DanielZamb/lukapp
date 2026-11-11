@@ -25,6 +25,7 @@ vi.mock("@gorhom/bottom-sheet", () => ({
   BottomSheetTextInput: "input",
 }));
 vi.mock("react-native", () => ({
+  AccessibilityInfo: { announceForAccessibility: () => {} },
   KeyboardAvoidingView: "keyboard-viewport",
   Text: "text",
   View: "view",
@@ -107,18 +108,21 @@ test.each([false, true])("typing a new expense keeps its sign and the digits exa
     accessibilityLabel: saveToBatch ? "Add to batch" : "Post",
     accessibilityRole: "button",
   }).props.onPress();
-  expect(input().props.value).toBe("-");
+  const sign = () => root!.root.findAll((node) => node.props.accessibilityLabel === "minus").map((node) => node.children.join(""));
+  expect(input().props.value).toBe("");
+  expect(sign()).toEqual(["−"]);
   for (const digit of "12500") {
     await act(async () => input().props.onChangeText(`${input().props.value}${digit}`));
   }
-  expect(input().props.value).toBe("-12500");
-  await act(async () => input().props.onChangeText("-12abc500"));
-  expect(input().props.value).toBe("-12abc500");
+  expect(input().props.value).toBe("12500");
+  expect(sign()).toEqual(["−"]);
+  await act(async () => input().props.onChangeText("12abc500"));
+  expect(input().props.value).toBe("12abc500");
   await act(async () => submit());
   expect(saveToBatch ? queued : post.mock.calls).toEqual(saveToBatch ? [null] : []);
   await act(async () => input().props.onChangeText(""));
-  await act(async () => input().props.onChangeText("-12.500"));
-  expect(input().props.value).toBe("-12.500");
+  await act(async () => input().props.onChangeText("12.500"));
+  expect(input().props.value).toBe("12.500");
   await act(async () => submit());
   expect(saveToBatch ? queued.at(-1) : post.mock.calls[0]).toBeFalsy();
   await act(async () => root!.root.findByProps({ accessibilityLabel: "Confirm COP 12.500,00", accessibilityRole: "button" }).props.onPress());
@@ -311,7 +315,7 @@ test("Add a place offers the four mapped types, emoji look, and balance today", 
     root!.root.findByProps({ accessibilityLabel: "Emoji 🏦" }).props.onPress(),
   );
   await act(async () => root!.root.findByProps({ accessibilityLabel: "Use this", accessibilityRole: "button" }).props.onPress());
-  expect(onChange).toHaveBeenLastCalledWith({ ...value, emoji: "🏦" });
+  expect(onChange).toHaveBeenLastCalledWith({ emoji: "🏦" });
   expect(
     root!.root
       .findAllByType("input")
@@ -330,7 +334,7 @@ test.each([
     return createElement(AccountSetupForm, {
       sheetRef: createRef<BottomSheetModal>(), value, currency: "COP", editable: true, busy: false, pending: false, error: "",
       canSubmit: true, onSubmit: vi.fn(), onDismiss: vi.fn(),
-      onChange: (next: PlaceDraft) => { sent.push(next.productKind ?? "none"); setValue(next); },
+      onChange: (change: Partial<PlaceDraft>) => { sent.push(change.productKind ?? "none"); setValue((current) => ({ ...current, ...change })); },
     });
   }
   await act(async () => {

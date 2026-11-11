@@ -5,7 +5,7 @@ import type {
   CategoryStyle,
 } from "../categories/model";
 import type { Translator } from "../../../../../src/i18n";
-import { amountMinorUnits, type AmountSession } from "../amount/session";
+import { sendableMinorUnits, type AmountAtPress } from "../amount/session";
 import { amountRefusal } from "../amount/hints";
 
 export type SetupCategory = {
@@ -47,9 +47,9 @@ export function setupSelections(
   });
 }
 /** The starting amount to send. Blank means zero; text that is not a complete amount is refused, never guessed. */
-export function startingAmount(amount: AmountSession, { t }: Translator) {
+export function startingAmount(amount: AmountAtPress, { t }: Translator) {
   if (!amount.editor.text.trim()) return 0;
-  const minorUnits = amountMinorUnits(amount);
+  const minorUnits = sendableMinorUnits(amount);
   if (minorUnits === null) throw new Error(amountRefusal(amount, t));
   if (minorUnits < 0) throw new Error(t("setup.startingNegative"));
   return minorUnits;

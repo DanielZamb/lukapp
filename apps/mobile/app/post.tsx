@@ -16,7 +16,7 @@ import { ActivityIndicator, BackHandler, Keyboard, Platform, Text, View } from "
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate } from "../src/features/money";
-import { amountMinorUnits, openAmount } from "../src/features/amount/session";
+import { openAmount, sendableMinorUnits } from "../src/features/amount/session";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
@@ -92,7 +92,7 @@ function PostMoney({
   const setupSheet = useRef<BottomSheetModal>(null);
   const setupPresented = useRef(false);
   const destinationRequest = useRef<AccountSetupRequest | null>(null);
-  const setupAfterPicker = useRef<PlaceDraft | null>(null);
+  const setupAfterPicker = useRef<Omit<PlaceDraft, "amount" | "date"> | null>(null);
   const { workspace, financialAccountProfile: defaultProfile } = defaults;
   const drafts = useLocalEntryDrafts({
     subject,
@@ -410,7 +410,7 @@ function PostMoney({
             (!editor.pending && (!categoryValid || !placesValid))
           ) return;
           if (needsBudgetCheck) {
-            const typed = amountMinorUnits(editor.amount);
+            const typed = sendableMinorUnits(editor.readAmount());
             if (!budget || typed === null) return;
             const hits = postingBudgetImpact({
               jars: budget.jars,
@@ -467,7 +467,7 @@ function PostMoney({
           destinationRequest.current = null;
           const setup = setupAfterPicker.current;
           setupAfterPicker.current = null;
-          if (setup) editor.setSetup(setup);
+          if (setup) editor.setSetup({ ...setup, amount: openAmount(workspace.functionalCurrency, "0"), date: defaultAccountingDate(workspace.timeZone) });
         }}
         onSelect={(id) =>
           interaction(() => {
@@ -486,8 +486,6 @@ function PostMoney({
               name: request?.name ?? "",
               productKind: request?.answer === "payDebt" ? null : "bankAccount",
               emoji: request?.style.emoji ?? "💰",
-              amount: openAmount(workspace.functionalCurrency, "0"),
-              date: defaultAccountingDate(workspace.timeZone),
               target:
                 placeTarget === "destination"
                   ? { kind: "destination", sourceProfileId: editor.profileId }
@@ -506,7 +504,7 @@ function PostMoney({
         pending={editor.pending}
         error={editor.error}
         canSubmit={editor.canSubmit}
-        onChange={(value) => interaction(() => editor.setSetup(value))}
+        onChange={(change) => interaction(() => editor.changeSetup(change))}
         onSubmit={() => void editor.submit()}
         onDismiss={() => {
           setupPresented.current = false;

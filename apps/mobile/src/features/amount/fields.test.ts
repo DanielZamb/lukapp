@@ -92,7 +92,7 @@ function PlaceSetup({ currency, sent }: { currency: Currency; sent: number[] }) 
   });
   return createElement(AccountSetupForm, {
     sheetRef: createRef<BottomSheetModal>(), value: editor.setup, currency, editable: editor.editable, busy: editor.busy,
-    pending: editor.pending, error: editor.error, canSubmit: editor.canSubmit, onChange: editor.setSetup,
+    pending: editor.pending, error: editor.error, canSubmit: editor.canSubmit, onChange: editor.changeSetup,
     onSubmit: () => void editor.submit(), onDismiss: noop,
   });
 }
@@ -192,6 +192,8 @@ async function render(field: Field, currency: Currency, language: Language) {
   const control = (name: string) => root!.root.find((node: ReactTestInstance) =>
     typeof node.type === "string" && (node.props.accessibilityLabel === name || node.props.label === name) && !!node.props.onPress);
   const submit = async () => { await act(async () => { await control(field.submit(language)).props.onPress(); }); };
+  /** The Save handler as this render hands it out; a bottom sheet's portal hands out the previous render's. */
+  const saveHandler = () => { const press = control(field.submit(language)).props.onPress as () => unknown; return async () => { await act(async () => { await press(); }); }; };
   const type = async (characters: string) => {
     for (const character of characters) {
       const node = input();
@@ -208,7 +210,7 @@ async function render(field: Field, currency: Currency, language: Language) {
   const alerts = () => root!.root.findAll((node) => node.type === "text" && node.props.accessibilityRole === "alert")
     .map((node) => node.children.join(""));
   if (field.starts) await act(async () => input().props.onChangeText(""));
-  return { sent: harness.sent, input, submit, type, decimal, alerts };
+  return { sent: harness.sent, input, submit, saveHandler, type, decimal, alerts };
 }
 
 const wrongKeyHint = {
@@ -222,6 +224,15 @@ const foreignHint = {
 
 for (const field of fields) {
   for (const currency of ["COP", "USD"] as const) {
+    test(`${field.name}, ${currency}: a Save handler from the render before the last keystroke sends the amount as typed`, async () => {
+      const screen = await render(field, currency, "en");
+      await screen.type("150");
+      const stale = screen.saveHandler();
+      await screen.type("0");
+      await stale();
+      expect(screen.sent).toEqual([150000]);
+    });
+
     for (const language of ["en", "es"] as const) {
       test(`${field.name}, ${currency}, ${language}: digits and the decimal key send 1234.50 as 123450 minor units`, async () => {
         const screen = await render(field, currency, language);
@@ -280,4 +291,15 @@ test.each([
     expect(screen.sent, name).toEqual([123450]);
     await act(async () => root?.unmount()); root = undefined;
   }
+});
+
+test("third review, finding 2: a place name handler from the render before the last balance keystroke keeps the balance as typed", async () => {
+  const screen = await render(fields.find((field) => field.name === "place setup balance")!, "COP", "en");
+  await screen.type("150");
+  const staleName = root!.root.find((node) => node.type === "input" && node.props.accessibilityLabel === "Place name").props.onChangeText as (text: string) => void;
+  await screen.type("0");
+  await act(async () => staleName("Trip"));
+  expect(screen.input().props.value).toBe("1500");
+  await screen.submit();
+  expect(screen.sent).toEqual([150000]);
 });

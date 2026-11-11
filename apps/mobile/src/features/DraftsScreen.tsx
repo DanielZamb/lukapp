@@ -47,6 +47,8 @@ function candidateDetail(
   const unavailable = place?.status ? unavailablePlaceReason({ name: place.name, status: place.status }, t) : null;
   if (unavailable) return unavailable;
   if (candidate.error) return candidateErrorText(t, candidate.error);
+  if (candidate.reviewAmount?.reenter) return t("amount.noticeReenter", { previous: candidate.reviewAmount.text });
+  if (candidate.reviewAmount?.review) return t("amount.reviewRequired");
   if (!isReadyCandidate(candidate, workspaceCurrency)) return t("inbox.needsReview");
   return places.find((place) => place.id === candidate.suggestion.financialAccountProfileId)?.name ?? t("inbox.savedPlace");
 }

@@ -2,7 +2,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT } from "../../i18n";
 import type { api } from "../api";
-import { amountMinorUnits, amountOfMinorUnits, type AmountSession } from "../amount/session";
+import { amountOfMinorUnits, amountSendable, displayedMinorUnits, sendableMinorUnits, type AmountSession } from "../amount/session";
+import { useAmountState } from "../amount/useAmountState";
 import { defaultAccountingDate } from "../timeZones";
 import { refusalCodeOf } from "../useFrozenCommand";
 import type { RecoveryPlace, RecoveryPlanView } from "./model";
@@ -26,7 +27,7 @@ export function useRecoveryMove(
     ?? null;
   const source = useChosenPlace(seed.sources, defaultSource?.id ?? null);
   const sourceId = source.id;
-  const [amount, setAmount] = useState(() => amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }));
+  const [amount, setAmount, readAmount] = useAmountState(() => amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }));
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -38,10 +39,11 @@ export function useRecoveryMove(
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  const minorUnits = amountMinorUnits(amount) ?? 0;
+  const shownMinorUnits = amountSendable(amount) ? displayedMinorUnits(amount) ?? 0 : 0;
   const editable = !busy && !pending;
   async function submit() {
     const mounted = lifetime.current;
+    const minorUnits = sendableMinorUnits(readAmount()) ?? 0;
     if (!request.current && seed.plan.status === "suspended") return;
     const selected = request.current?.sourceFinancialAccountProfileId ?? sourceId;
     if (!mounted.active || submitting.current || !selected || (!request.current && minorUnits <= 0)) return;
@@ -90,7 +92,7 @@ export function useRecoveryMove(
   return {
     sourceId, unavailable: source.unavailable, amount, busy, pending, error, editable,
     canSubmit: !busy && (pending || (seed.plan.status === "active" && !!sourceId && !source.unavailable
-      && sourceId !== seed.plan.destinationFinancialAccountProfileId && minorUnits > 0)),
+      && sourceId !== seed.plan.destinationFinancialAccountProfileId && shownMinorUnits > 0)),
     canDismiss: !busy && !pending,
     onSource: (id: string) => { if (canEdit()) source.choose(id); },
     onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.plan.currency) setAmount(value); },

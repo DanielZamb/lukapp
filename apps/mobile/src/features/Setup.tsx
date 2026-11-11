@@ -25,6 +25,7 @@ import { SetupCategories } from "./categories/SetupCategories";
 import { formatMoney } from "./money";
 import { AmountField } from "./amount/AmountField";
 import { displayedMinorUnits, openAmount } from "./amount/session";
+import { useAmountState } from "./amount/useAmountState";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { deviceTimeZone } from "./timeZones";
 import {
@@ -91,7 +92,7 @@ export function Setup({
   const [stage, setStage] = useState(1);
   const [consent, setConsent] = useState<boolean | null>(null);
   const [timeZone, setTimeZone] = useState(deviceTimeZone);
-  const [starting, setStarting] = useState(() => openAmount("COP"));
+  const [starting, setStarting, readStarting] = useAmountState(() => openAmount("COP"));
   const [wantsBudgets, setWantsBudgets] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -116,7 +117,7 @@ export function Setup({
     if (disabled || saving.current) return;
     interact();
     setCurrency(code);
-    if (code !== starting.currency) setStarting(openAmount(code));
+    if (code !== readStarting().currency) setStarting(openAmount(code));
     setCurrencyChosen(true);
     advance(3);
   }
@@ -131,7 +132,7 @@ export function Setup({
       if (!submission) {
         if (!presets || !categories.length || !currencyChosen || consent === null)
           return;
-        const startingMinorUnits = startingAmount(starting, translator);
+        const startingMinorUnits = startingAmount(readStarting(), translator);
         submission = {
           payload: {
             functionalCurrency: currency,

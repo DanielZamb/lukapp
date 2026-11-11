@@ -15,7 +15,8 @@ vi.mock("react-native", () => ({
 import { LanguageProvider, useLanguage } from "../../i18n";
 import { AmountField } from "./AmountField";
 import { samsungPhone } from "./phone.testSupport";
-import { amountMinorUnits, openAmount, type AmountSession } from "./session";
+import { openAmount, openSavedAmount, sendableMinorUnits, type AmountSession } from "./session";
+import { useAmountState } from "./useAmountState";
 
 let root: ReactTestRenderer | undefined;
 beforeEach(() => { vi.stubGlobal("React", React); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); });
@@ -24,8 +25,8 @@ afterEach(async () => { await act(async () => root?.unmount()); root = undefined
 const sent: Array<{ currency: string; minorUnits: number }> = [];
 let replaceSession: (session: AmountSession) => void = () => {};
 
-function Owner({ currency, opened }: { currency: string; opened?: string }) {
-  const [session, setSession] = useState<AmountSession>(() => openAmount(currency, opened));
+function Owner({ currency, opened, initial }: { currency: string; opened?: string; initial?: AmountSession }) {
+  const [session, setSession, read] = useAmountState<AmountSession>(() => initial ?? openAmount(currency, opened));
   replaceSession = setSession;
   const language = useLanguage();
   if (session.currency !== currency) setSession(openAmount(currency));
@@ -34,8 +35,8 @@ function Owner({ currency, opened }: { currency: string; opened?: string }) {
     createElement("button", {
       accessibilityLabel: "Send", accessibilityRole: "button",
       onPress: () => {
-        const minorUnits = amountMinorUnits(session);
-        if (minorUnits !== null) sent.push({ currency: session.currency, minorUnits });
+        const minorUnits = sendableMinorUnits(read());
+        if (minorUnits !== null) sent.push({ currency: read().currency, minorUnits });
       },
     }),
     createElement("button", { accessibilityLabel: "Spanish", accessibilityRole: "button", onPress: () => language.setPreference("es") }));
@@ -46,6 +47,14 @@ async function render(currency: string, language: "en" | "es" = "en", opened?: s
   await act(async () => { root?.unmount(); });
   await act(async () => {
     root = create(createElement(LanguageProvider, { initialPreference: language }, createElement(Owner, { currency, opened })));
+  });
+  return samsungPhone(input);
+}
+async function renderSession(initial: AmountSession) {
+  sent.length = 0;
+  await act(async () => { root?.unmount(); });
+  await act(async () => {
+    root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Owner, { currency: initial.currency, initial })));
   });
   return samsungPhone(input);
 }
@@ -174,6 +183,91 @@ test("finding 3: a paste awaits confirmation through edits that restore it, and 
   }
 });
 
+test("third review, finding 3: a converted saved amount awaits confirmation through a sign change", async () => {
+  const phone = await renderSession(openSavedAmount("CLP", { text: "-500,", format: "pre-currency" }).session);
+  expect(texts()).toContain("You saved this as -500,. It now shows as CLP 500.");
+  await phone.press(button("Switch the amount between minus and plus"));
+  await send();
+  expect(sent).toEqual([]);
+  await phone.press(button("Confirm CLP 500"));
+  await send();
+  expect(sent).toEqual([{ currency: "CLP", minorUnits: 500 }]);
+});
+
+test("third review, finding 3: a converted saved amount awaits confirmation after its separators are deleted, until the text is cleared", async () => {
+  let phone = await renderSession(openSavedAmount("USD", { text: "1.234,50", format: "legacy-es-CO/1" }).session);
+  expect(input().props.value).toBe("1,234.50");
+  for (let index = 0; index < 3; index++) await phone.backspace();
+  await phone.select(2);
+  await phone.backspace();
+  expect(phone.text).toBe("1234");
+  await send();
+  expect(sent).toEqual([]);
+  expect(texts()).toContain("You saved this as 1.234,50. It now shows as USD 1,234.00.");
+  phone = await renderSession(openSavedAmount("USD", { text: "1.234,50", format: "legacy-es-CO/1" }).session);
+  await phone.select(0, phone.text.length);
+  await phone.backspace();
+  expect(phone.text).toBe("");
+  await phone.type("12");
+  await send();
+  expect(sent).toEqual([{ currency: "USD", minorUnits: 1200 }]);
+});
+
+test("third review, finding 4: the sign key never writes the native text, so a keystroke racing it cannot drop the sign", async () => {
+  const phone = await render("USD");
+  await phone.type("12");
+  await phone.press(button("Switch the amount between minus and plus"), { hold: true });
+  expect(input().props.value).toBe("12");
+  expect(texts()).toContain("−");
+  await send();
+  await phone.type("3", { racing: true });
+  expect(phone.text).toBe("123");
+  expect(texts()).toContain("Now reads as −USD 123.00");
+  await send();
+  expect(sent).toEqual([{ currency: "USD", minorUnits: -1200 }, { currency: "USD", minorUnits: -12300 }]);
+});
+
+test("third review, finding 4: after the decimal key nothing is sent until the phone reports the write back", async () => {
+  const phone = await render("COP");
+  await phone.type("12345");
+  await phone.select(3);
+  await phone.press(button(decimalKey.COP), { hold: true });
+  expect(input().props.value).toBe("123,45");
+  await send();
+  expect(sent).toEqual([]);
+  await phone.settle();
+  expect(phone.log.at(-1)).toBe("caret 4-4");
+  await send();
+  expect(sent).toEqual([{ currency: "COP", minorUnits: 12345 }]);
+});
+
+test("third review, finding 4: a caret report elsewhere does not stand for the decimal key's write", async () => {
+  const phone = await render("USD");
+  await phone.type("12345");
+  await phone.select(3);
+  await phone.press(button(decimalKey.USD), { hold: true });
+  await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: { start: 5, end: 5 } } }));
+  await send();
+  expect(sent).toEqual([]);
+  await phone.settle();
+  await send();
+  expect(sent).toEqual([{ currency: "USD", minorUnits: 12345 }]);
+});
+
+test("third review, finding 4: when the phone reports other text after the decimal key, the phone's text is sent", async () => {
+  const phone = await render("COP");
+  await phone.type("12345");
+  await phone.select(3);
+  await phone.press(button(decimalKey.COP), { hold: true });
+  await send();
+  await phone.type("9", { racing: true });
+  expect(phone.log).toContain("  command dropped");
+  expect(phone.text).toBe("123945");
+  expect(input().props.value).toBe("123945");
+  await send();
+  expect(sent).toEqual([{ currency: "COP", minorUnits: 12394500 }]);
+});
+
 test("finding 4: a typed amount replaced in one change by another with the same separators awaits confirmation", async () => {
   const phone = await render("USD");
   await phone.type("1,234");
@@ -241,7 +335,7 @@ test("finding 8: a session the owner replaces is not overwritten by a change sti
   expect(sent).toEqual([{ currency: "USD", minorUnits: 9900 }]);
 });
 
-test("the sign key writes only the sign and keeps the caret the same distance from the end", async () => {
+test("the sign key changes only the sign shown beside the phone's text, and leaves that text and its caret alone", async () => {
   const phone = await render("COP");
   await phone.type("12345");
   await phone.select(3);
@@ -249,13 +343,30 @@ test("the sign key writes only the sign and keeps the caret the same distance fr
   expect(phone.text).toBe("123,45");
   expect(phone.caret).toEqual({ start: 4, end: 4 });
   await phone.press(button("Switch the amount between minus and plus"));
-  expect(phone.text).toBe("-123,45");
-  expect(phone.caret).toEqual({ start: 5, end: 5 });
+  expect(phone.text).toBe("123,45");
+  expect(phone.caret).toEqual({ start: 4, end: 4 });
+  expect(root!.root.findAll((node) => node.type === "text" && node.props.accessibilityLabel === "minus").map((node) => node.children.join(""))).toEqual(["−"]);
   await send();
   await phone.press(button("Switch the amount between minus and plus"));
   await send();
   expect(sent).toEqual([{ currency: "COP", minorUnits: -12345 }, { currency: "COP", minorUnits: 12345 }]);
-  expect(phone.text).toBe("+123,45");
+  expect(phone.text).toBe("123,45");
+  expect(root!.root.findAll((node) => node.type === "text" && node.props.accessibilityLabel === "plus").map((node) => node.children.join(""))).toEqual(["+"]);
+  await phone.type("9");
+  expect(phone.text).toBe("123,945");
+  await send();
+  expect(sent).toHaveLength(2);
+});
+
+test("a sign typed into the phone's text beside the sign the app holds reads as two signs and is never sent", async () => {
+  const phone = await render("USD");
+  await phone.type("5");
+  await phone.press(button("Switch the amount between minus and plus"));
+  await phone.select(0);
+  await phone.type("-");
+  expect(phone.text).toBe("-5");
+  await send();
+  expect(sent).toEqual([]);
 });
 
 test("the decimal key moves the caret after a mark already written, and starts with 0 before any digit", async () => {
@@ -328,7 +439,8 @@ test("a lone zero is selected on focus so the first key replaces it", async () =
 
 test("an amount the app opens grouped shows without its group marks and reads the same", async () => {
   await render("COP", "en", "-1.234.567,50");
-  expect(input().props.value).toBe("-1234567,50");
+  expect(input().props.value).toBe("1234567,50");
+  expect(texts()).toContain("−");
   expect(texts()).toContain("Reads as −COP 1.234.567,50");
   await render("COP", "en", "1.23");
   expect(input().props.value).toBe("1.23");
@@ -377,11 +489,11 @@ test("an owner that renders the field a commit late, as a bottom sheet's portal 
 
 test("a field that is not editable shows its owner's text and takes no native change", async () => {
   function Frozen() {
-    const [session, setSession] = useState(() => openAmount("USD", "12"));
+    const [session, setSession, read] = useAmountState(() => openAmount("USD", "12"));
     return createElement("view", null,
       createElement(AmountField, { session, onChange: setSession, editable: false, inputAccessibilityLabel: "Amount" }),
       createElement("button", { accessibilityLabel: "Send", accessibilityRole: "button",
-        onPress: () => { const minorUnits = amountMinorUnits(session); if (minorUnits !== null) sent.push({ currency: "USD", minorUnits }); } }));
+        onPress: () => { const minorUnits = sendableMinorUnits(read()); if (minorUnits !== null) sent.push({ currency: "USD", minorUnits }); } }));
   }
   sent.length = 0;
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Frozen))); });
@@ -389,4 +501,51 @@ test("a field that is not editable shows its owner's text and takes no native ch
   expect(input().props.value).toBe("12");
   await send();
   expect(sent).toEqual([{ currency: "USD", minorUnits: 1200 }]);
+});
+
+const readingLine = () => root!.root.findAll((node) => node.type === "text" && node.props.importantForAccessibility !== undefined)[0];
+
+test("third review, finding 5: the reading speaks up when the decimal mark appears or moves, and when the value changes tenfold", async () => {
+  const phone = await render("COP");
+  const reading = () => ({ text: readingLine().children.join(""), live: readingLine().props.accessibilityLiveRegion });
+  await phone.type("1");
+  expect(reading()).toEqual({ text: "Reads as COP 1,00", live: "none" });
+  await phone.type("2");
+  expect(reading()).toEqual({ text: "Now reads as COP 12,00", live: "polite" });
+  await phone.type("34");
+  expect(reading()).toEqual({ text: "Now reads as COP 1.234,00", live: "polite" });
+  await phone.press(button(decimalKey.COP));
+  await phone.type("5");
+  expect(reading()).toEqual({ text: "Now reads as COP 1.234,50", live: "polite" });
+  await phone.type("0");
+  expect(reading()).toEqual({ text: "Reads as COP 1.234,50", live: "none" });
+  await phone.select(4);
+  await phone.backspace();
+  expect(phone.text).toBe("123,50");
+  expect(reading()).toEqual({ text: "Now reads as COP 123,50", live: "polite" });
+  await phone.select(6);
+  await phone.backspace();
+  expect(reading()).toEqual({ text: "Reads as COP 123,50", live: "none" });
+});
+
+test("third review, finding 5: the reading speaks up when a change removes the decimal mark, and holds one line in both languages", async () => {
+  const phone = await render("USD", "es");
+  await phone.type("12");
+  await phone.press(button("Escribir punto decimal en USD"));
+  await phone.type("5");
+  expect(readingLine().children.join("")).toBe("Ahora se lee como USD 12.50");
+  await phone.type("0");
+  expect(readingLine().children.join("")).toBe("Se lee como USD 12.50");
+  await phone.select(3);
+  await phone.backspace();
+  expect(phone.text).toBe("1250");
+  expect(readingLine().children.join("")).toBe("Ahora se lee como USD 1,250.00");
+  expect(readingLine().props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true, accessibilityLiveRegion: "polite" });
+});
+
+test("third review, finding 5: an amount the owner opens is the first reading, so the first edit compares with it", async () => {
+  const phone = await render("USD", "en", "400");
+  expect(readingLine().children.join("")).toBe("Reads as USD 400.00");
+  await phone.backspace();
+  expect(readingLine().children.join("")).toBe("Now reads as USD 40.00");
 });

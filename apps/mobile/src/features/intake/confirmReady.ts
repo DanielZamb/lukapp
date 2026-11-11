@@ -1,5 +1,6 @@
 import { INTAKE_BATCH_LIMIT } from "../../../../../src/notificationIntake/policy";
 import type { IntakeService } from "./service";
+import { storedAmountSendable } from "../amount/storedText";
 import type { IntakeCandidate } from "./candidates";
 import type { ConfirmCandidateInput, CandidateConfirmResult } from "../../../../../src/notificationIntake/types";
 
@@ -31,6 +32,11 @@ export function handleReadyBatchError(
   return "retry" as const;
 }
 
+/**
+ * Confirms the Ready Candidates in batches. A Candidate whose saved amount now awaits confirmation or re-entry is left
+ * in review for the person, even when an older list still called it Ready; it is checked before any of its batch is
+ * frozen, so leaving it out freezes nothing else.
+ */
 export async function confirmReadyCandidates(
   service: IntakeService,
   candidates: IntakeCandidate[],
@@ -38,12 +44,15 @@ export async function confirmReadyCandidates(
 ) {
   let confirmed = 0;
   for (const chunk of chunkReady(candidates)) {
-    const items: ConfirmCandidateInput[] = [];
-    for (const candidate of chunk) {
+    const saved = new Map(service.candidates().map((candidate) => [candidate.id, candidate.reviewAmount]));
+    const rows = chunk.map((candidate) => {
       const row = service.read(candidate.id);
       if (!row) throw new Error("Candidate unavailable");
-      items.push(await service.beginConfirmation(row.id, row.recordRevision));
-    }
+      return row;
+    }).filter((row) => row.status.kind !== "review" || storedAmountSendable(saved.get(row.id)));
+    if (!rows.length) continue;
+    const items: ConfirmCandidateInput[] = [];
+    for (const row of rows) items.push(await service.beginConfirmation(row.id, row.recordRevision));
     service.assertAdmitted();
     const batch = await confirm(items);
     await service.recordOutcomes(batch.results);

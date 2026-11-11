@@ -3,7 +3,7 @@ vi.mock("expo-secure-store", () => ({}));
 import { formatAmount, formatMoney } from "../money";
 import { compactMoney } from "./compact";
 import { amountFormat } from "./currencyFormat";
-import { amountMinorUnits, amountOfMinorUnits, openAmount } from "./session";
+import { sendableMinorUnits, amountOfMinorUnits, openAmount } from "./session";
 import { compactAmount } from "../budget/model";
 import { compactHistoryAmount } from "../history/listModel";
 
@@ -26,7 +26,9 @@ export function callsWithoutCurrency() {
   // @ts-expect-error a currency is required
   amountFormat();
   // @ts-expect-error amounts are read from a session, never from bare text
-  amountMinorUnits("1.234,50");
+  sendableMinorUnits("1.234,50");
+  // @ts-expect-error a session a render holds is not an amount read at the moment of a press
+  sendableMinorUnits(openAmount("COP", "1"));
 }
 
 test("a currency outside the supported list is refused when an amount is shown or typed, never given a default format", () => {

@@ -4,9 +4,9 @@ import type { CandidateConfirmResult } from "../../../../../src/notificationInta
 import { finishIntakeWipe, type WipeStore } from "./control";
 import type { LocalInputLease } from "../../local-auth/localInput";
 import { parseIntakeDocument, type IntakeCandidate, type StoredSuggestion } from "./candidates";
-import type { StoredAmountText } from "../amount/storedText";
+import { storedAmountSendable, type StoredAmountText } from "../amount/storedText";
 import { commandFor, commandSchema, emptyState, ingest, mappingSchema, outcomeSchema, parseState, projectCandidate, prune,
-  reviewSchema, serializeState, terminal, type ActiveCandidate, type CandidateState, type SourceMapping } from "./durableState";
+  reviewAmountOf, reviewSchema, serializeState, terminal, type ActiveCandidate, type CandidateState, type SourceMapping } from "./durableState";
 
 export type IntakeDependencies = {
   native: NotificationIntakeNative;
@@ -263,6 +263,7 @@ export class IntakeService {
       if (row.status.kind !== "review") return { state, result: row.status.command };
       if (row.recordRevision !== revision) throw new Error("RECORD_REVISION_MISMATCH");
       if (!row.status.currencyReviewed) throw new Error("Review unresolved currency");
+      if (!storedAmountSendable(reviewAmountOf(row))) throw new Error("Review amount awaits confirmation");
       if (row.origin.kind === "native" && row.currency !== row.origin.mapping.currency) throw new Error("Unsupported workspace currency");
       const command = commandSchema.parse(commandFor(row));
       const next: ActiveCandidate = { ...row, recordRevision: revision + 1, status: { kind: "submitting", command, startedAt: this.deps.now() } };

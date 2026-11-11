@@ -14,7 +14,8 @@ import { font, fontSize, radius, spacing, touchTarget } from "../../../ui/tokens
 import { api } from "../../api";
 import { formatAmount } from "../../money";
 import { AmountField } from "../../amount/AmountField";
-import { amountMinorUnits, amountOfMinorUnits, openAmount } from "../../amount/session";
+import { amountOfMinorUnits, amountSendable, displayedMinorUnits, openAmount, sendableMinorUnits } from "../../amount/session";
+import { useAmountState } from "../../amount/useAmountState";
 import { currentAmountTextFormat } from "../../amount/currencyFormat";
 import { calendarDate } from "../../timeZones";
 import { useLocalEntryDrafts } from "../../useLocalEntryDrafts";
@@ -128,7 +129,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
   const [variant, setVariant] = useState<"A" | "B">("A");
   const [revealed, setRevealed] = useState(false);
   const [chosen, setChosen] = useState<Mention | null>(suggestion.amount);
-  const [amount, setAmount] = useState(() => suggestion.amount
+  const [amount, setAmount, readAmount] = useAmountState(() => suggestion.amount
     ? amountOfMinorUnits(currency, suggestion.amount.minor, { hideZeroDecimals: true }) : openAmount(currency));
   const [direction, setDirection] = useState<Direction>(suggestion.direction?.value ?? "out");
   const [description, setDescription] = useState(suggestion.counterparty?.value ?? "");
@@ -137,7 +138,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const hidden = suggestion.sensitive !== null && !revealed;
-  const minor = amountMinorUnits(amount) ?? 0;
+  const minor = amountSendable(amount) ? displayedMinorUnits(amount) ?? 0 : 0;
   const foreign = chosen?.currency && chosen.currency !== currency;
   const accent = dark ? "#c4b5fd" : theme.primary;
 
@@ -153,6 +154,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
     setAnchor(null);
   }
   async function startDraft() {
+    const minor = sendableMinorUnits(readAmount()) ?? 0;
     if (busy || !(minor > 0)) return;
     setBusy(true); setError("");
     try {

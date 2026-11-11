@@ -25,16 +25,20 @@ import { useT } from "../../i18n";
 import { rejectionMessage } from "./rejection";
 import type { AmountNotice, StoredAmountText } from "../amount/storedText";
 import {
-  amountMinorUnits,
   amountOfMinorUnits,
+  amountSendable,
   amountSign,
   displayedMinorUnits,
   openAmount,
   openSavedAmount,
+  sendableMinorUnits,
   storedAmountOf,
   withAmountSign,
+  type AmountAtPress,
+  type AmountReview,
   type AmountSession,
 } from "../amount/session";
+import { useAmountState, type AtPress } from "../amount/useAmountState";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -121,18 +125,36 @@ function categoryAmount(value: AmountSession, nature: CategoryNature) {
  * saved text and its format, so an unreadable or rewritten amount reopens exactly as before. Any change to the
  * amount, even one that ends with the same characters, drops it: the amount is then saved as the session holds it.
  */
-type OpenedAmount = { stored: StoredAmountText; notice: AmountNotice | null };
+type OpenedAmount = { stored: StoredAmountText; notice: AmountNotice | null; text: string; review: AmountReview | null };
+
+/** The text to save for `amount`: the opened saved text while the amount is still the one opened, else the session's. */
+function savedAmountText(amount: AmountSession, opened: OpenedAmount | null): StoredAmountText {
+  return opened && opened.text === amount.editor.text && opened.review === amount.review ? opened.stored : storedAmountOf(amount);
+}
 
 /** The amount of a complete session. Submission paths call it after checking validity, and it refuses again. */
-function requiredMinorUnits(session: AmountSession): number {
-  const minorUnits = amountMinorUnits(session);
+function requiredMinorUnits(amount: AmountAtPress): number {
+  const minorUnits = sendableMinorUnits(amount);
   if (minorUnits === null) throw new Error("Amount is not complete");
   return minorUnits;
 }
 
-/** A place's starting balance left blank is zero, as first-run setup reads it; any other text must be a complete amount. */
-function balanceMinorUnits(session: AmountSession): number | null {
-  return session.editor.text.trim() ? amountMinorUnits(session) : 0;
+/** A place's starting balance left blank is zero, as first-run setup reads it; any other text must be a sendable amount. */
+function balanceMinorUnits(amount: AmountAtPress): number | null {
+  return amount.editor.text.trim() ? sendableMinorUnits(amount) : 0;
+}
+
+/** Whether a place's starting balance may be sent, as `balanceMinorUnits` would read it. */
+function balanceSendable(amount: AmountSession): boolean {
+  if (!amount.editor.text.trim()) return true;
+  const shown = displayedMinorUnits(amount);
+  return amountSendable(amount) && shown !== null && shown >= 0;
+}
+
+/** Money in for a positive amount, money out otherwise. */
+function directionOf(amount: AmountSession): "in" | "out" {
+  const shown = displayedMinorUnits(amount);
+  return shown !== null && shown > 0 ? "in" : "out";
 }
 
 export function usePostingEditor(
@@ -145,7 +167,7 @@ export function usePostingEditor(
   const requestedId = session.draftId;
   const intake = session.intake ?? null;
   const isolate = session.intakeRoute === true || intake !== null;
-  const [amount, setAmount] = useState(() => openAmount(account.currency, "-"));
+  const [amount, setAmount, readAmount] = useAmountState(() => openAmount(account.currency, "-"));
   const [openedAmount, setOpenedAmount] = useState<OpenedAmount | null>(null);
   const [boundCurrency, setBoundCurrency] = useState(account.currency);
   const [description, setDescription] = useState("");
@@ -166,7 +188,7 @@ export function usePostingEditor(
   const [profileId, setProfileId] = useState(account.financialAccountProfileId);
   const [destinationId, setDestinationId] = useState<string | null>(null);
   const [transferReviewRequired, setTransferReviewRequired] = useState(false);
-  const [setup, setSetup] = useState<PlaceDraft | null>(null);
+  const [setup, setSetup, readSetup] = useAmountState<PlaceDraft | null>(null);
   const [pending, setPending] = useState<PendingPosting | null>(null);
   const [draftId, setDraftId] = useState<LocalEntryDraftId | undefined>();
   const [loading, setLoading] = useState(true);
@@ -239,7 +261,7 @@ export function usePostingEditor(
     const stored = factsAmount(facts);
     const opened = openSavedAmount(facts.currency, stored);
     setAmount(opened.session);
-    setOpenedAmount({ stored, notice: opened.notice });
+    setOpenedAmount({ stored, notice: opened.notice, text: opened.session.editor.text, review: opened.session.review });
     setDescription(facts.description);
     setDate(facts.accountingDate);
     setEntryType(facts.entryType);
@@ -299,15 +321,15 @@ export function usePostingEditor(
     setPosted(null);
     setError("");
   }
-  function snapshotConfirmed(binding: IntakeBinding): IntakeSuggestion {
+  function snapshotConfirmed(binding: IntakeBinding, amountNow: AmountAtPress): IntakeSuggestion {
     const currency = binding.facts.currency;
     if (currency !== "COP" && currency !== "USD") throw new Error("Unsupported Candidate currency");
     return {
-      direction,
+      direction: directionOf(amountNow),
       description: description.trim(),
       amount: {
         currency,
-        minorUnits: Math.abs(requiredMinorUnits(amount)),
+        minorUnits: Math.abs(requiredMinorUnits(amountNow)),
       },
       accountingDate: date,
       financialAccountProfileId: profileId,
@@ -328,12 +350,12 @@ export function usePostingEditor(
       categories: { ids: [], primaryId: null },
     };
   }
-  function snapshotFacts(): LocalEntryFacts {
+  function snapshotFacts(amountNow: AmountSession): LocalEntryFacts {
     return {
       workspaceId: account.workspaceId,
       currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
       entryType: entryType === "transfer" ? "transfer" : "normal",
-      ...amountFacts(openedAmount ? openedAmount.stored : storedAmountOf(amount)),
+      ...amountFacts(savedAmountText(amountNow, openedAmount)),
       accountingDate: date,
       description,
       profileId,
@@ -417,46 +439,42 @@ export function usePostingEditor(
     setOpenedAmount(null);
     if (setup) setSetup({ ...setup, amount: openAmount(account.currency, "0") });
   }
-  const minorUnits = amountMinorUnits(amount);
-  const amountValid =
-    minorUnits !== null &&
-    (entryType === "initial" ? minorUnits >= 0 : minorUnits !== 0);
   const validTransfer =
     entryType !== "transfer" ||
     (!!destinationId && destinationId !== profileId && !transferReviewRequired);
-  const shownMinorUnits = displayedMinorUnits(amount);
-  const direction: "in" | "out" =
-    shownMinorUnits !== null && shownMinorUnits > 0 ? "in" : "out";
+  const direction = directionOf(amount);
   /** Changes the amount; a change to its text or its confirmation means it is no longer the saved amount. */
   function changeAmount(next: AmountSession) {
-    if (next.editor.text !== amount.editor.text || next.review !== amount.review) setOpenedAmount(null);
+    const current = readAmount();
+    if (next.editor.text !== current.editor.text || next.review !== current.review) setOpenedAmount(null);
     setAmount(next);
   }
-  function buildEntry(): PendingPosting {
-    if (setup) {
-      if (!setup.productKind) throw new Error("Choose Credit card or Loan");
+  function buildEntry(amountNow: AmountAtPress, setupNow: AtPress<PlaceDraft> | null): PendingPosting {
+    if (setupNow) {
+      if (!setupNow.productKind) throw new Error("Choose Credit card or Loan");
       return {
         kind: "setup",
-        ...(setup.target ? { target: setup.target } : {}),
+        ...(setupNow.target ? { target: setupNow.target } : {}),
         payload: {
           workspaceId: account.workspaceId,
-          name: setup.name.trim(),
-          ...(setup.emoji?.trim() ? { emoji: setup.emoji.trim() } : {}),
-          productKind: setup.productKind,
+          name: setupNow.name.trim(),
+          ...(setupNow.emoji?.trim() ? { emoji: setupNow.emoji.trim() } : {}),
+          productKind: setupNow.productKind,
           amount: {
             currency: account.currency,
-            minorUnits: balanceMinorUnits(setup.amount) ?? requiredMinorUnits(setup.amount),
+            minorUnits: balanceMinorUnits(setupNow.amount) ?? requiredMinorUnits(setupNow.amount),
           },
-          accountingDate: setup.date,
+          accountingDate: setupNow.date,
           idempotencyKey: transport.newKey(),
         },
       };
     }
+    const signed = requiredMinorUnits(amountNow);
     const payload = {
       workspaceId: account.workspaceId,
       amount: {
         currency: account.currency,
-        minorUnits: Math.abs(requiredMinorUnits(amount)),
+        minorUnits: Math.abs(signed),
       },
       accountingDate: date,
       description: description.trim(),
@@ -488,7 +506,7 @@ export function usePostingEditor(
         payload: { ...payload, financialAccountProfileId: profileId },
       };
     return {
-      kind: direction === "in" ? "income" : "expense",
+      kind: signed > 0 ? "income" : "expense",
       payload: {
         ...payload,
         financialAccountProfileId: profileId,
@@ -496,25 +514,30 @@ export function usePostingEditor(
       },
     };
   }
-  const setupMinorUnits = setup && setup.amount.currency === account.currency ? balanceMinorUnits(setup.amount) : null;
-  const setupValid = !!setup?.name.trim() && setup.productKind !== null && setupMinorUnits !== null && setupMinorUnits >= 0;
-  const canSubmit =
-    !busy &&
-    !loading &&
-    !keeping &&
-    !blocked &&
-    (!intake ||
-      (!pending &&
-        entryType === "normal" &&
-        !setup &&
-        intake.facts.currency === account.currency)) &&
-    (!!pending || (setup ? setupValid : amountValid && validTransfer));
+  /** Whether a post may be sent with these amounts; rendering asks with the state, a press with what it reads. */
+  function canSubmitWith(amountNow: AmountSession, setupNow: PlaceDraft | null) {
+    const shown = displayedMinorUnits(amountNow);
+    const amountValid = amountSendable(amountNow) && shown !== null && (entryType === "initial" ? shown >= 0 : shown !== 0);
+    const setupValid = !!setupNow?.name.trim() && setupNow.productKind !== null && setupNow.amount.currency === account.currency
+      && balanceSendable(setupNow.amount);
+    return !busy &&
+      !loading &&
+      !keeping &&
+      !blocked &&
+      (!intake ||
+        (!pending &&
+          entryType === "normal" &&
+          !setupNow &&
+          intake.facts.currency === account.currency)) &&
+      (!!pending || (setupNow ? setupValid : amountValid && validTransfer));
+  }
+  const canSubmit = canSubmitWith(amount, setup);
   async function keepDraft() {
     const mounted = lifetime.current;
     if (
       !drafts ||
       !editable ||
-      setup ||
+      readSetup() ||
       entryType === "initial" ||
       opLock.current
     )
@@ -523,7 +546,7 @@ export function usePostingEditor(
     setKeeping(true);
     setError("");
     try {
-      const facts = snapshotFacts();
+      const facts = snapshotFacts(readAmount());
       const id = await drafts.keep({ draftId, facts });
       if (!mounted.active) return;
       setDraftId(id);
@@ -568,7 +591,7 @@ export function usePostingEditor(
   const reviewWrites = useRef<Promise<void>>(Promise.resolve());
   const latestReview = useRef<LocalEntryFacts | null>(null);
   const persistedReview = useRef<string | null>(null);
-  const reviewFacts = intake && !loading && appliedDraft.current === `intake:${intake.id}` ? snapshotFacts() : null;
+  const reviewFacts = intake && !loading && appliedDraft.current === `intake:${intake.id}` ? snapshotFacts(amount) : null;
   latestReview.current = reviewFacts;
   const reviewValue = reviewFacts ? JSON.stringify(reviewFacts) : null;
   useLayoutEffect(() => {
@@ -584,10 +607,10 @@ export function usePostingEditor(
       if (lifetime.current.active) setError(t("posting.reviewSaveFailed"));
     });
   }, [intake, reviewValue, transport]);
-  async function saveCandidateReview() {
+  async function saveCandidateReview(facts: LocalEntryFacts | null = latestReview.current) {
     try {
       await reviewWrites.current.catch(() => {});
-      if (intake && !intake.frozen && latestReview.current) await intake.persistReview(latestReview.current);
+      if (intake && !intake.frozen && facts) await intake.persistReview(facts);
     } catch (error) {
       if (!transport.reportFailure?.(error) && lifetime.current.active) setError(t("posting.reviewSaveFailed"));
       throw error;
@@ -600,7 +623,9 @@ export function usePostingEditor(
   }
   async function submit() {
     const mounted = lifetime.current;
-    if (!mounted.active || opLock.current || !canSubmit) return;
+    const amountNow = readAmount();
+    const setupNow = readSetup();
+    if (!mounted.active || opLock.current || !canSubmitWith(amountNow, setupNow)) return;
     opLock.current = true;
     submitting.current = true;
     setBusy(true);
@@ -612,8 +637,8 @@ export function usePostingEditor(
           setError(t("posting.alreadyPosting"));
           return;
         }
-        await saveCandidateReview();
-        const receipt = await intake.confirm(snapshotConfirmed(intake));
+        await saveCandidateReview(latestReview.current && snapshotFacts(amountNow));
+        const receipt = await intake.confirm(snapshotConfirmed(intake, amountNow));
         if (!mounted.active) return;
         setAmount(openAmount(account.currency, "-"));
         setOpenedAmount(null);
@@ -622,7 +647,7 @@ export function usePostingEditor(
         setPosted(receipt);
         return;
       }
-      const built = pending ?? buildEntry();
+      const built = pending ?? buildEntry(amountNow, setupNow);
       const saved = await transport.save(built, draftId);
       if (saved.command.payload.idempotencyKey !== built.payload.idempotencyKey) {
         if (mounted.active) {
@@ -663,7 +688,7 @@ export function usePostingEditor(
       setDescription("");
       setCategories({ ids: [], primaryId: null });
       setOpenedAmount(null);
-      setSavedFacts(factsKey({ ...snapshotFacts(), amountReenter: undefined, ...amountFacts(storedAmountOf(openAmount(account.currency, "-"))),
+      setSavedFacts(factsKey({ ...snapshotFacts(amountNow), amountReenter: undefined, ...amountFacts(storedAmountOf(openAmount(account.currency, "-"))),
         description: "", categories: { ids: [], primaryId: null } }));
       setPosted(receipt);
     } catch (error) {
@@ -717,24 +742,26 @@ export function usePostingEditor(
     !setup &&
     entryType !== "initial" &&
     posted === null &&
-    factsKey(snapshotFacts()) !== savedFacts;
+    factsKey(snapshotFacts(amount)) !== savedFacts;
   return {
     amount,
     amountNotice: openedAmount?.notice?.kind === "reenter" ? openedAmount.notice : null,
     signLocked: entryType === "normal" && classification.nature !== null,
     setAmount: (value: AmountSession) => {
-      if (canEdit() && value.currency === amount.currency) {
+      const current = readAmount();
+      if (canEdit() && value.currency === current.currency) {
         if (entryType === "normal" && classification.nature) {
           changeAmount(categoryAmount(value, classification.nature));
           return;
         }
-        const next = displayedMinorUnits(value);
-        const nextDirection = next === null ? direction : next > 0 ? "in" : "out";
-        if (nextDirection !== direction)
+        const was = directionOf(current);
+        if (displayedMinorUnits(value) !== null && directionOf(value) !== was)
           setCategories({ ids: [], primaryId: null });
         changeAmount(value);
       }
     },
+    /** The amount as of the latest change, for a check a press makes before it sends. */
+    readAmount,
     description,
     setDescription: (value: string) => {
       if (canEdit()) setDescription(value);
@@ -768,7 +795,7 @@ export function usePostingEditor(
     },
     transferReviewRequired,
     swapTransferPlaces: () => {
-      if (canEdit() && entryType === "transfer" && !setup && destinationId && destinationId !== profileId) {
+      if (canEdit() && entryType === "transfer" && !readSetup() && destinationId && destinationId !== profileId) {
         setProfileId(destinationId);
         setDestinationId(profileId);
         setTransferReviewRequired(true);
@@ -809,6 +836,10 @@ export function usePostingEditor(
     setSetup: (value: PlaceDraft | null) => {
       if (canEdit() && !isolate) { setSetupPosted(null); setSetup(value); }
     },
+    /** Applies the fields that changed to the latest draft, never to a render's copy, which may hold an older amount. */
+    changeSetup: (change: Partial<PlaceDraft>) => {
+      if (canEdit() && !isolate) { setSetupPosted(null); setSetup((current) => current && { ...current, ...change }); }
+    },
     direction,
     categories,
     setCategories: (value: TransactionCategories, nature: CategoryNature | null = null) => {
@@ -821,7 +852,7 @@ export function usePostingEditor(
       ) {
         setCategories({ ids: [...value.ids], primaryId: value.primaryId }, nature);
         if (entryType === "normal" && value.ids.length && nature)
-          changeAmount(categoryAmount(amount, nature));
+          changeAmount(categoryAmount(readAmount(), nature));
       }
     },
     pending: !!pending || intake?.frozen === true,
@@ -841,14 +872,16 @@ export function usePostingEditor(
     discardDraft,
     discardCandidate,
     captureForBatch: () => {
-      if (!canEdit() || !canSubmit || setup || intake) return null;
-      return { command: buildEntry(), draftId };
+      const amountNow = readAmount();
+      const setupNow = readSetup();
+      if (!canEdit() || !canSubmitWith(amountNow, setupNow) || setupNow || intake) return null;
+      return { command: buildEntry(amountNow, null), draftId };
     },
     resetComposer: () => {
-      if (canEdit() && !setup) resetComposer();
+      if (canEdit() && !readSetup()) resetComposer();
     },
     editBatchDraft: (value: { command: PendingPosting; draftId?: string }) => {
-      if (!canEdit() || setup || intake) return false;
+      if (!canEdit() || readSetup() || intake) return false;
       hydrateFromCommand(value.command);
       setDraftId(value.draftId);
       appliedDraft.current = value.draftId;

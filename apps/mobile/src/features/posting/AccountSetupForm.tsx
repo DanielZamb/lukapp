@@ -33,7 +33,8 @@ export function AccountSetupForm(props: {
   pending: boolean;
   error: string;
   canSubmit: boolean;
-  onChange: (value: PlaceDraft) => void;
+  /** Only the fields that changed, applied by the owner to its latest draft. */
+  onChange: (change: Partial<PlaceDraft>) => void;
   onSubmit: () => void;
   onDismiss: () => void;
 }) {
@@ -92,7 +93,7 @@ export function AccountSetupForm(props: {
               placeholder={t("posting.setupNamePlaceholder")}
               value={value.name}
               editable={props.editable}
-              onChangeText={(name) => props.onChange({ ...value, name })}
+              onChangeText={(name) => props.onChange({ name })}
               InputComponent={BottomSheetTextInput}
             />
             <View style={styles.field}>
@@ -114,7 +115,7 @@ export function AccountSetupForm(props: {
                     disabled={!props.editable}
                     onPress={() => {
                       setChosen(id);
-                      props.onChange({ ...value, productKind });
+                      props.onChange({ productKind });
                     }}
                     style={[
                       styles.chip,
@@ -147,7 +148,7 @@ export function AccountSetupForm(props: {
               <Text style={styles.label}>{balanceLabel}</Text>
               <AmountField
                 session={value.amount}
-                onChange={(amount) => props.onChange({ ...value, amount })}
+                onChange={(amount) => props.onChange({ amount })}
                 editable={props.editable}
                 inputAccessibilityLabel={balanceLabel}
                 placeholder="0"
@@ -246,7 +247,7 @@ export function AccountSetupForm(props: {
               trailingIcon="checkmark"
               disabled={!props.editable}
               onPress={() => {
-                props.onChange({ ...value, emoji: lookEmoji });
+                props.onChange({ emoji: lookEmoji });
                 lookSheet.current?.dismiss();
               }}
             />
