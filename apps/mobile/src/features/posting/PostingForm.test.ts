@@ -457,3 +457,13 @@ test("adding a place reads in Spanish, including the debt balance question", asy
   for (const copy of ["Add a place", "Name you recognize", "Credit card", "How much do you still owe?", "Retry setup"])
     expect(shown).not.toContain(copy);
 });
+
+test("Confirm From and To reports the pair it showed", async () => {
+  const onConfirm = vi.fn();
+  await act(async () => { root = create(createElement(PostingForm, {
+    ...emptyPostingForm, ...handlers, entryType: "transfer",
+    transferReview: { required: true, canConfirm: true, pair: { from: "daily", to: "wallet" }, onConfirm, onSwap: vi.fn() },
+  })); });
+  await act(async () => root!.root.findByType(ScrollView).findByProps({ accessibilityLabel: "Confirm From and To", accessibilityRole: "button" }).props.onPress());
+  expect(onConfirm.mock.calls).toEqual([[{ from: "daily", to: "wallet" }]]);
+});

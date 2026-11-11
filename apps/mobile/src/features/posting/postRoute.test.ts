@@ -794,3 +794,29 @@ test("a Candidate whose source maps to a closed Place shows it as closed and is 
   expect(candidateService.read("capture-1")).toBeDefined();
   expect(confirmOne).not.toHaveBeenCalled();
 });
+
+test("a transfer confirmation kept from an earlier pair does not confirm the pair chosen since", async () => {
+  queryData.profiles = [{ id: "daily", name: "My money" }, { id: "wallet", name: "Wallet" }, { id: "card", name: "Card" }];
+  await mount();
+  await act(async () => {
+    formProps().onEntryType?.("transfer");
+    formProps().onAmountChange(money("-1"));
+    formProps().onDescriptionChange("Top up");
+  });
+  const place = () => root!.root.find((node) => String(node.type) === "place-sheet");
+  await act(async () => formProps().onDestination?.());
+  await act(async () => place().props.onSelect("wallet"));
+  const shown = formProps().transferReview;
+  expect(shown?.pair).toEqual({ from: "daily", to: "wallet" });
+  await act(async () => formProps().onDestination?.());
+  await act(async () => place().props.onSelect("card"));
+  await act(async () => shown?.onConfirm(shown.pair));
+  expect(formProps().transferReview?.required).toBe(true);
+  expect(formProps().canSubmit).toBe(false);
+  await act(async () => { formProps().onPost(); });
+  expect(writes.post).not.toHaveBeenCalled();
+  await act(async () => formProps().transferReview?.onConfirm(formProps().transferReview?.pair));
+  await act(async () => { formProps().onPost(); });
+  expect(writes.post.mock.calls.map(([command]) => command.kind === "transfer" && [command.payload.sourceFinancialAccountProfileId,
+    command.payload.destinationFinancialAccountProfileId])).toEqual([["daily", "card"]]);
+});
