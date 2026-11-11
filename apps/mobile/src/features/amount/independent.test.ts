@@ -12,6 +12,7 @@ import { copAmountConvention, usdAmountConvention } from "../../../../../src/acc
 import { LanguageProvider } from "../../i18n";
 import { AmountField } from "./AmountField";
 import { confirmAmount, displayedMinorUnits, openAmountIn, sendableMinorUnits, type AmountAtPress, type AmountSession } from "./session";
+import { reactNativeInput, readsAs } from "./phone.testSupport";
 import { useAmountState } from "./useAmountState";
 
 /**
@@ -33,7 +34,7 @@ const shownSign = () => {
   return label === "minus" ? "-" : label === "plus" ? "+" : "";
 };
 
-async function mount(cop: boolean, precision: 0 | 2 | 3): Promise<Phone> {
+async function mount(cop: boolean, precision: 0 | 2 | 3, focus = true): Promise<Phone> {
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   function Owner() {
@@ -43,7 +44,7 @@ async function mount(cop: boolean, precision: 0 | 2 | 3): Promise<Phone> {
     return createElement(AmountField, { session: value, onChange: setValue, editable: true, inputAccessibilityLabel: "Amount", sign: {} });
   }
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Owner))); });
-  input().props.onFocus();
+  if (focus) input().props.onFocus();
   return phoneFor(cop);
 }
 
@@ -126,17 +127,6 @@ class Reference {
   }
 }
 
-/** The amount a person reads in the visible text, by an independent strict reading of the convention. */
-function reads(visible: string, cop: boolean, precision: number): number | null {
-  const group = cop ? "\\." : ",";
-  const decimal = cop ? "," : "\\.";
-  const match = new RegExp(`^([+−-]?)(\\d{1,3}(?:${group}\\d{3})+|\\d+)(?:${decimal}(\\d+))?$`).exec(visible.trim());
-  if (!match || (match[3] !== undefined && (precision === 0 || match[3].length > precision))) return null;
-  const v = Number(match[2].replace(/[.,]/g, "")) * 10 ** precision + Number((match[3] ?? "").padEnd(precision, "0") || "0");
-  if (!Number.isSafeInteger(v)) return null;
-  return match[1] && match[1] !== "+" && v ? -v : v;
-}
-
 function rng(seed: number) { let x = seed; return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 4294967296; }; }
 
 const sequences = Number(process.env.AMOUNT_FUZZ_SEQUENCES ?? 12);
@@ -191,7 +181,7 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
         actions++;
         const visible = phone.text;
         expect(input().props.value, `field shows the phone's text after step ${step}`).toBe(visible);
-        expect(displayedMinorUnits(session), `value of ${JSON.stringify(visible)}`).toBe(reads(shownSign() + visible, cop, precision));
+        expect(displayedMinorUnits(session), `value of ${JSON.stringify(visible)}`).toBe(readsAs(shownSign() + visible, cop, precision));
         if (session.review) expect(sendableMinorUnits(read())).toBeNull();
         else expect(sendableMinorUnits(read()), `sendable once the phone shows ${JSON.stringify(visible)}`).toBe(displayedMinorUnits(session));
         if (intact) compared++;
@@ -202,6 +192,68 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
     }
     console.log(`independent cop=${cop} precision=${precision} dropped=${dropped}: ${actions} actions, ${drops} dropped writes, ${compared} steps compared with the reference's intent, ${divergences} sequences left the reference's intent unexplained`);
     if (!dropped) expect(divergences).toBe(0);
+  },
+  120_000,
+);
+
+const interleavings = Number(process.env.AMOUNT_INTERLEAVINGS ?? 40);
+const interleavingSteps = Number(process.env.AMOUNT_INTERLEAVING_STEPS ?? 100);
+
+/**
+ * Finding A of the fourth review. The person types, taps, ends editing and presses the field's keys and Save, while
+ * React Native holds, runs or drops the field's writes and delivers the phone's events late, in any order the platform
+ * allows (`reactNativeInput`). Whenever Save sends while every edit the phone made has reached JavaScript, the amount
+ * is what the phone's text reads at that moment, sign beside it included, by the independent reader. Writes the field
+ * sent and the phone holds, runs or drops are exactly what this checks; a keystroke still on its way is beyond any
+ * app. Once nothing is in flight, a text that reads as an amount is sent, after the person confirms it if asked.
+ */
+test.each((["android", "ios"] as const).flatMap((platform) => [false, true].map((cop) => [platform, cop] as const)))(
+  "every interleaving on %s, cop=%s: Save sends what the phone's text reads or nothing, and a quiet phone's amount is sent",
+  async (platform, cop) => {
+    const precision = 2;
+    const random = rng(7717 + (platform === "ios" ? 31 : 0) + (cop ? 600 : 0));
+    const decimalKey = `Type a decimal ${cop ? "comma" : "point"} for ${cop ? "COP" : "USD"}`;
+    const control = (label: string) => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0];
+    let saves = 0;
+    let sent = 0;
+    let dropped = 0;
+    for (let sequence = 0; sequence < interleavings; sequence++) {
+      await mount(cop, precision, false);
+      const phone = reactNativeInput(input, platform);
+      phone.tap(0);
+      const shown = () => shownSign() + phone.text;
+      const save = (when: string) => {
+        if (phone.reporting) return null;
+        const amount = sendableMinorUnits(read());
+        saves++;
+        if (amount === null) return null;
+        sent++;
+        expect(amount, `${when}: sent while the phone shows ${JSON.stringify(shown())}`).toBe(readsAs(shown(), cop, precision));
+        return amount;
+      };
+      for (let step = 0; step < interleavingSteps; step++) {
+        const k = random();
+        const digit = String(Math.floor(random() * 10));
+        if (k < 0.22) phone.key(digit);
+        else if (k < 0.25) phone.key(random() < 0.5 ? "." : ",");
+        else if (k < 0.31) phone.backspace();
+        else if (k < 0.39) phone.tap(Math.floor(random() * (phone.text.length + 1)));
+        else if (k < 0.42) phone.done();
+        else if (k < 0.58) await phone.deliver();
+        else if (k < 0.7) phone.apply();
+        else if (k < 0.8) await phone.press(control(decimalKey));
+        else if (k < 0.83) await phone.press(control("Switch the amount between minus and plus"));
+        else save(`sequence ${sequence} step ${step}`);
+      }
+      await phone.quiesce();
+      dropped += phone.dropped;
+      const confirm = root.root.findAll((node) => String(node.props.accessibilityLabel).startsWith("Confirm ") && typeof node.props.onPress === "function")[0];
+      if (confirm) await act(async () => confirm.props.onPress());
+      expect(sendableMinorUnits(read()), `sequence ${sequence}, quiet, the phone shows ${JSON.stringify(shown())}`).toBe(readsAs(shown(), cop, precision));
+      await act(async () => { root?.unmount(); });
+    }
+    console.log(`interleavings ${platform} cop=${cop}: ${saves} saves, ${sent} sent, ${dropped} writes dropped`);
+    expect(sent).toBeGreaterThan(0);
   },
   120_000,
 );
