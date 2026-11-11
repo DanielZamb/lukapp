@@ -6,6 +6,9 @@ import DraftsRoute from "../../../app/drafts";
 import { fixture, now } from "../intake/service.testSupport";
 const now0 = now;
 import { viewInbox, type IntakeCandidate } from "../intake/candidates";
+import { confirmReadyCandidates } from "../intake/confirmReady";
+import { createCandidateBinding } from "../intake/postingBinding";
+import { createTranslator } from "../../../../../src/i18n";
 import type { ConfirmCandidateInput } from "../../../../../src/notificationIntake/types";
 
 const route = vi.hoisted((): {
@@ -309,4 +312,32 @@ test("a Candidate naming a closed Place says so and is left out of Confirm all R
   await act(async () => button("Confirm all Ready").props.onPress());
   expect(intakeState.confirm.mock.calls.map(([input]) => input.items.map((item: ConfirmCandidateInput) => item.candidateId))).toEqual([["c1"]]);
   expect(f.service.read("c2")?.review.financialAccountProfileId).toBe("wallet");
+});
+
+test("third review, finding 1: a Candidate whose amount awaits confirmation says so and is left out of Confirm all Ready until confirmed", async () => {
+  route.segment = "now";
+  intakeState.now = [candidate("c1"), candidate("c2")];
+  await mount();
+  const binding = createCandidateBinding({ service: f.service, candidateId: "c2", workspaceId: "workspace",
+    dispatch: vi.fn(), translator: createTranslator("en") });
+  await act(async () => binding.persistReview({ ...binding.facts, description: "Taxi", amountText: "-1.234", amountFormat: "cop/1",
+    amountReview: { reason: "pasted", previous: null } }));
+  await act(async () => button("Confirm all Ready").props.onPress());
+  expect(intakeState.confirm.mock.calls.map(([input]) => input.items.map((item: ConfirmCandidateInput) => item.candidateId))).toEqual([["c1"]]);
+  expect(text()).toContain("Confirm the amount before you continue.");
+  expect(f.service.read("c2")).toMatchObject({ status: { kind: "review" }, reviewAmountReview: { reason: "pasted", previous: null } });
+
+  const stale = f.service.candidates().filter((row) => row.id === "c2");
+  await act(async () => { await confirmReadyCandidates(f.service, stale, intakeState.confirm); });
+  expect(intakeState.confirm).toHaveBeenCalledTimes(1);
+  await expect(f.service.beginConfirmation("c2", f.service.read("c2")!.recordRevision)).rejects.toThrow();
+  expect(f.service.read("c2")).toMatchObject({ status: { kind: "review" } });
+
+  const confirming = createCandidateBinding({ service: f.service, candidateId: "c2", workspaceId: "workspace",
+    dispatch: vi.fn(), translator: createTranslator("en") });
+  await act(async () => confirming.persistReview({ ...confirming.facts, amountReview: undefined }));
+  expect(text()).not.toContain("Confirm the amount before you continue.");
+  await act(async () => button("Confirm all Ready").props.onPress());
+  expect(intakeState.confirm.mock.calls.at(-1)?.[0].items.map((item: ConfirmCandidateInput) => [item.candidateId, item.confirmed.amount]))
+    .toEqual([["c2", { currency: "COP", minorUnits: 123400 }]]);
 });
