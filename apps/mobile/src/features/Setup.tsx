@@ -25,7 +25,7 @@ import { SetupCategories } from "./categories/SetupCategories";
 import { formatMoney } from "./money";
 import { AmountField } from "./amount/AmountField";
 import { displayedMinorUnits, openAmount } from "./amount/session";
-import { useAmountState } from "./amount/useAmountState";
+import { useAmountState, useFormState, withFields, type AtPress } from "./amount/useAmountState";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { deviceTimeZone } from "./timeZones";
 import {
@@ -58,6 +58,22 @@ type SetupPhase =
       requests: AccountSetupRequest[];
       index: number;
     };
+/** The first-run answers Finish builds its save from, read once at the press. */
+type SetupAnswers = {
+  categories: SetupCategory[];
+  accountRequests: AccountSetupRequest[];
+  currency: string;
+  currencyChosen: boolean;
+  consent: boolean | null;
+  timeZone: string;
+  wantsBudgets: boolean;
+};
+/** Where the save stands: a held submission is resent as it was built. */
+type SetupRun = { phase: SetupPhase; busy: boolean };
+/** The held submission as it was built; a press reads it through a read-only view of the same plain data. */
+function heldSubmission(phase: AtPress<SetupPhase>): SetupSubmission | null {
+  return phase.kind === "retryDefaults" ? phase.submission as SetupSubmission : null;
+}
 const setupConflict = z.object({ code: z.literal("setup_conflict") });
 export function Setup({
   onComplete,
@@ -83,18 +99,19 @@ export function Setup({
   const presets = useQuery(api.accounting.listCategoryPresets, {
     nature: "Expense",
   });
-  const [categories, setCategories] = useState<SetupCategory[]>([]);
-  const [accountRequests, setAccountRequests] = useState<AccountSetupRequest[]>([]);
-  const [phase, setPhase] = useState<SetupPhase>({ kind: "editing" });
-  const [currency, setCurrency] = useState("COP");
-  const [currencyChosen, setCurrencyChosen] = useState(false);
+  const [answers, setAnswers, readAnswers] = useFormState<SetupAnswers>(() => ({
+    categories: [], accountRequests: [], currency: "COP", currencyChosen: false, consent: null, timeZone: deviceTimeZone(),
+    wantsBudgets: false,
+  }));
+  const [starting, setStarting, readStarting] = useAmountState(() => openAmount("COP"));
+  const answer = (patch: Partial<SetupAnswers>) => setAnswers((now) => withFields(now, patch));
+  const { categories, accountRequests, currency, currencyChosen, consent, timeZone, wantsBudgets } = answers;
+  const [run, setRun, readRun] = useFormState<SetupRun>({ phase: { kind: "editing" }, busy: false });
+  const { phase, busy } = run;
+  const setPhase = (next: SetupPhase) => setRun((now) => withFields(now, { phase: next }));
+  const setBusy = (next: boolean) => setRun((now) => withFields(now, { busy: next }));
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [stage, setStage] = useState(1);
-  const [consent, setConsent] = useState<boolean | null>(null);
-  const [timeZone, setTimeZone] = useState(deviceTimeZone);
-  const [starting, setStarting, readStarting] = useAmountState(() => openAmount("COP"));
-  const [wantsBudgets, setWantsBudgets] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const saving = useRef(false);
   const completed = useRef(false);
@@ -113,42 +130,46 @@ export function Setup({
     setStage((current) => Math.max(current, next));
   }
   const disabled = busy || phase.kind !== "editing";
+  /** Whether the answers are locked at the press: while saving, or once a save was sent. */
+  const lockedNow = () => { const now = readRun(); return saving.current || now.busy || now.phase.kind !== "editing"; };
   function chooseCurrency(code: string) {
-    if (disabled || saving.current) return;
+    if (lockedNow()) return;
     interact();
-    setCurrency(code);
+    answer({ currency: code, currencyChosen: true });
     if (code !== readStarting().currency) setStarting(openAmount(code));
-    setCurrencyChosen(true);
     advance(3);
   }
   const shown = starting.editor.text.trim() ? displayedMinorUnits(starting) : 0;
   const formatted = shown === null || shown < 0 ? "" : formatMoney({ currency: starting.currency, minorUnits: shown }, { hideZeroDecimals: true });
   async function finish() {
-    if (saving.current || phase.kind === "accounts") return;
+    const { phase: phaseNow } = readRun();
+    if (saving.current || phaseNow.kind === "accounts") return;
     interact();
     setError("");
-    let submission = phase.kind === "retryDefaults" ? phase.submission : null;
+    let submission = heldSubmission(phaseNow);
     try {
       if (!submission) {
-        if (!presets || !categories.length || !currencyChosen || consent === null)
+        const now = readAnswers();
+        if (!presets || !now.categories.length || !now.currencyChosen || now.consent === null)
           return;
         const startingMinorUnits = startingAmount(readStarting(), translator);
+        const chosen = [...now.categories];
         submission = {
           payload: {
-            functionalCurrency: currency,
+            functionalCurrency: now.currency,
             startingMinorUnits,
-            categories: setupSelections(categories, presets),
-            timeZone,
-            purchaseAlertsConsent: consent,
-            wantsBudgets,
+            categories: setupSelections(chosen, presets),
+            timeZone: now.timeZone,
+            purchaseAlertsConsent: now.consent,
+            wantsBudgets: now.wantsBudgets,
           },
-          accounts: [...accountRequests],
+          accounts: [...now.accountRequests],
           summary: {
-            categories,
-            currency,
+            categories: chosen,
+            currency: now.currency,
             startingMinorUnits,
-            purchaseAlertsConsent: consent,
-            wantsBudgets,
+            purchaseAlertsConsent: now.consent,
+            wantsBudgets: now.wantsBudgets,
           },
         };
       }
@@ -190,9 +211,10 @@ export function Setup({
     onComplete(summary);
   }
   function nextAccount() {
-    if (phase.kind !== "accounts") return;
-    if (phase.index + 1 >= phase.requests.length) complete(phase.summary);
-    else setPhase({ ...phase, index: phase.index + 1 });
+    const { phase: now } = readRun();
+    if (now.kind !== "accounts") return;
+    if (now.index + 1 >= now.requests.length) complete(now.summary as SetupSummary);
+    else setRun((current) => current.phase.kind === "accounts" ? { ...current, phase: { ...current.phase, index: now.index + 1 } } : current);
   }
   return (
     <>
@@ -207,7 +229,7 @@ export function Setup({
         backgroundStyle={{ backgroundColor: theme.background }}
         onDismiss={() => {
           if (completed.current) return;
-          if (!saving.current && phase.kind === "editing") onCancel();
+          if (!saving.current && readRun().phase.kind === "editing") onCancel();
           else sheet.current?.present();
         }}
       >
@@ -230,7 +252,7 @@ export function Setup({
               accessibilityState={{ disabled }}
               style={styles.icon}
               onPress={() => {
-                if (disabled || saving.current) return;
+                if (lockedNow()) return;
                 interact();
                 sheet.current?.dismiss();
               }}
@@ -250,11 +272,11 @@ export function Setup({
             selections={categories}
             disabled={disabled}
             onAccountSetup={(request) => {
-              if (!disabled && !saving.current) setAccountRequests((current) => [...current, request]);
+              if (!lockedNow()) setAnswers((now) => ({ ...now, accountRequests: [...now.accountRequests, request] }));
             }}
             onChange={(next) => {
-              if (disabled || saving.current) return;
-              setCategories(next);
+              if (lockedNow()) return;
+              answer({ categories: next });
               if (next.length) advance(2);
             }}
           />
@@ -294,7 +316,7 @@ export function Setup({
                   accessibilityLabel={t("setup.moreCurrencies")}
                   disabled={disabled}
                   onPress={() => {
-                    if (disabled || saving.current) return;
+                    if (lockedNow()) return;
                     interact();
                     setCurrencyOpen(true);
                   }}
@@ -317,9 +339,9 @@ export function Setup({
                 value={timeZone}
                 disabled={disabled}
                 onChange={(next) => {
-                  if (disabled || saving.current) return;
+                  if (lockedNow()) return;
                   interact();
-                  setTimeZone(next);
+                  answer({ timeZone: next });
                 }}
               />
             </View>
@@ -352,9 +374,9 @@ export function Setup({
                     }}
                     disabled={disabled}
                     onPress={() => {
-                      if (disabled || saving.current) return;
+                      if (lockedNow()) return;
                       interact();
-                      setConsent(option.value);
+                      answer({ consent: option.value });
                       advance(4);
                     }}
                     style={[
@@ -390,7 +412,7 @@ export function Setup({
                   editable={!disabled}
                   InputComponent={BottomSheetTextInput}
                   onChange={(value) => {
-                    if (disabled || saving.current) return;
+                    if (lockedNow()) return;
                     interact();
                     setStarting(value);
                   }}
@@ -431,9 +453,9 @@ export function Setup({
                 accessibilityState={{ selected: wantsBudgets, disabled }}
                 disabled={disabled}
                 onPress={() => {
-                  if (disabled || saving.current) return;
+                  if (lockedNow()) return;
                   interact();
-                  setWantsBudgets((value) => !value);
+                  setAnswers((now) => ({ ...now, wantsBudgets: !now.wantsBudgets }));
                 }}
                 style={{
                   minHeight: 48,

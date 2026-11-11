@@ -153,6 +153,13 @@ function isRenderEffect(fn: ts.Node) {
   return ts.isCallExpression(call) && call.arguments[0] === fn && ts.isIdentifier(call.expression) && renderEffects.has(call.expression.text);
 }
 
+/** A callback an array method runs during the render, such as the one that maps rows to elements; handlers it creates are still handlers. */
+function isRenderCallback(fn: ts.Node) {
+  const call = fn.parent;
+  return ts.isCallExpression(call) && call.arguments[0] === fn && ts.isPropertyAccessExpression(call.expression)
+    && ["map", "filter", "find", "findIndex", "some", "every", "flatMap"].includes(call.expression.name.text);
+}
+
 /**
  * Handlers that read an amount another way than its state's `read()`. In the function that calls useAmountState, the
  * state's value and every value the render derives from it are render values; a function nested in it, other than an
@@ -196,20 +203,21 @@ function capturedAmounts(file: string, source: string): string[] {
           for (const name of boundNames(node.name)) if (!rendered.has(name)) { rendered.add(name); grew = true; }
       });
     }
-    const inHandler = (node: ts.Node, hidden: ReadonlySet<string>) => {
+    const inHandler = (node: ts.Node, hidden: ReadonlySet<string>, render = true) => {
       if (isFunction(node)) {
         if (isRenderEffect(node)) return;
         const own = ownNames(node);
         const visible = new Set([...hidden].filter((name) => !own.has(name)));
+        if (render && isRenderCallback(node)) { if (node.body) ts.forEachChild(node.body, (child) => inHandler(child, visible)); return; }
         const walk = (at: ts.Node) => {
           if (ts.isIdentifier(at) && visible.has(at.text) && isRead(at)) found.push(`${file}:${lineOf(parsed, at)}: a handler reads ${at.text}, which the render derived from the amount state`);
-          if (isFunction(at)) { inHandler(at, visible); return; }
+          if (isFunction(at)) { inHandler(at, visible, false); return; }
           ts.forEachChild(at, walk);
         };
         if (node.body) ts.forEachChild(node.body, walk);
         return;
       }
-      ts.forEachChild(node, (child) => inHandler(child, hidden));
+      ts.forEachChild(node, (child) => inHandler(child, hidden, render));
     };
     if (owner.body) ts.forEachChild(owner.body, (node) => inHandler(node, rendered));
   }
