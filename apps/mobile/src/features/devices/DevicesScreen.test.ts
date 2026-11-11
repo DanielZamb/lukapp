@@ -309,3 +309,26 @@ test("a lost sign-out-others reply is not resent; a session added since then nee
   await press(screen, "Sign out others");
   expect(env.revokeOthers.mock.calls).toEqual([[{}], [{}]]);
 });
+
+test("a Save name handler kept from before the last keystrokes renames to the name the screen shows", async () => {
+  const screen = await open();
+  await press(screen, "Rename Work Pixel");
+  await act(async () => nameField(screen).props.onChangeText("Daily ph"));
+  const kept = button(screen, "Save name").props.onPress as () => void;
+  await act(async () => nameField(screen).props.onChangeText("Daily phone"));
+  await act(async () => kept());
+  expect(env.register.mock.calls.map(([request]) => request.label)).toEqual(["Daily phone"]);
+});
+
+test("a Cancel kept from before a lost reply checks the devices before it lets the rename go", async () => {
+  env.register.mockRejectedValueOnce(lostReply());
+  const screen = await open();
+  await press(screen, "Rename Work Pixel");
+  await act(async () => nameField(screen).props.onChangeText("Daily phone"));
+  const keptCancel = button(screen, "Cancel").props.onPress as () => void;
+  await press(screen, "Save name");
+  devices = [{ ...pixel, label: "Daily phone" }, iphone];
+  await act(async () => keptCancel());
+  expect(env.list).toHaveBeenCalledTimes(2);
+  expect(texts(screen)).toEqual(expect.arrayContaining(["This list shows your devices as they are saved now.", "Daily phone"]));
+});
