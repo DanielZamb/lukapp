@@ -24,6 +24,8 @@ export type CommandTransport<Request, Receipt> = {
   send: (request: Request) => Promise<Receipt>;
   reportFailure: (error: unknown) => boolean;
   onDone: (receipt: Receipt) => void;
+  /** Called once a refusal answers the request, so a caller can mark what the server turned away. */
+  onRefused?: (code: string, request: Request) => void;
   /** The code of a definite refusal, or null when the server may have applied the request. */
   refusalCode?: (error: unknown) => string | null;
   /**
@@ -95,6 +97,7 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
       if (!mounted.active) return;
       if (settled) {
         setState({ name: "open", refusal: { code, request } });
+        transport.onRefused?.(code, request);
         return "refused";
       }
       setState({ name: "uncertain", refusal: code });

@@ -272,6 +272,19 @@ test("a lost removal reply retried with Send again removes the same device", asy
   expect(texts(screen)).toContain("Old iPhone no longer has access.");
 });
 
+test("a lost removal reply whose retry is refused before the server looked stays unconfirmed, and Send again removes the same device", async () => {
+  env.revoke.mockRejectedValueOnce(lostReply()).mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }));
+  const screen = await open();
+  await press(screen, "Remove access for Old iPhone");
+  await press(screen, "Remove access");
+  await press(screen, "Send again");
+  expect(alerts(screen)).toEqual(["Removing Old iPhone is not confirmed yet. Send it again, or check your devices to see if it is still listed."]);
+  devices = [pixel, { ...iphone, revoked: true }];
+  await press(screen, "Send again");
+  expect(env.revoke.mock.calls).toEqual([[{ deviceId: "iphone" }], [{ deviceId: "iphone" }], [{ deviceId: "iphone" }]]);
+  expect(texts(screen)).toContain("Old iPhone no longer has access.");
+});
+
 test("a lost sign-out-others reply is not resent; a session added since then needs a new confirmation", async () => {
   const tablet: Device = { deviceId: "tablet" as Device["deviceId"], label: "New tablet", platform: "android", current: false, revoked: false, clerkActive: true };
   env.revokeOthers.mockRejectedValueOnce(lostReply());

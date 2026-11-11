@@ -241,3 +241,58 @@ test("choosing the destination as the source is refused in Spanish without sendi
   expect(move().error).toBe("Elige otro lugar de donde sacar la plata.");
   expect(api.move).not.toHaveBeenCalled();
 });
+
+test.each([
+  new ConvexError({ code: "provider_unavailable" }),
+  new ConvexError({ code: "session_verification_required" }),
+  new ConvexError({ code: "device_registration_required" }),
+  new ConvexError({ code: "permission_denied" }),
+  new ConvexError({ kind: "accounting", code: "workspace_membership_required" }),
+  new ConvexError({ kind: "accounting", code: "place_ending_scan_limit" }),
+  new ConvexError({ kind: "recovery", code: "idempotency_key_conflict" }),
+  new ConvexError({ kind: "recovery", code: "a_code_this_app_does_not_know" }),
+])("a retry refused with $data.code after a lost reply keeps the same movement until an answer arrives", async (refusal) => {
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement")).mockRejectedValueOnce(refusal);
+  const move = await open(api);
+  await act(async () => { await move().submit(); });
+  await act(async () => { await move().submit(); move().onAmount(money("100")); move().onSource("savings"); });
+  expect(move()).toMatchObject({ pending: true, editable: false, canDismiss: false, canSubmit: true,
+    error: "Could not confirm the transfer. Retry to safely check the same movement." });
+  await act(async () => { await move().submit(); });
+  expect(api.move.mock.calls.map(([request]) => [request.idempotencyKey, request.amount.minorUnits, request.sourceFinancialAccountProfileId]))
+    .toEqual([["move-1", 230_000, "daily"], ["move-1", 230_000, "daily"], ["move-1", 230_000, "daily"]]);
+  expect(api.onMoved).toHaveBeenCalledOnce();
+});
+
+test.each([
+  { kind: "recovery", code: "plan_cancelled" },
+  { kind: "recovery", code: "plan_already_complete" },
+  { kind: "recovery", code: "transfer_predates_activation" },
+  { kind: "recovery", code: "source_must_be_asset" },
+  { kind: "recovery", code: "idempotency_key_invalid" },
+  { kind: "accounting", code: "locked_period" },
+  { kind: "accounting", code: "currency_mismatch" },
+  { kind: "accounting", code: "amount_must_be_positive" },
+])("a retry refused with $code after a lost reply answers the movement and the next send is a new one", async (refusal) => {
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement")).mockRejectedValueOnce(new ConvexError(refusal));
+  const move = await open(api);
+  await act(async () => { await move().submit(); });
+  await act(async () => { await move().submit(); });
+  expect(move()).toMatchObject({ pending: false, editable: true, canDismiss: true,
+    error: "The movement was rejected. Check the source and amount, then try again." });
+  await act(async () => { await move().submit(); });
+  expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1", "move-2"]);
+});
+
+test("a retry refused because the source Place closed answers the movement and marks that Place", async () => {
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement"))
+    .mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "financial_account_profile_ended" }));
+  const move = await open(api);
+  await act(async () => { await move().submit(); });
+  await act(async () => { await move().submit(); });
+  expect(move()).toMatchObject({ pending: false, editable: true, canSubmit: false, error: "",
+    unavailable: { id: "daily", label: "Daily (closed)" } });
+});

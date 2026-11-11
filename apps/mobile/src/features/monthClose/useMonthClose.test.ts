@@ -123,6 +123,20 @@ test("an uncertain lock retries the same month and a second success is still clo
   expect(page.current().phase).toEqual({ kind: "closed", period: october });
 });
 
+test("after a lost reply, a lock refused before the server looked keeps the same month and the next retry locks it", async () => {
+  const api = transport();
+  api.lock.mockRejectedValueOnce(new Error("Lost response"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }));
+  const page = await open(api);
+  await act(async () => page.current().request());
+  await act(async () => { await page.current().confirm(); });
+  await act(async () => { await page.current().confirm(); });
+  expect(page.current().phase).toMatchObject({ kind: "failed", period: october });
+  await act(async () => { await page.current().confirm(); });
+  expect(api.lock.mock.calls.map(([input]) => input)).toEqual(Array.from({ length: 3 }, () => ({ workspaceId: "workspace", period: october })));
+  expect(page.current().phase).toEqual({ kind: "closed", period: october });
+});
+
 test("a month that is already locked opens finished and never calls lock", async () => {
   const api = transport();
   const page = await open(

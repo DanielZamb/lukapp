@@ -392,6 +392,27 @@ test("an unavailable destination freezes the report; Retry repeats the identical
   expect(h.phase()).toEqual({ kind: "sent", result: sent });
 });
 
+test.each<Record<string, string | number>>([
+  { code: "provider_unavailable" },
+  { code: "rate_limited", retryAfterMs: 60_000 },
+  { code: "invalid_report", field: "title" },
+])("after a lost reply, a retry refused with $code keeps the report frozen and the next retry repeats it", async (refusal) => {
+  const h = harness();
+  h.failNextSubmit(new Error("lost reply"));
+  h.failNextSubmit(refusal);
+  await h.machine.open("shake", "/history");
+  h.write();
+  await h.machine.send();
+  await h.machine.send();
+  h.machine.edit("title", "Changed after the refusal");
+  expect(h.drafts.stored).toMatchObject({ reportKey: "report-1", frozen: { screenshotSha256: sha256(original) } });
+  expect(h.report()).toMatchObject({ fields: { title: "Balance looks wrong" } });
+  await h.machine.send();
+  expect(h.calls).toEqual([`attach report-1 ${original}`, "submit report-1", "submit report-1", "submit report-1"]);
+  expect(new Set(h.submitted.map((args) => JSON.stringify(args))).size).toBe(1);
+  expect(h.phase()).toEqual({ kind: "sent", result: sent });
+});
+
 test("a frozen retry attaches the same bytes again only when the server no longer holds them", async () => {
   const h = harness();
   h.failNextSubmit({ code: "destination_unavailable" });

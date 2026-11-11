@@ -237,6 +237,26 @@ test("an uncertain partial batch locks edits and retries only the unconfirmed ex
   expect(session.get().batch.posted).toEqual({ count: 2, net: 2000 });
 });
 
+test.each([
+  new ConvexError({ code: "provider_unavailable" }),
+  new ConvexError({ code: "session_verification_required" }),
+  new ConvexError({ code: "device_registration_required" }),
+])("a retry turned away with $data.code after a lost reply keeps the batch waiting on the same entry", async (refusal) => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new Error("Response lost")).mockRejectedValueOnce(refusal);
+  const session = await open(api);
+  await queueEntry(session, "-10", "Taxi");
+  await act(async () => { await session.get().batch.postAll(); });
+  await act(async () => { await session.get().batch.postAll(); });
+  expect(session.get().batch).toMatchObject({ waiting: true, editable: false, posted: null });
+  expect(api.abort).not.toHaveBeenCalled();
+  await act(async () => { await session.get().batch.postAll(); });
+  const first = api.post.mock.calls[0][0];
+  expect(first.payload).toMatchObject({ description: "Taxi", amount: { currency: "COP", minorUnits: 1000 } });
+  expect(api.post.mock.calls.map(([entry]) => entry)).toEqual([first, first, first]);
+  expect(session.get().batch.posted).toEqual({ count: 1, net: -1000 });
+});
+
 test("a definitive rejection reopens the saved draft for correction", async () => {
   const api = transport();
   api.post.mockRejectedValueOnce(
