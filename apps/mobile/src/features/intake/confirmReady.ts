@@ -3,6 +3,7 @@ import type { IntakeService } from "./service";
 import { storedAmountSendable } from "../amount/storedText";
 import type { IntakeCandidate } from "./candidates";
 import type { ConfirmCandidateInput, CandidateConfirmResult } from "../../../../../src/notificationIntake/types";
+import { attemptRefusals } from "../useFrozenCommand";
 
 export function chunkReady<T>(items: T[], size = INTAKE_BATCH_LIMIT) {
   const chunks: T[][] = [];
@@ -55,7 +56,8 @@ export async function confirmReadyCandidates(
     for (const row of rows) items.push(await service.beginConfirmation(row.id, row.recordRevision));
     service.assertAdmitted();
     const batch = await confirm(items);
-    await service.recordOutcomes(batch.results);
+    // confirmCandidates reports an item its mutation turned away before the receipt lookup as failed; it stays frozen.
+    await service.recordOutcomes(batch.results.filter((result) => result.ok || !attemptRefusals.has(result.error)));
     await service.applyRecordedOutcomes();
     confirmed += batch.results.filter((result) => result.ok).length;
   }
