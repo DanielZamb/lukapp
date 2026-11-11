@@ -22,7 +22,7 @@ import {
   UndoConfirmScreen, UnreadableScreen, UnresolvedScreen, type PickOption,
 } from "./PlaceEndingScreens";
 import { useSourceBlocker } from "./sources";
-import { useUnresolvedEnding, type UnresolvedEnding } from "./unresolved";
+import { useUnresolvedEnding } from "./unresolved";
 
 /** A resent request refused as stale was never recorded; the person starts a fresh review. */
 const staleResend: Record<string, MessageKey> = {
@@ -107,21 +107,15 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     // The backend reports the Place as ended, so whatever the stored request did, it has nothing left to do.
     if (pending && (endedStatus === "closed" || endedStatus === "undone")) void settle(pending.request).catch(() => {});
   }, [pending, endedStatus, settle]);
-  /** The request is on the phone before it leaves; the command forgets it once its outcome is known. */
-  async function recorded<Receipt>(ending: UnresolvedEnding, send: () => Promise<Receipt>) {
-    await unresolved.keep(ending).catch(() => {});
-    return send();
-  }
-  const closeAction = useAction(api.accounting.closePlace);
-  const undoAction = useAction(api.accounting.startUndoPlace);
+  // The request is on the phone before it leaves, or it doesn't leave; the command forgets it once its outcome is known.
   const close = useFrozenCommand<CloseRequest, CloseReceipt>({
-    send: (request) => recorded({ act: "close", request }, () => closeAction(request)), reportFailure, refusalCode,
-    settles: settlesEnding, forget: settle,
+    send: useAction(api.accounting.closePlace), reportFailure, refusalCode,
+    settles: settlesEnding, keep: (request) => unresolved.keep({ act: "close", request }), forget: settle,
     onDone: (done) => { setReceipt(done); setSteps([{ name: "review" }]); },
   });
   const undo = useFrozenCommand<UndoRequest, UndoReceipt>({
-    send: (request) => recorded({ act: "undo", request }, () => undoAction(request)), reportFailure, refusalCode,
-    settles: settlesEnding, forget: settle,
+    send: useAction(api.accounting.startUndoPlace), reportFailure, refusalCode,
+    settles: settlesEnding, keep: (request) => unresolved.keep({ act: "undo", request }), forget: settle,
     onDone: () => leave(onStarted),
   });
   /** The unknown-outcome message, and why the latest retry was turned away if it was. */
@@ -338,6 +332,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const waiting = command.state.name === "open" && command.state.refusal !== null
     && (command.state.refusal.code === "place_close_balance_stale" || command.state.refusal.code === "place_undo_preview_stale");
   const error = command.state.name === "uncertain" ? uncertainMessage(act, command.state)
+    : command.state.name === "unsaved" ? t("placeEnding.notSaved")
     : command.state.name === "open" && command.state.refusal?.code === "place_close_date_stale"
       ? t("placeEnding.refuseDateStale", { date: formatLongDate(language, Date.parse(`${basis.accountingDate}T12:00:00Z`), "UTC") })
     : command.state.name === "open" && command.state.refusal && refusal.current ? refusalMessage(refusal.current, act, translator)

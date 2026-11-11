@@ -172,6 +172,7 @@ export const placeEnding = {
   undoStarting: "Starting",
   undoRetry: "Retry",
   undoUncertain: "We couldn't confirm whether the undo started. Retry: we send exactly the same request and nothing happens twice.",
+  notSaved: "This phone couldn't save the request before sending it, so nothing was sent. Try again.",
 
   statusReversed_one: "{count} movement reversed",
   statusReversed_other: "{count} movements reversed",

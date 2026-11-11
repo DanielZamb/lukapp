@@ -65,8 +65,23 @@ function writeAll(subject: string, endings: UnresolvedEnding[]) {
     : SecureStore.deleteItemAsync(unresolvedEndingKey(subject));
 }
 
-export async function readUnresolvedEnding(subject: string, workspaceId: string, placeId: string) {
+type RequestKey = Pick<CloseRequest, "workspaceId" | "financialAccountProfileId" | "idempotencyKey">;
+
+/**
+ * Requests whose outcome became known while the phone failed to delete them. Reads in this app run leave them out
+ * and delete them again. After a restart one reads as unconfirmed again; sending it under its own key can't apply it twice.
+ */
+const answered = new Set<string>();
+const answeredId = (subject: string, request: RequestKey) =>
+  JSON.stringify([subject, request.workspaceId, request.financialAccountProfileId, request.idempotencyKey]);
+
+async function readStored(subject: string, workspaceId: string, placeId: string) {
   return (await readAll(subject)).find((ending) => samePlace(ending, workspaceId, placeId)) ?? null;
+}
+
+export async function readUnresolvedEnding(subject: string, workspaceId: string, placeId: string) {
+  const ending = await readStored(subject, workspaceId, placeId);
+  return ending && !answered.has(answeredId(subject, ending.request)) ? ending : null;
 }
 
 /** Stored before the request is sent, replacing any earlier one for the same Place. */
@@ -79,13 +94,20 @@ export function keepUnresolvedEnding(lease: LocalInputLease, ending: UnresolvedE
 }
 
 /** Forgets a request once its outcome is known. Only the request with this key is removed, so a newer one survives an old answer. */
-export function settleUnresolvedEnding(lease: LocalInputLease, request: Pick<CloseRequest, "workspaceId" | "financialAccountProfileId" | "idempotencyKey">) {
-  return runLocalInputWrite(lease, async () => {
-    const endings = await readAll(lease.subject);
-    const kept = endings.filter((stored) => !(samePlace(stored, request.workspaceId, request.financialAccountProfileId)
-      && stored.request.idempotencyKey === request.idempotencyKey));
-    if (kept.length !== endings.length) await writeAll(lease.subject, kept);
-  });
+export async function settleUnresolvedEnding(lease: LocalInputLease, request: RequestKey) {
+  const id = answeredId(lease.subject, request);
+  try {
+    await runLocalInputWrite(lease, async () => {
+      const endings = await readAll(lease.subject);
+      const kept = endings.filter((stored) => !(samePlace(stored, request.workspaceId, request.financialAccountProfileId)
+        && stored.request.idempotencyKey === request.idempotencyKey));
+      if (kept.length !== endings.length) await writeAll(lease.subject, kept);
+    });
+    answered.delete(id);
+  } catch (error) {
+    answered.add(id);
+    throw error;
+  }
 }
 
 /** Part of the local input wiped on sign-out and device revocation. */
@@ -105,15 +127,23 @@ export function useUnresolvedEnding(workspaceId: string, placeId: string) {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let current = true;
-    readUnresolvedEnding(lease.subject, workspaceId, placeId)
-      .then((ending) => { if (current) setStored(ending); })
+    readStored(lease.subject, workspaceId, placeId)
+      .then((ending) => {
+        const known = ending !== null && answered.has(answeredId(lease.subject, ending.request));
+        if (current) setStored(known ? null : ending);
+        if (known) void settleUnresolvedEnding(lease, ending.request).catch(() => {});
+      })
       .catch(() => { if (current) setStored("unreadable"); });
     return () => { current = false; };
   }, [lease, workspaceId, placeId, attempt]);
   const keep = useCallback((ending: UnresolvedEnding) => keepUnresolvedEnding(lease, ending), [lease]);
-  const settle = useCallback(async (request: Pick<CloseRequest, "workspaceId" | "financialAccountProfileId" | "idempotencyKey">) => {
-    await settleUnresolvedEnding(lease, request);
-    setStored((current) => current && current !== "unreadable" && current.request.idempotencyKey === request.idempotencyKey ? null : current);
+  /** Even when the phone can't delete it, a request whose outcome is known no longer holds this screen. */
+  const settle = useCallback(async (request: RequestKey) => {
+    try {
+      await settleUnresolvedEnding(lease, request);
+    } finally {
+      setStored((current) => current && current !== "unreadable" && current.request.idempotencyKey === request.idempotencyKey ? null : current);
+    }
   }, [lease]);
   return { stored, keep, settle, retryRead: () => setAttempt((value) => value + 1) };
 }

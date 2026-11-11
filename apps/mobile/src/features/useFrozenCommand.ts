@@ -32,22 +32,26 @@ export type CommandTransport<Request, Receipt> = {
    * refusal, including one this caller does not know, leaves the request held. The attempt refusals never answer it.
    */
   settles?: (code: string, error: unknown) => boolean;
+  /** Saves a copy of a new request before it first leaves. If that fails, nothing is sent and nothing is held. */
+  keep?: (request: Request) => Promise<void>;
   /** Forgets a copy of the request kept elsewhere once its outcome is known. A failure here never holds the person back. */
   forget?: (request: Request) => Promise<void>;
 };
 
 export type CommandState<Request> =
   | { name: "open"; refusal: { code: string; request: Request } | null }
+  /** The copy couldn't be saved, so the request never left; the person can edit and send again. */
+  | { name: "unsaved" }
   | { name: "sending" }
   /** The request is held until its outcome is known; `refusal` is why the latest resend was turned away, if it was. */
   | { name: "uncertain"; refusal: string | null };
 
-export type CommandOutcome = "done" | "refused" | "uncertain";
+export type CommandOutcome = "done" | "refused" | "uncertain" | "unsent";
 
 export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<Request, Receipt>) {
   const [state, setState] = useState<CommandState<Request>>({ name: "open", refusal: null });
-  /** The request from the moment it first leaves until its outcome is known; while set, only it can be sent. */
-  const held = useRef<{ request: Request; unknown: boolean } | null>(null);
+  /** A request whose outcome is unknown. Until something answers it, it is the only request that can be sent. */
+  const held = useRef<Request | null>(null);
   const sending = useRef(false);
   const lifetime = useRef({ active: false });
   useLayoutEffect(() => {
@@ -62,13 +66,20 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
   async function submit(build: () => Request | null): Promise<CommandOutcome | undefined> {
     const mounted = lifetime.current;
     if (!mounted.active || sending.current) return;
-    const resent = held.current?.unknown ?? false;
-    const request = held.current?.request ?? build();
+    const resent = held.current;
+    const request = resent ?? build();
     if (!request) return;
-    held.current = { request, unknown: resent };
     sending.current = true;
     setState({ name: "sending" });
     try {
+      if (resent === null && transport.keep) {
+        try {
+          await transport.keep(request);
+        } catch {
+          if (mounted.active) setState({ name: "unsaved" });
+          return "unsent";
+        }
+      }
       const receipt = await transport.send(request);
       await forget(request);
       if (!mounted.active) return;
@@ -78,9 +89,9 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
     } catch (caught) {
       const handled = transport.reportFailure(caught);
       const code = handled ? null : (transport.refusalCode ?? refusalCodeOf)(caught);
-      const settled = code !== null && (!resent || (!attemptRefusals.has(code) && (transport.settles?.(code, caught) ?? false)));
+      const settled = code !== null && (resent === null || (!attemptRefusals.has(code) && (transport.settles?.(code, caught) ?? false)));
       if (settled) await forget(request);
-      else held.current = { request, unknown: true };
+      else held.current = request;
       if (!mounted.active) return;
       if (settled) {
         setState({ name: "open", refusal: { code, request } });
@@ -95,20 +106,20 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
   return {
     state,
     busy: state.name === "sending",
-    frozen: state.name !== "open",
+    frozen: state.name === "sending" || state.name === "uncertain",
     canEdit: () => lifetime.current.active && !sending.current && !held.current,
     submit,
     /** Sends again a request whose outcome was already unknown before this screen opened, such as one saved on the phone. */
     resend: (request: Request) => {
-      if (!sending.current && !held.current) held.current = { request, unknown: true };
+      if (!sending.current && !held.current) held.current = request;
       return submit(() => request);
     },
     /** Drops an unknown outcome once the caller has re-read what the server now holds. */
     release: () => {
       if (sending.current) return;
-      const request = held.current?.request;
+      const request = held.current;
       setState({ name: "open", refusal: null });
-      if (request !== undefined) void forget(request);
+      if (request !== null) void forget(request);
     },
   };
 }

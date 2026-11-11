@@ -175,6 +175,7 @@ export const placeEnding: Messages<typeof en> = {
   undoStarting: "Empezando",
   undoRetry: "Reintentar",
   undoUncertain: "No pudimos confirmar si empezó a deshacerse. Reintenta: enviamos exactamente la misma orden y nada pasa dos veces.",
+  notSaved: "Este celular no pudo guardar la solicitud antes de enviarla, así que no se envió nada. Intenta otra vez.",
 
   statusReversed_one: "{count} movimiento reversado",
   statusReversed_other: "{count} movimientos reversados",
