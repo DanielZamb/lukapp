@@ -276,6 +276,6 @@ export function amountSign(session: AmountSession): AmountSign {
 }
 
 /** Sets the sign held beside the native text and changes nothing else, including what still awaits confirmation. */
-export function withAmountSign(session: AmountSession, sign: "+" | "-"): AmountSession {
+export function withAmountSign(session: AmountSession, sign: AmountSign): AmountSession {
   return sign === session.sign ? session : { ...session, ...signed(session.editor.format, sign, nativeText(session)) };
 }

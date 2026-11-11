@@ -245,3 +245,34 @@ test("a transfer sends the typed magnitude whatever sign the amount holds; From 
     await act(async () => root?.unmount()); root = undefined;
   }
 });
+
+test("switching a new entry to Initial balance drops the money-out sign, and switching back restores it", async () => {
+  const { api, phone } = await render();
+  await phone.type("500");
+  expect(signShown()).toEqual(["minus −"]);
+  await act(async () => editor.setEntryType("initial"));
+  expect(signShown()).toEqual([]);
+  expect(phone.text).toBe("500");
+  expect(editor.canSubmit).toBe(true);
+  await act(async () => editor.setEntryType("normal"));
+  expect(signShown()).toEqual(["minus −"]);
+  expect(editor.direction).toBe("out");
+  await act(async () => editor.setEntryType("initial"));
+  await post();
+  expect(api.post.mock.calls.map(([command]) => [command.kind, command.payload.amount.minorUnits])).toEqual([["opening", 50000]]);
+});
+
+test("a Candidate whose direction could not be read cannot be posted until a category gives it one", async () => {
+  const binding = { ...candidate(""), originalSuggestion: { ...candidate("").originalSuggestion, direction: null } };
+  const { phone } = await render({ intake: binding });
+  await phone.type("2000");
+  expect(signShown()).toEqual([]);
+  expect(editor.canSubmit).toBe(false);
+  await post();
+  expect(binding.confirm).not.toHaveBeenCalled();
+  await choose(["food"], "Expense");
+  expect(signShown()).toEqual(["minus −"]);
+  expect(editor.canSubmit).toBe(true);
+  await post();
+  expect(binding.confirm).toHaveBeenCalledWith(expect.objectContaining({ direction: "out", amount: { currency: "COP", minorUnits: 200000 } }));
+});

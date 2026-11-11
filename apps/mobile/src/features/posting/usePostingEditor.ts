@@ -583,7 +583,10 @@ export function usePostingEditor(
         (!now.pending &&
           now.entryType === "normal" &&
           !setupNow &&
-          intake.facts.currency === account.currency)) &&
+          intake.facts.currency === account.currency &&
+          // A Candidate whose direction could not be read, and whose saved review holds no sign, has no direction of
+          // its own: its category has to give one.
+          (intake.originalSuggestion.direction !== null || amountSign(now.amount) !== "" || now.classification.nature !== null))) &&
       (!!now.pending || (setupNow ? setupValid : amountValid && validTransfer(now)));
   }
   /** The entry as a screen reads it: as rendered, or with `read()` at the moment of a press. */
@@ -844,7 +847,11 @@ export function usePostingEditor(
     },
     setEntryType: (value: EntryType) => {
       if (canEdit() && !intake) {
-        change({ entryType: value, confirmedPair: null, classification: unclassified });
+        // An initial balance is never money out, and an entry without a category opens as money out.
+        const now = readForm();
+        const amount = value === "initial" ? withAmountSign(now.amount, "")
+          : value === "normal" && now.entryType === "initial" ? withAmountSign(now.amount, "-") : now.amount;
+        changeAmount(amount, { entryType: value, confirmedPair: null, classification: unclassified });
         setError("");
       }
     },
