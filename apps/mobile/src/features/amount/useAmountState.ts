@@ -31,3 +31,8 @@ export function useAmountState<T>(initial: T | (() => T)) {
  * anything computed from it. Amounts inside read as `useAmountState` reads them.
  */
 export const useFormState = useAmountState;
+
+/** `now` with the fields of `patch`, or `now` itself when no field changes, so React keeps the render it has. */
+export function withFields<T extends object>(now: T, patch: Partial<T>): T {
+  return (Object.keys(patch) as (keyof T)[]).every((key) => Object.is(now[key], patch[key])) ? now : { ...now, ...patch };
+}

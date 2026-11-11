@@ -4,6 +4,7 @@ import type { AmountNotice } from "../amount/storedText";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useMemo, type ReactNode } from "react";
 import { ComposeModeToggle } from "./ComposeModeToggle";
+import type { TransferPair } from "./usePostingEditor";
 import {
   ActivityIndicator,
   Pressable,
@@ -65,8 +66,10 @@ export type PostingFormProps = {
   transferReview?: {
     required: boolean;
     canConfirm: boolean;
+    /** The From and To shown beside the button; confirming applies only while they are still the pair. */
+    pair?: TransferPair;
     onSwap: () => void;
-    onConfirm: () => void;
+    onConfirm: (shown?: TransferPair) => void;
   };
 };
 
@@ -343,7 +346,8 @@ export function PostingForm(props: PostingFormProps) {
           <SecondaryButton label={t("posting.formSwap")} disabled={!props.editable || !props.transferReview.canConfirm}
             onPress={props.transferReview.onSwap} />
           {props.transferReview.required && <PrimaryButton label={t("posting.formConfirmPlaces")}
-            disabled={!props.editable || !props.transferReview.canConfirm} onPress={props.transferReview.onConfirm} />}
+            disabled={!props.editable || !props.transferReview.canConfirm}
+            onPress={() => props.transferReview?.onConfirm(props.transferReview.pair)} />}
         </>}
       </View>}
       {!!props.blockedReason && !props.canSubmit && !props.pending && <Text style={styles.detail}>{props.blockedReason}</Text>}

@@ -38,7 +38,7 @@ import {
   type AmountReview,
   type AmountSession,
 } from "../amount/session";
-import { useAmountState, type AtPress } from "../amount/useAmountState";
+import { useFormState, withFields, type AtPress } from "../amount/useAmountState";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -157,6 +157,115 @@ function directionOf(amount: AmountSession): "in" | "out" {
   return shown !== null && shown > 0 ? "in" : "out";
 }
 
+type Classification = { value: TransactionCategories; nature: CategoryNature | null };
+const unclassified: Classification = { value: { ids: [], primaryId: null }, nature: null };
+function classify(value: TransactionCategories, nature: CategoryNature | null = null): Classification {
+  return { value, nature: value.ids.length ? nature : null };
+}
+
+/** The From and To a person confirmed for a transfer. Any other pair on the form is unconfirmed. */
+export type TransferPair = { from: string; to: string };
+
+/**
+ * Everything the person sets on an entry, with the editor state that decides whether a press may send it. A press
+ * reads it once and builds, validates and sends from that one snapshot.
+ */
+type Editor = {
+  amount: AmountSession;
+  openedAmount: OpenedAmount | null;
+  description: string;
+  classification: Classification;
+  date: string;
+  entryType: EntryType;
+  profileId: string;
+  destinationId: string | null;
+  confirmedPair: TransferPair | null;
+  setup: PlaceDraft | null;
+  /** The entry sent and kept on the phone whose outcome is not yet known; a press resends it exactly. */
+  pending: PendingPosting | null;
+  draftId: LocalEntryDraftId | undefined;
+  loading: boolean;
+  busy: boolean;
+  keeping: boolean;
+  blocked: boolean;
+};
+/** The editor as rendered or as read at a press; only the press reading can send its amounts. */
+type EditorView = Editor | AtPress<Editor>;
+
+function composerFields(account: Account, date: string) {
+  return {
+    amount: openAmount(account.currency, "-"), openedAmount: null, description: "", classification: unclassified, date,
+    entryType: "normal", profileId: account.financialAccountProfileId, destinationId: null, confirmedPair: null,
+  } satisfies Partial<Editor>;
+}
+
+/** The form showing an entry already built, as it was sent. */
+function commandFields(value: PendingPosting): Partial<Editor> {
+  const payload = value.payload;
+  return {
+    openedAmount: null,
+    date: payload.accountingDate,
+    amount: amountOfMinorUnits(payload.amount.currency, value.kind === "expense" ? -payload.amount.minorUnits : payload.amount.minorUnits),
+    description: "description" in payload ? payload.description : "",
+    entryType: value.kind === "transfer" ? "transfer" : value.kind === "opening" ? "initial" : "normal",
+    ...(value.kind === "setup" ? {
+      setup: {
+        name: value.payload.name,
+        ...(value.payload.emoji ? { emoji: value.payload.emoji } : {}),
+        productKind: value.payload.productKind,
+        amount: amountOfMinorUnits(value.payload.amount.currency, value.payload.amount.minorUnits),
+        date: payload.accountingDate,
+        target: value.target,
+      },
+    } : value.kind === "transfer" ? {
+      profileId: value.payload.sourceFinancialAccountProfileId,
+      destinationId: value.payload.destinationFinancialAccountProfileId,
+    } : { profileId: value.payload.financialAccountProfileId }),
+    ...(value.kind === "expense" || value.kind === "income" || value.kind === "transfer" ? {
+      classification: classify({
+        ids: value.payload.userCategoryIds ?? (value.payload.userCategoryId ? [value.payload.userCategoryId] : []),
+        primaryId: value.payload.primaryUserCategoryId ?? null,
+      }, value.kind === "income" ? "Income" : value.kind === "expense" ? "Expense" : null),
+    } : {}),
+  };
+}
+
+/** The form showing kept facts. A kept transfer is confirmed again before it posts. */
+function factsFields(facts: LocalEntryFacts): Partial<Editor> {
+  const stored = factsAmount(facts);
+  const opened = openSavedAmount(facts.currency, stored);
+  return {
+    amount: opened.session,
+    openedAmount: { stored, notice: opened.notice, text: opened.session.editor.text, review: opened.session.review },
+    description: facts.description,
+    date: facts.accountingDate,
+    entryType: facts.entryType,
+    confirmedPair: null,
+    profileId: facts.profileId,
+    destinationId: facts.destinationId,
+    classification: classify({ ids: [...facts.categories.ids], primaryId: facts.categories.primaryId },
+      facts.entryType === "normal" ? (amountSign(opened.session) === "-" ? "Expense" : "Income") : null),
+    setup: null,
+  };
+}
+
+/** The held entry as it was sent; a press reads it through a read-only view of the same plain data. */
+function heldEntry(now: EditorView): PendingPosting | null {
+  return now.pending as PendingPosting | null;
+}
+
+function pairConfirmed(now: EditorView) {
+  return !!now.destinationId && now.confirmedPair?.from === now.profileId && now.confirmedPair.to === now.destinationId;
+}
+
+function validTransfer(now: EditorView) {
+  return now.entryType !== "transfer" || (!!now.destinationId && now.destinationId !== now.profileId && pairConfirmed(now));
+}
+
+function isEditable(now: EditorView, intake: IntakeBinding | null) {
+  return !now.busy && !now.pending && !now.loading && !now.blocked && !intake?.frozen;
+}
+
 export function usePostingEditor(
   account: Account,
   transport: PostingTransport,
@@ -167,113 +276,32 @@ export function usePostingEditor(
   const requestedId = session.draftId;
   const intake = session.intake ?? null;
   const isolate = session.intakeRoute === true || intake !== null;
-  const [amount, setAmount, readAmount] = useAmountState(() => openAmount(account.currency, "-"));
-  const [openedAmount, setOpenedAmount] = useState<OpenedAmount | null>(null);
+  const [form, setForm, readForm] = useFormState<Editor>(() => ({
+    ...composerFields(account, defaultAccountingDate(account.timeZone)),
+    setup: null, pending: null, draftId: undefined, loading: true, busy: false, keeping: false, blocked: false,
+  }));
+  const change = (patch: Partial<Editor>) => setForm((now) => withFields(now, patch));
   const [boundCurrency, setBoundCurrency] = useState(account.currency);
-  const [description, setDescription] = useState("");
-  const [classification, setClassification] = useState<{
-    value: TransactionCategories;
-    nature: CategoryNature | null;
-  }>({
-    value: { ids: [], primaryId: null },
-    nature: null,
-  });
-  const categories = classification.value;
-  function setCategories(value: TransactionCategories, nature: CategoryNature | null = null) {
-    setClassification({ value, nature: value.ids.length ? nature : null });
-  }
-  const [startDate] = useState(() => defaultAccountingDate(account.timeZone));
-  const [date, setDate] = useState(startDate);
-  const [entryType, setEntryType] = useState<EntryType>("normal");
-  const [profileId, setProfileId] = useState(account.financialAccountProfileId);
-  const [destinationId, setDestinationId] = useState<string | null>(null);
-  const [transferReviewRequired, setTransferReviewRequired] = useState(false);
-  const [setup, setSetup, readSetup] = useAmountState<PlaceDraft | null>(null);
-  const [pending, setPending] = useState<PendingPosting | null>(null);
-  const [draftId, setDraftId] = useState<LocalEntryDraftId | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [keeping, setKeeping] = useState(false);
-  const [blocked, setBlocked] = useState(false);
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<PostingReceipt | null>(null);
   const [setupPosted, setSetupPosted] = useState<PostingReceipt | null>(null);
-  const [savedFacts, setSavedFacts] = useState(() => factsKey(blankFacts(startDate)));
+  const [savedFacts, setSavedFacts] = useState(() => factsKey(blankFacts(readForm().date)));
   const opLock = useRef(false);
   const submitting = useRef(false);
   const appliedDraft = useRef<LocalEntryDraftId | undefined>(undefined);
   const lifetime = useRef({ active: false });
-  const editable = !busy && !pending && !loading && !blocked && !intake?.frozen;
+  const editable = isEditable(form, intake);
   const canKeepDraft =
     drafts !== null &&
     intake === null &&
     editable &&
-    !keeping &&
-    !setup &&
-    entryType !== "initial";
-  const canEdit = () =>
-    lifetime.current.active &&
-    !submitting.current &&
-    !pending &&
-    !loading &&
-    !blocked &&
-    !intake?.frozen;
-  function hydrateFromCommand(value: PendingPosting) {
-    const payload = value.payload;
-    setOpenedAmount(null);
-    setDate(payload.accountingDate);
-    setAmount(amountOfMinorUnits(payload.amount.currency,
-      value.kind === "expense" ? -payload.amount.minorUnits : payload.amount.minorUnits));
-    setDescription("description" in payload ? payload.description : "");
-    setEntryType(
-      value.kind === "transfer"
-        ? "transfer"
-        : value.kind === "opening"
-          ? "initial"
-          : "normal",
-    );
-    if (value.kind === "setup")
-      setSetup({
-        name: value.payload.name,
-        ...(value.payload.emoji ? { emoji: value.payload.emoji } : {}),
-        productKind: value.payload.productKind,
-        amount: amountOfMinorUnits(value.payload.amount.currency, value.payload.amount.minorUnits),
-        date: payload.accountingDate,
-        target: value.target,
-      });
-    else if (value.kind === "transfer") {
-      setProfileId(value.payload.sourceFinancialAccountProfileId);
-      setDestinationId(value.payload.destinationFinancialAccountProfileId);
-    } else setProfileId(value.payload.financialAccountProfileId);
-    if (
-      value.kind === "expense" ||
-      value.kind === "income" ||
-      value.kind === "transfer"
-    )
-      setCategories({
-        ids:
-          value.payload.userCategoryIds ??
-          (value.payload.userCategoryId ? [value.payload.userCategoryId] : []),
-        primaryId: value.payload.primaryUserCategoryId ?? null,
-      }, value.kind === "income" ? "Income" : value.kind === "expense" ? "Expense" : null);
-  }
-  function hydrateFromFacts(facts: LocalEntryFacts) {
-    const stored = factsAmount(facts);
-    const opened = openSavedAmount(facts.currency, stored);
-    setAmount(opened.session);
-    setOpenedAmount({ stored, notice: opened.notice, text: opened.session.editor.text, review: opened.session.review });
-    setDescription(facts.description);
-    setDate(facts.accountingDate);
-    setEntryType(facts.entryType);
-    setTransferReviewRequired(facts.entryType === "transfer");
-    setProfileId(facts.profileId);
-    setDestinationId(facts.destinationId);
-    setCategories({
-      ids: [...facts.categories.ids],
-      primaryId: facts.categories.primaryId,
-    }, facts.entryType === "normal" ? (amountSign(opened.session) === "-" ? "Expense" : "Income") : null);
-    setSetup(null);
-  }
+    !form.keeping &&
+    !form.setup &&
+    form.entryType !== "initial";
+  const canEdit = () => {
+    const now = readForm();
+    return lifetime.current.active && !submitting.current && !now.pending && !now.loading && !now.blocked && !intake?.frozen;
+  };
   function assertSameWorkspace(draft: LocalEntryDraft) {
     const workspaceId =
       draft.status === "open"
@@ -287,54 +315,43 @@ export function usePostingEditor(
       throw new Error("Pending entry belongs to another workspace");
   }
   function showSent(id: LocalEntryDraftId, command: PendingPosting) {
-    hydrateFromCommand(command);
-    setPending(command);
-    setDraftId(id);
+    change({ ...commandFields(command), pending: command, draftId: id });
     appliedDraft.current = id;
   }
   function resume(draft: LocalEntryDraft): "applied" | "blocked-by-pending" {
-    if (pending || loading || blocked) return "blocked-by-pending";
+    const now = readForm();
+    if (now.pending || now.loading || now.blocked) return "blocked-by-pending";
     assertSameWorkspace(draft);
     if (draft.status === "posting") showSent(draft.id, draft.command);
     else {
-      hydrateFromFacts(draft.facts);
+      change({ ...factsFields(draft.facts), draftId: draft.id });
       setSavedFacts(factsKey(draft.facts));
-      setDraftId(draft.id);
       appliedDraft.current = draft.id;
     }
     return "applied";
   }
   function resetComposer() {
     const today = defaultAccountingDate(account.timeZone);
-    setAmount(openAmount(account.currency, "-"));
-    setOpenedAmount(null);
-    setDescription("");
-    setCategories({ ids: [], primaryId: null });
-    setDate(today);
+    change({ ...composerFields(account, today), draftId: undefined });
     setSavedFacts(factsKey(blankFacts(today)));
-    setEntryType("normal");
-    setProfileId(account.financialAccountProfileId);
-    setDestinationId(null);
-    setTransferReviewRequired(false);
-    setDraftId(undefined);
     appliedDraft.current = undefined;
     setPosted(null);
     setError("");
   }
-  function snapshotConfirmed(binding: IntakeBinding, amountNow: AmountAtPress): IntakeSuggestion {
+  function snapshotConfirmed(binding: IntakeBinding, now: AtPress<Editor>): IntakeSuggestion {
     const currency = binding.facts.currency;
     if (currency !== "COP" && currency !== "USD") throw new Error("Unsupported Candidate currency");
     return {
-      direction: directionOf(amountNow),
-      description: description.trim(),
+      direction: directionOf(now.amount),
+      description: now.description.trim(),
       amount: {
         currency,
-        minorUnits: Math.abs(requiredMinorUnits(amountNow)),
+        minorUnits: Math.abs(requiredMinorUnits(now.amount)),
       },
-      accountingDate: date,
-      financialAccountProfileId: profileId,
-      userCategoryIds: [...categories.ids],
-      primaryUserCategoryId: categories.primaryId,
+      accountingDate: now.date,
+      financialAccountProfileId: now.profileId,
+      userCategoryIds: [...now.classification.value.ids],
+      primaryUserCategoryId: now.classification.value.primaryId,
     };
   }
   function blankFacts(accountingDate: string): LocalEntryFacts {
@@ -350,17 +367,17 @@ export function usePostingEditor(
       categories: { ids: [], primaryId: null },
     };
   }
-  function snapshotFacts(amountNow: AmountSession): LocalEntryFacts {
+  function snapshotFacts(now: EditorView): LocalEntryFacts {
     return {
       workspaceId: account.workspaceId,
       currency: pendingExpenseSchema.shape.amount.shape.currency.parse(account.currency),
-      entryType: entryType === "transfer" ? "transfer" : "normal",
-      ...amountFacts(savedAmountText(amountNow, openedAmount)),
-      accountingDate: date,
-      description,
-      profileId,
-      destinationId,
-      categories: { ids: [...categories.ids], primaryId: categories.primaryId },
+      entryType: now.entryType === "transfer" ? "transfer" : "normal",
+      ...amountFacts(savedAmountText(now.amount, now.openedAmount)),
+      accountingDate: now.date,
+      description: now.description,
+      profileId: now.profileId,
+      destinationId: now.destinationId,
+      categories: { ids: [...now.classification.value.ids], primaryId: now.classification.value.primaryId },
     };
   }
   useLayoutEffect(() => {
@@ -371,17 +388,15 @@ export function usePostingEditor(
       .then((value) => {
         if (!mounted.active) return;
         if (isolate && (value.kind === "pending" || value.kind === "blocked")) {
-          setBlocked(true);
-          setLoading(false);
+          change({ blocked: true, loading: false });
           return;
         }
         if (isolate) {
-          setLoading(false);
+          change({ loading: false });
           return;
         }
         if (value.kind === "blocked") {
-          setBlocked(true);
-          setLoading(false);
+          change({ blocked: true, loading: false });
           return;
         }
         if (value.kind === "pending") {
@@ -390,12 +405,10 @@ export function usePostingEditor(
             value.command.payload.amount.currency !== account.currency
           )
             throw new Error("Pending entry belongs to another workspace");
-          setPending(value.command);
-          setDraftId(value.id);
           appliedDraft.current = value.id;
-          hydrateFromCommand(value.command);
+          change({ ...commandFields(value.command), pending: value.command, draftId: value.id });
         }
-        setLoading(false);
+        change({ loading: false });
       })
       .catch((error: unknown) => {
         if (mounted.active && !transport.reportFailure?.(error))
@@ -406,7 +419,7 @@ export function usePostingEditor(
     };
   }, [account.workspaceId, account.currency, transport, isolate]);
   useLayoutEffect(() => {
-    if (loading || !requestedId || !drafts || pending || blocked) return;
+    if (form.loading || !requestedId || !drafts || form.pending || form.blocked) return;
     if (appliedDraft.current === requestedId) return;
     const mounted = lifetime.current;
     appliedDraft.current = requestedId;
@@ -424,32 +437,31 @@ export function usePostingEditor(
         if (mounted.active && !transport.reportFailure?.(error))
           setError(t("posting.draftRestoreFailed"));
       });
-  }, [loading, requestedId, drafts, pending, blocked, transport]);
+  }, [form.loading, requestedId, drafts, form.pending, form.blocked, transport]);
   useLayoutEffect(() => {
-    if (loading || !intake || pending || blocked) return;
+    if (form.loading || !intake || form.pending || form.blocked) return;
     const token = `intake:${intake.id}`;
     if (appliedDraft.current === token) return;
     appliedDraft.current = token;
-    hydrateFromFacts(intake.facts);
-  }, [loading, intake, pending, blocked]);
+    change(factsFields(intake.facts));
+  }, [form.loading, intake, form.pending, form.blocked]);
 
   if (boundCurrency !== account.currency) {
     setBoundCurrency(account.currency);
-    setAmount(openAmount(account.currency, "-"));
-    setOpenedAmount(null);
-    if (setup) setSetup({ ...setup, amount: openAmount(account.currency, "0") });
+    setForm((now) => ({
+      ...now, amount: openAmount(account.currency, "-"), openedAmount: null,
+      setup: now.setup && { ...now.setup, amount: openAmount(account.currency, "0") },
+    }));
   }
-  const validTransfer =
-    entryType !== "transfer" ||
-    (!!destinationId && destinationId !== profileId && !transferReviewRequired);
-  const direction = directionOf(amount);
   /** Changes the amount; a change to its text or its confirmation means it is no longer the saved amount. */
   function changeAmount(next: AmountSession) {
-    const current = readAmount();
-    if (next.editor.text !== current.editor.text || next.review !== current.review) setOpenedAmount(null);
-    setAmount(next);
+    setForm((now) => ({
+      ...now, amount: next,
+      openedAmount: next.editor.text !== now.amount.editor.text || next.review !== now.amount.review ? null : now.openedAmount,
+    }));
   }
-  function buildEntry(amountNow: AmountAtPress, setupNow: AtPress<PlaceDraft> | null): PendingPosting {
+  function buildEntry(now: AtPress<Editor>): PendingPosting {
+    const setupNow = now.setup;
     if (setupNow) {
       if (!setupNow.productKind) throw new Error("Choose Credit card or Loan");
       return {
@@ -469,15 +481,16 @@ export function usePostingEditor(
         },
       };
     }
-    const signed = requiredMinorUnits(amountNow);
+    const signed = requiredMinorUnits(now.amount);
+    const categories = now.classification.value;
     const payload = {
       workspaceId: account.workspaceId,
       amount: {
         currency: account.currency,
         minorUnits: Math.abs(signed),
       },
-      accountingDate: date,
-      description: description.trim(),
+      accountingDate: now.date,
+      description: now.description.trim(),
       idempotencyKey: transport.newKey(),
     };
     const categoryAssignments = {
@@ -488,75 +501,92 @@ export function usePostingEditor(
         ? { primaryUserCategoryId: categories.primaryId }
         : {}),
     };
-    if (entryType === "transfer") {
-      if (!destinationId) throw new Error("Choose where the money goes");
+    if (now.entryType === "transfer") {
+      if (!now.destinationId) throw new Error("Choose where the money goes");
       return {
         kind: "transfer",
         payload: {
           ...payload,
           ...categoryAssignments,
-          sourceFinancialAccountProfileId: profileId,
-          destinationFinancialAccountProfileId: destinationId,
+          sourceFinancialAccountProfileId: now.profileId,
+          destinationFinancialAccountProfileId: now.destinationId,
         },
       };
     }
-    if (entryType === "initial")
+    if (now.entryType === "initial")
       return {
         kind: "opening",
-        payload: { ...payload, financialAccountProfileId: profileId },
+        payload: { ...payload, financialAccountProfileId: now.profileId },
       };
     return {
       kind: signed > 0 ? "income" : "expense",
       payload: {
         ...payload,
-        financialAccountProfileId: profileId,
+        financialAccountProfileId: now.profileId,
         ...categoryAssignments,
       },
     };
   }
-  /** Whether a post may be sent with these amounts; rendering asks with the state, a press with what it reads. */
-  function canSubmitWith(amountNow: AmountSession, setupNow: PlaceDraft | null) {
-    const shown = displayedMinorUnits(amountNow);
-    const amountValid = amountSendable(amountNow) && shown !== null && (entryType === "initial" ? shown >= 0 : shown !== 0);
+  /** Whether a post may be sent; rendering asks with the form, a press with what it reads. */
+  function canSubmitWith(now: EditorView) {
+    const shown = displayedMinorUnits(now.amount);
+    const amountValid = amountSendable(now.amount) && shown !== null && (now.entryType === "initial" ? shown >= 0 : shown !== 0);
+    const setupNow = now.setup;
     const setupValid = !!setupNow?.name.trim() && setupNow.productKind !== null && setupNow.amount.currency === account.currency
       && balanceSendable(setupNow.amount);
-    return !busy &&
-      !loading &&
-      !keeping &&
-      !blocked &&
+    return !now.busy &&
+      !now.loading &&
+      !now.keeping &&
+      !now.blocked &&
       (!intake ||
-        (!pending &&
-          entryType === "normal" &&
+        (!now.pending &&
+          now.entryType === "normal" &&
           !setupNow &&
           intake.facts.currency === account.currency)) &&
-      (!!pending || (setupNow ? setupValid : amountValid && validTransfer));
+      (!!now.pending || (setupNow ? setupValid : amountValid && validTransfer(now)));
   }
-  const canSubmit = canSubmitWith(amount, setup);
+  /** The entry as a screen reads it: as rendered, or with `read()` at the moment of a press. */
+  function view<V extends EditorView>(now: V) {
+    return {
+      description: now.description,
+      date: now.date,
+      entryType: now.entryType,
+      profileId: now.profileId,
+      destinationId: now.destinationId,
+      categories: now.classification.value as V["classification"]["value"],
+      direction: directionOf(now.amount),
+      setup: now.setup,
+      pending: !!now.pending || intake?.frozen === true,
+      canSubmit: canSubmitWith(now),
+      transferReviewRequired: !pairConfirmed(now),
+    };
+  }
   async function keepDraft() {
     const mounted = lifetime.current;
+    const now = readForm();
     if (
       !drafts ||
-      !editable ||
-      readSetup() ||
-      entryType === "initial" ||
+      !isEditable(now, intake) ||
+      now.setup ||
+      now.entryType === "initial" ||
       opLock.current
     )
       return;
     opLock.current = true;
-    setKeeping(true);
+    change({ keeping: true });
     setError("");
     try {
-      const facts = snapshotFacts(readAmount());
-      const id = await drafts.keep({ draftId, facts });
+      const facts = snapshotFacts(now);
+      const id = await drafts.keep({ draftId: now.draftId, facts });
       if (!mounted.active) return;
-      setDraftId(id);
+      change({ draftId: id });
       appliedDraft.current = id;
       setSavedFacts(factsKey(facts));
       return id;
     } catch (error) {
       if (transport.reportFailure?.(error) || !mounted.active) return;
       if (error instanceof LocalEntryDraftGoneError) {
-        setDraftId(undefined);
+        change({ draftId: undefined });
         appliedDraft.current = undefined;
         setError(t("posting.draftGoneKeep"));
         return;
@@ -573,10 +603,11 @@ export function usePostingEditor(
       setError(t("posting.keepFailed"));
     } finally {
       opLock.current = false;
-      if (mounted.active) setKeeping(false);
+      if (mounted.active) change({ keeping: false });
     }
   }
   async function discardDraft() {
+    const draftId = readForm().draftId;
     if (!drafts || !draftId || intake || opLock.current) return undefined;
     opLock.current = true;
     try {
@@ -591,7 +622,7 @@ export function usePostingEditor(
   const reviewWrites = useRef<Promise<void>>(Promise.resolve());
   const latestReview = useRef<LocalEntryFacts | null>(null);
   const persistedReview = useRef<string | null>(null);
-  const reviewFacts = intake && !loading && appliedDraft.current === `intake:${intake.id}` ? snapshotFacts(amount) : null;
+  const reviewFacts = intake && !form.loading && appliedDraft.current === `intake:${intake.id}` ? snapshotFacts(form) : null;
   latestReview.current = reviewFacts;
   const reviewValue = reviewFacts ? JSON.stringify(reviewFacts) : null;
   useLayoutEffect(() => {
@@ -623,32 +654,28 @@ export function usePostingEditor(
   }
   async function submit() {
     const mounted = lifetime.current;
-    const amountNow = readAmount();
-    const setupNow = readSetup();
-    if (!mounted.active || opLock.current || !canSubmitWith(amountNow, setupNow)) return;
+    const now = readForm();
+    if (!mounted.active || opLock.current || !canSubmitWith(now)) return;
     opLock.current = true;
     submitting.current = true;
-    setBusy(true);
+    change({ busy: true });
     setError("");
     setPosted(null);
     try {
       if (intake) {
-        if (pending) {
+        if (now.pending) {
           setError(t("posting.alreadyPosting"));
           return;
         }
-        await saveCandidateReview(latestReview.current && snapshotFacts(amountNow));
-        const receipt = await intake.confirm(snapshotConfirmed(intake, amountNow));
+        await saveCandidateReview(latestReview.current && snapshotFacts(now));
+        const receipt = await intake.confirm(snapshotConfirmed(intake, now));
         if (!mounted.active) return;
-        setAmount(openAmount(account.currency, "-"));
-        setOpenedAmount(null);
-        setDescription("");
-        setCategories({ ids: [], primaryId: null });
+        change({ amount: openAmount(account.currency, "-"), openedAmount: null, description: "", classification: unclassified });
         setPosted(receipt);
         return;
       }
-      const built = pending ?? buildEntry(amountNow, setupNow);
-      const saved = await transport.save(built, draftId);
+      const built = heldEntry(now) ?? buildEntry(now);
+      const saved = await transport.save(built, now.draftId);
       if (saved.command.payload.idempotencyKey !== built.payload.idempotencyKey) {
         if (mounted.active) {
           showSent(saved.id, saved.command);
@@ -657,8 +684,7 @@ export function usePostingEditor(
         return;
       }
       if (mounted.active) {
-        setPending(saved.command);
-        setDraftId(saved.id);
+        change({ pending: saved.command, draftId: saved.id });
         appliedDraft.current = saved.id;
       }
       const receipt = await transport.post(saved.command);
@@ -670,25 +696,19 @@ export function usePostingEditor(
         return;
       }
       if (!mounted.active) return;
-      setPending(null);
-      setDraftId(undefined);
+      change({ pending: null, draftId: undefined, setup: null });
       appliedDraft.current = undefined;
-      setSetup(null);
       if (saved.command.kind === "setup" && receipt.financialAccountProfileId) {
-        if (saved.command.target?.kind === "destination") {
-          setProfileId(saved.command.target.sourceProfileId);
-          setDestinationId(receipt.financialAccountProfileId);
-          setEntryType("transfer");
-          setTransferReviewRequired(true);
-        } else setProfileId(receipt.financialAccountProfileId);
+        if (saved.command.target?.kind === "destination")
+          change({ profileId: saved.command.target.sourceProfileId, destinationId: receipt.financialAccountProfileId,
+            entryType: "transfer", confirmedPair: null });
+        else change({ profileId: receipt.financialAccountProfileId });
         setSetupPosted(receipt);
         return;
       }
-      setAmount(openAmount(account.currency, entryType === "initial" ? "0" : "-"));
-      setDescription("");
-      setCategories({ ids: [], primaryId: null });
-      setOpenedAmount(null);
-      setSavedFacts(factsKey({ ...snapshotFacts(amountNow), amountReenter: undefined, ...amountFacts(storedAmountOf(openAmount(account.currency, "-"))),
+      change({ amount: openAmount(account.currency, now.entryType === "initial" ? "0" : "-"), description: "",
+        classification: unclassified, openedAmount: null });
+      setSavedFacts(factsKey({ ...snapshotFacts(now), amountReenter: undefined, ...amountFacts(storedAmountOf(openAmount(account.currency, "-"))),
         description: "", categories: { ids: [], primaryId: null } }));
       setPosted(receipt);
     } catch (error) {
@@ -704,8 +724,7 @@ export function usePostingEditor(
       }
       if (error instanceof LocalEntryDraftGoneError) {
         if (!mounted.active) return;
-        setPending(null);
-        setDraftId(undefined);
+        change({ pending: null, draftId: undefined });
         appliedDraft.current = undefined;
         setError(t("posting.draftGonePosted"));
         return;
@@ -721,7 +740,7 @@ export function usePostingEditor(
         try {
           await transport.abort();
           if (!mounted.active) return;
-          setPending(null);
+          change({ pending: null });
         } catch {
           if (mounted.active)
             setError(t("posting.clearFailed"));
@@ -732,116 +751,103 @@ export function usePostingEditor(
     } finally {
       opLock.current = false;
       submitting.current = false;
-      if (mounted.active) setBusy(false);
+      if (mounted.active) change({ busy: false });
     }
   }
   const unsaved =
     drafts !== null &&
     intake === null &&
     editable &&
-    !setup &&
-    entryType !== "initial" &&
+    !form.setup &&
+    form.entryType !== "initial" &&
     posted === null &&
-    factsKey(snapshotFacts(amount)) !== savedFacts;
+    factsKey(snapshotFacts(form)) !== savedFacts;
   return {
-    amount,
-    amountNotice: openedAmount?.notice?.kind === "reenter" ? openedAmount.notice : null,
-    signLocked: entryType === "normal" && classification.nature !== null,
+    ...view(form),
+    amount: form.amount,
+    amountNotice: form.openedAmount?.notice?.kind === "reenter" ? form.openedAmount.notice : null,
+    signLocked: form.entryType === "normal" && form.classification.nature !== null,
     setAmount: (value: AmountSession) => {
-      const current = readAmount();
-      if (canEdit() && value.currency === current.currency) {
-        if (entryType === "normal" && classification.nature) {
-          changeAmount(categoryAmount(value, classification.nature));
+      const now = readForm();
+      if (canEdit() && value.currency === now.amount.currency) {
+        const nature = now.classification.nature;
+        if (now.entryType === "normal" && nature) {
+          changeAmount(categoryAmount(value, nature));
           return;
         }
-        const was = directionOf(current);
-        if (displayedMinorUnits(value) !== null && directionOf(value) !== was)
-          setCategories({ ids: [], primaryId: null });
+        if (displayedMinorUnits(value) !== null && directionOf(value) !== directionOf(now.amount))
+          change({ classification: unclassified });
         changeAmount(value);
       }
     },
     /** The amount as of the latest change, for a check a press makes before it sends. */
-    readAmount,
-    description,
+    readAmount: () => readForm().amount,
+    /** The entry as of the latest change, for a check a press makes before it sends. */
+    read: () => view(readForm()),
     setDescription: (value: string) => {
-      if (canEdit()) setDescription(value);
+      if (canEdit()) change({ description: value });
     },
-    date,
     setDate: (value: string) => {
-      if (canEdit()) setDate(value);
+      if (canEdit()) change({ date: value });
     },
-    entryType,
     setEntryType: (value: EntryType) => {
       if (canEdit() && !intake) {
-        setEntryType(value);
-        setTransferReviewRequired(value === "transfer" && destinationId !== null);
-        setCategories({ ids: [], primaryId: null });
+        change({ entryType: value, confirmedPair: null, classification: unclassified });
         setError("");
       }
     },
-    profileId,
     setProfileId: (value: string) => {
-      if (canEdit()) {
-        if (entryType === "transfer" && value !== profileId) setTransferReviewRequired(true);
-        setProfileId(value);
-      }
+      if (canEdit()) change({ profileId: value });
     },
-    destinationId,
     setDestinationId: (value: string) => {
-      if (canEdit()) {
-        if (entryType === "transfer" && value !== destinationId) setTransferReviewRequired(true);
-        setDestinationId(value);
-      }
+      if (canEdit()) change({ destinationId: value });
     },
-    transferReviewRequired,
     swapTransferPlaces: () => {
-      if (canEdit() && entryType === "transfer" && !readSetup() && destinationId && destinationId !== profileId) {
-        setProfileId(destinationId);
-        setDestinationId(profileId);
-        setTransferReviewRequired(true);
-      }
+      const now = readForm();
+      if (canEdit() && now.entryType === "transfer" && !now.setup && now.destinationId && now.destinationId !== now.profileId)
+        change({ profileId: now.destinationId, destinationId: now.profileId });
     },
-    confirmTransferReview: () => {
-      if (canEdit() && entryType === "transfer" && destinationId && destinationId !== profileId)
-        setTransferReviewRequired(false);
+    /**
+     * Confirms the pair now on the form, or only `shown`, the pair the person was looking at, when it still is: a
+     * confirmation never applies to a pair that changed after it was shown.
+     */
+    confirmTransferReview: (shown?: TransferPair) => {
+      const now = readForm();
+      if (!canEdit() || now.entryType !== "transfer" || !now.destinationId || now.destinationId === now.profileId) return;
+      if (shown && (shown.from !== now.profileId || shown.to !== now.destinationId)) return;
+      change({ confirmedPair: { from: now.profileId, to: now.destinationId } });
     },
     beginTransfer: () => {
-      if (!canEdit() || isolate || keeping || opLock.current) return false;
-      setCategories({ ids: [], primaryId: null });
-      setEntryType("transfer");
-      setDestinationId(null);
-      setTransferReviewRequired(true);
+      if (!canEdit() || isolate || readForm().keeping || opLock.current) return false;
+      change({ classification: unclassified, entryType: "transfer", destinationId: null, confirmedPair: null });
       setError("");
       return true;
     },
     beginAccountSetup: (request: AccountSetupRequest) => {
-      if (!canEdit() || isolate || keeping || opLock.current) return false;
-      setCategories({ ids: [], primaryId: null });
-      setEntryType("transfer");
-      setDestinationId(null);
-      setTransferReviewRequired(true);
+      const now = readForm();
+      if (!canEdit() || isolate || now.keeping || opLock.current) return false;
       setSetupPosted(null);
-      setSetup({
-        name: request.name,
-        emoji: request.style.emoji,
-        productKind: request.answer === "payDebt" ? null : "bankAccount",
-        amount: openAmount(account.currency, "0"),
-        date: defaultAccountingDate(account.timeZone),
-        target: { kind: "destination", sourceProfileId: profileId },
+      change({
+        classification: unclassified, entryType: "transfer", destinationId: null, confirmedPair: null,
+        setup: {
+          name: request.name,
+          emoji: request.style.emoji,
+          productKind: request.answer === "payDebt" ? null : "bankAccount",
+          amount: openAmount(account.currency, "0"),
+          date: defaultAccountingDate(account.timeZone),
+          target: { kind: "destination", sourceProfileId: now.profileId },
+        },
       });
       setError("");
       return true;
     },
-    setup,
     setSetup: (value: PlaceDraft | null) => {
-      if (canEdit() && !isolate) { setSetupPosted(null); setSetup(value); }
+      if (canEdit() && !isolate) { setSetupPosted(null); change({ setup: value }); }
     },
     /** Applies the fields that changed to the latest draft, never to a render's copy, which may hold an older amount. */
-    changeSetup: (change: Partial<PlaceDraft>) => {
-      if (canEdit() && !isolate) { setSetupPosted(null); setSetup((current) => current && { ...current, ...change }); }
+    changeSetup: (patch: Partial<PlaceDraft>) => {
+      if (canEdit() && !isolate) { setSetupPosted(null); setForm((now) => ({ ...now, setup: now.setup && { ...now.setup, ...patch } })); }
     },
-    direction,
-    categories,
     setCategories: (value: TransactionCategories, nature: CategoryNature | null = null) => {
       if (
         canEdit() &&
@@ -850,40 +856,37 @@ export function usePostingEditor(
         value.ids.every(Boolean) &&
         (!value.primaryId || value.ids.includes(value.primaryId))
       ) {
-        setCategories({ ids: [...value.ids], primaryId: value.primaryId }, nature);
-        if (entryType === "normal" && value.ids.length && nature)
-          changeAmount(categoryAmount(readAmount(), nature));
+        const now = readForm();
+        change({ classification: classify({ ids: [...value.ids], primaryId: value.primaryId }, nature) });
+        if (now.entryType === "normal" && value.ids.length && nature)
+          changeAmount(categoryAmount(now.amount, nature));
       }
     },
-    pending: !!pending || intake?.frozen === true,
-    loading,
-    busy,
+    loading: form.loading,
+    busy: form.busy,
     error,
     setupPosted,
     posted,
     editable,
-    canSubmit,
     canKeepDraft,
     lockEntryType: intake !== null,
-    draftId,
-    blockedByPendingPostings: blocked,
+    draftId: form.draftId,
+    blockedByPendingPostings: form.blocked,
     keepDraft,
     unsaved,
     discardDraft,
     discardCandidate,
     captureForBatch: () => {
-      const amountNow = readAmount();
-      const setupNow = readSetup();
-      if (!canEdit() || !canSubmitWith(amountNow, setupNow) || setupNow || intake) return null;
-      return { command: buildEntry(amountNow, null), draftId };
+      const now = readForm();
+      if (!canEdit() || !canSubmitWith(now) || now.setup || intake) return null;
+      return { command: buildEntry(now), draftId: now.draftId };
     },
     resetComposer: () => {
-      if (canEdit() && !readSetup()) resetComposer();
+      if (canEdit() && !readForm().setup) resetComposer();
     },
     editBatchDraft: (value: { command: PendingPosting; draftId?: string }) => {
-      if (!canEdit() || readSetup() || intake) return false;
-      hydrateFromCommand(value.command);
-      setDraftId(value.draftId);
+      if (!canEdit() || readForm().setup || intake) return false;
+      change({ ...commandFields(value.command), draftId: value.draftId });
       appliedDraft.current = value.draftId;
       setPosted(null);
       setError("");

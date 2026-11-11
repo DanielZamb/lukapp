@@ -541,6 +541,7 @@ test("Transfer persists its selected categories through retry hydration", async 
     editor().setDestinationId("wallet");
     editor().setCategories({ ids: ["travel"], primaryId: "travel" });
   });
+  await act(async () => editor().confirmTransferReview());
   api.post.mockRejectedValueOnce(new Error("Reply lost"));
   await act(async () => {
     await editor().submit();
