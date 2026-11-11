@@ -779,6 +779,85 @@ test("a resend whose outcome is unknown again stays stored and locked, and the n
   expect(phone.has(storedKey)).toBe(false);
 });
 
+const turnedAway = [
+  { code: "provider_unavailable", reason: "We couldn't verify your session. Try again." },
+  { code: "session_verification_required", reason: "Your session needs confirming. Sign in again and retry." },
+  { code: "device_registration_required", reason: "This phone no longer has access." },
+  { code: "workspace_membership_required", reason: "You don't have permission to do this in this workspace." },
+  { code: "idempotency_key_conflict", reason: "We couldn't do it (idempotency_key_conflict)." },
+  { code: "a_future_code", reason: "We couldn't do it (a_future_code)." },
+];
+const refusedWith = (code: string) => code.startsWith("place_") || code.startsWith("idempotency") || code.startsWith("workspace_") || code === "a_future_code"
+  ? new ConvexError({ kind: "accounting", code, message: "x" }) : new ConvexError({ code });
+
+test.each(turnedAway)("a retry refused with $code says nothing about the first closing, so it stays locked and on the phone across a restart", async ({ code, reason }) => {
+  remote.close.mockRejectedValueOnce(new Error("network lost")).mockRejectedValueOnce(refusedWith(code))
+    .mockResolvedValueOnce({ ...receipt(), replay: true });
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  await ui.press("Retry closing");
+  await settle();
+  expect(ui.alerts()).toEqual([`${closeUncertain} ${reason}`]);
+  expect(ui.has("Back")).toBe(false);
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "close", request: sentTransfer }] });
+  await restart();
+  expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet closed");
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer], [sentTransfer]]);
+  expect(ui.texts()).toContain("Wallet is closed");
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test("a resent closing turned away before the server looked for it stays stored and locked until an answer arrives", async () => {
+  storeOnPhone(sentTransfer);
+  remote.close.mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" })).mockResolvedValueOnce(receipt());
+  await open();
+  await settle();
+  await ui.press("Send it again");
+  await settle();
+  expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet closed");
+  expect(ui.alerts()).toEqual([`${closeUncertain} We couldn't verify your session. Try again.`]);
+  expect(JSON.parse(phone.get(storedKey)!).endings[0].request).toEqual(sentTransfer);
+  await restart();
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
+  expect(ui.texts()).toContain("Wallet is closed");
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test.each([
+  { error: () => new ConvexError({ kind: "accounting", code: "place_close_balance_stale", message: "x" }),
+    alert: "The balance changed before the place closed, so nothing was recorded. Getting the new balance…" },
+  { error: () => new ConvexError({ kind: "accounting", code: "place_new_rule", message: "x", context: { code: "place_new_rule" } }),
+    alert: "We couldn't do it (place_new_rule)." },
+])("a retry refused after the server found no earlier closing settles it: forgotten, and the next attempt is new", async ({ error, alert }) => {
+  remote.close.mockRejectedValueOnce(new Error("network lost")).mockRejectedValueOnce(error()).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  await ui.press("Retry closing");
+  await settle();
+  expect(ui.alerts()).toEqual([alert]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.has("Back")).toBe(true);
+});
+
+test("a first attempt turned away before the server looked for anything is refused: editable, forgotten, and the next attempt is new", async () => {
+  remote.close.mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" })).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual(["We couldn't verify your session. Try again."]);
+  expect(phone.has(storedKey)).toBe(false);
+  await ui.press("Close Wallet");
+  await settle();
+  expect(remote.close.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-1", "key-2"]);
+  expect(ui.texts()).toContain("Wallet is closed");
+});
+
 test.each([
   { code: "place_close_balance_stale", notice: "It wasn't closed because its balance changed since. Start a new review." },
   { code: "place_close_date_stale", notice: "It wasn't closed because the day changed since. Start a new review." },

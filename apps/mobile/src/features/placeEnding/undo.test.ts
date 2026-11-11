@@ -402,6 +402,46 @@ test("an unconfirmed start survives a restart and resends the identical request,
   expect(mounted!.routes()).toEqual(["index", "places", "account"]);
 });
 
+const undoUncertain = "We couldn't confirm whether the undo started. Retry: we send exactly the same request and nothing happens twice.";
+test("a retry turned away before the server looked for the start keeps it locked and on the phone, and after a restart it is sent again", async () => {
+  remote.undo.mockRejectedValueOnce(new Error("timeout"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockResolvedValueOnce({ ...operation({ kind: "running" }), replay: true });
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  await ui.press("Retry");
+  await settle();
+  expect(ui.alerts()).toEqual([`${undoUncertain} We couldn't verify your session. Try again.`]);
+  expect(ui.input("Place name to confirm").props.editable).toBe(false);
+  const sent = { workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", previewFingerprint: "reviewed-snapshot",
+    reversalDescriptionPrefix: "Reversal:" };
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "undo", request: sent }] });
+  await act(async () => mounted!.root.unmount());
+  mounted = await mountStack(router, () => createElement(PlaceEndingRoute));
+  await settle();
+  expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet started undoing");
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.undo.mock.calls).toEqual([[sent], [sent], [sent]]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a first start turned away before the server looked for anything is refused: editable and forgotten", async () => {
+  remote.undo.mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" })).mockResolvedValueOnce(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual(["We couldn't verify your session. Try again."]);
+  expect(ui.input("Place name to confirm").props.editable).toBe(true);
+  expect(phone.has(storedKey)).toBe(false);
+  await ui.press("Undo Wallet");
+  expect(remote.undo.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-1", "key-2"]);
+});
+
 test("a resent start refused as stale is forgotten and a fresh confirmation follows", async () => {
   phone.set(storedKey, JSON.stringify({ v: 1, endings: [{ act: "undo", request: { workspaceId: "ws", financialAccountProfileId: "wallet",
     idempotencyKey: "old", previewFingerprint: "old-snapshot", reversalDescriptionPrefix: "Reversal:" } }] }));

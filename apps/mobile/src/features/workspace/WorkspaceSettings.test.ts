@@ -275,6 +275,34 @@ test("an unconfirmed default locks the choice, survives system Back and retries 
   expect(sheets()).toEqual([]);
 });
 
+test("a retry turned away before the server looked for the change keeps it locked until an answer arrives", async () => {
+  state.defaultPlace.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockResolvedValueOnce(receipt("defaultPlace", "daily", "savings", "key-1"));
+  await render();
+  await attempt("defaultPlace");
+  await press(control("button", "Retry the same change"));
+  expect(alerts()).toEqual(["We couldn’t confirm this change. Retry to check the same change safely; it won’t be applied twice."]);
+  expect(control("radio", "Savings").props.accessibilityState).toEqual({ checked: true, disabled: true });
+  await systemBack();
+  expect(sheets()).toEqual(["Choose your default place"]);
+  await press(control("button", "Retry the same change"));
+  const first = { workspaceId: "ws", financialAccountProfileId: "savings", expectedFinancialAccountProfileId: "daily", idempotencyKey: "key-1" };
+  expect(state.defaultPlace.mock.calls.map(([request]) => request)).toEqual([first, first, first]);
+  expect(sheets()).toEqual([]);
+});
+
+test("a retry refused as stale after the server found no earlier change answers it and unlocks the choice", async () => {
+  state.defaultPlace.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "default_place_stale", message: "x" }));
+  await render();
+  await attempt("defaultPlace");
+  await press(control("button", "Retry the same change"));
+  await refresh({ defaultFinancialAccountProfileId: "savings" });
+  expect(alerts()).toEqual(["Your default place was changed somewhere else. It’s now Savings."]);
+  expect(control("radio", "Daily").props.accessibilityState).toEqual({ checked: false, disabled: false });
+});
+
 test("an access failure goes to the device handler and the retry repeats the identical request", async () => {
   const revoked = new ConvexError({ code: "device_revoked", wipeLocalInput: true });
   state.reportFailure.mockImplementation((error) => error === revoked);
