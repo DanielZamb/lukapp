@@ -385,3 +385,15 @@ test("a rename resent after a lost reply is the held name, whatever a kept field
     workspaceId: "ws", financialAccountProfileId: "daily", name: "Everyday", expectedName: "Daily",
   })));
 });
+
+test("a Use handler kept from the look sheet's earlier render saves the emoji picked since", async () => {
+  state.changeLook.mockResolvedValue(undefined);
+  await render();
+  await act(async () => button("Change look").props.onPress());
+  const sheet = () => tree().find((node) => String(node.type) === "emoji-sheet");
+  const kept = sheet().props.onUse as () => Promise<void>;
+  await act(async () => sheet().props.onPick("🏦"));
+  expect(sheet().props.emoji).toBe("🏦");
+  await act(async () => kept());
+  expect(state.changeLook.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "daily", emoji: "🏦" }]]);
+});
