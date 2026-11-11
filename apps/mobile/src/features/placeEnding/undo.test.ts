@@ -8,10 +8,18 @@ import { emptyState } from "../intake/durableState";
 import { mountStack, screenHelpers, settle } from "./flow.testSupport";
 
 const phone = vi.hoisted(() => new Map<string, string>());
+/** How many of the next writes or deletes the phone's secure store fails, as a full or locked keychain does. */
+const failing = vi.hoisted(() => ({ writes: 0, deletes: 0 }));
 vi.mock("expo-secure-store", () => ({
   getItemAsync: async (key: string) => phone.get(key) ?? null,
-  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
-  deleteItemAsync: async (key: string) => { phone.delete(key); },
+  setItemAsync: async (key: string, value: string) => {
+    if (failing.writes > 0) { failing.writes--; throw new Error("keychain write failed"); }
+    phone.set(key, value);
+  },
+  deleteItemAsync: async (key: string) => {
+    if (failing.deletes > 0) { failing.deletes--; throw new Error("keychain delete failed"); }
+    phone.delete(key);
+  },
 }));
 vi.mock("../../local-auth/localInput", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
@@ -48,38 +56,63 @@ type Snapshot = {
   otherPlaces: Array<{ financialAccountProfileId: string; name: string; balanceChange: Money }>;
   currentMonthExpenseChange: Money; currentMonthIncomeChange: Money;
 };
-const remote = vi.hoisted(() => ({
-  places: [] as unknown[], closure: null as unknown, blockers: [] as unknown[], snapshot: null as unknown,
-  close: vi.fn(), undo: vi.fn(), pages: vi.fn(), version: 0, listeners: new Set<() => void>(),
-}));
+const remote = vi.hoisted(() => {
+  const value = {
+    places: [] as unknown[], closure: null as unknown, blockers: [] as unknown[], snapshot: null as unknown,
+    close: vi.fn(), undo: vi.fn(), pages: vi.fn(), version: 0, listeners: new Set<() => void>(),
+    /** The workspace day on the server's clock and on this phone's; they turn at nearly the same moment, not exactly. */
+    serverDay: "2026-11-10", phoneDay: "2026-11-10",
+    /** The whole preview the server computes now. Like the real one, its fingerprint covers the workspace month. */
+    preview: () => {
+      const month = value.serverDay.slice(0, 7);
+      const current = value.snapshot as { fingerprint: string } | null;
+      const snapshot = current && month !== "2026-11" ? { ...current, fingerprint: `${current.fingerprint}@${month}` } : current;
+      return { fingerprint: snapshot?.fingerprint ?? "", snapshot, closure: { ...value.closure as object, accountingDate: value.serverDay },
+        canUndo: value.blockers.length === 0, blockers: value.blockers, operation: null,
+        // A single page of a larger ledger: the confirmation must not mistake it for the whole preview.
+        page: { entriesToReverse: 1, alreadyReversed: 0, lockedMonthEntries: 0, earlierOpenMonthEntries: 0, otherPlaces: [],
+          currentMonthExpenseChange: { currency: "COP", minorUnits: 0 }, currentMonthIncomeChange: { currency: "COP", minorUnits: 0 },
+          scannedLines: 10, isDone: false, continueCursor: "c1" } };
+    },
+  };
+  return value;
+});
 function serverChange(change: () => void) {
   change();
   remote.version++;
   for (const listener of remote.listeners) listener();
 }
-vi.mock("../useWorkspaceCalendar", () => ({ useWorkspaceCalendar: () => ({ date: "2026-11-10", month: "2026-11", now: new Date() }) }));
-vi.mock("convex/react", async () => {
-  const { getFunctionName } = await import("convex/server");
+/** Time passes with no data change, so no subscribed query runs again; only this phone's calendar sees it. */
+function timePasses(change: () => void) {
+  change();
+  for (const listener of remote.listeners) listener();
+}
+vi.mock("../useWorkspaceCalendar", async () => {
   const { useSyncExternalStore } = await import("react");
   const subscribe = (listener: () => void) => { remote.listeners.add(listener); return () => { remote.listeners.delete(listener); }; };
-  const preview = () => {
-    const current = remote.snapshot as Snapshot | null;
-    return { fingerprint: current?.fingerprint ?? "", snapshot: current, closure: remote.closure, canUndo: remote.blockers.length === 0,
-      blockers: remote.blockers, operation: null,
-      // A single page of a larger ledger: the confirmation must not mistake it for the whole preview.
-      page: { entriesToReverse: 1, alreadyReversed: 0, lockedMonthEntries: 0, earlierOpenMonthEntries: 0, otherPlaces: [],
-        currentMonthExpenseChange: { currency: "COP", minorUnits: 0 }, currentMonthIncomeChange: { currency: "COP", minorUnits: 0 },
-        scannedLines: 10, isDone: false, continueCursor: "c1" } };
-  };
+  return { useWorkspaceCalendar: () => {
+    const date = useSyncExternalStore(subscribe, () => remote.phoneDay);
+    return { date, month: date.slice(0, 7), now: new Date() };
+  } };
+});
+vi.mock("convex/react", async () => {
+  const { getFunctionName } = await import("convex/server");
+  const { useRef, useSyncExternalStore } = await import("react");
+  const subscribe = (listener: () => void) => { remote.listeners.add(listener); return () => { remote.listeners.delete(listener); }; };
   const client = { query: (...args: unknown[]) => remote.pages(...args) };
   return {
     useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
       useSyncExternalStore(subscribe, () => remote.version);
-      if (args === "skip") return undefined;
+      // A subscription answers again only when data it read changes; a new subscription reads afresh.
+      const subscription = useRef<{ version: number; value: unknown } | null>(null);
+      if (args === "skip") { subscription.current = null; return undefined; }
       const name = getFunctionName(ref);
       if (name === "accounting:listFinancialAccountProfiles") return remote.places;
       if (name === "accounting:placeClosure") return remote.closure;
-      if (name === "accounting:previewUndoPlace") return preview();
+      if (name === "accounting:previewUndoPlace") {
+        if (subscription.current?.version !== remote.version) subscription.current = { version: remote.version, value: remote.preview() };
+        return subscription.current.value;
+      }
       if (name === "accounting:listUserCategories") return [];
       return undefined;
     },
@@ -115,6 +148,10 @@ let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
 beforeEach(() => {
   phone.clear();
+  remote.serverDay = "2026-11-10";
+  remote.phoneDay = "2026-11-10";
+  failing.writes = 0;
+  failing.deletes = 0;
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   keys.next = 0;
@@ -181,6 +218,82 @@ test("a preview that changes while the confirmation is open refreshes its number
   await ui.type("Place name to confirm", "Wallet");
   await ui.press("Undo Wallet");
   expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["after-a-new-expense"]);
+});
+
+const monthNotice = "A new month started, so the numbers were refreshed. Check them and type the name again.";
+/** Start as the server runs it: a fingerprint other than the one it computes now is stale. */
+async function startOnServer(request: { previewFingerprint: string }) {
+  if (request.previewFingerprint !== remote.preview().fingerprint)
+    throw new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" });
+  return operation({ kind: "pending" });
+}
+
+test("a new month while the confirmation is open reads the preview again, clears the typed name and asks to confirm the new numbers", async () => {
+  remote.serverDay = remote.phoneDay = "2026-11-30";
+  remote.undo.mockImplementation(startOnServer);
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => timePasses(() => { remote.serverDay = remote.phoneDay = "2026-12-01"; }));
+  await settle();
+  expect(ui.alerts()).toEqual([monthNotice]);
+  expect(ui.input("Place name to confirm").props.value).toBe("");
+  expect(ui.disabled("Undo Wallet")).toBe(true);
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["reviewed-snapshot@2026-12"]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a start refused as stale because the server's month turned before this phone's reads the preview again and asks to confirm again", async () => {
+  remote.serverDay = remote.phoneDay = "2026-11-30";
+  remote.undo.mockImplementation(startOnServer);
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  remote.serverDay = "2026-12-01";
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual([monthNotice]);
+  expect(ui.input("Place name to confirm").props.value).toBe("");
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => [request.idempotencyKey, request.previewFingerprint]))
+    .toEqual([["key-1", "reviewed-snapshot"], ["key-2", "reviewed-snapshot@2026-12"]]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a new month that arrives with a new movement refreshes the confirmation once and binds both", async () => {
+  remote.serverDay = remote.phoneDay = "2026-11-30";
+  remote.undo.mockImplementation(startOnServer);
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => serverChange(() => {
+    remote.serverDay = remote.phoneDay = "2026-12-01";
+    remote.snapshot = snapshot({ fingerprint: "after-a-new-expense", entriesToReverse: 8 });
+  }));
+  await settle();
+  expect(ui.alerts()).toEqual([monthNotice]);
+  expect(ui.texts()).toContain("This reverses 8 movements.");
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["after-a-new-expense@2026-12"]);
+});
+
+test("this phone's month turning before the server's keeps the typed name when the numbers are the same", async () => {
+  remote.serverDay = remote.phoneDay = "2026-11-30";
+  remote.undo.mockImplementation(startOnServer);
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await act(async () => timePasses(() => { remote.phoneDay = "2026-12-01"; }));
+  await settle();
+  expect(ui.alerts()).toEqual([]);
+  expect(ui.input("Place name to confirm").props.value).toBe("Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => request.previewFingerprint)).toEqual(["reviewed-snapshot"]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
 });
 
 test("a preview that changes before the confirmation opens needs no notice", async () => {
@@ -400,6 +513,79 @@ test("an unconfirmed start survives a restart and resends the identical request,
   expect(remote.undo.mock.calls).toEqual([[sent], [sent]]);
   expect(phone.has(storedKey)).toBe(false);
   expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+const undoUncertain = "We couldn't confirm whether the undo started. Retry: we send exactly the same request and nothing happens twice.";
+test("a retry turned away before the server looked for the start keeps it locked and on the phone, and after a restart it is sent again", async () => {
+  remote.undo.mockRejectedValueOnce(new Error("timeout"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockResolvedValueOnce({ ...operation({ kind: "running" }), replay: true });
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  await ui.press("Retry");
+  await settle();
+  expect(ui.alerts()).toEqual([`${undoUncertain} We couldn't verify your session. Try again.`]);
+  expect(ui.input("Place name to confirm").props.editable).toBe(false);
+  const sent = { workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", previewFingerprint: "reviewed-snapshot",
+    reversalDescriptionPrefix: "Reversal:" };
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "undo", request: sent }] });
+  await act(async () => mounted!.root.unmount());
+  mounted = await mountStack(router, () => createElement(PlaceEndingRoute));
+  await settle();
+  expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet started undoing");
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.undo.mock.calls).toEqual([[sent], [sent], [sent]]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("an undo the phone can't save first is never sent: the typed name stays, and trying again sends it", async () => {
+  remote.undo.mockResolvedValue(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  failing.writes = 1;
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo).not.toHaveBeenCalled();
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.alerts()).toEqual(["This phone couldn't save the request before sending it, so nothing was sent. Try again."]);
+  expect(ui.input("Place name to confirm").props).toMatchObject({ value: "Wallet", editable: true });
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-2"]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a start whose receipt arrives while the phone can't forget it still follows on the Place's page, and doesn't come back on the next open", async () => {
+  remote.undo.mockResolvedValueOnce(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  failing.deletes = 1;
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+  await act(async () => mounted!.root.unmount());
+  mounted = await mountStack(router, () => createElement(PlaceEndingRoute));
+  await settle();
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  expect(phone.has(storedKey)).toBe(false);
+  expect(remote.undo).toHaveBeenCalledTimes(1);
+});
+
+test("a first start turned away before the server looked for anything is refused: editable and forgotten", async () => {
+  remote.undo.mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" })).mockResolvedValueOnce(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual(["We couldn't verify your session. Try again."]);
+  expect(ui.input("Place name to confirm").props.editable).toBe(true);
+  expect(phone.has(storedKey)).toBe(false);
+  await ui.press("Undo Wallet");
+  expect(remote.undo.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-1", "key-2"]);
 });
 
 test("a resent start refused as stale is forgotten and a fresh confirmation follows", async () => {

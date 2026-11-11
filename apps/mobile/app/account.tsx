@@ -36,7 +36,7 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   const changeLook = useAction(api.accounting.changeAccountLook);
   const reportFailure = useDeviceAccessFailure();
   const [aborted, setAborted] = useState<UndoOperation | null>(null);
-  const abort = useFrozenCommand({ send: useAction(api.accounting.abortUndoPlace), reportFailure,
+  const abort = useFrozenCommand({ send: useAction(api.accounting.abortUndoPlace), reportFailure, settles: abortSettles,
     onDone: (receipt: { operation: UndoOperation }) => setAborted(receipt.operation) });
   const rename = useAction(api.accounting.renameAccount);
   const [emoji, setEmoji] = useState<string | null>(null);
@@ -116,6 +116,12 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
     </> : ready ? <Text style={ui.muted}>{t("places.accountNotFound")}</Text> : <ActivityIndicator accessibilityLabel={t("places.accountLoading")} />}
   </Screen>;
 }
+/**
+ * abortUndoOperation (convex/accountingUndo.ts) returns the aborted operation as its receipt. It refuses a missing
+ * operation from the request alone, and refuses as forbidden only an operation that is neither stopped nor aborted,
+ * so either answers an earlier Cancel whose outcome was unknown.
+ */
+const abortSettles = (code: string) => code === "place_undo_abort_forbidden" || code === "place_undo_operation_not_found";
 function abortRefusal(code: string, translator: ReturnType<typeof useT>) {
   return code === "place_undo_abort_forbidden" ? translator.t("placeEnding.abortForbidden")
     : refusalMessage({ code, blocker: null }, "undo", translator);

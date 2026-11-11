@@ -274,7 +274,7 @@ export function ReceiptScreen({ name, receipt, onDone }: { name: string; receipt
 
 export function UndoConfirmScreen({ name, balance, snapshot, changed, replacement, onRepickDefault, typed, editable, onTyped,
   busy, uncertain, error, canConfirm, onConfirm, onBack }: {
-  name: string; balance: Money; snapshot: UndoSnapshot | null; changed: boolean; replacement: ChoiceView | null; onRepickDefault: () => void;
+  name: string; balance: Money; snapshot: UndoSnapshot | null; changed: string | null; replacement: ChoiceView | null; onRepickDefault: () => void;
   typed: string; editable: boolean; onTyped: (value: string) => void;
   busy: boolean; uncertain: boolean; error: string; canConfirm: boolean; onConfirm: () => void; onBack?: () => void;
 }) {
@@ -283,7 +283,7 @@ export function UndoConfirmScreen({ name, balance, snapshot, changed, replacemen
   const { t, tn } = useT();
   return <Screen>
     <Header title={t("placeEnding.undoConfirmTitle", { name })} eyebrow={t("placeEnding.eyebrow")} onBack={onBack} />
-    <Notice lines={changed ? [t("placeEnding.undoChanged")] : []} />
+    <Notice lines={changed ? [changed] : []} />
     <Text style={styles.warning}>{t("placeEnding.undoWarning")}</Text>
     {!snapshot ? <ActivityIndicator accessibilityLabel={t("placeEnding.undoLoading")} /> : <View style={styles.card}>
       <Text style={styles.strong}>{tn("placeEnding.undoEntries", snapshot.entriesToReverse)}</Text>

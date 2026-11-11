@@ -204,6 +204,36 @@ test("an uncertain rename stays frozen, survives system back, and retries the id
   expect(input()).toBeUndefined();
 });
 
+test("a retry turned away before the server checked the name keeps the rename frozen until an answer arrives", async () => {
+  state.rename.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockResolvedValueOnce(receipt);
+  await render();
+  await openSheet();
+  await type("Everyday");
+  await save();
+  await save("Retry saving the name");
+  expect(alerts()).toEqual(["Could not confirm the new name. Retry to safely check the same change."]);
+  expect(input().props).toMatchObject({ value: "Everyday", editable: false });
+  expect(tree().findByType("sheet" as never).props.enablePanDownToClose).toBe(false);
+  await save("Retry saving the name");
+  const first = { workspaceId: "ws", financialAccountProfileId: "daily", name: "Everyday", expectedName: "Daily" };
+  expect(state.rename.mock.calls.map(([request]) => request)).toEqual([first, first, first]);
+  expect(input()).toBeUndefined();
+});
+
+test("a retry refused after the server compared the names answers the first attempt and unlocks the sheet", async () => {
+  state.rename.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "account_name_conflict" }));
+  await render();
+  await openSheet();
+  await type("Savings");
+  await save();
+  await save("Retry saving the name");
+  expect(alerts()).toEqual(["Another place is already called “Savings”. Choose a different name."]);
+  expect(input().props).toMatchObject({ value: "Savings", editable: true });
+});
+
 test("an access failure goes to the device handler and the retry repeats the same command", async () => {
   const revoked = new ConvexError({ code: "device_revoked" });
   state.reportFailure.mockImplementation((error) => error === revoked);

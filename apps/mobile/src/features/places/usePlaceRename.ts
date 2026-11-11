@@ -21,13 +21,21 @@ const refusals: Record<string, MessageKey> = {
   financial_account_profile_not_found: "planning.renameMissing",
 };
 
+/**
+ * renameAccount (src/accounting/commands/renameAccount.ts) answers with the Place itself once it carries the name.
+ * It refuses a blank, long or unknown target from the request alone, and a stale or taken name only after finding the
+ * Place without the name, so those answer an earlier send. An ended or undoing Place is checked before that and keeps it held.
+ */
+const settling = new Set(["name_required", "account_name_too_long", "account_name_stale", "account_name_conflict", "financial_account_profile_not_found"]);
+
 export function usePlaceRename(
   seed: { workspaceId: string; profileId: string; storedName: string; initialName: string },
   transport: PlaceRenameTransport,
 ) {
   const { t } = useT();
   const [name, setName] = useState(seed.initialName);
-  const command = useFrozenCommand({ send: transport.rename, reportFailure: transport.reportFailure, onDone: transport.onRenamed });
+  const command = useFrozenCommand({ send: transport.rename, reportFailure: transport.reportFailure, onDone: transport.onRenamed,
+    settles: (code) => settling.has(code) });
   const trimmed = hasVisibleText(name) ? name.trim() : "";
   const { state } = command;
   const error = state.name === "uncertain" ? t("planning.renameUncertain")

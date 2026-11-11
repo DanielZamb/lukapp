@@ -8,10 +8,18 @@ import { emptyState } from "../intake/durableState";
 import { mountStack, screenHelpers, settle } from "./flow.testSupport";
 
 const phone = vi.hoisted(() => new Map<string, string>());
+/** How many of the next writes or deletes the phone's secure store fails, as a full or locked keychain does. */
+const failing = vi.hoisted(() => ({ writes: 0, deletes: 0 }));
 vi.mock("expo-secure-store", () => ({
   getItemAsync: async (key: string) => phone.get(key) ?? null,
-  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
-  deleteItemAsync: async (key: string) => { phone.delete(key); },
+  setItemAsync: async (key: string, value: string) => {
+    if (failing.writes > 0) { failing.writes--; throw new Error("keychain write failed"); }
+    phone.set(key, value);
+  },
+  deleteItemAsync: async (key: string) => {
+    if (failing.deletes > 0) { failing.deletes--; throw new Error("keychain delete failed"); }
+    phone.delete(key);
+  },
 }));
 vi.mock("../../local-auth/localInput", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
@@ -117,6 +125,8 @@ let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
 beforeEach(() => {
   phone.clear();
+  failing.writes = 0;
+  failing.deletes = 0;
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   keys.next = 0;
@@ -779,6 +789,85 @@ test("a resend whose outcome is unknown again stays stored and locked, and the n
   expect(phone.has(storedKey)).toBe(false);
 });
 
+const turnedAway = [
+  { code: "provider_unavailable", reason: "We couldn't verify your session. Try again." },
+  { code: "session_verification_required", reason: "Your session needs confirming. Sign in again and retry." },
+  { code: "device_registration_required", reason: "This phone no longer has access." },
+  { code: "workspace_membership_required", reason: "You don't have permission to do this in this workspace." },
+  { code: "idempotency_key_conflict", reason: "We couldn't do it (idempotency_key_conflict)." },
+  { code: "a_future_code", reason: "We couldn't do it (a_future_code)." },
+];
+const refusedWith = (code: string) => code.startsWith("place_") || code.startsWith("idempotency") || code.startsWith("workspace_") || code === "a_future_code"
+  ? new ConvexError({ kind: "accounting", code, message: "x" }) : new ConvexError({ code });
+
+test.each(turnedAway)("a retry refused with $code says nothing about the first closing, so it stays locked and on the phone across a restart", async ({ code, reason }) => {
+  remote.close.mockRejectedValueOnce(new Error("network lost")).mockRejectedValueOnce(refusedWith(code))
+    .mockResolvedValueOnce({ ...receipt(), replay: true });
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  await ui.press("Retry closing");
+  await settle();
+  expect(ui.alerts()).toEqual([`${closeUncertain} ${reason}`]);
+  expect(ui.has("Back")).toBe(false);
+  expect(JSON.parse(phone.get(storedKey)!)).toEqual({ v: 1, endings: [{ act: "close", request: sentTransfer }] });
+  await restart();
+  expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet closed");
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer], [sentTransfer]]);
+  expect(ui.texts()).toContain("Wallet is closed");
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test("a resent closing turned away before the server looked for it stays stored and locked until an answer arrives", async () => {
+  storeOnPhone(sentTransfer);
+  remote.close.mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" })).mockResolvedValueOnce(receipt());
+  await open();
+  await settle();
+  await ui.press("Send it again");
+  await settle();
+  expect(ui.texts()[1]).toBe("We couldn't confirm whether Wallet closed");
+  expect(ui.alerts()).toEqual([`${closeUncertain} We couldn't verify your session. Try again.`]);
+  expect(JSON.parse(phone.get(storedKey)!).endings[0].request).toEqual(sentTransfer);
+  await restart();
+  await ui.press("Send it again");
+  await settle();
+  expect(remote.close.mock.calls).toEqual([[sentTransfer], [sentTransfer]]);
+  expect(ui.texts()).toContain("Wallet is closed");
+  expect(phone.has(storedKey)).toBe(false);
+});
+
+test.each([
+  { error: () => new ConvexError({ kind: "accounting", code: "place_close_balance_stale", message: "x" }),
+    alert: "The balance changed before the place closed, so nothing was recorded. Getting the new balance…" },
+  { error: () => new ConvexError({ kind: "accounting", code: "place_new_rule", message: "x", context: { code: "place_new_rule" } }),
+    alert: "We couldn't do it (place_new_rule)." },
+])("a retry refused after the server found no earlier closing settles it: forgotten, and the next attempt is new", async ({ error, alert }) => {
+  remote.close.mockRejectedValueOnce(new Error("network lost")).mockRejectedValueOnce(error()).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  await ui.press("Retry closing");
+  await settle();
+  expect(ui.alerts()).toEqual([alert]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.has("Back")).toBe(true);
+});
+
+test("a first attempt turned away before the server looked for anything is refused: editable, forgotten, and the next attempt is new", async () => {
+  remote.close.mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" })).mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  await ui.press("Close Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual(["We couldn't verify your session. Try again."]);
+  expect(phone.has(storedKey)).toBe(false);
+  await ui.press("Close Wallet");
+  await settle();
+  expect(remote.close.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-1", "key-2"]);
+  expect(ui.texts()).toContain("Wallet is closed");
+});
+
 test.each([
   { code: "place_close_balance_stale", notice: "It wasn't closed because its balance changed since. Start a new review." },
   { code: "place_close_date_stale", notice: "It wasn't closed because the day changed since. Start a new review." },
@@ -812,6 +901,57 @@ test("a request is on the phone while it is sent and forgotten after a receipt o
   expect(seen.map((raw) => JSON.parse(raw!).endings[0].request.idempotencyKey)).toEqual(["key-1", "key-2"]);
   expect(phone.has(storedKey)).toBe(false);
   expect(ui.texts()).toContain("Wallet is closed");
+});
+
+const notSaved = "This phone couldn't save the request before sending it, so nothing was sent. Try again.";
+test("a closing the phone can't save first is never sent: nothing is locked, and trying again sends a new request", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  failing.writes = 1;
+  await ui.press("Close Wallet");
+  await settle();
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.alerts()).toEqual([notSaved]);
+  expect(ui.has("Back")).toBe(true);
+  await restart();
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  await ui.press("Close Wallet");
+  await ui.press("I moved it to another place");
+  await ui.press("Savings");
+  await ui.press("Close Wallet");
+  await settle();
+  expect(remote.close.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-2"]);
+  expect(ui.texts()).toContain("Wallet is closed");
+});
+
+test("a closing whose receipt arrives while the phone can't forget it shows the receipt, and the Place reading closed clears the leftover", async () => {
+  remote.close.mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  failing.deletes = 1;
+  await ui.press("Close Wallet");
+  await settle();
+  expect(ui.texts()).toContain("Wallet is closed");
+  remote.places = [{ ...wallet, status: "closed" }, daily, savings];
+  await restart();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "This place has already ended", "Its history stays under Closed places."]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(remote.close).toHaveBeenCalledTimes(1);
+});
+
+test("a resent closing refused while the phone can't forget it lets the person start again, and doesn't come back on the next open", async () => {
+  storeOnPhone({ ...sentTransfer, idempotencyKey: "from-before" });
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_balance_stale", message: "x" }));
+  await open();
+  await settle();
+  failing.deletes = 1;
+  await ui.press("Send it again");
+  await settle();
+  expect(ui.texts().slice(1, 3)).toEqual(["What happened to Wallet?", "It wasn't closed because its balance changed since. Start a new review."]);
+  await restart();
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  expect(phone.has(storedKey)).toBe(false);
+  expect(remote.close).toHaveBeenCalledTimes(1);
 });
 
 test("a stored request is forgotten once the backend reports the Place as ended, and another Place's request is kept", async () => {

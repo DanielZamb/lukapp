@@ -53,6 +53,17 @@ const refusals: Record<string, MessageKey> = {
   permission_denied: "workspace.accessRefused",
 };
 
+/**
+ * changeWorkspaceSetting (convex/personalDefaults.ts) looks for the receipt under the key first. Every refusal after
+ * that, and a blank key, answers an earlier send. defaults_unavailable is also raised before the lookup, so it keeps
+ * the request held, as idempotency_key_conflict does.
+ */
+const settling = new Set([
+  "idempotency_key_required", "time_zone_invalid", "functional_currency_invalid", ...Object.keys(currencyLocks),
+  "workspace_membership_required", "financial_account_profile_not_found", "financial_account_profile_ended", "place_undo_in_progress",
+  "default_place_stale", "time_zone_stale", "functional_currency_stale", "time_zone_month_behind",
+]);
+
 /** The one sentence that says why the currency is read-only, chosen by the read's reason. */
 export function currencyLockKey(settings: WorkspaceSettingsRead): MessageKey | null {
   if (settings.canChangeFunctionalCurrency) return null;
@@ -80,6 +91,7 @@ export function useSettingChange<S extends Setting>(
   const { t } = useT();
   const command = useFrozenCommand<SettingRequest<S>, SettingReceipt>({
     send: transport.send, reportFailure: transport.reportFailure, onDone: transport.onDone, refusalCode,
+    settles: (code) => settling.has(code),
   });
   const { state } = command;
   const current = seed.describe(seed.current);

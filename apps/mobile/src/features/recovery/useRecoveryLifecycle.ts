@@ -55,13 +55,21 @@ const correctionRefusals: Record<string, MessageKey> = {
   reason_invalid: "planning.fixReasonInvalid",
 };
 
+/**
+ * cancelPlan and correctContribution (src/savingsRecovery/) look for the receipt under the key before anything
+ * else but the key's own shape, so each refusal below answers a send whose outcome was unknown.
+ */
+const cancelSettles = new Set([...Object.keys(cancelRefusals), "idempotency_key_invalid"]);
+const correctionSettles = new Set([...Object.keys(correctionRefusals), "transfer_not_usable", "destination_not_found", "idempotency_key_invalid"]);
+
 export function useRecoveryCancel(
   seed: { workspaceId: string; plan: RecoveryPlanView },
   transport: RecoveryCancelTransport,
 ) {
   const { t } = useT();
   const [reason, setReason] = useState("");
-  const command = useFrozenCommand({ send: transport.cancel, reportFailure: transport.reportFailure, onDone: transport.onCancelled });
+  const command = useFrozenCommand({ send: transport.cancel, reportFailure: transport.reportFailure, onDone: transport.onCancelled,
+    settles: (code) => cancelSettles.has(code) });
   const { state } = command;
   const trimmed = reason.trim();
   const valid = trimmed.length <= REASON_LIMIT;
@@ -93,7 +101,8 @@ export function useRecoveryCorrection(
   const { t } = useT();
   const [target, setTarget] = useState<CorrectionTarget | null>(null);
   const [reason, setReason] = useState("");
-  const command = useFrozenCommand({ send: transport.correct, reportFailure: transport.reportFailure, onDone: transport.onCorrected });
+  const command = useFrozenCommand({ send: transport.correct, reportFailure: transport.reportFailure, onDone: transport.onCorrected,
+    settles: (code) => correctionSettles.has(code) });
   const { state } = command;
   const targets = correctionTargets(seed.plans, seed.plan, seed.contribution);
   const trimmed = reason.trim();

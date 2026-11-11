@@ -153,6 +153,7 @@ export const placeEnding = {
   undoConfirmTitle: "Undo {name}",
   undoLoading: "Working out what changes…",
   undoChanged: "This place's movements changed, so the numbers were refreshed. Check them and type the name again.",
+  undoMonthChanged: "A new month started, so the numbers were refreshed. Check them and type the name again.",
   undoEntries_one: "This reverses {count} movement.",
   undoEntries_other: "This reverses {count} movements.",
   undoLocked_one: "Of these, {count} is from a month you already closed.",
@@ -172,6 +173,7 @@ export const placeEnding = {
   undoStarting: "Starting",
   undoRetry: "Retry",
   undoUncertain: "We couldn't confirm whether the undo started. Retry: we send exactly the same request and nothing happens twice.",
+  notSaved: "This phone couldn't save the request before sending it, so nothing was sent. Try again.",
 
   statusReversed_one: "{count} movement reversed",
   statusReversed_other: "{count} movements reversed",
