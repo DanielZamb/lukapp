@@ -9,11 +9,11 @@ import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { amountOfMinorUnits, openAmount, type AmountSession } from "../amount/session";
 import { api } from "../api";
 import { formatMoney } from "../money";
-import { refusalCodeOf, useFrozenCommand } from "../useFrozenCommand";
+import { useFrozenCommand, type CommandState } from "../useFrozenCommand";
 import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
 import {
-  answerSpec, balanceCase, blockerView, categoryChoice, closeRequest, everyPlace, keepAllowed, lineComplete, placeChoice, refusalMessage, refusalOf,
-  remainingMinorUnits, sameMoney, staleNotice, typedNameMatches, undoRequest, workspaceDay,
+  answerSpec, balanceCase, blockerView, categoryChoice, closeRequest, everyPlace, heldReason, keepAllowed, lineComplete, placeChoice, refusalMessage,
+  refusalOf, remainingMinorUnits, sameMoney, settlesEnding, staleNotice, typedNameMatches, undoRequest, workspaceDay,
   type Act, type Answer, type Blocker, type ChoiceView, type CloseReceipt, type CloseRequest, type LineDraft, type Reviewed,
   type SourceBlocker, type StaleNotice, type UndoReceipt, type UndoRequest,
 } from "./model";
@@ -107,28 +107,26 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     // The backend reports the Place as ended, so whatever the stored request did, it has nothing left to do.
     if (pending && (endedStatus === "closed" || endedStatus === "undone")) void settle(pending.request).catch(() => {});
   }, [pending, endedStatus, settle]);
-  /** The request is on the phone before it leaves, and forgotten only once its outcome is known. */
+  /** The request is on the phone before it leaves; the command forgets it once its outcome is known. */
   async function recorded<Receipt>(ending: UnresolvedEnding, send: () => Promise<Receipt>) {
     await unresolved.keep(ending).catch(() => {});
-    try {
-      const receipt = await send();
-      await settle(ending.request).catch(() => {});
-      return receipt;
-    } catch (error) {
-      if (refusalCodeOf(error) !== null) await settle(ending.request).catch(() => {});
-      throw error;
-    }
+    return send();
   }
   const closeAction = useAction(api.accounting.closePlace);
   const undoAction = useAction(api.accounting.startUndoPlace);
   const close = useFrozenCommand<CloseRequest, CloseReceipt>({
     send: (request) => recorded({ act: "close", request }, () => closeAction(request)), reportFailure, refusalCode,
+    settles: settlesEnding, forget: settle,
     onDone: (done) => { setReceipt(done); setSteps([{ name: "review" }]); },
   });
   const undo = useFrozenCommand<UndoRequest, UndoReceipt>({
     send: (request) => recorded({ act: "undo", request }, () => undoAction(request)), reportFailure, refusalCode,
+    settles: settlesEnding, forget: settle,
     onDone: () => leave(onStarted),
   });
+  /** The unknown-outcome message, and why the latest retry was turned away if it was. */
+  const uncertainMessage = (ending: Act, state: CommandState<unknown>) => state.name !== "uncertain" ? ""
+    : [t(ending === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain"), ...(state.refusal ? [heldReason(state.refusal, translator)] : [])].join(" ");
   const command = act === "undo" ? undo : close;
   const locked = close.frozen || undo.frozen;
   const step = steps[steps.length - 1]!;
@@ -237,7 +235,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     const resending = pending.act === "close" ? close : undo;
     const resend = () => {
       interact();
-      const outcome = pending.act === "close" ? close.submit(() => pending.request) : undo.submit(() => pending.request);
+      const outcome = pending.act === "close" ? close.resend(pending.request) : undo.resend(pending.request);
       void outcome.then((result) => {
         if (result !== "refused" || !refusal.current) return;
         const stale = staleResend[refusal.current.code];
@@ -245,7 +243,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
       });
     };
     return <UnresolvedScreen ending={pending} name={name} workspaceId={workspaceId} nature={closure.nature} places={places}
-      busy={resending.busy} error={resending.state.name === "uncertain" ? t(pending.act === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain") : ""}
+      busy={resending.busy} error={uncertainMessage(pending.act, resending.state)}
       onSend={resend} onBack={locked ? undefined : back} />;
   }
   if (!locked && place.status !== "open")
@@ -339,8 +337,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
 
   const waiting = command.state.name === "open" && command.state.refusal !== null
     && (command.state.refusal.code === "place_close_balance_stale" || command.state.refusal.code === "place_undo_preview_stale");
-  const error = command.state.name === "uncertain"
-    ? t(act === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain")
+  const error = command.state.name === "uncertain" ? uncertainMessage(act, command.state)
     : command.state.name === "open" && command.state.refusal?.code === "place_close_date_stale"
       ? t("placeEnding.refuseDateStale", { date: formatLongDate(language, Date.parse(`${basis.accountingDate}T12:00:00Z`), "UTC") })
     : command.state.name === "open" && command.state.refusal && refusal.current ? refusalMessage(refusal.current, act, translator)

@@ -4,6 +4,7 @@ import { formatDateTime, formatList, formatLongDate, type MessageKey, type Trans
 import { amountMinorUnits, type AmountSession } from "../amount/session";
 import { formatMoney } from "../money";
 import type { api } from "../api";
+import { attemptRefusals } from "../useFrozenCommand";
 
 export type Closure = FunctionReturnType<typeof api.accounting.placeClosure>;
 export type UndoPreview = FunctionReturnType<typeof api.accounting.previewUndoPlace>;
@@ -380,6 +381,37 @@ function fallbackBlocker(code: string): UndoBlocker | null {
   if (code === "place_undo_dependency" || code === "place_undo_ended_counterparty") return { code, places: [] };
   if (code === "place_future_entries" || code === "place_undo_invalid_entry") return null;
   return { code } as UndoBlocker;
+}
+
+/**
+ * Refusals that answer a Close or Undo Start sent earlier whose outcome is unknown. Each is raised only after the
+ * command looked for a receipt under the request's key and found none (src/accounting/commands/closePlace.ts after
+ * line 76, convex/accountingUndo.ts after line 100), or depends on the request alone and so refused the first send too
+ * (idempotency_key_required, name_required, category_name_too_long, description_invalid). Not here on purpose:
+ * workspace_membership_required, checked before the lookup; idempotency_key_conflict, which means a receipt exists
+ * under the key; and any code this app doesn't know.
+ */
+const settlingRefusals: ReadonlySet<string> = new Set([
+  "place_close_balance_stale", "place_close_date_stale", "place_undo_preview_stale",
+  "place_default_replacement_required", "place_default_replacement_invalid", "default_place_stale", "defaults_unavailable",
+  "place_close_line_invalid", "place_close_balance_mismatch", "transfer_profiles_must_differ", "financial_account_profile_not_found",
+  "amount_must_be_positive", "currency_mismatch", "category_not_found", "category_nature_required", "category_nature_mismatch",
+  "activity_before_opening", "locked_period", "ledger_summary_not_ready", "ledger_totals_out_of_range", ...blockerCodes,
+  "idempotency_key_required", "name_required", "category_name_too_long", "description_invalid",
+]);
+
+/** Whether a refusal of a resent Close or Start answers the earlier send. A blocker sent as context is thrown only after the lookup. */
+export function settlesEnding(code: string, error: unknown) {
+  if (settlingRefusals.has(code)) return true;
+  const data: unknown = error instanceof ConvexError ? error.data : null;
+  const context = data !== null && typeof data === "object" && "context" in data ? data.context : null;
+  return context !== null && typeof context === "object" && "code" in context && context.code === code;
+}
+
+/** Why a resend was turned away while its request stays held: the attempt's own reason, or the code for support. */
+export function heldReason(code: string, translator: Translator) {
+  const known = attemptRefusals.has(code) || code === "workspace_membership_required" ? refusals[code] : undefined;
+  return translator.t(known ?? "placeEnding.refuseOther", { code });
 }
 
 export function refusalMessage(refusal: { code: string; blocker: UndoBlocker | null }, act: Act, translator: Translator) {
