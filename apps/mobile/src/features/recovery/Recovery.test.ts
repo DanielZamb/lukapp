@@ -620,7 +620,6 @@ test.each([
   expect(button(screen, "See the transfer")).toBeDefined();
   expect(screen.findAll((node) => node.type === Text && node.children.join("") === "Could not confirm the transfer. Retry to safely check the same movement.")).toHaveLength(1);
   await act(async () => { button(screen, "See the transfer").props.onPress(); });
-  expect(screen.findByType(Header).props.onBack).toBeUndefined();
   remote.move.mockRejectedValueOnce(new ConvexError({ kind: "recovery", code }));
   await act(async () => { button(screen, "Retry transfer").props.onPress(); });
   expect(remote.move.mock.calls.map(([request]) => request)).toEqual([sentMove]);
@@ -628,6 +627,43 @@ test.each([
   expect(phone.has(storedKey)).toBe(false);
   await act(async () => { screen.findByType(Header).props.onBack(); });
   expect(screen.findByType(RecoveryPlanScreen).props.unconfirmedMove).toBe(false);
+});
+
+test.each(["header", "android", "ios"])("a stored transfer can be left with %s back and found again on its plan, twice, while a new send keeps back hidden", async (method) => {
+  storeOnPhone({ act: "move", request: sentMove });
+  const { screen, onBack } = await open([plan], true);
+  for (let round = 0; round < 2; round++) {
+    await act(async () => { button(screen, "See the transfer").props.onPress(); });
+    expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ pending: true, editable: false, canDismiss: true, sourceId: "daily",
+      amount: typedAmount("300000") });
+    if (round === 1) {
+      remote.move.mockRejectedValueOnce(new Error("offline"));
+      await act(async () => { button(screen, "Retry transfer").props.onPress(); });
+    }
+    await act(async () => {
+      if (method === "header") screen.findByType(Header).props.onBack();
+      else if (method === "android") stack.goBack();
+      else stack.dispatch(StackActions.pop(1));
+    });
+    expect(screen.findByType(RecoveryPlanScreen).props).toMatchObject({ unconfirmedMove: true, plan: { id: "repair" } });
+  }
+  expect(onBack).not.toHaveBeenCalled();
+  expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index", "plans", "recovery"]);
+  expect(remote.move.mock.calls.map(([request]) => request)).toEqual([sentMove]);
+  expect(storedRequests()).toEqual([{ act: "move", request: sentMove }]);
+});
+
+test("a stored activation can be left from its proposal and is shown again from the same expense", async () => {
+  storeOnPhone({ act: "activate", request: sentActivation });
+  const { screen } = await open();
+  for (let round = 0; round < 2; round++) {
+    await act(async () => { screen.findByType(ListRow).props.onPress(); });
+    expect(screen.findByType(RecoveryDraft).props).toMatchObject({ pending: true, editable: false, canDismiss: true });
+    await act(async () => { stack.goBack(); });
+    expect(screen.findByType(RecoveryCandidates)).toBeDefined();
+  }
+  expect(remote.activate).not.toHaveBeenCalled();
+  expect(storedRequests()).toEqual([{ act: "activate", request: sentActivation }]);
 });
 
 test("a retry turned away before the server looked keeps the stored transfer frozen and on the phone across another restart", async () => {

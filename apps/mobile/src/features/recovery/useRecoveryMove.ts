@@ -103,8 +103,8 @@ export function useRecoveryMove(
     sourceId, unavailable, amount: form.amount, busy: command.busy, pending, error, editable: !command.frozen,
     canSubmit: !command.busy && (pending || (seed.plan.status === "active" && !!sourceId && !unavailable
       && sourceId !== seed.plan.destinationFinancialAccountProfileId && shownMinorUnits > 0)),
-    canDismiss: !command.frozen,
-    dismiss: (close: () => void) => { if (command.canEdit()) close(); },
+    canDismiss: !command.frozen || (state.name === "uncertain" && state.carried),
+    dismiss: (close: () => void) => { if (command.canLeave()) close(); },
     onSource: (id: string) => { if (command.canEdit()) setForm((now) => ({ ...now, source: choosePlace(now.source, id) })); },
     onAmount: (value: AmountSession) => { if (command.canEdit() && value.currency === seed.plan.currency) setForm((now) => ({ ...now, amount: value })); },
     submit: async () => { await command.submit(build); },

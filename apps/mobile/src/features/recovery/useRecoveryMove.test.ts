@@ -380,7 +380,7 @@ test("a reopened movement cannot be edited or replaced by a new one before it is
   const move = await open(api);
   const kept = move();
   await act(async () => { kept.onAmount(money("9.000")); kept.onSource("daily"); });
-  expect(move()).toMatchObject({ sourceId: "savings", amount: typedAmount("1000"), editable: false, canDismiss: false, canSubmit: true });
+  expect(move()).toMatchObject({ sourceId: "savings", amount: typedAmount("1000"), editable: false, canDismiss: true, canSubmit: true });
   await act(async () => { await kept.submit(); });
   expect(api.move.mock.calls.map(([request]) => request)).toEqual([stored]);
   expect(api.keep).not.toHaveBeenCalled();

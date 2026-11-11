@@ -115,8 +115,8 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     installmentCount: form.months, amount: form.amount, destinationId: form.destination.id, unavailable, busy: command.busy,
     pending, error, editable: !command.frozen, suggestion,
     canSubmit: !command.busy && (pending || (!!form.destination.id && !unavailable && ready)),
-    canDismiss: !command.frozen,
-    dismiss: (close: () => void) => { if (command.canEdit()) close(); },
+    canDismiss: !command.frozen || (state.name === "uncertain" && state.carried),
+    dismiss: (close: () => void) => { if (command.canLeave()) close(); },
     onMonths: (count: MonthCount) => {
       if (command.canEdit())
         setForm((now) => ({ ...now, months: count, amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, count)) }));
