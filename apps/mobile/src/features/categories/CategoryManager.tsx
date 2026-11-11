@@ -1,7 +1,7 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useAction, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
-import { useFormState, withFields, type AtPress } from "../amount/useAmountState";
+import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
 import { ActivityIndicator, BackHandler, Text, View } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
@@ -51,7 +51,7 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
   const openedInitial = useRef(false);
   const nature = useNatureSuggestion(editor?.kind === "custom" ? editor.name : "");
   useEffect(() => { change({ suggestion: { key: nature.key ?? "", suggested: nature.suggested } }); }, [nature.key, nature.suggested]);
-  const answerOf = (shown: EditableCategory | AtPress<EditableCategory> | null, suggestion: ManagerForm["suggestion"]) =>
+  const answerOf = (shown: EditableCategory | ReadAtPress<EditableCategory> | null, suggestion: ManagerForm["suggestion"]) =>
     shown?.kind === "custom" ? natureAnswer(shown, suggestion) : null;
   const answer = answerOf(editor, form.suggestion);
   const open = editor !== null;
@@ -80,12 +80,12 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
     });
     return () => subscription.remove();
   }, [open]);
-  const duplicateOf = (shown: EditableCategory | AtPress<EditableCategory>) => !!categories?.some((category) =>
+  const duplicateOf = (shown: EditableCategory | ReadAtPress<EditableCategory>) => !!categories?.some((category) =>
     (shown.kind !== "edit" || category.id !== shown.category.id) &&
     category.normalizedName === categoryNameKey(shown.name),
   );
   /** Whether a save may be sent; rendering asks with the form, a press with what it reads. */
-  const confirmable = (now: ManagerForm | AtPress<ManagerForm>) => {
+  const confirmable = (now: ManagerForm | ReadAtPress<ManagerForm>) => {
     const shown = now.editor;
     return !!shown && categories !== undefined && !!shown.name.trim()
       && shown.name.trim().length <= 80 && !duplicateOf(shown) && (shown.kind === "edit" || answerOf(shown, now.suggestion) !== null);

@@ -38,7 +38,7 @@ import {
   type AmountReview,
   type AmountSession,
 } from "../amount/session";
-import { useFormState, withFields, type AtPress } from "../amount/useAmountState";
+import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -190,7 +190,7 @@ type Editor = {
   blocked: boolean;
 };
 /** The editor as rendered or as read at a press; only the press reading can send its amounts. */
-type EditorView = Editor | AtPress<Editor>;
+type EditorView = Editor | ReadAtPress<Editor>;
 
 function composerFields(account: Account, date: string) {
   return {
@@ -338,7 +338,7 @@ export function usePostingEditor(
     setPosted(null);
     setError("");
   }
-  function snapshotConfirmed(binding: IntakeBinding, now: AtPress<Editor>): IntakeSuggestion {
+  function snapshotConfirmed(binding: IntakeBinding, now: ReadAtPress<Editor>): IntakeSuggestion {
     const currency = binding.facts.currency;
     if (currency !== "COP" && currency !== "USD") throw new Error("Unsupported Candidate currency");
     return {
@@ -460,7 +460,7 @@ export function usePostingEditor(
       openedAmount: next.editor.text !== now.amount.editor.text || next.review !== now.amount.review ? null : now.openedAmount,
     }));
   }
-  function buildEntry(now: AtPress<Editor>): PendingPosting {
+  function buildEntry(now: ReadAtPress<Editor>): PendingPosting {
     const setupNow = now.setup;
     if (setupNow) {
       if (!setupNow.productKind) throw new Error("Choose Credit card or Loan");

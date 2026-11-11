@@ -25,7 +25,7 @@ import { SetupCategories } from "./categories/SetupCategories";
 import { formatMoney } from "./money";
 import { AmountField } from "./amount/AmountField";
 import { displayedMinorUnits, openAmount } from "./amount/session";
-import { useAmountState, useFormState, withFields, type AtPress } from "./amount/useAmountState";
+import { useAmountState, useFormState, withFields, type ReadAtPress } from "./amount/useAmountState";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { deviceTimeZone } from "./timeZones";
 import {
@@ -71,7 +71,7 @@ type SetupAnswers = {
 /** Where the save stands: a held submission is resent as it was built. */
 type SetupRun = { phase: SetupPhase; busy: boolean };
 /** The held submission as it was built; a press reads it through a read-only view of the same plain data. */
-function heldSubmission(phase: AtPress<SetupPhase>): SetupSubmission | null {
+function heldSubmission(phase: ReadAtPress<SetupPhase>): SetupSubmission | null {
   return phase.kind === "retryDefaults" ? phase.submission as SetupSubmission : null;
 }
 const setupConflict = z.object({ code: z.literal("setup_conflict") });

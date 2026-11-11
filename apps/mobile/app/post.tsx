@@ -17,7 +17,7 @@ import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate } from "../src/features/money";
 import { openAmount, sendableMinorUnits } from "../src/features/amount/session";
-import { useFormState, withFields, type AtPress } from "../src/features/amount/useAmountState";
+import { useFormState, withFields, type ReadAtPress } from "../src/features/amount/useAmountState";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
@@ -235,7 +235,7 @@ function PostMoney({
       needsBudgetCheck: entry.entryType === "normal" && entry.direction === "out" && !entry.pending,
     };
   };
-  const queueable = (entry: EntryView, at: AtPress<RouteState> | RouteState) =>
+  const queueable = (entry: EntryView, at: ReadAtPress<RouteState> | RouteState) =>
     entry.canSubmit && !entry.setup && !at.impact && checksOf(entry).completeEntry && !entry.pending && !candidateId;
   const { categoryValid, placesValid, completeEntry, needsBudgetCheck } = checksOf(editor);
   const budget = useQuery(

@@ -2,7 +2,7 @@ import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { useAction, useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFormState, withFields, type AtPress } from "../amount/useAmountState";
+import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
 import { suggestedCategoryName } from "./suggestedNames";
 import { useT } from "../../i18n";
 import { api } from "../api";
@@ -75,7 +75,7 @@ export function useCategoryPicker(
   const { search, editor, replaceSelection } = form;
   const nature = useNatureSuggestion(editor?.kind === "custom" ? editor.name : "");
   useEffect(() => { change({ suggestion: { key: nature.key ?? "", suggested: nature.suggested } }); }, [nature.key, nature.suggested]);
-  const answerOf = (now: PickerForm | AtPress<PickerForm>) => now.editor?.kind === "custom" ? natureAnswer(now.editor, now.suggestion) : null;
+  const answerOf = (now: PickerForm | ReadAtPress<PickerForm>) => now.editor?.kind === "custom" ? natureAnswer(now.editor, now.suggestion) : null;
   const answer = answerOf(form);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -146,7 +146,7 @@ export function useCategoryPicker(
     ? categories?.map((category) => category.name)
     : options?.map((option) => option.name);
   /** Whether the open editor may be saved; rendering asks with the form, a press with what it reads. */
-  const confirmable = (now: PickerForm | AtPress<PickerForm>) => {
+  const confirmable = (now: PickerForm | ReadAtPress<PickerForm>) => {
     const shown = now.editor;
     const answered = answerOf(now);
     return !!shown && (shown.kind === "restyle" || (

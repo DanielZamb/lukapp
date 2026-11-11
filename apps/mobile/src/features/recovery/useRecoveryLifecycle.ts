@@ -1,7 +1,7 @@
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
-import { useFormState, type AtPress } from "../amount/useAmountState";
+import { useFormState, type ReadAtPress } from "../amount/useAmountState";
 import { useFrozenCommand } from "../useFrozenCommand";
 import {
   correctionTargets,
@@ -115,7 +115,7 @@ export function useRecoveryCorrection(
   const { state } = command;
   const targets = correctionTargets(seed.plans, seed.plan, seed.contribution);
   /** Whether a correction may be sent with these answers; rendering asks with the form, a press with what it reads. */
-  const ready = ({ target, reason }: Correction | AtPress<Correction>) => {
+  const ready = ({ target, reason }: Correction | ReadAtPress<Correction>) => {
     const trimmed = reason.trim();
     return seed.contribution.status === "active" && trimmed.length > 0 && trimmed.length <= REASON_LIMIT
       && (target?.kind === "remove" || (target?.kind === "plan" && targets.some((plan) => plan.id === target.planId)));

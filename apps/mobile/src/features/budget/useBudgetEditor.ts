@@ -7,7 +7,7 @@ import { useT, type MessageKey } from "../../i18n";
 import { admissionFailure } from "../../device-admission/failure";
 import { api } from "../api";
 import { amountOfMinorUnits, amountSendable, displayedMinorUnits, openAmount, sendableMinorUnits, type AmountAtPress, type AmountSession } from "../amount/session";
-import { useFormState, withFields, type AtPress } from "../amount/useAmountState";
+import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
 import type { BudgetJar, RemovedLimit } from "./model";
 
 type AmountArgs = FunctionArgs<typeof api.budget.setCategoryLimit>;
@@ -114,7 +114,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
   }, []);
   const { minorUnits, issue } = limitIssue(form.amount, seed.jar?.limitMinorUnits);
   /** Whether `act` may be sent; rendering asks with the form, a press with what it reads. */
-  const sendable = (act: LimitAct, now: BudgetForm | AtPress<BudgetForm>) =>
+  const sendable = (act: LimitAct, now: BudgetForm | ReadAtPress<BudgetForm>) =>
     !now.busy && !now.blocked && (now.pendingAct ? now.pendingAct === act : readyFor(act, now.categoryId, now.amount, seed));
 
   function build(act: LimitAct, selectedCategoryId: string, pressed: AmountAtPress): LimitCommand {
