@@ -157,6 +157,7 @@ export const placeEnding: Messages<typeof en> = {
   undoLoading: "Calculando qué cambia…",
   undoChanged: "Los movimientos de este lugar cambiaron, así que actualizamos las cifras. Revísalas y vuelve a escribir el nombre.",
   undoMonthChanged: "Empezó un mes nuevo, así que actualizamos las cifras. Revísalas y vuelve a escribir el nombre.",
+  undoUnchanged: "Revisamos otra vez este lugar y las cifras son las mismas, pero no empezó a deshacerse. Intenta de nuevo, o vuelve atrás y ábrelo más tarde.",
   undoEntries_one: "Esto reversa {count} movimiento.",
   undoEntries_other: "Esto reversa {count} movimientos.",
   undoLocked_one: "De esos, {count} es de un mes que ya cerraste.",
