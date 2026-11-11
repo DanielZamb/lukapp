@@ -180,10 +180,13 @@ function capturedAmounts(file: string, source: string): string[] {
       const walk = (node: ts.Node) => { visit(node); if (!isFunction(node)) ts.forEachChild(node, walk); };
       if (owner.body) ts.forEachChild(owner.body, walk);
     };
-    const reads = (node: ts.Node, names: Set<string>) => {
+    const reads = (node: ts.Node, names: ReadonlySet<string>) => {
       let hit = false;
-      const walk = (at: ts.Node) => { if (ts.isIdentifier(at) && names.has(at.text) && isRead(at)) hit = true; else ts.forEachChild(at, walk); };
-      walk(node);
+      const walk = (at: ts.Node, visible: ReadonlySet<string>) => {
+        const inner = isFunction(at) ? new Set([...visible].filter((name) => !ownNames(at).has(name))) : visible;
+        if (ts.isIdentifier(at) && inner.has(at.text) && isRead(at)) hit = true; else ts.forEachChild(at, (child) => walk(child, inner));
+      };
+      walk(node, names);
       return hit;
     };
     for (let grew = true; grew;) {

@@ -7,7 +7,7 @@ import { formatLongDate, useT, type MessageKey } from "../../i18n";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { amountOfMinorUnits, openAmount, type AmountSession } from "../amount/session";
-import { useAmountState } from "../amount/useAmountState";
+import { useFormState, withFields } from "../amount/useAmountState";
 import { api } from "../api";
 import { formatMoney } from "../money";
 import { useFrozenCommand, type CommandState } from "../useFrozenCommand";
@@ -56,6 +56,19 @@ export type PlaceEndingProps = {
   onSources: () => void;
 };
 
+/** The person's answers and where they are in the flow, read once by a press. */
+type Flow = {
+  act: Act | null;
+  steps: Step[];
+  adding: boolean;
+  replacement: string | null;
+  lines: LineDraft[];
+  typed: string;
+  /** The balance and day the Close answers settle, as reviewed. */
+  reviewed: Reviewed | null;
+  receipt: CloseReceipt | null;
+};
+
 /** After a balance change, the person is returned to the step that depends on it; the steps before it stay. */
 function restack(steps: Step[], zero: boolean): Step[] {
   const at = steps[steps.length - 1]!.name;
@@ -81,14 +94,12 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const calendar = useWorkspaceCalendar(timeZone);
   const places = useQuery(api.accounting.listFinancialAccountProfiles, { workspaceId, ...everyPlace });
   const closure = useQuery(api.accounting.placeClosure, { workspaceId, financialAccountProfileId: profileId });
-  const [act, setAct] = useState<Act | null>(null);
-  const [steps, setSteps] = useState<Step[]>([{ name: "choose" }]);
-  const [replacement, setReplacement] = useState<string | null>(null);
-  const [lines, setLines, readLines] = useAmountState<LineDraft[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [typed, setTyped] = useState("");
-  const [receipt, setReceipt] = useState<CloseReceipt | null>(null);
-  const [reviewed, setReviewed] = useState<Reviewed | null>(null);
+  const [flow, setFlow, readFlow] = useFormState<Flow>({
+    act: null, steps: [{ name: "choose" }], adding: false, replacement: null, lines: [], typed: "", reviewed: null, receipt: null,
+  });
+  const change = (patch: Partial<Flow>) => setFlow((now) => withFields(now, patch));
+  const moveSteps = (next: (steps: Step[]) => Step[]) => setFlow((now) => ({ ...now, steps: next(now.steps) }));
+  const { act, steps, adding, replacement, lines, typed, reviewed, receipt } = flow;
   const [notice, setNotice] = useState<StaleNotice | null>(null);
   /** The preview whose numbers are on the confirmation, and the workspace month the server read it in. */
   const [shownPreview, setShownPreview] = useState<{ fingerprint: string; month: string } | null>(null);
@@ -98,7 +109,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const [sendBlock, setSendBlock] = useState<SourceBlocker | null>(null);
   const nextLine = useRef(0);
   const leaving = useRef(false);
-  const categories = useQuery(api.accounting.listUserCategories, act === "close" ? { workspaceId } : "skip");
+  const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
   const { blocker: sources, atSend: sourcesAtSend } = useSourceBlocker(workspaceId, profileId);
   const refusal = useRef<ReturnType<typeof refusalOf>>(null);
   const refusalCode = (error: unknown) => { refusal.current = refusalOf(error); return refusal.current?.code ?? null; };
@@ -114,7 +125,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const close = useFrozenCommand<CloseRequest, CloseReceipt>({
     send: useAction(api.accounting.closePlace), reportFailure, refusalCode,
     settles: settlesEnding, keep: (request) => unresolved.keep({ act: "close", request }), forget: settle,
-    onDone: (done) => { setReceipt(done); setSteps([{ name: "review" }]); },
+    onDone: (done) => change({ receipt: done, steps: [{ name: "review" }] }),
   });
   const undo = useFrozenCommand<UndoRequest, UndoReceipt>({
     send: useAction(api.accounting.startUndoPlace), reportFailure, refusalCode,
@@ -131,7 +142,9 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const uncertainMessage = (ending: Act, state: CommandState<unknown>) => state.name !== "uncertain" ? ""
     : [t(ending === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain"), ...(state.refusal ? [heldReason(state.refusal, translator)] : [])].join(" ");
   const command = act === "undo" ? undo : close;
+  const commandOf = (ending: Act | null) => ending === "undo" ? undo : close;
   const locked = close.frozen || undo.frozen;
+  const lockedNow = () => !close.canEdit() || !undo.canEdit();
   const step = steps[steps.length - 1]!;
   const place = places?.find((item) => item.id === profileId);
 
@@ -146,22 +159,24 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     go();
   }
   function back() {
-    if (locked) return;
+    if (lockedNow()) return;
     interact();
-    if (receipt) return leave(onEnded);
+    const now = readFlow();
+    if (now.receipt) return leave(onEnded);
     // A Place that ended or started undoing elsewhere has no step left to return to.
     if (place && place.status !== "open") return leave(onBack);
-    if (command.state.name === "open" && command.state.refusal) command.release();
-    if (adding) return setAdding(false);
-    if (step.name === "confirm") { setShownPreview(null); setPreviewChanged(null); }
-    if (step.name === "lines" || step.name === "review") setNotice(null);
-    if (steps.length > 1) return setSteps((current) => current.slice(0, -1));
+    commandOf(now.act).dismissRefusal();
+    if (now.adding) return change({ adding: false });
+    const at = now.steps[now.steps.length - 1]!;
+    if (at.name === "confirm") { setShownPreview(null); setPreviewChanged(null); }
+    if (at.name === "lines" || at.name === "review") setNotice(null);
+    if (now.steps.length > 1) return moveSteps((current) => current.slice(0, -1));
     leave(onBack);
   }
   usePreventRemove(locked || steps.length > 1 || adding || receipt !== null, ({ data }) => {
     if (leaving.current) return navigation.dispatch(data.action);
     if (data.action.type === "GO_BACK" || data.action.type === "POP") back();
-    else if (!locked) navigation.dispatch(data.action);
+    else if (!lockedNow()) navigation.dispatch(data.action);
   });
 
   const others = (places ?? []).filter((item) => item.status === "open" && item.id !== profileId);
@@ -173,14 +188,10 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   // The facts under an open Close moved: withdraw what was built on them before this render reaches the screen.
   const changed = act === "close" && reviewed && !locked && !receipt ? staleNotice(reviewed, live, notice) : null;
   if (changed && reviewed) {
-    setReviewed(live);
     setNotice(changed);
-    if (!sameMoney(reviewed.balance, live.balance)) {
-      const situation = balanceCase(live);
-      setLines(keepAllowed(lines, situation));
-      setAdding(false);
-      setSteps(restack(steps, situation === "zero"));
-    }
+    const situation = balanceCase(live);
+    change({ reviewed: live, ...(sameMoney(reviewed.balance, live.balance) ? {}
+      : { lines: keepAllowed(lines, situation), adding: false, steps: restack(steps, situation === "zero") }) });
     if (close.state.name === "open" && close.state.refusal) close.release();
   }
   // The Undo preview changed while its numbers were on the confirmation: those numbers and the typed name no longer count.
@@ -189,7 +200,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     if (shownPreview === null) setShownPreview({ fingerprint: preview.fingerprint, month });
     else if (preview.fingerprint !== shownPreview.fingerprint) {
       setShownPreview({ fingerprint: preview.fingerprint, month });
-      setTyped("");
+      change({ typed: "" });
       setPreviewChanged(month === shownPreview.month ? "placeEnding.undoChanged" : "placeEnding.undoMonthChanged");
       if (undo.state.name === "open" && undo.state.refusal) undo.release();
     }
@@ -201,35 +212,39 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const balance = basis.balance;
   const situation = balanceCase(basis);
 
-  function sequence(chosen: Act): Step[] {
-    const tail: Step[] = chosen === "undo" ? [{ name: "confirm" }] : situation === "zero" ? [{ name: "review" }] : [{ name: "lines" }, { name: "review" }];
+  /** The steps of `chosen`; a Close of a zero balance has no answers to give. */
+  function sequence(chosen: Act, basisNow: Reviewed | null): Step[] {
+    const zero = basisNow !== null && balanceCase(basisNow) === "zero";
+    const tail: Step[] = chosen === "undo" ? [{ name: "confirm" }] : zero ? [{ name: "review" }] : [{ name: "lines" }, { name: "review" }];
     return closure?.requiresReplacementDefault ? [{ name: "default" }, ...tail] : tail;
   }
   function advance() {
-    if (!act) return;
+    const now = readFlow();
+    if (!now.act) return;
     interact();
-    const below = steps[steps.length - 2];
+    const at = now.steps[now.steps.length - 1]!;
+    const below = now.steps[now.steps.length - 2];
     // Choosing again from a confirmation returns to that confirmation.
-    if (step.name === "default" && (below?.name === "review" || below?.name === "confirm"))
-      return setSteps((current) => current.slice(0, -1));
-    if (step.name === "lines") setNotice(null);
-    const order = sequence(act);
-    const at = order.findIndex((item) => item.name === step.name);
-    const next = order[at + 1];
-    if (next) setSteps((current) => [...current, next]);
+    if (at.name === "default" && (below?.name === "review" || below?.name === "confirm"))
+      return moveSteps((current) => current.slice(0, -1));
+    if (at.name === "lines") setNotice(null);
+    const order = sequence(now.act, now.reviewed);
+    const next = order[order.findIndex((item) => item.name === at.name) + 1];
+    if (next) moveSteps((current) => [...current, next]);
   }
   function choose(chosen: Act) {
     interact();
-    if (close.state.name === "open" && close.state.refusal) close.release();
-    if (undo.state.name === "open" && undo.state.refusal) undo.release();
+    close.dismissRefusal();
+    undo.dismissRefusal();
     setResolvedNotice(null);
-    if (chosen !== act) { setLines([]); setTyped(""); setAdding(false); }
-    setAct(chosen);
-    setReviewed(chosen === "close" ? live : null);
+    const basisNow = chosen === "close" ? live : null;
+    change({
+      ...(chosen !== readFlow().act ? { lines: [], typed: "", adding: false } : {}),
+      act: chosen, reviewed: basisNow, steps: [{ name: "choose" }, sequence(chosen, basisNow)[0]!],
+    });
     setNotice(null);
     setShownPreview(null);
     setPreviewChanged(null);
-    setSteps([{ name: "choose" }, sequence(chosen)[0]!]);
   }
 
   if (unresolved.stored === undefined) return <LoadingScreen onBack={back} />;
@@ -261,52 +276,50 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     if (server === undefined || sources === undefined) return <LoadingScreen onBack={back} />;
     const blockers: Blocker[] = [...(sources ? [sources] : []), ...server];
     if (blockers.length)
-      return <BlockersScreen act={act} name={name} blockers={blockers} onBack={() => { interact(); setSteps([{ name: "choose" }]); }}
+      return <BlockersScreen act={act} name={name} blockers={blockers} onBack={() => { interact(); change({ steps: [{ name: "choose" }] }); }}
         onSources={() => { interact(); onSources(); }} onCloseInstead={() => choose("close")} />;
   }
 
   if (step.name === "default")
     return <DefaultScreen act={act} name={name} places={others} selected={replacement}
-      onSelect={(id) => { interact(); setReplacement(id); }}
-      onContinue={replacement && others.some((item) => item.id === replacement) ? advance : undefined} onBack={back} />;
+      onSelect={(id) => { interact(); change({ replacement: id }); }}
+      onContinue={replacement && others.map((item) => item.id).includes(replacement) ? advance : undefined} onBack={back} />;
 
-  const findLine = (id: string) => readLines().find((line) => line.id === id);
-  function update(id: string, change: Partial<LineDraft>) {
-    setLines((current) => current.map((line) => line.id === id ? { ...line, ...change } : line));
+  const findLine = (id: string) => readFlow().lines.find((line) => line.id === id);
+  function update(id: string, patch: Partial<LineDraft>) {
+    setFlow((now) => ({ ...now, lines: now.lines.map((line) => line.id === id ? { ...line, ...patch } : line) }));
   }
-  const amountFor = (minorUnits: number): AmountSession => minorUnits > 0
-    ? amountOfMinorUnits(balance.currency, minorUnits, { hideZeroDecimals: true }) : openAmount(balance.currency);
+  const amountFor = (currency: string, minorUnits: number): AmountSession => minorUnits > 0
+    ? amountOfMinorUnits(currency, minorUnits, { hideZeroDecimals: true }) : openAmount(currency);
   function addLine(answer: Answer) {
-    if (!close.canEdit()) return;
+    const now = readFlow();
+    if (!close.canEdit() || !now.reviewed) return;
     interact();
-    const current = readLines();
-    const remaining = remainingMinorUnits(balance, current);
+    const owed = now.reviewed.balance;
     const { kind } = answerSpec(answer);
     const only = kind === "transfer" && others.length === 1 ? { id: others[0]!.id, name: others[0]!.name } : null;
-    const line: LineDraft = { id: `line-${nextLine.current++}`, answer, target: only, amount: amountFor(remaining) };
-    const nextLines = [...current, line];
-    setLines(nextLines);
-    setAdding(false);
-    if (kind === "adjustment" || only) {
-      if (nextLines.length === 1 && lineComplete(line) && remainingMinorUnits(balance, nextLines) === 0) {
-        setNotice(null);
-        setSteps((current) => [...current, { name: "review" }]);
-      }
-    } else setSteps((current) => [...current, { name: "pick", lineId: line.id }]);
+    const line: LineDraft = { id: `line-${nextLine.current++}`, answer, target: only, amount: amountFor(owed.currency, remainingMinorUnits(owed, now.lines)) };
+    const nextLines = [...now.lines, line];
+    const answered = (kind === "adjustment" || only) && nextLines.length === 1 && lineComplete(line) && remainingMinorUnits(owed, nextLines) === 0;
+    if (answered) setNotice(null);
+    change({ lines: nextLines, adding: false, steps: answered ? [...now.steps, { name: "review" }]
+      : kind === "adjustment" || only ? [...now.steps] : [...now.steps, { name: "pick", lineId: line.id }] });
   }
-  function pickTarget(lineId: string, option: PickOption) {
-    if (!close.canEdit()) return;
+  /** Gives the line the Pick step is open for the option chosen there. */
+  function pickTarget(option: PickOption) {
+    const now = readFlow();
+    const at = now.steps[now.steps.length - 1];
+    if (!close.canEdit() || !now.reviewed || at?.name !== "pick") return;
     interact();
-    const nextLines = readLines().map((line) => line.id === lineId ? { ...line, target: { id: option.id, name: option.label } } : line);
-    setLines(nextLines);
-    const rest = steps.slice(0, -1);
+    const nextLines = now.lines.map((line) => line.id === at.lineId ? { ...line, target: { id: option.id, name: option.label } } : line);
+    const rest = now.steps.slice(0, -1);
     const firstAnswer = rest[rest.length - 1]?.name === "lines" && nextLines.length === 1 && nextLines.every(lineComplete)
-      && remainingMinorUnits(balance, nextLines) === 0;
+      && remainingMinorUnits(now.reviewed.balance, nextLines) === 0;
     if (firstAnswer) setNotice(null);
-    setSteps(firstAnswer ? [...rest, { name: "review" }] : rest);
+    change({ lines: nextLines, steps: firstAnswer ? [...rest, { name: "review" }] : rest });
   }
-  const repick = (lineId: string) => { if (close.canEdit()) { interact(); setSteps((current) => [...current, { name: "pick", lineId }]); } };
-  const repickDefault = () => { if (command.canEdit()) { interact(); setSteps((current) => [...current, { name: "default" }]); } };
+  const repick = (lineId: string) => { if (close.canEdit()) { interact(); moveSteps((current) => [...current, { name: "pick", lineId }]); } };
+  const repickDefault = () => { if (commandOf(readFlow().act).canEdit()) { interact(); moveSteps((current) => [...current, { name: "default" }]); } };
 
   if (step.name === "pick") {
     const line = findLine(step.lineId);
@@ -317,7 +330,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
       : categories?.filter((category) => category.nature === "Expense")
         .map((category) => ({ id: category.id, label: category.name, emoji: category.style.emoji }));
     return <PickScreen kind={kind === "transfer" ? "place" : "category"} answer={line.answer} options={options} selected={line.target?.id ?? null}
-      onSelect={(option) => pickTarget(line.id, option)} onBack={back} />;
+      onSelect={pickTarget} onBack={back} />;
   }
 
   const choiceOf = (line: LineDraft): ChoiceView | null => !line.target ? null
@@ -334,10 +347,12 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   if (step.name === "lines")
     return <LinesScreen name={name} situation={situation} balance={balance} lines={lines} adding={adding || lines.length === 0}
       editable={!close.frozen} choiceOf={choiceOf} notice={noticeLines} blocked={unavailable}
-      onAnswer={addLine} onAdd={() => { interact(); setAdding(true); }}
-      onCancelAdd={() => { interact(); setAdding(false); }} onPick={repick}
-      onAmount={(id, amount) => { if (close.canEdit() && amount.currency === balance.currency) { interact(); update(id, { amount }); } }}
-      onRemove={(id) => { if (close.canEdit()) { interact(); setLines((current) => current.filter((line) => line.id !== id)); } }}
+      onAnswer={addLine} onAdd={() => { interact(); change({ adding: true }); }}
+      onCancelAdd={() => { interact(); change({ adding: false }); }} onPick={repick}
+      onAmount={(id, amount) => {
+        if (close.canEdit() && amount.currency === readFlow().reviewed?.balance.currency) { interact(); update(id, { amount }); }
+      }}
+      onRemove={(id) => { if (close.canEdit()) { interact(); setFlow((now) => ({ ...now, lines: now.lines.filter((line) => line.id !== id) })); } }}
       onContinue={advance} onBack={back} />;
 
   const waiting = command.state.name === "open" && command.state.refusal !== null
@@ -353,16 +368,20 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     const snapshot = preview?.snapshot ?? null;
     return <UndoConfirmScreen name={name} balance={balance} snapshot={snapshot} changed={previewChanged && t(previewChanged)}
       replacement={replacementChoice} onRepickDefault={repickDefault} typed={typed} editable={!undo.frozen}
-      onTyped={(value) => { if (undo.canEdit()) { interact(); setTyped(value); } }}
+      onTyped={(value) => { if (undo.canEdit()) { interact(); change({ typed: value }); } }}
       busy={undo.busy} uncertain={undo.state.name === "uncertain"} error={error} onBack={locked ? undefined : back}
       canConfirm={!undo.busy && (undo.state.name === "uncertain"
         || (!!snapshot && !waiting && !replacementChoice?.unavailable && typedNameMatches(typed, name)))}
-      onConfirm={() => {
+      onConfirm={(shown) => {
         interact();
-        if (!undo.frozen && !clearToSend()) return;
-        void undo.submit(() => snapshot && typedNameMatches(typed, name) && !replacementChoice?.unavailable
-          ? undoRequest({ previewFingerprint: snapshot.fingerprint, workspaceId, placeId: profileId, replacement, idempotencyKey: Crypto.randomUUID() }, t)
-          : null);
+        if (undo.canEdit() && !clearToSend()) return;
+        void undo.submit(() => {
+          const now = readFlow();
+          return shown && typedNameMatches(now.typed, name) && !(now.replacement && placeChoice(now.replacement, places, t).unavailable)
+            ? undoRequest({ previewFingerprint: shown.fingerprint, workspaceId, placeId: profileId, replacement: now.replacement,
+              idempotencyKey: Crypto.randomUUID() }, t)
+            : null;
+        });
       }} />;
   }
 
@@ -370,13 +389,14 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     notice={noticeLines} replacement={replacementChoice} unavailable={unavailable} onRepick={repick} onRepickDefault={repickDefault}
     busy={close.busy} uncertain={close.state.name === "uncertain"} error={error} onBack={locked ? undefined : back}
     canConfirm={!close.busy && (close.state.name === "uncertain" || (!unavailable && !waiting))}
-    onConfirm={() => {
+    onConfirm={(shown) => {
       interact();
-      if (!close.frozen && !clearToSend()) return;
+      if (close.canEdit() && !clearToSend()) return;
       void close.submit(() => {
-        const pressed = readLines();
-        return pressed.some((line) => choiceOf(line)?.unavailable) || replacementChoice?.unavailable ? null
-          : closeRequest({ reviewed: basis, workspaceId, place: { id: profileId, name }, lines: pressed, replacement, idempotencyKey: Crypto.randomUUID() }, t);
+        const now = readFlow();
+        return now.lines.some((line) => choiceOf(line)?.unavailable) || (now.replacement && placeChoice(now.replacement, places, t).unavailable) ? null
+          : closeRequest({ reviewed: shown, workspaceId, place: { id: profileId, name }, lines: now.lines, replacement: now.replacement,
+            idempotencyKey: Crypto.randomUUID() }, t);
       });
     }} />;
 }

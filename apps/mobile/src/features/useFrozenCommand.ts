@@ -117,6 +117,11 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
       if (!sending.current && !held.current) held.current = request;
       return submit(() => request);
     },
+    /** Clears a refusal on screen, judged at the press: a request sending or held is never touched. */
+    dismissRefusal: () => {
+      if (sending.current || held.current) return;
+      setState((current) => current.name === "open" && current.refusal ? { name: "open", refusal: null } : current);
+    },
     /** Drops an unknown outcome once the caller has re-read what the server now holds. */
     release: () => {
       if (sending.current) return;

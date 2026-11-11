@@ -13,7 +13,7 @@ import type { UnresolvedEnding } from "./unresolved";
 import {
   answerSpec, answersFor, balanceCase, blockerView, closingLineReview, lineMinorUnits, placeChoice, remainingMinorUnits, signedMoney, situationCopy,
   type Act, type Answer, type BalanceCase, type Blocker, type ChoiceView, type Closure, type CloseReceipt, type LineDraft, type PlaceProfile,
-  type UndoSnapshot,
+  type Reviewed, type UndoSnapshot,
 } from "./model";
 
 type Money = Closure["balance"];
@@ -211,7 +211,9 @@ export function ReviewScreen({ name, balance, lines, choiceOf, accountingDate, n
   busy, uncertain, error, canConfirm, onBack, onConfirm }: {
   name: string; balance: Money; lines: LineDraft[]; choiceOf: (line: LineDraft) => ChoiceView | null; accountingDate: string;
   notice: string[]; replacement: ChoiceView | null; unavailable: boolean; onRepick: (lineId: string) => void; onRepickDefault: () => void;
-  busy: boolean; uncertain: boolean; error: string; canConfirm: boolean; onBack?: () => void; onConfirm: () => void;
+  busy: boolean; uncertain: boolean; error: string; canConfirm: boolean; onBack?: () => void;
+  /** Receives the balance and day this screen showed, which the closing confirms. */
+  onConfirm: (shown: Pick<Reviewed, "balance" | "accountingDate">) => void;
 }) {
   const ui = useUi();
   const styles = useStyles();
@@ -239,7 +241,7 @@ export function ReviewScreen({ name, balance, lines, choiceOf, accountingDate, n
     {busy && <ActivityIndicator accessibilityLabel={t("placeEnding.closing")} />}
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     <PrimaryButton label={uncertain ? t("placeEnding.closeRetry") : t("placeEnding.closeConfirm", { name })}
-      trailingIcon={uncertain ? "refresh" : "checkmark"} pending={busy} disabled={!canConfirm} onPress={onConfirm} />
+      trailingIcon={uncertain ? "refresh" : "checkmark"} pending={busy} disabled={!canConfirm} onPress={() => onConfirm({ balance, accountingDate })} />
   </Screen>;
 }
 
@@ -276,7 +278,9 @@ export function UndoConfirmScreen({ name, balance, snapshot, changed, replacemen
   busy, uncertain, error, canConfirm, onConfirm, onBack }: {
   name: string; balance: Money; snapshot: UndoSnapshot | null; changed: string | null; replacement: ChoiceView | null; onRepickDefault: () => void;
   typed: string; editable: boolean; onTyped: (value: string) => void;
-  busy: boolean; uncertain: boolean; error: string; canConfirm: boolean; onConfirm: () => void; onBack?: () => void;
+  busy: boolean; uncertain: boolean; error: string; canConfirm: boolean; onBack?: () => void;
+  /** Receives the preview this screen showed, whose fingerprint the start confirms. */
+  onConfirm: (shown: UndoSnapshot | null) => void;
 }) {
   const ui = useUi();
   const styles = useStyles();
@@ -309,7 +313,7 @@ export function UndoConfirmScreen({ name, balance, snapshot, changed, replacemen
     {busy && <ActivityIndicator accessibilityLabel={t("placeEnding.undoStarting")} />}
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     <PrimaryButton label={uncertain ? t("placeEnding.undoRetry") : t("placeEnding.undoConfirm", { name })}
-      trailingIcon={uncertain ? "refresh" : "arrow-undo"} pending={busy} disabled={!canConfirm} onPress={onConfirm} />
+      trailingIcon={uncertain ? "refresh" : "arrow-undo"} pending={busy} disabled={!canConfirm} onPress={() => onConfirm(snapshot)} />
   </Screen>;
 }
 
