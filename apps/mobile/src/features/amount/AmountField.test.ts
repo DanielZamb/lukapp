@@ -226,6 +226,47 @@ test("third review, finding 4: the sign key never writes the native text, so a k
   expect(sent).toEqual([{ currency: "USD", minorUnits: -1200 }, { currency: "USD", minorUnits: -12300 }]);
 });
 
+test("third review, finding 4: after the decimal key nothing is sent until the phone reports the write back", async () => {
+  const phone = await render("COP");
+  await phone.type("12345");
+  await phone.select(3);
+  await phone.press(button(decimalKey.COP), { hold: true });
+  expect(input().props.value).toBe("123,45");
+  await send();
+  expect(sent).toEqual([]);
+  await phone.settle();
+  expect(phone.log.at(-1)).toBe("caret 4-4");
+  await send();
+  expect(sent).toEqual([{ currency: "COP", minorUnits: 12345 }]);
+});
+
+test("third review, finding 4: a caret report elsewhere does not stand for the decimal key's write", async () => {
+  const phone = await render("USD");
+  await phone.type("12345");
+  await phone.select(3);
+  await phone.press(button(decimalKey.USD), { hold: true });
+  await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: { start: 5, end: 5 } } }));
+  await send();
+  expect(sent).toEqual([]);
+  await phone.settle();
+  await send();
+  expect(sent).toEqual([{ currency: "USD", minorUnits: 12345 }]);
+});
+
+test("third review, finding 4: when the phone reports other text after the decimal key, the phone's text is sent", async () => {
+  const phone = await render("COP");
+  await phone.type("12345");
+  await phone.select(3);
+  await phone.press(button(decimalKey.COP), { hold: true });
+  await send();
+  await phone.type("9", { racing: true });
+  expect(phone.log).toContain("  command dropped");
+  expect(phone.text).toBe("123945");
+  expect(input().props.value).toBe("123945");
+  await send();
+  expect(sent).toEqual([{ currency: "COP", minorUnits: 12394500 }]);
+});
+
 test("finding 4: a typed amount replaced in one change by another with the same separators awaits confirmation", async () => {
   const phone = await render("USD");
   await phone.type("1,234");
