@@ -637,3 +637,14 @@ test("choosing the default again from the confirmation returns to it with system
   expect(mounted!.routes()).toEqual(["index", "places", "account", "place-ending"]);
   expect(remote.undo).not.toHaveBeenCalled();
 });
+
+test("an Undo start kept from before the typed name was cleared sends nothing", async () => {
+  remote.undo.mockResolvedValue(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  const kept = ui.pressable("Undo Wallet").props.onPress as () => void;
+  await ui.type("Place name to confirm", "");
+  expect(ui.disabled("Undo Wallet")).toBe(true);
+  await act(async () => kept());
+  expect(remote.undo).not.toHaveBeenCalled();
+});
