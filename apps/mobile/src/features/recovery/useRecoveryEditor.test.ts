@@ -131,3 +131,55 @@ test.each([
   }
   root = undefined;
 });
+
+test.each([
+  new ConvexError({ code: "provider_unavailable" }),
+  new ConvexError({ code: "session_verification_required" }),
+  new ConvexError({ code: "device_registration_required" }),
+  new ConvexError({ code: "permission_denied" }),
+  new ConvexError({ kind: "recovery", code: "idempotency_key_conflict" }),
+  new ConvexError({ kind: "recovery", code: "a_code_this_app_does_not_know" }),
+])("a retry refused with $data.code after a lost reply keeps the same plan until an answer arrives", async (refusal) => {
+  const api = transport();
+  api.save.mockRejectedValueOnce(new Error("lost acknowledgement")).mockRejectedValueOnce(refusal);
+  const editor = await open(api);
+  await act(async () => { await editor().submit(); });
+  await act(async () => { await editor().submit(); editor().onMonths(12); editor().onDestination("daily"); });
+  expect(editor()).toMatchObject({ pending: true, editable: false, canDismiss: false, canSubmit: true,
+    installmentCount: 4, destinationId: "savings", error: "Could not confirm activation. Retry to safely check the same plan." });
+  await act(async () => { await editor().submit(); });
+  const first = {
+    workspaceId: "workspace", sourceJournalEntryId: "exp-1", destinationFinancialAccountProfileId: "savings",
+    installmentCount: 4, installmentMinorUnits: 300_000, idempotencyKey: "activate-1",
+  };
+  expect(api.save.mock.calls.map(([request]) => request)).toEqual([first, first, first]);
+  expect(api.onSaved).toHaveBeenCalledOnce();
+});
+
+test.each([
+  { code: "expense_already_recovered", error: "This expense already has a recovery plan." },
+  { code: "expense_not_recoverable", error: "The plan was not activated. Check the monthly amount and destination, then try again." },
+  { code: "installment_below_minimum", error: "The plan was not activated. Check the monthly amount and destination, then try again." },
+  { code: "replacement_already_exists", error: "The cancelled plan already has a replacement." },
+  { code: "idempotency_key_invalid", error: "The plan was not activated. Check the monthly amount and destination, then try again." },
+])("a retry refused with $code after a lost reply answers the plan and the next send is a new one", async ({ code, error }) => {
+  const api = transport();
+  api.save.mockRejectedValueOnce(new Error("lost acknowledgement")).mockRejectedValueOnce(new ConvexError({ kind: "recovery", code }));
+  const editor = await open(api);
+  await act(async () => { await editor().submit(); });
+  await act(async () => { await editor().submit(); });
+  expect(editor()).toMatchObject({ pending: false, editable: true, canDismiss: true, error });
+  await act(async () => { await editor().submit(); });
+  expect(api.save.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["activate-1", "activate-1", "activate-2"]);
+});
+
+test("a retry refused because the destination Place closed answers the plan and marks that Place", async () => {
+  const api = transport();
+  api.save.mockRejectedValueOnce(new Error("lost acknowledgement"))
+    .mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "financial_account_profile_ended" }));
+  const editor = await open(api);
+  await act(async () => { await editor().submit(); });
+  await act(async () => { await editor().submit(); });
+  expect(editor()).toMatchObject({ pending: false, editable: true, canSubmit: false, error: "",
+    unavailable: { id: "savings", label: "Savings (closed)" } });
+});

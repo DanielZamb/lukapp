@@ -403,6 +403,80 @@ test("an uncertain transfer keeps back hidden, retries the same movement, then B
   expect(stack.getRootState()?.routes.map((route) => route.name)).toEqual(["index"]);
 });
 
+test("a retry turned away before the server looked for the transfer keeps it frozen, so the next press resends that transfer instead of a second one", async () => {
+  remote.move.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockImplementation(async (request) => moveReceipt(request));
+  const { screen } = await open([plan], true, "alerts");
+  await act(async () => { button(screen, "Move money for October").props.onPress(); });
+  uuid.next = () => "move-1";
+  await act(async () => { button(screen, "Post transfer").props.onPress(); });
+  uuid.next = () => "move-2";
+  await act(async () => { button(screen, "Retry transfer").props.onPress(); });
+  const refused = { onBack: screen.findByType(Header).props.onBack, labels: labels(screen), screen: screen.findByType(RecoveryMoveScreen).props };
+  await act(async () => { screen.findByType(RecoveryMoveScreen).props.onAmount(money("10.000")); });
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  const sent = remote.move.mock.calls.map(([request]) => request);
+  expect(sent[0]).toMatchObject({
+    workspaceId: "workspace", planId: "repair", sourceFinancialAccountProfileId: "daily",
+    amount: { currency: "COP", minorUnits: 30_000_000 }, idempotencyKey: "move-1",
+  });
+  expect(sent).toEqual([sent[0], sent[0], sent[0]]);
+  expect(refused).toMatchObject({ onBack: undefined, labels: ["Retry transfer"], screen: {
+    pending: true, editable: false, canDismiss: false, error: "Could not confirm the transfer. Retry to safely check the same movement.",
+  } });
+});
+
+test("a retry refused after the server found no earlier transfer answers it and unlocks Move money", async () => {
+  remote.move.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ kind: "recovery", code: "plan_cancelled" }));
+  const { screen } = await open([plan], true, "alerts");
+  await act(async () => { button(screen, "Move money for October").props.onPress(); });
+  await act(async () => { button(screen, "Post transfer").props.onPress(); });
+  await act(async () => { button(screen, "Retry transfer").props.onPress(); });
+  expect(screen.findByType(RecoveryMoveScreen).props).toMatchObject({ pending: false, editable: true, canDismiss: true,
+    error: "The movement was rejected. Check the source and amount, then try again." });
+  expect(screen.findByType(Header).props.onBack).toBeDefined();
+});
+
+test("a retry turned away before the server looked for the plan keeps the draft frozen and activates that same plan", async () => {
+  remote.activate.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }))
+    .mockImplementation(async (request) => ({
+      replay: true,
+      plan: { ...request, id: "dental-plan", title: "Dental care", principalMinorUnits: 48_000_000,
+        impliedAnnualRateBps: 0, currency: "COP", activationMonth: "2026-10", createdBy: "owner", createdAt: 1 },
+    }));
+  const { screen } = await open();
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  uuid.next = () => "plan-1";
+  await act(async () => { button(screen, "Activate plan").props.onPress(); });
+  uuid.next = () => "plan-2";
+  await act(async () => { button(screen, "Retry activation").props.onPress(); });
+  const refused = { onBack: screen.findByType(Header).props.onBack, draft: screen.findByType(RecoveryDraft).props };
+  await act(async () => { screen.findByType(RecoveryDraft).props.onMonths(12); });
+  await act(async () => { screen.findByType(PrimaryButton).props.onPress(); });
+  const first = {
+    workspaceId: "workspace", sourceJournalEntryId: "dental", destinationFinancialAccountProfileId: "savings",
+    installmentCount: 4, installmentMinorUnits: 12_000_000, idempotencyKey: "plan-1",
+  };
+  expect(remote.activate.mock.calls.map(([request]) => request)).toEqual([first, first, first]);
+  expect(refused).toMatchObject({ onBack: undefined, draft: {
+    pending: true, editable: false, canDismiss: false, error: "Could not confirm activation. Retry to safely check the same plan.",
+  } });
+});
+
+test("a retry refused after the server found no earlier plan answers it and unlocks the draft", async () => {
+  remote.activate.mockRejectedValueOnce(new Error("offline"))
+    .mockRejectedValueOnce(new ConvexError({ kind: "recovery", code: "expense_already_recovered" }));
+  const { screen } = await open();
+  await act(async () => { screen.findByType(ListRow).props.onPress(); });
+  await act(async () => { button(screen, "Activate plan").props.onPress(); });
+  await act(async () => { button(screen, "Retry activation").props.onPress(); });
+  expect(screen.findByType(RecoveryDraft).props).toMatchObject({ pending: false, editable: true, canDismiss: true,
+    error: "This expense already has a recovery plan." });
+});
+
 function contribution(id: string, over: Partial<RecoveryContribution> = {}): RecoveryContribution {
   return {
     id, workspaceId: "workspace", planId: "repair", transferJournalEntryId: `transfer-${id}`, amountMinorUnits: 30_000_000,
