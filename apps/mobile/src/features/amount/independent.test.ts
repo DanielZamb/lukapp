@@ -17,8 +17,9 @@ import { useAmountState } from "./useAmountState";
 
 /**
  * The second review's independent emulator and reference model (reports/mvp-2026-11-10/amount-field/
- * r8-independent-emulator.test.ts), adapted to a field that shows the typed text, holds the sign beside it, and
- * controls the caret only after its decimal key. The reference keeps a plain string with "." for decimals and a
+ * r8-independent-emulator.test.ts), adapted to a field that shows the typed text, holds the sign beside it, controls
+ * the caret only after its decimal key, and shows a mark that completes the amount in a new input with the caret at the
+ * end, which no keystroke can drop. The reference keeps a plain string with "." for decimals and a
  * separate sign, and reads them with its own arithmetic. The phone keeps the native text and caret; a field write is
  * "dropped" when a keystroke reaches the phone first, as React Native drops a command older than the native text, and
  * that keystroke's event then reaches the field. The sign key writes nothing, so it has nothing to drop.
@@ -49,6 +50,7 @@ async function mount(cop: boolean, precision: 0 | 2 | 3, focus = true): Promise<
 }
 
 function phoneFor(cop: boolean) {
+  let node = input();
   let text = "";
   let start = 0;
   let end = 0;
@@ -65,6 +67,12 @@ function phoneFor(cop: boolean) {
    */
   async function settle(drop: boolean) {
     const now = shown();
+    if (input() !== node) {
+      node = input();
+      text = now.text;
+      start = end = text.length;
+      return;
+    }
     if (drop) return;
     if (now.text !== text) { text = now.text; start = end = Math.min(end, text.length); }
     if (now.selection && (now.selection.start !== start || now.selection.end !== end)) {
@@ -106,6 +114,9 @@ class Reference {
     if (kind === "decimal") {
       if (this.text.includes(".")) { this.a = this.b = this.text.indexOf(".") + 1; return; }
       inserted = /^[+-]?$/.test(this.text.slice(0, a)) ? "0." : ".";
+      this.text = this.text.slice(0, a) + inserted + this.text.slice(b);
+      this.a = this.b = this.value() === null ? a + inserted.length : this.text.length;
+      return;
     }
     if (kind === "sign") {
       this.sign = this.sign === "-" ? "+" : "-";
@@ -196,7 +207,7 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
   120_000,
 );
 
-const interleavings = Number(process.env.AMOUNT_INTERLEAVINGS ?? 40);
+const interleavings = Number(process.env.AMOUNT_INTERLEAVINGS ?? 60);
 const interleavingSteps = Number(process.env.AMOUNT_INTERLEAVING_STEPS ?? 100);
 
 /**
@@ -234,15 +245,16 @@ test.each((["android", "ios"] as const).flatMap((platform) => [false, true].map(
       for (let step = 0; step < interleavingSteps; step++) {
         const k = random();
         const digit = String(Math.floor(random() * 10));
-        if (k < 0.22) phone.key(digit);
-        else if (k < 0.25) phone.key(random() < 0.5 ? "." : ",");
-        else if (k < 0.31) phone.backspace();
-        else if (k < 0.39) phone.tap(Math.floor(random() * (phone.text.length + 1)));
-        else if (k < 0.42) phone.done();
-        else if (k < 0.58) await phone.deliver();
-        else if (k < 0.7) phone.apply();
-        else if (k < 0.8) await phone.press(control(decimalKey));
-        else if (k < 0.83) await phone.press(control("Switch the amount between minus and plus"));
+        if (k < 0.2) phone.key(digit);
+        else if (k < 0.21) phone.key(random() < 0.5 ? "." : ",");
+        else if (k < 0.25) phone.backspace();
+        else if (k < 0.3) phone.tap(Math.floor(random() * (phone.text.length + 1)));
+        else if (k < 0.32) phone.tap(phone.caret.end + 1);
+        else if (k < 0.34) phone.done();
+        else if (k < 0.64) await phone.deliver();
+        else if (k < 0.74) phone.apply();
+        else if (k < 0.84) await phone.press(control(decimalKey));
+        else if (k < 0.86) await phone.press(control("Switch the amount between minus and plus"));
         else save(`sequence ${sequence} step ${step}`);
       }
       await phone.quiesce();
@@ -253,7 +265,7 @@ test.each((["android", "ios"] as const).flatMap((platform) => [false, true].map(
       await act(async () => { root?.unmount(); });
     }
     console.log(`interleavings ${platform} cop=${cop}: ${saves} saves, ${sent} sent, ${dropped} writes dropped`);
-    expect(sent).toBeGreaterThan(0);
+    expect(sent, "Save sent an amount in a fair share of the checks").toBeGreaterThan(saves / 5);
   },
   120_000,
 );

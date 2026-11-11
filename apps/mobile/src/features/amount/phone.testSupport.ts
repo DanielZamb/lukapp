@@ -164,7 +164,7 @@ export function readsAs(visible: string, cop: boolean, precision: number): numbe
   return match[1] && match[1] !== "+" && v ? -v : v;
 }
 
-type NativeEvent = { node: ReactTestInstance; text: string } & (
+type NativeEvent = { node: ReactTestInstance; handlers: ReactTestInstance["props"]; text: string } & (
   | { kind: "change"; eventCount: number }
   | { kind: "selection"; selection: Caret }
   | { kind: "focus" | "blur" | "endEditing" });
@@ -202,11 +202,11 @@ export function reactNativeInput(input: () => ReactTestInstance, platform: "andr
   function reportCaret() {
     if (same(watched, caret)) return;
     watched = caret;
-    events.push({ node, text, kind: "selection", selection: caret });
+    events.push({ node, handlers: node.props, text, kind: "selection", selection: caret });
   }
   function focus() {
     focused = true;
-    events.push({ node, text, kind: "focus" });
+    events.push({ node, handlers: node.props, text, kind: "focus" });
     if (platform === "android") reportCaret();
   }
   function observe() {
@@ -238,7 +238,7 @@ export function reactNativeInput(input: () => ReactTestInstance, platform: "andr
     text = result.text;
     caret = result.caret;
     count += 1;
-    events.push({ node, text, kind: "change", eventCount: count });
+    events.push({ node, handlers: node.props, text, kind: "change", eventCount: count });
     reportCaret();
   }
   function stage(native: () => void) {
@@ -248,6 +248,7 @@ export function reactNativeInput(input: () => ReactTestInstance, platform: "andr
 
   return {
     get text() { return text; },
+    get caret() { return caret; },
     get focused() { return focused; },
     get dropped() { return dropped; },
     /** Whether the phone reported an edit JavaScript has not received yet: no app can know that text. */
@@ -280,7 +281,7 @@ export function reactNativeInput(input: () => ReactTestInstance, platform: "andr
         if (!focused) return;
         focused = false;
         const order: Array<"blur" | "endEditing"> = platform === "android" ? ["blur", "endEditing"] : ["endEditing", "blur"];
-        for (const kind of order) events.push({ node, text, kind });
+        for (const kind of order) events.push({ node, handlers: node.props, text, kind });
       });
     },
     /** The native view runs the oldest command JavaScript sent it. */
@@ -298,13 +299,14 @@ export function reactNativeInput(input: () => ReactTestInstance, platform: "andr
       const event = events.shift();
       if (!event) return;
       const target = event.node;
+      const props = target === node ? target.props : event.handlers;
       const carried = platform === "ios" ? { text: event.text } : {};
       await act(async () => {
-        if (event.kind === "change") target.props.onChangeText?.(event.text);
-        else if (event.kind === "selection") target.props.onSelectionChange?.({ nativeEvent: { selection: event.selection, ...carried } });
-        else if (event.kind === "focus") target.props.onFocus?.({ nativeEvent: carried });
-        else if (event.kind === "blur") target.props.onBlur?.({ nativeEvent: carried });
-        else target.props.onEndEditing?.({ nativeEvent: { text: event.text } });
+        if (event.kind === "change") props.onChangeText?.(event.text);
+        else if (event.kind === "selection") props.onSelectionChange?.({ nativeEvent: { selection: event.selection, ...carried } });
+        else if (event.kind === "focus") props.onFocus?.({ nativeEvent: carried });
+        else if (event.kind === "blur") props.onBlur?.({ nativeEvent: carried });
+        else props.onEndEditing?.({ nativeEvent: { text: event.text } });
       });
       if (target === node && event.kind === "change") { pushedText = event.text; heard = event.eventCount; }
       if (target === node && event.kind === "selection") pushedSelection = event.selection;

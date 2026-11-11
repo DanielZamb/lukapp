@@ -36,7 +36,9 @@ const recordings = readdirSync(directory).filter((name) => name.endsWith(".json"
  * Recordings made with the field that wrote the sign into the phone's text. The current field holds the sign beside
  * that text, so on the same keys the phone's text lacks the sign the old field wrote, its carets sit one place lower,
  * and a sign write the phone dropped for a racing keystroke no longer loses the sign. Each entry states what the
- * current field must show and send. These are adaptations, not recordings: re-record them on the phone.
+ * current field must show and send. These are adaptations, not recordings: re-record them on the phone. r2-S3 also
+ * places the decimal mark between digits, which now shows a new input and closes the keyboard, so on the phone its
+ * later 9 needs a tap in the field first.
  */
 const withoutWrittenSign: Readonly<Record<string, { finalText: string; sends: Array<number | null> }>> = {
   "r2-S3-cop-decimal-sign-keys.json": { finalText: "123,945", sends: [12345, -12345] },

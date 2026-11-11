@@ -227,56 +227,31 @@ test("third review, finding 4: the sign key never writes the native text, so a k
   expect(sent).toEqual([{ currency: "USD", minorUnits: -1200 }, { currency: "USD", minorUnits: -12300 }]);
 });
 
-test("third review, finding 4: after the decimal key nothing is sent until the phone reports the write back", async () => {
+test("third review, finding 4: a decimal mark at the end is written into the field, and the next keystroke's text is the amount", async () => {
   const phone = await render("COP");
-  await phone.type("12345");
-  await phone.select(3);
+  await phone.type("12");
   await phone.press(button(decimalKey.COP), { hold: true });
-  expect(input().props.value).toBe("123,45");
+  expect(input().props.value).toBe("12,");
   await send();
   expect(sent).toEqual([]);
   await phone.settle();
-  expect(phone.log.at(-1)).toBe("caret 4-4");
+  await phone.type("5");
+  expect(phone.text).toBe("12,5");
   await send();
-  expect(sent).toEqual([{ currency: "COP", minorUnits: 12345 }]);
-});
-
-test("third review, finding 4: a caret report elsewhere does not stand for the decimal key's write", async () => {
-  const phone = await render("USD");
-  await phone.type("12345");
-  await phone.select(3);
-  await phone.press(button(decimalKey.USD), { hold: true });
-  await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: { start: 5, end: 5 } } }));
-  await send();
-  expect(sent).toEqual([]);
-  await phone.settle();
-  await send();
-  expect(sent).toEqual([{ currency: "USD", minorUnits: 12345 }]);
-});
-
-test("third review, finding 4: when the phone reports other text after the decimal key, the phone's text is sent", async () => {
-  const phone = await render("COP");
-  await phone.type("12345");
-  await phone.select(3);
-  await phone.press(button(decimalKey.COP), { hold: true });
-  await send();
-  await phone.type("9", { racing: true });
-  expect(phone.log).toContain("  command dropped");
-  expect(phone.text).toBe("123945");
-  expect(input().props.value).toBe("123945");
-  await send();
-  expect(sent).toEqual([{ currency: "COP", minorUnits: 12394500 }]);
+  expect(sent).toEqual([{ currency: "COP", minorUnits: 1250 }]);
 });
 
 test("fourth review, finding A: a caret report after the decimal key never stands for its write; what is sent is what the phone's text reads", async () => {
   const phone = await render("USD");
   await phone.type("12345");
   await phone.select(3);
+  const old = input().props.onChangeText as (text: string) => void;
   await phone.press(button(decimalKey.USD), { hold: true });
   await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: { start: 4, end: 4 } } }));
   await send();
   expect(sent).toEqual([{ currency: "USD", minorUnits: readsAs(phone.text, false, 2) }]);
-  await phone.type("9", { racing: true });
+  await phone.deliverToStale(old, "123945");
+  expect(input().props.value).toBe(phone.text);
   await send();
   expect(sent.slice(1)).toEqual([{ currency: "USD", minorUnits: readsAs(phone.text, false, 2) }]);
 });
@@ -380,11 +355,11 @@ test("finding 8: a session the owner replaces is not overwritten by a change sti
 
 test("the sign key changes only the sign shown beside the phone's text, and leaves that text and its caret alone", async () => {
   const phone = await render("COP");
-  await phone.type("12345");
-  await phone.select(3);
+  await phone.type("123");
   await phone.press(button(decimalKey.COP));
+  await phone.type("45");
+  await phone.select(4);
   expect(phone.text).toBe("123,45");
-  expect(phone.caret).toEqual({ start: 4, end: 4 });
   await phone.press(button("Switch the amount between minus and plus"));
   expect(phone.text).toBe("123,45");
   expect(phone.caret).toEqual({ start: 4, end: 4 });

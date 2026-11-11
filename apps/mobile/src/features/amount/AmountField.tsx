@@ -6,7 +6,7 @@ import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../
 import { formatMoney } from "../money";
 import { amountHint } from "./hints";
 import {
-  confirmAmount, displayedMinorUnits, nativeText, readingShifted, toggleAmountSign, withDecimalMark, withNativeCaret, withNativeText,
+  confirmAmount, displayedMinorUnits, nativeText, readingShifted, toggleAmountSign, withDecimalMark, withNativeText,
   type AmountSession,
 } from "./session";
 
@@ -31,10 +31,17 @@ export type AmountFieldProps = {
 };
 
 /**
- * The one input for an amount. The native field owns the text: the field reads it literally on every change and never
- * rewrites it while the person types, so the amount is always the text as shown. The sign is shown beside the input
- * and never written into it. The grouped reading appears under it. The decimal key is the only edit the field writes
- * into the native text itself, and the caret is placed only after it.
+ * The one input for an amount. The native field owns the text: the field reads it literally on every change event and
+ * never rewrites it while the person types, so the amount is always the text as shown. The sign is shown beside the
+ * input and never written into it. The grouped reading appears under it.
+ *
+ * The decimal key is the field's only edit to the text. React Native reports no event for a JavaScript write, and a
+ * keystroke that reaches the phone first drops it, so the phone's text after a write is known only from the next
+ * change event; no caret report or end-of-editing text can stand in, since either may describe the text before the
+ * write landed. A mark that leaves the amount incomplete is written into the field, where the person types on and the
+ * next change event reports what the phone holds; until then nothing can be sent anyway. A mark that completes the
+ * amount is shown in a new native input holding exactly that text, which no keystroke can overtake, and the keyboard
+ * closes with the old input; the amount can be sent at once.
  *
  * The text the input shows is the field's own state, set in the same event as React Native's record of the native
  * text, so an owner that renders the field late, as a bottom sheet's portal does, cannot push an older text back. An
@@ -95,21 +102,22 @@ export function AmountField(props: AmountFieldProps) {
     emitted.current.add(next);
     props.onChange(next);
   }
-  /** A write of the field's decimal key into the native text, with the caret it leaves. */
+  /** The decimal key's mark: written into the native text, or shown in a new input when it completes the amount. */
   function press(next: AmountSession, at: number) {
-    caret.current = { start: at, end: at };
-    setPlaced({ start: at, end: at });
-    setInput((shown) => ({ ...shown, text: nativeText(next) }));
+    if (next.editor.kind === "complete" && nativeText(next) !== nativeText(latest.current)) {
+      const end = nativeText(next).length;
+      caret.current = { start: end, end };
+      focused.current = false;
+      if (placed) setPlaced(undefined);
+      setInput((shown) => ({ ...shown, text: nativeText(next), generation: shown.generation + 1, autoFocus: false }));
+    } else {
+      caret.current = { start: at, end: at };
+      setPlaced({ start: at, end: at });
+      setInput((shown) => ({ ...shown, text: nativeText(next) }));
+    }
     emit(next);
   }
   const mine = generation;
-  /** The phone's text, from a change or from the end of editing. */
-  function report(text: string) {
-    if (mine !== current.current || !props.editable) return;
-    if (placed) setPlaced(undefined);
-    setInput((shown) => ({ ...shown, text }));
-    emit(withNativeText(latest.current, text));
-  }
   const keyEnabled = props.editable && decimals;
   const refused = !!hint || !!props.message?.error;
   const shown = editor.kind === "complete" ? formatMoney({ currency, minorUnits: editor.minorUnits }) : null;
@@ -147,13 +155,16 @@ export function AmountField(props: AmountFieldProps) {
           selectionColor={theme.primary}
           onFocus={() => { focused.current = true; }}
           onBlur={() => { focused.current = false; }}
-          onChangeText={(text) => report(text)}
-          onEndEditing={({ nativeEvent: { text } }) => report(text)}
+          onChangeText={(text) => {
+            if (mine !== current.current || !props.editable) return;
+            if (placed) setPlaced(undefined);
+            setInput((shown) => ({ ...shown, text }));
+            emit(withNativeText(latest.current, text));
+          }}
           onSelectionChange={({ nativeEvent: { selection } }) => {
             if (mine !== current.current) return;
             caret.current = { start: selection.start, end: selection.end };
             if (placed) setPlaced(undefined);
-            emit(withNativeCaret(latest.current, selection));
           }}
           style={[props.label ? [shared.fieldInput, styles.boxed, refused && shared.fieldInputInvalid] : null, styles.input, props.inputStyle]}
         />
@@ -178,7 +189,7 @@ export function AmountField(props: AmountFieldProps) {
           disabled={!props.editable}
           onPress={() => {
             if (!keyEnabled) return;
-            const next = withDecimalMark(latest.current, caret.current.end, focused.current);
+            const next = withDecimalMark(latest.current, caret.current.end);
             press(next.session, next.caret);
           }}
           style={({ pressed }) => [styles.key, !keyEnabled && styles.keyDisabled, pressed && styles.pressed]}
