@@ -328,6 +328,7 @@ test("every amount a production handler sends is read from its owner's state at 
     "apps/mobile/app/account.tsx",
     "apps/mobile/app/drafts.tsx",
     "apps/mobile/app/post.tsx",
+    "apps/mobile/src/device-admission/DeviceAdmissionGate.tsx",
     "apps/mobile/src/features/HomePlaceSetup.tsx",
     "apps/mobile/src/features/Setup.tsx",
     "apps/mobile/src/features/budget/useBudgetEditor.ts",
