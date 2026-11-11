@@ -502,3 +502,50 @@ test("a field that is not editable shows its owner's text and takes no native ch
   await send();
   expect(sent).toEqual([{ currency: "USD", minorUnits: 1200 }]);
 });
+
+const readingLine = () => root!.root.findAll((node) => node.type === "text" && node.props.importantForAccessibility !== undefined)[0];
+
+test("third review, finding 5: the reading speaks up when the decimal mark appears or moves, and when the value changes tenfold", async () => {
+  const phone = await render("COP");
+  const reading = () => ({ text: readingLine().children.join(""), live: readingLine().props.accessibilityLiveRegion });
+  await phone.type("1");
+  expect(reading()).toEqual({ text: "Reads as COP 1,00", live: "none" });
+  await phone.type("2");
+  expect(reading()).toEqual({ text: "Now reads as COP 12,00", live: "polite" });
+  await phone.type("34");
+  expect(reading()).toEqual({ text: "Now reads as COP 1.234,00", live: "polite" });
+  await phone.press(button(decimalKey.COP));
+  await phone.type("5");
+  expect(reading()).toEqual({ text: "Now reads as COP 1.234,50", live: "polite" });
+  await phone.type("0");
+  expect(reading()).toEqual({ text: "Reads as COP 1.234,50", live: "none" });
+  await phone.select(4);
+  await phone.backspace();
+  expect(phone.text).toBe("123,50");
+  expect(reading()).toEqual({ text: "Now reads as COP 123,50", live: "polite" });
+  await phone.select(6);
+  await phone.backspace();
+  expect(reading()).toEqual({ text: "Reads as COP 123,50", live: "none" });
+});
+
+test("third review, finding 5: the reading speaks up when a change removes the decimal mark, and holds one line in both languages", async () => {
+  const phone = await render("USD", "es");
+  await phone.type("12");
+  await phone.press(button("Escribir punto decimal en USD"));
+  await phone.type("5");
+  expect(readingLine().children.join("")).toBe("Ahora se lee como USD 12.50");
+  await phone.type("0");
+  expect(readingLine().children.join("")).toBe("Se lee como USD 12.50");
+  await phone.select(3);
+  await phone.backspace();
+  expect(phone.text).toBe("1250");
+  expect(readingLine().children.join("")).toBe("Ahora se lee como USD 1,250.00");
+  expect(readingLine().props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true, accessibilityLiveRegion: "polite" });
+});
+
+test("third review, finding 5: an amount the owner opens is the first reading, so the first edit compares with it", async () => {
+  const phone = await render("USD", "en", "400");
+  expect(readingLine().children.join("")).toBe("Reads as USD 400.00");
+  await phone.backspace();
+  expect(readingLine().children.join("")).toBe("Now reads as USD 40.00");
+});
