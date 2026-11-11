@@ -56,13 +56,12 @@ const recovery = unresolvedRequests<UnresolvedRecovery>({
 });
 
 /**
- * Whether the plans the server shows already settle a saved request. A movement is settled once its plan lists a
- * contribution under its key. An activation is settled once its expense shows a plan with its terms, or any plan not
- * cancelled: resending it could then only replay that plan or be refused as expense_already_recovered. The board does
- * not carry a plan's own key, so a plan with the same terms made on another phone settles it too; resending it after
- * that plan was cancelled would start a plan the person had already ended.
+ * Whether the plans the server shows already settle a saved request. An activation is settled by a plan for its expense
+ * that is not cancelled, since a resend could only replay it or be refused, or by a cancelled one with its terms. The
+ * board carries no plan key, so the terms stand in for it: a same-terms plan from another phone settles it too, and
+ * resending after that plan was cancelled would restart a plan the person ended.
  */
-export function settledByBoard(entry: UnresolvedRecovery, plans: readonly RecoveryPlanView[]) {
+function settledByBoard(entry: UnresolvedRecovery, plans: readonly RecoveryPlanView[]) {
   if (entry.act === "move") {
     const { planId, idempotencyKey } = entry.request;
     return plans.some((plan) => plan.id === planId && plan.contributionHistory.some((item) => item.idempotencyKey === idempotencyKey));
@@ -101,14 +100,12 @@ export function useUnresolvedRecovery(workspaceId: string, plans: readonly Recov
   return {
     reading: stored === undefined,
     unreadable: stored === "unreadable",
-    entries,
     move: (planId: string) => moves.find((request) => request.planId === planId) ?? null,
     activation: (expenseId: string) => activations.find((request) => request.sourceJournalEntryId === expenseId) ?? null,
     keepMove: (request: MoveRequest) => keep({ act: "move", request }),
     forgetMove: (request: MoveRequest) => forget({ act: "move", request }),
     keepActivation: (request: ActivationRequest) => keep({ act: "activate", request }),
     forgetActivation: (request: ActivationRequest) => forget({ act: "activate", request }),
-    forget,
     retryRead,
   };
 }
