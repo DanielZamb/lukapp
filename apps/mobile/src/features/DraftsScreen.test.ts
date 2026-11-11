@@ -240,6 +240,17 @@ test.each([
 });
 
 test.each([
+  { reviewAmount: { text: "-1.234", format: "cop/1", review: { reason: "pasted", previous: null } }, detail: "Confirm the amount before you continue." },
+  { reviewAmount: { text: "-1.234,50", format: "pre-currency", reenter: true }, detail: "We couldn't read the amount saved earlier (-1.234,50). Type it again." },
+  { reviewAmount: { text: "-1.264", format: "cop/1" }, detail: "Daily money" },
+] as const)("a Candidate row says what its saved amount still needs: $detail", async ({ reviewAmount, detail }) => {
+  await act(async () => {
+    root = create(createElement(DraftsScreen, render({ now: [{ ...candidate, reviewAmount }] })));
+  });
+  expect(button("Review Groceries").findAllByType("text").map((node) => node.children.join(""))).toContain(detail);
+});
+
+test.each([
   { description: "  Groceries  ", title: "Groceries" },
   { description: "  ", title: "Needs review" },
 ])("Candidate review labels match the displayed description '$title'", async ({ description, title }) => {

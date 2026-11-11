@@ -322,8 +322,10 @@ test("third review, finding 1: a Candidate whose amount awaits confirmation says
     dispatch: vi.fn(), translator: createTranslator("en") });
   await act(async () => binding.persistReview({ ...binding.facts, description: "Taxi", amountText: "-1.234", amountFormat: "cop/1",
     amountReview: { reason: "pasted", previous: null } }));
+  expect(text()).toContain("Confirm the amount before you continue.");
   await act(async () => button("Confirm all Ready").props.onPress());
   expect(intakeState.confirm.mock.calls.map(([input]) => input.items.map((item: ConfirmCandidateInput) => item.candidateId))).toEqual([["c1"]]);
+  await act(async () => button("Back to Candidates").props.onPress());
   expect(text()).toContain("Confirm the amount before you continue.");
   expect(f.service.read("c2")).toMatchObject({ status: { kind: "review" }, reviewAmountReview: { reason: "pasted", previous: null } });
 
