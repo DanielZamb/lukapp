@@ -240,7 +240,7 @@ test("a split must explain exactly the whole balance, and amounts follow the sha
   await ui.press("🛒 Groceries");
   expect(ui.texts()).toContain("Still to explain: COP 0");
   expect(ui.disabled("Review")).toBe(true);
-  await ui.type("Amount for I moved it to another place", "30.000");
+  await ui.type("Amount for I moved it to another place", "30000");
   expect(ui.texts()).toContain("Still to explain: COP 20.000");
   expect(ui.disabled("Review")).toBe(true);
   await ui.type("Amount for I spent it", "25.000");
@@ -249,7 +249,7 @@ test("a split must explain exactly the whole balance, and amounts follow the sha
   await ui.press("Confirm COP 25.000,00");
   expect(ui.texts()).toContain("You explained COP 5.000 too much");
   expect(ui.disabled("Review")).toBe(true);
-  await ui.type("Amount for I spent it", "20.000");
+  await ui.type("Amount for I spent it", "20000");
   expect(ui.texts()).toContain("Still to explain: COP 0");
   await ui.press("Review");
   expect(ui.texts()).toEqual(expect.arrayContaining(["Transfer to Savings", "COP 30.000", "Expense in Groceries", "COP 20.000"]));
@@ -535,7 +535,7 @@ test("a balance that changes under the summary withdraws it and returns to the a
     "Wallet has COP 30.000. Account for all of it to close it."]);
   expect(ui.texts()).toEqual(expect.arrayContaining(["I moved it to another place", "Savings", "You explained COP 20.000 too much"]));
   expect(ui.disabled("Review")).toBe(true);
-  await ui.type("Amount for I moved it to another place", "30.000");
+  await ui.type("Amount for I moved it to another place", "30000");
   await ui.press("Review");
   expect(ui.texts().join(" ")).not.toContain("changed from");
   await ui.press("Close Wallet");
@@ -600,7 +600,7 @@ test("a balance refused as stale after the new balance arrived returns to the an
   expect(ui.texts().slice(1, 3)).toEqual(["Where did the money go?",
     "The balance of Wallet changed from COP 50.000 to COP 40.000. Check your answers against the new balance, then review again."]);
   expect(ui.alerts()).not.toContain("The balance changed before the place closed, so nothing was recorded. Getting the new balance…");
-  await ui.type("Amount for I moved it to another place", "40.000");
+  await ui.type("Amount for I moved it to another place", "40000");
   await ui.press("Review");
   await ui.press("Close Wallet");
   expect(remote.close.mock.calls.map(([request]) => [request.idempotencyKey, request.reviewedBalance, request.lines[0].amount]))
