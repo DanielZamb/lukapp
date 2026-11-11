@@ -130,6 +130,11 @@ function requiredMinorUnits(session: AmountSession): number {
   return minorUnits;
 }
 
+/** A place's starting balance left blank is zero, as first-run setup reads it; any other text must be a complete amount. */
+function balanceMinorUnits(session: AmountSession): number | null {
+  return session.editor.text.trim() ? amountMinorUnits(session) : 0;
+}
+
 export function usePostingEditor(
   account: Account,
   transport: PostingTransport,
@@ -440,7 +445,7 @@ export function usePostingEditor(
           productKind: setup.productKind,
           amount: {
             currency: account.currency,
-            minorUnits: requiredMinorUnits(setup.amount),
+            minorUnits: balanceMinorUnits(setup.amount) ?? requiredMinorUnits(setup.amount),
           },
           accountingDate: setup.date,
           idempotencyKey: transport.newKey(),
@@ -491,7 +496,7 @@ export function usePostingEditor(
       },
     };
   }
-  const setupMinorUnits = setup && setup.amount.currency === account.currency ? amountMinorUnits(setup.amount) : null;
+  const setupMinorUnits = setup && setup.amount.currency === account.currency ? balanceMinorUnits(setup.amount) : null;
   const setupValid = !!setup?.name.trim() && setup.productKind !== null && setupMinorUnits !== null && setupMinorUnits >= 0;
   const canSubmit =
     !busy &&

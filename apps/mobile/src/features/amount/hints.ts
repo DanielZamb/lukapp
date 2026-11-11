@@ -48,7 +48,9 @@ export function amountHint(session: AmountSession, t: Translator["t"]): string |
     case "too_large":
       return t("amount.hintTooLarge");
     case "not_a_number":
-      return t("amount.hintNotNumber", { example: example.full });
+      return issue.character === convention.group || issue.character === convention.decimal
+        ? t("amount.hintFormat", { example: example.full })
+        : t("amount.hintNotNumber", { example: example.full });
   }
 }
 

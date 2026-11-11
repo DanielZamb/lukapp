@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createElement, type ComponentProps } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { typeAmount } from "./amount/typing.testSupport";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { HomePlaceSetup } from "./HomePlaceSetup";
 import { LanguageProvider } from "../i18n";
@@ -263,19 +264,19 @@ test("in Spanish the sheet reads in Spanish, a blank name stores the Spanish def
 });
 
 test.each([
-  ["COP", "Type a decimal comma for COP", "12.50", "Use the comma for decimals, for example 12,50", "1.234,50"],
-  ["USD", "Type a decimal point for USD", "12,50", "Use the point for decimals, for example 12.50", "1,234.50"],
+  ["COP", "Type a decimal comma for COP", "12.50", "Use the comma for decimals, for example 12,50", "1234,50"],
+  ["USD", "Type a decimal point for USD", "12,50", "Use the point for decimals, for example 12.50", "1234.50"],
 ])("a %s home place balance is typed with the decimal key; the other separator is refused and nothing is sent",
   async (currency, decimal, wrong, hint, shown) => {
     await act(async () => { root = create(createElement(HomePlaceSetup, props(true, currency))); });
-    for (const key of wrong) await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+    await typeAmount(() => input("Balance today"), wrong, { replacing: true });
     expect(root.root.findAll((node) => node.props.accessibilityRole === "alert").map((node) => node.children.join(""))).toContain(hint);
     await act(async () => button("Add this place").props.onPress());
     expect(state.post).not.toHaveBeenCalled();
     await act(async () => input("Balance today").props.onChangeText(""));
-    for (const key of "1234") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+    await typeAmount(() => input("Balance today"), "1234");
     await act(async () => button(decimal).props.onPress());
-    for (const key of "50") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+    await typeAmount(() => input("Balance today"), "50");
     expect(input("Balance today").props.value).toBe(shown);
     await act(async () => button("Add this place").props.onPress());
     expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency, minorUnits: 123450 });
@@ -283,8 +284,8 @@ test.each([
 
 test("a workspace currency change while the balance is typed shows and sends the same amount in the new currency", async () => {
   await act(async () => { root = create(createElement(HomePlaceSetup, props(true, "COP"))); });
-  for (const key of "12500") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
-  expect(input("Balance today").props.value).toBe("12.500");
+  await typeAmount(() => input("Balance today"), "12500", { replacing: true });
+  expect(input("Balance today").props.value).toBe("12500");
   await act(async () => root.update(createElement(HomePlaceSetup, props(true, "USD"))));
   expect(input("Balance today").props.value).toBe("0");
   expect(button("Type a decimal point for USD")).toBeTruthy();
@@ -294,10 +295,10 @@ test("a workspace currency change while the balance is typed shows and sends the
 
 test("after a workspace currency change the balance typed in the new currency is the one sent", async () => {
   await act(async () => { root = create(createElement(HomePlaceSetup, props(true, "COP"))); });
-  for (const key of "12500") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
+  await typeAmount(() => input("Balance today"), "12500", { replacing: true });
   await act(async () => root.update(createElement(HomePlaceSetup, props(true, "USD"))));
-  for (const key of "1234") await act(async () => input("Balance today").props.onChangeText(`${input("Balance today").props.value}${key}`));
-  expect(input("Balance today").props.value).toBe("1,234");
+  await typeAmount(() => input("Balance today"), "1234", { replacing: true });
+  expect(input("Balance today").props.value).toBe("1234");
   await act(async () => button("Add this place").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency: "USD", minorUnits: 123400 });
 });

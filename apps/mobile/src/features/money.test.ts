@@ -2,21 +2,20 @@ import { expect, test, vi } from "vitest";
 import { formatMoney, currencyDisplayPrefix } from "./money";
 import { createTranslator } from "../../../../src/i18n";
 import { amountHint } from "./amount/hints";
-import { nativeTextChange, nativeTrackOf } from "./amount/nativeEdit";
-import { amountMinorUnits, openAmount } from "./amount/session";
+import { amountMinorUnits, openAmount, withNativeText } from "./amount/session";
 
 function typed(currency: string, keys: string) {
   let session = openAmount(currency);
-  for (const key of keys) session = nativeTextChange(session, nativeTrackOf(session), session.editor.text + key).session;
+  for (const key of keys) session = withNativeText(session, session.editor.text + key);
   return session;
 }
 
 test.each([
-  ["-012500", "-12.500", -1250000],
-  ["+12500", "+12.500", 1250000],
-  ["−12500", "-12.500", -1250000],
+  ["-012500", "-012500", -1250000],
+  ["+12500", "+12500", 1250000],
+  ["−12500", "−12500", -1250000],
   ["-1.234,56", "-1.234,56", -123456],
-])("typing %s in a COP field shows %s", (keys, text, minorUnits) => {
+])("typing %s in a COP field shows exactly %s", (keys, text, minorUnits) => {
   const session = typed("COP", keys);
   expect(session.editor.text).toBe(text);
   expect(amountMinorUnits(session)).toBe(minorUnits);
@@ -138,7 +137,8 @@ test("full monetary display preserves exact safe-integer boundaries without Intl
 });
 
 
-test("typing continues through automatic grouping for zero- and three-decimal currencies", () => {
-  expect(typed("JPY", "10005").editor.text).toBe("10.005");
+test("typing in zero- and three-decimal currencies keeps the text exactly as typed", () => {
+  expect(typed("JPY", "10005").editor.text).toBe("10005");
+  expect(amountMinorUnits(typed("JPY", "10005"))).toBe(10005);
   expect(amountMinorUnits(typed("BHD", "1.234"))).toBe(1_234_000);
 });

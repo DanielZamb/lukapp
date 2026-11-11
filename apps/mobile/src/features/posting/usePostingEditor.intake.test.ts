@@ -105,7 +105,7 @@ test("a Candidate prefills the shared posting form", async () => {
     confirm: vi.fn(),
   });
   expect(editor().description).toBe("Groceries");
-  expect(editor().amount.editor.text).toBe("-1.264,00");
+  expect(editor().amount.editor.text).toBe("-1264,00");
   expect(editor().date).toBe("2026-10-17");
   expect(editor().profileId).toBe("daily");
   expect(editor().categories).toEqual({ ids: ["food"], primaryId: null });
@@ -218,7 +218,7 @@ test.each(["intake", "accounting"])("an idempotency conflict from %s retains the
   expect(editor().posted).toBeNull();
   expect(editor().error).toBe("This entry was already sent with different details");
   expect(editor().description).toBe("Groceries");
-  expect(editor().amount.editor.text).toBe(facts.amountText);
+  expect(editor().amount.editor.text).toBe("-1264,00");
   expect(editor().categories).toEqual(facts.categories);
   await act(async () => { await editor().submit(); });
   expect(confirm).toHaveBeenCalledTimes(2);
@@ -276,7 +276,7 @@ test("the account door explicitly refuses intake without changing its facts or w
   expect(accepted).toBe(false);
   expect(editor().setup).toBeNull();
   expect(editor().entryType).toBe("normal");
-  expect(editor().amount.editor.text).toBe(facts.amountText);
+  expect(editor().amount.editor.text).toBe("-1264,00");
   expect(editor().categories).toEqual(facts.categories);
   expect(api.save).not.toHaveBeenCalled();
   expect(api.post).not.toHaveBeenCalled();

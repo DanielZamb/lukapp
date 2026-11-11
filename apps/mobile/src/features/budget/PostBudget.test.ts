@@ -123,7 +123,7 @@ function text() {
 async function open() {
   await act(async () => { root = create(createElement(LocalInput.Provider, { value: new LocalInputLease("owner", "session") }, createElement(PostRoute))); });
   await act(async () => {
-    form().onAmountChange(money("-120.000,00"));
+    form().onAmountChange(money("-120000,00"));
     form().onDescriptionChange("Groceries");
     root?.root.findByType(DateTimePicker).props.onChange({}, new Date("2026-10-18T12:00:00"));
   });
@@ -149,11 +149,11 @@ test("crossing sheet shows all impacts; Reconsider leaves the draft, Continue po
   expect(transport.post).not.toHaveBeenCalled();
   await press("Reconsider");
   expect(root?.root.findAllByType(PostingImpactSheet)).toHaveLength(0);
-  expect({ amount: form().amount.editor.text, description: form().description, editable: form().editable }).toEqual({ amount: "-120.000,00", description: "Groceries", editable: true });
+  expect({ amount: form().amount.editor.text, description: form().description, editable: form().editable }).toEqual({ amount: "-120000,00", description: "Groceries", editable: true });
   expect(transport.post).not.toHaveBeenCalled();
   await act(async () => form().onPost());
   await act(async () => root?.root.findByType(PostingImpactSheet).findByType(BottomSheetModal).props.onDismiss());
-  expect(form().amount.editor.text).toBe("-120.000,00");
+  expect(form().amount.editor.text).toBe("-120000,00");
   expect(transport.post).not.toHaveBeenCalled();
   await act(async () => form().onPost());
   if (!root) throw new Error("Post not mounted");
@@ -181,7 +181,7 @@ test("unselected, under-limit and already-over jars do not interrupt posting", a
   expect(form().posted).toBe("Groceries · −COP 10.000,00");
   if (!budget) throw new Error("Budget missing");
   budget.jars[0].consumptionMinorUnits = 11000000;
-  await act(async () => { form().onAmountChange(money("-120.000,00")); });
+  await act(async () => { form().onAmountChange(money("-120000,00")); });
   await act(async () => { root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null }); });
   await act(async () => form().onPost());
   expect(form().posted).toBe("Entry · −COP 120.000,00");
@@ -232,7 +232,7 @@ test("saving the second place inside a tx stays in the form without LevelUnlocke
   expect(transport.post.mock.calls.map(([command]) => command.kind)).toEqual(["setup"]);
   expect(root?.root.findByType(AccountSetupForm).props.value).toBeNull();
   expect(form().posted).toBeNull();
-  expect(form().amount.editor.text).toBe("-120.000,00");
+  expect(form().amount.editor.text).toBe("-120000,00");
   expect(form().description).toBe("Groceries");
   expect(router.replace).not.toHaveBeenCalled();
   expect(navigation.dispatch).not.toHaveBeenCalled();

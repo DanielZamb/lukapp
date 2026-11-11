@@ -165,14 +165,14 @@ test("a selected category controls the sign during selection and later amount ed
   const editor = await open(api);
   await act(async () => editor().setAmount(money("-1.250,00")));
   await act(async () => editor().setCategories({ ids: ["salary"], primaryId: null }, "Income"));
-  expect(editor().amount.editor.text).toBe("+1.250,00");
+  expect(editor().amount.editor.text).toBe("+1250,00");
   await act(async () => editor().setAmount(money("-27,50")));
   expect(editor().amount.editor.text).toBe("+27,50");
   expect(editor().categories.ids).toEqual(["salary"]);
   await act(async () => editor().setCategories({ ids: ["food"], primaryId: null }, "Expense"));
   expect(editor().amount.editor.text).toBe("-27,50");
   await act(async () => editor().setAmount(money("+2.000,")));
-  expect(editor().amount.editor.text).toBe("-2.000,");
+  expect(editor().amount.editor.text).toBe("-2000,");
   expect(editor().categories.ids).toEqual(["food"]);
   await act(async () => editor().setCategories({ ids: [], primaryId: null }, null));
   await act(async () => editor().setAmount(money("+3")));

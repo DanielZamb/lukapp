@@ -196,8 +196,9 @@ async function render(field: Field, currency: Currency, language: Language) {
     for (const character of characters) {
       const node = input();
       const value = node.props.value as string;
-      const { end } = node.props.selection as { end: number };
-      await act(async () => node.props.onChangeText(value.slice(0, end) + character + value.slice(end)));
+      await act(async () => node.props.onChangeText(value + character));
+      const end = value.length + 1;
+      await act(async () => input().props.onSelectionChange?.({ nativeEvent: { selection: { start: end, end } } }));
     }
   };
   const decimal = async () => {
@@ -227,7 +228,7 @@ for (const field of fields) {
         await screen.type("1234");
         await screen.decimal();
         await screen.type("50");
-        expect(screen.input().props.value.replace(/^[+-]/, "")).toBe(currency === "COP" ? "1.234,50" : "1,234.50");
+        expect(screen.input().props.value.replace(/^[+-]/, "")).toBe(currency === "COP" ? "1234,50" : "1234.50");
         await screen.submit();
         expect(screen.sent).toEqual([123450]);
       });

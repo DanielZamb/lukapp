@@ -176,9 +176,19 @@ function reviewed(currency: "COP" | "USD", text: string | null, review: Partial<
   return { ...state, records: [{ ...row, review: { ...row.review, ...review }, reviewAmountText: text, reviewAmountFormat: text === null ? null : "pre-currency" as const }] };
 }
 
+test("a version 4 Candidate document reads unchanged as version 5, with no confirmation pending on its review text", () => {
+  const state = parseState(versionThree(reviewed("USD", "-1.234,50", { amountMinorUnits: 123450, direction: "out" })));
+  const versionFour = JSON.stringify({ ...JSON.parse(serializeState(state)), v: 4 });
+  const read = parseState(versionFour);
+  expect(read.v).toBe(5);
+  expect(read.records).toEqual(state.records);
+  expect((read.records[0] as ActiveCandidate).reviewAmountReview).toBeUndefined();
+  expect(projectCandidate(read.records[0] as ActiveCandidate).reviewAmount).toEqual({ text: "-1.234,50", format: "pre-currency" });
+});
+
 test("version 3 Candidate review text becomes tagged pre-currency text and reopens with the same money", () => {
   const state = parseState(versionThree(reviewed("USD", "-1.234,50", { amountMinorUnits: 123450, direction: "out" })));
-  expect(state.v).toBe(4);
+  expect(state.v).toBe(5);
   const row = state.records[0] as ActiveCandidate;
   expect(row).toMatchObject({ reviewAmountText: "-1.234,50", reviewAmountFormat: "pre-currency" });
   expect(row.reviewAmountReenter).toBeUndefined();

@@ -17,6 +17,7 @@ export function factsFromCandidate(candidate: IntakeCandidate): LocalEntryFacts 
     entryType: "normal",
     ...(typed ? {
       amountText: typed.text, amountFormat: typed.format, ...(typed.reenter ? { amountReenter: true } : {}),
+      ...(typed.review ? { amountReview: typed.review } : {}),
     } : {
       amountText: signed === null || candidate.suggestion.direction === null ? "" : formatMoney({
         currency: candidate.currency,

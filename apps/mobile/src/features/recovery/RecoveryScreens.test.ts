@@ -156,7 +156,7 @@ test("the editable hero precedes one static source, destination and plan, then p
   }));
   expect(screen.findByType(Header).props).toMatchObject({ title: "Move money", eyebrow: "RECOVERY CONTRIBUTION" });
   const input = screen.findByType(TextInput);
-  expect(input.props).toMatchObject({ accessibilityLabel: "Amount in COP", value: "2.300,00", keyboardType: "decimal-pad", editable: true });
+  expect(input.props).toMatchObject({ accessibilityLabel: "Amount in COP", value: "2300,00", keyboardType: "decimal-pad", editable: true });
   expect(screen.findAllByType(Choice)).toHaveLength(0);
   expect(screen.findByType(ListGroup).findAllByType(ListRow).map((row) => ({ title: row.props.title, value: row.props.value, icon: row.props.icon }))).toEqual([
     { title: "From", value: "Daily", icon: "arrow-up-circle-outline" },

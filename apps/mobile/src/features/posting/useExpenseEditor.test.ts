@@ -156,7 +156,7 @@ test("an uncertain response keeps the entry locked and retries its exact saved p
     await editor().submit();
   });
   expect(editor().posted).toBeNull();
-  expect(editor().amount.editor.text).toBe("-1.234,50");
+  expect(editor().amount.editor.text).toBe("-1234,50");
   expect(editor().pending).toBe(true);
   expect(editor().editable).toBe(false);
   expect(api.clear).not.toHaveBeenCalled();

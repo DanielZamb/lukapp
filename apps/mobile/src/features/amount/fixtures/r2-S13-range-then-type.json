@@ -1,0 +1,41 @@
+{
+ "device": "Samsung Galaxy S21 FE (SM-G990E), Android 16, Samsung Keyboard 5.9.20.89, locale en-US, font scale 1.5",
+ "recorded": "2026-11-10",
+ "source": "reports/mvp-2026-11-10/amount-field/device/logs/r2-S13-range-then-type.jsonl",
+ "currency": "USD",
+ "initialText": "123456",
+ "finalText": "9",
+ "sends": [
+  900
+ ],
+ "events": [
+  {
+   "kind": "selection",
+   "start": 0,
+   "end": 6
+  },
+  {
+   "kind": "keyPress",
+   "key": "9"
+  },
+  {
+   "kind": "selection",
+   "start": 6,
+   "end": 6
+  },
+  {
+   "kind": "text",
+   "text": "9",
+   "eventCount": 260
+  },
+  {
+   "kind": "selection",
+   "start": 1,
+   "end": 1
+  },
+  {
+   "kind": "send",
+   "expect": 900
+  }
+ ]
+}

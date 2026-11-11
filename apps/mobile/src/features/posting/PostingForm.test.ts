@@ -67,7 +67,7 @@ const handlers = {
   onDone: vi.fn(),
 };
 
-test.each([false, true])("typing a new expense preserves its sign and grouping, batch=%s", async (saveToBatch) => {
+test.each([false, true])("typing a new expense keeps its sign and the digits exactly as typed, batch=%s", async (saveToBatch) => {
   const post = vi.fn<PostingTransport["post"]>(async () => ({
     description: "",
     amount: { currency: "COP", minorUnits: 1250000 },
@@ -111,11 +111,12 @@ test.each([false, true])("typing a new expense preserves its sign and grouping, 
   for (const digit of "12500") {
     await act(async () => input().props.onChangeText(`${input().props.value}${digit}`));
   }
-  expect(input().props.value).toBe("-12.500");
+  expect(input().props.value).toBe("-12500");
   await act(async () => input().props.onChangeText("-12abc500"));
   expect(input().props.value).toBe("-12abc500");
   await act(async () => submit());
   expect(saveToBatch ? queued : post.mock.calls).toEqual(saveToBatch ? [null] : []);
+  await act(async () => input().props.onChangeText(""));
   await act(async () => input().props.onChangeText("-12.500"));
   expect(input().props.value).toBe("-12.500");
   await act(async () => submit());
@@ -292,7 +293,7 @@ test("Add a place offers the four mapped types, emoji look, and balance today", 
     );
   });
   expect(text()).toContain(
-    "Add a place\nName you recognize\nType\nChecking account\nSavings account\nDigital wallet\nCash\nLook\n🐷\nChange\nBalance today\n,\nAdd this place",
+    "Add a place\nName you recognize\nType\nChecking account\nSavings account\nDigital wallet\nCash\nLook\n🐷\nChange\nBalance today\n,\nReads as COP 0,00\nAdd this place",
   );
   const types = root!.root
     .findByProps({ accessibilityLabel: "Place type" })

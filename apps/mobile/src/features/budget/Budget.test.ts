@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
+import { typeAmount } from "../amount/typing.testSupport";
 import { getFunctionName, type FunctionArgs, type FunctionReference, type FunctionReturnType } from "convex/server";
 import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -114,7 +115,7 @@ test("creation chooses a category before the composer, then saves shared-parser 
   expect(screen.findAll((node) => String(node.type) === "EditorSheet")).toHaveLength(0);
   expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props).toMatchObject({ keyboardType: "decimal-pad", placeholder: "0" });
   expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(false);
-  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("800.000");
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("800000");
   expect(screen.findByProps({ accessibilityLabel: "COP 800.000" }).props.accessibilityState.selected).toBe(true);
   expect(texts(screen).some((text) => text.startsWith("Repeats each month"))).toBe(false);
   expect(screen.findByProps({ accessibilityLabel: "Remaining jar" }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 0, text: "−COP 60.000 remaining" });
@@ -122,15 +123,15 @@ test("creation chooses a category before the composer, then saves shared-parser 
   expect(["COP 600.000", "COP 800.000", "COP 1.000.000", "COP 1.200.000"].map((label) => screen.findByProps({ accessibilityLabel: label }).props.accessibilityLabel))
     .toEqual(["COP 600.000", "COP 800.000", "COP 1.000.000", "COP 1.200.000"]);
   await act(async () => screen.findByProps({ accessibilityLabel: "COP 1.000.000" }).props.onPress());
-  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("1.000.000");
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("1000000");
   totals = { month, currency: "COP", totalsOverlap: true, categories: [] };
   await act(async () => root?.update(createElement(BudgetRoute)));
-  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("1.000.000");
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("1000000");
   totals = { month, currency: "COP", totalsOverlap: true, categories: [{ categoryId: "food", name: "Food", nature: "Expense", minorUnits: 86_000_000 }] };
   await act(async () => root?.update(createElement(BudgetRoute)));
   expect(screen.findByProps({ accessibilityLabel: "Remaining jar" }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 14, text: "COP 140.000 remaining" });
   expect(texts(screen)).toContain("What is still in the jar. Spent eats it.");
-  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("0"));
+  await typeAmount(() => screen.findByProps({ accessibilityLabel: "Monthly limit" }), "0", { replacing: true });
   expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(true);
   await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("1.500.000,25"));
   expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(true);
@@ -154,7 +155,7 @@ test.each(["second place", "existing limit", "removed limit"])("a workspace with
   const screen = await render();
   await act(async () => screen.findByProps({ accessibilityLabel: unlockedBy === "existing limit" ? "Set another limit" : "Set a October limit" }).props.onPress());
   await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
-  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("50.000"));
+  await typeAmount(() => screen.findByProps({ accessibilityLabel: "Monthly limit" }), "50.000", { replacing: true });
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
   expect(save).toHaveBeenCalledOnce();
   expect(reset.mock.calls).toEqual([[{ type: "RESET", payload: { index: 0, routes: [{ name: "index" }] } }]]);
@@ -171,7 +172,7 @@ test("the first limit still unlocks when live data updates before its receipt ar
   const screen = await render();
   await act(async () => screen.findByProps({ accessibilityLabel: "Set a October limit" }).props.onPress());
   await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
-  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("50.000"));
+  await typeAmount(() => screen.findByProps({ accessibilityLabel: "Monthly limit" }), "50.000", { replacing: true });
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
   expect(reset).not.toHaveBeenCalled();
   if (board) board.jars.push({ category: { id: "food", name: "Food", emoji: "🛒" }, revisionId: "revision", limitMinorUnits: 5_000_000, consumptionMinorUnits: 0 });
@@ -212,7 +213,7 @@ test("composer waits for spending and preserves a failed save for a safe retry",
   expect(texts(screen)).toContain("COP 0 out this month");
   expect(texts(screen)).toContain("COP 200.000");
   expect(screen.findAllByProps({ accessibilityLabel: "COP 0" })).toHaveLength(0);
-  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("400.000");
+  expect(screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.value).toBe("400000");
   expect(screen.findByProps({ accessibilityLabel: "COP 400.000" }).props.accessibilityState.selected).toBe(true);
   save.mockRejectedValueOnce(new Error("lost acknowledgement"));
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
@@ -343,13 +344,8 @@ function limitJar(limitMinorUnits = 40_000_000, revisionId = "revision") {
 const limitInput = (screen: ReactTestInstance) => screen.findByProps({ accessibilityLabel: "New limit in COP" });
 /** Selects the limit shown and types over it one key at a time. */
 async function typeLimit(screen: ReactTestInstance, text: string) {
-  const shown: string = limitInput(screen).props.value;
-  await act(async () => limitInput(screen).props.onSelectionChange({ nativeEvent: { selection: { start: 0, end: shown.length } } }));
   if (!text) await act(async () => limitInput(screen).props.onChangeText(""));
-  for (const key of text) {
-    const { value, selection } = limitInput(screen).props as { value: string; selection: { start: number; end: number } };
-    await act(async () => limitInput(screen).props.onChangeText(value.slice(0, selection.start) + key + value.slice(selection.end)));
-  }
+  await typeAmount(() => limitInput(screen), text, { replacing: true });
 }
 const saveButton = (screen: ReactTestInstance) => screen.findByProps({ accessibilityLabel: "Save October" });
 
@@ -357,17 +353,17 @@ test("an existing limit saves typed amounts below and above it that no shortcut 
   limitJar();
   const screen = await render();
   await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
-  expect(limitInput(screen).props).toMatchObject({ value: "400.000,00", keyboardType: "decimal-pad", editable: true });
+  expect(limitInput(screen).props).toMatchObject({ value: "400000,00", keyboardType: "decimal-pad", editable: true });
   expect(texts(screen)).toContain("This is the current limit. Type another amount or tap a shortcut.");
   expect(saveButton(screen).props.accessibilityState.disabled).toBe(true);
   await typeLimit(screen, "315500");
-  expect(limitInput(screen).props.value).toBe("315.500");
+  expect(limitInput(screen).props.value).toBe("315500");
   expect(screen.findAll((node) => String(node.type) === "Pressable" && node.props.accessibilityState?.selected === true)).toHaveLength(0);
   await act(async () => saveButton(screen).props.onPress());
   limitJar(31_550_000, "lowered");
   await act(async () => root?.update(createElement(BudgetRoute)));
   await act(async () => screen.findByProps({ accessibilityLabel: "Change October's limit" }).props.onPress());
-  expect(limitInput(screen).props.value).toBe("315.500,00");
+  expect(limitInput(screen).props.value).toBe("315500,00");
   await typeLimit(screen, "1.234.567,8");
   await act(async () => saveButton(screen).props.onPress());
   expect(save.mock.calls.map(([request]) => request)).toEqual([
@@ -510,7 +506,7 @@ test("a typed zero offers both acts in plain words, saves nothing by itself, and
   expect(saveButton(screen).props.accessibilityState.disabled).toBe(true);
   await act(async () => saveButton(screen).props.onPress());
   await androidBack();
-  expect(limitInput(screen).props.value).toBe("400.000,00");
+  expect(limitInput(screen).props.value).toBe("400000,00");
   expect(texts(screen)).not.toContain("A limit of zero?");
   expect(sheets(screen)).toBe(1);
   await androidBack();
@@ -542,7 +538,7 @@ test("removing from the typed-zero choice names the category and month, sends on
   expect(screen.findAll((node) => String(node.type) === "Pressable" && node.props.accessibilityLabel?.startsWith("Food:"))).toHaveLength(0);
   await press(screen, "Set another limit");
   await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
-  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("300.000"));
+  await typeAmount(() => screen.findByProps({ accessibilityLabel: "Monthly limit" }), "300.000", { replacing: true });
   await press(screen, "Save this limit");
   expect(save.mock.calls.map(([args]) => args)).toEqual([{
     workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10", limit: { currency: "COP", minorUnits: 30_000_000 },
@@ -656,7 +652,7 @@ test("every new choice closes on Back before the sheet, and two round trips retu
     expect(texts(screen)).toContain("Remove the limit for Food?");
     await androidBack();
     expect(texts(screen)).not.toContain("Remove the limit for Food?");
-    expect(limitInput(screen).props.value).toBe("400.000,00");
+    expect(limitInput(screen).props.value).toBe("400000,00");
     await press(screen, "Spend nothing");
     await press(screen, "Cancel");
     expect(texts(screen)).not.toContain("Spend nothing in Food?");
@@ -685,12 +681,12 @@ test("a new limit refuses a typed zero with a message and offers neither removal
   const screen = await render();
   await press(screen, "Set a October limit");
   await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
-  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("0"));
+  await typeAmount(() => screen.findByProps({ accessibilityLabel: "Monthly limit" }), "0", { replacing: true });
   expect(alerts(screen)).toEqual(["The limit must be more than zero."]);
   expect(screen.findByProps({ accessibilityLabel: "Save this limit" }).props.disabled).toBe(true);
   expect(texts(screen).filter((text) => /zero\?|Remove|Spend nothing/.test(text))).toEqual([]);
   await press(screen, "Save this limit");
-  await act(async () => screen.findByProps({ accessibilityLabel: "Monthly limit" }).props.onChangeText("50.000"));
+  await typeAmount(() => screen.findByProps({ accessibilityLabel: "Monthly limit" }), "50.000", { replacing: true });
   expect(alerts(screen)).toEqual([]);
   expect([save.mock.calls, spendNothing.mock.calls, removeLimit.mock.calls]).toEqual([[], [], []]);
 });
@@ -701,14 +697,10 @@ test("a workspace currency change closes an open limit editor, and the limit typ
   await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
   const monthly = () => screen.findByProps({ accessibilityLabel: "Monthly limit" });
   async function typeMonthly(text: string) {
-    await act(async () => monthly().props.onSelectionChange({ nativeEvent: { selection: { start: 0, end: String(monthly().props.value).length } } }));
-    for (const key of text) {
-      const { value, selection } = monthly().props as { value: string; selection: { start: number; end: number } };
-      await act(async () => monthly().props.onChangeText(value.slice(0, selection.start) + key + value.slice(selection.end)));
-    }
+    await typeAmount(monthly, text, { replacing: true });
   }
   await typeMonthly("1234");
-  expect(monthly().props.value).toBe("1.234");
+  expect(monthly().props.value).toBe("1234");
   board = { ...board!, currency: "USD" };
   await act(async () => root?.update(createElement(BudgetRoute)));
   expect(screen.findAllByProps({ accessibilityLabel: "Monthly limit" })).toHaveLength(0);
@@ -716,7 +708,7 @@ test("a workspace currency change closes an open limit editor, and the limit typ
   await act(async () => screen.findByProps({ accessibilityLabel: "Set a October limit" }).props.onPress());
   await act(async () => screen.findByProps({ accessibilityRole: "radio" }).props.onPress());
   await typeMonthly("1234");
-  expect(monthly().props.value).toBe("1,234");
+  expect(monthly().props.value).toBe("1234");
   await act(async () => screen.findByProps({ accessibilityLabel: "Save this limit" }).props.onPress());
   expect(save.mock.calls.map(([request]) => request.limit)).toEqual([{ currency: "USD", minorUnits: 123400 }]);
 });

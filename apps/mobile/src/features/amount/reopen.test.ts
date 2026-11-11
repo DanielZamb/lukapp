@@ -11,9 +11,9 @@ import type { PendingPosting } from "../posting/pendingPostingSchema";
 import { usePostingEditor, type PostingTransport } from "../posting/usePostingEditor";
 import { createCandidateBinding } from "../intake/postingBinding";
 import { emptyState, ingest, serializeState, type ActiveCandidate } from "../intake/durableState";
+import { IntakeService } from "../intake/service";
 import { capture, fixture, mapping, now } from "../intake/service.testSupport";
-import { nativeTextChange, nativeTrackOf } from "./nativeEdit";
-import { confirmAmount, editAmountSession, openAmount, toggleAmountSign } from "./session";
+import { confirmAmount, openAmount, toggleAmountSign, withNativeText } from "./session";
 
 let root: ReactTestRenderer | undefined;
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; vi.unstubAllGlobals(); });
@@ -71,9 +71,9 @@ const savedBefore = (currency: string, amountText: string) => parseLocalEntryDoc
 }, now).document.drafts;
 
 test.each([
-  ["COP", "-1.234,50", "-1.234,50", null],
-  ["USD", "-1.234,50", "-1,234.50", { reason: "converted", previous: "-1.234,50", minorUnits: 123450 }],
-  ["USD", "-1.234", "-1,234.00", { reason: "converted", previous: "-1.234", minorUnits: 123400 }],
+  ["COP", "-1.234,50", "-1234,50", null],
+  ["USD", "-1.234,50", "-1,234.50", { reason: "converted", previous: "-1.234,50" }],
+  ["USD", "-1.234", "-1,234.00", { reason: "converted", previous: "-1.234" }],
 ])("a %s Draft saved before the update as %s reopens as %s and posts the same money once confirmed", async (currency, saved, shown, review) => {
   const { api, posted } = transport();
   const { value } = port(savedBefore(currency, saved));
@@ -119,18 +119,18 @@ test.each([["COP", "-1.234,5", 123450], ["USD", "-1,234.5", 123450]])("a new %s 
   const { api } = transport();
   const store = port([]);
   const first = await openEditor({ currency, drafts: store.value, api });
-  await act(async () => { first.editor().setAmount(openAmount(currency, typed)); first.editor().setDescription("Lunch"); });
+  await act(async () => { first.editor().setAmount([...typed].reduce((session, key) => withNativeText(session, session.editor.text + key), openAmount(currency))); first.editor().setDescription("Lunch"); });
   await act(async () => { await first.editor().keepDraft(); });
   expect(store.kept[0]?.facts).toMatchObject({ amountText: typed, amountFormat: currency === "COP" ? "cop/1" : "usd/1" });
   await act(async () => root?.unmount()); root = undefined;
   const { api: second, posted } = transport();
   const reopened = await openEditor({ currency, drafts: store.value, draftId: "new", api: second });
-  expect(reopened.editor().amount.editor.text).toBe(typed);
+  expect(reopened.editor().amount.editor.text).toBe(typed.replace(currency === "COP" ? "." : ",", ""));
   await act(async () => { await reopened.editor().submit(); });
   expect(posted.map((command) => command.payload.amount)).toEqual([{ currency, minorUnits }]);
 });
 
-test.each([["COP", "-1.234,50"], ["USD", "-1,234.50"]])("a %s batch row reopens from its stored command as %s and keeps its minor units", async (currency, shown) => {
+test.each([["COP", "-1234,50"], ["USD", "-1234.50"]])("a %s batch row reopens from its stored command as %s and keeps its minor units", async (currency, shown) => {
   const { api } = transport();
   const { editor } = await openEditor({ currency, api });
   const command: PendingPosting = { kind: "expense", payload: { workspaceId: "workspace", financialAccountProfileId: "cash",
@@ -187,7 +187,7 @@ async function openCandidate(service: ReturnType<typeof fixture>["service"], cur
   return () => { if (!editor) throw new Error("No editor"); return editor; };
 }
 
-test.each([["COP", "-1.234,50"], ["USD", "-1,234.50"]] as const)("a %s Candidate edit saved before the update reopens as %s and confirms the same money", async (currency, shown) => {
+test.each([["COP", "-1234,50"], ["USD", "-1,234.50"]] as const)("a %s Candidate edit saved before the update reopens as %s and confirms the same money", async (currency, shown) => {
   const f = await candidateSavedBefore(currency, "-1.234,50", 123450);
   const dispatch = vi.fn(async (command: ConfirmCandidateInput) => confirmed(command));
   const editor = await openCandidate(f.service, currency, dispatch);
@@ -201,6 +201,31 @@ test.each([["COP", "-1.234,50"], ["USD", "-1,234.50"]] as const)("a %s Candidate
   }
   await act(async () => { await editor().submit(); });
   expect(dispatch.mock.calls.map(([command]) => command.confirmed.amount)).toEqual([{ currency, minorUnits: 123450 }]);
+});
+
+test("finding 5: a Candidate's pasted amount still awaits confirmation after closing, reopening and restarting", async () => {
+  const f = await candidateSavedBefore("COP", "-1.234,50", 123450);
+  const dispatch = vi.fn(async (command: ConfirmCandidateInput) => confirmed(command));
+  let editor = await openCandidate(f.service, "COP", dispatch);
+  await act(async () => { editor().setDescription("Market"); editor().setAmount(withNativeText(editor().amount, "-1.234")); });
+  expect(editor().amount.review).toEqual({ reason: "pasted", previous: null });
+  await act(async () => root?.unmount()); root = undefined;
+  expect(serializeState(f.state())).toContain("\"reviewAmountReview\":{\"reason\":\"pasted\",\"previous\":null}");
+  editor = await openCandidate(f.service, "COP", dispatch);
+  expect(editor().amount.editor.text).toBe("-1.234");
+  expect(editor().amount.review).toEqual({ reason: "pasted", previous: null });
+  expect(editor().canSubmit).toBe(false);
+  await act(async () => { await editor().submit(); });
+  expect(dispatch).not.toHaveBeenCalled();
+  await act(async () => root?.unmount()); root = undefined;
+  const restarted = new IntakeService(f.deps);
+  await restarted.refresh();
+  editor = await openCandidate(restarted, "COP", dispatch);
+  expect(editor().amount.review).toEqual({ reason: "pasted", previous: null });
+  expect(editor().canSubmit).toBe(false);
+  await act(async () => { editor().setAmount(confirmAmount(editor().amount)); });
+  await act(async () => { await editor().submit(); });
+  expect(dispatch.mock.calls.map(([command]) => command.confirmed.amount)).toEqual([{ currency: "COP", minorUnits: 123400 }]);
 });
 
 test("a Candidate edit whose saved text and saved amount disagree asks for re-entry and confirms nothing", async () => {
@@ -224,7 +249,7 @@ test("a rewritten Draft awaits confirmation until confirmed, through keeping, a 
   expect(store.kept.at(-1)?.facts.amountReview).toBeUndefined();
   await act(async () => root?.unmount()); root = undefined;
   opened = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
-  expect(opened.editor().amount.review).toEqual({ reason: "converted", previous: "-1.234", minorUnits: 123400 });
+  expect(opened.editor().amount.review).toEqual({ reason: "converted", previous: "-1.234" });
   await act(async () => { opened.editor().setAmount(toggleAmountSign(opened.editor().amount)); });
   expect(opened.editor().amount.editor.text).toBe("+1,234.00");
   await act(async () => { await opened.editor().keepDraft(); });
@@ -233,7 +258,7 @@ test("a rewritten Draft awaits confirmation until confirmed, through keeping, a 
   await act(async () => root?.unmount()); root = undefined;
   opened = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
   expect(opened.editor().amount.editor.text).toBe("+1,234.00");
-  expect(opened.editor().amount.review).toEqual({ reason: "converted", previous: "-1.234", minorUnits: 123400 });
+  expect(opened.editor().amount.review).toEqual({ reason: "converted", previous: "-1.234" });
   expect(opened.editor().canSubmit).toBe(false);
   await act(async () => { opened.editor().setAmount(confirmAmount(opened.editor().amount)); });
   await act(async () => { await opened.editor().keepDraft(); });
@@ -250,9 +275,9 @@ test("an amount edited and restored to the same characters is saved as the sessi
   const store = port(savedBefore("USD", "-1.234,50"));
   const { editor } = await openEditor({ currency: "USD", drafts: store.value, draftId: "old", api });
   expect(editor().amount.editor.text).toBe("-1,234.50");
-  await act(async () => { editor().setAmount(editAmountSession(editor().amount, { kind: "delete", direction: "backward" })); });
+  await act(async () => { editor().setAmount(withNativeText(editor().amount, "-1,234.5")); });
   expect(editor().amount.editor.text).toBe("-1,234.5");
-  await act(async () => { editor().setAmount(editAmountSession(editor().amount, { kind: "type", character: "0" })); });
+  await act(async () => { editor().setAmount(withNativeText(editor().amount, "-1,234.50")); });
   expect(editor().amount.editor.text).toBe("-1,234.50");
   await act(async () => { await editor().keepDraft(); });
   expect(store.kept.at(-1)?.facts).toMatchObject({ amountText: "-1,234.50", amountFormat: "usd/1",
@@ -264,14 +289,14 @@ test("a pasted amount kept in a Draft reopens still awaiting confirmation", asyn
   const store = port([]);
   const first = await openEditor({ currency: "USD", drafts: store.value, api });
   const blank = first.editor().amount;
-  await act(async () => { first.editor().setAmount(nativeTextChange(blank, nativeTrackOf(blank), "-1,234").session); });
+  await act(async () => { first.editor().setAmount(withNativeText(blank, "-1,234")); });
   await act(async () => { first.editor().setDescription("Rent"); });
   expect(first.editor().canSubmit).toBe(false);
   await act(async () => { await first.editor().keepDraft(); });
   expect(store.kept.at(-1)?.facts).toMatchObject({ amountText: "-1,234", amountFormat: "usd/1", amountReview: { reason: "pasted", previous: null } });
   await act(async () => root?.unmount()); root = undefined;
   const reopened = await openEditor({ currency: "USD", drafts: store.value, draftId: "new", api });
-  expect(reopened.editor().amount.review).toEqual({ reason: "pasted", previous: null, minorUnits: 123400 });
+  expect(reopened.editor().amount.review).toEqual({ reason: "pasted", previous: null });
   expect(reopened.editor().canSubmit).toBe(false);
 });
 
