@@ -165,4 +165,6 @@ export const posting: Messages<typeof en> = {
   rejectAmountInvalid: "Escribe un monto válido antes de registrar.",
   rejectDirectionInvalid: "Escribe el monto con signo: negativo si la plata sale, positivo si entra.",
   rejectWorkspaceNotFound: "Este espacio ya no está disponible.",
+  entryChanged: "El movimiento cambió después de revisar el Presupuesto. Revísalo y regístralo de nuevo.",
+  budgetUnchecked: "No pudimos revisar tu Presupuesto. Intenta registrarlo de nuevo.",
 };

@@ -39,6 +39,7 @@ import {
   type AmountSession,
 } from "../amount/session";
 import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
+import { sameValue } from "../confirmation";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -163,6 +164,23 @@ const unclassified: Classification = { value: { ids: [], primaryId: null }, natu
 function classify(value: TransactionCategories, nature: CategoryNature | null = null): Classification {
   return { value, nature: value.ids.length ? nature : null };
 }
+
+/**
+ * An entry as a confirmation shows it: every value its command is built from, as plain data. A confirmation of this
+ * entry sends it only while the form still reads the same.
+ */
+export type EntrySnapshot = Readonly<{
+  entryType: EntryType;
+  currency: string;
+  /** Signed: negative for money out. */
+  minorUnits: number;
+  date: string;
+  description: string;
+  profileId: string;
+  destinationId: string | null;
+  categoryIds: readonly string[];
+  primaryId: string | null;
+}>;
 
 /** The From and To a person confirmed for a transfer. Any other pair on the form is unconfirmed. */
 export type TransferPair = { from: string; to: string };
@@ -366,6 +384,17 @@ export function usePostingEditor(
       profileId: account.financialAccountProfileId,
       destinationId: null,
       categories: { ids: [], primaryId: null },
+    };
+  }
+  /** The entry the form would send now, or null when it holds no sendable entry of its own. */
+  function entrySnapshot(now: ReadAtPress<Editor>): EntrySnapshot | null {
+    if (now.setup || now.pending || intake) return null;
+    const minorUnits = sendableMinorUnits(now.amount, account.currency);
+    if (minorUnits === null) return null;
+    const { ids, primaryId } = now.classification.value;
+    return {
+      entryType: now.entryType, currency: account.currency, minorUnits, date: now.date, description: now.description.trim(),
+      profileId: now.profileId, destinationId: now.destinationId, categoryIds: [...ids], primaryId,
     };
   }
   function snapshotFacts(now: EditorView): LocalEntryFacts {
@@ -657,10 +686,18 @@ export function usePostingEditor(
     await reviewWrites.current.catch(() => {});
     return intake.discard();
   }
-  async function submit() {
+  /**
+   * Sends the entry on the form. With `shown`, the entry a confirmation showed, it sends only while the form still
+   * reads exactly that entry; otherwise nothing is sent and the person is told the entry changed.
+   */
+  async function submit(shown?: EntrySnapshot) {
     const mounted = lifetime.current;
     const now = readForm();
     if (!mounted.active || opLock.current || !canSubmitWith(now)) return;
+    if (shown && !sameValue(entrySnapshot(now), shown)) {
+      setError(t("posting.entryChanged"));
+      return;
+    }
     opLock.current = true;
     submitting.current = true;
     change({ busy: true });
@@ -788,6 +825,8 @@ export function usePostingEditor(
     readAmount: () => readForm().amount,
     /** The entry as of the latest change, for a check a press makes before it sends. */
     read: () => view(readForm()),
+    /** The entry the form would send now, for a confirmation to show and bind. */
+    snapshot: () => entrySnapshot(readForm()),
     setDescription: (value: string) => {
       if (canEdit()) change({ description: value });
     },

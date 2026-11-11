@@ -850,7 +850,7 @@ async function foodExpense(amount: string) {
   await act(async () => sheet().props.onSelect("food"));
   await act(async () => sheet().props.onDone());
 }
-const posted = () => writes.post.mock.calls.map(([command]: [PendingPosting]) => command.payload.amount.minorUnits);
+const posted = () => writes.post.mock.calls.map(([command]) => (command as PendingPosting).payload.amount.minorUnits);
 const warning = () => root!.root.findAll((node) => node.props.label === "Continue anyway" && typeof node.props.onPress === "function")[0];
 
 test("fourth review, finding 2: Continue on a Budget warning never posts an amount the warning was not checked against", async () => {
@@ -874,4 +874,18 @@ test("fourth review, finding 3: a kept Post handler checks the Budget of the mon
   await act(async () => { await kept(); });
   expect(posted()).toEqual([]);
   expect(warning()).toBeDefined();
+});
+
+test("two presses of Post open one Budget warning, and two presses of Continue post the entry once", async () => {
+  queryData.budget = (month) => ({ month, jars: [foodJar] });
+  await foodExpense("-120000");
+  const press = formProps().onPost;
+  await act(async () => { press(); press(); });
+  expect(convexQuery).toHaveBeenCalledTimes(1);
+  expect(posted()).toEqual([]);
+  const kept = warning().props.onPress as () => void;
+  await act(async () => { kept(); });
+  await act(async () => { kept(); });
+  await act(async () => { press(); });
+  expect(posted()).toEqual([12_000_000]);
 });

@@ -162,4 +162,6 @@ export const posting = {
   rejectAmountInvalid: "Enter a valid amount before posting.",
   rejectDirectionInvalid: "Enter a signed amount: negative for money out, positive for money in.",
   rejectWorkspaceNotFound: "This workspace is no longer available.",
+  entryChanged: "The entry changed after the Budget check. Check it and post again.",
+  budgetUnchecked: "We couldn't check your Budget. Try posting again.",
 } as const;

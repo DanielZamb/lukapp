@@ -9,31 +9,35 @@ import { Header, PrimaryButton, SecondaryButton, useUi, useTheme } from "../../u
 import { useT } from "../../i18n";
 import { compactMoney } from "../amount/compact";
 import { font, spacing } from "../../ui/tokens";
+import type { Shown } from "../confirmation";
 import type { PostingBudgetImpact } from "./postingImpact";
 
-export function PostingImpactSheet({
-  description,
+/** What a Budget warning shows: the entry's description and how far each jar goes over. */
+export type ImpactView = Readonly<{ description: string; hits: PostingBudgetImpact }>;
+
+/** The Budget warning before posting. Its two answers hand back the warning they were shown on. */
+export function PostingImpactSheet<S extends ImpactView>({
+  shown,
   currency,
-  hits,
   onContinue,
   onReconsider,
 }: {
-  description: string;
+  shown: Shown<S>;
   currency: string;
-  hits: PostingBudgetImpact;
-  onContinue: () => void;
-  onReconsider: () => void;
+  onContinue: (shown: Shown<S>) => void;
+  onReconsider: (shown: Shown<S>) => void;
 }) {
+  const { description, hits } = shown.snapshot;
   const ui = useUi();
   const theme = useTheme();
   const { t, language } = useT();
   const sheet = useRef<BottomSheetModal>(null);
   const decided = useRef(false);
   useEffect(() => { sheet.current?.present(); }, []);
-  function decide(action: () => void) {
+  function decide(action: (shown: Shown<S>) => void) {
     if (decided.current) return;
     decided.current = true;
-    action();
+    action(shown);
   }
   return (
     <BottomSheetModal

@@ -9,6 +9,7 @@ import { BudgetBoard } from "./BudgetBoard";
 import { BudgetLimitSheet } from "./BudgetLimitSheet";
 import { compactAmount, monthLabel, nextAction, type BudgetJar } from "./model";
 import { PostingImpactSheet } from "./PostingImpactSheet";
+import { showing } from "../confirmation";
 import { openAmount } from "../amount/session";
 import { postingBudgetImpact } from "./postingImpact";
 
@@ -117,8 +118,8 @@ test("the limit sheet keeps the month phrases whole in Spanish", async () => {
 
 test("the posting impact sheet formats the overage with the shared compact helper in one message", async () => {
   const screen = await inSpanish(createElement(PostingImpactSheet, {
-    description: "", currency: "COP", onContinue: () => {}, onReconsider: () => {},
-    hits: [{ category: { id: "food", name: "Comida", emoji: "🛒" }, overMinorUnits: 120_000_000 }],
+    currency: "COP", onContinue: () => {}, onReconsider: () => {},
+    shown: showing({ description: "", hits: [{ category: { id: "food", name: "Comida", emoji: "🛒" }, overMinorUnits: 120_000_000 }] }),
   }));
   const shown = texts(screen);
   // Intl separates the number and "M" with a no-break space.
@@ -181,8 +182,8 @@ test("a spend-nothing jar reads as a zero limit in Spanish on its sheet, the boa
   ]));
   await act(async () => root?.unmount());
   const warning = await inSpanish(createElement(PostingImpactSheet, {
-    description: "Pizza", currency: "COP", onContinue: () => {}, onReconsider: () => {},
-    hits: postingBudgetImpact({ jars: [zero], categoryIds: ["Domicilios"], expenseMinorUnits: 350_000_000 }),
+    currency: "COP", onContinue: () => {}, onReconsider: () => {},
+    shown: showing({ description: "Pizza", hits: postingBudgetImpact({ jars: [zero], categoryIds: ["Domicilios"], expenseMinorUnits: 350_000_000 }) }),
   }));
   expect(texts(warning)).toContain(`Domicilios: 3,5${nb}M de más`);
 });
