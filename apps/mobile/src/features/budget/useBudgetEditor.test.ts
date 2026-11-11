@@ -261,3 +261,46 @@ test("access refusals: wipe signals go to access handling, a first denial releas
   expect(uncertain.send.mock.calls.map(([command]) => command)).toEqual([1, 2, 3].map(() => ({ kind: "remove", args: food("budget-1") })));
   expect(uncertain.onSaved).toHaveBeenCalledOnce();
 });
+
+test("a Save handler kept before the category changed sets the limit on the category the screen shows", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => { editor().onCategory("food"); editor().onAmount(money("1.500")); });
+  const kept = editor().submit;
+  await act(async () => { editor().onCategory("family"); });
+  expect(editor().categoryId).toBe("family");
+  await act(async () => { await kept(); });
+  expect(api.send.mock.calls.map(([command]) => command)).toEqual([{ kind: "amount", args: {
+    workspaceId: "workspace", categoryId: "family", effectiveMonth: "2026-10",
+    limit: { currency: "COP", minorUnits: 150000 }, expectedRevisionId: null, idempotencyKey: "budget-1",
+  } }]);
+});
+
+test("a Save handler kept from before a closing refusal sends nothing more", async () => {
+  const api = transport();
+  api.send.mockRejectedValueOnce(new ConvexError({ kind: "budget", code: "limit_changed" }));
+  const editor = await open(api);
+  await act(async () => { editor().onCategory("food"); editor().onAmount(money("1.500")); });
+  const kept = editor().submit;
+  await act(async () => { await editor().submit(); });
+  expect(editor().error).toBe("This limit or month changed. Close and reopen the Budget to use its latest limit.");
+  await act(async () => { await kept(); });
+  expect(api.send).toHaveBeenCalledOnce();
+});
+
+test("handlers kept from before a lost reply neither edit the held limit nor rebuild it", async () => {
+  const api = transport();
+  api.send.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const editor = await open(api);
+  await act(async () => { editor().onCategory("food"); editor().onAmount(money("1.500")); });
+  const kept = { submit: editor().submit, category: editor().onCategory, amount: editor().onAmount };
+  await act(async () => { await kept.submit(); });
+  await act(async () => { kept.category("family"); kept.amount(money("9.000")); });
+  expect(editor()).toMatchObject({ categoryId: "food", amount: typedAmount("1.500") });
+  await act(async () => { await kept.submit(); });
+  const held = { kind: "amount", args: {
+    workspaceId: "workspace", categoryId: "food", effectiveMonth: "2026-10",
+    limit: { currency: "COP", minorUnits: 150000 }, expectedRevisionId: null, idempotencyKey: "budget-1",
+  } };
+  expect(api.send.mock.calls.map(([command]) => command)).toEqual([held, held]);
+});
