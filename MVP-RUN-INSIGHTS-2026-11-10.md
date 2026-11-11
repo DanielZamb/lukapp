@@ -136,3 +136,32 @@ Questions for the owner that no worker could settle: whether the server should a
 ## Evidence kept
 
 Raw evidence is not published: `reports/` is ignored by this repository's rules and new verification results belong there. What was chosen from the worker checkouts (reports, decision tables, failing-before logs, baseline witness scripts, mutation receipts; about 1 MB, full-suite logs dropped) is in the primary checkout under `reports/mvp-2026-11-10/worktree-evidence/<branch>/`, beside the worker reports already collected in `reports/mvp-2026-11-10/` and the device study in `reports/mvp-2026-11-10/amount-field/`. The recordings the tests need are tracked in `apps/mobile/src/features/amount/fixtures/`.
+
+## Addendum, 11 November 04:50: the later review rounds (head `3fd1a15`)
+
+The three workers still running when this was written have merged, followed by four more fix rounds, each prompted by an independent review of the one before. 3,477 tests pass. Backend on development is at `fb9ea3f`; later commits change the app only. Still no signed-in or device run.
+
+| Merge | What it fixed |
+|---|---|
+| `95649f1` | A retry's coded error no longer releases a request whose outcome is unknown; a Close or Undo is not sent unless saved on the phone first; Undo's preview renews on a new month. |
+| `a791015` | Amount field: batch confirm of unconfirmed amounts, Save reading the amount at the press, separate paste and conversion reasons, sign held beside the text. |
+| `ad025e2` | Recovery Move money and Activate plan on the shared frozen-command rule; a batch item refused by an access check stays frozen. |
+| `fb9ea3f` | Decimal key without caret acknowledgement (a completing mark is shown in a fresh input); "Confirm all Ready" follows the single-entry opening; Undo preview takes a `renewal` argument (backend). |
+| `6451e15` | Every write screen builds its command from one reading of the form at the press; guard test `apps/mobile/src/features/pressReads.test.ts`. |
+| `a597695` | Move money and Activate plan are stored before sending (`apps/mobile/src/features/unresolvedRequests.ts`), so a restart resends the same key. |
+| `bd12675` | An amount carries the opening it was typed under and is refused under a later currency or owner state; two-step confirmations act only on what they showed (`apps/mobile/src/features/confirmation.ts`); a frozen Candidate resends its held command. |
+| `3fd1a15` | Regression from `bd12675`: Post did nothing for a money-out Candidate. Also a Close left silent by a late paste. |
+
+Findings per review round on 11 November: 3, 5, 4, 5, 2. The last round's ordinary-use defect was introduced by the round before it.
+
+### Lessons added
+
+13. **A null that means "skip" is a defect waiting.** Twice a helper returned null for "I cannot describe this" and its caller treated that as a finished press: the person tapped and nothing happened, with no message. A press either builds a command or shows a reason.
+14. **Stop patching when a fix round introduces an ordinary-use regression.** The fifth reviewer's advice, taken: fix the two findings, add no further mechanism, and verify on a device before another review. If the next review finds another silent skip, make Post one function that returns a command or a reason.
+15. **Each review round should be asked whether the design is converging,** with reachability stated per finding (ordinary use, one-frame race, retained callback). Counts alone did not show that the causes were narrowing until the regression appeared.
+16. **Name the deployment on every deploy command.** `convex dev --once` without `CONVEX_DEPLOYMENT` in a worktree that has no `.env.local` creates a local anonymous config instead of failing.
+17. **Check a worker's branch name before merging;** T3 renames `t3/<id>` branches after the task title.
+
+### Next step
+
+Device verification against the deployed backend, signed in: Post an expense Candidate after choosing a category, Post an income Candidate, the Budget warning and Continue, Close a Place, resend a frozen Candidate, Move money with a lost reply and a restart, and the amount field's sign and decimal keys on the Samsung keyboard. The Codex reviewer seat is out of quota until 16 November; the last round was reviewed by Grok 4.7.
