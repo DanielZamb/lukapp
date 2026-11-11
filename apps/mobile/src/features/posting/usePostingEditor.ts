@@ -557,6 +557,7 @@ export function usePostingEditor(
       direction: directionOf(now.amount),
       setup: now.setup,
       pending: !!now.pending || intake?.frozen === true,
+      loading: now.loading,
       canSubmit: canSubmitWith(now),
       transferReviewRequired: !pairConfirmed(now),
     };
@@ -862,7 +863,6 @@ export function usePostingEditor(
           changeAmount(categoryAmount(now.amount, nature));
       }
     },
-    loading: form.loading,
     busy: form.busy,
     error,
     setupPosted,

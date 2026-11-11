@@ -1,6 +1,7 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useFormState } from "./amount/useAmountState";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useLocalEntryInteraction } from "../local-auth/interaction";
 import { PrimaryButton, SecondaryButton, useTheme, useUi } from "../ui/core";
@@ -45,9 +46,11 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   const finished = useRef(false);
   const unlockingSave = useRef<boolean | null>(null);
   const { showUnlocked } = useLevelNavigation();
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<PlaceKind>("Savings");
-  const [emojiChanged, setEmojiChanged] = useState(false);
+  /** The answers shown beside the editor's Place draft; choosing a kind reads them at the press. */
+  const [answers, setAnswers, readAnswers] = useFormState<{ name: string; kind: PlaceKind; emojiChanged: boolean }>({
+    name: "", kind: "Savings", emojiChanged: false,
+  });
+  const { name, kind } = answers;
   const [emojiOpen, setEmojiOpen] = useState(false);
   useEffect(() => {
     if (finished.current) return;
@@ -70,9 +73,10 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
   }, [editor, onClose, showUnlocked, t, workspace.timeZone, workspace.functionalCurrency]);
   const setup = editor.setup;
   function pickKind(next: PlaceKind) {
-    if (!setup || !editor.editable) return;
-    interact(); setKind(next);
-    editor.changeSetup({ productKind: kindDetails[next].productKind, ...(emojiChanged ? {} : { emoji: kindDetails[next].emoji }) });
+    if (!editor.read().setup) return;
+    interact();
+    setAnswers((now) => ({ ...now, kind: next }));
+    editor.changeSetup({ productKind: kindDetails[next].productKind, ...(readAnswers().emojiChanged ? {} : { emoji: kindDetails[next].emoji }) });
   }
   return <>
     {editor.loading && <ActivityIndicator accessibilityLabel={t("home.addPlaceLoading")} />}
@@ -94,7 +98,7 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
           <Text style={styles.fieldLabel}>{t("home.addPlaceName")}</Text>
           <BottomSheetTextInput accessibilityLabel={t("home.addPlaceNameA11y")} placeholder={t("home.addPlaceNamePlaceholder")} placeholderTextColor={theme.mutedForeground}
             value={name} editable={editor.editable} style={styles.input} onChangeText={(value) => {
-              interact(); setName(value); editor.changeSetup({ name: value.trim() || t("home.addPlaceDefaultName") });
+              interact(); setAnswers((now) => ({ ...now, name: value })); editor.changeSetup({ name: value.trim() || t("home.addPlaceDefaultName") });
             }} />
         </View>
         <View style={styles.field}>
@@ -124,15 +128,16 @@ export function HomePlaceSetup({ defaults, subject, unlocking, onClose }: {
         {editor.pending && <Text style={ui.muted}>{t("home.addPlacePending")}</Text>}
         <PrimaryButton label={editor.pending ? t("home.addPlaceRetry") : t("home.addPlaceSubmit")} trailingIcon="checkmark"
           pending={editor.busy} disabled={!editor.canSubmit} onPress={() => {
-            if (!editor.canSubmit) return;
+            const now = editor.read();
+            if (!now.canSubmit) return;
             interact();
-            if (!editor.pending) unlockingSave.current = unlocking;
+            if (!now.pending) unlockingSave.current = unlocking;
             void editor.submit();
           }} />
       </BottomSheetScrollView>}
     </BottomSheetModal>
     {emojiOpen && setup && <EmojiSheet emoji={setup.emoji ?? kindDetails[kind].emoji}
-      onPick={(emoji) => { setEmojiChanged(true); editor.changeSetup({ emoji }); }}
+      onPick={(emoji) => { setAnswers((now) => ({ ...now, emojiChanged: true })); editor.changeSetup({ emoji }); }}
       onUse={() => {}} onDismiss={() => setEmojiOpen(false)} />}
   </>;
 }
