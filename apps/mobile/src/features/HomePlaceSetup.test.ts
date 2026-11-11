@@ -302,3 +302,14 @@ test("after a workspace currency change the balance typed in the new currency is
   await act(async () => button("Add this place").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency: "USD", minorUnits: 123400 });
 });
+
+test("third review, finding 2: a name handler from the render before the last balance keystroke keeps the balance as typed", async () => {
+  await act(async () => { root = create(createElement(HomePlaceSetup, props(true, "COP"))); });
+  await typeAmount(() => input("Balance today"), "150", { replacing: true });
+  const staleName = input("Place name").props.onChangeText as (text: string) => void;
+  await typeAmount(() => input("Balance today"), "0");
+  await act(async () => staleName("Trip"));
+  expect(input("Balance today").props.value).toBe("1500");
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "Trip", amount: { currency: "COP", minorUnits: 150000 } });
+});

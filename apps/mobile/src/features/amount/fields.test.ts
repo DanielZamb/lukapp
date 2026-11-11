@@ -292,3 +292,14 @@ test.each([
     await act(async () => root?.unmount()); root = undefined;
   }
 });
+
+test("third review, finding 2: a place name handler from the render before the last balance keystroke keeps the balance as typed", async () => {
+  const screen = await render(fields.find((field) => field.name === "place setup balance")!, "COP", "en");
+  await screen.type("150");
+  const staleName = root!.root.find((node) => node.type === "input" && node.props.accessibilityLabel === "Place name").props.onChangeText as (text: string) => void;
+  await screen.type("0");
+  await act(async () => staleName("Trip"));
+  expect(screen.input().props.value).toBe("1500");
+  await screen.submit();
+  expect(screen.sent).toEqual([150000]);
+});
