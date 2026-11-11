@@ -1077,7 +1077,7 @@ test("in Spanish the new day and a stale refusal read as such", async () => {
     "El saldo cambió antes de cerrar el lugar, así que no se registró nada. Estamos trayendo el saldo nuevo…"]);
 });
 
-test("a Close handler kept before the default place was chosen again sends the default the summary shows", async () => {
+test("a Close handler kept before the default place was chosen again sends nothing; the summary's own Close sends the default it shows", async () => {
   remote.closure = closure("Asset", 0, { isDefault: true, requiresReplacementDefault: true });
   remote.close.mockResolvedValue(receipt());
   await open();
@@ -1091,6 +1091,9 @@ test("a Close handler kept before the default place was chosen again sends the d
   await ui.press("Continue");
   expect(ui.texts()).toContain("Daily becomes your default place.");
   await act(async () => kept());
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(ui.alerts()).toContain("Your answers changed before you confirmed. Check them and close again.");
+  await ui.press("Close Wallet");
   expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(0),
     reviewedAccountingDate: "2026-11-10", replacementDefaultFinancialAccountProfileId: "daily", lines: [] }]]);
 });

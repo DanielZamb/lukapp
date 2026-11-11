@@ -11,9 +11,10 @@ import { api } from "../api";
 import { formatMoney } from "../money";
 import type { UnresolvedEnding } from "./unresolved";
 import {
-  answerSpec, answersFor, balanceCase, blockerView, closingLineReview, lineMinorUnits, placeChoice, remainingMinorUnits, signedMoney, situationCopy,
+  answerSpec, answersFor, balanceCase, blockerView, closingLineReview, lineMinorUnits, placeChoice, remainingMinorUnits, reviewedLines, signedMoney,
+  situationCopy, type ReviewShown,
   type Act, type Answer, type BalanceCase, type Blocker, type ChoiceView, type Closure, type CloseReceipt, type LineDraft, type PlaceProfile,
-  type Reviewed, type UndoSnapshot,
+  type UndoSnapshot,
 } from "./model";
 
 type Money = Closure["balance"];
@@ -207,13 +208,14 @@ function useLineLabel() {
   return (line: LineDraft, target: string | null) => t(answerSpec(line.answer).review, { target: target ?? "" });
 }
 
-export function ReviewScreen({ name, balance, lines, choiceOf, accountingDate, notice, replacement, unavailable, onRepick, onRepickDefault,
-  busy, uncertain, error, canConfirm, onBack, onConfirm }: {
+export function ReviewScreen({ name, balance, lines, choiceOf, accountingDate, notice, replacement, replacementId, unavailable, onRepick,
+  onRepickDefault, busy, uncertain, error, canConfirm, onBack, onConfirm }: {
   name: string; balance: Money; lines: LineDraft[]; choiceOf: (line: LineDraft) => ChoiceView | null; accountingDate: string;
-  notice: string[]; replacement: ChoiceView | null; unavailable: boolean; onRepick: (lineId: string) => void; onRepickDefault: () => void;
+  notice: string[]; replacement: ChoiceView | null; replacementId: string | null; unavailable: boolean; onRepick: (lineId: string) => void;
+  onRepickDefault: () => void;
   busy: boolean; uncertain: boolean; error: string; canConfirm: boolean; onBack?: () => void;
-  /** Receives the balance and day this screen showed, which the closing confirms. */
-  onConfirm: (shown: Pick<Reviewed, "balance" | "accountingDate">) => void;
+  /** Receives the balance, day, lines and new Default Place this screen showed, which the closing confirms. */
+  onConfirm: (shown: ReviewShown) => void;
 }) {
   const ui = useUi();
   const styles = useStyles();
@@ -241,7 +243,7 @@ export function ReviewScreen({ name, balance, lines, choiceOf, accountingDate, n
     {busy && <ActivityIndicator accessibilityLabel={t("placeEnding.closing")} />}
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     <PrimaryButton label={uncertain ? t("placeEnding.closeRetry") : t("placeEnding.closeConfirm", { name })}
-      trailingIcon={uncertain ? "refresh" : "checkmark"} pending={busy} disabled={!canConfirm} onPress={() => onConfirm({ balance, accountingDate })} />
+      trailingIcon={uncertain ? "refresh" : "checkmark"} pending={busy} disabled={!canConfirm} onPress={() => onConfirm({ balance, accountingDate, lines: reviewedLines(lines), replacement: replacementId })} />
   </Screen>;
 }
 

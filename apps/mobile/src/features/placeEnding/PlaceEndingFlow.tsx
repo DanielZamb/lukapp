@@ -12,8 +12,9 @@ import { api } from "../api";
 import { formatMoney } from "../money";
 import { useFrozenCommand, type CommandState } from "../useFrozenCommand";
 import { useWorkspaceCalendar } from "../useWorkspaceCalendar";
+import { sameValue } from "../confirmation";
 import {
-  answerSpec, balanceCase, blockerView, categoryChoice, closeRequest, everyPlace, heldReason, keepAllowed, lineComplete, placeChoice, refusalMessage,
+  answerSpec, balanceCase, blockerView, categoryChoice, closeRequest, everyPlace, heldReason, keepAllowed, lineComplete, placeChoice, refusalMessage, reviewedLines,
   refusalOf, remainingMinorUnits, sameMoney, settlesEnding, staleNotice, typedNameMatches, undoRequest, workspaceDay,
   type Act, type Answer, type Blocker, type ChoiceView, type CloseReceipt, type CloseRequest, type LineDraft, type Reviewed,
   type SourceBlocker, type StaleNotice, type UndoReceipt, type UndoRequest,
@@ -107,6 +108,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const [previewChanged, setPreviewChanged] = useState<MessageKey | null>(null);
   const [resolvedNotice, setResolvedNotice] = useState<string | null>(null);
   const [sendBlock, setSendBlock] = useState<SourceBlocker | null>(null);
+  const [reviewChanged, setReviewChanged] = useState(false);
   const nextLine = useRef(0);
   const leaving = useRef(false);
   const categories = useQuery(api.accounting.listUserCategories, { workspaceId });
@@ -169,7 +171,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     if (now.adding) return change({ adding: false });
     const at = now.steps[now.steps.length - 1]!;
     if (at.name === "confirm") { setShownPreview(null); setPreviewChanged(null); }
-    if (at.name === "lines" || at.name === "review") setNotice(null);
+    if (at.name === "lines" || at.name === "review") { setNotice(null); setReviewChanged(false); }
     if (now.steps.length > 1) return moveSteps((current) => current.slice(0, -1));
     leave(onBack);
   }
@@ -392,14 +394,21 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   }
 
   return <ReviewScreen name={name} balance={balance} lines={lines} choiceOf={choiceOf} accountingDate={basis.accountingDate}
-    notice={noticeLines} replacement={replacementChoice} unavailable={unavailable} onRepick={repick} onRepickDefault={repickDefault}
-    busy={close.busy} uncertain={close.state.name === "uncertain"} error={error} onBack={locked ? undefined : back}
+    notice={noticeLines} replacement={replacementChoice} replacementId={replacement} unavailable={unavailable} onRepick={repick}
+    onRepickDefault={repickDefault} busy={close.busy} uncertain={close.state.name === "uncertain"}
+    error={reviewChanged ? t("placeEnding.reviewChanged") : error} onBack={locked ? undefined : back}
     canConfirm={!close.busy && (close.state.name === "uncertain" || (!unavailable && !waiting))}
     onConfirm={(shown) => {
       interact();
+      setReviewChanged(false);
       if (close.canEdit() && !clearToSend()) return;
       void close.submit(() => {
         const now = readFlow();
+        // The review's answers changed after this screen showed them: none of them is confirmed.
+        if (!sameValue(reviewedLines(now.lines), shown.lines) || now.replacement !== shown.replacement) {
+          setReviewChanged(true);
+          return null;
+        }
         return now.lines.some((line) => choiceOf(line)?.unavailable) || (now.replacement && placeChoice(now.replacement, places, t).unavailable) ? null
           : closeRequest({ reviewed: shown, workspaceId, place: { id: profileId, name }, lines: now.lines, replacement: now.replacement,
             idempotencyKey: Crypto.randomUUID() }, t);
