@@ -132,16 +132,17 @@ function savedAmountText(amount: AmountSession, opened: OpenedAmount | null): St
   return opened && opened.text === amount.editor.text && opened.review === amount.review ? opened.stored : storedAmountOf(amount);
 }
 
-/** The amount of a complete session. Submission paths call it after checking validity, and it refuses again. */
-function requiredMinorUnits(amount: AmountAtPress): number {
-  const minorUnits = sendableMinorUnits(amount);
+/** The amount of a complete session in `currency`. Submission paths call it after checking validity, and it refuses again. */
+function requiredMinorUnits(amount: AmountAtPress, currency: string): number {
+  const minorUnits = sendableMinorUnits(amount, currency);
   if (minorUnits === null) throw new Error("Amount is not complete");
   return minorUnits;
 }
 
 /** A place's starting balance left blank is zero, as first-run setup reads it; any other text must be a sendable amount. */
-function balanceMinorUnits(amount: AmountAtPress): number | null {
-  return amount.editor.text.trim() ? sendableMinorUnits(amount) : 0;
+function balanceMinorUnits(amount: AmountAtPress, currency: string): number | null {
+  if (amount.currency !== currency) return null;
+  return amount.editor.text.trim() ? sendableMinorUnits(amount, currency) : 0;
 }
 
 /** Whether a place's starting balance may be sent, as `balanceMinorUnits` would read it. */
@@ -346,7 +347,7 @@ export function usePostingEditor(
       description: now.description.trim(),
       amount: {
         currency,
-        minorUnits: Math.abs(requiredMinorUnits(now.amount)),
+        minorUnits: Math.abs(requiredMinorUnits(now.amount, currency)),
       },
       accountingDate: now.date,
       financialAccountProfileId: now.profileId,
@@ -474,14 +475,14 @@ export function usePostingEditor(
           productKind: setupNow.productKind,
           amount: {
             currency: account.currency,
-            minorUnits: balanceMinorUnits(setupNow.amount) ?? requiredMinorUnits(setupNow.amount),
+            minorUnits: balanceMinorUnits(setupNow.amount, account.currency) ?? requiredMinorUnits(setupNow.amount, account.currency),
           },
           accountingDate: setupNow.date,
           idempotencyKey: transport.newKey(),
         },
       };
     }
-    const signed = requiredMinorUnits(now.amount);
+    const signed = requiredMinorUnits(now.amount, account.currency);
     const categories = now.classification.value;
     const payload = {
       workspaceId: account.workspaceId,

@@ -25,13 +25,13 @@ test("amount refusals speak the chosen language and give an example in the curre
   expect(hint("12,34", "USD")).toBe("Usa el punto para los decimales, por ejemplo 12.50");
   expect(hint("12a")).toBe("Escribe solo números y separadores, por ejemplo 1.234,50");
   expect(hint("99999999999999999")).toBe("El monto es demasiado grande.");
-  expect(sendableMinorUnits(pressed(openAmount("COP", "-1.250.300")))).toBe(-125_030_000);
-  expect(sendableMinorUnits(pressed(openAmount("USD", "12.34")))).toBe(1234);
-  expect(sendableMinorUnits(pressed(openAmount("USD", "12,34")))).toBeNull();
+  expect(sendableMinorUnits(pressed(openAmount("COP", "-1.250.300")), "COP")).toBe(-125_030_000);
+  expect(sendableMinorUnits(pressed(openAmount("USD", "12.34")), "USD")).toBe(1234);
+  expect(sendableMinorUnits(pressed(openAmount("USD", "12,34")), "USD")).toBeNull();
   await act(async () => root?.unmount());
   await inLanguage("en");
   expect(hint("1,234", "COP")).toBe("Use up to 2 decimal places, for example 12,50");
   expect(hint("12a")).toBe("Type only digits and separators, for example 1.234,50");
   expect(hint("12a", "USD")).toBe("Type only digits and separators, for example 1,234.50");
-  expect(sendableMinorUnits(pressed(openAmount("COP", "-1.250.300")))).toBe(-125_030_000);
+  expect(sendableMinorUnits(pressed(openAmount("COP", "-1.250.300")), "COP")).toBe(-125_030_000);
 });

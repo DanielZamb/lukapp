@@ -205,7 +205,7 @@ export function closeRequest(input: {
   const description = t("placeEnding.closingDescription", { place: input.place.name });
   const adjustment = t("placeEnding.adjustmentDescription", { place: input.place.name });
   const lines = input.lines.map((line): CloseRequest["lines"][number] => {
-    const amount = { currency: balance.currency, minorUnits: sendableMinorUnits(line.amount)! };
+    const amount = { currency: balance.currency, minorUnits: sendableMinorUnits(line.amount, balance.currency)! };
     const { kind } = answerSpec(line.answer);
     if (kind === "transfer") return { kind, otherFinancialAccountProfileId: line.target!.id, amount, description };
     if (kind === "expense") return { kind, userCategoryId: line.target!.id, amount, description };

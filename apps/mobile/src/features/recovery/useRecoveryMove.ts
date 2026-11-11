@@ -84,7 +84,7 @@ export function useRecoveryMove(
   const shownMinorUnits = amountSendable(form.amount) ? displayedMinorUnits(form.amount) ?? 0 : 0;
   function build(): Request | null {
     const now = readForm();
-    const minorUnits = sendableMinorUnits(now.amount) ?? 0;
+    const minorUnits = sendableMinorUnits(now.amount, seed.plan.currency) ?? 0;
     const from = now.source.id;
     if (seed.plan.status === "suspended" || !from || minorUnits <= 0 || unavailableReason(now.source, seed.sources)) return null;
     setSameSource(from === seed.plan.destinationFinancialAccountProfileId);

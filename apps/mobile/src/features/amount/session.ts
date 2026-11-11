@@ -5,6 +5,7 @@ import {
   type AmountEditorState,
   type AmountFormat,
 } from "../../../../../src/money/amount";
+import { currencyAmountConvention } from "../../../../../src/accounting/currencies";
 import { amountFormat } from "./currencyFormat";
 import {
   amountTextFormatOf,
@@ -29,18 +30,41 @@ export type AmountReview = Readonly<{ pasted: boolean; converted: Readonly<{ pre
 
 export type AmountSign = "" | "+" | "-";
 
+declare const openingBrand: unique symbol;
+/**
+ * One opening of an amount by its owner, in one currency and grammar. Every edit of the session keeps it; an owner
+ * that replaces the amount, for a new currency, a reset or a suggestion, opens a new one. An owner's state refuses an
+ * update carrying an opening it has already replaced, so a keystroke typed before the replacement cannot return.
+ */
+export type AmountOpening = { readonly [openingBrand]: true };
+const openings = new WeakSet<object>();
+
+function newOpening(): AmountOpening {
+  const opening = Object.freeze({}) as AmountOpening;
+  openings.add(opening);
+  return opening;
+}
+
+/** The opening of `value` when it is an amount session, else null. */
+export function openingOf(value: unknown): AmountOpening | null {
+  if (typeof value !== "object" || value === null || !("opening" in value)) return null;
+  const { opening } = value as { opening: unknown };
+  return typeof opening === "object" && opening !== null && openings.has(opening) ? opening as AmountOpening : null;
+}
+
 /**
  * One editing session of one amount field, bound to one currency. The native text is exactly what the native field
  * shows: the app never regroups it while the person types. The sign is held beside it, set by the sign key or the
  * owner and never written into the native text, so no keystroke racing the sign key can drop it. `editor` reads the
  * sign followed by the native text with the strict grammar; a sign typed into the native text as well reads as two
- * signs and is refused. A new currency starts a new session; a language change does not touch it.
+ * signs and is refused. A new currency starts a new session with a new opening; a language change does not touch it.
  */
 export type AmountSession = Readonly<{
   currency: string;
   sign: AmountSign;
   editor: AmountEditorState;
   review: AmountReview | null;
+  opening: AmountOpening;
 }>;
 
 /** The editor state for text exactly as written, read with the strict grammar and never rewritten. */
@@ -80,7 +104,7 @@ function opening(format: AmountFormat, text: string): Pick<AmountSession, "sign"
 }
 
 export function openAmountIn(format: AmountFormat, currency: string, text = ""): AmountSession {
-  return { currency, ...opening(format, openedText(format, text)), review: null };
+  return { currency, ...opening(format, openedText(format, text)), review: null, opening: newOpening() };
 }
 
 export function openAmount(currency: string, text = ""): AmountSession {
@@ -113,7 +137,7 @@ export function openSavedAmount(
 ): { session: AmountSession; notice: AmountNotice | null } {
   const opened = openStoredAmountText(stored, currency, format);
   const awaiting = (reason: AmountReviewReason, previous: string | null): AmountSession =>
-    ({ currency, ...opening(format, opened.text), review: reviewOf(reason, previous) });
+    ({ currency, ...opening(format, opened.text), review: reviewOf(reason, previous), opening: newOpening() });
   if (opened.notice?.kind === "converted")
     return { session: awaiting("converted", stored.review?.previous ?? opened.notice.previous), notice: opened.notice };
   if (stored.review && !opened.notice) return { session: awaiting(stored.review.reason, stored.review.previous), notice: null };
@@ -132,8 +156,12 @@ export function amountSendable(session: AmountSession): boolean {
   return session.editor.kind === "complete" && session.review === null;
 }
 
-/** The signed minor units to send, of an amount read at the moment of the press; null when it may not be sent. */
-export function sendableMinorUnits(amount: AmountAtPress): number | null {
+/**
+ * The signed minor units to send in `currency`, of an amount read at the moment of the press; null when it may not be
+ * sent. An amount typed in another currency, or in a grammar other than `currency`'s, is never sent as `currency`.
+ */
+export function sendableMinorUnits(amount: AmountAtPress, currency: string): number | null {
+  if (amount.currency !== currency || amount.editor.format.convention !== currencyAmountConvention(currency)) return null;
   return amountSendable(amount) ? displayedMinorUnits(amount) : null;
 }
 

@@ -97,7 +97,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   const ready = suggestion.valid && amountSendable(form.amount);
   function build(): Request | null {
     const now = readForm();
-    const typed = sendableMinorUnits(now.amount);
+    const typed = sendableMinorUnits(now.amount, seed.currency);
     const pressed = typed === null ? null : suggestionFor(seed.candidate.amountMinorUnits, now.months, typed);
     const destinationId = now.destination.id;
     if (!destinationId || unavailableReason(now.destination, seed.destinations) || !pressed?.valid) return null;

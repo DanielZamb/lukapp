@@ -47,9 +47,10 @@ export function setupSelections(
   });
 }
 /** The starting amount to send. Blank means zero; text that is not a complete amount is refused, never guessed. */
-export function startingAmount(amount: AmountAtPress, { t }: Translator) {
+export function startingAmount(amount: AmountAtPress, currency: string, { t }: Translator) {
+  if (amount.currency !== currency) throw new Error(t("amount.currencyChanged"));
   if (!amount.editor.text.trim()) return 0;
-  const minorUnits = sendableMinorUnits(amount);
+  const minorUnits = sendableMinorUnits(amount, currency);
   if (minorUnits === null) throw new Error(amountRefusal(amount, t));
   if (minorUnits < 0) throw new Error(t("setup.startingNegative"));
   return minorUnits;

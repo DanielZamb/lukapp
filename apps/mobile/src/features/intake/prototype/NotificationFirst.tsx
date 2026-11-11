@@ -162,7 +162,7 @@ function Composer({ arrival, subject, workspaceId, currency, timeZone, defaultPr
     setAnchor(null);
   }
   async function startDraft() {
-    const minor = sendableMinorUnits(readAmount()) ?? 0;
+    const minor = sendableMinorUnits(readAmount(), currency) ?? 0;
     const now = readDraft();
     if (now.busy || !(minor > 0)) return;
     setBusy(true); setError("");

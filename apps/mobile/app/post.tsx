@@ -415,7 +415,7 @@ function PostMoney({
           const checks = checksOf(entry);
           if (at.impact || !entry.canSubmit || entry.setup || (!entry.pending && !checks.completeEntry)) return;
           if (checks.needsBudgetCheck) {
-            const typed = sendableMinorUnits(editor.readAmount());
+            const typed = sendableMinorUnits(editor.readAmount(), workspace.functionalCurrency);
             if (!budget || typed === null) return;
             const hits = postingBudgetImpact({
               jars: budget.jars,

@@ -24,8 +24,8 @@ import type { AccountSetupRequest } from "./categories/model";
 import { SetupCategories } from "./categories/SetupCategories";
 import { formatMoney } from "./money";
 import { AmountField } from "./amount/AmountField";
-import { displayedMinorUnits, openAmount } from "./amount/session";
-import { useAmountState, useFormState, withFields, type ReadAtPress } from "./amount/useAmountState";
+import { displayedMinorUnits, openAmount, type AmountSession } from "./amount/session";
+import { useFormState, withFields, type ReadAtPress } from "./amount/useAmountState";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { deviceTimeZone } from "./timeZones";
 import {
@@ -58,9 +58,10 @@ type SetupPhase =
       requests: AccountSetupRequest[];
       index: number;
     };
-/** The first-run answers Finish builds its save from, read once at the press. */
+/** The first-run answers Finish builds its save from, read once at the press, the starting amount among them. */
 type SetupAnswers = {
   categories: SetupCategory[];
+  starting: AmountSession;
   accountRequests: AccountSetupRequest[];
   currency: string;
   currencyChosen: boolean;
@@ -100,12 +101,11 @@ export function Setup({
     nature: "Expense",
   });
   const [answers, setAnswers, readAnswers] = useFormState<SetupAnswers>(() => ({
-    categories: [], accountRequests: [], currency: "COP", currencyChosen: false, consent: null, timeZone: deviceTimeZone(),
-    wantsBudgets: false,
+    categories: [], starting: openAmount("COP"), accountRequests: [], currency: "COP", currencyChosen: false, consent: null,
+    timeZone: deviceTimeZone(), wantsBudgets: false,
   }));
-  const [starting, setStarting, readStarting] = useAmountState(() => openAmount("COP"));
   const answer = (patch: Partial<SetupAnswers>) => setAnswers((now) => withFields(now, patch));
-  const { categories, accountRequests, currency, currencyChosen, consent, timeZone, wantsBudgets } = answers;
+  const { categories, starting, accountRequests, currency, currencyChosen, consent, timeZone, wantsBudgets } = answers;
   const [run, setRun, readRun] = useFormState<SetupRun>({ phase: { kind: "editing" }, busy: false });
   const { phase, busy } = run;
   const setPhase = (next: SetupPhase) => setRun((now) => withFields(now, { phase: next }));
@@ -135,8 +135,9 @@ export function Setup({
   function chooseCurrency(code: string) {
     if (lockedNow()) return;
     interact();
-    answer({ currency: code, currencyChosen: true });
-    if (code !== readStarting().currency) setStarting(openAmount(code));
+    setAnswers((now) => withFields(now, {
+      currency: code, currencyChosen: true, ...(code === now.starting.currency ? {} : { starting: openAmount(code) }),
+    }));
     advance(3);
   }
   const shown = starting.editor.text.trim() ? displayedMinorUnits(starting) : 0;
@@ -152,7 +153,7 @@ export function Setup({
         const now = readAnswers();
         if (!presets || !now.categories.length || !now.currencyChosen || now.consent === null)
           return;
-        const startingMinorUnits = startingAmount(readStarting(), translator);
+        const startingMinorUnits = startingAmount(now.starting, now.currency, translator);
         const chosen = [...now.categories];
         submission = {
           payload: {
@@ -414,7 +415,7 @@ export function Setup({
                   onChange={(value) => {
                     if (lockedNow()) return;
                     interact();
-                    setStarting(value);
+                    answer({ starting: value });
                   }}
                   inputStyle={{
                     minHeight: 88,
