@@ -111,11 +111,18 @@ export function useFrozenCommand<Request, Receipt>(transport: CommandTransport<R
     busy: state.name === "sending",
     frozen: state.name === "sending" || state.name === "uncertain",
     canEdit: () => lifetime.current.active && !sending.current && !held.current,
+    /** Where the command stands at the press: sending, holding a request whose outcome is unknown, or open. */
+    atPress: (): "sending" | "held" | "open" => sending.current ? "sending" : held.current ? "held" : "open",
     submit,
     /** Sends again a request whose outcome was already unknown before this screen opened, such as one saved on the phone. */
     resend: (request: Request) => {
       if (!sending.current && !held.current) held.current = request;
       return submit(() => request);
+    },
+    /** Clears a refusal on screen, judged at the press: a request sending or held is never touched. */
+    dismissRefusal: () => {
+      if (sending.current || held.current) return;
+      setState((current) => current.name === "open" && current.refusal ? { name: "open", refusal: null } : current);
     },
     /** Drops an unknown outcome once the caller has re-read what the server now holds. */
     release: () => {

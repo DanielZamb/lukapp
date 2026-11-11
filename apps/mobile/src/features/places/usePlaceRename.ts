@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useFormState } from "../amount/useAmountState";
 import { hasVisibleText } from "../../../../../src/accounting/names";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
@@ -33,7 +33,8 @@ export function usePlaceRename(
   transport: PlaceRenameTransport,
 ) {
   const { t } = useT();
-  const [name, setName] = useState(seed.initialName);
+  const [form, setForm, readForm] = useFormState({ name: seed.initialName });
+  const name = form.name;
   const command = useFrozenCommand({ send: transport.rename, reportFailure: transport.reportFailure, onDone: transport.onRenamed,
     settles: (code) => settling.has(code) });
   const trimmed = hasVisibleText(name) ? name.trim() : "";
@@ -50,12 +51,16 @@ export function usePlaceRename(
     editable: !command.frozen,
     canDismiss: !command.frozen,
     canSubmit: !command.busy && (state.name === "uncertain" || (!!trimmed && trimmed !== seed.storedName)),
-    onName: (value: string) => { if (command.canEdit()) setName(value); },
-    submit: () => command.submit(() => !trimmed || trimmed === seed.storedName ? null : {
-      workspaceId: seed.workspaceId,
-      financialAccountProfileId: seed.profileId,
-      name: trimmed,
-      expectedName: seed.storedName,
+    onName: (value: string) => { if (command.canEdit()) setForm({ name: value }); },
+    submit: () => command.submit(() => {
+      const typed = readForm().name;
+      const sent = hasVisibleText(typed) ? typed.trim() : "";
+      return !sent || sent === seed.storedName ? null : {
+        workspaceId: seed.workspaceId,
+        financialAccountProfileId: seed.profileId,
+        name: sent,
+        expectedName: seed.storedName,
+      };
     }),
   };
 }

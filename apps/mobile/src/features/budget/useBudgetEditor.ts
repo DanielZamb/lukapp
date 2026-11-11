@@ -7,7 +7,7 @@ import { useT, type MessageKey } from "../../i18n";
 import { admissionFailure } from "../../device-admission/failure";
 import { api } from "../api";
 import { amountOfMinorUnits, amountSendable, displayedMinorUnits, openAmount, sendableMinorUnits, type AmountAtPress, type AmountSession } from "../amount/session";
-import { useAmountState } from "../amount/useAmountState";
+import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
 import type { BudgetJar, RemovedLimit } from "./model";
 
 type AmountArgs = FunctionArgs<typeof api.budget.setCategoryLimit>;
@@ -82,16 +82,26 @@ export function useSendLimitCommand(): BudgetTransport["send"] {
     : command.kind === "spendNothing" ? spendNothing(command.args) : remove(command.args);
 }
 
+/** The person's answers and the editor state that decides whether a press may send; a press reads it once. */
+type BudgetForm = {
+  categoryId: string | null;
+  amount: AmountSession;
+  search: string;
+  busy: boolean;
+  pendingAct: LimitAct | null;
+  /** A refusal closed this editor; it sends nothing more. */
+  blocked: boolean;
+};
+
 export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTransport) {
   const translator = useT();
   const { t } = translator;
-  const [categoryId, setCategoryId] = useState<string | null>(seed.jar?.category.id ?? seed.initialCategoryId ?? null);
-  const [amount, setAmount, readAmount] = useAmountState(() => startingAmount(seed));
-  if (amount.currency !== seed.currency) setAmount(startingAmount(seed));
-  const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [pendingAct, setPendingAct] = useState<LimitAct | null>(null);
-  const [blocked, setBlocked] = useState(false);
+  const [form, setForm, readForm] = useFormState<BudgetForm>(() => ({
+    categoryId: seed.jar?.category.id ?? seed.initialCategoryId ?? null, amount: startingAmount(seed), search: "",
+    busy: false, pendingAct: null, blocked: false,
+  }));
+  const change = (patch: Partial<BudgetForm>) => setForm((now) => withFields(now, patch));
+  if (form.amount.currency !== seed.currency) change({ amount: startingAmount(seed) });
   const [error, setError] = useState("");
   const command = useRef<LimitCommand | null>(null);
   const uncertain = useRef(false);
@@ -102,8 +112,10 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
     lifetime.current = mounted;
     return () => { mounted.active = false; };
   }, []);
-  const { minorUnits, issue } = limitIssue(amount, seed.jar?.limitMinorUnits);
-  const canSend = (act: LimitAct) => !busy && !blocked && (pendingAct ? pendingAct === act : readyFor(act, categoryId, readAmount(), seed));
+  const { minorUnits, issue } = limitIssue(form.amount, seed.jar?.limitMinorUnits);
+  /** Whether `act` may be sent; rendering asks with the form, a press with what it reads. */
+  const sendable = (act: LimitAct, now: BudgetForm | ReadAtPress<BudgetForm>) =>
+    !now.busy && !now.blocked && (now.pendingAct ? now.pendingAct === act : readyFor(act, now.categoryId, now.amount, seed));
 
   function build(act: LimitAct, selectedCategoryId: string, pressed: AmountAtPress): LimitCommand {
     const target = {
@@ -120,32 +132,32 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
 
   async function send(act: LimitAct) {
     const mounted = lifetime.current;
-    const selectedCategoryId = command.current?.args.categoryId ?? categoryId;
-    if (!mounted.active || submitting.current || blocked || !selectedCategoryId) return;
-    const pressed = readAmount();
-    if (command.current ? command.current.kind !== act : !readyFor(act, selectedCategoryId, pressed, seed)) return;
+    const now = readForm();
+    const selectedCategoryId = command.current?.args.categoryId ?? now.categoryId;
+    if (!mounted.active || submitting.current || now.blocked || !selectedCategoryId) return;
+    if (command.current ? command.current.kind !== act : !readyFor(act, selectedCategoryId, now.amount, seed)) return;
     submitting.current = true;
-    setBusy(true);
+    change({ busy: true });
     setError("");
     try {
-      const frozen = command.current ?? build(act, selectedCategoryId, pressed);
+      const frozen = command.current ?? build(act, selectedCategoryId, now.amount);
       command.current = frozen;
-      setPendingAct(frozen.kind);
+      change({ pendingAct: frozen.kind });
       const receipt = await transport.send(frozen);
       if (!mounted.active) return;
       command.current = null;
       uncertain.current = false;
-      setPendingAct(null);
+      change({ pendingAct: null });
       transport.onSaved(receipt);
     } catch (error) {
       if (transport.reportFailure(error) || !mounted.active) return;
       const data = error instanceof ConvexError ? error.data : null;
       const refused = budgetRefusal.safeParse(data);
-      const release = () => { command.current = null; uncertain.current = false; setPendingAct(null); };
+      const release = () => { command.current = null; uncertain.current = false; change({ pendingAct: null }); };
       if (refused.success) {
         const refusal = refusals[refused.data.code] ?? { message: "budget.errorRejected", closes: false };
         release();
-        setBlocked(refusal.closes);
+        change({ blocked: refusal.closes });
         setError(t(refusal.message));
       } else if (accessRefusal.safeParse(data).success) {
         // Access is checked before any write, so a first attempt is known not to have applied.
@@ -158,21 +170,22 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
       }
     } finally {
       submitting.current = false;
-      if (mounted.active) setBusy(false);
+      if (mounted.active) change({ busy: false });
     }
   }
-  const canEdit = () => lifetime.current.active && !submitting.current && !command.current && !blocked;
-  const pending = pendingAct !== null;
+  const canEdit = () => lifetime.current.active && !submitting.current && !command.current && !readForm().blocked;
+  const pending = form.pendingAct !== null;
   return {
-    categoryId, amount, minorUnits, amountIssue: issue, search, busy, pending, pendingAct, error,
-    editable: !busy && !pending && !blocked,
-    canSubmit: canSend("amount"),
-    canSend,
-    canDismiss: !busy && !pending,
-    onCategory: (id: string) => { if (canEdit() && !seed.jar) setCategoryId(id); },
-    onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.currency) setAmount(value); },
-    onResetAmount: () => { if (canEdit()) setAmount(startingAmount(seed)); },
-    onSearch: (value: string) => { if (canEdit()) setSearch(value); },
+    categoryId: form.categoryId, amount: form.amount, minorUnits, amountIssue: issue, search: form.search, busy: form.busy, pending,
+    pendingAct: form.pendingAct, error,
+    editable: !form.busy && !pending && !form.blocked,
+    canSubmit: sendable("amount", form),
+    canSend: (act: LimitAct) => sendable(act, readForm()),
+    canDismiss: !form.busy && !pending,
+    onCategory: (id: string) => { if (canEdit() && !seed.jar) change({ categoryId: id }); },
+    onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.currency) change({ amount: value }); },
+    onResetAmount: () => { if (canEdit()) change({ amount: startingAmount(seed) }); },
+    onSearch: (value: string) => { if (canEdit()) change({ search: value }); },
     submit: () => send("amount"),
     spendNothing: () => send("spendNothing"),
     remove: () => send("remove"),

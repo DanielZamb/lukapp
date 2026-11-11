@@ -313,3 +313,15 @@ test("third review, finding 2: a name handler from the render before the last ba
   await act(async () => button("Add this place").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ name: "Trip", amount: { currency: "COP", minorUnits: 150000 } });
 });
+
+test("a kind chip kept from before a custom emoji was picked keeps that emoji", async () => {
+  await render();
+  const keptCash = button("Cash").props.onPress as () => void;
+  await act(async () => button("Choose emoji").props.onPress());
+  await act(async () => input("Custom emoji").props.onChangeText("🦊"));
+  await act(async () => button("Use this").props.onPress());
+  await act(async () => root.root.findAll((node) => String(node.type) === "sheet")[1].props.onDismiss());
+  await act(async () => keptCash());
+  await act(async () => button("Add this place").props.onPress());
+  expect(state.post.mock.calls[0]?.[0].payload).toMatchObject({ productKind: "cash", emoji: "🦊" });
+});

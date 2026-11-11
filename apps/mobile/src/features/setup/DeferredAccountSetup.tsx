@@ -50,7 +50,7 @@ export function DeferredAccountSetup({ request, subject, workspaceId, profileId,
     }
   }, [editor, onDone, request, timeZone, currency]);
   function finish() {
-    if (done.current || submitted.current || editor.loading) return;
+    if (done.current || submitted.current || editor.read().loading) return;
     done.current = true;
     sheet.current?.dismiss();
     onDone();
@@ -64,7 +64,7 @@ export function DeferredAccountSetup({ request, subject, workspaceId, profileId,
     <AccountSetupForm sheetRef={sheet} value={editor.setup} currency={currency}
       editable={editor.editable} busy={editor.busy} pending={editor.pending} error={editor.error}
       canSubmit={editor.canSubmit} onChange={editor.changeSetup} onSubmit={() => {
-        if (!editor.canSubmit) return;
+        if (!editor.read().canSubmit) return;
         submitted.current = true;
         void editor.submit();
       }}

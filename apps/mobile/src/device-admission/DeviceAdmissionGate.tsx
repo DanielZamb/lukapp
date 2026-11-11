@@ -1,3 +1,4 @@
+import { useFormState, withFields } from "../features/amount/useAmountState";
 import { useClerk } from "@clerk/expo";
 import { useAction, useQuery_experimental } from "convex/react";
 import Constants from "expo-constants";
@@ -54,10 +55,15 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     else if (status.status === "success" && status.data.status === "revoked")
       report(new ConvexError({ code: "device_revoked", wipeLocalInput: true, ...(status.data.movedTo ? { movedTo: status.data.movedTo } : {}) }));
   }, [status, report]);
-  const [name, setName] = useState("");
-  const [replacementName, setReplacementName] = useState(() => t(platform === "ios" ? "access.defaultNameIos" : "access.defaultNameAndroid"));
+  /** The names typed for this phone and whether one was sent; registering reads them at the press. */
+  const [form, setForm, readForm] = useFormState(() => ({
+    name: "", replacementName: t(platform === "ios" ? "access.defaultNameIos" : "access.defaultNameAndroid"), submitted: false,
+  }));
+  const { name, replacementName, submitted } = form;
+  const setName = (value: string) => setForm((now) => withFields(now, { name: value }));
+  const setReplacementName = (value: string) => setForm((now) => withFields(now, { replacementName: value }));
+  const setSubmitted = (value: boolean) => setForm((now) => withFields(now, { submitted: value }));
   const [busy, setBusy] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [failure, setFailure] = useState<AdmissionFailure | null>(null);
   const submitting = useRef(false);
   const mounted = useRef(true);
@@ -65,7 +71,8 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  const validName = name.trim().length > 0 && name.trim().length <= 80;
+  const named = (value: string) => value.trim().length > 0 && value.trim().length <= 80;
+  const validName = named(name);
   const existingLabel = status.status === "success" && status.data.status === "unregistered"
     ? status.data.existingLabel : undefined;
 
@@ -73,7 +80,7 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     ? status.data.occupier : undefined;
 
   async function registerNamed(label: string) {
-    if (submitting.current || submitted || !nativePlatform || !appVersion || !validBuild ||
+    if (submitting.current || readForm().submitted || !nativePlatform || !appVersion || !validBuild ||
       status.status !== "success" || status.data.status !== "unregistered") return;
     submitting.current = true;
     setBusy(true);
@@ -95,14 +102,14 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
     void registerNamed(existingLabel);
   }, [existingLabel]);
   async function move() {
-    if (!occupier || submitting.current || submitted || !nativePlatform || !appVersion || !validBuild ||
-        !replacementName.trim() || replacementName.trim().length > 80) return;
+    const now = readForm();
+    if (!occupier || submitting.current || now.submitted || !nativePlatform || !appVersion || !validBuild || !named(now.replacementName)) return;
     submitting.current = true;
     setBusy(true);
     setFailure(null);
     try {
       if (!await enrollment.ensure() || !mounted.current) return;
-      await replace({ installId, label: replacementName.trim(), platform: nativePlatform, appVersion,
+      await replace({ installId, label: now.replacementName.trim(), platform: nativePlatform, appVersion,
         expectedOccupierId: occupier.deviceId, expectedSessionId: occupier.sessionId });
       if (mounted.current) setSubmitted(true);
     } catch (error) {
@@ -170,7 +177,7 @@ function AdmissionAttempt({ children, retry }: { children: ReactNode; retry: () 
       canSubmit={validName}
       error={failure?.message ?? ""}
       onNameChange={(value) => { interaction(); setName(value); }}
-      onSubmit={() => { if (validName) void registerNamed(name.trim()); }}
+      onSubmit={() => { const typed = readForm().name; if (named(typed)) void registerNamed(typed.trim()); }}
       onSignOut={() => void leave()}
     />
   );

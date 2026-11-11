@@ -139,3 +139,24 @@ test("a category detail link opens that category and search narrows the list", a
   await act(async () => search.props.onChangeText("salary"));
   expect(tree().findAllByType(ListRow).map((row) => row.props.title)).toEqual(["Salary"]);
 });
+
+test("a Delete kept from the confirming render deletes nothing once the confirmation was cancelled", async () => {
+  await render(); await openCategory();
+  await act(async () => sheet().onDelete?.());
+  const kept = sheet().onDelete;
+  await act(async () => sheet().onCancelDelete?.());
+  await act(async () => kept?.());
+  expect(provider.remove).not.toHaveBeenCalled();
+  expect(sheet().confirmingDelete).toBe(true);
+});
+
+test("a Save kept from before the name changed renames to the name the sheet shows", async () => {
+  await render(); await openCategory();
+  await act(async () => sheet().onName("Week"));
+  const kept = sheet().onConfirm;
+  await act(async () => sheet().onName("Weekend"));
+  await act(async () => kept());
+  expect(provider.update.mock.calls.map(([request]) => request)).toEqual([
+    { workspaceId: "workspace", categoryId: "cafe", name: "Weekend", style: category.style },
+  ]);
+});

@@ -195,7 +195,7 @@ export function canReview(balance: Money, lines: readonly LineDraft[]) {
 export function closeRequest(input: {
   workspaceId: string;
   place: { id: string; name: string };
-  reviewed: Reviewed;
+  reviewed: Pick<Reviewed, "balance" | "accountingDate">;
   lines: readonly AtPress<LineDraft>[];
   replacement: string | null;
   idempotencyKey: string;

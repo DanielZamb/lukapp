@@ -181,10 +181,10 @@ test("unselected, under-limit and already-over jars do not interrupt posting", a
   expect(form().posted).toBe("Groceries · −COP 10.000,00");
   if (!budget) throw new Error("Budget missing");
   budget.jars[0].consumptionMinorUnits = 11000000;
-  await act(async () => { form().onAmountChange(money("-120000,00")); });
+  await act(async () => { form().onAmountChange(money("-120000,00")); form().onDescriptionChange("Market"); });
   await act(async () => { root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null }); });
   await act(async () => form().onPost());
-  expect(form().posted).toBe("Entry · −COP 120.000,00");
+  expect(form().posted).toBe("Market · −COP 120.000,00");
   expect(root?.root.findAllByType(PostingImpactSheet)).toHaveLength(0);
 });
 
@@ -201,14 +201,14 @@ test("budget loading waits for an expense but does not change income, transfers 
   expect(form().canSubmit).toBe(true);
   await act(async () => form().onPost());
   expect(transport.post.mock.calls[0][0].kind).toBe("income");
-  await act(async () => { form().onEntryType("transfer"); form().onAmountChange(money("120.000,00")); });
+  await act(async () => { form().onEntryType("transfer"); form().onAmountChange(money("120.000,00")); form().onDescriptionChange("Card"); });
   const { PlaceSheet } = await import("../posting/PlaceSheet");
   await act(async () => form().onDestination());
   await act(async () => root?.root.findByType(PlaceSheet).props.onSelect("card"));
   await act(async () => form().transferReview?.onConfirm());
   await act(async () => form().onPost());
   expect(transport.post.mock.calls[1][0].kind).toBe("transfer");
-  await act(async () => { form().onEntryType("initial"); form().onAmountChange(money("120.000,00")); });
+  await act(async () => { form().onEntryType("initial"); form().onAmountChange(money("120.000,00")); form().onDescriptionChange("Opening"); });
   await act(async () => form().onPost());
   expect(transport.post.mock.calls[2][0].kind).toBe("opening");
 });
@@ -336,4 +336,22 @@ test("Post all checks cumulative expenses and shows the existing confirmation on
   expect(transport.post).toHaveBeenCalledTimes(2);
   expect(root?.root.findAllByType(PostingImpactSheet)).toHaveLength(0);
   expect(tape().batch.queue).toEqual([]);
+});
+
+test("Post sends nothing while the description is empty, as its disabled button shows, even when its handler is called", async () => {
+  await open();
+  const { CategoryPicker } = await import("../categories/CategoryPicker");
+  await act(async () => {
+    root?.root.findByType(CategoryPicker).props.onChange({ ids: ["food"], primaryId: null });
+    form().onAmountChange(money("-10.000,00"));
+  });
+  const kept = form().onPost;
+  await act(async () => form().onDescriptionChange(""));
+  expect(form().canSubmit).toBe(false);
+  await act(async () => kept());
+  await act(async () => form().onPost());
+  expect(transport.post).not.toHaveBeenCalled();
+  await act(async () => form().onDescriptionChange("Market"));
+  await act(async () => kept());
+  expect(transport.post.mock.calls.map(([entry]) => "description" in entry.payload && entry.payload.description)).toEqual(["Market"]);
 });

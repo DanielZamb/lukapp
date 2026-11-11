@@ -541,6 +541,7 @@ test("Transfer persists its selected categories through retry hydration", async 
     editor().setDestinationId("wallet");
     editor().setCategories({ ids: ["travel"], primaryId: "travel" });
   });
+  await act(async () => editor().confirmTransferReview());
   api.post.mockRejectedValueOnce(new Error("Reply lost"));
   await act(async () => {
     await editor().submit();
@@ -657,4 +658,84 @@ test.each(["source", "destination"])("changing the confirmed transfer %s require
     destinationFinancialAccountProfileId: changed === "destination" ? "loan" : "savings",
     amount: { minorUnits: 1000 },
   } });
+});
+
+test("a Post handler kept before the amount, date, description, categories and Place changed sends what the screen shows", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount(money("-10"));
+    editor().setDescription("Lunch");
+    editor().setDate("2026-10-17");
+    editor().setCategories({ ids: ["food"], primaryId: null }, "Expense");
+  });
+  const kept = editor().submit;
+  await act(async () => {
+    editor().setAmount(money("-25"));
+    editor().setDescription("Dinner");
+    editor().setDate("2026-10-18");
+    editor().setCategories({ ids: ["dining"], primaryId: null }, "Expense");
+    editor().setProfileId("wallet");
+  });
+  await act(async () => { await kept(); });
+  expect(api.post.mock.calls.map(([entry]) => entry)).toEqual([{
+    kind: "expense",
+    payload: {
+      workspaceId: "workspace", financialAccountProfileId: "wallet", amount: { currency: "COP", minorUnits: 2500 },
+      accountingDate: "2026-10-18", description: "Dinner", userCategoryIds: ["dining"], idempotencyKey: "entry-1",
+    },
+  }]);
+});
+
+test("a Post handler kept from a confirmed transfer pair does not post once the destination changed", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount(money("-10"));
+    editor().setEntryType("transfer");
+    editor().setDescription("Transfer");
+  });
+  await act(async () => editor().setDestinationId("savings"));
+  await act(async () => editor().confirmTransferReview());
+  const kept = editor().submit;
+  await act(async () => editor().setDestinationId("loan"));
+  expect(editor()).toMatchObject({ destinationId: "loan", transferReviewRequired: true, canSubmit: false });
+  await act(async () => { await kept(); });
+  expect(api.save).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+  await act(async () => editor().confirmTransferReview());
+  await act(async () => { await kept(); });
+  expect(api.post.mock.calls.map(([entry]) => entry.kind === "transfer" && entry.payload.destinationFinancialAccountProfileId))
+    .toEqual(["loan"]);
+});
+
+test("handlers kept from before a lost reply neither edit the held entry nor rebuild it on the resend", async () => {
+  const api = transport();
+  api.post.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const editor = await open(api);
+  await act(async () => {
+    editor().setAmount(money("-10"));
+    editor().setDescription("Lunch");
+    editor().setDate("2026-10-17");
+  });
+  const kept = { submit: editor().submit, amount: editor().setAmount, description: editor().setDescription, date: editor().setDate,
+    place: editor().setProfileId };
+  await act(async () => { await kept.submit(); });
+  expect(editor().pending).toBe(true);
+  await act(async () => {
+    kept.amount(money("-99"));
+    kept.description("Changed");
+    kept.date("2026-10-18");
+    kept.place("wallet");
+  });
+  expect(editor()).toMatchObject({ description: "Lunch", date: "2026-10-17", profileId: "bank" });
+  await act(async () => { await kept.submit(); });
+  const held = {
+    kind: "expense",
+    payload: {
+      workspaceId: "workspace", financialAccountProfileId: "bank", amount: { currency: "COP", minorUnits: 1000 },
+      accountingDate: "2026-10-17", description: "Lunch", idempotencyKey: "entry-1",
+    },
+  };
+  expect(api.post.mock.calls.map(([entry]) => entry)).toEqual([held, held]);
 });

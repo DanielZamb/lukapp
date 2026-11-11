@@ -1,12 +1,13 @@
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
 import { useAction, useQuery } from "convex/react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
 import { suggestedCategoryName } from "./suggestedNames";
 import { useT } from "../../i18n";
 import { api } from "../api";
 import { useNatureSuggestion } from "./useNatureSuggestion";
-import { defaultCategoryStyle, selectionKey } from "./model";
+import { defaultCategoryStyle, natureAnswer, natureAnswers, selectionKey } from "./model";
 import { needsPrimary, toggleCategory, type TransactionCategories } from "./transactionSelection";
 import type {
   AccountSetupRequest,
@@ -37,6 +38,15 @@ export type CategoryPickerMode =
 function searchable(name: string) {
   return name.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
 }
+/** What the sheet has open and typed; Save acts on one read of it at the press. */
+type PickerForm = {
+  search: string;
+  editor: CategoryEditor | null;
+  replaceSelection: boolean;
+  /** The nature suggested for the name in `key`, as the sheet shows it. */
+  suggestion: { key: string; suggested: NatureAnswer | null };
+};
+
 export function useCategoryPicker(
   mode: CategoryPickerMode,
   onClose: () => void,
@@ -56,14 +66,20 @@ export function useCategoryPicker(
   );
   const create = useAction(api.accounting.createUserCategory);
   const restyle = useAction(api.accounting.restyleUserCategory);
-  const [search, setSearch] = useState("");
-  const [editor, setEditor] = useState<CategoryEditor | null>(null);
+  const [form, setForm, readForm] = useFormState<PickerForm>({
+    search: "", editor: null, replaceSelection: false, suggestion: { key: "", suggested: null },
+  });
+  const change = (patch: Partial<PickerForm>) => setForm((now) => withFields(now, patch));
+  const setEditor = (next: CategoryEditor | null | ((current: CategoryEditor | null) => CategoryEditor | null)) =>
+    setForm((now) => ({ ...now, editor: typeof next === "function" ? next(now.editor) : next }));
+  const { search, editor, replaceSelection } = form;
   const nature = useNatureSuggestion(editor?.kind === "custom" ? editor.name : "");
-  const answer = editor?.kind === "custom" ? editor.answer ?? nature.suggested : null;
+  useEffect(() => { change({ suggestion: { key: nature.key ?? "", suggested: nature.suggested } }); }, [nature.key, nature.suggested]);
+  const answerOf = (now: PickerForm | ReadAtPress<PickerForm>) => now.editor?.kind === "custom" ? natureAnswer(now.editor, now.suggestion) : null;
+  const answer = answerOf(form);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [limitReached, setLimitReached] = useState(false);
-  const [replaceSelection, setReplaceSelection] = useState(false);
   const saving = useRef(false);
   const knownOptions: CategoryOption[] | undefined =
     mode.kind === "posting"
@@ -90,9 +106,8 @@ export function useCategoryPicker(
     : knownOptions;
   function back() {
     if (!saving.current) {
-      setEditor(null);
+      change({ editor: null, replaceSelection: false });
       setError("");
-      setReplaceSelection(false);
     }
   }
   function togglePostingCategory(value: TransactionCategories, category: Pick<Category, "id" | "nature">) {
@@ -124,23 +139,31 @@ export function useCategoryPicker(
   }
   function preset(preset: CategoryPreset) {
     recordInteraction();
-    setEditor({ kind: "preset", preset, style: defaultCategoryStyle });
+    change({ editor: { kind: "preset", preset, style: defaultCategoryStyle }, replaceSelection: false });
     setError("");
-    setReplaceSelection(false);
   }
   const existingNames = mode.kind === "posting"
     ? categories?.map((category) => category.name)
     : options?.map((option) => option.name);
-  const canConfirm = !!editor && (editor.kind === "restyle" || (
-    existingNames !== undefined &&
-    (editor.kind === "preset" || (
-      !!editor.name.trim() && answer !== null && nature.allowed.includes(answer) && !existingNames.some((name) =>
-        searchable(name.trim().replace(/\s+/g, " ")) === searchable(editor.name.trim().replace(/\s+/g, " ")),
-      )
-    ))
-  ));
+  /** Whether the open editor may be saved; rendering asks with the form, a press with what it reads. */
+  const confirmable = (now: PickerForm | ReadAtPress<PickerForm>) => {
+    const shown = now.editor;
+    const answered = answerOf(now);
+    return !!shown && (shown.kind === "restyle" || (
+      existingNames !== undefined &&
+      (shown.kind === "preset" || (
+        !!shown.name.trim() && answered !== null && natureAnswers.includes(answered) && !existingNames.some((name) =>
+          searchable(name.trim().replace(/\s+/g, " ")) === searchable(shown.name.trim().replace(/\s+/g, " ")),
+        )
+      ))
+    ));
+  };
+  const canConfirm = confirmable(form);
   async function confirm() {
-    if (!editor || saving.current || !canConfirm) return;
+    const now = readForm();
+    const editor = now.editor;
+    const answer = answerOf(now);
+    if (!editor || saving.current || !confirmable(now)) return;
     recordInteraction();
     saving.current = true;
     setBusy(true);
@@ -197,7 +220,7 @@ export function useCategoryPicker(
           selection,
         });
         if (result.kind === "category") {
-          const next = replaceSelection
+          const next = now.replaceSelection
             ? { ids: [result.category.id], primaryId: null }
             : mode.value.ids.includes(result.category.id)
               ? mode.value
@@ -206,8 +229,7 @@ export function useCategoryPicker(
             mode.onChange(next, result.category.nature ?? null);
             setLimitReached(false);
           } else setLimitReached(true);
-          setEditor(null);
-          setReplaceSelection(false);
+          change({ editor: null, replaceSelection: false });
           onClose();
         }
       } else {
@@ -237,8 +259,7 @@ export function useCategoryPicker(
     recordInteraction();
     setEditor((current) => (current ? { ...current, style } : current));
   }
-  const includes = (name: string) =>
-    searchable(name).includes(searchable(search.trim()));
+  const needle = searchable(search.trim());
   return {
     categories,
     allPresets: presets,
@@ -248,32 +269,30 @@ export function useCategoryPicker(
       editor,
       busy,
       error,
-      options: options?.filter((o) => includes(o.name)),
-      presets: presets?.filter((p) => includes(p.name)),
+      options: options?.filter((o) => searchable(o.name).includes(needle)),
+      presets: presets?.filter((p) => searchable(p.name).includes(needle)),
       canConfirm,
       answer,
       suggested: nature.suggested,
       allowed: nature.allowed,
       onAnswer: (value: NatureAnswer) => {
-        if (saving.current || !nature.allowed.includes(value)) return;
+        if (saving.current || !natureAnswers.includes(value)) return;
         recordInteraction();
         setEditor((current) => current?.kind === "custom" ? { ...current, answer: value } : current);
       },
       onSearch: (value: string) => {
         recordInteraction();
-        setSearch(value);
+        change({ search: value });
       },
       onSelect: select,
       onRestyle: editStyle,
       onPreset: preset,
       onCreate: () => {
         recordInteraction();
-        setReplaceSelection(mode.kind === "posting" && mode.value.ids.length >= 3);
-        setEditor({
-          kind: "custom",
-          name: search,
-          answer: null,
-          style: defaultCategoryStyle,
+        const now = readForm();
+        change({
+          replaceSelection: mode.kind === "posting" && mode.value.ids.length >= 3,
+          editor: { kind: "custom", name: now.search, answer: null, style: defaultCategoryStyle },
         });
         setError("");
       },
@@ -286,8 +305,7 @@ export function useCategoryPicker(
       replacingSelection: replaceSelection,
       onCreateEncompassing: () => {
         recordInteraction();
-        setReplaceSelection(true);
-        setEditor({ kind: "custom", name: search, answer: null, style: defaultCategoryStyle });
+        change({ replaceSelection: true, editor: { kind: "custom", name: readForm().search, answer: null, style: defaultCategoryStyle } });
         setError("");
       },
       primaryOptions: mode.kind === "posting" && categories && needsPrimary(mode.value.ids, categories)

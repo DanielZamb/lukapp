@@ -1,6 +1,7 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useAction, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
+import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
 import { ActivityIndicator, BackHandler, Text, View } from "react-native";
 import { useDeviceAccessFailure } from "../../local-auth/accessFailure";
 import { useLocalEntryInteraction } from "../../local-auth/interaction";
@@ -9,8 +10,18 @@ import { useT } from "../../i18n";
 import { api } from "../api";
 import { DeferredAccountSetup } from "../setup/DeferredAccountSetup";
 import { CategorySheet } from "./CategorySheet";
-import { categoryFailureMessage, categoryNameKey, defaultCategoryStyle, natureLabel, type AccountSetupRequest, type Category, type EditableCategory } from "./model";
+import { categoryFailureMessage, categoryNameKey, defaultCategoryStyle, natureAnswer, natureLabel, type AccountSetupRequest, type Category, type EditableCategory, type NatureAnswer } from "./model";
 import { useNatureSuggestion } from "./useNatureSuggestion";
+
+/** What the person has open and answered; Save and Delete act on one read of it at the press. */
+type ManagerForm = {
+  search: string;
+  editor: EditableCategory | null;
+  confirmingDelete: boolean;
+  accountRequest: AccountSetupRequest | null;
+  /** The nature suggested for the name in `key`, as the screen shows it. */
+  suggestion: { key: string; suggested: NatureAnswer | null };
+};
 
 export function CategoryManager({ workspaceId, subject, profileId, currency, timeZone, initialCategoryId, onBack }: {
   workspaceId: string; subject: string; profileId: string; currency: string; timeZone: string;
@@ -25,24 +36,29 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
   const remove = useAction(api.accounting.deleteUserCategory);
   const interact = useLocalEntryInteraction();
   const reportFailure = useDeviceAccessFailure();
-  const [search, setSearch] = useState("");
-  const [editor, setEditor] = useState<EditableCategory | null>(null);
+  const [form, setForm, readForm] = useFormState<ManagerForm>({
+    search: "", editor: null, confirmingDelete: false, accountRequest: null, suggestion: { key: "", suggested: null },
+  });
+  const change = (patch: Partial<ManagerForm>) => setForm((now) => withFields(now, patch));
+  const { search, editor, confirmingDelete, accountRequest } = form;
+  const setEditor = (next: (current: EditableCategory | null) => EditableCategory | null) => setForm((now) => ({ ...now, editor: next(now.editor) }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [accountRequest, setAccountRequest] = useState<AccountSetupRequest | null>(null);
   const queuedAccount = useRef<AccountSetupRequest | null>(null);
   const saving = useRef(false);
   const sheet = useRef<BottomSheetModal>(null);
   const presented = useRef(false);
   const openedInitial = useRef(false);
   const nature = useNatureSuggestion(editor?.kind === "custom" ? editor.name : "");
-  const answer = editor?.kind === "custom" ? editor.answer ?? nature.suggested : null;
+  useEffect(() => { change({ suggestion: { key: nature.key ?? "", suggested: nature.suggested } }); }, [nature.key, nature.suggested]);
+  const answerOf = (shown: EditableCategory | ReadAtPress<EditableCategory> | null, suggestion: ManagerForm["suggestion"]) =>
+    shown?.kind === "custom" ? natureAnswer(shown, suggestion) : null;
+  const answer = answerOf(editor, form.suggestion);
   const open = editor !== null;
   function edit(category: Category) {
-    if (saving.current || accountRequest) return;
-    interact(); setError(""); setConfirmingDelete(false);
-    setEditor({ kind: "edit", category, name: category.name, style: category.style });
+    if (saving.current || readForm().accountRequest) return;
+    interact(); setError("");
+    change({ confirmingDelete: false, editor: { kind: "edit", category, name: category.name, style: category.style } });
   }
   useEffect(() => {
     if (!openedInitial.current && initialCategoryId && categories) {
@@ -64,31 +80,40 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
     });
     return () => subscription.remove();
   }, [open]);
-  const duplicate = !!editor && categories?.some((category) =>
-    (editor.kind !== "edit" || category.id !== editor.category.id) &&
-    category.normalizedName === categoryNameKey(editor.name),
+  const duplicateOf = (shown: EditableCategory | ReadAtPress<EditableCategory>) => !!categories?.some((category) =>
+    (shown.kind !== "edit" || category.id !== shown.category.id) &&
+    category.normalizedName === categoryNameKey(shown.name),
   );
-  const canConfirm = !!editor && categories !== undefined && !!editor.name.trim() && editor.name.trim().length <= 80 &&
-    !duplicate && (editor.kind === "edit" || answer !== null);
+  /** Whether a save may be sent; rendering asks with the form, a press with what it reads. */
+  const confirmable = (now: ManagerForm | ReadAtPress<ManagerForm>) => {
+    const shown = now.editor;
+    return !!shown && categories !== undefined && !!shown.name.trim()
+      && shown.name.trim().length <= 80 && !duplicateOf(shown) && (shown.kind === "edit" || answerOf(shown, now.suggestion) !== null);
+  };
+  const duplicate = !!editor && duplicateOf(editor);
+  const canConfirm = confirmable(form);
   const filtered = categories?.filter((category) => categoryNameKey(category.name).includes(categoryNameKey(search)));
   async function save(deleting = false) {
-    if (!editor || saving.current || (!deleting && !canConfirm)) return;
-    if (deleting && editor.kind !== "edit") return;
+    const now = readForm();
+    const shown = now.editor;
+    if (!shown || saving.current || (!deleting && !confirmable(now))) return;
+    if (deleting && (shown.kind !== "edit" || !now.confirmingDelete)) return;
+    const answered = answerOf(shown, now.suggestion);
     interact(); saving.current = true; setBusy(true); setError("");
     try {
-      if (deleting && editor.kind === "edit") {
-        await remove({ workspaceId, categoryId: editor.category.id });
-      } else if (editor.kind === "edit") {
-        await update({ workspaceId, categoryId: editor.category.id, name: editor.name.trim(), style: editor.style });
-      } else if (answer === "stillMine" || answer === "payDebt") {
-        queuedAccount.current = { name: editor.name.trim(), style: editor.style, answer };
-      } else if (answer === "spend" || answer === "receive") {
-        const result = await create({ workspaceId, selection: { kind: "custom", name: editor.name.trim(), answer, style: editor.style } });
+      if (deleting && shown.kind === "edit") {
+        await remove({ workspaceId, categoryId: shown.category.id });
+      } else if (shown.kind === "edit") {
+        await update({ workspaceId, categoryId: shown.category.id, name: shown.name.trim(), style: shown.style });
+      } else if (answered === "stillMine" || answered === "payDebt") {
+        queuedAccount.current = { name: shown.name.trim(), style: shown.style, answer: answered };
+      } else if (answered === "spend" || answered === "receive") {
+        const result = await create({ workspaceId, selection: { kind: "custom", name: shown.name.trim(), answer: answered, style: shown.style } });
         if (result.kind === "accountSetupRequired") queuedAccount.current = {
-          name: result.name, answer: result.answer, style: editor.style,
+          name: result.name, answer: result.answer, style: shown.style,
         };
       }
-      setEditor(null); setConfirmingDelete(false);
+      change({ editor: null, confirmingDelete: false });
     } catch (failure) {
       if (!reportFailure(failure)) setError(categoryFailureMessage(failure, translator));
     } finally {
@@ -99,7 +124,7 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
     <Header title={t("categories.managerTitle")} eyebrow={t("categories.managerEyebrow")} onBack={onBack} />
     <Text style={ui.muted}>{t("categories.managerIntro")}</Text>
     <Field label={t("categories.searchLabel")} accessibilityLabel={t("categories.searchLabel")} value={search}
-      onChangeText={(value) => { interact(); setSearch(value); }} placeholder={t("categories.searchPlaceholder")} />
+      onChangeText={(value) => { interact(); change({ search: value }); }} placeholder={t("categories.searchPlaceholder")} />
     {filtered === undefined ? <ActivityIndicator accessibilityLabel={t("categories.loading")} /> : filtered.length > 0 ? <ListGroup>
       {filtered.map((category) =>
         <ListRow key={category.id} title={category.name} value={category.style.emoji}
@@ -107,13 +132,13 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
     </ListGroup> : <Text style={ui.muted}>{categories?.length === 0
       ? t("categories.managerEmpty") : t("categories.managerNoMatch")}</Text>}
     <PrimaryButton label={t("categories.addCategory")} trailingIcon="add" disabled={categories === undefined || !!accountRequest} onPress={() => {
-      interact(); setError(""); setConfirmingDelete(false);
-      setEditor({ kind: "custom", name: "", answer: null, style: defaultCategoryStyle });
+      interact(); setError("");
+      change({ confirmingDelete: false, editor: { kind: "custom", name: "", answer: null, style: defaultCategoryStyle } });
     }} />
     {!editor && !!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     {accountRequest && <View style={ui.section}><DeferredAccountSetup request={accountRequest} subject={subject}
       workspaceId={workspaceId} profileId={profileId} currency={currency} timeZone={timeZone}
-      onDone={() => setAccountRequest(null)} /></View>}
+      onDone={() => change({ accountRequest: null })} /></View>}
     <CategorySheet sheetRef={sheet} search="" options={[]} editor={editor} busy={busy}
       error={duplicate ? t("categories.errorNameConflict") : error} canConfirm={canConfirm}
       answer={answer} suggested={nature.suggested} allowed={nature.allowed}
@@ -122,12 +147,12 @@ export function CategoryManager({ workspaceId, subject, profileId, currency, tim
       onName={(name) => { if (!saving.current) { interact(); setEditor((current) => current ? { ...current, name, ...(current.kind === "custom" ? { answer: null } : {}) } : current); } }}
       onStyle={(style) => { if (!saving.current) { interact(); setEditor((current) => current ? { ...current, style } : current); } }}
       onConfirm={() => void save()} confirmingDelete={confirmingDelete}
-      onDelete={() => { if (saving.current) return; interact(); if (confirmingDelete) void save(true); else setConfirmingDelete(true); }}
-      onCancelDelete={() => { interact(); setConfirmingDelete(false); }}
+      onDelete={() => { if (saving.current) return; interact(); if (readForm().confirmingDelete) void save(true); else change({ confirmingDelete: true }); }}
+      onCancelDelete={() => { interact(); change({ confirmingDelete: false }); }}
       onDismiss={() => {
         if (saving.current) return;
-        presented.current = false; setEditor(null); setConfirmingDelete(false); setError("");
-        if (queuedAccount.current) { setAccountRequest(queuedAccount.current); queuedAccount.current = null; }
+        presented.current = false; change({ editor: null, confirmingDelete: false }); setError("");
+        if (queuedAccount.current) { change({ accountRequest: queuedAccount.current }); queuedAccount.current = null; }
       }} />
   </Screen>;
 }

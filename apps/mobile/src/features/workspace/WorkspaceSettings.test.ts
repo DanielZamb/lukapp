@@ -645,3 +645,17 @@ test("Back from the screen returns to the existing caller, and a direct link fal
   expect(state.router.replace.mock.calls).toEqual([["/settings"]]);
   expect(state.router.push).not.toHaveBeenCalled();
 });
+
+test("a place tap kept from before a lost reply neither shows another place nor sends one", async () => {
+  state.defaultPlace.mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce(receipt("defaultPlace", "daily", "savings", "key-1"));
+  await render();
+  await press(row(copy[language].place));
+  const keptDaily = control("radio", "Daily").props.onPress as () => void;
+  await press(control("radio", "Savings"));
+  await act(async () => keptDaily());
+  expect(control("radio", "Savings").props.accessibilityState).toEqual({ checked: true, disabled: true });
+  await press(control("button", "Retry the same change"));
+  const first = { workspaceId: "ws", financialAccountProfileId: "savings", expectedFinancialAccountProfileId: "daily", idempotencyKey: "key-1" };
+  expect(state.defaultPlace.mock.calls.map(([request]) => request)).toEqual([first, first]);
+});

@@ -107,6 +107,8 @@ test("a violation planted beside an exempt declaration, in the same file, is sti
 const amountFolder = "apps/mobile/src/features/amount/";
 const sessionConstructors = ["openAmount", "openAmountIn", "amountOfMinorUnits", "openSavedAmount"];
 const renderEffects = new Set(["useEffect", "useLayoutEffect", "useInsertionEffect", "useMemo"]);
+/** The hooks whose state a handler reads with `read()`; `useFormState` is `useAmountState` for a whole form. */
+const pressStates = new Set(["useAmountState", "useFormState"]);
 
 function parse(file: string, source: string) {
   return ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -151,6 +153,13 @@ function isRenderEffect(fn: ts.Node) {
   return ts.isCallExpression(call) && call.arguments[0] === fn && ts.isIdentifier(call.expression) && renderEffects.has(call.expression.text);
 }
 
+/** A callback an array method runs during the render, such as the one that maps rows to elements; handlers it creates are still handlers. */
+function isRenderCallback(fn: ts.Node) {
+  const call = fn.parent;
+  return ts.isCallExpression(call) && call.arguments[0] === fn && ts.isPropertyAccessExpression(call.expression)
+    && ["map", "filter", "find", "findIndex", "some", "every", "flatMap"].includes(call.expression.name.text);
+}
+
 /**
  * Handlers that read an amount another way than its state's `read()`. In the function that calls useAmountState, the
  * state's value and every value the render derives from it are render values; a function nested in it, other than an
@@ -162,7 +171,7 @@ function capturedAmounts(file: string, source: string): string[] {
   const owners: Array<{ owner: ts.FunctionLikeDeclaration; value: string }> = [];
   const findOwners = (node: ts.Node) => {
     if (ts.isVariableDeclaration(node) && node.initializer && ts.isCallExpression(node.initializer)
-      && ts.isIdentifier(node.initializer.expression) && node.initializer.expression.text === "useAmountState"
+      && ts.isIdentifier(node.initializer.expression) && pressStates.has(node.initializer.expression.text)
       && ts.isArrayBindingPattern(node.name)) {
       const [first] = node.name.elements;
       let owner: ts.Node = node.parent;
@@ -178,10 +187,13 @@ function capturedAmounts(file: string, source: string): string[] {
       const walk = (node: ts.Node) => { visit(node); if (!isFunction(node)) ts.forEachChild(node, walk); };
       if (owner.body) ts.forEachChild(owner.body, walk);
     };
-    const reads = (node: ts.Node, names: Set<string>) => {
+    const reads = (node: ts.Node, names: ReadonlySet<string>) => {
       let hit = false;
-      const walk = (at: ts.Node) => { if (ts.isIdentifier(at) && names.has(at.text) && isRead(at)) hit = true; else ts.forEachChild(at, walk); };
-      walk(node);
+      const walk = (at: ts.Node, visible: ReadonlySet<string>) => {
+        const inner = isFunction(at) ? new Set([...visible].filter((name) => !ownNames(at).has(name))) : visible;
+        if (ts.isIdentifier(at) && inner.has(at.text) && isRead(at)) hit = true; else ts.forEachChild(at, (child) => walk(child, inner));
+      };
+      walk(node, names);
       return hit;
     };
     for (let grew = true; grew;) {
@@ -191,20 +203,21 @@ function capturedAmounts(file: string, source: string): string[] {
           for (const name of boundNames(node.name)) if (!rendered.has(name)) { rendered.add(name); grew = true; }
       });
     }
-    const inHandler = (node: ts.Node, hidden: ReadonlySet<string>) => {
+    const inHandler = (node: ts.Node, hidden: ReadonlySet<string>, render = true) => {
       if (isFunction(node)) {
         if (isRenderEffect(node)) return;
         const own = ownNames(node);
         const visible = new Set([...hidden].filter((name) => !own.has(name)));
+        if (render && isRenderCallback(node)) { if (node.body) ts.forEachChild(node.body, (child) => inHandler(child, visible)); return; }
         const walk = (at: ts.Node) => {
           if (ts.isIdentifier(at) && visible.has(at.text) && isRead(at)) found.push(`${file}:${lineOf(parsed, at)}: a handler reads ${at.text}, which the render derived from the amount state`);
-          if (isFunction(at)) { inHandler(at, visible); return; }
+          if (isFunction(at)) { inHandler(at, visible, false); return; }
           ts.forEachChild(at, walk);
         };
         if (node.body) ts.forEachChild(node.body, walk);
         return;
       }
-      ts.forEachChild(node, (child) => inHandler(child, hidden));
+      ts.forEachChild(node, (child) => inHandler(child, hidden, render));
     };
     if (owner.body) ts.forEachChild(owner.body, (node) => inHandler(node, rendered));
   }
@@ -309,16 +322,28 @@ test("every amount a production handler sends is read from its owner's state at 
   expect([...carriers]).toEqual(expect.arrayContaining(["AmountSession", "LineDraft", "PlaceDraft"]));
   const found = [...sources].flatMap(([file, source]) => amountReadsOutsidePress(file, source, carriers));
   expect(found).toEqual([]);
-  const owners = [...sources].filter(([file, source]) => !file.startsWith(amountFolder) && /\buseAmountState\s*[<(]/.test(source))
+  const owners = [...sources].filter(([file, source]) => !file.startsWith(amountFolder) && /\buse(Amount|Form)State\s*[<(]/.test(source))
     .map(([file]) => file).sort();
   expect(owners).toEqual([
+    "apps/mobile/app/account.tsx",
+    "apps/mobile/app/drafts.tsx",
+    "apps/mobile/app/post.tsx",
+    "apps/mobile/src/device-admission/DeviceAdmissionGate.tsx",
+    "apps/mobile/src/features/HomePlaceSetup.tsx",
     "apps/mobile/src/features/Setup.tsx",
     "apps/mobile/src/features/budget/useBudgetEditor.ts",
+    "apps/mobile/src/features/categories/CategoryManager.tsx",
+    "apps/mobile/src/features/categories/useCategoryPicker.ts",
+    "apps/mobile/src/features/devices/DevicesScreen.tsx",
     "apps/mobile/src/features/intake/prototype/NotificationFirst.tsx",
     "apps/mobile/src/features/placeEnding/PlaceEndingFlow.tsx",
+    "apps/mobile/src/features/places/usePlaceRename.ts",
+    "apps/mobile/src/features/posting/usePostingBatch.ts",
     "apps/mobile/src/features/posting/usePostingEditor.ts",
     "apps/mobile/src/features/recovery/useRecoveryEditor.ts",
+    "apps/mobile/src/features/recovery/useRecoveryLifecycle.ts",
     "apps/mobile/src/features/recovery/useRecoveryMove.ts",
+    "apps/mobile/src/features/workspace/WorkspaceSettings.tsx",
   ]);
 });
 

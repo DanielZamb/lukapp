@@ -1076,3 +1076,21 @@ test("in Spanish the new day and a stale refusal read as such", async () => {
   expect(ui.alerts()).toEqual(["Cambió el día: este cierre ahora se registra el 11 de noviembre de 2026. Revísalo otra vez antes de cerrar.",
     "El saldo cambió antes de cerrar el lugar, así que no se registró nada. Estamos trayendo el saldo nuevo…"]);
 });
+
+test("a Close handler kept before the default place was chosen again sends the default the summary shows", async () => {
+  remote.closure = closure("Asset", 0, { isDefault: true, requiresReplacementDefault: true });
+  remote.close.mockResolvedValue(receipt());
+  await open();
+  await ui.press("Close Wallet");
+  await ui.press("Savings");
+  await ui.press("Continue");
+  const kept = ui.pressable("Close Wallet").props.onPress as () => void;
+  await act(async () => serverChange(() => { remote.places = [wallet, daily, { ...savings, status: "closed" }]; }));
+  await ui.row("Savings (closed) can't become your default place anymore");
+  await ui.press("Daily");
+  await ui.press("Continue");
+  expect(ui.texts()).toContain("Daily becomes your default place.");
+  await act(async () => kept());
+  expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(0),
+    reviewedAccountingDate: "2026-11-10", replacementDefaultFinancialAccountProfileId: "daily", lines: [] }]]);
+});

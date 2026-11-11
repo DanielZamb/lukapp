@@ -390,3 +390,12 @@ test("closed access and revocation read in Spanish and stay distinguishable", as
   expect(spoken()).toContain("Confirmando el acceso de este celular…");
   expect(button("Revisar de nuevo")).toBeDefined();
 });
+
+test("a Register handler kept from before the last keystrokes registers the name the screen shows", async () => {
+  await open({ status: "success", data: { status: "unregistered", wipeLocalInput: false } });
+  await act(async () => root?.root.findByType("input").props.onChangeText("My ph"));
+  const kept = button("Register device").props.onPress as () => void;
+  await act(async () => root?.root.findByType("input").props.onChangeText("My phone"));
+  await act(async () => kept());
+  expect(sdk.register.mock.calls.map(([args]) => (args as { label: string }).label)).toEqual(["My phone"]);
+});

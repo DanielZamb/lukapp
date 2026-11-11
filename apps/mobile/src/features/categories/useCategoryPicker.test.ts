@@ -316,3 +316,23 @@ test("the current name receives a visible suggestion that can be overridden", as
   expect(picker.sheet().suggested).toBeNull();
   expect(picker.sheet().canConfirm).toBe(false);
 });
+
+test("a Save kept from the render before the last keystrokes creates the name and look the sheet shows", async () => {
+  const picker = await open([category("food")]);
+  await act(async () => picker.sheet().onCreate());
+  await act(async () => picker.sheet().onName("Week"));
+  await act(async () => picker.sheet().onAnswer("spend"));
+  const kept = picker.sheet().onConfirm;
+  await act(async () => picker.sheet().onName("Weekend"));
+  await act(async () => kept());
+  expect(provider.create).not.toHaveBeenCalled();
+  await act(async () => {
+    picker.sheet().onAnswer("spend");
+    picker.sheet().onStyle({ emoji: "🎉", tone: "primary", color: "olive" });
+  });
+  provider.create.mockResolvedValueOnce({ kind: "category", category: category("weekend") });
+  await act(async () => kept());
+  expect(provider.create.mock.calls.map(([request]) => request)).toEqual([{ workspaceId: "workspace", selection: {
+    kind: "custom", name: "Weekend", answer: "spend", style: { emoji: "🎉", tone: "primary", color: "olive" },
+  } }]);
+});

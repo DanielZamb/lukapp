@@ -1,7 +1,7 @@
-import { useState } from "react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
+import { useFormState, type ReadAtPress } from "../amount/useAmountState";
 import { useFrozenCommand } from "../useFrozenCommand";
 import {
   correctionTargets,
@@ -62,76 +62,93 @@ const correctionRefusals: Record<string, MessageKey> = {
 const cancelSettles = new Set([...Object.keys(cancelRefusals), "idempotency_key_invalid"]);
 const correctionSettles = new Set([...Object.keys(correctionRefusals), "transfer_not_usable", "destination_not_found", "idempotency_key_invalid"]);
 
+function cancelReason(reason: string) {
+  const trimmed = reason.trim();
+  return { trimmed, valid: trimmed.length <= REASON_LIMIT };
+}
+
 export function useRecoveryCancel(
   seed: { workspaceId: string; plan: RecoveryPlanView },
   transport: RecoveryCancelTransport,
 ) {
   const { t } = useT();
-  const [reason, setReason] = useState("");
+  const [form, setForm, readForm] = useFormState({ reason: "" });
   const command = useFrozenCommand({ send: transport.cancel, reportFailure: transport.reportFailure, onDone: transport.onCancelled,
     settles: (code) => cancelSettles.has(code) });
   const { state } = command;
-  const trimmed = reason.trim();
-  const valid = trimmed.length <= REASON_LIMIT;
+  const { valid } = cancelReason(form.reason);
   const error = state.name === "uncertain" ? t("planning.cancelUncertain")
     : state.name === "open" && state.refusal ? t(cancelRefusals[state.refusal.code] ?? "planning.cancelRejected")
       : valid ? "" : t("planning.cancelReasonInvalid");
   return {
-    reason,
+    reason: form.reason,
     error,
     busy: command.busy,
     pending: state.name === "uncertain",
     editable: !command.frozen,
     canDismiss: !command.frozen,
+    dismiss: (close: () => void) => { if (command.canEdit()) close(); },
     canSubmit: !command.busy && (state.name === "uncertain" || (isCancellable(seed.plan) && valid)),
-    onReason: (value: string) => { if (command.canEdit()) setReason(value); },
-    submit: () => command.submit(() => !isCancellable(seed.plan) || !valid ? null : {
-      workspaceId: seed.workspaceId,
-      planId: seed.plan.id,
-      ...(trimmed ? { reason: trimmed } : {}),
-      idempotencyKey: transport.newKey(),
+    onReason: (value: string) => { if (command.canEdit()) setForm({ reason: value }); },
+    submit: () => command.submit(() => {
+      const { trimmed, valid: sendable } = cancelReason(readForm().reason);
+      return !isCancellable(seed.plan) || !sendable ? null : {
+        workspaceId: seed.workspaceId,
+        planId: seed.plan.id,
+        ...(trimmed ? { reason: trimmed } : {}),
+        idempotencyKey: transport.newKey(),
+      };
     }),
   };
 }
+
+type Correction = { target: CorrectionTarget | null; reason: string };
 
 export function useRecoveryCorrection(
   seed: { workspaceId: string; plan: RecoveryPlanView; plans: RecoveryPlanView[]; contribution: RecoveryContribution },
   transport: RecoveryCorrectionTransport,
 ) {
   const { t } = useT();
-  const [target, setTarget] = useState<CorrectionTarget | null>(null);
-  const [reason, setReason] = useState("");
+  const [form, setForm, readForm] = useFormState<Correction>({ target: null, reason: "" });
   const command = useFrozenCommand({ send: transport.correct, reportFailure: transport.reportFailure, onDone: transport.onCorrected,
     settles: (code) => correctionSettles.has(code) });
   const { state } = command;
   const targets = correctionTargets(seed.plans, seed.plan, seed.contribution);
-  const trimmed = reason.trim();
-  const ready = seed.contribution.status === "active" && trimmed.length > 0 && trimmed.length <= REASON_LIMIT
-    && (target?.kind === "remove" || (target?.kind === "plan" && targets.some((plan) => plan.id === target.planId)));
+  /** Whether a correction may be sent with these answers; rendering asks with the form, a press with what it reads. */
+  const ready = ({ target, reason }: Correction | ReadAtPress<Correction>) => {
+    const trimmed = reason.trim();
+    return seed.contribution.status === "active" && trimmed.length > 0 && trimmed.length <= REASON_LIMIT
+      && (target?.kind === "remove" || (target?.kind === "plan" && targets.some((plan) => plan.id === target.planId)));
+  };
   const refusedTitle = (request: CorrectRequest) =>
     seed.plans.find((plan) => plan.id === (request.targetPlanId ?? seed.plan.id))?.title ?? seed.plan.title;
   const error = state.name === "uncertain" ? t("planning.fixUncertain")
     : state.name === "open" && state.refusal
       ? t(correctionRefusals[state.refusal.code] ?? "planning.fixRejected", { plan: refusedTitle(state.refusal.request) })
-      : trimmed.length > REASON_LIMIT ? t("planning.fixReasonInvalid") : "";
+      : form.reason.trim().length > REASON_LIMIT ? t("planning.fixReasonInvalid") : "";
   return {
-    target,
+    target: form.target,
     targets,
-    reason,
+    reason: form.reason,
     error,
     busy: command.busy,
     pending: state.name === "uncertain",
     editable: !command.frozen,
     canDismiss: !command.frozen,
-    canSubmit: !command.busy && (state.name === "uncertain" || ready),
-    onTarget: (next: CorrectionTarget) => { if (command.canEdit()) setTarget(next); },
-    onReason: (value: string) => { if (command.canEdit()) setReason(value); },
-    submit: () => command.submit(() => !ready || !target ? null : {
-      workspaceId: seed.workspaceId,
-      contributionId: seed.contribution.id,
-      reason: trimmed,
-      ...(target.kind === "plan" ? { targetPlanId: target.planId } : {}),
-      idempotencyKey: transport.newKey(),
+    dismiss: (close: () => void) => { if (command.canEdit()) close(); },
+    canSubmit: !command.busy && (state.name === "uncertain" || ready(form)),
+    onTarget: (next: CorrectionTarget) => { if (command.canEdit()) setForm((now) => ({ ...now, target: next })); },
+    onReason: (value: string) => { if (command.canEdit()) setForm((now) => ({ ...now, reason: value })); },
+    submit: () => command.submit(() => {
+      const now = readForm();
+      const target = now.target;
+      return !ready(now) || !target ? null : {
+        workspaceId: seed.workspaceId,
+        contributionId: seed.contribution.id,
+        reason: now.reason.trim(),
+        ...(target.kind === "plan" ? { targetPlanId: target.planId } : {}),
+        idempotencyKey: transport.newKey(),
+      };
     }),
   };
 }

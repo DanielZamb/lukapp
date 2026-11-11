@@ -183,3 +183,58 @@ test("a retry refused because the destination Place closed answers the plan and 
   expect(editor()).toMatchObject({ pending: false, editable: true, canSubmit: false, error: "",
     unavailable: { id: "savings", label: "Savings (closed)" } });
 });
+
+test("a Submit handler kept from the eight-month render sends the four months the screen shows", async () => {
+  const api = transport();
+  const editor = await open(api);
+  await act(async () => { editor().onMonths(8); });
+  const kept = editor().submit;
+  await act(async () => { editor().onMonths(4); });
+  expect(editor()).toMatchObject({ installmentCount: 4, suggestion: { installmentMinorUnits: 300_000, targetMinorUnits: 1_200_000 } });
+  await act(async () => { await kept(); });
+  expect(api.save.mock.calls.map(([request]) => request)).toEqual([{
+    workspaceId: "workspace", sourceJournalEntryId: "exp-1", destinationFinancialAccountProfileId: "savings",
+    installmentCount: 4, installmentMinorUnits: 300_000, idempotencyKey: "activate-1",
+  }]);
+});
+
+test("a Submit handler kept before the destination changed sends the destination the screen shows", async () => {
+  const api = transport();
+  const editor = await open(api);
+  const kept = editor().submit;
+  await act(async () => { editor().onDestination("daily"); });
+  expect(editor().destinationId).toBe("daily");
+  await act(async () => { await kept(); });
+  expect(api.save.mock.calls.map(([request]) => request.destinationFinancialAccountProfileId)).toEqual(["daily"]);
+});
+
+test("a Submit handler kept before months changed resends the held plan unchanged after a lost reply", async () => {
+  const api = transport();
+  api.save.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const editor = await open(api);
+  const keptMonths = editor().onMonths;
+  const keptDestination = editor().onDestination;
+  await act(async () => { await editor().submit(); });
+  await act(async () => { keptMonths(8); keptDestination("daily"); });
+  const kept = editor().submit;
+  await act(async () => { await kept(); });
+  const first = {
+    workspaceId: "workspace", sourceJournalEntryId: "exp-1", destinationFinancialAccountProfileId: "savings",
+    installmentCount: 4, installmentMinorUnits: 300_000, idempotencyKey: "activate-1",
+  };
+  expect(api.save.mock.calls.map(([request]) => request)).toEqual([first, first]);
+  expect(editor()).toMatchObject({ installmentCount: 4, destinationId: "savings" });
+});
+
+test.fails("known exposure: an activation held after a lost reply is lost with the screen, so reopening sends a new key", async () => {
+  const api = transport();
+  api.save.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const editor = await open(api);
+  await act(async () => { await editor().submit(); });
+  expect(editor().pending).toBe(true);
+  await act(async () => root?.unmount());
+  root = undefined;
+  const reopened = await open(api);
+  await act(async () => { await reopened().submit(); });
+  expect(api.save.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["activate-1", "activate-1"]);
+});

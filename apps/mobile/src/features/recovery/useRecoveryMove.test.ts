@@ -296,3 +296,49 @@ test("a retry refused because the source Place closed answers the movement and m
   expect(move()).toMatchObject({ pending: false, editable: true, canSubmit: false, error: "",
     unavailable: { id: "daily", label: "Daily (closed)" } });
 });
+
+test("a Move money handler kept before the source changed sends from the source the screen shows", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
+  const api = transport();
+  const wallet: RecoveryPlace = { id: "wallet", name: "Wallet", productKind: "bankAccount" };
+  const move = await open(api, { workspaceId: "workspace", plan, sources: [...sources, wallet], timeZone: "America/Bogota" });
+  const kept = move().submit;
+  await act(async () => { move().onSource("wallet"); });
+  expect(move().sourceId).toBe("wallet");
+  await act(async () => { await kept(); });
+  expect(api.move.mock.calls.map(([request]) => [request.sourceFinancialAccountProfileId, request.amount.minorUnits]))
+    .toEqual([["wallet", 230_000]]);
+});
+
+test("a Move money handler kept before a lost reply resends the held movement, not the source chosen since", async () => {
+  vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const wallet: RecoveryPlace = { id: "wallet", name: "Wallet", productKind: "bankAccount" };
+  const move = await open(api, { workspaceId: "workspace", plan, sources: [...sources, wallet], timeZone: "America/Bogota" });
+  const keptSource = move().onSource;
+  const keptAmount = move().onAmount;
+  const kept = move().submit;
+  await act(async () => { await move().submit(); });
+  await act(async () => { keptSource("wallet"); keptAmount(money("1.000")); });
+  await act(async () => { await kept(); });
+  const first = {
+    workspaceId: "workspace", planId: "plan-1", sourceFinancialAccountProfileId: "daily",
+    amount: { currency: "COP", minorUnits: 230_000 }, accountingDate: "2026-10-17",
+    description: "Recovery: Laptop repair", idempotencyKey: "move-1",
+  };
+  expect(api.move.mock.calls.map(([request]) => request)).toEqual([first, first]);
+});
+
+test.fails("known exposure: a Move money held after a lost reply is lost with the screen, so reopening sends a new key", async () => {
+  const api = transport();
+  api.move.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  const move = await open(api);
+  await act(async () => { await move().submit(); });
+  expect(move().pending).toBe(true);
+  await act(async () => root?.unmount());
+  root = undefined;
+  const reopened = await open(api);
+  await act(async () => { await reopened().submit(); });
+  expect(api.move.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["move-1", "move-1"]);
+});

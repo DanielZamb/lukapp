@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useFormState, withFields } from "../amount/useAmountState";
 import { ConvexError } from "convex/values";
 import { useT } from "../../i18n";
 import { rejectionMessage } from "./rejection";
@@ -33,8 +34,11 @@ export function usePostingBatch(
     receipts: { count: 0, net: 0 },
   });
   const current = useRef(state);
-  const [loaded, setLoaded] = useState(false);
-  const [busy, setBusy] = useState(false);
+  /** Whether the stored batch has loaded and whether a change or a post is running, read at the press. */
+  const [progress, setProgress, readProgress] = useFormState({ loaded: false, busy: false });
+  const { loaded, busy } = progress;
+  const setBusy = (value: boolean) => setProgress((now) => withFields(now, { busy: value }));
+  const setLoaded = (value: boolean) => setProgress((now) => withFields(now, { loaded: value }));
   const [error, setError] = useState("");
   const [posted, setPosted] = useState<BatchReceipt | null>(null);
   const lock = useRef(false);
@@ -75,7 +79,8 @@ export function usePostingBatch(
 
   async function edit(change: Extract<PostingBatchChange, { kind: "keep" | "remove" }>) {
     const owner = lifetime.current;
-    if (!owner.active || !editable || lock.current) return false;
+    const now = readProgress();
+    if (!owner.active || !now.loaded || now.busy || current.current.pendingItemId || lock.current) return false;
     lock.current = true;
     setBusy(true);
     try {
@@ -104,7 +109,7 @@ export function usePostingBatch(
   async function postAll() {
     const owner = lifetime.current;
     if (
-      !owner.active || !loaded || lock.current || current.current.queue.length === 0
+      !owner.active || !readProgress().loaded || lock.current || current.current.queue.length === 0
     ) return;
     lock.current = true;
     setBusy(true);

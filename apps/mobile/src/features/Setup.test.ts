@@ -726,3 +726,26 @@ test("third review, finding 2: a Start tracking handler from the render before t
   await act(async () => { stale(); });
   expect(backend.ensure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ startingMinorUnits: 150000 }));
 });
+
+test("a Start tracking handler kept from before the currency changed saves the currency the amount is in", async () => {
+  await open();
+  await reveal();
+  const kept = node("Start tracking").props.onPress as () => void;
+  await press("USD");
+  await type("Starting amount", "25");
+  await act(async () => kept());
+  expect(backend.ensure.mock.calls.map(([payload]) => [payload.functionalCurrency, payload.startingMinorUnits])).toEqual([["USD", 2500]]);
+});
+
+test("handlers kept from before a lost reply neither change the answers nor rebuild the held setup", async () => {
+  await open();
+  await reveal();
+  const kept = { finish: node("Start tracking").props.onPress as () => void, usd: node("USD").props.onPress as () => void };
+  backend.ensure.mockRejectedValueOnce(new Error("lost acknowledgement"));
+  await act(async () => kept.finish());
+  await act(async () => kept.usd());
+  expect(node("COP").props.accessibilityState.checked).toBe(true);
+  await act(async () => kept.finish());
+  expect(backend.ensure.mock.calls.map(([payload]) => payload.functionalCurrency)).toEqual(["COP", "COP"]);
+  expect(backend.ensure.mock.calls[1][0]).toEqual(backend.ensure.mock.calls[0][0]);
+});

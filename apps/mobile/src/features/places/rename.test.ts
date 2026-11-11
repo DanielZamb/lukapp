@@ -357,3 +357,43 @@ test.each([
   expect(texts().filter((text) => ["Default", "Por defecto"].includes(text))).toEqual(label);
   expect(tree().findAll((node) => typeof node.props.title === "string" && /default|defecto/i.test(node.props.title))).toEqual([]);
 });
+
+test("a Save handler kept from the render before the last keystrokes renames to the name the sheet shows", async () => {
+  state.rename.mockResolvedValue(receipt);
+  await render();
+  await openSheet();
+  await type("Every");
+  const kept = button("Save name").props.onPress as () => void;
+  await type("Everyday");
+  await act(async () => kept());
+  expect(state.rename.mock.calls).toEqual([[{
+    workspaceId: "ws", financialAccountProfileId: "daily", name: "Everyday", expectedName: "Daily",
+  }]]);
+});
+
+test("a rename resent after a lost reply is the held name, whatever a kept field handler types since", async () => {
+  state.rename.mockRejectedValueOnce(new Error("lost acknowledgement")).mockResolvedValueOnce(receipt);
+  await render();
+  await openSheet();
+  await type("Everyday");
+  const keptType = input().props.onChangeText as (value: string) => void;
+  await save();
+  await act(async () => keptType("Changed"));
+  expect(input().props.value).toBe("Everyday");
+  await save("Retry saving the name");
+  expect(state.rename.mock.calls.map(([request]) => request)).toEqual([1, 2].map(() => ({
+    workspaceId: "ws", financialAccountProfileId: "daily", name: "Everyday", expectedName: "Daily",
+  })));
+});
+
+test("a Use handler kept from the look sheet's earlier render saves the emoji picked since", async () => {
+  state.changeLook.mockResolvedValue(undefined);
+  await render();
+  await act(async () => button("Change look").props.onPress());
+  const sheet = () => tree().find((node) => String(node.type) === "emoji-sheet");
+  const kept = sheet().props.onUse as () => Promise<void>;
+  await act(async () => sheet().props.onPick("🏦"));
+  expect(sheet().props.emoji).toBe("🏦");
+  await act(async () => kept());
+  expect(state.changeLook.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "daily", emoji: "🏦" }]]);
+});

@@ -1,3 +1,4 @@
+import { useFormState } from "../amount/useAmountState";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useAction, useQuery } from "convex/react";
@@ -103,10 +104,10 @@ function PlaceSheet({ seed, profiles, onClose }: { seed: Seed; profiles: Profile
   const sheet = useRef<BottomSheetModal>(null);
   const transport = useTransport<"defaultPlace">(useAction(api.accounting.changeDefaultPlace), sheet);
   const change = useSettingChange("defaultPlace", seed, transport);
-  const [chosen, setChosen] = useState(seed.current);
+  const [chosen, setChosen, readChosen] = useFormState(seed.current);
   const shown = change.locked ? chosen : seed.current;
   const select = (id: string) => {
-    if (change.locked) return;
+    if (change.atPress() !== "open") return;
     interact();
     if (id === seed.current) return sheet.current?.dismiss();
     setChosen(id);
@@ -134,7 +135,7 @@ function PlaceSheet({ seed, profiles, onClose }: { seed: Seed; profiles: Profile
       {change.busy && <ActivityIndicator accessibilityLabel={t("workspace.saving")} />}
       {!!change.error && <Text accessibilityRole="alert" style={ui.error}>{change.error}</Text>}
       {change.uncertain && <PrimaryButton label={t("workspace.retry")} trailingIcon="refresh"
-        onPress={() => { interact(); void change.submit(chosen); }} />}
+        onPress={() => { interact(); void change.submit(readChosen()); }} />}
     </SettingSheet>
   );
 }
@@ -197,8 +198,9 @@ function ConfirmBody({ sheet, change, value, current, title, lines, confirmLabel
   const interact = useLocalEntryInteraction();
   const confirm = () => {
     interact();
-    if (!change.uncertain && !ready) return;
-    if (!change.uncertain && value === current) return sheet.current?.dismiss();
+    const held = change.atPress() === "held";
+    if (!held && !ready) return;
+    if (!held && value === current) return sheet.current?.dismiss();
     void change.submit(value);
   };
   return (
