@@ -25,6 +25,16 @@ export function createCandidateBinding(input: {
     return value;
   }
   let seen = row().recordRevision;
+  /** The confirmation a frozen Candidate holds, exactly as it will be sent again; null while it is in review. */
+  function held(): IntakeSuggestion | null {
+    const current = service.read(candidateId);
+    return current && current.status.kind !== "review" ? current.status.command.confirmed : null;
+  }
+  const opened = row();
+  const holding = held();
+  // A frozen Candidate shows the command it holds, never its review text read again under today's amount format.
+  const shown = holding ? { ...projectCandidate(opened), reviewAmount: null,
+    suggestion: { ...opened.review, ...heldReview(holding) } } : projectCandidate(opened);
   function receipt(result: ConfirmCandidateResult, command: ConfirmCandidateInput): PostingReceipt {
     return { description: result.posted.description, amount: { currency: result.posted.amount.currency,
       minorUnits: (command.confirmed.direction === "out" ? -1 : 1) * Math.abs(result.posted.amount.minorUnits) } };
@@ -46,14 +56,15 @@ export function createCandidateBinding(input: {
   }
   return {
     id: candidateId,
-    facts: factsFromCandidate(projectCandidate(row())),
+    facts: factsFromCandidate(shown),
     reviewNote: reviewNote(row(), input.translator),
     notification: notificationOf(row()),
     originalSuggestion: evidenceFor(row()),
     get frozen() { const current = service.read(candidateId); return !current || current.status.kind !== "review"; },
+    get held() { return held(); },
     persistReview,
     discard: () => discardCandidate(service, candidateId, seen),
-    async confirm(confirmed: IntakeSuggestion) {
+    async confirm(confirmed: IntakeSuggestion | null) {
       let current = row();
       if (current.status.kind === "outcome") {
         const saved = current.status;
@@ -62,6 +73,7 @@ export function createCandidateBinding(input: {
         return receipt(saved.outcome.result, saved.command);
       }
       if (current.status.kind === "review") {
+        if (!confirmed) throw new Error("Confirm the Candidate's facts first");
         if (confirmed.amount.currency !== current.currency) throw new Error("Unsupported workspace currency");
         const { amount, ...review } = confirmed;
         const revision = await service.updateReview(candidateId, current.recordRevision, { ...review, amountMinorUnits: amount.minorUnits }, { currencyReviewed: true });
@@ -84,6 +96,11 @@ export function createCandidateBinding(input: {
       return receipt(result, command);
     },
   };
+}
+
+/** The review fields of a held confirmation, as the single-entry form opens them. */
+function heldReview({ amount, ...rest }: IntakeSuggestion) {
+  return { ...rest, userCategoryIds: [...rest.userCategoryIds], amountMinorUnits: amount.minorUnits };
 }
 
 /**

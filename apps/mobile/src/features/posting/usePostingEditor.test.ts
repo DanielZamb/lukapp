@@ -750,3 +750,21 @@ test("a late amount from an input the form already replaced changes neither the 
   expect(editor().categories.ids).toEqual(["food"]);
   expect(displayedMinorUnits(editor().amount)).toBe(-500);
 });
+
+test("a restored frozen Draft shows the amount of the command it holds and resends that command byte for byte", async () => {
+  const api = transport();
+  const command: PendingPosting = {
+    kind: "expense",
+    payload: {
+      workspaceId: "workspace", financialAccountProfileId: "bank", amount: { currency: "COP", minorUnits: 123450 },
+      accountingDate: "2026-10-17", description: "Kept", idempotencyKey: "frozen-key", userCategoryIds: ["food"],
+    },
+  };
+  api.load.mockResolvedValue({ kind: "pending", id: "frozen", command });
+  const editor = await open(api);
+  expect({ text: editor().amount.editor.text, review: editor().amount.review, editable: editor().editable, canSubmit: editor().canSubmit })
+    .toEqual({ text: "-1234,50", review: null, editable: false, canSubmit: true });
+  await act(async () => { await editor().submit(); });
+  expect(JSON.stringify(api.save.mock.calls[0]?.[0])).toBe(JSON.stringify(command));
+  expect(JSON.stringify(api.post.mock.calls[0]?.[0])).toBe(JSON.stringify(command));
+});

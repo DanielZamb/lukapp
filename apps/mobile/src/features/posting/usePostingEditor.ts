@@ -88,8 +88,14 @@ export type IntakeBinding = {
   notification?: { text: string; packageName: string; at: number } | null;
   originalSuggestion: IntakeEvidence;
   readonly frozen: boolean;
+  /**
+   * The confirmation a frozen Candidate holds, or null in review. The form shows it and resends exactly it, through
+   * `confirm(null)`, without reading or validating the amount on screen.
+   */
+  readonly held: IntakeSuggestion | null;
   persistReview(facts: LocalEntryFacts): Promise<void>;
-  confirm(confirmed: IntakeSuggestion): Promise<PostingReceipt>;
+  /** Confirms the Candidate with `confirmed`, the facts on the form; a frozen Candidate sends its held command again. */
+  confirm(confirmed: IntakeSuggestion | null): Promise<PostingReceipt>;
   /** Discards the Candidate at the last revision this form saw or saved. */
   discard(): Promise<DiscardOutcome>;
 };
@@ -562,6 +568,8 @@ export function usePostingEditor(
   }
   /** Whether a post may be sent; rendering asks with the form, a press with what it reads. */
   function canSubmitWith(now: EditorView) {
+    const held = intake?.held;
+    if (held) return !now.busy && !now.loading && !now.keeping && !now.blocked && held.amount.currency === account.currency;
     const shown = displayedMinorUnits(now.amount);
     const amountValid = amountSendable(now.amount) && shown !== null && (now.entryType === "initial" ? shown >= 0 : shown !== 0);
     const setupNow = now.setup;
@@ -709,8 +717,10 @@ export function usePostingEditor(
           setError(t("posting.alreadyPosting"));
           return;
         }
-        await saveCandidateReview(latestReview.current && snapshotFacts(now));
-        const receipt = await intake.confirm(snapshotConfirmed(intake, now));
+        const receipt = intake.held ? await intake.confirm(null) : await (async () => {
+          await saveCandidateReview(latestReview.current && snapshotFacts(now));
+          return intake.confirm(snapshotConfirmed(intake, now));
+        })();
         if (!mounted.active) return;
         change({ amount: openAmount(account.currency, "-"), openedAmount: null, description: "", classification: unclassified });
         setPosted(receipt);

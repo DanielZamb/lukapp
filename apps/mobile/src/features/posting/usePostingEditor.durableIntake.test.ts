@@ -186,7 +186,7 @@ test("fourth review, finding 5: a frozen legacy Candidate shows its held command
   const shown = { editable: editor().editable, review: editor().amount.review, text: editor().amount.editor.text, canSubmit: editor().canSubmit };
   await act(async () => { await editor().submit(); });
   expect(dispatch).toHaveBeenCalledTimes(1);
-  expect(shown).toEqual({ editable: false, review: null, text: "-1,234.50", canSubmit: true });
+  expect(shown).toEqual({ editable: false, review: null, text: "-1234.50", canSubmit: true });
   await act(async () => root?.unmount()); root = undefined;
 
   const batch = await frozenLegacyUsdCandidate();
