@@ -8,10 +8,18 @@ import { emptyState } from "../intake/durableState";
 import { mountStack, screenHelpers, settle } from "./flow.testSupport";
 
 const phone = vi.hoisted(() => new Map<string, string>());
+/** How many of the next writes or deletes the phone's secure store fails, as a full or locked keychain does. */
+const failing = vi.hoisted(() => ({ writes: 0, deletes: 0 }));
 vi.mock("expo-secure-store", () => ({
   getItemAsync: async (key: string) => phone.get(key) ?? null,
-  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
-  deleteItemAsync: async (key: string) => { phone.delete(key); },
+  setItemAsync: async (key: string, value: string) => {
+    if (failing.writes > 0) { failing.writes--; throw new Error("keychain write failed"); }
+    phone.set(key, value);
+  },
+  deleteItemAsync: async (key: string) => {
+    if (failing.deletes > 0) { failing.deletes--; throw new Error("keychain delete failed"); }
+    phone.delete(key);
+  },
 }));
 vi.mock("../../local-auth/localInput", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
@@ -115,6 +123,8 @@ let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
 beforeEach(() => {
   phone.clear();
+  failing.writes = 0;
+  failing.deletes = 0;
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   keys.next = 0;
@@ -427,6 +437,39 @@ test("a retry turned away before the server looked for the start keeps it locked
   expect(remote.undo.mock.calls).toEqual([[sent], [sent], [sent]]);
   expect(phone.has(storedKey)).toBe(false);
   expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("an undo the phone can't save first is never sent: the typed name stays, and trying again sends it", async () => {
+  remote.undo.mockResolvedValue(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  failing.writes = 1;
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo).not.toHaveBeenCalled();
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.alerts()).toEqual(["This phone couldn't save the request before sending it, so nothing was sent. Try again."]);
+  expect(ui.input("Place name to confirm").props).toMatchObject({ value: "Wallet", editable: true });
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-2"]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("a start whose receipt arrives while the phone can't forget it still follows on the Place's page, and doesn't come back on the next open", async () => {
+  remote.undo.mockResolvedValueOnce(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  failing.deletes = 1;
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+  await act(async () => mounted!.root.unmount());
+  mounted = await mountStack(router, () => createElement(PlaceEndingRoute));
+  await settle();
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  expect(phone.has(storedKey)).toBe(false);
+  expect(remote.undo).toHaveBeenCalledTimes(1);
 });
 
 test("a first start turned away before the server looked for anything is refused: editable and forgotten", async () => {

@@ -41,3 +41,17 @@ test("signing out or losing the device wipes stored requests with the other loca
   expect(phone.has(unresolvedEndingKey("owner"))).toBe(false);
   expect(phone.has(unresolvedEndingKey("someone"))).toBe(true);
 });
+
+test("a request answered while the phone can't delete it is left out of later reads in this run, and the next settle deletes it", async () => {
+  const lease = new LocalInputLease("owner", "session");
+  await keepUnresolvedEnding(lease, close("wallet", "a"));
+  vi.mocked(SecureStore.deleteItemAsync).mockRejectedValueOnce(new Error("keychain delete failed"));
+  await expect(settleUnresolvedEnding(lease, close("wallet", "a").request)).rejects.toThrow("keychain delete failed");
+  expect(phone.has(unresolvedEndingKey("owner"))).toBe(true);
+  expect(await readUnresolvedEnding("owner", "ws", "wallet")).toBeNull();
+  expect(await readUnresolvedEnding("someone-else", "ws", "wallet")).toBeNull();
+  await settleUnresolvedEnding(lease, close("wallet", "a").request);
+  expect(phone.has(unresolvedEndingKey("owner"))).toBe(false);
+  await keepUnresolvedEnding(lease, close("wallet", "a"));
+  expect(await readUnresolvedEnding("owner", "ws", "wallet")).toEqual(close("wallet", "a"));
+});

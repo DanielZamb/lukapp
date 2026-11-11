@@ -8,10 +8,18 @@ import { emptyState } from "../intake/durableState";
 import { mountStack, screenHelpers, settle } from "./flow.testSupport";
 
 const phone = vi.hoisted(() => new Map<string, string>());
+/** How many of the next writes or deletes the phone's secure store fails, as a full or locked keychain does. */
+const failing = vi.hoisted(() => ({ writes: 0, deletes: 0 }));
 vi.mock("expo-secure-store", () => ({
   getItemAsync: async (key: string) => phone.get(key) ?? null,
-  setItemAsync: async (key: string, value: string) => { phone.set(key, value); },
-  deleteItemAsync: async (key: string) => { phone.delete(key); },
+  setItemAsync: async (key: string, value: string) => {
+    if (failing.writes > 0) { failing.writes--; throw new Error("keychain write failed"); }
+    phone.set(key, value);
+  },
+  deleteItemAsync: async (key: string) => {
+    if (failing.deletes > 0) { failing.deletes--; throw new Error("keychain delete failed"); }
+    phone.delete(key);
+  },
 }));
 vi.mock("../../local-auth/localInput", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../local-auth/localInput")>();
@@ -117,6 +125,8 @@ let mounted: Awaited<ReturnType<typeof mountStack>> | undefined;
 const ui = screenHelpers(() => mounted!.root as ReactTestRenderer);
 beforeEach(() => {
   phone.clear();
+  failing.writes = 0;
+  failing.deletes = 0;
   vi.stubGlobal("React", React);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   keys.next = 0;
@@ -891,6 +901,57 @@ test("a request is on the phone while it is sent and forgotten after a receipt o
   expect(seen.map((raw) => JSON.parse(raw!).endings[0].request.idempotencyKey)).toEqual(["key-1", "key-2"]);
   expect(phone.has(storedKey)).toBe(false);
   expect(ui.texts()).toContain("Wallet is closed");
+});
+
+const notSaved = "This phone couldn't save the request before sending it, so nothing was sent. Try again.";
+test("a closing the phone can't save first is never sent: nothing is locked, and trying again sends a new request", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await reviewTransferToSavings();
+  failing.writes = 1;
+  await ui.press("Close Wallet");
+  await settle();
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(phone.has(storedKey)).toBe(false);
+  expect(ui.alerts()).toEqual([notSaved]);
+  expect(ui.has("Back")).toBe(true);
+  await restart();
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  await ui.press("Close Wallet");
+  await ui.press("I moved it to another place");
+  await ui.press("Savings");
+  await ui.press("Close Wallet");
+  await settle();
+  expect(remote.close.mock.calls.map(([request]) => request.idempotencyKey)).toEqual(["key-2"]);
+  expect(ui.texts()).toContain("Wallet is closed");
+});
+
+test("a closing whose receipt arrives while the phone can't forget it shows the receipt, and the Place reading closed clears the leftover", async () => {
+  remote.close.mockResolvedValueOnce(receipt());
+  await reviewTransferToSavings();
+  failing.deletes = 1;
+  await ui.press("Close Wallet");
+  await settle();
+  expect(ui.texts()).toContain("Wallet is closed");
+  remote.places = [{ ...wallet, status: "closed" }, daily, savings];
+  await restart();
+  expect(ui.texts()).toEqual(["CLOSE OR UNDO", "This place has already ended", "Its history stays under Closed places."]);
+  expect(phone.has(storedKey)).toBe(false);
+  expect(remote.close).toHaveBeenCalledTimes(1);
+});
+
+test("a resent closing refused while the phone can't forget it lets the person start again, and doesn't come back on the next open", async () => {
+  storeOnPhone({ ...sentTransfer, idempotencyKey: "from-before" });
+  remote.close.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_close_balance_stale", message: "x" }));
+  await open();
+  await settle();
+  failing.deletes = 1;
+  await ui.press("Send it again");
+  await settle();
+  expect(ui.texts().slice(1, 3)).toEqual(["What happened to Wallet?", "It wasn't closed because its balance changed since. Start a new review."]);
+  await restart();
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  expect(phone.has(storedKey)).toBe(false);
+  expect(remote.close).toHaveBeenCalledTimes(1);
 });
 
 test("a stored request is forgotten once the backend reports the Place as ended, and another Place's request is kept", async () => {
