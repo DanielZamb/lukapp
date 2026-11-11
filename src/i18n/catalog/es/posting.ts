@@ -163,7 +163,7 @@ export const posting: Messages<typeof en> = {
   rejectAccountRequired: "Elige el lugar de donde sale esta plata.",
   rejectDescriptionRequired: "Agrega una descripción antes de registrar.",
   rejectAmountInvalid: "Escribe un monto válido antes de registrar.",
-  rejectDirectionInvalid: "Escribe el monto con signo: negativo si la plata sale, positivo si entra.",
+  rejectDirectionInvalid: "Elige una categoría para saber si la plata entró o salió.",
   rejectWorkspaceNotFound: "Este espacio ya no está disponible.",
   entryChanged: "El movimiento cambió después de revisar el Presupuesto. Revísalo y regístralo de nuevo.",
   budgetUnchecked: "No pudimos revisar tu Presupuesto. Intenta registrarlo de nuevo.",

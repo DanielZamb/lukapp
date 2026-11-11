@@ -2,7 +2,7 @@ import { expect, test, vi } from "vitest";
 import { formatMoney, currencyDisplayPrefix } from "./money";
 import { createTranslator } from "../../../../src/i18n";
 import { amountHint } from "./amount/hints";
-import { sendableMinorUnits, openAmount, withNativeText } from "./amount/session";
+import { sendableMinorUnits, openAmount, withAmountSign, withNativeText } from "./amount/session";
 import { pressed } from "./amount/pressed.testSupport";
 
 function typed(currency: string, keys: string) {
@@ -12,21 +12,26 @@ function typed(currency: string, keys: string) {
 }
 
 test.each([
-  ["-012500", "-012500", -1250000],
-  ["+12500", "+12500", 1250000],
-  ["−12500", "−12500", -1250000],
-  ["-1.234,56", "-1.234,56", -123456],
-])("typing %s in a COP field shows exactly %s", (keys, text, minorUnits) => {
+  ["-012500", "-", -1250000],
+  ["+12500", "+", 1250000],
+  ["−12500", "-", -1250000],
+  ["-1.234,56", "-", -123456],
+])("typing %s in a COP field shows exactly what was typed and is refused; the owner's sign %s with the digits reads exactly", (keys, sign, minorUnits) => {
   const session = typed("COP", keys);
-  expect(session.editor.text).toBe(text);
-  expect(sendableMinorUnits(pressed(session), "COP")).toBe(minorUnits);
+  expect(session.editor.text).toBe(keys);
+  expect(sendableMinorUnits(pressed(session), "COP")).toBeNull();
+  expect(amountHint(session, createTranslator("en").t)).toBe("Type only digits and separators, for example 1.234,50");
+  const owned = withAmountSign(typed("COP", keys.slice(1)), sign as "+" | "-");
+  expect(owned.editor.text).toBe(`${sign}${keys.slice(1)}`);
+  expect(sendableMinorUnits(pressed(owned), "COP")).toBe(minorUnits);
 });
 
 test("typing and reading an amount work without Intl on Hermes", () => {
   vi.stubGlobal("Intl", undefined);
   try {
-    expect(sendableMinorUnits(pressed(typed("COP", "-012500")), "COP")).toBe(-1250000);
-    expect(sendableMinorUnits(pressed(typed("USD", "-1,234.5")), "USD")).toBe(-123450);
+    expect(sendableMinorUnits(pressed(withAmountSign(typed("COP", "012500"), "-")), "COP")).toBe(-1250000);
+    expect(sendableMinorUnits(pressed(withAmountSign(typed("USD", "1,234.5"), "-")), "USD")).toBe(-123450);
+    expect(sendableMinorUnits(pressed(typed("USD", "-1,234.5")), "USD")).toBeNull();
   } finally {
     vi.unstubAllGlobals();
   }

@@ -41,18 +41,19 @@ for (const currency of ["COP", "USD", "BHD"]) {
 type Entered = readonly [text: string, result: number | "incomplete" | "invalid"];
 /**
  * Text entered into an empty amount field at once. The old sanitizer rewrote it (`old`); the field now keeps it,
- * normalized only when it is already a valid amount in the currency's own grammar. A raw value of minor units
- * means the field can send it; "incomplete" and "invalid" cannot be sent.
+ * normalized only when it is already a valid amount in the currency's own grammar. A sign is never part of the text:
+ * the field's owner sets it beside the text, so text carrying one is invalid. A raw value of minor units means the
+ * field can send it; "incomplete" and "invalid" cannot be sent.
  */
 const entered: ReadonlyArray<readonly [raw: string, oldTwo: string, oldThree: string, cop: Entered, usd: Entered, bhd: Entered]> = [
   ["", "", "", ["", "incomplete"], ["", "incomplete"], ["", "incomplete"]],
-  ["-", "-", "-", ["-", "incomplete"], ["-", "incomplete"], ["-", "incomplete"]],
-  ["+", "+", "+", ["+", "incomplete"], ["+", "incomplete"], ["+", "incomplete"]],
-  ["-012500", "-12.500", "-12.500", ["-12.500", -1250000], ["-12,500", -1250000], ["-12.500", -12500000]],
+  ["-", "-", "-", ["-", "invalid"], ["-", "invalid"], ["-", "invalid"]],
+  ["+", "+", "+", ["+", "invalid"], ["+", "invalid"], ["+", "invalid"]],
+  ["-012500", "-12.500", "-12.500", ["-012500", "invalid"], ["-012500", "invalid"], ["-012500", "invalid"]],
   ["12abc500", "12.500", "12.500", ["12abc500", "invalid"], ["12abc500", "invalid"], ["12abc500", "invalid"]],
   ["letters", "", "", ["letters", "invalid"], ["letters", "invalid"], ["letters", "invalid"]],
-  ["+12500", "+12.500", "+12.500", ["+12.500", 1250000], ["+12,500", 1250000], ["+12.500", 12500000]],
-  ["−12500", "-12.500", "-12.500", ["-12.500", -1250000], ["-12,500", -1250000], ["-12.500", -12500000]],
+  ["+12500", "+12.500", "+12.500", ["+12500", "invalid"], ["+12500", "invalid"], ["+12500", "invalid"]],
+  ["−12500", "-12.500", "-12.500", ["−12500", "invalid"], ["−12500", "invalid"], ["−12500", "invalid"]],
   ["1-2", "-12", "-12", ["1-2", "invalid"], ["1-2", "invalid"], ["1-2", "invalid"]],
   ["--1", "-1", "-1", ["--1", "invalid"], ["--1", "invalid"], ["--1", "invalid"]],
   ["+-1", "+1", "+1", ["+-1", "invalid"], ["+-1", "invalid"], ["+-1", "invalid"]],

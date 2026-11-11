@@ -130,8 +130,8 @@ export function samsungPhone(input: () => ReactTestInstance, options: { platform
       await edit(insert(clip), { stale: true });
     },
     /**
-     * A control outside the text field, such as the field's own keys. What it renders lands before the next native
-     * edit, unless `hold` keeps it pending so a racing keystroke can come first.
+     * A control outside the text field, such as an owner's control that sets the sign or a Confirm button. What it
+     * renders lands before the next native edit, unless `hold` keeps it pending so a racing keystroke can come first.
      */
     async press(control: ReactTestInstance, options: { hold?: boolean } = {}) {
       observe();
@@ -150,18 +150,19 @@ export function samsungPhone(input: () => ReactTestInstance, options: { platform
 }
 
 /**
- * The amount a person reads in `visible` (the sign shown beside the field, then the field's text), by a strict reading
- * of the convention written apart from the app's grammar: COP groups with "." and marks decimals with ",", USD the
- * other way round.
+ * The amount a person reads from `sign`, the sign shown beside the field, and `text`, the field's text, by a strict
+ * reading of the convention written apart from the app's grammar: COP groups with "." and marks decimals with ",", USD
+ * the other way round. A sign inside the text is never part of an amount, so such text reads as nothing.
  */
-export function readsAs(visible: string, cop: boolean, precision: number): number | null {
+export function readsAs(sign: string, text: string, cop: boolean, precision: number): number | null {
+  if (/[+−-]/.test(text)) return null;
   const group = cop ? "\\." : ",";
   const decimal = cop ? "," : "\\.";
-  const match = new RegExp(`^([+−-]?)(\\d{1,3}(?:${group}\\d{3})+|\\d+)(?:${decimal}(\\d+))?$`).exec(visible.trim());
-  if (!match || (match[3] !== undefined && (precision === 0 || match[3].length > precision))) return null;
-  const v = Number(match[2].replace(/[.,]/g, "")) * 10 ** precision + Number((match[3] ?? "").padEnd(precision, "0") || "0");
+  const match = new RegExp(`^(\\d{1,3}(?:${group}\\d{3})+|\\d+)(?:${decimal}(\\d+))?$`).exec(text.trim());
+  if (!match || (match[2] !== undefined && (precision === 0 || match[2].length > precision))) return null;
+  const v = Number(match[1].replace(/[.,]/g, "")) * 10 ** precision + Number((match[2] ?? "").padEnd(precision, "0") || "0");
   if (!Number.isSafeInteger(v)) return null;
-  return match[1] && match[1] !== "+" && v ? -v : v;
+  return sign === "-" && v ? -v : v;
 }
 
 type NativeEvent = { node: ReactTestInstance; handlers: ReactTestInstance["props"]; text: string } & (
@@ -322,7 +323,7 @@ export function reactNativeInput(input: () => ReactTestInstance, platform: "andr
     },
     /** Reads what JavaScript rendered: a new input, or text and caret to push to the native view. */
     sync() { observe(); },
-    /** A control outside the input, such as the field's own keys. */
+    /** A control outside the input, such as an owner's control that sets the sign or a Confirm button. */
     async press(control: ReactTestInstance) {
       observe();
       await act(async () => control.props.onPress());

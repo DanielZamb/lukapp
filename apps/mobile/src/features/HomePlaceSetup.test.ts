@@ -264,22 +264,33 @@ test("in Spanish the sheet reads in Spanish, a blank name stores the Spanish def
 });
 
 test.each([
-  ["COP", "Type a decimal comma for COP", "12.50", "Use the comma for decimals, for example 12,50", "1234,50"],
-  ["USD", "Type a decimal point for USD", "12,50", "Use the point for decimals, for example 12.50", "1234.50"],
-])("a %s home place balance is typed with the decimal key; the other separator is refused and nothing is sent",
-  async (currency, decimal, wrong, hint, shown) => {
+  ["COP", "12.50", "Use the comma for decimals, for example 12,50", "1234,50"],
+  ["USD", "12,50", "Use the point for decimals, for example 12.50", "1234.50"],
+])("a %s home place balance is typed with the phone's decimal mark; the other separator is refused and nothing is sent",
+  async (currency, wrong, hint, shown) => {
     await act(async () => { root = create(createElement(HomePlaceSetup, props(true, currency))); });
     await typeAmount(() => input("Balance today"), wrong, { replacing: true });
     expect(root.root.findAll((node) => node.props.accessibilityRole === "alert").map((node) => node.children.join(""))).toContain(hint);
     await act(async () => button("Add this place").props.onPress());
     expect(state.post).not.toHaveBeenCalled();
     await act(async () => input("Balance today").props.onChangeText(""));
-    await typeAmount(() => input("Balance today"), "1234");
-    await act(async () => button(decimal).props.onPress());
+    await typeAmount(() => input("Balance today"), shown.slice(0, 5));
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post, "a balance ending in its decimal mark is incomplete").not.toHaveBeenCalled();
     await typeAmount(() => input("Balance today"), "50");
     expect(input("Balance today").props.value).toBe(shown);
     await act(async () => button("Add this place").props.onPress());
     expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency, minorUnits: 123450 });
+  });
+
+test.each([["-", "COP"], ["+", "COP"], ["−", "USD"]])("a %s typed into a %s home place balance is refused with the format hint and nothing is sent",
+  async (sign, currency) => {
+    await act(async () => { root = create(createElement(HomePlaceSetup, props(true, currency))); });
+    await typeAmount(() => input("Balance today"), `${sign}500`, { replacing: true });
+    expect(root.root.findAll((node) => node.props.accessibilityRole === "alert").map((node) => node.children.join("")))
+      .toContain(`Type only digits and separators, for example ${currency === "COP" ? "1.234,50" : "1,234.50"}`);
+    await act(async () => button("Add this place").props.onPress());
+    expect(state.post).not.toHaveBeenCalled();
   });
 
 test("a workspace currency change while the balance is typed shows and sends the same amount in the new currency", async () => {
@@ -288,7 +299,7 @@ test("a workspace currency change while the balance is typed shows and sends the
   expect(input("Balance today").props.value).toBe("12500");
   await act(async () => root.update(createElement(HomePlaceSetup, props(true, "USD"))));
   expect(input("Balance today").props.value).toBe("0");
-  expect(button("Type a decimal point for USD")).toBeTruthy();
+  expect(root.root.findAll((node) => node.type === "text").map((node) => node.children.join(""))).toContain("Reads as USD 0.00");
   await act(async () => button("Add this place").props.onPress());
   expect(state.post.mock.calls[0]?.[0].payload.amount).toEqual({ currency: "USD", minorUnits: 0 });
 });

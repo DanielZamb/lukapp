@@ -165,3 +165,12 @@ Findings per review round on 11 November: 3, 5, 4, 5, 2. The last round's ordina
 ### Next step
 
 Device verification against the deployed backend, signed in: Post an expense Candidate after choosing a category, Post an income Candidate, the Budget warning and Continue, Close a Place, resend a frozen Candidate, Move money with a lost reply and a restart, and the amount field's sign and decimal keys on the Samsung keyboard. The Codex reviewer seat is out of quota until 16 November; the last round was reviewed by Grok 4.7.
+
+## Addendum, 11 November evening: the amount field has no keys of its own
+
+The owner decided that the field shows no sign or decimal key: "the sign should be determined by the nature of the spending category and spending account assigned to the place, and the comma should be the native numberpad comma." Commit `25d02d2` removed both keys; the commits after it rework the tests. This supersedes the design line above that "the app's only edits are its decimal and sign keys", and the follow-up and next step to check those keys on the Samsung keyboard.
+
+- The decimal mark is typed on the phone's number pad and read strictly in the workspace currency's convention. A mark typed before any digit is refused; the removed key wrote `0` before it.
+- A `+`, `-` or `−` anywhere in the text is refused with the format hint, whatever sign the owner holds. The posting editor sets the sign from the category's nature (Income `+`, Expense `−`); a new entry with no category is money out.
+- Seven device recordings pressed the removed keys and were deleted (`r2-S3`, `r2-S9`, `r2-S16`, `r2-S16b`, `r2-S18`, `r2-S18b`, `r3-A9`); thirteen remain and replay as recorded. None of them types the workspace's own decimal mark, so that needs a new recording on the phone.
+- Open for the owner: an Initial balance started from a new entry keeps the `−` sign and cannot be posted unless it is zero; ADR-0096 (local) still says each field carries a decimal button; what `decimal-pad` offers on keyboards other than Samsung Keyboard in Español (US) is unverified.

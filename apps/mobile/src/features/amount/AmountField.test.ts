@@ -15,7 +15,7 @@ vi.mock("react-native", () => ({
 import { LanguageProvider, useLanguage } from "../../i18n";
 import { AmountField } from "./AmountField";
 import { readsAs, samsungPhone } from "./phone.testSupport";
-import { openAmount, openSavedAmount, sendableMinorUnits, type AmountSession } from "./session";
+import { openAmount, openSavedAmount, sendableMinorUnits, withAmountSign, type AmountSession } from "./session";
 import { useAmountState } from "./useAmountState";
 
 let root: ReactTestRenderer | undefined;
@@ -31,7 +31,11 @@ function Owner({ currency, opened, initial }: { currency: string; opened?: strin
   const language = useLanguage();
   if (session.currency !== currency) setSession(openAmount(currency));
   return createElement("view", null,
-    createElement(AmountField, { session, onChange: setSession, editable: true, inputAccessibilityLabel: "Amount", sign: {} }),
+    createElement(AmountField, { session, onChange: setSession, editable: true, inputAccessibilityLabel: "Amount" }),
+    ...(["-", "+"] as const).map((sign) => createElement("button", {
+      key: sign, accessibilityLabel: `Owner sets ${sign}`, accessibilityRole: "button",
+      onPress: () => setSession((now) => withAmountSign(now, sign)),
+    })),
     createElement("button", {
       accessibilityLabel: "Send", accessibilityRole: "button",
       onPress: () => {
@@ -68,18 +72,23 @@ const texts = () => root!.root.findAll((node) => node.type === "text").map((node
 const alerts = () => root!.root.findAll((node) => node.type === "text" && node.props.accessibilityRole === "alert")
   .map((node) => node.children.join(""));
 const send = async () => { await act(async () => button("Send").props.onPress()); };
-const decimalKey = { COP: "Type a decimal comma for COP", USD: "Type a decimal point for USD" } as const;
+/** The sign the owner sets beside the field, as the posting editor does from the entry's category. */
+const ownerSign = (sign: "-" | "+") => button(`Owner sets ${sign}`);
+const signShown = () => root!.root.findAll((node) => node.type === "text"
+  && (node.props.accessibilityLabel === "minus" || node.props.accessibilityLabel === "plus"))
+  .map((node) => [node.props.accessibilityLabel, node.children.join("")]);
 
 for (const language of ["en", "es"] as const) {
-  test(`${language}: digits and the decimal key give exact minor units, and the field shows exactly what was typed`, async () => {
-    const decimal = { COP: { en: "Type a decimal comma for COP", es: "Escribir coma decimal en COP" },
-      USD: { en: "Type a decimal point for USD", es: "Escribir punto decimal en USD" } } as const;
+  test(`${language}: digits and the phone's decimal mark give exact minor units, and the field shows exactly what was typed`, async () => {
     for (const [currency, shown, reading] of [
       ["COP", "1234,50", { en: "Reads as COP 1.234,50", es: "Se lee como COP 1.234,50" }],
       ["USD", "1234.50", { en: "Reads as USD 1,234.50", es: "Se lee como USD 1,234.50" }]] as const) {
       const phone = await render(currency, language);
-      await phone.type("1234");
-      await phone.press(button(decimal[currency][language]));
+      await phone.type(shown.slice(0, 5));
+      expect(input().props.value).toBe(shown.slice(0, 5));
+      expect(alerts()).toEqual([]);
+      await send();
+      expect(sent, "an amount ending in its decimal mark is incomplete").toEqual([]);
       await phone.type("50");
       expect(phone.text).toBe(shown);
       expect(input().props.value).toBe(shown);
@@ -183,10 +192,11 @@ test("finding 3: a paste awaits confirmation through edits that restore it, and 
   }
 });
 
-test("third review, finding 3: a converted saved amount awaits confirmation through a sign change", async () => {
+test("third review, finding 3: a converted saved amount awaits confirmation through a sign change by its owner", async () => {
   const phone = await renderSession(openSavedAmount("CLP", { text: "-500,", format: "pre-currency" }).session);
   expect(texts()).toContain("You saved this as -500,. It now shows as CLP 500.");
-  await phone.press(button("Switch the amount between minus and plus"));
+  await phone.press(ownerSign("+"));
+  expect(signShown()).toEqual([["plus", "+"]]);
   await send();
   expect(sent).toEqual([]);
   await phone.press(button("Confirm CLP 500"));
@@ -213,10 +223,10 @@ test("third review, finding 3: a converted saved amount awaits confirmation afte
   expect(sent).toEqual([{ currency: "USD", minorUnits: 1200 }]);
 });
 
-test("third review, finding 4: the sign key never writes the native text, so a keystroke racing it cannot drop the sign", async () => {
+test("third review, finding 4: the owner's sign never writes the native text, so a keystroke racing it cannot drop the sign", async () => {
   const phone = await render("USD");
   await phone.type("12");
-  await phone.press(button("Switch the amount between minus and plus"), { hold: true });
+  await phone.press(ownerSign("-"), { hold: true });
   expect(input().props.value).toBe("12");
   expect(texts()).toContain("−");
   await send();
@@ -225,65 +235,6 @@ test("third review, finding 4: the sign key never writes the native text, so a k
   expect(texts()).toContain("Now reads as −USD 123.00");
   await send();
   expect(sent).toEqual([{ currency: "USD", minorUnits: -1200 }, { currency: "USD", minorUnits: -12300 }]);
-});
-
-test("third review, finding 4: a decimal mark at the end is written into the field, and the next keystroke's text is the amount", async () => {
-  const phone = await render("COP");
-  await phone.type("12");
-  await phone.press(button(decimalKey.COP), { hold: true });
-  expect(input().props.value).toBe("12,");
-  await send();
-  expect(sent).toEqual([]);
-  await phone.settle();
-  await phone.type("5");
-  expect(phone.text).toBe("12,5");
-  await send();
-  expect(sent).toEqual([{ currency: "COP", minorUnits: 1250 }]);
-});
-
-test("fourth review, finding A: a caret report after the decimal key never stands for its write; what is sent is what the phone's text reads", async () => {
-  const phone = await render("USD");
-  await phone.type("12345");
-  await phone.select(3);
-  const old = input().props.onChangeText as (text: string) => void;
-  await phone.press(button(decimalKey.USD), { hold: true });
-  await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: { start: 4, end: 4 } } }));
-  await send();
-  expect(sent).toEqual([{ currency: "USD", minorUnits: readsAs(phone.text, false, 2) }]);
-  await phone.deliverToStale(old, "123945");
-  expect(input().props.value).toBe(phone.text);
-  await send();
-  expect(sent.slice(1)).toEqual([{ currency: "USD", minorUnits: readsAs(phone.text, false, 2) }]);
-});
-
-test("fourth review, finding A: on iOS a decimal mark placed between digits can be sent without another keystroke", async () => {
-  const phone = await render("USD", "en", undefined, "ios");
-  await phone.type("12345");
-  await phone.select(3);
-  await phone.press(button(decimalKey.USD));
-  expect(phone.text).toBe("123.45");
-  await send();
-  expect(sent).toEqual([{ currency: "USD", minorUnits: 12345 }]);
-});
-
-test("fourth review, finding A: a decimal mark that completes the amount closes the keyboard, and one that leaves it incomplete keeps it open", async () => {
-  let phone = await render("COP");
-  await phone.type("12345");
-  await phone.select(3);
-  await phone.press(button(decimalKey.COP), { hold: true });
-  expect(phone.text).toBe("123,45");
-  expect(phone.focused).toBe(false);
-  await send();
-  expect(sent).toEqual([{ currency: "COP", minorUnits: 12345 }]);
-  phone = await render("COP");
-  await phone.type("12");
-  await phone.press(button(decimalKey.COP), { hold: true });
-  expect(phone.focused).toBe(true);
-  expect(input().props.value).toBe("12,");
-  await phone.type("5", { racing: true });
-  expect(phone.text).toBe("125");
-  await send();
-  expect(sent).toEqual([{ currency: "COP", minorUnits: 12500 }]);
 });
 
 test("finding 4: a typed amount replaced in one change by another with the same separators awaits confirmation", async () => {
@@ -312,27 +263,17 @@ test("digits pasted without a separator need no confirmation; removing every sep
   expect(sent).toEqual([{ currency: "USD", minorUnits: 123400 }]);
 });
 
-test("finding 6: caret reports that arrive late never move a digit, since the value is the text", async () => {
+test("finding 6: the field neither reads nor places the caret, so a caret report that arrives late never moves a digit", async () => {
   const phone = await render("USD");
+  expect(input().props.onSelectionChange).toBeUndefined();
+  expect(input().props.selection).toBeUndefined();
   await phone.type("12");
-  await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: { start: 1, end: 1 } } }));
+  await phone.select(1);
+  await phone.select(2);
   await phone.type("3");
   expect(phone.text).toBe("123");
   await send();
   expect(sent).toEqual([{ currency: "USD", minorUnits: 12300 }]);
-});
-
-test("finding 7: an app key's write the phone drops for a newer keystroke leaves the field showing and sending the phone's text", async () => {
-  const phone = await render("USD");
-  await phone.type("12");
-  await phone.press(button(decimalKey.USD), { hold: true });
-  expect(input().props.value).toBe("12.");
-  await phone.type("5", { racing: true });
-  expect(phone.log).toContain("  command dropped");
-  expect(phone.text).toBe("125");
-  expect(input().props.value).toBe("125");
-  await send();
-  expect(sent).toEqual([{ currency: "USD", minorUnits: 12500 }]);
 });
 
 test("finding 8: a session the owner replaces is not overwritten by a change still in flight from the old input", async () => {
@@ -353,85 +294,134 @@ test("finding 8: a session the owner replaces is not overwritten by a change sti
   expect(sent).toEqual([{ currency: "USD", minorUnits: 9900 }]);
 });
 
-test("the sign key changes only the sign shown beside the phone's text, and leaves that text and its caret alone", async () => {
+test("the owner's sign changes only the sign shown beside the phone's text, and leaves that text, its caret and its input alone", async () => {
   const phone = await render("COP");
-  await phone.type("123");
-  await phone.press(button(decimalKey.COP));
-  await phone.type("45");
+  await phone.type("123,45");
   await phone.select(4);
-  expect(phone.text).toBe("123,45");
-  await phone.press(button("Switch the amount between minus and plus"));
+  expect(signShown()).toEqual([]);
+  const kept = input();
+  await phone.press(ownerSign("-"));
   expect(phone.text).toBe("123,45");
   expect(phone.caret).toEqual({ start: 4, end: 4 });
-  expect(root!.root.findAll((node) => node.type === "text" && node.props.accessibilityLabel === "minus").map((node) => node.children.join(""))).toEqual(["−"]);
+  expect(input()).toBe(kept);
+  expect(signShown()).toEqual([["minus", "−"]]);
   await send();
-  await phone.press(button("Switch the amount between minus and plus"));
+  await phone.press(ownerSign("+"));
   await send();
   expect(sent).toEqual([{ currency: "COP", minorUnits: -12345 }, { currency: "COP", minorUnits: 12345 }]);
   expect(phone.text).toBe("123,45");
-  expect(root!.root.findAll((node) => node.type === "text" && node.props.accessibilityLabel === "plus").map((node) => node.children.join(""))).toEqual(["+"]);
+  expect(input()).toBe(kept);
+  expect(signShown()).toEqual([["plus", "+"]]);
   await phone.type("9");
   expect(phone.text).toBe("123,945");
   await send();
   expect(sent).toHaveLength(2);
 });
 
-test("a sign typed into the phone's text beside the sign the app holds reads as two signs and is never sent", async () => {
-  const phone = await render("USD");
-  await phone.type("5");
-  await phone.press(button("Switch the amount between minus and plus"));
-  await phone.select(0);
-  await phone.type("-");
-  expect(phone.text).toBe("-5");
-  await send();
-  expect(sent).toEqual([]);
+const typedSignHint = { COP: "Type only digits and separators, for example 1.234,50", USD: "Type only digits and separators, for example 1,234.50" } as const;
+
+for (const held of ["", "-", "+"] as const)
+  for (const typed of ["+", "-", "−"] as const)
+    test.each([["first", 0], ["middle", 2], ["last", 5]] as const)(
+      `a ${typed} typed %s into the text, with the sign held ${held || "empty"}, is refused with the format hint and nothing is sent`,
+      async (_where, at) => {
+        for (const currency of ["COP", "USD"] as const) {
+          const phone = await render(currency);
+          if (held) await phone.press(ownerSign(held));
+          const amount = currency === "COP" ? "12,50" : "12.50";
+          await phone.type(amount);
+          await send();
+          expect(sent).toEqual([{ currency, minorUnits: held === "-" ? -1250 : 1250 }]);
+          sent.length = 0;
+          await phone.select(at);
+          await phone.type(typed);
+          const shown = `${amount.slice(0, at)}${typed}${amount.slice(at)}`;
+          expect(phone.text).toBe(shown);
+          expect(input().props.value).toBe(shown);
+          expect(alerts()).toEqual([typedSignHint[currency]]);
+          expect(texts().some((text) => text.includes("Reads as"))).toBe(false);
+          await send();
+          expect(sent).toEqual([]);
+          expect(signShown()).toEqual(held ? [[held === "-" ? "minus" : "plus", held === "-" ? "−" : "+"]] : []);
+          await phone.select(at + 1);
+          await phone.backspace();
+          await send();
+          expect(sent, "deleting the typed sign restores the amount").toEqual([{ currency, minorUnits: held === "-" ? -1250 : 1250 }]);
+        }
+      });
+
+test("a sign typed alone, or as the first key of an empty field, is refused with the format hint and nothing is sent", async () => {
+  for (const typed of ["-", "+", "−", "-5", "+5", "−5"]) {
+    const phone = await render("USD");
+    await phone.type(typed);
+    expect(input().props.value).toBe(typed);
+    expect(alerts()).toEqual([typedSignHint.USD]);
+    await send();
+    expect(sent).toEqual([]);
+  }
 });
 
-test("the decimal key moves the caret after a mark already written, and starts with 0 before any digit", async () => {
-  let phone = await render("USD");
-  await phone.type("12.5");
-  await phone.select(1);
-  await phone.press(button(decimalKey.USD));
-  expect(phone.text).toBe("12.5");
-  expect(phone.caret).toEqual({ start: 3, end: 3 });
-  phone = await render("USD");
-  await phone.press(button(decimalKey.USD));
-  await phone.type("5");
-  expect(phone.text).toBe("0.5");
-  await send();
-  expect(sent).toEqual([{ currency: "USD", minorUnits: 50 }]);
+test("a pasted amount that carries a sign is refused with the format hint and nothing is sent, whatever sign the owner set", async () => {
+  for (const held of ["", "-", "+"] as const) {
+    const phone = await render("USD");
+    if (held) await phone.press(ownerSign(held));
+    await phone.paste("-1,234.50");
+    expect(input().props.value).toBe("-1,234.50");
+    expect(alerts()).toEqual([typedSignHint.USD]);
+    expect(root!.root.findAll((node) => node.type === "button" && String(node.props.accessibilityLabel).startsWith("Confirm"))).toEqual([]);
+    await send();
+    expect(sent).toEqual([]);
+  }
 });
 
-test("the phone's own minus from the .- key is read literally", async () => {
-  const phone = await render("USD");
-  await phone.type("5.");
-  await phone.cycleDotToMinus();
-  expect(input().props.value).toBe("5-");
-  await send();
-  expect(sent).toEqual([]);
+test("the phone's own minus from the .- key is read literally and refused with the format hint", async () => {
+  for (const held of ["", "-", "+"] as const) {
+    const phone = await render("USD");
+    if (held) await phone.press(ownerSign(held));
+    await phone.type("5.");
+    await phone.cycleDotToMinus();
+    expect(input().props.value).toBe("5-");
+    expect(alerts()).toEqual([typedSignHint.USD]);
+    await send();
+    expect(sent).toEqual([]);
+  }
+});
+
+test("a decimal mark typed before any digit is refused with the format hint; typed after a 0 it reads as typed", async () => {
+  for (const [currency, mark, hint] of [["COP", ",", "Write the amount like this: 1.234,50"], ["USD", ".", "Write the amount like this: 1,234.50"]] as const) {
+    let phone = await render(currency);
+    await phone.type(`${mark}5`);
+    expect(input().props.value).toBe(`${mark}5`);
+    expect(alerts()).toEqual([hint]);
+    await send();
+    expect(sent).toEqual([]);
+    phone = await render(currency);
+    await phone.type(`0${mark}5`);
+    await send();
+    expect(sent).toEqual([{ currency, minorUnits: 50 }]);
+  }
 });
 
 test("a language switch mid-entry keeps the text, the value and the session", async () => {
   const phone = await render("USD");
-  await phone.type("1234");
-  await phone.press(button(decimalKey.USD));
-  await phone.type("5");
+  await phone.type("1234.5");
+  const kept = input();
   await act(async () => button("Spanish").props.onPress());
+  expect(input()).toBe(kept);
   expect(input().props.value).toBe("1234.5");
-  expect(button("Escribir punto decimal en USD")).toBeTruthy();
+  expect(texts()).toContain("Ahora se lee como USD 1,234.50");
   await phone.type("6");
   await send();
   expect(sent).toEqual([{ currency: "USD", minorUnits: 123456 }]);
 });
 
-test("the decimal key says a currency has no decimals, stays a touch target so the keyboard stays open, and writes nothing", async () => {
+test("a currency without decimals refuses the phone's decimal mark with a hint, and sends once it is deleted", async () => {
   const phone = await render("JPY");
-  await phone.type("12");
-  const key = button("JPY amounts have no decimals");
-  expect(key.props.accessibilityState).toEqual({ disabled: true });
-  expect(key.props.disabled).toBe(false);
-  await phone.press(key);
-  expect(phone.text).toBe("12");
+  await phone.type("12,");
+  expect(alerts()).toEqual(["JPY amounts have no decimals, for example 1.234"]);
+  await send();
+  expect(sent).toEqual([]);
+  await phone.backspace();
   await send();
   expect(sent).toEqual([{ currency: "JPY", minorUnits: 12 }]);
 });
@@ -532,8 +522,7 @@ test("third review, finding 5: the reading speaks up when the decimal mark appea
   expect(reading()).toEqual({ text: "Now reads as COP 12,00", live: "polite" });
   await phone.type("34");
   expect(reading()).toEqual({ text: "Now reads as COP 1.234,00", live: "polite" });
-  await phone.press(button(decimalKey.COP));
-  await phone.type("5");
+  await phone.type(",5");
   expect(reading()).toEqual({ text: "Now reads as COP 1.234,50", live: "polite" });
   await phone.type("0");
   expect(reading()).toEqual({ text: "Reads as COP 1.234,50", live: "none" });
@@ -548,9 +537,7 @@ test("third review, finding 5: the reading speaks up when the decimal mark appea
 
 test("third review, finding 5: the reading speaks up when a change removes the decimal mark, and holds one line in both languages", async () => {
   const phone = await render("USD", "es");
-  await phone.type("12");
-  await phone.press(button("Escribir punto decimal en USD"));
-  await phone.type("5");
+  await phone.type("12.5");
   expect(readingLine().children.join("")).toBe("Ahora se lee como USD 12.50");
   await phone.type("0");
   expect(readingLine().children.join("")).toBe("Se lee como USD 12.50");

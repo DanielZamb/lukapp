@@ -2,15 +2,13 @@ import { useEffect, useMemo, useRef, useState, type ComponentProps, type Compone
 import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
 import { useT } from "../../i18n";
 import { useThemeContext } from "../../ui/themeContext";
-import { font, fontSize, radius, spacing, touchTarget, type Theme } from "../../ui/tokens";
+import { font, fontSize, spacing, type Theme } from "../../ui/tokens";
 import { formatMoney } from "../money";
 import { amountHint } from "./hints";
 import {
-  confirmAmount, displayedMinorUnits, nativeText, readingShifted, toggleAmountSign, withDecimalMark, withNativeText,
+  confirmAmount, displayedMinorUnits, nativeText, readingShifted, withNativeText,
   type AmountSession,
 } from "./session";
-
-type Caret = { start: number; end: number };
 
 export type AmountFieldProps = {
   session: AmountSession;
@@ -21,8 +19,6 @@ export type AmountFieldProps = {
   /** A visible label in the shared field style, which also gives the input the field's box. */
   label?: string;
   placeholder?: string;
-  /** A control that sets the sign, for fields that accept a negative amount. */
-  sign?: { disabled?: boolean };
   /** The owner's own message, shown when the text itself has no refusal to explain. */
   message?: { error?: string; helper?: string };
   notice?: string | null;
@@ -32,16 +28,11 @@ export type AmountFieldProps = {
 
 /**
  * The one input for an amount. The native field owns the text: the field reads it literally on every change event and
- * never rewrites it while the person types, so the amount is always the text as shown. The sign is shown beside the
- * input and never written into it. The grouped reading appears under it.
+ * never writes to it while the person types, so the amount is always the text as shown. The grouped reading appears
+ * under it.
  *
- * The decimal key is the field's only edit to the text. React Native reports no event for a JavaScript write, and a
- * keystroke that reaches the phone first drops it, so the phone's text after a write is known only from the next
- * change event; no caret report or end-of-editing text can stand in, since either may describe the text before the
- * write landed. A mark that leaves the amount incomplete is written into the field, where the person types on and the
- * next change event reports what the phone holds; until then nothing can be sent anyway. A mark that completes the
- * amount is shown in a new native input holding exactly that text, which no keystroke can overtake, and the keyboard
- * closes with the old input; the amount can be sent at once.
+ * The field has no keys of its own. The decimal mark is typed on the phone's number pad. The sign is the owner's:
+ * it is shown beside the input, never written into it, and a sign typed into the text is refused.
  *
  * The text the input shows is the field's own state, set in the same event as React Native's record of the native
  * text, so an owner that renders the field late, as a bottom sheet's portal does, cannot push an older text back. An
@@ -59,12 +50,10 @@ export function AmountField(props: AmountFieldProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const latest = useRef(props.session);
   const emitted = useRef(new WeakSet<AmountSession>());
-  const caret = useRef<Caret>({ start: nativeText(props.session).length, end: nativeText(props.session).length });
   const focused = useRef(false);
   const seen = useRef<AmountSession | null>(displayedMinorUnits(props.session) === null ? null : props.session);
   const [shifted, setShifted] = useState(false);
   const [input, setInput] = useState({ seen: props.session, text: nativeText(props.session), generation: 0, autoFocus: false });
-  const [placed, setPlaced] = useState<Caret | undefined>(undefined);
   let { generation } = input;
   if (input.seen !== props.session) {
     const owner = !emitted.current.has(props.session);
@@ -74,9 +63,6 @@ export function AmountField(props: AmountFieldProps) {
       seen.current = displayedMinorUnits(props.session) === null ? null : props.session;
       if (shifted) setShifted(false);
       generation += 1;
-      const end = nativeText(props.session).length;
-      caret.current = { start: end, end };
-      if (placed) setPlaced(undefined);
     }
     setInput(replaced
       ? { seen: props.session, text: nativeText(props.session), generation, autoFocus: focused.current }
@@ -88,8 +74,6 @@ export function AmountField(props: AmountFieldProps) {
   current.current = generation;
   const session = latest.current;
   const { editor, currency, review, sign } = session;
-  const { decimal } = editor.format.convention;
-  const decimals = editor.format.precision > 0;
   const hint = amountHint(session, t);
   const Input = props.InputComponent ?? TextInput;
   function emit(next: AmountSession) {
@@ -102,26 +86,10 @@ export function AmountField(props: AmountFieldProps) {
     emitted.current.add(next);
     props.onChange(next);
   }
-  /** The decimal key's mark: written into the native text, or shown in a new input when it completes the amount. */
-  function press(next: AmountSession, at: number) {
-    if (next.editor.kind === "complete" && nativeText(next) !== nativeText(latest.current)) {
-      const end = nativeText(next).length;
-      caret.current = { start: end, end };
-      focused.current = false;
-      if (placed) setPlaced(undefined);
-      setInput((shown) => ({ ...shown, text: nativeText(next), generation: shown.generation + 1, autoFocus: false }));
-    } else {
-      caret.current = { start: at, end: at };
-      setPlaced({ start: at, end: at });
-      setInput((shown) => ({ ...shown, text: nativeText(next) }));
-    }
-    emit(next);
-  }
   const mine = generation;
-  const keyEnabled = props.editable && decimals;
   const refused = !!hint || !!props.message?.error;
   const shown = editor.kind === "complete" ? formatMoney({ currency, minorUnits: editor.minorUnits }) : null;
-  /** The grouped reading of the text. Its one line is always laid out, so the keys never move while the person types. */
+  /** The grouped reading of the text. Its one line is always laid out, so nothing moves while the person types. */
   const reading = review ? null : shown;
   const emphasized = shifted && reading !== null;
   const spoken = reading === null ? null : t(emphasized ? "amount.readingChanged" : "amount.reading", { amount: reading });
@@ -143,7 +111,6 @@ export function AmountField(props: AmountFieldProps) {
           autoFocus={input.autoFocus}
           accessibilityLabel={props.inputAccessibilityLabel}
           value={input.text}
-          selection={placed}
           editable={props.editable}
           selectTextOnFocus={/^\s*[+−-]?0$/.test(input.text)}
           keyboardType="decimal-pad"
@@ -157,45 +124,11 @@ export function AmountField(props: AmountFieldProps) {
           onBlur={() => { focused.current = false; }}
           onChangeText={(text) => {
             if (mine !== current.current || !props.editable) return;
-            if (placed) setPlaced(undefined);
             setInput((shown) => ({ ...shown, text }));
             emit(withNativeText(latest.current, text));
           }}
-          onSelectionChange={({ nativeEvent: { selection } }) => {
-            if (mine !== current.current) return;
-            caret.current = { start: selection.start, end: selection.end };
-            if (placed) setPlaced(undefined);
-          }}
           style={[props.label ? [shared.fieldInput, styles.boxed, refused && shared.fieldInputInvalid] : null, styles.input, props.inputStyle]}
         />
-        {props.sign && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("amount.signA11y")}
-            accessibilityState={{ disabled: !props.editable || props.sign.disabled === true }}
-            disabled={!props.editable || props.sign.disabled === true}
-            onPress={() => emit(toggleAmountSign(latest.current))}
-            style={({ pressed }) => [styles.key, (!props.editable || props.sign?.disabled) && styles.keyDisabled, pressed && styles.pressed]}
-          >
-            <Text style={styles.keyText}>+/−</Text>
-          </Pressable>
-        )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={decimals
-            ? t(decimal === "," ? "amount.decimalCommaA11y" : "amount.decimalPointA11y", { currency })
-            : t("amount.noDecimalsA11y", { currency })}
-          accessibilityState={{ disabled: !keyEnabled }}
-          disabled={!props.editable}
-          onPress={() => {
-            if (!keyEnabled) return;
-            const next = withDecimalMark(latest.current, caret.current.end);
-            press(next.session, next.caret);
-          }}
-          style={({ pressed }) => [styles.key, !keyEnabled && styles.keyDisabled, pressed && styles.pressed]}
-        >
-          <Text style={styles.keyText}>{decimal}</Text>
-        </Pressable>
       </View>
       {props.notice ? <Text style={ui.muted}>{props.notice}</Text> : null}
       {review && reviewed ? (
@@ -245,19 +178,5 @@ function createStyles(theme: Theme) {
     review: { gap: spacing.sm, paddingVertical: spacing.xs },
     reading: { lineHeight: Math.round(fontSize.body * 1.4) },
     readingShifted: { fontFamily: font.bold, color: theme.foreground },
-    key: {
-      minWidth: touchTarget,
-      minHeight: touchTarget,
-      paddingHorizontal: spacing.md,
-      alignItems: "center",
-      justifyContent: "center",
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: theme.border,
-      backgroundColor: theme.secondary,
-    },
-    keyDisabled: { opacity: 0.4 },
-    pressed: { opacity: 0.7 },
-    keyText: { fontFamily: font.bold, fontSize: fontSize.body, color: theme.foreground },
   });
 }

@@ -2,7 +2,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { amountOfMinorUnits, confirmAmount, openAmount, sendableMinorUnits, toggleAmountSign, withNativeText, type AmountSession } from "./session";
+import { amountOfMinorUnits, confirmAmount, openAmount, sendableMinorUnits, withAmountSign, withNativeText, type AmountSession } from "./session";
 import { useFormState } from "./useAmountState";
 
 let root: ReactTestRenderer | undefined;
@@ -29,7 +29,7 @@ test("an edit of the amount the state holds is taken; one of an amount the owner
   const replaced = openAmount("USD");
   expect(state.set((now) => ({ ...now, amount: replaced }))).toBe(true);
   expect(state.set((now) => ({ ...now, amount: withNativeText(before, "1.0000") }))).toBe(false);
-  expect(state.set((now) => ({ ...now, amount: toggleAmountSign(before), lines: [] }))).toBe(false);
+  expect(state.set((now) => ({ ...now, amount: withAmountSign(before, "-"), lines: [] }))).toBe(false);
   expect(state.read().amount).toBe(replaced);
   expect(state.set((now) => ({ ...now, amount: withNativeText(now.amount, "12") }))).toBe(true);
   expect(sendableMinorUnits(state.read().amount as never, "USD")).toBe(1200);

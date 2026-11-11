@@ -2,10 +2,6 @@ import type { Messages } from "../../types";
 import type { amount as en } from "../en/amount";
 
 export const amount: Messages<typeof en> = {
-  decimalCommaA11y: "Escribir coma decimal en {currency}",
-  decimalPointA11y: "Escribir punto decimal en {currency}",
-  noDecimalsA11y: "Los montos en {currency} no llevan decimales",
-  signA11y: "Cambiar el monto entre menos y más",
   signMinus: "menos",
   signPlus: "más",
   markComma: "la coma",

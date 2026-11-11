@@ -26,7 +26,7 @@ afterEach(async () => { await act(async () => root?.unmount()); root = undefined
 
 function Owner() {
   const [session, setSession] = useAmountState<AmountSession>(() => openAmount("COP"));
-  return createElement(AmountField, { session, onChange: setSession, editable: true, inputAccessibilityLabel: "Amount", sign: {} });
+  return createElement(AmountField, { session, onChange: setSession, editable: true, inputAccessibilityLabel: "Amount" });
 }
 
 test("third review, finding 5: on iOS a reading that speaks up is announced once, and a calm one is not", async () => {
@@ -36,8 +36,8 @@ test("third review, finding 5: on iOS a reading that speaks up is announced once
   expect(announced).toEqual([]);
   await phone.type("2");
   expect(announced).toEqual(["Ahora se lee como COP 12,00"]);
-  await act(async () => root!.root.find((node) => node.type === "button" && node.props.accessibilityLabel === "Escribir coma decimal en COP").props.onPress());
-  await phone.settle();
+  await phone.type(",");
+  expect(announced, "an amount ending in its decimal mark has no reading to announce").toEqual(["Ahora se lee como COP 12,00"]);
   await phone.type("5");
   await phone.type("0");
   expect(announced).toEqual(["Ahora se lee como COP 12,00", "Ahora se lee como COP 12,50"]);

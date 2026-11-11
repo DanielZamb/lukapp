@@ -818,7 +818,6 @@ export function usePostingEditor(
     ...view(form),
     amount: form.amount,
     amountNotice: form.openedAmount?.notice?.kind === "reenter" ? form.openedAmount.notice : null,
-    signLocked: form.entryType === "normal" && form.classification.nature !== null,
     setAmount: (value: AmountSession) => {
       const now = readForm();
       if (canEdit() && value.currency === now.amount.currency) {
