@@ -332,3 +332,24 @@ test("a Cancel kept from before a lost reply checks the devices before it lets t
   expect(env.list).toHaveBeenCalledTimes(2);
   expect(texts(screen)).toEqual(expect.arrayContaining(["This list shows your devices as they are saved now.", "Daily phone"]));
 });
+
+test("a Remove access kept from one device's confirmation removes nothing after the person backs out and opens another", async () => {
+  devices = [iphone, { ...iphone, deviceId: "tablet" as Device["deviceId"], label: "Tablet" }, pixel];
+  const screen = await open();
+  await press(screen, "Remove access for Old iPhone");
+  const kept = button(screen, "Remove access").props.onPress as () => void;
+  await press(screen, "Keep access");
+  await press(screen, "Remove access for Tablet");
+  await act(async () => { kept(); });
+  expect(env.revoke).not.toHaveBeenCalled();
+  await press(screen, "Remove access");
+  expect(env.revoke.mock.calls).toEqual([[{ deviceId: "tablet" }]]);
+});
+
+test("two presses of a device's Remove, before the confirmation shows, remove nothing", async () => {
+  const screen = await open();
+  const first = button(screen, "Remove access for Old iPhone").props.onPress as () => void;
+  await act(async () => { first(); first(); });
+  expect(env.revoke).not.toHaveBeenCalled();
+  expect(texts(screen)).toContain("Remove access for Old iPhone?");
+});

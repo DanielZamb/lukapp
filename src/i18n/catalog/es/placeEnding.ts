@@ -273,4 +273,5 @@ export const placeEnding: Messages<typeof en> = {
   refuseDevice: "Este celular ya no tiene acceso.",
   refuseAccess: "No tienes permiso para hacer esto en este espacio.",
   refuseOther: "No pudimos hacerlo ({code}).",
+  reviewChanged: "Tus respuestas cambiaron antes de que confirmaras. Revísalas y confirma de nuevo.",
 };

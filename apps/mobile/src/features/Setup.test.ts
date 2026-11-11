@@ -749,3 +749,19 @@ test("handlers kept from before a lost reply neither change the answers nor rebu
   expect(backend.ensure.mock.calls.map(([payload]) => payload.functionalCurrency)).toEqual(["COP", "COP"]);
   expect(backend.ensure.mock.calls[1][0]).toEqual(backend.ensure.mock.calls[0][0]);
 });
+
+test("fourth review, finding 1: the COP field's last keystroke, arriving after USD is chosen, is not saved as a USD amount", async () => {
+  await open();
+  await reveal();
+  await press("I already know my spending. I want budgets.");
+  await typeKeys("Starting amount", "1.00");
+  const late = node("Starting amount").props.onChangeText as (text: string) => void;
+  await act(async () => {
+    node("USD").props.onPress();
+    late("1.000");
+  });
+  const shown = node("Starting amount").props.value as string;
+  await press("Start tracking");
+  expect(backend.ensure.mock.calls.map(([payload]) => [payload.functionalCurrency, payload.startingMinorUnits])).toEqual([["USD", 0]]);
+  expect(shown).toBe("");
+});

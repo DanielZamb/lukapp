@@ -74,12 +74,14 @@ export function useMonthClose(
       );
   }, [readiness?.alreadyLocked, readiness?.canLock, readiness?.period]);
 
-  async function confirm() {
+  /** Locks `shown`, the month the confirmation showed, only while the open confirmation is for that month. */
+  async function confirm(shown: ClosePeriod) {
     const mounted = lifetime.current;
     const now = current.current;
     if (
       !mounted.active ||
-      (now.kind !== "confirm" && now.kind !== "failed")
+      (now.kind !== "confirm" && now.kind !== "failed") ||
+      !samePeriod(now.period, shown)
     )
       return;
     const period = now.period;

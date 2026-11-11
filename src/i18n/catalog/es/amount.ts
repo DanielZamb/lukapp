@@ -23,5 +23,6 @@ export const amount: Messages<typeof en> = {
   reviewPasted: "Pegaste {amount}. Revisa que esté bien antes de seguir.",
   reviewConfirm: "Confirmar {amount}",
   reviewRequired: "Confirma el monto antes de seguir.",
+  currencyChanged: "La moneda cambió mientras escribías. Revisa el monto e inténtalo de nuevo.",
   noticeReenter: "No pudimos leer el monto guardado antes ({previous}). Escríbelo de nuevo.",
 };

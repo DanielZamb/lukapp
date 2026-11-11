@@ -347,7 +347,7 @@ function ConfirmPanel({ kind, frozen, machine }: { kind: "discard" | "newKey"; f
       </Text>
       <Text style={ui.body}>{t(kind === "discard" ? "feedback.discardDetail" : "feedback.newKeyDetail")}</Text>
       {kind === "discard" ? (
-        <SecondaryButton label={t("common.discard")} tone="danger" onPress={() => void machine.discard()} />
+        <SecondaryButton label={t("common.discard")} tone="danger" onPress={() => void machine.confirmDiscard()} />
       ) : (
         <PrimaryButton label={t("feedback.newKeyConfirm")} onPress={() => machine.confirmNewKey()} />
       )}

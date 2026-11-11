@@ -35,8 +35,8 @@ function Owner({ currency, opened, initial }: { currency: string; opened?: strin
     createElement("button", {
       accessibilityLabel: "Send", accessibilityRole: "button",
       onPress: () => {
-        const minorUnits = sendableMinorUnits(read());
-        if (minorUnits !== null) sent.push({ currency: read().currency, minorUnits });
+        const minorUnits = sendableMinorUnits(read(), currency);
+        if (minorUnits !== null) sent.push({ currency, minorUnits });
       },
     }),
     createElement("button", { accessibilityLabel: "Spanish", accessibilityRole: "button", onPress: () => language.setPreference("es") }));
@@ -511,7 +511,7 @@ test("a field that is not editable shows its owner's text and takes no native ch
     return createElement("view", null,
       createElement(AmountField, { session, onChange: setSession, editable: false, inputAccessibilityLabel: "Amount" }),
       createElement("button", { accessibilityLabel: "Send", accessibilityRole: "button",
-        onPress: () => { const minorUnits = sendableMinorUnits(read()); if (minorUnits !== null) sent.push({ currency: "USD", minorUnits }); } }));
+        onPress: () => { const minorUnits = sendableMinorUnits(read(), "USD"); if (minorUnits !== null) sent.push({ currency: "USD", minorUnits }); } }));
   }
   sent.length = 0;
   await act(async () => { root = create(createElement(LanguageProvider, { initialPreference: "en" }, createElement(Frozen))); });

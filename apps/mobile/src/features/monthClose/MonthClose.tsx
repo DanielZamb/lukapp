@@ -132,9 +132,9 @@ export function MonthClose({
         close.request();
       }}
       onCancel={close.cancel}
-      onConfirm={() => {
+      onConfirm={(period) => {
         interact();
-        void close.confirm();
+        void close.confirm(period);
       }}
     />
   );

@@ -1077,7 +1077,7 @@ test("in Spanish the new day and a stale refusal read as such", async () => {
     "El saldo cambió antes de cerrar el lugar, así que no se registró nada. Estamos trayendo el saldo nuevo…"]);
 });
 
-test("a Close handler kept before the default place was chosen again sends the default the summary shows", async () => {
+test("a Close handler kept before the default place was chosen again sends nothing; the summary's own Close sends the default it shows", async () => {
   remote.closure = closure("Asset", 0, { isDefault: true, requiresReplacementDefault: true });
   remote.close.mockResolvedValue(receipt());
   await open();
@@ -1091,6 +1091,33 @@ test("a Close handler kept before the default place was chosen again sends the d
   await ui.press("Continue");
   expect(ui.texts()).toContain("Daily becomes your default place.");
   await act(async () => kept());
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(ui.alerts()).toContain("Your answers changed before you confirmed. Check them and confirm again.");
+  await ui.press("Close Wallet");
   expect(remote.close.mock.calls).toEqual([[{ workspaceId: "ws", financialAccountProfileId: "wallet", idempotencyKey: "key-1", reviewedBalance: closing(0),
     reviewedAccountingDate: "2026-11-10", replacementDefaultFinancialAccountProfileId: "daily", lines: [] }]]);
+});
+
+test("Close never sends line amounts the review did not show, when late field events change them under it", async () => {
+  remote.close.mockResolvedValue(receipt());
+  await open();
+  await ui.press("Close Wallet");
+  await ui.press("I moved it to another place");
+  await ui.press("Savings");
+  await systemBack();
+  await ui.press("Split into another answer");
+  await ui.press("I spent it");
+  await ui.press("🛒 Groceries");
+  await ui.type("Amount for I moved it to another place", "30000");
+  await ui.type("Amount for I spent it", "20000");
+  const late = { moved: ui.input("Amount for I moved it to another place").props.onChangeText as (text: string) => void,
+    spent: ui.input("Amount for I spent it").props.onChangeText as (text: string) => void };
+  await ui.press("Review");
+  const kept = ui.pressable("Close Wallet").props.onPress as () => void;
+  await act(async () => { late.moved("25000"); late.spent("25000"); kept(); });
+  expect(remote.close).not.toHaveBeenCalled();
+  expect(ui.texts()).toEqual(expect.arrayContaining(["COP 25.000"]));
+  await ui.press("Close Wallet");
+  expect(remote.close.mock.calls.map(([request]) => request.lines.map((line: { amount: { minorUnits: number } }) => line.amount.minorUnits)))
+    .toEqual([[2_500_000, 2_500_000]]);
 });

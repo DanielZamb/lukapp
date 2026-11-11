@@ -125,7 +125,7 @@ export function useBudgetEditor(seed: BudgetEditorSeed, transport: BudgetTranspo
       idempotencyKey: transport.newKey(),
     };
     if (act !== "amount") return { kind: act, args: target };
-    const limit = sendableMinorUnits(pressed);
+    const limit = sendableMinorUnits(pressed, seed.currency);
     if (limit === null) throw new Error("Limit amount is not sendable");
     return { kind: act, args: { ...target, limit: { currency: seed.currency, minorUnits: limit } } };
   }

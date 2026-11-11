@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vitest";
-import { openAmount } from "../amount/session";
+import { displayedMinorUnits, openAmount, withNativeText } from "../amount/session";
 
 const money = (text: string, currency = "COP") => openAmount(currency, text);
 import {
@@ -738,4 +738,33 @@ test("handlers kept from before a lost reply neither edit the held entry nor reb
     },
   };
   expect(api.post.mock.calls.map(([entry]) => entry)).toEqual([held, held]);
+});
+
+test("a late amount from an input the form already replaced changes neither the amount nor the categories", async () => {
+  const editor = await open(transport());
+  await act(async () => editor().setAmount(money("+1")));
+  const held = editor().amount;
+  await act(async () => editor().setAmount(money("-5,00")));
+  await act(async () => editor().setCategories({ ids: ["food"], primaryId: null }));
+  await act(async () => editor().setAmount(withNativeText(held, "10")));
+  expect(editor().categories.ids).toEqual(["food"]);
+  expect(displayedMinorUnits(editor().amount)).toBe(-500);
+});
+
+test("a restored frozen Draft shows the amount of the command it holds and resends that command byte for byte", async () => {
+  const api = transport();
+  const command: PendingPosting = {
+    kind: "expense",
+    payload: {
+      workspaceId: "workspace", financialAccountProfileId: "bank", amount: { currency: "COP", minorUnits: 123450 },
+      accountingDate: "2026-10-17", description: "Kept", idempotencyKey: "frozen-key", userCategoryIds: ["food"],
+    },
+  };
+  api.load.mockResolvedValue({ kind: "pending", id: "frozen", command });
+  const editor = await open(api);
+  expect({ text: editor().amount.editor.text, review: editor().amount.review, editable: editor().editable, canSubmit: editor().canSubmit })
+    .toEqual({ text: "-1234,50", review: null, editable: false, canSubmit: true });
+  await act(async () => { await editor().submit(); });
+  expect(JSON.stringify(api.save.mock.calls[0]?.[0])).toBe(JSON.stringify(command));
+  expect(JSON.stringify(api.post.mock.calls[0]?.[0])).toBe(JSON.stringify(command));
 });

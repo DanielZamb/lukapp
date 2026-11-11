@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { confirmShown, showing, type Shown } from "../confirmation";
 import type { Theme } from "../../ui/tokens";
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useEffect, useLayoutEffect, useRef } from "react";
@@ -49,8 +50,21 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const sheet = useRef<BottomSheetModal>(null);
   const active = useRef(false);
-  const [chosenLayer, setLayer] = useState<Layer | null>(null);
-  const layer = props.pendingAct === "spendNothing" || props.pendingAct === "remove" ? props.pendingAct : chosenLayer;
+  const [chosen, setChosen] = useState<Shown<Layer> | null>(null);
+  /** The confirmation layer open now; each opening has its own generation. */
+  const openLayer = useRef<Shown<Layer> | null>(null);
+  const setLayer = (next: Layer | null) => {
+    openLayer.current = next && showing(next);
+    setChosen(openLayer.current);
+  };
+  const layer = props.pendingAct === "spendNothing" || props.pendingAct === "remove" ? props.pendingAct : chosen?.snapshot ?? null;
+  /** A layer's confirming answer: it acts while the opening it was shown on is still open, or to resend a held request. */
+  const confirming = (act: Layer, answer: () => void) => {
+    const shown = chosen;
+    return () => {
+      if (props.pendingAct === act || (shown !== null && confirmShown(openLayer.current, shown, shown.snapshot) === "confirmed")) answer();
+    };
+  };
   const issue = props.editable ? props.amountIssue : null;
   const zeroChoice = !layer && issue === "zero";
   const back = useRef(() => {});
@@ -112,13 +126,13 @@ export function BudgetLimitSheet(props: BudgetLimitSheetProps) {
           <Text style={ui.body}>{t("budget.spendNothingEffect", { name })}</Text>
           {error}
           <PrimaryButton label={props.busy ? t("budget.saving") : props.pending ? t("budget.retry") : t("budget.spendNothingConfirm")}
-            disabled={!props.canSend("spendNothing")} onPress={props.onSpendNothing} />
+            disabled={!props.canSend("spendNothing")} onPress={confirming("spendNothing", props.onSpendNothing)} />
           {cancelLayer}
         </> : layer === "remove" ? <>
           <Text style={ui.body}>{t("budget.removeEffect", { month })}</Text>
           {error}
           <PrimaryButton label={props.busy ? t("budget.removing") : props.pending ? t("budget.retry") : t("budget.removeLimit")}
-            disabled={!props.canSend("remove")} onPress={props.onRemove} />
+            disabled={!props.canSend("remove")} onPress={confirming("remove", props.onRemove)} />
           {cancelLayer}
         </> : <>
           {preview.spendNothing && <Text style={styles.label}>{t("budget.spendNothing")}</Text>}

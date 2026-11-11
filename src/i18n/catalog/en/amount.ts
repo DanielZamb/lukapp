@@ -20,5 +20,6 @@ export const amount = {
   reviewPasted: "You pasted {amount}. Make sure it's right before you continue.",
   reviewConfirm: "Confirm {amount}",
   reviewRequired: "Confirm the amount before you continue.",
+  currencyChanged: "The currency changed while you typed. Check the amount and try again.",
   noticeReenter: "We couldn't read the amount saved earlier ({previous}). Type it again.",
 } as const;

@@ -714,3 +714,24 @@ test("an Undo start kept from before the typed name was cleared sends nothing", 
   await act(async () => kept());
   expect(remote.undo).not.toHaveBeenCalled();
 });
+
+test("an Undo kept from a confirmation that showed another Default Place sends nothing; the confirmation's own Undo sends the one it shows", async () => {
+  remote.closure = closure({ isDefault: true, requiresReplacementDefault: true });
+  remote.undo.mockResolvedValue(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.press("Daily");
+  await ui.press("Continue");
+  await settle();
+  await ui.type("Place name to confirm", "Wallet");
+  const kept = ui.pressable("Undo Wallet").props.onPress as () => void;
+  await act(async () => serverChange(() => { remote.places = [profile("wallet", "Wallet"), profile("daily", "Daily", "closed"), profile("savings", "Savings")]; }));
+  await ui.row("Daily (closed) can't become your default place anymore");
+  await ui.press("Savings");
+  await ui.press("Continue");
+  await settle();
+  expect(ui.texts()).toContain("Savings becomes your default place.");
+  await act(async () => kept());
+  expect(remote.undo).not.toHaveBeenCalled();
+  await ui.press("Undo Wallet");
+  expect(remote.undo.mock.calls.map(([request]) => request.replacementDefaultFinancialAccountProfileId)).toEqual(["savings"]);
+});

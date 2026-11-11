@@ -62,6 +62,8 @@ export function useRecoveryMove(
     amount: amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }),
     source: placeChoice(defaultSource?.id ?? null),
   });
+  if (form.amount.currency !== seed.plan.currency)
+    setForm((now) => ({ ...now, amount: amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }) }));
   const unavailable = useChosenPlace(seed.sources, form.source);
   const sourceId = form.source.id;
   const [sameSource, setSameSource] = useState(false);
@@ -84,7 +86,7 @@ export function useRecoveryMove(
   const shownMinorUnits = amountSendable(form.amount) ? displayedMinorUnits(form.amount) ?? 0 : 0;
   function build(): Request | null {
     const now = readForm();
-    const minorUnits = sendableMinorUnits(now.amount) ?? 0;
+    const minorUnits = sendableMinorUnits(now.amount, seed.plan.currency) ?? 0;
     const from = now.source.id;
     if (seed.plan.status === "suspended" || !from || minorUnits <= 0 || unavailableReason(now.source, seed.sources)) return null;
     setSameSource(from === seed.plan.destinationFinancialAccountProfileId);

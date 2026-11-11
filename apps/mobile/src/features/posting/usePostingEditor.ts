@@ -39,6 +39,7 @@ import {
   type AmountSession,
 } from "../amount/session";
 import { useFormState, withFields, type ReadAtPress } from "../amount/useAmountState";
+import { sameValue } from "../confirmation";
 export type PostingReceipt = {
   description: string;
   amount: { currency: string; minorUnits: number };
@@ -87,8 +88,14 @@ export type IntakeBinding = {
   notification?: { text: string; packageName: string; at: number } | null;
   originalSuggestion: IntakeEvidence;
   readonly frozen: boolean;
+  /**
+   * The confirmation a frozen Candidate holds, or null in review. The form shows it and resends exactly it, through
+   * `confirm(null)`, without reading or validating the amount on screen.
+   */
+  readonly held: IntakeSuggestion | null;
   persistReview(facts: LocalEntryFacts): Promise<void>;
-  confirm(confirmed: IntakeSuggestion): Promise<PostingReceipt>;
+  /** Confirms the Candidate with `confirmed`, the facts on the form; a frozen Candidate sends its held command again. */
+  confirm(confirmed: IntakeSuggestion | null): Promise<PostingReceipt>;
   /** Discards the Candidate at the last revision this form saw or saved. */
   discard(): Promise<DiscardOutcome>;
 };
@@ -132,16 +139,17 @@ function savedAmountText(amount: AmountSession, opened: OpenedAmount | null): St
   return opened && opened.text === amount.editor.text && opened.review === amount.review ? opened.stored : storedAmountOf(amount);
 }
 
-/** The amount of a complete session. Submission paths call it after checking validity, and it refuses again. */
-function requiredMinorUnits(amount: AmountAtPress): number {
-  const minorUnits = sendableMinorUnits(amount);
+/** The amount of a complete session in `currency`. Submission paths call it after checking validity, and it refuses again. */
+function requiredMinorUnits(amount: AmountAtPress, currency: string): number {
+  const minorUnits = sendableMinorUnits(amount, currency);
   if (minorUnits === null) throw new Error("Amount is not complete");
   return minorUnits;
 }
 
 /** A place's starting balance left blank is zero, as first-run setup reads it; any other text must be a sendable amount. */
-function balanceMinorUnits(amount: AmountAtPress): number | null {
-  return amount.editor.text.trim() ? sendableMinorUnits(amount) : 0;
+function balanceMinorUnits(amount: AmountAtPress, currency: string): number | null {
+  if (amount.currency !== currency) return null;
+  return amount.editor.text.trim() ? sendableMinorUnits(amount, currency) : 0;
 }
 
 /** Whether a place's starting balance may be sent, as `balanceMinorUnits` would read it. */
@@ -162,6 +170,23 @@ const unclassified: Classification = { value: { ids: [], primaryId: null }, natu
 function classify(value: TransactionCategories, nature: CategoryNature | null = null): Classification {
   return { value, nature: value.ids.length ? nature : null };
 }
+
+/**
+ * An entry as a confirmation shows it: every value its command is built from, as plain data. A confirmation of this
+ * entry sends it only while the form still reads the same.
+ */
+export type EntrySnapshot = Readonly<{
+  entryType: EntryType;
+  currency: string;
+  /** Signed: negative for money out. */
+  minorUnits: number;
+  date: string;
+  description: string;
+  profileId: string;
+  destinationId: string | null;
+  categoryIds: readonly string[];
+  primaryId: string | null;
+}>;
 
 /** The From and To a person confirmed for a transfer. Any other pair on the form is unconfirmed. */
 export type TransferPair = { from: string; to: string };
@@ -346,7 +371,7 @@ export function usePostingEditor(
       description: now.description.trim(),
       amount: {
         currency,
-        minorUnits: Math.abs(requiredMinorUnits(now.amount)),
+        minorUnits: Math.abs(requiredMinorUnits(now.amount, currency)),
       },
       accountingDate: now.date,
       financialAccountProfileId: now.profileId,
@@ -365,6 +390,17 @@ export function usePostingEditor(
       profileId: account.financialAccountProfileId,
       destinationId: null,
       categories: { ids: [], primaryId: null },
+    };
+  }
+  /** The entry the form would send now, or null when it holds no sendable entry of its own. */
+  function entrySnapshot(now: ReadAtPress<Editor>): EntrySnapshot | null {
+    if (now.setup || now.pending || intake) return null;
+    const minorUnits = sendableMinorUnits(now.amount, account.currency);
+    if (minorUnits === null) return null;
+    const { ids, primaryId } = now.classification.value;
+    return {
+      entryType: now.entryType, currency: account.currency, minorUnits, date: now.date, description: now.description.trim(),
+      profileId: now.profileId, destinationId: now.destinationId, categoryIds: [...ids], primaryId,
     };
   }
   function snapshotFacts(now: EditorView): LocalEntryFacts {
@@ -453,10 +489,13 @@ export function usePostingEditor(
       setup: now.setup && { ...now.setup, amount: openAmount(account.currency, "0") },
     }));
   }
-  /** Changes the amount; a change to its text or its confirmation means it is no longer the saved amount. */
-  function changeAmount(next: AmountSession) {
+  /**
+   * Changes the amount, with `patch` in the same update so that both are refused together when the amount belongs to
+   * one the form replaced. A change to its text or its confirmation means it is no longer the saved amount.
+   */
+  function changeAmount(next: AmountSession, patch: Partial<Editor> = {}) {
     setForm((now) => ({
-      ...now, amount: next,
+      ...now, ...patch, amount: next,
       openedAmount: next.editor.text !== now.amount.editor.text || next.review !== now.amount.review ? null : now.openedAmount,
     }));
   }
@@ -474,14 +513,14 @@ export function usePostingEditor(
           productKind: setupNow.productKind,
           amount: {
             currency: account.currency,
-            minorUnits: balanceMinorUnits(setupNow.amount) ?? requiredMinorUnits(setupNow.amount),
+            minorUnits: balanceMinorUnits(setupNow.amount, account.currency) ?? requiredMinorUnits(setupNow.amount, account.currency),
           },
           accountingDate: setupNow.date,
           idempotencyKey: transport.newKey(),
         },
       };
     }
-    const signed = requiredMinorUnits(now.amount);
+    const signed = requiredMinorUnits(now.amount, account.currency);
     const categories = now.classification.value;
     const payload = {
       workspaceId: account.workspaceId,
@@ -529,6 +568,8 @@ export function usePostingEditor(
   }
   /** Whether a post may be sent; rendering asks with the form, a press with what it reads. */
   function canSubmitWith(now: EditorView) {
+    const held = intake?.held;
+    if (held) return !now.busy && !now.loading && !now.keeping && !now.blocked && held.amount.currency === account.currency;
     const shown = displayedMinorUnits(now.amount);
     const amountValid = amountSendable(now.amount) && shown !== null && (now.entryType === "initial" ? shown >= 0 : shown !== 0);
     const setupNow = now.setup;
@@ -653,10 +694,18 @@ export function usePostingEditor(
     await reviewWrites.current.catch(() => {});
     return intake.discard();
   }
-  async function submit() {
+  /**
+   * Sends the entry on the form. With `shown`, the entry a confirmation showed, it sends only while the form still
+   * reads exactly that entry; otherwise nothing is sent and the person is told the entry changed.
+   */
+  async function submit(shown?: EntrySnapshot) {
     const mounted = lifetime.current;
     const now = readForm();
     if (!mounted.active || opLock.current || !canSubmitWith(now)) return;
+    if (shown && !sameValue(entrySnapshot(now), shown)) {
+      setError(t("posting.entryChanged"));
+      return;
+    }
     opLock.current = true;
     submitting.current = true;
     change({ busy: true });
@@ -668,8 +717,10 @@ export function usePostingEditor(
           setError(t("posting.alreadyPosting"));
           return;
         }
-        await saveCandidateReview(latestReview.current && snapshotFacts(now));
-        const receipt = await intake.confirm(snapshotConfirmed(intake, now));
+        const receipt = intake.held ? await intake.confirm(null) : await (async () => {
+          await saveCandidateReview(latestReview.current && snapshotFacts(now));
+          return intake.confirm(snapshotConfirmed(intake, now));
+        })();
         if (!mounted.active) return;
         change({ amount: openAmount(account.currency, "-"), openedAmount: null, description: "", classification: unclassified });
         setPosted(receipt);
@@ -776,15 +827,16 @@ export function usePostingEditor(
           changeAmount(categoryAmount(value, nature));
           return;
         }
-        if (displayedMinorUnits(value) !== null && directionOf(value) !== directionOf(now.amount))
-          change({ classification: unclassified });
-        changeAmount(value);
+        changeAmount(value, displayedMinorUnits(value) !== null && directionOf(value) !== directionOf(now.amount)
+          ? { classification: unclassified } : {});
       }
     },
     /** The amount as of the latest change, for a check a press makes before it sends. */
     readAmount: () => readForm().amount,
     /** The entry as of the latest change, for a check a press makes before it sends. */
     read: () => view(readForm()),
+    /** The entry the form would send now, for a confirmation to show and bind. */
+    snapshot: () => entrySnapshot(readForm()),
     setDescription: (value: string) => {
       if (canEdit()) change({ description: value });
     },

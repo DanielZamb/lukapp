@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, test, vi } from "vitest";
 import { ConvexError } from "convex/values";
-import { evaluateMonthClose, type MonthCloseReadiness } from "./model";
+import { evaluateMonthClose, type ClosePeriod, type MonthCloseReadiness } from "./model";
 import { useMonthClose, type MonthCloseTransport } from "./useMonthClose";
 
 const october = { year: 2026, month: 10 };
@@ -69,13 +69,16 @@ async function open(
   };
 }
 
+/** The month the confirmation on screen shows. */
+const shown = (page: { current: () => { phase: { kind: string; period?: ClosePeriod } } }) => page.current().phase.period ?? october;
+
 test("a dated draft blocks close so lock is never sent", async () => {
   const api = transport();
   const page = await open(api, ready({ draftCount: 1 }));
   expect(page.current().phase).toEqual({ kind: "review" });
   await act(async () => page.current().request());
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(page.current().phase).toEqual({ kind: "review" });
   expect(api.lock).not.toHaveBeenCalled();
@@ -91,7 +94,7 @@ test("Candidates warn but still allow one lock of the month", async () => {
   expect(page.current().phase).toEqual({ kind: "review" });
   await act(async () => page.current().request());
   await act(async () => {
-    await Promise.all([page.current().confirm(), page.current().confirm()]);
+    await Promise.all([page.current().confirm(shown(page)), page.current().confirm(shown(page))]);
   });
   expect(api.lock).toHaveBeenCalledExactlyOnceWith({
     workspaceId: "workspace",
@@ -106,7 +109,7 @@ test("an uncertain lock retries the same month and a second success is still clo
   const page = await open(api);
   await act(async () => page.current().request());
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(page.current().phase).toEqual({
     kind: "failed",
@@ -114,7 +117,7 @@ test("an uncertain lock retries the same month and a second success is still clo
     message: "Could not confirm the close. Retry to lock the same month safely.",
   });
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(api.lock.mock.calls.map(([input]) => input)).toEqual([
     { workspaceId: "workspace", period: october },
@@ -129,10 +132,10 @@ test("after a lost reply, a lock refused before the server looked keeps the same
     .mockRejectedValueOnce(new ConvexError({ code: "provider_unavailable" }));
   const page = await open(api);
   await act(async () => page.current().request());
-  await act(async () => { await page.current().confirm(); });
-  await act(async () => { await page.current().confirm(); });
+  await act(async () => { await page.current().confirm(shown(page)); });
+  await act(async () => { await page.current().confirm(shown(page)); });
   expect(page.current().phase).toMatchObject({ kind: "failed", period: october });
-  await act(async () => { await page.current().confirm(); });
+  await act(async () => { await page.current().confirm(shown(page)); });
   expect(api.lock.mock.calls.map(([input]) => input)).toEqual(Array.from({ length: 3 }, () => ({ workspaceId: "workspace", period: october })));
   expect(page.current().phase).toEqual({ kind: "closed", period: october });
 });
@@ -146,7 +149,7 @@ test("a month that is already locked opens finished and never calls lock", async
   expect(page.current().phase).toEqual({ kind: "closed", period: october });
   await act(async () => page.current().request());
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(api.lock).not.toHaveBeenCalled();
 });
@@ -157,7 +160,7 @@ test("a retry after midnight still locks the month that was requested", async ()
   const page = await open(api, ready());
   await act(async () => page.current().request());
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   await page.change(
     evaluateMonthClose({
@@ -169,7 +172,7 @@ test("a retry after midnight still locks the month that was requested", async ()
     }),
   );
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(api.lock.mock.calls.map(([input]) => input)).toEqual([
     { workspaceId: "workspace", period: october },
@@ -184,7 +187,7 @@ test("a draft written while the screen is open blocks the lock", async () => {
   const page = await open(api, ready());
   await act(async () => page.current().request());
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(api.draftsInMonth).toHaveBeenCalledWith(october);
   expect(api.lock).not.toHaveBeenCalled();
@@ -204,7 +207,7 @@ test("a draft that appears before lock returns the review and device denial stay
   await page.change(ready());
   await act(async () => page.current().request());
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(api.reportFailure).toHaveBeenCalledWith(denial);
   expect(page.current().phase).toEqual({ kind: "locking", period: october });
@@ -216,15 +219,24 @@ test("a failed lock keeps its retry when the month rolls over before the server 
   const page = await open(api, ready());
   await act(async () => page.current().request());
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(page.current().phase.kind).toBe("failed");
   // After midnight the requested October is no longer the current period: a mismatch, not a lock.
   await page.change(ready({ periodStatus: "mismatch" }));
   expect(page.current().phase).toMatchObject({ kind: "failed", period: october });
   await act(async () => {
-    await page.current().confirm();
+    await page.current().confirm(shown(page));
   });
   expect(api.lock.mock.calls.map(([input]) => input.period)).toEqual([october, october]);
   expect(page.current().phase).toMatchObject({ kind: "closed", period: october });
+});
+
+test("a Confirm that showed another month locks nothing", async () => {
+  const api = transport();
+  const page = await open(api, ready({}));
+  await act(async () => page.current().request());
+  await act(async () => { await page.current().confirm({ year: 2026, month: 9 }); });
+  expect(api.lock).not.toHaveBeenCalled();
+  expect(page.current().phase).toEqual({ kind: "confirm", period: october });
 });

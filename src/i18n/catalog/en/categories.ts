@@ -97,4 +97,5 @@ export const categories = {
   suggestedBills: "Bills",
   suggestedFamily: "Family",
   suggestedOther: "Other",
+  deleteChanged: "The category on screen changed. Open it again to delete it.",
 } as const;

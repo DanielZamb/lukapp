@@ -211,9 +211,8 @@ type Exemption = readonly [file: string, name: string, why: string];
 const allowed: readonly Exemption[] = [
   ["apps/mobile/app/account.tsx", "account", "Change look opens the sheet on the emoji the page shows; nothing is sent until Use, which reads the pick at the press"],
   ["apps/mobile/app/drafts.tsx", "drafts", "Discard calls the local Drafts store's port, which reads the stored Draft itself"],
-  ["apps/mobile/app/post.tsx", "budget",
-    "the Budget read for the month the screen shows; Post checks its advisory impact against it, while the entry itself is read at the press"],
-  ["apps/mobile/app/post.tsx", "binding", "the Candidate this route opened, set once when it loads; Use amount reads only its original suggested direction"],
+  ["apps/mobile/app/post.tsx", "binding",
+    "the Candidate this route opened, set once per Candidate; Use amount reads only its original suggested direction, which never changes"],
   ["apps/mobile/src/features/placeEnding/PlaceEndingFlow.tsx", "live",
     "choosing Close records the balance and day the server reported as the basis to review; a later change is withdrawn by the stale check and refused by the server"],
   ["apps/mobile/src/features/placeEnding/PlaceEndingFlow.tsx", "pending", "the request stored on the phone before its first send; Retry resends it exactly as stored"],

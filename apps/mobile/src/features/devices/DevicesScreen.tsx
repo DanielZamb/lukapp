@@ -1,4 +1,5 @@
 import { useFormState } from "../amount/useAmountState";
+import { confirmShown, showing, type Shown } from "../confirmation";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useAction } from "convex/react";
 import { ConvexError } from "convex/values";
@@ -16,11 +17,12 @@ import { useFrozenCommand } from "../useFrozenCommand";
 
 type Device = FunctionReturnType<typeof api.deviceAccess.list>[number];
 type DeviceList = { kind: "loading" } | { kind: "failed" } | { kind: "ready"; devices: Device[] };
+/** Ending another device's access, or every other session's, as its confirmation shows it. */
+type Ending = { kind: "remove"; device: Device } | { kind: "signOutOthers" };
 type Step =
   | { kind: "list" }
   | { kind: "rename"; device: Device; name: string }
-  | { kind: "remove"; device: Device }
-  | { kind: "signOutOthers" };
+  | { kind: "confirm"; shown: Shown<Ending> };
 type Command =
   | { kind: "rename"; request: FunctionArgs<typeof api.deviceAccess.register> }
   | { kind: "remove"; device: Device }
@@ -100,12 +102,23 @@ export function DevicesScreen({ onBack }: { onBack: () => void }) {
     setDevices({ kind: "loading" });
     void load();
   }
+  /** Opens the confirmation for `ending`; asking again while one is open keeps that one. */
+  function askOnce(ending: Ending) {
+    setStep((now) => now.kind === "confirm" ? now : { kind: "confirm", shown: showing(ending) });
+  }
   function closeStep() {
     const at = command.atPress();
     if (at === "sending") return;
     if (at === "held") return showStoredList(t("lifecycle.devicesChecked"));
     command.release();
     setStep({ kind: "list" });
+  }
+  /** The confirmation's button: ends the access its confirmation showed, while that confirmation is still open. */
+  function confirmEnding(pressed: Shown<Ending>) {
+    const now = readStep();
+    if (confirmShown(now.kind === "confirm" ? now.shown : null, pressed, pressed.snapshot) !== "confirmed") return;
+    const ending = pressed.snapshot;
+    void send(ending.kind === "remove" ? { kind: "remove", device: { ...ending.device } } : { kind: "signOutOthers" });
   }
   async function send(request: Command) {
     setNotice("");
@@ -162,9 +175,10 @@ export function DevicesScreen({ onBack }: { onBack: () => void }) {
     );
   }
 
-  if (step.kind === "remove" || step.kind === "signOutOthers") {
-    const remove = step.kind === "remove";
-    const name = remove ? step.device.label : "";
+  if (step.kind === "confirm") {
+    const { shown } = step;
+    const remove = shown.snapshot.kind === "remove";
+    const name = shown.snapshot.kind === "remove" ? shown.snapshot.device.label : "";
     return (
       <Screen>
         {header}
@@ -174,15 +188,10 @@ export function DevicesScreen({ onBack }: { onBack: () => void }) {
         <Text style={ui.body}>{remove ? t("lifecycle.removeBody", { name }) : t("lifecycle.signOutOthersBody")}</Text>
         {uncertain ? remove && alert(t("lifecycle.removeUncertain", { name }))
           : refusal && alert(t(remove ? "lifecycle.removeFailed" : "lifecycle.signOutOthersFailed"))}
-        {(remove || !uncertain) && <SecondaryButton tone="danger" disabled={busy}
+        {(remove || !uncertain) && <ConfirmButton shown={shown} disabled={busy} onConfirm={confirmEnding}
           label={busy ? t(remove ? "lifecycle.removing" : "lifecycle.signingOutOthers")
             : uncertain ? t("lifecycle.sendAgain")
-            : t(remove ? "lifecycle.removeConfirm" : "lifecycle.signOutOthersConfirm")}
-          onPress={() => {
-            const now = readStep();
-            if (now.kind === "remove") void send({ kind: "remove", device: { ...now.device } });
-            else if (now.kind === "signOutOthers") void send({ kind: "signOutOthers" });
-          }} />}
+            : t(remove ? "lifecycle.removeConfirm" : "lifecycle.signOutOthersConfirm")} />}
         {uncertain ? checkDevices
           : <SecondaryButton label={remove ? t("lifecycle.keepAccess") : t("common.cancel")} disabled={busy} onPress={closeStep} />}
       </Screen>
@@ -222,11 +231,11 @@ export function DevicesScreen({ onBack }: { onBack: () => void }) {
                   onPress={() => { setNotice(""); setStep({ kind: "rename", device, name: device.label }); }} />
                 : <SecondaryButton tone="danger" label={t("lifecycle.removeAction")}
                   accessibilityLabel={t("lifecycle.removeA11y", { name: device.label })}
-                  onPress={() => { setNotice(""); setStep({ kind: "remove", device }); }} />}
+                  onPress={() => { setNotice(""); askOnce({ kind: "remove", device }); }} />}
             </View>
           ))}
           <SecondaryButton tone="danger" label={t("lifecycle.signOutOthers")}
-            onPress={() => { setNotice(""); setStep({ kind: "signOutOthers" }); }} />
+            onPress={() => { setNotice(""); askOnce({ kind: "signOutOthers" }); }} />
         </View>}
     </Screen>
   );
@@ -245,4 +254,11 @@ function createStyles(theme: Theme) {
     current: { alignSelf: "flex-start", paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.full,
       borderWidth: 1, borderColor: theme.ring, color: theme.foreground, fontFamily: font.semibold, fontSize: 14, lineHeight: 20 },
   });
+}
+
+/** A danger button that hands back the confirmation it was rendered for. */
+function ConfirmButton({ shown, label, disabled, onConfirm }: {
+  shown: Shown<Ending>; label: string; disabled: boolean; onConfirm: (shown: Shown<Ending>) => void;
+}) {
+  return <SecondaryButton tone="danger" disabled={disabled} label={label} onPress={() => onConfirm(shown)} />;
 }

@@ -1,4 +1,5 @@
 import { usePreventRemove } from "@react-navigation/native";
+import { confirmShown, showing, type Shown } from "../confirmation";
 import { router, useNavigation } from "expo-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Text } from "react-native";
@@ -45,7 +46,16 @@ export function useEntryExit({ editor, enabled, candidateRoute, onCandidateLeave
   const { t } = useT();
   const ui = useUi();
   const navigation = useNavigation();
-  const [sheet, setSheet] = useState<ExitSheet | null>(null);
+  const [sheet, setShownSheet] = useState<Shown<ExitSheet> | null>(null);
+  /** The sheet open now; an answer acts only on the opening of the sheet it was shown on. */
+  const openSheet = useRef<Shown<ExitSheet> | null>(null);
+  function setSheet(next: ExitSheet | null) {
+    openSheet.current = next && showing(next);
+    setShownSheet(openSheet.current);
+  }
+  const whileOpen = (shown: Shown<ExitSheet>, answer: () => void) => () => {
+    if (confirmShown(openSheet.current, shown, shown.snapshot) === "confirmed") answer();
+  };
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [notice, setNotice] = useState("");
@@ -56,7 +66,7 @@ export function useEntryExit({ editor, enabled, candidateRoute, onCandidateLeave
     setSheet({ kind: "leave", resume: () => navigation.dispatch(data.action) });
   });
   useEffect(() => {
-    if (editor.pending) setSheet((open) => (open?.kind === "leave" ? null : open));
+    if (editor.pending && openSheet.current?.snapshot.kind === "leave") setSheet(null);
   }, [editor.pending]);
 
   function leave(resume?: () => void) {
@@ -132,24 +142,25 @@ export function useEntryExit({ editor, enabled, candidateRoute, onCandidateLeave
     </>
   );
   let node: ReactNode = null;
-  if (sheet?.kind === "leave") {
+  if (sheet?.snapshot.kind === "leave") {
+    const { resume } = sheet.snapshot;
     const existing = !!editor.draftId;
     node = <ConfirmSheet label={t("drafts.unsavedLabel")} busy={busy} error={failure} onDismiss={close}
       title={existing ? t("drafts.leaveDraftTitle") : t("drafts.leaveNewTitle")}
       body={existing ? t("drafts.leaveDraftBody") : t("drafts.leaveNewBody")}
       actions={[
-        { label: existing ? t("drafts.saveChanges") : t("drafts.keepDraft"), tone: "primary", onPress: () => void keep(sheet.resume) },
-        { label: existing ? t("drafts.discardChanges") : t("common.discard"), tone: "danger", onPress: () => leave(sheet.resume) },
+        { label: existing ? t("drafts.saveChanges") : t("drafts.keepDraft"), tone: "primary", onPress: whileOpen(sheet, () => void keep(resume)) },
+        { label: existing ? t("drafts.discardChanges") : t("common.discard"), tone: "danger", onPress: whileOpen(sheet, () => leave(resume)) },
         { label: t("drafts.continueEditing"), onPress: close },
       ]} />;
   } else if (sheet) {
-    const candidate = sheet.kind === "discard-candidate";
+    const candidate = sheet.snapshot.kind === "discard-candidate";
     node = <ConfirmSheet label={t(candidate ? "drafts.discardCandidateTitle" : "drafts.discardDraftTitle")}
       busy={busy} error={failure} onDismiss={close} detail={detail}
       title={t(candidate ? "drafts.discardCandidateTitle" : "drafts.discardDraftTitle")}
       body={t(candidate ? "drafts.discardCandidateBody" : "drafts.discardDraftBody")}
       actions={[
-        { label: t("common.discard"), tone: "danger", onPress: () => void (candidate ? discardCandidate() : discardDraft()) },
+        { label: t("common.discard"), tone: "danger", onPress: whileOpen(sheet, () => void (candidate ? discardCandidate() : discardDraft())) },
         { label: t("common.cancel"), onPress: close },
       ]} />;
   }

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { showing } from "../confirmation";
 import { ConvexError } from "convex/values";
 import { createElement, createRef, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -81,7 +82,7 @@ test("the new-category question asks what happens to the money in Spanish", asyn
 test("editing keeps the stored name and explains the money direction in one sentence", async () => {
   const category = { id: "rent", name: "Rent", normalizedName: "rent", nature: "Expense", style: { emoji: "🏠", tone: "primary" } } as unknown as Category;
   await inSpanish(createElement(CategorySheet, sheet({
-    editor: { kind: "edit", category, name: "Rent", style: category.style }, onDelete: vi.fn(), confirmingDelete: true,
+    editor: { kind: "edit", category, name: "Rent", style: category.style }, onDelete: vi.fn(), deleting: showing({ categoryId: "rent", name: "Rent" }),
   })));
   const shown = text();
   expect(shown).toContain("Sale plata. Cambiar el nombre, el ícono o el color no cambia si la plata entra o sale.");

@@ -270,4 +270,5 @@ export const placeEnding = {
   refuseDevice: "This phone no longer has access.",
   refuseAccess: "You don't have permission to do this in this workspace.",
   refuseOther: "We couldn't do it ({code}).",
+  reviewChanged: "Your answers changed before you confirmed. Check them and confirm again.",
 } as const;

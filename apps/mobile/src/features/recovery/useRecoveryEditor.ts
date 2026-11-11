@@ -75,6 +75,8 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
     amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)),
     destination: placeChoice(defaultDestination?.id ?? null),
   });
+  if (form.amount.currency !== seed.currency)
+    setForm((now) => ({ ...now, amount: installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, now.months)) }));
   const unavailable = useChosenPlace(seed.destinations, form.destination);
   const command = useFrozenCommand<Request, Receipt>({
     send: transport.save, reportFailure: transport.reportFailure, onDone: transport.onSaved,
@@ -97,7 +99,7 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   const ready = suggestion.valid && amountSendable(form.amount);
   function build(): Request | null {
     const now = readForm();
-    const typed = sendableMinorUnits(now.amount);
+    const typed = sendableMinorUnits(now.amount, seed.currency);
     const pressed = typed === null ? null : suggestionFor(seed.candidate.amountMinorUnits, now.months, typed);
     const destinationId = now.destination.id;
     if (!destinationId || unavailableReason(now.destination, seed.destinations) || !pressed?.valid) return null;

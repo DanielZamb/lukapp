@@ -25,6 +25,7 @@ import {
   monthLabel,
   reviewEyebrow,
   type MonthCloseReadiness,
+  type ClosePeriod,
 } from "./model";
 import type { MonthClosePhase } from "./useMonthClose";
 
@@ -60,7 +61,8 @@ export function MonthCloseScreen({
   onHome: () => void;
   onRequest: () => void;
   onCancel: () => void;
-  onConfirm: () => void;
+  /** Receives the month the confirmation showed. */
+  onConfirm: (period: ClosePeriod) => void;
 }) {
   const theme = useTheme();
   const ui = useUi();
@@ -125,7 +127,7 @@ export function MonthCloseScreen({
           trailingIcon="lock-closed-outline"
           pending={locking}
           disabled={locking}
-          onPress={onConfirm}
+          onPress={() => onConfirm(display.period)}
         />
         {phase.kind === "confirm" ? (
           <SecondaryButton label={t("review.closeKeepReviewing")} onPress={onCancel} />

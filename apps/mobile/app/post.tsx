@@ -16,8 +16,9 @@ import { ActivityIndicator, BackHandler, Keyboard, Platform, Text, View } from "
 import { usePersonalDefaults } from "../src/features/activity";
 import { api } from "../src/features/api";
 import { formatMoney, localDate } from "../src/features/money";
-import { openAmount, sendableMinorUnits } from "../src/features/amount/session";
+import { openAmount } from "../src/features/amount/session";
 import { useFormState, withFields, type ReadAtPress } from "../src/features/amount/useAmountState";
+import { confirmShown, sameValue, showing, type Shown } from "../src/features/confirmation";
 import { PostingImpactSheet } from "../src/features/budget/PostingImpactSheet";
 import {
   postingBudgetImpact,
@@ -34,6 +35,7 @@ import { PlaceSheet } from "../src/features/posting/PlaceSheet";
 import { AccountSetupForm } from "../src/features/posting/AccountSetupForm";
 import {
   usePostingEditor,
+  type EntrySnapshot,
   type IntakeBinding,
   type PlaceDraft,
 } from "../src/features/posting/usePostingEditor";
@@ -53,12 +55,21 @@ import {
 type Defaults = NonNullable<ReturnType<typeof usePersonalDefaults>>;
 /** The entry fields a route check reads, as the editor renders them or reads them at a press. */
 type EntryView = ReturnType<ReturnType<typeof usePostingEditor>["read"]> | ReturnType<typeof usePostingEditor>;
+/**
+ * A Budget warning before posting: for one entry, the entry as checked and the Budget month it was checked against;
+ * for the batch, the queue held locked while the warning is open.
+ */
+type Impact =
+  | { kind: "entry"; entry: EntrySnapshot; month: string; description: string; hits: PostingBudgetImpact }
+  | { kind: "batch"; description: string; hits: PostingBudgetImpact };
 /** What this route shows around the entry, read with `readRoute()` at a press. */
 type RouteState = {
   placeTarget: "source" | "destination";
   mode: "one" | "batch";
   editingId: string | undefined;
-  impact: { description: string; hits: PostingBudgetImpact } | null;
+  impact: Shown<Impact> | null;
+  /** Why the last Post sent nothing, when the entry changed under its Budget check. */
+  notice: "changed" | "unchecked" | null;
 };
 function PostMoney({
   defaults,
@@ -81,9 +92,11 @@ function PostMoney({
   const theme = useTheme();
   const recordInteraction = useLocalEntryInteraction();
   const [categoryVisible, setCategoryVisible] = useState(false);
-  const [route, setRoute, readRoute] = useFormState<RouteState>({ placeTarget: "source", mode: "one", editingId: undefined, impact: null });
+  const [route, setRoute, readRoute] = useFormState<RouteState>({
+    placeTarget: "source", mode: "one", editingId: undefined, impact: null, notice: null,
+  });
   const routeChange = (patch: Partial<RouteState>) => setRoute((now) => withFields(now, patch));
-  const { placeTarget, mode, impact } = route;
+  const { placeTarget, mode, impact, notice } = route;
   const [placePickerOpen, setPlacePickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const categories = useQuery(api.accounting.listUserCategories, {
@@ -138,6 +151,7 @@ function PostMoney({
   const convex = useConvex();
   const active = useRef(true);
   const batchDecision = useRef<((allow: boolean) => void) | null>(null);
+  const checking = useRef(false);
   useEffect(() => {
     active.current = true;
     return () => {
@@ -155,7 +169,7 @@ function PostMoney({
     Keyboard.dismiss();
     return new Promise<boolean>((resolve) => {
       batchDecision.current = resolve;
-      routeChange({ impact: { description: t("posting.batchImpactTitle"), hits } });
+      routeChange({ impact: showing({ kind: "batch", description: t("posting.batchImpactTitle"), hits }) });
     });
   });
   const [composing, setComposing] = useState(false);
@@ -235,7 +249,7 @@ function PostMoney({
       needsBudgetCheck: entry.entryType === "normal" && entry.direction === "out" && !entry.pending,
     };
   };
-  const queueable = (entry: EntryView, at: ReadAtPress<RouteState> | RouteState) =>
+  const queueable = (entry: EntryView, at: Pick<RouteState, "impact"> | ReadAtPress<Pick<RouteState, "impact">>) =>
     entry.canSubmit && !entry.setup && !at.impact && checksOf(entry).completeEntry && !entry.pending && !candidateId;
   const { categoryValid, placesValid, completeEntry, needsBudgetCheck } = checksOf(editor);
   const budget = useQuery(
@@ -289,6 +303,68 @@ function PostMoney({
     : !editor.canSubmit ? t("posting.blockedAmount")
     : needsBudgetCheck && budget === undefined ? t("posting.checkingBudget") : undefined);
   const canQueue = queueable(editor, route);
+  /**
+   * Posts the entry, after checking the Budget of the month it is in, read at the press. A crossing opens the warning
+   * bound to the entry as checked; an entry that changed during the check is not sent.
+   */
+  async function post() {
+    const at = readRoute();
+    if (at.mode === "batch") {
+      void saveToBatch();
+      return;
+    }
+    const entry = editor.read();
+    const checks = checksOf(entry);
+    if (at.impact || checking.current || !entry.canSubmit || entry.setup || (!entry.pending && !checks.completeEntry)) return;
+    routeChange({ notice: null });
+    if (!checks.needsBudgetCheck) {
+      void editor.submit();
+      return;
+    }
+    const snapshot = editor.snapshot();
+    if (!snapshot) return;
+    const month = snapshot.date.slice(0, 7);
+    checking.current = true;
+    try {
+      const evaluated = await convex.query(api.budget.evaluate, { workspaceId: workspace.id, month });
+      if (!active.current) return;
+      if (evaluated.month !== month || !sameValue(editor.snapshot(), snapshot)) {
+        routeChange({ notice: "changed" });
+        return;
+      }
+      const hits = postingBudgetImpact({ jars: evaluated.jars, categoryIds: [...snapshot.categoryIds], expenseMinorUnits: -snapshot.minorUnits });
+      if (hits.length) {
+        Keyboard.dismiss();
+        routeChange({ impact: showing({ kind: "entry", entry: snapshot, month, description: snapshot.description, hits }) });
+        return;
+      }
+      void editor.submit(snapshot);
+    } catch (error) {
+      if (active.current && !transport.reportFailure?.(error)) routeChange({ notice: "unchecked" });
+    } finally {
+      checking.current = false;
+    }
+  }
+  /** Continue on the Budget warning it was shown on: the batch goes on, or the entry posts only as it was checked. */
+  function continueImpact(pressed: Shown<Impact>) {
+    const open = readRoute().impact;
+    const current = pressed.snapshot.kind === "entry" ? { ...pressed.snapshot, entry: editor.snapshot() } : pressed.snapshot;
+    const outcome = confirmShown(open, pressed, current);
+    if (outcome === "stale") return;
+    routeChange({ impact: null, notice: outcome === "changed" ? "changed" : null });
+    if (pressed.snapshot.kind === "batch") {
+      batchDecision.current?.(outcome === "confirmed");
+      batchDecision.current = null;
+    } else if (outcome === "confirmed") void editor.submit(pressed.snapshot.entry);
+  }
+  function reconsiderImpact(pressed: Shown<Impact>) {
+    if (confirmShown(readRoute().impact, pressed, pressed.snapshot) === "stale") return;
+    routeChange({ impact: null });
+    if (pressed.snapshot.kind === "batch") {
+      batchDecision.current?.(false);
+      batchDecision.current = null;
+    }
+  }
   async function saveToBatch() {
     const at = readRoute();
     if (!queueable(editor.read(), at)) return false;
@@ -302,6 +378,7 @@ function PostMoney({
     <>
       <PostingForm
         {...editor}
+        error={notice ? t(notice === "changed" ? "posting.entryChanged" : "posting.budgetUnchecked") : editor.error}
         sourceNote={sourceNote}
         notification={binding?.notification ? (
           <NotificationCard
@@ -405,31 +482,7 @@ function PostMoney({
         onDate={() => {
           if (!editor.read().setup) dateSheet.current?.present();
         }}
-        onPost={() => {
-          const at = readRoute();
-          if (at.mode === "batch") {
-            void saveToBatch();
-            return;
-          }
-          const entry = editor.read();
-          const checks = checksOf(entry);
-          if (at.impact || !entry.canSubmit || entry.setup || (!entry.pending && !checks.completeEntry)) return;
-          if (checks.needsBudgetCheck) {
-            const typed = sendableMinorUnits(editor.readAmount());
-            if (!budget || typed === null) return;
-            const hits = postingBudgetImpact({
-              jars: budget.jars,
-              categoryIds: [...entry.categories.ids],
-              expenseMinorUnits: -typed,
-            });
-            if (hits.length) {
-              Keyboard.dismiss();
-              routeChange({ impact: { description: entry.description.trim(), hits } });
-              return;
-            }
-          }
-          void editor.submit();
-        }}
+        onPost={() => void post()}
         onDone={() => router.back()}
       />
       {categoryEnabled && (
@@ -543,22 +596,7 @@ function PostMoney({
     </>
   );
   const impactSheet = impact && (
-    <PostingImpactSheet
-          currency={workspace.functionalCurrency}
-      {...impact}
-      onReconsider={() => {
-        routeChange({ impact: null });
-        batchDecision.current?.(false);
-        batchDecision.current = null;
-      }}
-      onContinue={() => {
-        routeChange({ impact: null });
-        if (batchDecision.current) {
-          batchDecision.current(true);
-          batchDecision.current = null;
-        } else void editor.submit();
-      }}
-    />
+    <PostingImpactSheet shown={impact} currency={workspace.functionalCurrency} onContinue={continueImpact} onReconsider={reconsiderImpact} />
   );
   if (mode === "one")
     return (

@@ -100,4 +100,5 @@ export const categories: Messages<typeof en> = {
   suggestedBills: "Servicios",
   suggestedFamily: "Familia",
   suggestedOther: "Otros",
+  deleteChanged: "La categoría en pantalla cambió. Ábrela otra vez para eliminarla.",
 };

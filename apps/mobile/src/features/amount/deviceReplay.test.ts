@@ -84,6 +84,7 @@ test("the recordings cover typing, editing, pasting, the field's keys and an own
 
 test.each(recordings)("replaying %s from the phone shows the text the phone showed and sends what it sent", async (name, recording) => {
   const initial: AmountSession = openAmount(recording.currency, recording.initialText);
+  let owner = recording.currency;
   let replace: (next: AmountSession) => void = () => {};
   let read: () => AmountAtPress = () => { throw new Error("Not rendered"); };
   function Owner() {
@@ -103,8 +104,11 @@ test.each(recordings)("replaying %s from the phone shows the text the phone show
     else if (event.kind === "selection") await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: event } }));
     else if (event.kind === "decimal") await act(async () => key(/^Type a decimal/).props.onPress());
     else if (event.kind === "sign") await act(async () => key(/^Switch the amount/).props.onPress());
-    else if (event.kind === "replace") { await act(async () => replace(openAmount(event.currency, event.text))); input().props.onFocus(); }
-    else if (event.kind === "send") sends.push(sendableMinorUnits(read()));
+    else if (event.kind === "replace") {
+      owner = event.currency;
+      await act(async () => replace(openAmount(event.currency, event.text)));
+      input().props.onFocus();
+    } else if (event.kind === "send") sends.push(sendableMinorUnits(read(), owner));
   }
   expect(input().props.value).toBe(expected.finalText);
   expect(sends).toEqual(expected.sends);

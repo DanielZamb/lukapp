@@ -173,6 +173,14 @@ export function lineMinorUnits(line: LineDraft) {
 }
 
 /** True when every amount is filled and every answer that needs a Place or category has one; availability is checked apart. */
+/** The lines as the review shows them: each answer, where it went and its amount. */
+export function reviewedLines(lines: readonly LineDraft[]) {
+  return lines.map((line) => ({ id: line.id, answer: line.answer, target: line.target?.id ?? null, minorUnits: displayedMinorUnits(line.amount) }));
+}
+
+/** What the Close review shows: the balance and day it settles, the lines, and the new Default Place if any. */
+export type ReviewShown = Pick<Reviewed, "balance" | "accountingDate"> & { lines: ReturnType<typeof reviewedLines>; replacement: string | null };
+
 export function lineComplete(line: LineDraft) {
   return lineMinorUnits(line) !== null && (answerSpec(line.answer).kind === "adjustment" || line.target !== null);
 }
@@ -205,7 +213,7 @@ export function closeRequest(input: {
   const description = t("placeEnding.closingDescription", { place: input.place.name });
   const adjustment = t("placeEnding.adjustmentDescription", { place: input.place.name });
   const lines = input.lines.map((line): CloseRequest["lines"][number] => {
-    const amount = { currency: balance.currency, minorUnits: sendableMinorUnits(line.amount)! };
+    const amount = { currency: balance.currency, minorUnits: sendableMinorUnits(line.amount, balance.currency)! };
     const { kind } = answerSpec(line.answer);
     if (kind === "transfer") return { kind, otherFinancialAccountProfileId: line.target!.id, amount, description };
     if (kind === "expense") return { kind, userCategoryId: line.target!.id, amount, description };

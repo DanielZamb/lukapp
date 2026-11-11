@@ -182,10 +182,10 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
           await phone.select(0, phone.text.length); await phone.edit("", -1); await phone.edit(pasted);
           expect(input().props.value).toBe(pasted);
           expect(session.review, "a pasted group mark awaits confirmation").not.toBeNull();
-          expect(sendableMinorUnits(read())).toBeNull();
+          expect(sendableMinorUnits(read(), cop ? "COP" : "USD")).toBeNull();
           const confirm = root.root.findAll((node) => String(node.props.accessibilityLabel).startsWith("Confirm ") && typeof node.props.onPress === "function")[0];
           await act(async () => confirm.props.onPress());
-          expect(sendableMinorUnits(read())).toBe((reference.sign === "-" ? -1 : 1) * 1234 * 10 ** precision);
+          expect(sendableMinorUnits(read(), cop ? "COP" : "USD")).toBe((reference.sign === "-" ? -1 : 1) * 1234 * 10 ** precision);
           await phone.select(0, phone.text.length); await phone.edit("", -1);
           reference.text = ""; reference.a = reference.b = 0;
         }
@@ -193,8 +193,8 @@ test.each([false, true].flatMap((cop) => ([0, 2, 3] as const).flatMap((precision
         const visible = phone.text;
         expect(input().props.value, `field shows the phone's text after step ${step}`).toBe(visible);
         expect(displayedMinorUnits(session), `value of ${JSON.stringify(visible)}`).toBe(readsAs(shownSign() + visible, cop, precision));
-        if (session.review) expect(sendableMinorUnits(read())).toBeNull();
-        else expect(sendableMinorUnits(read()), `sendable once the phone shows ${JSON.stringify(visible)}`).toBe(displayedMinorUnits(session));
+        if (session.review) expect(sendableMinorUnits(read(), cop ? "COP" : "USD")).toBeNull();
+        else expect(sendableMinorUnits(read(), cop ? "COP" : "USD"), `sendable once the phone shows ${JSON.stringify(visible)}`).toBe(displayedMinorUnits(session));
         if (intact) compared++;
         if (intact && (visible !== reference.shown() || shownSign() !== reference.sign || displayedMinorUnits(session) !== reference.value()
           || phone.caret[0] !== reference.a || phone.caret[1] !== reference.b)) { divergences++; intact = false; }
@@ -235,7 +235,7 @@ test.each((["android", "ios"] as const).flatMap((platform) => [false, true].map(
       const shown = () => shownSign() + phone.text;
       const save = (when: string) => {
         if (phone.reporting) return null;
-        const amount = sendableMinorUnits(read());
+        const amount = sendableMinorUnits(read(), cop ? "COP" : "USD");
         saves++;
         if (amount === null) return null;
         sent++;
@@ -261,7 +261,7 @@ test.each((["android", "ios"] as const).flatMap((platform) => [false, true].map(
       dropped += phone.dropped;
       const confirm = root.root.findAll((node) => String(node.props.accessibilityLabel).startsWith("Confirm ") && typeof node.props.onPress === "function")[0];
       if (confirm) await act(async () => confirm.props.onPress());
-      expect(sendableMinorUnits(read()), `sequence ${sequence}, quiet, the phone shows ${JSON.stringify(shown())}`).toBe(readsAs(shown(), cop, precision));
+      expect(sendableMinorUnits(read(), cop ? "COP" : "USD"), `sequence ${sequence}, quiet, the phone shows ${JSON.stringify(shown())}`).toBe(readsAs(shown(), cop, precision));
       await act(async () => { root?.unmount(); });
     }
     console.log(`interleavings ${platform} cop=${cop}: ${saves} saves, ${sent} sent, ${dropped} writes dropped`);
