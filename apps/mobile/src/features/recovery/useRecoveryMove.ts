@@ -1,11 +1,11 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT } from "../../i18n";
 import type { api } from "../api";
 import { amountOfMinorUnits, amountSendable, displayedMinorUnits, sendableMinorUnits, type AmountSession } from "../amount/session";
 import { useAmountState } from "../amount/useAmountState";
 import { defaultAccountingDate } from "../timeZones";
-import { refusalCodeOf } from "../useFrozenCommand";
+import { useFrozenCommand } from "../useFrozenCommand";
 import type { RecoveryPlace, RecoveryPlanView } from "./model";
 import { endedPlaceRefusal, useChosenPlace } from "./useChosenPlace";
 
@@ -18,6 +18,23 @@ export type RecoveryMoveTransport = {
   onMoved: (receipt: Receipt) => void;
 };
 
+/**
+ * recordRecoveryMove (src/savingsRecovery/recordRecoveryMove.ts) looks for the contribution under the key at line 34.
+ * Each refusal below answers a send whose outcome was unknown: the key's shape; a check made only when no contribution
+ * or transfer was found (lifecycle.ts, recordContribution.ts, src/accounting/posting.ts after line 42); or a check of
+ * something fixed once the transfer exists (the plan, a Place's kind, the workspace currency). Not here on purpose:
+ * idempotency_key_conflict, which means something is stored under the key, and workspace_membership_required and
+ * place_ending_scan_limit, which a replay of a posted transfer can raise too.
+ */
+const moveSettles: ReadonlySet<string> = new Set([
+  "idempotency_key_invalid", "plan_not_found", "plan_cancelled", "expense_not_recoverable", "destination_not_found",
+  "transfer_predates_activation", "plan_already_complete", "amount_out_of_range", "source_must_be_asset", "destination_must_be_asset",
+  "financial_account_profile_ended", "place_undo_in_progress", "transfer_not_found", "transfer_not_usable", "transfer_reversed",
+  "transfer_destination_mismatch", "transfer_already_attributed", "transfer_profiles_must_differ", "functional_currency_invalid",
+  "amount_must_be_positive", "currency_mismatch", "financial_account_profile_not_found", "locked_period", "activity_before_opening",
+  "ledger_summary_not_ready", "ledger_totals_out_of_range",
+]);
+
 export function useRecoveryMove(
   seed: { workspaceId: string; timeZone: string; plan: RecoveryPlanView; sources: RecoveryPlace[] },
   transport: RecoveryMoveTransport,
@@ -28,74 +45,44 @@ export function useRecoveryMove(
   const source = useChosenPlace(seed.sources, defaultSource?.id ?? null);
   const sourceId = source.id;
   const [amount, setAmount, readAmount] = useAmountState(() => amountOfMinorUnits(seed.plan.currency, seed.plan.dueMinorUnits, { hideZeroDecimals: true }));
-  const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const request = useRef<Request | null>(null);
-  const submitting = useRef(false);
-  const lifetime = useRef({ active: false });
-  useLayoutEffect(() => {
-    const mounted = { active: true };
-    lifetime.current = mounted;
-    return () => { mounted.active = false; };
-  }, []);
+  const [sameSource, setSameSource] = useState(false);
+  const command = useFrozenCommand<Request, Receipt>({
+    send: transport.move, reportFailure: transport.reportFailure, onDone: transport.onMoved,
+    settles: (code) => moveSettles.has(code),
+    onRefused: (code, request) => {
+      const ended = endedPlaceRefusal(code);
+      if (ended) source.refuse(request.sourceFinancialAccountProfileId, ended);
+    },
+  });
+  const { state } = command;
+  const pending = state.name === "uncertain";
+  const refusal = state.name === "open" ? state.refusal : null;
+  const error = pending ? t("recovery.moveUncertain")
+    : sameSource ? t("recovery.moveSameSource")
+      : refusal && !endedPlaceRefusal(refusal.code) ? t("recovery.moveRejected") : "";
   const shownMinorUnits = amountSendable(amount) ? displayedMinorUnits(amount) ?? 0 : 0;
-  const editable = !busy && !pending;
-  async function submit() {
-    const mounted = lifetime.current;
+  function build(): Request | null {
     const minorUnits = sendableMinorUnits(readAmount()) ?? 0;
-    if (!request.current && seed.plan.status === "suspended") return;
-    const selected = request.current?.sourceFinancialAccountProfileId ?? sourceId;
-    if (!mounted.active || submitting.current || !selected || (!request.current && minorUnits <= 0)) return;
-    if (!request.current && selected === seed.plan.destinationFinancialAccountProfileId) {
-      setError(t("recovery.moveSameSource"));
-      return;
-    }
-    if (!request.current && source.unavailable) return;
-    submitting.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      const payload = request.current ?? {
-        workspaceId: seed.workspaceId,
-        planId: seed.plan.id,
-        sourceFinancialAccountProfileId: selected,
-        amount: { currency: seed.plan.currency, minorUnits },
-        accountingDate: defaultAccountingDate(seed.timeZone),
-        description: t("recovery.moveDescription", { title: seed.plan.title }),
-        idempotencyKey: transport.newKey(),
-      };
-      request.current = payload;
-      setPending(true);
-      const receipt = await transport.move(payload);
-      if (!mounted.active) return;
-      request.current = null;
-      setPending(false);
-      transport.onMoved(receipt);
-    } catch (caught) {
-      if (transport.reportFailure(caught) || !mounted.active) return;
-      const code = refusalCodeOf(caught);
-      const sent = request.current;
-      if (code !== null && sent) {
-        request.current = null;
-        setPending(false);
-        const ended = endedPlaceRefusal(code);
-        if (ended) source.refuse(sent.sourceFinancialAccountProfileId, ended);
-        else setError(t("recovery.moveRejected"));
-      } else setError(t("recovery.moveUncertain"));
-    } finally {
-      submitting.current = false;
-      if (mounted.active) setBusy(false);
-    }
+    if (seed.plan.status === "suspended" || !sourceId || minorUnits <= 0 || source.unavailable) return null;
+    setSameSource(sourceId === seed.plan.destinationFinancialAccountProfileId);
+    if (sourceId === seed.plan.destinationFinancialAccountProfileId) return null;
+    return {
+      workspaceId: seed.workspaceId,
+      planId: seed.plan.id,
+      sourceFinancialAccountProfileId: sourceId,
+      amount: { currency: seed.plan.currency, minorUnits },
+      accountingDate: defaultAccountingDate(seed.timeZone),
+      description: t("recovery.moveDescription", { title: seed.plan.title }),
+      idempotencyKey: transport.newKey(),
+    };
   }
-  const canEdit = () => lifetime.current.active && !submitting.current && !request.current;
   return {
-    sourceId, unavailable: source.unavailable, amount, busy, pending, error, editable,
-    canSubmit: !busy && (pending || (seed.plan.status === "active" && !!sourceId && !source.unavailable
+    sourceId, unavailable: source.unavailable, amount, busy: command.busy, pending, error, editable: !command.frozen,
+    canSubmit: !command.busy && (pending || (seed.plan.status === "active" && !!sourceId && !source.unavailable
       && sourceId !== seed.plan.destinationFinancialAccountProfileId && shownMinorUnits > 0)),
-    canDismiss: !busy && !pending,
-    onSource: (id: string) => { if (canEdit()) source.choose(id); },
-    onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.plan.currency) setAmount(value); },
-    submit,
+    canDismiss: !command.frozen,
+    onSource: (id: string) => { if (command.canEdit()) source.choose(id); },
+    onAmount: (value: AmountSession) => { if (command.canEdit() && value.currency === seed.plan.currency) setAmount(value); },
+    submit: async () => { await command.submit(build); },
   };
 }

@@ -1,8 +1,8 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useT, type MessageKey } from "../../i18n";
 import type { api } from "../api";
-import { refusalCodeOf } from "../useFrozenCommand";
+import { useFrozenCommand } from "../useFrozenCommand";
 import { amountOfMinorUnits, amountSendable, displayedMinorUnits, sendableMinorUnits, type AmountSession } from "../amount/session";
 import { useAmountState } from "../amount/useAmountState";
 import {
@@ -32,6 +32,19 @@ export type RecoveryEditorTransport = {
   reportFailure: (error: unknown) => boolean;
   onSaved: (receipt: Receipt) => void;
 };
+/**
+ * activatePlan (src/savingsRecovery/activatePlan.ts) looks for the plan under the key at line 19, after checking only the
+ * request itself (the key's shape, the workspace id). Every other refusal it raises comes after finding no plan there,
+ * so it answers a send whose outcome was unknown. Not here on purpose: idempotency_key_conflict, which means a plan is
+ * stored under the key.
+ */
+const activationSettles: ReadonlySet<string> = new Set([
+  "idempotency_key_invalid", "workspace_not_found", "expense_not_found", "expense_not_recoverable", "place_undo_in_progress",
+  "financial_account_profile_ended", "place_ending_scan_limit", "replacement_plan_not_found", "replacement_plan_not_cancelled",
+  "replacement_expense_mismatch", "replacement_already_exists", "replacement_plan_not_latest", "expense_already_recovered",
+  "destination_not_found", "destination_must_be_asset", "amount_out_of_range", "amount_must_be_positive",
+  "installment_count_invalid", "installment_below_minimum", "installment_above_principal",
+]);
 const replacementRefusals: Record<string, MessageKey> = {
   replacement_already_exists: "planning.replacementExists",
   replacement_plan_not_latest: "planning.replacementUnavailable",
@@ -48,76 +61,50 @@ export function useRecoveryEditor(seed: RecoveryEditorSeed, transport: RecoveryE
   const [amount, setAmount, readAmount] = useAmountState(() => installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, DEFAULT_INSTALLMENT_COUNT)));
   const destination = useChosenPlace(seed.destinations, defaultDestination?.id ?? null);
   const destinationId = destination.id;
-  const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
-  const request = useRef<Request | null>(null);
-  const submitting = useRef(false);
-  const lifetime = useRef({ active: false });
-  useLayoutEffect(() => {
-    const mounted = { active: true };
-    lifetime.current = mounted;
-    return () => { mounted.active = false; };
-  }, []);
+  const command = useFrozenCommand<Request, Receipt>({
+    send: transport.save, reportFailure: transport.reportFailure, onDone: transport.onSaved,
+    settles: (code) => activationSettles.has(code),
+    onRefused: (code, request) => {
+      const ended = endedPlaceRefusal(code);
+      if (ended) destination.refuse(request.destinationFinancialAccountProfileId, ended);
+    },
+  });
+  const { state } = command;
+  const pending = state.name === "uncertain";
+  const refusal = state.name === "open" ? state.refusal : null;
+  const error = pending ? t("recovery.draftUncertain")
+    : !refusal || endedPlaceRefusal(refusal.code) ? ""
+      : t(refusal.code === "expense_already_recovered" ? "recovery.draftAlreadyRecovered"
+        : replacementRefusals[refusal.code] ?? "recovery.draftRejected");
   const suggestion = suggestionFor(seed.candidate.amountMinorUnits, installmentCount, displayedMinorUnits(amount) ?? 0);
   const ready = suggestion.valid && amountSendable(amount);
-  const editable = !busy && !pending;
-  async function submit() {
-    const mounted = lifetime.current;
-    const selected = request.current?.destinationFinancialAccountProfileId ?? destinationId;
+  function build(): Request | null {
     const typed = sendableMinorUnits(readAmount());
     const pressed = typed === null ? null : suggestionFor(seed.candidate.amountMinorUnits, installmentCount, typed);
-    if (!mounted.active || submitting.current || !selected || (!request.current && (!pressed?.valid || destination.unavailable))) return;
-    submitting.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      const payload = request.current ?? {
-        workspaceId: seed.workspaceId,
-        sourceJournalEntryId: seed.candidate.journalEntryId,
-        destinationFinancialAccountProfileId: selected,
-        installmentCount,
-        installmentMinorUnits: pressed!.installmentMinorUnits,
-        idempotencyKey: transport.newKey(),
-        ...(seed.replacesPlanId ? { replacesPlanId: seed.replacesPlanId } : {}),
-      };
-      request.current = payload;
-      setPending(true);
-      const receipt = await transport.save(payload);
-      if (!mounted.active) return;
-      request.current = null;
-      setPending(false);
-      transport.onSaved(receipt);
-    } catch (caught) {
-      if (transport.reportFailure(caught) || !mounted.active) return;
-      const code = refusalCodeOf(caught);
-      const sent = request.current;
-      if (code !== null && sent) {
-        request.current = null;
-        setPending(false);
-        const ended = endedPlaceRefusal(code);
-        if (ended) destination.refuse(sent.destinationFinancialAccountProfileId, ended);
-        else setError(t(code === "expense_already_recovered" ? "recovery.draftAlreadyRecovered"
-          : replacementRefusals[code] ?? "recovery.draftRejected"));
-      } else setError(t("recovery.draftUncertain"));
-    } finally {
-      submitting.current = false;
-      if (mounted.active) setBusy(false);
-    }
+    if (!destinationId || destination.unavailable || !pressed?.valid) return null;
+    return {
+      workspaceId: seed.workspaceId,
+      sourceJournalEntryId: seed.candidate.journalEntryId,
+      destinationFinancialAccountProfileId: destinationId,
+      installmentCount,
+      installmentMinorUnits: pressed.installmentMinorUnits,
+      idempotencyKey: transport.newKey(),
+      ...(seed.replacesPlanId ? { replacesPlanId: seed.replacesPlanId } : {}),
+    };
   }
-  const canEdit = () => lifetime.current.active && !submitting.current && !request.current;
   return {
-    installmentCount, amount, destinationId, unavailable: destination.unavailable, busy, pending, error, editable, suggestion,
-    canSubmit: !busy && (pending || (!!destinationId && !destination.unavailable && ready)),
-    canDismiss: !busy && !pending,
+    installmentCount, amount, destinationId, unavailable: destination.unavailable, busy: command.busy, pending, error,
+    editable: !command.frozen, suggestion,
+    canSubmit: !command.busy && (pending || (!!destinationId && !destination.unavailable && ready)),
+    canDismiss: !command.frozen,
     onMonths: (count: MonthCount) => {
-      if (!canEdit()) return;
+      if (!command.canEdit()) return;
       setInstallmentCount(count);
       setAmount(installmentAmount(seed.currency, minInstallment(seed.candidate.amountMinorUnits, count)));
     },
-    onAmount: (value: AmountSession) => { if (canEdit() && value.currency === seed.currency) setAmount(value); },
-    onDestination: (id: string) => { if (canEdit()) destination.choose(id); },
-    submit,
+    onAmount: (value: AmountSession) => { if (command.canEdit() && value.currency === seed.currency) setAmount(value); },
+    onDestination: (id: string) => { if (command.canEdit()) destination.choose(id); },
+    submit: async () => { await command.submit(build); },
   };
 }
 
