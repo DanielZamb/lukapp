@@ -20,6 +20,5 @@ export const amount = {
   reviewPasted: "You pasted {amount}. Make sure it's right before you continue.",
   reviewConfirm: "Confirm {amount}",
   reviewRequired: "Confirm the amount before you continue.",
-  awaitingPhone: "One moment: the decimal mark is still reaching the field.",
   noticeReenter: "We couldn't read the amount saved earlier ({previous}). Type it again.",
 } as const;

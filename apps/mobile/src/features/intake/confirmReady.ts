@@ -1,6 +1,6 @@
 import { INTAKE_BATCH_LIMIT } from "../../../../../src/notificationIntake/policy";
 import type { IntakeService } from "./service";
-import { storedAmountSendable } from "../amount/storedText";
+import { candidateSendsAsSaved } from "./amountText";
 import type { IntakeCandidate } from "./candidates";
 import type { ConfirmCandidateInput, CandidateConfirmResult } from "../../../../../src/notificationIntake/types";
 import { attemptRefusals } from "../useFrozenCommand";
@@ -34,9 +34,10 @@ export function handleReadyBatchError(
 }
 
 /**
- * Confirms the Ready Candidates in batches. A Candidate whose saved amount now awaits confirmation or re-entry is left
- * in review for the person, even when an older list still called it Ready; it is checked before any of its batch is
- * frozen, so leaving it out freezes nothing else.
+ * Confirms the Ready Candidates in batches. A Candidate in review whose amount would not be sent as it is when opened
+ * alone, because it asks for confirmation or re-entry or reads other money, is left in review for the person, even
+ * when an older list still called it Ready; it is checked before any of its batch is frozen, so leaving it out freezes
+ * nothing else. A frozen Candidate is sent again with its stored command.
  */
 export async function confirmReadyCandidates(
   service: IntakeService,
@@ -45,12 +46,15 @@ export async function confirmReadyCandidates(
 ) {
   let confirmed = 0;
   for (const chunk of chunkReady(candidates)) {
-    const saved = new Map(service.candidates().map((candidate) => [candidate.id, candidate.reviewAmount]));
+    const current = new Map(service.candidates().map((candidate) => [candidate.id, candidate]));
     const rows = chunk.map((candidate) => {
       const row = service.read(candidate.id);
       if (!row) throw new Error("Candidate unavailable");
       return row;
-    }).filter((row) => row.status.kind !== "review" || storedAmountSendable(saved.get(row.id)));
+    }).filter((row) => {
+      const candidate = current.get(row.id);
+      return row.status.kind !== "review" || (!!candidate && candidateSendsAsSaved(candidate));
+    });
     if (!rows.length) continue;
     const items: ConfirmCandidateInput[] = [];
     for (const row of rows) items.push(await service.beginConfirmation(row.id, row.recordRevision));

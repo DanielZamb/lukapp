@@ -1,30 +1,18 @@
-import { formatMoney } from "../money";
-import { currentAmountTextFormat } from "../amount/currencyFormat";
 import type { LocalEntryFacts } from "../localEntryDrafts";
+import { candidateAmountText } from "./amountText";
 import type { IntakeCandidate } from "./candidates";
 import { reviewSuggestionOf } from "./candidates";
 
 export function factsFromCandidate(candidate: IntakeCandidate): LocalEntryFacts {
-  const known = candidate.suggestion.amountMinorUnits;
-  const signed = known === null ? null :
-    candidate.suggestion.direction === "out"
-      ? -Math.abs(known)
-      : Math.abs(known);
-  const typed = candidate.reviewAmount;
+  const typed = candidateAmountText(candidate);
   return {
     workspaceId: candidate.workspaceId,
     currency: candidate.currency,
     entryType: "normal",
-    ...(typed ? {
-      amountText: typed.text, amountFormat: typed.format, ...(typed.reenter ? { amountReenter: true } : {}),
-      ...(typed.review ? { amountReview: typed.review } : {}),
-    } : {
-      amountText: signed === null || candidate.suggestion.direction === null ? "" : formatMoney({
-        currency: candidate.currency,
-        minorUnits: signed,
-      }).replace(`${candidate.currency} `, ""),
-      amountFormat: currentAmountTextFormat(candidate.currency),
-    }),
+    amountText: typed.text,
+    amountFormat: typed.format,
+    ...(typed.reenter ? { amountReenter: true } : {}),
+    ...(typed.review ? { amountReview: typed.review } : {}),
     accountingDate: candidate.suggestion.accountingDate,
     description: candidate.suggestion.description,
     profileId: candidate.suggestion.financialAccountProfileId,

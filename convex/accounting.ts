@@ -547,8 +547,14 @@ export const startUndoPlace = action({
     return ctx.runMutation(internal.accountingWrites.startUndoPlace, { ...args, session });
   },
 });
+/**
+ * The preview's fingerprint covers the workspace month read from the clock, and Convex reuses a query's answer for the
+ * same arguments while the data it read is unchanged, whatever the time. `renewal` changes whenever the phone needs a
+ * fresh preview (a new month, a Start refused as stale), so Convex computes one; its value is never read.
+ */
 export const previewUndoPlace = query({
-  args: { workspaceId: v.string(), financialAccountProfileId: v.string(), cursor: v.optional(v.union(v.string(), v.null())) }, returns: undoPreview,
+  args: { workspaceId: v.string(), financialAccountProfileId: v.string(), cursor: v.optional(v.union(v.string(), v.null())),
+    renewal: v.optional(v.string()) }, returns: undoPreview,
   handler: async (ctx, args) => run(async () => {
     const actor = await requireWorkspacePermission(ctx, { workspaceId: args.workspaceId, permission: "workspace:read" });
     return previewUndo(ctx, actor, args);

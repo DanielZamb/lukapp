@@ -69,6 +69,21 @@ test.each(["added", "reversed", "changed"])("Undo refuses snapshot after origina
   expect(await facts(s)).toEqual(before);
 });
 
+test("Undo preview takes a renewal that changes nothing in its answer, so a phone can ask for a fresh one in a new month", async () => {
+  const s = await setup();
+  await s.expense("before", 20);
+  vi.setSystemTime(new Date("2026-11-30T12:00:00Z"));
+  const plain = await s.t.query(api.accounting.previewUndoPlace, s.target);
+  expect(await s.t.query(api.accounting.previewUndoPlace, { ...s.target, cursor: null, renewal: "2026-11 " })).toEqual(plain);
+  vi.setSystemTime(new Date("2026-12-01T12:00:00Z"));
+  const start = (previewFingerprint: string, idempotencyKey: string) => s.t.action(api.accounting.startUndoPlace, { ...s.target, idempotencyKey, previewFingerprint });
+  await expect(start(plain.fingerprint, "undo-1")).rejects.toMatchObject({ data: { code: "place_undo_preview_stale" } });
+  const renewed = await s.t.query(api.accounting.previewUndoPlace, { ...s.target, cursor: null, renewal: "2026-12 undo-1" });
+  expect(renewed.fingerprint).not.toBe(plain.fingerprint);
+  expect(renewed.closure.accountingDate).toBe("2026-12-01");
+  await expect(start(renewed.fingerprint, "undo-2")).resolves.toMatchObject({ replay: false });
+});
+
 test("Undo fingerprint spans all pages, receipt retains initial counts and effects, totals retain un-reversed money", async () => {
   const s = await setup();
   for (let i = 0; i < 12; i++) await s.expense(`e-${i}`, 10);

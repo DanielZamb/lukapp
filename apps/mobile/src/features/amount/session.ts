@@ -35,16 +35,12 @@ export type AmountSign = "" | "+" | "-";
  * owner and never written into the native text, so no keystroke racing the sign key can drop it. `editor` reads the
  * sign followed by the native text with the strict grammar; a sign typed into the native text as well reads as two
  * signs and is refused. A new currency starts a new session; a language change does not touch it.
- *
- * `unreported` is a decimal-key write the phone has not yet shown back, with the caret it placed. Until then the text
- * is the app's guess, since a keystroke that reaches the phone first drops the write, and nothing can be sent.
  */
 export type AmountSession = Readonly<{
   currency: string;
   sign: AmountSign;
   editor: AmountEditorState;
   review: AmountReview | null;
-  unreported: Readonly<{ caret: number }> | null;
 }>;
 
 /** The editor state for text exactly as written, read with the strict grammar and never rewritten. */
@@ -84,7 +80,7 @@ function opening(format: AmountFormat, text: string): Pick<AmountSession, "sign"
 }
 
 export function openAmountIn(format: AmountFormat, currency: string, text = ""): AmountSession {
-  return { currency, ...opening(format, openedText(format, text)), review: null, unreported: null };
+  return { currency, ...opening(format, openedText(format, text)), review: null };
 }
 
 export function openAmount(currency: string, text = ""): AmountSession {
@@ -117,7 +113,7 @@ export function openSavedAmount(
 ): { session: AmountSession; notice: AmountNotice | null } {
   const opened = openStoredAmountText(stored, currency, format);
   const awaiting = (reason: AmountReviewReason, previous: string | null): AmountSession =>
-    ({ currency, ...opening(format, opened.text), review: reviewOf(reason, previous), unreported: null });
+    ({ currency, ...opening(format, opened.text), review: reviewOf(reason, previous) });
   if (opened.notice?.kind === "converted")
     return { session: awaiting("converted", stored.review?.previous ?? opened.notice.previous), notice: opened.notice };
   if (stored.review && !opened.notice) return { session: awaiting(stored.review.reason, stored.review.previous), notice: null };
@@ -129,16 +125,26 @@ declare const atPress: unique symbol;
 export type AmountAtPress = AmountSession & { readonly [atPress]: true };
 
 /**
- * Whether the amount may be sent: complete, not awaiting the person's confirmation, and shown by the phone. For
- * enabling a control while rendering; a handler sends `sendableMinorUnits` of the amount it reads.
+ * Whether the amount may be sent: complete and not awaiting the person's confirmation. For enabling a control while
+ * rendering; a handler sends `sendableMinorUnits` of the amount it reads.
  */
 export function amountSendable(session: AmountSession): boolean {
-  return session.editor.kind === "complete" && session.review === null && session.unreported === null;
+  return session.editor.kind === "complete" && session.review === null;
 }
 
 /** The signed minor units to send, of an amount read at the moment of the press; null when it may not be sent. */
 export function sendableMinorUnits(amount: AmountAtPress): number | null {
   return amountSendable(amount) ? displayedMinorUnits(amount) : null;
+}
+
+/**
+ * The signed minor units a saved amount sends as it opens in `currency`'s editor, or null when opening it asks the
+ * person to confirm it or type it again, or it is not a whole amount. This is the one answer to whether a saved
+ * amount may be sent as it is, for the single-entry form and for any batch alike.
+ */
+export function savedAmountAsOpened(currency: string, stored: StoredAmountText): number | null {
+  const { session } = openSavedAmount(currency, stored);
+  return amountSendable(session) ? displayedMinorUnits(session) : null;
 }
 
 /** The signed minor units the field shows, whether or not they still await confirmation. Never send these. */
@@ -194,34 +200,23 @@ function withText(session: AmountSession, native: string, pasted = false): Amoun
 }
 
 /**
- * The session after the native field reported its text. The text is taken as it is, and it settles any decimal-key
- * write the phone had not shown yet. When the edit wrote more than one character and a separator among them, as a
- * paste does, the amount awaits confirmation; a keystroke writes one.
+ * The session after the native field reported its text in a change event, the one report React Native orders against
+ * the field's own writes: a write sent before the edit is dropped, one applied before it is part of the text. The text
+ * is taken as it is. When the edit wrote more than one character and a separator among them, as a paste does, the
+ * amount awaits confirmation; a keystroke writes one.
  */
 export function withNativeText(session: AmountSession, text: string): AmountSession {
   const before = nativeText(session);
-  if (text === before) return session.unreported ? { ...session, unreported: null } : session;
+  if (text === before) return session;
   const wrote = written(before, text);
-  return { ...withText(session, text, wrote.length > 1 && hasSeparator(wrote)), unreported: null };
-}
-
-/**
- * The session after the native field reported its caret. The phone never reports text for the app's own write, only
- * the caret it placed, and it drops the write and that caret together; a collapsed caret exactly there therefore
- * shows the write landed, unless a text report came first, which already settled it.
- */
-export function withNativeCaret(session: AmountSession, selection: Readonly<{ start: number; end: number }>): AmountSession {
-  const { unreported } = session;
-  return unreported && selection.start === unreported.caret && selection.end === unreported.caret ? { ...session, unreported: null } : session;
+  return withText(session, text, wrote.length > 1 && hasSeparator(wrote));
 }
 
 /**
  * Writes this currency's decimal mark at `caret` in the native text, with a leading 0 when no digit comes before it,
- * and says where the caret goes. Text that already has the mark only moves the caret after it. While the person is
- * `typing` into the field a keystroke can reach the phone before the write, so the write stays unreported until the
- * phone shows it; a field nobody types into takes the write as it is.
+ * and says where the caret goes. Text that already has the mark only moves the caret after it.
  */
-export function withDecimalMark(session: AmountSession, caret: number, typing: boolean): { session: AmountSession; caret: number } {
+export function withDecimalMark(session: AmountSession, caret: number): { session: AmountSession; caret: number } {
   const text = nativeText(session);
   const mark = session.editor.format.convention.decimal;
   const existing = text.indexOf(mark);
@@ -230,7 +225,7 @@ export function withDecimalMark(session: AmountSession, caret: number, typing: b
   const before = text.slice(0, at);
   const insert = /^\s*[+−-]?$/.test(before) ? `0${mark}` : mark;
   const placed = at + insert.length;
-  return { session: { ...withText(session, before + insert + text.slice(at)), unreported: typing ? { caret: placed } : null }, caret: placed };
+  return { session: withText(session, before + insert + text.slice(at)), caret: placed };
 }
 
 /** How many digits come before the decimal mark, or null without one. */

@@ -60,6 +60,14 @@ const remote = vi.hoisted(() => {
   const value = {
     places: [] as unknown[], closure: null as unknown, blockers: [] as unknown[], snapshot: null as unknown,
     close: vi.fn(), undo: vi.fn(), pages: vi.fn(), version: 0, listeners: new Set<() => void>(),
+    /**
+     * Convex's query cache: an answer computed for a function and its arguments is served again to a new subscription
+     * with the same arguments while none of the data it read changed. Time passing invalidates nothing here, which is
+     * the least the documentation promises ("not re-run when Date.now() changes").
+     */
+    cache: new Map<string, { version: number; value: unknown }>(),
+    /** While true, the server's next answers are still on their way: a new subscription has none, an old one keeps its last. */
+    held: false,
     /** The workspace day on the server's clock and on this phone's; they turn at nearly the same moment, not exactly. */
     serverDay: "2026-11-10", phoneDay: "2026-11-10",
     /** The whole preview the server computes now. Like the real one, its fingerprint covers the workspace month. */
@@ -77,6 +85,11 @@ const remote = vi.hoisted(() => {
   };
   return value;
 });
+/** The server answers the subscriptions that were waiting. */
+function answerHeld() {
+  remote.held = false;
+  for (const listener of remote.listeners) listener();
+}
 function serverChange(change: () => void) {
   change();
   remote.version++;
@@ -102,16 +115,27 @@ vi.mock("convex/react", async () => {
   const client = { query: (...args: unknown[]) => remote.pages(...args) };
   return {
     useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
-      useSyncExternalStore(subscribe, () => remote.version);
-      // A subscription answers again only when data it read changes; a new subscription reads afresh.
-      const subscription = useRef<{ version: number; value: unknown } | null>(null);
+      useSyncExternalStore(subscribe, () => `${remote.version} ${remote.held}`);
+      // A subscription answers again only when data it read changes. A new one is answered from the server's cache
+      // when the same arguments were computed at this data version, and computed now otherwise.
+      const subscription = useRef<{ key: string; answer: { version: number; value: unknown } | null } | null>(null);
       if (args === "skip") { subscription.current = null; return undefined; }
       const name = getFunctionName(ref);
       if (name === "accounting:listFinancialAccountProfiles") return remote.places;
       if (name === "accounting:placeClosure") return remote.closure;
       if (name === "accounting:previewUndoPlace") {
-        if (subscription.current?.version !== remote.version) subscription.current = { version: remote.version, value: remote.preview() };
-        return subscription.current.value;
+        const key = `${name} ${JSON.stringify(args)}`;
+        const serve = () => {
+          const cached = remote.cache.get(key);
+          if (cached?.version === remote.version) return cached;
+          const fresh = { version: remote.version, value: remote.preview() };
+          remote.cache.set(key, fresh);
+          return fresh;
+        };
+        const current = subscription.current;
+        if (!current || current.key !== key) subscription.current = { key, answer: remote.held ? null : serve() };
+        else if (!remote.held && current.answer?.version !== remote.version) subscription.current = { key, answer: serve() };
+        return subscription.current!.answer?.value;
       }
       if (name === "accounting:listUserCategories") return [];
       return undefined;
@@ -150,6 +174,8 @@ beforeEach(() => {
   phone.clear();
   remote.serverDay = "2026-11-10";
   remote.phoneDay = "2026-11-10";
+  remote.cache.clear();
+  remote.held = false;
   failing.writes = 0;
   failing.deletes = 0;
   vi.stubGlobal("React", React);
@@ -221,6 +247,7 @@ test("a preview that changes while the confirmation is open refreshes its number
 });
 
 const monthNotice = "A new month started, so the numbers were refreshed. Check them and type the name again.";
+const sameNotice = "We checked this place again and the numbers are the same, but the undo didn't start. Try again, or go back and open it later.";
 /** Start as the server runs it: a fingerprint other than the one it computes now is stale. */
 async function startOnServer(request: { previewFingerprint: string }) {
   if (request.previewFingerprint !== remote.preview().fingerprint)
@@ -324,15 +351,54 @@ test("a start refused as stale after the new preview arrived asks again with the
 });
 
 test("a start refused as stale before the new preview arrives blocks starting until it does", async () => {
-  remote.undo.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" }));
+  remote.undo.mockImplementationOnce(async () => {
+    remote.held = true;
+    remote.snapshot = snapshot({ fingerprint: "newer", entriesToReverse: 6 });
+    remote.version++;
+    throw new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" });
+  });
   await openUndo();
   await ui.type("Place name to confirm", "Wallet");
   await ui.press("Undo Wallet");
   expect(ui.alerts()).toEqual(["This place's movements changed before the undo started, so nothing started. Getting the new numbers…"]);
   expect(ui.disabled("Undo Wallet")).toBe(true);
-  await act(async () => serverChange(() => { remote.snapshot = snapshot({ fingerprint: "newer", entriesToReverse: 6 }); }));
+  await act(async () => answerHeld());
   expect(ui.alerts()).toEqual([changedNotice]);
   expect(ui.texts()).toContain("This reverses 6 movements.");
+  expect(remote.undo).toHaveBeenCalledTimes(1);
+});
+
+test("fourth review, finding C: a Start refused as stale whose fresh preview has the same numbers says so and lets the person try again", async () => {
+  remote.undo.mockImplementationOnce(async () => {
+    remote.held = true;
+    throw new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" });
+  }).mockResolvedValueOnce(operation({ kind: "pending" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  expect(ui.disabled("Undo Wallet")).toBe(true);
+  await act(async () => answerHeld());
+  expect(ui.alerts()).toEqual([sameNotice]);
+  expect(ui.input("Place name to confirm").props.value).toBe("Wallet");
+  expect(ui.disabled("Undo Wallet")).toBe(false);
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(remote.undo.mock.calls.map(([request]) => [request.idempotencyKey, request.previewFingerprint]))
+    .toEqual([["key-1", "reviewed-snapshot"], ["key-2", "reviewed-snapshot"]]);
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
+});
+
+test("fourth review, finding C: a refused Start with unchanged numbers can be left with system back to the place's page", async () => {
+  remote.undo.mockRejectedValueOnce(new ConvexError({ kind: "accounting", code: "place_undo_preview_stale", message: "x" }));
+  await openUndo();
+  await ui.type("Place name to confirm", "Wallet");
+  await ui.press("Undo Wallet");
+  await settle();
+  expect(ui.alerts()).toEqual([sameNotice]);
+  await act(async () => { mounted!.stack.goBack(); });
+  expect(ui.texts()[1]).toBe("What happened to Wallet?");
+  await act(async () => { mounted!.stack.goBack(); });
+  expect(mounted!.routes()).toEqual(["index", "places", "account"]);
   expect(remote.undo).toHaveBeenCalledTimes(1);
 });
 

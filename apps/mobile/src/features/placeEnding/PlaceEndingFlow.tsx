@@ -121,12 +121,13 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     settles: settlesEnding, keep: (request) => unresolved.keep({ act: "undo", request }), forget: settle,
     onDone: () => leave(onStarted),
   });
-  // The preview is read again in a new month, and after a Start refused as stale, which a subscription alone can miss.
+  // The preview is asked for again in a new month, and after a Start refused as stale, which a subscription alone misses.
   const staleStart = undo.state.name === "open" && undo.state.refusal?.code === "place_undo_preview_stale"
     ? undo.state.refusal.request.idempotencyKey : null;
   const [renewedFor, setRenewedFor] = useState("");
   if (staleStart !== null && staleStart !== renewedFor) setRenewedFor(staleStart);
-  const preview = useUndoPreview(act === "undo" ? { workspaceId, financialAccountProfileId: profileId } : null, `${calendar.month} ${renewedFor}`);
+  const { preview, renewed } = useUndoPreview(act === "undo" ? { workspaceId, financialAccountProfileId: profileId } : null,
+    `${calendar.month} ${renewedFor}`);
   /** The unknown-outcome message, and why the latest retry was turned away if it was. */
   const uncertainMessage = (ending: Act, state: CommandState<unknown>) => state.name !== "uncertain" ? ""
     : [t(ending === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain"), ...(state.refusal ? [heldReason(state.refusal, translator)] : [])].join(" ");
@@ -192,6 +193,10 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
       setTyped("");
       setPreviewChanged(month === shownPreview.month ? "placeEnding.undoChanged" : "placeEnding.undoMonthChanged");
       if (undo.state.name === "open" && undo.state.refusal) undo.release();
+    } else if (staleStart !== null && staleStart === renewedFor && renewed) {
+      // The preview read afresh for this refusal shows the same numbers: say so and let Start be tried again.
+      setPreviewChanged("placeEnding.undoUnchanged");
+      undo.release();
     }
   }
 
