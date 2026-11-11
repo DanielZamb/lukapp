@@ -14,6 +14,7 @@ import { everyPlace, refusalMessage, refusalOf, type UndoOperation } from "../sr
 import { UndoStatusCard, useUndoStatus } from "../src/features/placeEnding/UndoStatus";
 import { UnresolvedSummary } from "../src/features/placeEnding/PlaceEndingScreens";
 import { useUnresolvedEnding } from "../src/features/placeEnding/unresolved";
+import { useFormState } from "../src/features/amount/useAmountState";
 import { useFrozenCommand } from "../src/features/useFrozenCommand";
 import { useDeviceAccessFailure } from "../src/local-auth/accessFailure";
 import { formatLongDate, useT } from "../src/i18n";
@@ -39,7 +40,9 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
   const abort = useFrozenCommand({ send: useAction(api.accounting.abortUndoPlace), reportFailure, settles: abortSettles,
     onDone: (receipt: { operation: UndoOperation }) => setAborted(receipt.operation) });
   const rename = useAction(api.accounting.renameAccount);
-  const [emoji, setEmoji] = useState<string | null>(null);
+  const [look, setLook, readLook] = useFormState<{ emoji: string | null }>({ emoji: null });
+  const emoji = look.emoji;
+  const setEmoji = (value: string | null) => setLook({ emoji: value });
   const [renaming, setRenaming] = useState(false);
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const account = activity?.accounts.find((a) => a.financialAccountProfileId === profileId);
@@ -110,7 +113,10 @@ function Account({ workspaceId, profileId, defaultProfileId, timeZone }: {
       {open && !unconfirmed && <SecondaryButton label={t("placeEnding.endAction")}
         onPress={() => router.push({ pathname: "/place-ending", params: { profileId } })} />}
       {open && emoji !== null && <EmojiSheet emoji={emoji} onPick={setEmoji} onDismiss={() => setEmoji(null)}
-        onUse={async () => { await changeLook({ workspaceId, financialAccountProfileId: profileId, emoji }); }} />}
+        onUse={async () => {
+          const chosen = readLook().emoji;
+          if (chosen !== null) await changeLook({ workspaceId, financialAccountProfileId: profileId, emoji: chosen });
+        }} />}
       {open && renaming && <RenameSheet rename={rename} onDismiss={() => setRenaming(false)}
         seed={{ workspaceId, profileId, storedName: account.name, initialName: title }} />}
     </> : ready ? <Text style={ui.muted}>{t("places.accountNotFound")}</Text> : <ActivityIndicator accessibilityLabel={t("places.accountLoading")} />}

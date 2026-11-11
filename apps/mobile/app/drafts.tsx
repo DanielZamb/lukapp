@@ -1,3 +1,4 @@
+import { useFormState } from "../src/features/amount/useAmountState";
 import { useAuth } from "@clerk/expo";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useAction, useQuery } from "convex/react";
@@ -90,7 +91,7 @@ function Drafts({
     if (paramSegment !== null || !listsLoaded || segmentTouched.current) return;
     setSegment(needsYouNowCount > 0 ? "now" : "wait");
   }, [paramSegment, listsLoaded, needsYouNowCount]);
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming, readConfirming] = useFormState(false);
   const [confirmedCount, setConfirmedCount] = useState<number | null>(null);
   const period = { year: currentPeriod.year, month: currentPeriod.month };
   return (
@@ -137,7 +138,7 @@ function Drafts({
       onDiscardDraft={(id) => drafts.port.discard(id)}
       onConfirmReady={() => {
         void (async () => {
-          if (!ready.length || confirming) return;
+          if (!ready.length || readConfirming()) return;
           setConfirming(true);
           let addedCount = 0;
           try {

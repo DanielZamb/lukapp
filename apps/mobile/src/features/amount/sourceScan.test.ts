@@ -317,12 +317,15 @@ test("every amount a production handler sends is read from its owner's state at 
   const owners = [...sources].filter(([file, source]) => !file.startsWith(amountFolder) && /\buse(Amount|Form)State\s*[<(]/.test(source))
     .map(([file]) => file).sort();
   expect(owners).toEqual([
+    "apps/mobile/app/account.tsx",
+    "apps/mobile/app/drafts.tsx",
     "apps/mobile/app/post.tsx",
     "apps/mobile/src/features/Setup.tsx",
     "apps/mobile/src/features/budget/useBudgetEditor.ts",
     "apps/mobile/src/features/intake/prototype/NotificationFirst.tsx",
     "apps/mobile/src/features/placeEnding/PlaceEndingFlow.tsx",
     "apps/mobile/src/features/places/usePlaceRename.ts",
+    "apps/mobile/src/features/posting/usePostingBatch.ts",
     "apps/mobile/src/features/posting/usePostingEditor.ts",
     "apps/mobile/src/features/recovery/useRecoveryEditor.ts",
     "apps/mobile/src/features/recovery/useRecoveryLifecycle.ts",

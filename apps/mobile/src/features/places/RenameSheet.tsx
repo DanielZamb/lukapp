@@ -8,6 +8,12 @@ import { PrimaryButton, useTheme, useUi } from "../../ui/core";
 import { usePlaceStyles } from "./styles";
 import { usePlaceRename, type PlaceRenameTransport } from "./usePlaceRename";
 
+type BackdropProps = Parameters<typeof BottomSheetBackdrop>[0];
+const ClosingBackdrop = (props: BackdropProps) =>
+  <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" />;
+const HeldBackdrop = (props: BackdropProps) =>
+  <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="none" />;
+
 export function RenameSheet({ seed, rename, onDismiss }: {
   seed: Parameters<typeof usePlaceRename>[0];
   rename: PlaceRenameTransport["rename"];
@@ -37,8 +43,7 @@ export function RenameSheet({ seed, rename, onDismiss }: {
   };
   return <BottomSheetModal ref={sheet} stackBehavior="push" enableDynamicSizing enablePanDownToClose={form.canDismiss}
     onDismiss={onDismiss} accessibilityLabel={t("planning.renameTitle")}
-    backdropComponent={(props) => <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1}
-      pressBehavior={form.canDismiss ? "close" : "none"} />}
+    backdropComponent={form.canDismiss ? ClosingBackdrop : HeldBackdrop}
     backgroundStyle={styles.sheetSurface} handleIndicatorStyle={{ backgroundColor: theme.ring }}
     keyboardBehavior="interactive" keyboardBlurBehavior="restore">
     <BottomSheetScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetBody}>

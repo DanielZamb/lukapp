@@ -142,7 +142,6 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
   const uncertainMessage = (ending: Act, state: CommandState<unknown>) => state.name !== "uncertain" ? ""
     : [t(ending === "undo" ? "placeEnding.undoUncertain" : "placeEnding.closeUncertain"), ...(state.refusal ? [heldReason(state.refusal, translator)] : [])].join(" ");
   const command = act === "undo" ? undo : close;
-  const commandOf = (ending: Act | null) => ending === "undo" ? undo : close;
   const locked = close.frozen || undo.frozen;
   const lockedNow = () => !close.canEdit() || !undo.canEdit();
   const step = steps[steps.length - 1]!;
@@ -165,7 +164,7 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     if (now.receipt) return leave(onEnded);
     // A Place that ended or started undoing elsewhere has no step left to return to.
     if (place && place.status !== "open") return leave(onBack);
-    commandOf(now.act).dismissRefusal();
+    if (now.act === "undo") undo.dismissRefusal(); else close.dismissRefusal();
     if (now.adding) return change({ adding: false });
     const at = now.steps[now.steps.length - 1]!;
     if (at.name === "confirm") { setShownPreview(null); setPreviewChanged(null); }
@@ -319,7 +318,9 @@ export function PlaceEndingFlow({ workspaceId, profileId, timeZone, onBack, onEn
     change({ lines: nextLines, steps: firstAnswer ? [...rest, { name: "review" }] : rest });
   }
   const repick = (lineId: string) => { if (close.canEdit()) { interact(); moveSteps((current) => [...current, { name: "pick", lineId }]); } };
-  const repickDefault = () => { if (commandOf(readFlow().act).canEdit()) { interact(); moveSteps((current) => [...current, { name: "default" }]); } };
+  const repickDefault = () => {
+    if (readFlow().act === "undo" ? undo.canEdit() : close.canEdit()) { interact(); moveSteps((current) => [...current, { name: "default" }]); }
+  };
 
   if (step.name === "pick") {
     const line = findLine(step.lineId);

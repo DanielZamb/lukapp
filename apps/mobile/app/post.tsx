@@ -310,8 +310,10 @@ function PostMoney({
             currency={workspace.functionalCurrency}
             amount={editor.amount}
             editable={editor.editable}
-            onUseAmount={(minor) => interaction(() => editor.setAmount(
-              signedAmount(minor, editor.amount.currency, editor.amount, binding.originalSuggestion.direction)))}
+            onUseAmount={(minor) => interaction(() => {
+              const amount = editor.readAmount();
+              editor.setAmount(signedAmount(minor, amount.currency, amount, binding.originalSuggestion.direction));
+            })}
             onUseDescription={(text) => interaction(() => editor.setDescription(text))}
           />
         ) : undefined}
@@ -401,7 +403,7 @@ function PostMoney({
         }}
         onCategory={() => setCategoryVisible(true)}
         onDate={() => {
-          if (!setup) dateSheet.current?.present();
+          if (!editor.read().setup) dateSheet.current?.present();
         }}
         onPost={() => {
           const at = readRoute();
