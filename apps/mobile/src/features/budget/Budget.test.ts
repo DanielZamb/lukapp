@@ -725,3 +725,16 @@ test("a workspace currency change closes an open limit sheet before anything typ
   expect(screen.findAllByType(BottomSheetModal)).toHaveLength(0);
   expect(save).not.toHaveBeenCalled();
 });
+
+test("a Remove limit kept from a removal confirmation the person cancelled removes nothing", async () => {
+  limitJar();
+  const screen = await render();
+  await press(screen, "Food: COP 200.000,00 left of COP 400.000,00. COP 200.000,00 spent. Edit Budget.");
+  await typeLimit(screen, "0");
+  await press(screen, "Remove limit");
+  const kept = screen.findAll((node) => String(node.type) === "Pressable" && node.props.accessibilityLabel === "Remove limit")[0]!.props.onPress as () => void;
+  await press(screen, "Cancel");
+  expect(texts(screen)).not.toContain("Remove the limit for Food?");
+  await act(async () => { kept(); });
+  expect(removeLimit).not.toHaveBeenCalled();
+});
