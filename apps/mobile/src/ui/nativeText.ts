@@ -55,3 +55,16 @@ export function cappedNativeStyle(style: TextStyle, scale: number, cap?: number)
     ...(style.letterSpacing !== undefined && { letterSpacing: nativeInputForDp(style.letterSpacing * cap, scale) }),
   };
 }
+
+/**
+ * A text style drawn for `effective`, a text size above the phone's own, with font scaling off: each length is the
+ * size the phone would have produced at that setting, so the app's own text size and the phone's give the same result.
+ */
+export function appScaledStyle(style: TextStyle, effective: number, nonlinear: boolean, cap?: number): TextStyle {
+  const scaled = (value: number) => cap && effective > cap ? value * cap : nonlinear ? androidScaledSize(value, effective) : value * effective;
+  return {
+    fontSize: scaled(style.fontSize ?? 14),
+    ...(style.lineHeight !== undefined && { lineHeight: scaled(style.lineHeight) }),
+    ...(style.letterSpacing !== undefined && { letterSpacing: scaled(style.letterSpacing) }),
+  };
+}

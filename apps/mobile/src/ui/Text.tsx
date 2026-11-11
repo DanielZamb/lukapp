@@ -6,6 +6,7 @@ import { textSpecs, textStyle, textTone, type TextTone, type TextVariant } from 
 import { textPresetSpec, type TextPreset } from "./textPresets";
 import { useTextReflow, type TextReflow } from "./reflow";
 import { cappedNativeStyle } from "./nativeText";
+import { useAppTextSize } from "./scaledText";
 
 export type TextProps = ComponentPropsWithRef<typeof NativeText> & ({ variant?: TextVariant; preset?: never } | { preset: TextPreset; variant?: never }) & { tone?: TextTone; reflow?: TextReflow };
 
@@ -14,19 +15,22 @@ export function Text({ variant = "body", preset, tone, reflow, style, ...props }
   const theme = useTheme();
   const metrics = useNativeTextMetrics();
   const flow = useTextReflow(reflow);
+  const sized = useAppTextSize();
   const { maxScale, ...presetStyle } = preset ? textPresetSpec(tier, preset) : textSpecs[tier][variant];
   const base = preset ? presetStyle : textStyle(tier, variant);
   const color = tone !== undefined || !preset ? { color: textTone(theme, tone ?? "default") } : undefined;
   const combined = reflow ? [base, color, style, flow.style] : [base, color, style];
   const nativeStyle = tier === "xxxl" && metrics.nonlinearAndroid
     ? cappedNativeStyle(StyleSheet.flatten(combined), metrics.fontScale, maxScale) : null;
+  const scaled = sized(combined, maxScale);
   return <NativeText {...props} {...(reflow === "unclamp" || reflow === "trail" ? { numberOfLines: flow.numberOfLines } : {})}
     allowFontScaling maxFontSizeMultiplier={maxScale}
-    style={[...combined, ...(nativeStyle ? [nativeStyle] : [])]} />;
+    style={[...combined, ...(nativeStyle ? [nativeStyle] : [])]} {...scaled} />;
 }
 
 export function EmojiText({ children, size, lineHeight }: { children: ReactNode; size: number; lineHeight: number }) {
   const metrics = useNativeTextMetrics();
   const style = { fontSize: size, lineHeight };
-  return <NativeText allowFontScaling maxFontSizeMultiplier={1.3} style={[style, ...(metrics.nonlinearAndroid ? [cappedNativeStyle(style, metrics.fontScale, 1.3)] : [])]}>{children}</NativeText>;
+  const scaled = useAppTextSize()(style, 1.3);
+  return <NativeText allowFontScaling maxFontSizeMultiplier={1.3} style={[style, ...(metrics.nonlinearAndroid ? [cappedNativeStyle(style, metrics.fontScale, 1.3)] : [])]} {...scaled}>{children}</NativeText>;
 }
